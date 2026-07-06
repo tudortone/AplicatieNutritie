@@ -1,0 +1,9 @@
+node_modules/
+.expo/
+.env
+*.env
+cod_complet_proiect.txt
+*.log
+check_schema.js
+build_full_code.js
+.DS_Store
