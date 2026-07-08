@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, KeyboardAvoidingView, Platform, Keyboard
+  ScrollView, KeyboardAvoidingView, Platform, Keyboard, Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../supabase';
@@ -10,7 +10,7 @@ import { useFocusEffect } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
-import { Bot, Send, Sparkles, Refrigerator, Utensils, Flame, Clock } from 'lucide-react-native';
+import { Bot, Send, Sparkles, Refrigerator, Utensils, Flame, Clock, SquarePen } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTheme } from '../../context/ThemeContext';
@@ -160,6 +160,30 @@ export default function ChatScreen() {
     await executaTrimitereMesaj(mesajText);
   };
 
+  const handleResetChat = () => {
+    Alert.alert(
+      "Începi o conversație nouă?",
+      "Istoricul curent va fi șters și vei începe o conversație proaspătă cu asistentul AI.",
+      [
+        { text: "Anulează", style: "cancel" },
+        {
+          text: "Chat nou",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            } catch {}
+            const initialMsg: ChatMessage[] = [
+              { role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
+            ];
+            setMesaje(initialMsg);
+            await AsyncStorage.removeItem('chat_history');
+          }
+        }
+      ]
+    );
+  };
+
   const inputBottomPadding = isKeyboardVisible 
     ? 10 
     : (Platform.OS === 'ios' ? 24 : 14);
@@ -186,11 +210,23 @@ export default function ChatScreen() {
             </View>
           </View>
 
-          {/* Context chips */}
-          <View style={styles.contextRow}>
+          {/* Header Right / Actions */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <View style={[styles.contextChip, { backgroundColor: colors.accent + '14', borderColor: colors.accent + '26' }]}>
               <Text style={[styles.contextChipText, { color: colors.accent }]}>{totalCalorii} kcal / {caloriiTinta} kcal</Text>
             </View>
+
+            <TouchableOpacity
+              onPress={handleResetChat}
+              style={[
+                styles.newChatBtn,
+                { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }
+              ]}
+              accessibilityLabel="Începe o conversație nouă și șterge istoricul"
+              accessibilityRole="button"
+            >
+              <SquarePen size={18} color={colors.textPrimary} />
+            </TouchableOpacity>
           </View>
         </Animated.View>
 
@@ -345,6 +381,7 @@ const styles = StyleSheet.create({
   contextRow: { flexDirection: 'row', gap: 8 },
   contextChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   contextChipText: { fontSize: 12, fontWeight: '700' },
+  newChatBtn: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
 
   chatScroll: { flex: 1 },
   bubble: { flexDirection: 'row', marginBottom: 16, alignItems: 'flex-end' },

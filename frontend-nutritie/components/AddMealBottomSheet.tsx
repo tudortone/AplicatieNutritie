@@ -29,6 +29,14 @@ import { foodPresets, categories, FoodPreset } from '../constants/foodPresets';
 
 export interface AddMealBottomSheetRef {
   open: (masaToEdit?: Masa) => void;
+  openWithItem: (item: {
+    nume: string;
+    calorii: number;
+    proteine: number;
+    carbohidrati: number;
+    grasimi: number;
+    gramajDefault?: number;
+  }) => void;
   close: () => void;
 }
 
@@ -209,6 +217,33 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         } catch {}
         bottomSheetRef.current?.expand();
+      },
+      openWithItem: (item) => {
+        const defaultGr = item.gramajDefault || 100;
+        setEditingMasaId(null);
+        setNume(item.nume);
+        setGrame(String(defaultGr));
+        setCalorii(String(item.calorii));
+        setProteine(String(item.proteine));
+        setCarbohidrati(String(item.carbohidrati));
+        setGrasimi(String(item.grasimi));
+
+        setBaseNutrition({
+          defaultGrame: defaultGr,
+          calorii: item.calorii,
+          proteine: item.proteine,
+          carbohidrati: item.carbohidrati,
+          grasimi: item.grasimi,
+        });
+
+        try {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        } catch {}
+
+        bottomSheetRef.current?.expand();
+        setTimeout(() => {
+          scrollToGramajSection();
+        }, 350);
       },
       close: () => {
         bottomSheetRef.current?.close();
@@ -571,7 +606,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
               {/* Butoane rapide gramaj (P0.2) */}
               <View style={styles.gramChipsRow}>
-                {['50', '100', '150', '200', '300'].map((val) => {
+                {['50', '100', '150', '200', '250'].map((val) => {
                   const isActive = grame === val;
                   return (
                     <TouchableOpacity

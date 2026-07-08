@@ -5,13 +5,15 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Scan, TrendingUp, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints } from 'lucide-react-native';
+import { Scan, TrendingUp, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTheme } from '../../context/ThemeContext';
 import { useApa } from '../../hooks/useApa';
 import { AddMealBottomSheet, AddMealBottomSheetRef } from '../../components/AddMealBottomSheet';
 import { useHealthSync } from '../../hooks/useHealthSync';
+import { useAntrenamente } from '../../hooks/useAntrenamente';
+import { getCalorieState } from '../../lib/calorieState';
 import { SkeletonLoader } from '../../components/SkeletonLoader';
 
 function RingProgress({ procent, color, bgColor }: { procent: number; color: string; bgColor: string }) {
@@ -75,12 +77,14 @@ export default function HomeScreen() {
   } = useMeseAzi();
   const { pahare, tinta: tintaPahare, adaugaPahar, scadePahar } = useApa();
   const { steps, activeCalories, stepGoal, isEnabled, platformName, providerInfo, addSimulatedSteps, refreshSteps } = useHealthSync();
+  const { totalCaloriiArse, refresh: refreshAntrenamente } = useAntrenamente();
   const [ascundeCardHealth, setAscundeCardHealth] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       refresh();
       refreshSteps();
+      refreshAntrenamente();
       AsyncStorage.getItem('ascundeCardHealth').then((val) => {
         if (val === 'true') setAscundeCardHealth(true);
         else setAscundeCardHealth(false);
@@ -90,9 +94,11 @@ export default function HomeScreen() {
 
   const caloriiConsumate = totalCalorii;
   const proteineConsumate = totalProteine;
-  const caloriiRamase = caloriiTinta - caloriiConsumate + (isEnabled ? activeCalories : 0);
+  const caloriiRamase = caloriiTinta - caloriiConsumate + (isEnabled ? activeCalories : 0) + totalCaloriiArse;
   const procentCalorii = Math.min((caloriiConsumate / caloriiTinta) * 100, 100);
   const procentProteine = Math.min((proteineConsumate / proteineTinta) * 100, 100);
+
+  const calState = getCalorieState(caloriiConsumate, caloriiTinta, colors.accent, colors.accentSecondary);
 
   const userName = user?.email ? user.email.split('@')[0] : 'Prieten';
   const capitalizedName = userName.charAt(0).toUpperCase() + userName.slice(1);
@@ -167,7 +173,7 @@ export default function HomeScreen() {
             </View>
             <View style={s.greetingSubRow}>
               <Text style={[s.greetingSub, { color: colors.textSecondary }]}>Urmărește-ți nutriția de astăzi</Text>
-              <Text style={[s.caloriiInline, { color: colors.accent }]}>  {caloriiConsumate} kcal</Text>
+              <Text style={[s.caloriiInline, { color: calState.ringColor }]}>  {calState.emoji} {calState.mesaj}</Text>
             </View>
           </View>
           <View style={s.streakBadge}>
@@ -195,10 +201,18 @@ export default function HomeScreen() {
                     <Text style={[s.ringCardSubSep, { color: colors.textSecondary }]}>  •  Țintă: </Text>
                     <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]}>{caloriiTinta} kcal</Text>
                   </View>
+                  {totalCaloriiArse > 0 && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                      <Dumbbell size={14} color={colors.warning} />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.warning }}>
+                        Ars prin sport: +{totalCaloriiArse} kcal
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 <RingProgress 
                   procent={procentCalorii} 
-                  color={procentCalorii > 90 ? '#f43f5e' : colors.accent} 
+                  color={calState.ringColor} 
                   bgColor="rgba(255,255,255,0.06)" 
                 />
               </View>
@@ -283,8 +297,8 @@ export default function HomeScreen() {
                 <Camera size={28} color={colors.background} strokeWidth={2.5} />
               </View>
               <View style={s.scanCTAText}>
-                <Text style={[s.scanCTATitle, { color: colors.background }]}>Scanează Mâncarea</Text>
-                <Text style={s.scanCTASub}>Analiză nutrițională instantă cu AI</Text>
+                <Text style={[s.scanCTATitle, { color: colors.background }]}>Scanează Mâncarea cu AI</Text>
+                <Text style={s.scanCTASub}>Analiză foto instantă a caloriilor</Text>
               </View>
               <View style={s.scanCTAArrow}>
                 <Scan size={20} color={colors.background} />
@@ -293,26 +307,45 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Manual Add CTA (Secundar, discret) */}
-        <Animated.View entering={FadeInDown.duration(700).delay(300)}>
+        {/* Rând acțiuni secundare (B1) - Cod de Bare + Manual */}
+        <Animated.View entering={FadeInDown.duration(700).delay(280)} style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Adaugă o masă manual fără poză"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingVertical: 10,
-              marginBottom: 10,
-              gap: 6,
-            }}
-            onPress={() => addMealSheetRef.current?.open()}
-            activeOpacity={0.7}
+            accessibilityLabel="Scanează cod de bare produs"
+            style={[s.secActionCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+            onPress={() => router.push('/scanner-barcode' as any)}
           >
-            <PlusCircle size={16} color={colors.accent} />
-            <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
-              Sau <Text style={{ color: colors.textPrimary, textDecorationLine: 'underline' }}>adaugă o masă manual</Text> (fără poză)
-            </Text>
+            <Scan size={18} color={colors.accent} />
+            <Text style={[s.secActionText, { color: colors.textPrimary }]}>Cod de Bare</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Adaugă o masă manual"
+            style={[s.secActionCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+            onPress={() => addMealSheetRef.current?.open()}
+          >
+            <PlusCircle size={18} color={colors.accentSecondary} />
+            <Text style={[s.secActionText, { color: colors.textPrimary }]}>Adaugă Manual</Text>
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Mini-Card separat: Greutate & Progres (B2) */}
+        <Animated.View entering={FadeInDown.duration(700).delay(310)}>
+          <TouchableOpacity
+            onPress={() => router.push('/profil')}
+            style={[s.weightCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+          >
+            <View style={s.weightIconWrap}>
+              <Scale size={20} color={colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.weightLabel, { color: colors.textSecondary }]}>GREUTATE & PROGRES</Text>
+              <Text style={[s.weightValue, { color: colors.textPrimary }]}>
+                {greutate || 75} kg
+              </Text>
+            </View>
+            <Text style={[s.weightLink, { color: colors.accent }]}>Editează &rarr;</Text>
           </TouchableOpacity>
         </Animated.View>
 
@@ -582,4 +615,13 @@ const s = StyleSheet.create({
   healthCalories: { fontSize: 13, fontWeight: '800' },
   healthOfflineBox: { backgroundColor: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)' },
   healthOfflineText: { fontSize: 13, lineHeight: 18, textAlign: 'center' },
+
+  secActionCard: { flex: 1, height: 48, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  secActionText: { fontSize: 14, fontWeight: '800' },
+
+  weightCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, borderWidth: 1, marginBottom: 20 },
+  weightIconWrap: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
+  weightLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
+  weightValue: { fontSize: 20, fontWeight: '900', marginTop: 2 },
+  weightLink: { fontSize: 13, fontWeight: '800' },
 });

@@ -1,10 +1,19 @@
 ================================================================================
-COD SURSĂ COMPLET - APLICAȚIA NUTRIAI (FĂRĂ CHEI API)
+COD SURSA COMPLET - APLICATIA NUTRIAI (FARA CHEI API)
 ================================================================================
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\AGENTS.md
+FISIER: frontend-nutritie\.env
+================================================================================
+
+EXPO_PUBLIC_API_URL=https://nutritie-backend-ai.onrender.com
+EXPO_PUBLIC_SUPABASE_URL=https://tfqcihbjgmscsseyzifs.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_[ASCUNS_FARA_CHEIE_API]
+
+
+================================================================================
+FISIER: frontend-nutritie\AGENTS.md
 ================================================================================
 
 # Expo HAS CHANGED
@@ -13,14 +22,14 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v54.0.0/ before 
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\CLAUDE.md
+FISIER: frontend-nutritie\CLAUDE.md
 ================================================================================
 
 @AGENTS.md
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\README.md
+FISIER: frontend-nutritie\README.md
 ================================================================================
 
 # Welcome to your Expo app 👋
@@ -76,7 +85,7 @@ Join our community of developers creating universal apps.
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\app.json
+FISIER: frontend-nutritie\app.json
 ================================================================================
 
 {
@@ -144,7 +153,7 @@ FIȘIER: frontend-nutritie\app.json
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\eas.json
+FISIER: frontend-nutritie\eas.json
 ================================================================================
 
 {
@@ -175,7 +184,7 @@ FIȘIER: frontend-nutritie\eas.json
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\eslint.config.js
+FISIER: frontend-nutritie\eslint.config.js
 ================================================================================
 
 // https://docs.expo.dev/guides/using-eslint/
@@ -191,7 +200,7 @@ module.exports = defineConfig([
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\expo-env.d.ts
+FISIER: frontend-nutritie\expo-env.d.ts
 ================================================================================
 
 /// <reference types="expo/types" />
@@ -199,7 +208,7 @@ FIȘIER: frontend-nutritie\expo-env.d.ts
 // NOTE: This file should not be edited and should be in your git ignore
 
 ================================================================================
-FIȘIER: frontend-nutritie\package-lock.json
+FISIER: frontend-nutritie\package-lock.json
 ================================================================================
 
 {
@@ -13993,7 +14002,7 @@ FIȘIER: frontend-nutritie\package-lock.json
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\package.json
+FISIER: frontend-nutritie\package.json
 ================================================================================
 
 {
@@ -14064,7 +14073,7 @@ FIȘIER: frontend-nutritie\package.json
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\supabase.ts
+FISIER: frontend-nutritie\supabase.ts
 ================================================================================
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -14085,7 +14094,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 ================================================================================
-FIȘIER: frontend-nutritie\tsconfig.json
+FISIER: frontend-nutritie\tsconfig.json
 ================================================================================
 
 {
@@ -14108,7 +14117,7 @@ FIȘIER: frontend-nutritie\tsconfig.json
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\types.ts
+FISIER: frontend-nutritie\types.ts
 ================================================================================
 
 export interface Masa {
@@ -14133,7 +14142,7 @@ export interface AlimentAI {
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\.claude\settings.json
+FISIER: frontend-nutritie\.claude\settings.json
 ================================================================================
 
 {
@@ -14144,14 +14153,14 @@ FIȘIER: frontend-nutritie\.claude\settings.json
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\.vscode\extensions.json
+FISIER: frontend-nutritie\.vscode\extensions.json
 ================================================================================
 
 { "recommendations": ["expo.vscode-expo-tools"] }
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\.vscode\settings.json
+FISIER: frontend-nutritie\.vscode\settings.json
 ================================================================================
 
 {
@@ -14164,7 +14173,7 @@ FIȘIER: frontend-nutritie\.vscode\settings.json
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\app\_layout.tsx
+FISIER: frontend-nutritie\app\_layout.tsx
 ================================================================================
 
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
@@ -14276,7 +14285,7 @@ export default function RootLayout() {
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\app\adauga-manual.tsx
+FISIER: frontend-nutritie\app\adauga-manual.tsx
 ================================================================================
 
 import React, { useState } from 'react';
@@ -14588,7 +14597,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\app\auth.tsx
+FISIER: frontend-nutritie\app\auth.tsx
 ================================================================================
 
 import React, { useState } from 'react';
@@ -14824,7 +14833,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\app\calculator-ai.tsx
+FISIER: frontend-nutritie\app\calculator-ai.tsx
 ================================================================================
 
 import React, { useState } from 'react';
@@ -15113,7 +15122,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\app\camera.tsx
+FISIER: frontend-nutritie\app\camera.tsx
 ================================================================================
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
@@ -15602,7 +15611,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\app\onboarding.tsx
+FISIER: frontend-nutritie\app\onboarding.tsx
 ================================================================================
 
 import React, { useState, useRef } from 'react';
@@ -15776,14 +15785,398 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\app\(tabs)\_layout.tsx
+FISIER: frontend-nutritie\app\scanner-barcode.tsx
+================================================================================
+
+import React, { useState, useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Platform
+} from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useRouter } from 'expo-router';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ScanLine, X, Plus, Check, Search, Package, Trash2, ArrowLeft } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+
+import { useTheme } from '../context/ThemeContext';
+import { useNotificationBanner } from '../context/NotificationBannerContext';
+import { getProdusByBarcode, ProdusScanat } from '../lib/openfoodfacts';
+import { useCamara, ProdusCamara } from '../hooks/useCamara';
+import { AddMealBottomSheet, AddMealBottomSheetRef } from '../components/AddMealBottomSheet';
+
+export default function ScannerBarcodeScreen() {
+  const router = useRouter();
+  const { colors } = useTheme();
+  const { showBanner } = useNotificationBanner();
+  const { produse, loading: loadingCamara, adaugaProdus, stergeProdus } = useCamara();
+
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanLocked, setScanLocked] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [produsGasit, setProdusGasit] = useState<ProdusScanat | null>(null);
+  const [activeTab, setActiveTab] = useState<'scan' | 'camara'>('scan');
+
+  const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
+
+  const handleBarcodeScanned = useCallback(async ({ data }: { data: string }) => {
+    if (scanLocked || searching || activeTab !== 'scan') return;
+    setScanLocked(true);
+    setSearching(true);
+
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {}
+
+    const res = await getProdusByBarcode(data);
+    setSearching(false);
+
+    if (res) {
+      setProdusGasit(res);
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch {}
+    } else {
+      Alert.alert(
+        "Produs negăsit",
+        `Codul EAN "${data}" nu a fost găsit în baza OpenFoodFacts. Poți adăuga produsul manual la masă.`,
+        [{ text: "OK" }]
+      );
+      setTimeout(() => setScanLocked(false), 2000);
+    }
+  }, [scanLocked, searching, activeTab]);
+
+  const handleSalveazaInCamara = async () => {
+    if (!produsGasit) return;
+    try {
+      await adaugaProdus(produsGasit);
+      showBanner({
+        title: "Salvat în Cămara Mea!",
+        message: `${produsGasit.nume} este acum disponibil pentru acces rapid.`,
+        type: "success",
+      });
+      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+      setProdusGasit(null);
+      setScanLocked(false);
+    } catch {
+      Alert.alert("Eroare", "Nu am putut salva în Cămară. Verifică dacă tabela există în Supabase.");
+    }
+  };
+
+  const handleAdaugaLaMasa = (item: ProdusScanat | ProdusCamara) => {
+    addMealSheetRef.current?.openWithItem({
+      nume: item.nume,
+      calorii: item.calorii_100g,
+      proteine: item.proteine_100g,
+      carbohidrati: item.carbohidrati_100g,
+      grasimi: item.grasimi_100g,
+      gramajDefault: 100,
+    });
+  };
+
+  if (!permission) {
+    return <View style={[styles.container, { backgroundColor: colors.background }]} />;
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={[styles.permContainer, { backgroundColor: colors.background }]}>
+        <ScanLine size={52} color={colors.accent} />
+        <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Acces la cameră</Text>
+        <Text style={[styles.permSub, { color: colors.textSecondary }]}>
+          Avem nevoie de permisiunea ta pentru a scana coduri de bare de pe produse.
+        </Text>
+        <TouchableOpacity
+          onPress={requestPermission}
+          style={[styles.permBtn, { backgroundColor: colors.accent }]}
+          accessibilityLabel="Acordă permisiunea camerei"
+          accessibilityRole="button"
+        >
+          <Text style={styles.permBtnText}>Permite Accesul</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const renderCamaraItem = ({ item }: { item: ProdusCamara }) => (
+    <View style={[styles.pantryCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.pantryTitle, { color: colors.textPrimary }]}>{item.nume}</Text>
+        {!!item.brand && <Text style={[styles.pantryBrand, { color: colors.textSecondary }]}>{item.brand}</Text>}
+        <Text style={[styles.pantryMacro, { color: colors.accent }]}>
+          {item.calorii_100g} kcal / 100g • P: {item.proteine_100g}g • C: {item.carbohidrati_100g}g • G: {item.grasimi_100g}g
+        </Text>
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <TouchableOpacity
+          onPress={() => handleAdaugaLaMasa(item)}
+          style={[styles.addMasaBtn, { backgroundColor: colors.accent }]}
+          accessibilityLabel={`Adaugă ${item.nume} la masă`}
+          accessibilityRole="button"
+        >
+          <Plus size={18} color="#000" strokeWidth={3} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => stergeProdus(item.id)}
+          style={[styles.deleteBtn, { backgroundColor: colors.danger + '1A' }]}
+          accessibilityLabel={`Șterge ${item.nume} din cămară`}
+          accessibilityRole="button"
+        >
+          <Trash2 size={16} color={colors.danger} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Top Bar */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.navBtn, { backgroundColor: colors.surfaceBg }]}
+          accessibilityLabel="Înapoi"
+          accessibilityRole="button"
+        >
+          <ArrowLeft size={20} color={colors.textPrimary} />
+        </TouchableOpacity>
+
+        <View style={styles.tabsRow}>
+          <TouchableOpacity
+            onPress={() => setActiveTab('scan')}
+            style={[
+              styles.tabBtn,
+              activeTab === 'scan' && { backgroundColor: colors.accent },
+            ]}
+          >
+            <Text style={[styles.tabText, { color: activeTab === 'scan' ? '#000' : colors.textPrimary }]}>
+              Scanare Barcode
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setActiveTab('camara')}
+            style={[
+              styles.tabBtn,
+              activeTab === 'camara' && { backgroundColor: colors.accent },
+            ]}
+          >
+            <Text style={[styles.tabText, { color: activeTab === 'camara' ? '#000' : colors.textPrimary }]}>
+              Cămara Mea ({produse.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {activeTab === 'scan' ? (
+        <View style={styles.cameraWrap}>
+          <CameraView
+            style={StyleSheet.absoluteFill}
+            barcodeScannerSettings={{
+              barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
+            }}
+            onBarcodeScanned={handleBarcodeScanned}
+          />
+
+          {/* Target box viewfinder */}
+          <View style={styles.viewfinderOverlay}>
+            <View style={[styles.targetBox, { borderColor: colors.accent }]} />
+            <Text style={[styles.scanHint, { color: '#FFF' }]}>
+              Îndreaptă camera către codul de bare al produsului
+            </Text>
+          </View>
+
+          {searching && (
+            <BlurView intensity={40} tint="dark" style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color={colors.accent} />
+              <Text style={[styles.loadingText, { color: colors.textPrimary }]}>
+                Căutăm în OpenFoodFacts...
+              </Text>
+            </BlurView>
+          )}
+
+          {produsGasit && (
+            <BlurView intensity={70} tint="dark" style={[styles.resultCard, { borderColor: colors.accent }]}>
+              <View style={styles.resHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.resTitle, { color: colors.textPrimary }]}>{produsGasit.nume}</Text>
+                  {!!produsGasit.brand && (
+                    <Text style={[styles.resBrand, { color: colors.textSecondary }]}>{produsGasit.brand}</Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setProdusGasit(null);
+                    setScanLocked(false);
+                  }}
+                  style={styles.resClose}
+                  accessibilityLabel="Închide detaliile produsului scanat"
+                  accessibilityRole="button"
+                >
+                  <X size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.macroGrid}>
+                <View style={styles.macroBox}>
+                  <Text style={[styles.macroVal, { color: colors.accent }]}>{produsGasit.calorii_100g}</Text>
+                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>kcal / 100g</Text>
+                </View>
+                <View style={styles.macroBox}>
+                  <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{produsGasit.proteine_100g}g</Text>
+                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Proteine</Text>
+                </View>
+                <View style={styles.macroBox}>
+                  <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{produsGasit.carbohidrati_100g}g</Text>
+                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Carbi</Text>
+                </View>
+                <View style={styles.macroBox}>
+                  <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{produsGasit.grasimi_100g}g</Text>
+                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Grăsimi</Text>
+                </View>
+              </View>
+
+              <View style={styles.resActions}>
+                <TouchableOpacity
+                  onPress={handleSalveazaInCamara}
+                  style={[styles.actionBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                >
+                  <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>+ În Cămară</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => handleAdaugaLaMasa(produsGasit)}
+                  style={[styles.actionBtnPrimary, { backgroundColor: colors.accent }]}
+                >
+                  <Text style={styles.actionPrimaryText}>Adaugă la Masă (g)</Text>
+                </TouchableOpacity>
+              </View>
+            </BlurView>
+          )}
+        </View>
+      ) : (
+        <View style={styles.pantryWrap}>
+          <FlatList
+            data={produse}
+            keyExtractor={(item) => item.id}
+            renderItem={renderCamaraItem}
+            contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+            ListEmptyComponent={
+              <View style={styles.emptyPantry}>
+                <Package size={48} color={colors.textTertiary} />
+                <Text style={[styles.emptyPTitle, { color: colors.textPrimary }]}>
+                  Cămara ta este goală
+                </Text>
+                <Text style={[styles.emptyPSub, { color: colors.textSecondary }]}>
+                  Scanează codurile de bare ale produselor tale preferate pentru a le adăuga aici.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setActiveTab('scan')}
+                  style={[styles.emptyPBtn, { backgroundColor: colors.accent }]}
+                >
+                  <Text style={styles.emptyPBtnText}>Scanează Primul Produs</Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        </View>
+      )}
+
+      <AddMealBottomSheet ref={addMealSheetRef} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  permContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+  permTitle: { fontSize: 24, fontWeight: '900', marginTop: 18, marginBottom: 8 },
+  permSub: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  permBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16 },
+  permBtnText: { color: '#000', fontSize: 16, fontWeight: '800' },
+
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 54 : 30,
+    paddingBottom: 14,
+    gap: 12,
+    zIndex: 10,
+  },
+  navBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  tabsRow: { flex: 1, flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: 4 },
+  tabBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
+  tabText: { fontSize: 13, fontWeight: '800' },
+
+  cameraWrap: { flex: 1, position: 'relative' },
+  viewfinderOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+  targetBox: { width: 260, height: 140, borderRadius: 20, borderWidth: 2, borderStyle: 'dashed' },
+  scanHint: { fontSize: 14, fontWeight: '700', marginTop: 20, textAlign: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12 },
+
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { fontSize: 16, fontWeight: '800', marginTop: 16 },
+
+  resultCard: {
+    position: 'absolute',
+    bottom: 30,
+    left: 16,
+    right: 16,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    padding: 20,
+    overflow: 'hidden',
+  },
+  resHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  resTitle: { fontSize: 18, fontWeight: '900' },
+  resBrand: { fontSize: 13, fontWeight: '600', marginTop: 2 },
+  resClose: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+
+  macroGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 18 },
+  macroBox: { alignItems: 'center', flex: 1 },
+  macroVal: { fontSize: 18, fontWeight: '900' },
+  macroLbl: { fontSize: 11, fontWeight: '700', marginTop: 2 },
+
+  resActions: { flexDirection: 'row', gap: 10 },
+  actionBtn: { flex: 1, height: 48, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  actionBtnText: { fontSize: 14, fontWeight: '800' },
+  actionBtnPrimary: { flex: 1.3, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  actionPrimaryText: { color: '#000', fontSize: 14, fontWeight: '900' },
+
+  pantryWrap: { flex: 1 },
+  pantryCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 18, borderWidth: 1, marginBottom: 12 },
+  pantryTitle: { fontSize: 16, fontWeight: '800' },
+  pantryBrand: { fontSize: 13, fontWeight: '600', marginTop: 2 },
+  pantryMacro: { fontSize: 12, fontWeight: '800', marginTop: 6 },
+
+  addMasaBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  deleteBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+
+  emptyPantry: { alignItems: 'center', padding: 40, marginTop: 40 },
+  emptyPTitle: { fontSize: 20, fontWeight: '900', marginTop: 16, marginBottom: 8 },
+  emptyPSub: { fontSize: 14, lineHeight: 22, textAlign: 'center', marginBottom: 24 },
+  emptyPBtn: { paddingHorizontal: 20, paddingVertical: 14, borderRadius: 14 },
+  emptyPBtnText: { color: '#000', fontSize: 15, fontWeight: '800' },
+});
+
+
+================================================================================
+FISIER: frontend-nutritie\app\(tabs)\_layout.tsx
 ================================================================================
 
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Home, List, MessageCircle, User, BarChart3 } from 'lucide-react-native';
+import { Home, List, MessageCircle, User, BarChart3, Dumbbell } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 
 export default function TabLayout() {
@@ -15821,6 +16214,13 @@ export default function TabLayout() {
         options={{
           title: 'Jurnal',
           tabBarIcon: ({ color, size }) => <List size={size} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />,
+        }}
+      />
+      <Tabs.Screen
+        name="antrenamente"
+        options={{
+          title: 'Sport',
+          tabBarIcon: ({ color, size }) => <Dumbbell size={size} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />,
         }}
       />
       <Tabs.Screen
@@ -15871,13 +16271,232 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\app\(tabs)\chat.tsx
+FISIER: frontend-nutritie\app\(tabs)\antrenamente.tsx
+================================================================================
+
+import React, { useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  FlatList,
+  Platform
+} from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Dumbbell, Flame, Plus, Trash2, Trophy, Sparkles } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+
+import { useTheme } from '../../context/ThemeContext';
+import { useAntrenamente, Antrenament } from '../../hooks/useAntrenamente';
+import { AddWorkoutBottomSheet, AddWorkoutBottomSheetRef } from '../../components/AddWorkoutBottomSheet';
+
+export default function AntrenamenteScreen() {
+  const { colors } = useTheme();
+  const {
+    antrenamente,
+    totalCaloriiArse,
+    numarAntrenamente,
+    stergeAntrenament,
+    loading,
+    refresh
+  } = useAntrenamente();
+
+  const bottomSheetRef = useRef<AddWorkoutBottomSheetRef>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
+
+  const handleStergere = (item: Antrenament) => {
+    Alert.alert(
+      "Șterge antrenamentul",
+      `Ești sigur că vrei să ștergi "${item.nume}" (-${item.calorii_arse} kcal)?`,
+      [
+        { text: "Anulează", style: "cancel" },
+        {
+          text: "Șterge",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              await stergeAntrenament(item.id);
+            } catch {}
+          }
+        }
+      ]
+    );
+  };
+
+  const renderItem = ({ item }: { item: Antrenament }) => (
+    <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+      <View style={styles.cardLeft}>
+        <View style={[styles.cardIconBox, { backgroundColor: colors.warning + '26' }]}>
+          <Dumbbell size={20} color={colors.warning} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{item.nume}</Text>
+          <Text style={[styles.cardSub, { color: colors.textSecondary }]}>{item.durata_min} minute • {item.tip}</Text>
+        </View>
+      </View>
+
+      <View style={styles.cardRight}>
+        <View style={styles.kcalBadge}>
+          <Flame size={14} color={colors.warning} />
+          <Text style={[styles.kcalText, { color: colors.warning }]}>+{item.calorii_arse} kcal</Text>
+        </View>
+
+        <TouchableOpacity
+          onPress={() => handleStergere(item)}
+          style={[styles.deleteBtn, { backgroundColor: colors.danger + '1A' }]}
+          accessibilityLabel={`Șterge antrenamentul ${item.nume}`}
+          accessibilityRole="button"
+        >
+          <Trash2 size={16} color={colors.danger} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={[styles.outerContainer, { backgroundColor: colors.background }]}>
+      {/* Gradients decorative */}
+      <View style={[styles.glowTop, { backgroundColor: colors.warning }]} />
+
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Sport & Activitate</Text>
+            <Text style={[styles.headerSub, { color: colors.textSecondary }]}>
+              Caloriile arse măresc bugetul zilnic
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={() => bottomSheetRef.current?.open()}
+            style={[styles.addTopBtn, { backgroundColor: colors.warning }]}
+            accessibilityLabel="Adaugă un nou antrenament"
+            accessibilityRole="button"
+          >
+            <Plus size={22} color="#000" strokeWidth={3} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Summary Card */}
+        <BlurView intensity={20} tint="dark" style={[styles.summaryCard, { borderColor: colors.warning + '40' }]}>
+          <LinearGradient
+            colors={[colors.warning + '1A', 'rgba(0,0,0,0)']}
+            style={styles.summaryGradient}
+          >
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>TOTAL ARS AZI</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Flame size={24} color={colors.warning} />
+                <Text style={[styles.summaryValue, { color: colors.warning }]}>
+                  +{totalCaloriiArse}
+                </Text>
+                <Text style={[styles.summaryUnit, { color: colors.textSecondary }]}>kcal</Text>
+              </View>
+            </View>
+
+            <View style={[styles.divider, { backgroundColor: colors.cardBorder }]} />
+
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>ANTRENAMENTE</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Trophy size={22} color={colors.accent} />
+                <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>
+                  {numarAntrenamente}
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
+        </BlurView>
+
+        {/* Listă Antrenamente */}
+        <FlatList
+          data={antrenamente}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={[styles.emptyBox, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
+              <Dumbbell size={42} color={colors.textTertiary} />
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                Nu ai înregistrat niciun antrenament azi
+              </Text>
+              <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
+                Orice exercițiu sau plimbare înregistrată îți adaugă calorii suplimentare în bugetul zilnic.
+              </Text>
+              <TouchableOpacity
+                onPress={() => bottomSheetRef.current?.open()}
+                style={[styles.emptyBtn, { backgroundColor: colors.warning }]}
+              >
+                <Text style={styles.emptyBtnText}>Adaugă primul antrenament</Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
+      </View>
+
+      <AddWorkoutBottomSheet ref={bottomSheetRef} onSuccess={refresh} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  outerContainer: { flex: 1 },
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 56 : 32 },
+  glowTop: { position: 'absolute', top: -100, right: -60, width: 280, height: 280, borderRadius: 140, opacity: 0.08 },
+
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
+  headerTitle: { fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
+  headerSub: { fontSize: 13, fontWeight: '600', marginTop: 2 },
+  addTopBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+
+  summaryCard: { borderRadius: 22, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
+  summaryGradient: { flexDirection: 'row', alignItems: 'center', padding: 18 },
+  summaryItem: { flex: 1 },
+  summaryLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, marginBottom: 6 },
+  summaryValue: { fontSize: 26, fontWeight: '900' },
+  summaryUnit: { fontSize: 14, fontWeight: '700', alignSelf: 'flex-end', marginBottom: 3 },
+  divider: { width: 1, height: '80%', marginHorizontal: 16 },
+
+  listContent: { paddingBottom: 100 },
+  card: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14, borderRadius: 18, borderWidth: 1, marginBottom: 12 },
+  cardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  cardIconBox: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  cardTitle: { fontSize: 16, fontWeight: '800' },
+  cardSub: { fontSize: 13, fontWeight: '600', marginTop: 2 },
+
+  cardRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  kcalBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: 'rgba(245, 158, 11, 0.12)' },
+  kcalText: { fontSize: 14, fontWeight: '800' },
+  deleteBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+
+  emptyBox: { padding: 32, borderRadius: 22, borderWidth: 1, alignItems: 'center', marginTop: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginTop: 14, marginBottom: 8 },
+  emptySub: { fontSize: 14, lineHeight: 20, textAlign: 'center', marginBottom: 20 },
+  emptyBtn: { paddingHorizontal: 20, paddingVertical: 14, borderRadius: 14 },
+  emptyBtnText: { color: '#000', fontSize: 15, fontWeight: '800' },
+});
+
+
+================================================================================
+FISIER: frontend-nutritie\app\(tabs)\chat.tsx
 ================================================================================
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, KeyboardAvoidingView, Platform, Keyboard
+  ScrollView, KeyboardAvoidingView, Platform, Keyboard, Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../supabase';
@@ -15886,7 +16505,7 @@ import { useFocusEffect } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
-import { Bot, Send, Sparkles, Refrigerator, Utensils, Flame, Clock } from 'lucide-react-native';
+import { Bot, Send, Sparkles, Refrigerator, Utensils, Flame, Clock, SquarePen } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTheme } from '../../context/ThemeContext';
@@ -16036,6 +16655,30 @@ export default function ChatScreen() {
     await executaTrimitereMesaj(mesajText);
   };
 
+  const handleResetChat = () => {
+    Alert.alert(
+      "Începi o conversație nouă?",
+      "Istoricul curent va fi șters și vei începe o conversație proaspătă cu asistentul AI.",
+      [
+        { text: "Anulează", style: "cancel" },
+        {
+          text: "Chat nou",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            } catch {}
+            const initialMsg: ChatMessage[] = [
+              { role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
+            ];
+            setMesaje(initialMsg);
+            await AsyncStorage.removeItem('chat_history');
+          }
+        }
+      ]
+    );
+  };
+
   const inputBottomPadding = isKeyboardVisible 
     ? 10 
     : (Platform.OS === 'ios' ? 24 : 14);
@@ -16062,11 +16705,23 @@ export default function ChatScreen() {
             </View>
           </View>
 
-          {/* Context chips */}
-          <View style={styles.contextRow}>
+          {/* Header Right / Actions */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <View style={[styles.contextChip, { backgroundColor: colors.accent + '14', borderColor: colors.accent + '26' }]}>
               <Text style={[styles.contextChipText, { color: colors.accent }]}>{totalCalorii} kcal / {caloriiTinta} kcal</Text>
             </View>
+
+            <TouchableOpacity
+              onPress={handleResetChat}
+              style={[
+                styles.newChatBtn,
+                { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }
+              ]}
+              accessibilityLabel="Începe o conversație nouă și șterge istoricul"
+              accessibilityRole="button"
+            >
+              <SquarePen size={18} color={colors.textPrimary} />
+            </TouchableOpacity>
           </View>
         </Animated.View>
 
@@ -16221,6 +16876,7 @@ const styles = StyleSheet.create({
   contextRow: { flexDirection: 'row', gap: 8 },
   contextChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   contextChipText: { fontSize: 12, fontWeight: '700' },
+  newChatBtn: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
 
   chatScroll: { flex: 1 },
   bubble: { flexDirection: 'row', marginBottom: 16, alignItems: 'flex-end' },
@@ -16249,7 +16905,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\app\(tabs)\index.tsx
+FISIER: frontend-nutritie\app\(tabs)\index.tsx
 ================================================================================
 
 import React, { useCallback, useRef, useState } from 'react';
@@ -16259,13 +16915,15 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Scan, TrendingUp, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints } from 'lucide-react-native';
+import { Scan, TrendingUp, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTheme } from '../../context/ThemeContext';
 import { useApa } from '../../hooks/useApa';
 import { AddMealBottomSheet, AddMealBottomSheetRef } from '../../components/AddMealBottomSheet';
 import { useHealthSync } from '../../hooks/useHealthSync';
+import { useAntrenamente } from '../../hooks/useAntrenamente';
+import { getCalorieState } from '../../lib/calorieState';
 import { SkeletonLoader } from '../../components/SkeletonLoader';
 
 function RingProgress({ procent, color, bgColor }: { procent: number; color: string; bgColor: string }) {
@@ -16329,12 +16987,14 @@ export default function HomeScreen() {
   } = useMeseAzi();
   const { pahare, tinta: tintaPahare, adaugaPahar, scadePahar } = useApa();
   const { steps, activeCalories, stepGoal, isEnabled, platformName, providerInfo, addSimulatedSteps, refreshSteps } = useHealthSync();
+  const { totalCaloriiArse, refresh: refreshAntrenamente } = useAntrenamente();
   const [ascundeCardHealth, setAscundeCardHealth] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       refresh();
       refreshSteps();
+      refreshAntrenamente();
       AsyncStorage.getItem('ascundeCardHealth').then((val) => {
         if (val === 'true') setAscundeCardHealth(true);
         else setAscundeCardHealth(false);
@@ -16344,9 +17004,11 @@ export default function HomeScreen() {
 
   const caloriiConsumate = totalCalorii;
   const proteineConsumate = totalProteine;
-  const caloriiRamase = caloriiTinta - caloriiConsumate + (isEnabled ? activeCalories : 0);
+  const caloriiRamase = caloriiTinta - caloriiConsumate + (isEnabled ? activeCalories : 0) + totalCaloriiArse;
   const procentCalorii = Math.min((caloriiConsumate / caloriiTinta) * 100, 100);
   const procentProteine = Math.min((proteineConsumate / proteineTinta) * 100, 100);
+
+  const calState = getCalorieState(caloriiConsumate, caloriiTinta, colors.accent, colors.accentSecondary);
 
   const userName = user?.email ? user.email.split('@')[0] : 'Prieten';
   const capitalizedName = userName.charAt(0).toUpperCase() + userName.slice(1);
@@ -16421,7 +17083,7 @@ export default function HomeScreen() {
             </View>
             <View style={s.greetingSubRow}>
               <Text style={[s.greetingSub, { color: colors.textSecondary }]}>Urmărește-ți nutriția de astăzi</Text>
-              <Text style={[s.caloriiInline, { color: colors.accent }]}>  {caloriiConsumate} kcal</Text>
+              <Text style={[s.caloriiInline, { color: calState.ringColor }]}>  {calState.emoji} {calState.mesaj}</Text>
             </View>
           </View>
           <View style={s.streakBadge}>
@@ -16449,10 +17111,18 @@ export default function HomeScreen() {
                     <Text style={[s.ringCardSubSep, { color: colors.textSecondary }]}>  •  Țintă: </Text>
                     <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]}>{caloriiTinta} kcal</Text>
                   </View>
+                  {totalCaloriiArse > 0 && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                      <Dumbbell size={14} color={colors.warning} />
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.warning }}>
+                        Ars prin sport: +{totalCaloriiArse} kcal
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 <RingProgress 
                   procent={procentCalorii} 
-                  color={procentCalorii > 90 ? '#f43f5e' : colors.accent} 
+                  color={calState.ringColor} 
                   bgColor="rgba(255,255,255,0.06)" 
                 />
               </View>
@@ -16537,8 +17207,8 @@ export default function HomeScreen() {
                 <Camera size={28} color={colors.background} strokeWidth={2.5} />
               </View>
               <View style={s.scanCTAText}>
-                <Text style={[s.scanCTATitle, { color: colors.background }]}>Scanează Mâncarea</Text>
-                <Text style={s.scanCTASub}>Analiză nutrițională instantă cu AI</Text>
+                <Text style={[s.scanCTATitle, { color: colors.background }]}>Scanează Mâncarea cu AI</Text>
+                <Text style={s.scanCTASub}>Analiză foto instantă a caloriilor</Text>
               </View>
               <View style={s.scanCTAArrow}>
                 <Scan size={20} color={colors.background} />
@@ -16547,26 +17217,45 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Manual Add CTA (Secundar, discret) */}
-        <Animated.View entering={FadeInDown.duration(700).delay(300)}>
+        {/* Rând acțiuni secundare (B1) - Cod de Bare + Manual */}
+        <Animated.View entering={FadeInDown.duration(700).delay(280)} style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Adaugă o masă manual fără poză"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingVertical: 10,
-              marginBottom: 10,
-              gap: 6,
-            }}
-            onPress={() => addMealSheetRef.current?.open()}
-            activeOpacity={0.7}
+            accessibilityLabel="Scanează cod de bare produs"
+            style={[s.secActionCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+            onPress={() => router.push('/scanner-barcode' as any)}
           >
-            <PlusCircle size={16} color={colors.accent} />
-            <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
-              Sau <Text style={{ color: colors.textPrimary, textDecorationLine: 'underline' }}>adaugă o masă manual</Text> (fără poză)
-            </Text>
+            <Scan size={18} color={colors.accent} />
+            <Text style={[s.secActionText, { color: colors.textPrimary }]}>Cod de Bare</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Adaugă o masă manual"
+            style={[s.secActionCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+            onPress={() => addMealSheetRef.current?.open()}
+          >
+            <PlusCircle size={18} color={colors.accentSecondary} />
+            <Text style={[s.secActionText, { color: colors.textPrimary }]}>Adaugă Manual</Text>
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Mini-Card separat: Greutate & Progres (B2) */}
+        <Animated.View entering={FadeInDown.duration(700).delay(310)}>
+          <TouchableOpacity
+            onPress={() => router.push('/profil')}
+            style={[s.weightCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+          >
+            <View style={s.weightIconWrap}>
+              <Scale size={20} color={colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.weightLabel, { color: colors.textSecondary }]}>GREUTATE & PROGRES</Text>
+              <Text style={[s.weightValue, { color: colors.textPrimary }]}>
+                {greutate || 75} kg
+              </Text>
+            </View>
+            <Text style={[s.weightLink, { color: colors.accent }]}>Editează &rarr;</Text>
           </TouchableOpacity>
         </Animated.View>
 
@@ -16836,10 +17525,19 @@ const s = StyleSheet.create({
   healthCalories: { fontSize: 13, fontWeight: '800' },
   healthOfflineBox: { backgroundColor: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)' },
   healthOfflineText: { fontSize: 13, lineHeight: 18, textAlign: 'center' },
+
+  secActionCard: { flex: 1, height: 48, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  secActionText: { fontSize: 14, fontWeight: '800' },
+
+  weightCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, borderWidth: 1, marginBottom: 20 },
+  weightIconWrap: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
+  weightLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
+  weightValue: { fontSize: 20, fontWeight: '900', marginTop: 2 },
+  weightLink: { fontSize: 13, fontWeight: '800' },
 });
 
 ================================================================================
-FIȘIER: frontend-nutritie\app\(tabs)\istoric.tsx
+FISIER: frontend-nutritie\app\(tabs)\istoric.tsx
 ================================================================================
 
 import React, { useCallback, useState, useMemo, useRef } from 'react';
@@ -17222,7 +17920,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\app\(tabs)\profil.tsx
+FISIER: frontend-nutritie\app\(tabs)\profil.tsx
 ================================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -17820,7 +18518,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\app\(tabs)\statistici.tsx
+FISIER: frontend-nutritie\app\(tabs)\statistici.tsx
 ================================================================================
 
 import React, { useState, useCallback, useEffect } from 'react';
@@ -18432,7 +19130,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\components\AddMealBottomSheet.tsx
+FISIER: frontend-nutritie\components\AddMealBottomSheet.tsx
 ================================================================================
 
 import React, { useCallback, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
@@ -18466,6 +19164,14 @@ import { foodPresets, categories, FoodPreset } from '../constants/foodPresets';
 
 export interface AddMealBottomSheetRef {
   open: (masaToEdit?: Masa) => void;
+  openWithItem: (item: {
+    nume: string;
+    calorii: number;
+    proteine: number;
+    carbohidrati: number;
+    grasimi: number;
+    gramajDefault?: number;
+  }) => void;
   close: () => void;
 }
 
@@ -18646,6 +19352,33 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         } catch {}
         bottomSheetRef.current?.expand();
+      },
+      openWithItem: (item) => {
+        const defaultGr = item.gramajDefault || 100;
+        setEditingMasaId(null);
+        setNume(item.nume);
+        setGrame(String(defaultGr));
+        setCalorii(String(item.calorii));
+        setProteine(String(item.proteine));
+        setCarbohidrati(String(item.carbohidrati));
+        setGrasimi(String(item.grasimi));
+
+        setBaseNutrition({
+          defaultGrame: defaultGr,
+          calorii: item.calorii,
+          proteine: item.proteine,
+          carbohidrati: item.carbohidrati,
+          grasimi: item.grasimi,
+        });
+
+        try {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        } catch {}
+
+        bottomSheetRef.current?.expand();
+        setTimeout(() => {
+          scrollToGramajSection();
+        }, 350);
       },
       close: () => {
         bottomSheetRef.current?.close();
@@ -19008,7 +19741,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
               {/* Butoane rapide gramaj (P0.2) */}
               <View style={styles.gramChipsRow}>
-                {['50', '100', '150', '200', '300'].map((val) => {
+                {['50', '100', '150', '200', '250'].map((val) => {
                   const isActive = grame === val;
                   return (
                     <TouchableOpacity
@@ -19371,7 +20104,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\components\AddWeightModal.tsx
+FISIER: frontend-nutritie\components\AddWeightModal.tsx
 ================================================================================
 
 import React, { useState, useEffect } from 'react';
@@ -19580,7 +20313,357 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\components\BouncingDot.tsx
+FISIER: frontend-nutritie\components\AddWorkoutBottomSheet.tsx
+================================================================================
+
+import React, { useState, useMemo, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator
+} from 'react-native';
+import BottomSheet, {
+  BottomSheetScrollView,
+  BottomSheetBackdrop,
+  BottomSheetTextInput
+} from '@gorhom/bottom-sheet';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Dumbbell, Flame, Clock, Check, X } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { useNotificationBanner } from '../context/NotificationBannerContext';
+import { exercitiiPresets, ExercitiuPreset, calculeazaCaloriiArse } from '../constants/exercitii';
+import { useAntrenamente } from '../hooks/useAntrenamente';
+
+export interface AddWorkoutBottomSheetRef {
+  open: () => void;
+  close: () => void;
+}
+
+interface AddWorkoutBottomSheetProps {
+  onSuccess?: () => void;
+}
+
+export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWorkoutBottomSheetProps>(
+  ({ onSuccess }, ref) => {
+    const { colors } = useTheme();
+    const { user } = useAuth();
+    const { showBanner } = useNotificationBanner();
+    const { adaugaAntrenament } = useAntrenamente();
+
+    const bottomSheetRef = useRef<BottomSheet>(null);
+    const snapPoints = useMemo(() => ['70%', '88%'], []);
+
+    const [selectedPreset, setSelectedPreset] = useState<ExercitiuPreset>(exercitiiPresets[0]);
+    const [durataMin, setDurataMin] = useState('30');
+    const [manualKcal, setManualKcal] = useState('');
+    const [useManual, setUseManual] = useState(false);
+    const [greutateUser, setGreutateUser] = useState(75);
+    const [loading, setLoading] = useState(false);
+
+    useImperativeHandle(ref, () => ({
+      open: async () => {
+        try {
+          if (user?.user_metadata?.greutate) {
+            setGreutateUser(Number(user.user_metadata.greutate));
+          } else {
+            const st = await AsyncStorage.getItem('greutate');
+            if (st) setGreutateUser(Number(st));
+          }
+        } catch {}
+
+        setSelectedPreset(exercitiiPresets[0]);
+        setDurataMin('30');
+        setManualKcal('');
+        setUseManual(false);
+
+        try {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        } catch {}
+        bottomSheetRef.current?.expand();
+      },
+      close: () => {
+        bottomSheetRef.current?.close();
+      },
+    }));
+
+    const renderBackdrop = useCallback(
+      (props: any) => (
+        <BottomSheetBackdrop
+          {...props}
+          disappearsOnIndex={-1}
+          appearsOnIndex={0}
+          opacity={0.6}
+        />
+      ),
+      []
+    );
+
+    const durNumber = parseInt(durataMin, 10) || 0;
+    const estimatedKcal = useMemo(() => {
+      if (useManual) return parseInt(manualKcal, 10) || 0;
+      return calculeazaCaloriiArse(selectedPreset.met, greutateUser, durNumber);
+    }, [useManual, manualKcal, selectedPreset.met, greutateUser, durNumber]);
+
+    const handleSave = async () => {
+      if (durNumber <= 0) {
+        Alert.alert("Durată invalidă", "Introdu o durată în minute mai mare decât 0.");
+        return;
+      }
+      if (estimatedKcal <= 0) {
+        Alert.alert("Calorii invalide", "Numărul de calorii arse trebuie să fie mai mare decât 0.");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        await adaugaAntrenament({
+          nume: selectedPreset.nume,
+          tip: selectedPreset.tip,
+          durata_min: durNumber,
+          calorii_arse: estimatedKcal,
+          met: selectedPreset.met,
+        });
+
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch {}
+
+        showBanner({
+          title: "Antrenament salvat!",
+          message: `+${estimatedKcal} kcal adăugate la bugetul tău de azi.`,
+          type: "success",
+        });
+
+        bottomSheetRef.current?.close();
+        if (onSuccess) onSuccess();
+      } catch (err: any) {
+        Alert.alert("Eroare", "Nu am putut salva antrenamentul. Verifică dacă tabela 'antrenamente' există în Supabase.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    return (
+      <BottomSheet
+        ref={bottomSheetRef}
+        index={-1}
+        snapPoints={snapPoints}
+        backdropComponent={renderBackdrop}
+        enablePanDownToClose
+        backgroundStyle={{ backgroundColor: colors.cardBg, borderColor: colors.cardBorder, borderWidth: 1 }}
+        handleIndicatorStyle={{ backgroundColor: colors.textTertiary }}
+      >
+        <BottomSheetScrollView contentContainerStyle={styles.container}>
+          <View style={styles.header}>
+            <View style={styles.titleRow}>
+              <View style={[styles.iconBox, { backgroundColor: colors.warning + '26' }]}>
+                <Dumbbell size={22} color={colors.warning} />
+              </View>
+              <Text style={[styles.title, { color: colors.textPrimary }]}>
+                Înregistrează Antrenament
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => bottomSheetRef.current?.close()}
+              style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]}
+              accessibilityLabel="Închide panoul antrenament"
+              accessibilityRole="button"
+            >
+              <X size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Selectare exercițiu */}
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+            ALEGE TIPUL DE EXERCIȚIU
+          </Text>
+          <View style={styles.chipsWrap}>
+            {exercitiiPresets.map((preset) => {
+              const active = selectedPreset.id === preset.id;
+              return (
+                <TouchableOpacity
+                  key={preset.id}
+                  onPress={() => {
+                    setSelectedPreset(preset);
+                    try { Haptics.selectionAsync(); } catch {}
+                  }}
+                  style={[
+                    styles.presetChip,
+                    {
+                      backgroundColor: active ? colors.warning : colors.surfaceBg,
+                      borderColor: active ? colors.warning : colors.cardBorder,
+                    },
+                  ]}
+                  accessibilityLabel={`Selectează ${preset.nume}`}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.chipIcon}>{preset.icon}</Text>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      { color: active ? '#000' : colors.textPrimary },
+                    ]}
+                  >
+                    {preset.nume}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Durată (minute) */}
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 16 }]}>
+            DURATĂ ANTRENAMENT (MINUTE)
+          </Text>
+          <View style={styles.inputRow}>
+            <Clock size={20} color={colors.textSecondary} style={{ marginRight: 8 }} />
+            <BottomSheetTextInput
+              style={[
+                styles.input,
+                { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg },
+              ]}
+              keyboardType="numeric"
+              value={durataMin}
+              onChangeText={setDurataMin}
+              placeholder="Ex: 30"
+              placeholderTextColor={colors.textTertiary}
+            />
+          </View>
+          <View style={styles.quickDurationRow}>
+            {['15', '30', '45', '60', '90'].map((val) => (
+              <TouchableOpacity
+                key={val}
+                onPress={() => {
+                  setDurataMin(val);
+                  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                }}
+                style={[
+                  styles.quickBtn,
+                  {
+                    backgroundColor: durataMin === val ? colors.warning + '26' : colors.surfaceBg,
+                    borderColor: durataMin === val ? colors.warning : colors.cardBorder,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: durataMin === val ? colors.warning : colors.textSecondary,
+                    fontWeight: '700',
+                    fontSize: 13,
+                  }}
+                >
+                  {val}m
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Preview sau introducedere manuală calorii */}
+          <View style={[styles.previewCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Flame size={24} color={colors.warning} />
+                <View>
+                  <Text style={{ fontSize: 13, color: colors.textSecondary }}>Calorii arse estimate</Text>
+                  <Text style={{ fontSize: 24, fontWeight: '900', color: colors.warning }}>
+                    +{estimatedKcal} kcal
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setUseManual(!useManual)}
+                style={[
+                  styles.switchManualBtn,
+                  { borderColor: useManual ? colors.warning : colors.cardBorder },
+                ]}
+              >
+                <Text style={{ fontSize: 12, color: useManual ? colors.warning : colors.textSecondary, fontWeight: '700' }}>
+                  {useManual ? "Calcul automat" : "Introdu manual"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {useManual && (
+              <View style={{ marginTop: 12 }}>
+                <BottomSheetTextInput
+                  style={[
+                    styles.input,
+                    { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg },
+                  ]}
+                  keyboardType="numeric"
+                  value={manualKcal}
+                  onChangeText={setManualKcal}
+                  placeholder="Introdu numărul exact de kcal arse"
+                  placeholderTextColor={colors.textTertiary}
+                />
+              </View>
+            )}
+          </View>
+
+          {/* Buton Salvează */}
+          <TouchableOpacity
+            onPress={handleSave}
+            disabled={loading}
+            style={styles.saveWrap}
+            accessibilityLabel="Salvează antrenamentul"
+            accessibilityRole="button"
+          >
+            <LinearGradient colors={['#F59E0B', '#D97706']} style={styles.saveBtn}>
+              {loading ? (
+                <ActivityIndicator color="#000" />
+              ) : (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Check size={20} color="#000" strokeWidth={3} />
+                  <Text style={styles.saveText}>Salvează Antrenamentul</Text>
+                </View>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        </BottomSheetScrollView>
+      </BottomSheet>
+    );
+  }
+);
+
+const styles = StyleSheet.create({
+  container: { padding: 20, paddingBottom: 40 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconBox: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  title: { fontSize: 20, fontWeight: '800' },
+  closeBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+
+  sectionLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, marginBottom: 10 },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  presetChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
+  chipIcon: { fontSize: 16 },
+  chipText: { fontSize: 13, fontWeight: '700' },
+
+  inputRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  input: { flex: 1, borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, height: 48, fontSize: 16, fontWeight: '700' },
+
+  quickDurationRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  quickBtn: { flex: 1, height: 44, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+
+  previewCard: { padding: 16, borderRadius: 18, borderWidth: 1, marginBottom: 24 },
+  switchManualBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
+
+  saveWrap: { borderRadius: 18, overflow: 'hidden' },
+  saveBtn: { height: 54, justifyContent: 'center', alignItems: 'center' },
+  saveText: { color: '#000', fontSize: 16, fontWeight: '800' },
+});
+
+
+================================================================================
+FISIER: frontend-nutritie\components\BouncingDot.tsx
 ================================================================================
 
 import React, { useEffect } from 'react';
@@ -19643,7 +20726,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\components\InAppNotification.tsx
+FISIER: frontend-nutritie\components\InAppNotification.tsx
 ================================================================================
 
 import React, { useEffect } from 'react';
@@ -19827,7 +20910,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\components\LockScreen.tsx
+FISIER: frontend-nutritie\components\LockScreen.tsx
 ================================================================================
 
 import React from 'react';
@@ -19969,7 +21052,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\components\MacroRing.tsx
+FISIER: frontend-nutritie\components\MacroRing.tsx
 ================================================================================
 
 import React, { useEffect } from 'react';
@@ -20084,7 +21167,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\components\MonthCalendar.tsx
+FISIER: frontend-nutritie\components\MonthCalendar.tsx
 ================================================================================
 
 import React, { useState, useMemo } from 'react';
@@ -20383,7 +21466,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\components\RecipeGeneratorModal.tsx
+FISIER: frontend-nutritie\components\RecipeGeneratorModal.tsx
 ================================================================================
 
 import React, { useState } from 'react';
@@ -20625,7 +21708,7 @@ const styles = StyleSheet.create({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\components\SkeletonLoader.tsx
+FISIER: frontend-nutritie\components\SkeletonLoader.tsx
 ================================================================================
 
 import React, { useEffect } from 'react';
@@ -20689,7 +21772,7 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\constants\config.ts
+FISIER: frontend-nutritie\constants\config.ts
 ================================================================================
 
 import { Platform } from 'react-native';
@@ -20699,12 +21782,47 @@ import { Platform } from 'react-native';
 // de aceea folosim `10.0.2.2`. Dacă rulezi pe telefon fizic, setează `EXPO_PUBLIC_API_URL`
 // cu IP-ul mașinii tale, de exemplu `http://192.168.1.100:3000`.
 const envApiUrl = process.env.EXPO_PUBLIC_API_URL;
-export const API_URL = envApiUrl
-  || (Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000');
+export const API_URL = envApiUrl || 'https://nutritie-backend-ai.onrender.com';
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\constants\foodPresets.ts
+FISIER: frontend-nutritie\constants\exercitii.ts
+================================================================================
+
+export interface ExercitiuPreset {
+  id: string;
+  nume: string;
+  tip: string;
+  icon: string;
+  met: number; // Metabolic Equivalent of Task
+}
+
+export const exercitiiPresets: ExercitiuPreset[] = [
+  { id: 'alergat', nume: 'Alergat (ușor/mediu)', tip: 'cardio', icon: '🏃', met: 9.8 },
+  { id: 'ciclism', nume: 'Ciclism / Bicicletă', tip: 'cardio', icon: '🚴', met: 7.5 },
+  { id: 'forta', nume: 'Antrenament cu greutăți / Forță', tip: 'strength', icon: '🏋️', met: 6.0 },
+  { id: 'inot', nume: 'Înot', tip: 'cardio', icon: '🏊', met: 8.3 },
+  { id: 'mers', nume: 'Mers alert', tip: 'cardio', icon: '🚶', met: 3.5 },
+  { id: 'hiit', nume: 'HIIT / Circuit cardio intens', tip: 'cardio', icon: '⚡', met: 10.0 },
+  { id: 'yoga', nume: 'Yoga / Stretching / Pilates', tip: 'flexibility', icon: '🧘', met: 2.5 },
+  { id: 'fotbal', nume: 'Fotbal / Baschet / Sport de echipă', tip: 'sport', icon: '⚽', met: 7.0 },
+  { id: 'box', nume: 'Box / Sac de box', tip: 'cardio', icon: '🥊', met: 9.0 },
+  { id: 'banda', nume: 'Bandă de alergat / Înclinație', tip: 'cardio', icon: '🏔️', met: 6.5 },
+];
+
+/**
+ * Calculează caloriile arse folosind formula MET standard:
+ * kcal = MET * greutate_kg * ore
+ */
+export function calculeazaCaloriiArse(met: number, greutateKg: number, durataMin: number): number {
+  if (!met || !greutateKg || !durataMin) return 0;
+  const ore = durataMin / 60;
+  return Math.round(met * greutateKg * ore);
+}
+
+
+================================================================================
+FISIER: frontend-nutritie\constants\foodPresets.ts
 ================================================================================
 
 export interface FoodPreset {
@@ -20954,7 +22072,7 @@ export const categories = [
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\constants\theme.ts
+FISIER: frontend-nutritie\constants\theme.ts
 ================================================================================
 
 export type ThemeName = 'midnight' | 'ocean' | 'sunset';
@@ -21051,7 +22169,7 @@ export const Colors = midnight;
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\context\AuthContext.tsx
+FISIER: frontend-nutritie\context\AuthContext.tsx
 ================================================================================
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -21112,7 +22230,7 @@ export const useAuth = () => {
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\context\NotificationBannerContext.tsx
+FISIER: frontend-nutritie\context\NotificationBannerContext.tsx
 ================================================================================
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
@@ -21218,7 +22336,7 @@ export function NotificationBannerProvider({ children }: { children: React.React
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\context\ThemeContext.tsx
+FISIER: frontend-nutritie\context\ThemeContext.tsx
 ================================================================================
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
@@ -21274,7 +22392,156 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\hooks\useApa.ts
+FISIER: frontend-nutritie\hooks\useAntrenamente.ts
+================================================================================
+
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { calculeazaCaloriiArse } from '../constants/exercitii';
+import type { User } from '@supabase/supabase-js';
+
+export interface Antrenament {
+  id: string;
+  user_id: string;
+  nume: string;
+  tip: string;
+  durata_min: number;
+  calorii_arse: number;
+  created_at: string;
+}
+
+export function useAntrenamente(dataSelectata?: Date) {
+  const [antrenamente, setAntrenamente] = useState<Antrenament[]>([]);
+  const [totalCaloriiArse, setTotalCaloriiArse] = useState(0);
+  const [numarAntrenamente, setNumarAntrenamente] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+
+  const targetDate = dataSelectata || new Date();
+  const dateKey = targetDate.toDateString();
+
+  const fetchAntrenamente = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        setLoading(false);
+        return;
+      }
+      setUser(currentUser);
+
+      const startOfDay = new Date(targetDate);
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const endOfDay = new Date(targetDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const { data, error } = await supabase
+        .from('antrenamente')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .gte('created_at', startOfDay.toISOString())
+        .lte('created_at', endOfDay.toISOString())
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn('Eroare la citirea antrenamentelor (posibil tabela nu exista inca):', error.message);
+        setAntrenamente([]);
+        setTotalCaloriiArse(0);
+        setNumarAntrenamente(0);
+      } else if (data) {
+        setAntrenamente(data as Antrenament[]);
+        const total = data.reduce((sum, item) => sum + (item.calorii_arse || 0), 0);
+        setTotalCaloriiArse(total);
+        setNumarAntrenamente(data.length);
+      }
+    } catch (e) {
+      console.warn('Eroare fetch antrenamente:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [dateKey]);
+
+  useEffect(() => {
+    fetchAntrenamente();
+  }, [fetchAntrenamente]);
+
+  const adaugaAntrenament = async (payload: {
+    nume: string;
+    tip: string;
+    durata_min: number;
+    calorii_arse?: number;
+    met?: number;
+  }) => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) throw new Error('Nu ești autentificat.');
+
+      let calorii = payload.calorii_arse || 0;
+      if (!calorii && payload.met) {
+        // Citim greutatea utilizatorului din metadata sau AsyncStorage
+        let greutateKg = currentUser.user_metadata?.greutate;
+        if (!greutateKg) {
+          const storedG = await AsyncStorage.getItem('greutate');
+          greutateKg = storedG ? parseFloat(storedG) : 75;
+        }
+        calorii = calculeazaCaloriiArse(payload.met, greutateKg || 75, payload.durata_min);
+      }
+
+      const row = {
+        user_id: currentUser.id,
+        nume: payload.nume.trim(),
+        tip: payload.tip,
+        durata_min: payload.durata_min,
+        calorii_arse: calorii,
+        created_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('antrenamente')
+        .insert([row])
+        .select()
+        .single();
+
+      if (error) throw error;
+      await fetchAntrenamente();
+      return data as Antrenament;
+    } catch (error) {
+      console.error('Eroare la adaugarea antrenamentului:', error);
+      throw error;
+    }
+  };
+
+  const stergeAntrenament = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('antrenamente')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      await fetchAntrenamente();
+    } catch (error) {
+      console.error('Eroare la stergerea antrenamentului:', error);
+      throw error;
+    }
+  };
+
+  return {
+    antrenamente,
+    totalCaloriiArse,
+    numarAntrenamente,
+    adaugaAntrenament,
+    stergeAntrenament,
+    loading,
+    refresh: fetchAntrenamente,
+  };
+}
+
+
+================================================================================
+FISIER: frontend-nutritie\hooks\useApa.ts
 ================================================================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -21347,7 +22614,7 @@ export function useApa() {
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\hooks\useAppStore.ts
+FISIER: frontend-nutritie\hooks\useAppStore.ts
 ================================================================================
 
 import { create } from 'zustand';
@@ -21414,7 +22681,7 @@ export const useAppStore = create<AppState>((set) => ({
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\hooks\useBiometrics.ts
+FISIER: frontend-nutritie\hooks\useBiometrics.ts
 ================================================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -21567,7 +22834,135 @@ export function useBiometrics() {
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\hooks\useFavorite.ts
+FISIER: frontend-nutritie\hooks\useCamara.ts
+================================================================================
+
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../supabase';
+import type { ProdusScanat } from '../lib/openfoodfacts';
+
+export interface ProdusCamara {
+  id: string;
+  user_id: string;
+  barcode: string;
+  nume: string;
+  brand?: string;
+  calorii_100g: number;
+  proteine_100g: number;
+  grasimi_100g: number;
+  carbohidrati_100g: number;
+  imagine_url?: string;
+  created_at: string;
+}
+
+export function useCamara() {
+  const [produse, setProduse] = useState<ProdusCamara[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchProduse = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setProduse([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('produse_camara')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn('Eroare la citirea produselor din camara (posibil tabela lipseste):', error.message);
+        setProduse([]);
+      } else if (data) {
+        setProduse(data as ProdusCamara[]);
+      }
+    } catch (e) {
+      console.warn('Eroare fetch camara:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProduse();
+  }, [fetchProduse]);
+
+  const adaugaProdus = async (item: ProdusScanat) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Utilizator neautentificat');
+
+      const payload = {
+        user_id: user.id,
+        barcode: item.barcode,
+        nume: item.nume,
+        brand: item.brand || null,
+        calorii_100g: item.calorii_100g,
+        proteine_100g: item.proteine_100g,
+        grasimi_100g: item.grasimi_100g,
+        carbohidrati_100g: item.carbohidrati_100g,
+        imagine_url: item.imagine_url || null,
+        created_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('produse_camara')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+      await fetchProduse();
+      return data as ProdusCamara;
+    } catch (err) {
+      console.error('Eroare la salvare produs camara:', err);
+      throw err;
+    }
+  };
+
+  const stergeProdus = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('produse_camara')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      await fetchProduse();
+    } catch (err) {
+      console.error('Eroare stergere produs camara:', err);
+      throw err;
+    }
+  };
+
+  const cautaLocal = (query: string): ProdusCamara[] => {
+    const q = query.trim().toLowerCase();
+    if (!q) return produse;
+    return produse.filter(p =>
+      p.nume.toLowerCase().includes(q) ||
+      (p.brand && p.brand.toLowerCase().includes(q)) ||
+      p.barcode.includes(q)
+    );
+  };
+
+  return {
+    produse,
+    loading,
+    adaugaProdus,
+    stergeProdus,
+    cautaLocal,
+    refresh: fetchProduse,
+  };
+}
+
+
+================================================================================
+FISIER: frontend-nutritie\hooks\useFavorite.ts
 ================================================================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -21658,7 +23053,7 @@ export function useFavorite() {
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\hooks\useHealthSync.ts
+FISIER: frontend-nutritie\hooks\useHealthSync.ts
 ================================================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -21948,7 +23343,7 @@ export function useHealthSync(): HealthSyncState {
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\hooks\useMeseAzi.ts
+FISIER: frontend-nutritie\hooks\useMeseAzi.ts
 ================================================================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -22110,7 +23505,7 @@ export function useMeseAzi(dataSelectata?: Date) {
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\hooks\useNotifications.ts
+FISIER: frontend-nutritie\hooks\useNotifications.ts
 ================================================================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -22293,7 +23688,163 @@ export function useNotifications() {
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\scripts\export_for_ai.js
+FISIER: frontend-nutritie\lib\calorieState.ts
+================================================================================
+
+export type CalorieStateKey = 'start' | 'on_track' | 'aproape' | 'atins' | 'depasit';
+
+export interface CalorieStateConfig {
+  key: CalorieStateKey;
+  ringColor: string;
+  glowColor: string;
+  mesaj: string;
+  emoji: string;
+  isOver: boolean;
+  surplusKcal: number;
+}
+
+/**
+ * Returnează starea vizuală adaptivă pe baza consumului și țintei calorice.
+ */
+export function getCalorieState(
+  consumat: number,
+  tinta: number,
+  defaultAccent: string,
+  defaultSecondary: string
+): CalorieStateConfig {
+  const t = Math.max(tinta, 1);
+  const c = Math.max(consumat, 0);
+  const procent = (c / t) * 100;
+
+  if (procent > 100) {
+    const surplus = c - t;
+    return {
+      key: 'depasit',
+      ringColor: '#f43f5e', // Roșu de depășire vizibil clar
+      glowColor: '#f43f5e',
+      mesaj: `Ai depășit ținta cu ${surplus} kcal`,
+      emoji: '🔴',
+      isOver: true,
+      surplusKcal: surplus,
+    };
+  }
+
+  if (procent >= 90) {
+    return {
+      key: 'atins',
+      ringColor: '#10B981', // Teal / Verde smarald de succes
+      glowColor: '#10B981',
+      mesaj: 'Țintă atinsă perfect azi',
+      emoji: '🎯',
+      isOver: false,
+      surplusKcal: 0,
+    };
+  }
+
+  if (procent >= 70) {
+    return {
+      key: 'aproape',
+      ringColor: '#F59E0B', // Galben energetic
+      glowColor: '#F59E0B',
+      mesaj: 'Aproape de țintă',
+      emoji: '⚡',
+      isOver: false,
+      surplusKcal: 0,
+    };
+  }
+
+  if (procent >= 15) {
+    return {
+      key: 'on_track',
+      ringColor: defaultAccent,
+      glowColor: defaultAccent,
+      mesaj: 'Ești pe drumul bun',
+      emoji: '✅',
+      isOver: false,
+      surplusKcal: 0,
+    };
+  }
+
+  return {
+    key: 'start',
+    ringColor: defaultAccent,
+    glowColor: defaultSecondary,
+    mesaj: 'Hai să începem ziua!',
+    emoji: '🌅',
+    isOver: false,
+    surplusKcal: 0,
+  };
+}
+
+
+================================================================================
+FISIER: frontend-nutritie\lib\openfoodfacts.ts
+================================================================================
+
+export interface ProdusScanat {
+  barcode: string;
+  nume: string;
+  brand?: string;
+  calorii_100g: number;
+  proteine_100g: number;
+  grasimi_100g: number;
+  carbohidrati_100g: number;
+  imagine_url?: string;
+}
+
+/**
+ * Caută un produs după codul de bare în OpenFoodFacts API (gratuit, fără cheie).
+ */
+export async function getProdusByBarcode(barcode: string): Promise<ProdusScanat | null> {
+  const code = barcode.trim();
+  if (!code) return null;
+
+  try {
+    const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`, {
+      headers: {
+        'User-Agent': 'NutriAI - React Native App - Contact: tudortone'
+      }
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (data.status !== 1 || !data.product) {
+      return null;
+    }
+
+    const p = data.product;
+    const nutriments = p.nutriments || {};
+
+    const calorii = Math.round(Number(nutriments['energy-kcal_100g'] || nutriments['energy-kcal'] || 0));
+    const proteine = Math.round(Number(nutriments['proteins_100g'] || nutriments['proteins'] || 0));
+    const grasimi = Math.round(Number(nutriments['fat_100g'] || nutriments['fat'] || 0));
+    const carbohidrati = Math.round(Number(nutriments['carbohydrates_100g'] || nutriments['carbohydrates'] || 0));
+
+    const numeProdus = p.product_name_ro || p.product_name || `Produs EAN ${code}`;
+    const brand = p.brands || p.brand_owner || '';
+
+    return {
+      barcode: code,
+      nume: numeProdus,
+      brand: brand,
+      calorii_100g: calorii,
+      proteine_100g: proteine,
+      grasimi_100g: grasimi,
+      carbohidrati_100g: carbohidrati,
+      imagine_url: p.image_front_small_url || p.image_url || undefined,
+    };
+  } catch (error) {
+    console.warn('Eroare fetch OpenFoodFacts:', error);
+    return null;
+  }
+}
+
+
+================================================================================
+FISIER: frontend-nutritie\scripts\export_for_ai.js
 ================================================================================
 
 const fs = require('fs');
@@ -22359,7 +23910,7 @@ try {
 
 
 ================================================================================
-FIȘIER: frontend-nutritie\scripts\reset-project.js
+FISIER: frontend-nutritie\scripts\reset-project.js
 ================================================================================
 
 #!/usr/bin/env node
@@ -22477,7 +24028,19 @@ rl.question(
 
 
 ================================================================================
-FIȘIER: backend-nutritie-ai\check_schema.js
+FISIER: backend-nutritie-ai\.env
+================================================================================
+
+GEMINI_API_KEY=AQ.[ASCUNS_FARA_CHEIE_API]
+GROQ_API_KEY=gsk_[ASCUNS_FARA_CHEIE_API]
+PORT=3000
+HOST=0.0.0.0
+SUPABASE_URL=https://tfqcihbjgmscsseyzifs.supabase.co
+SUPABASE_ANON_KEY=sb_publishable_[ASCUNS_FARA_CHEIE_API]
+CORS_ORIGINS=https://nutritie-backend-ai.onrender.com,http://localhost:8081,http://localhost:19000,http://localhost:3000,http://10.0.2.2:8081,http://10.0.2.2:3000
+
+================================================================================
+FISIER: backend-nutritie-ai\check_schema.js
 ================================================================================
 
 const { createClient } = require('@supabase/supabase-js');
@@ -22511,7 +24074,7 @@ checkDatabaseSchema();
 
 
 ================================================================================
-FIȘIER: backend-nutritie-ai\package-lock.json
+FISIER: backend-nutritie-ai\package-lock.json
 ================================================================================
 
 {
@@ -28496,7 +30059,7 @@ FIȘIER: backend-nutritie-ai\package-lock.json
 
 
 ================================================================================
-FIȘIER: backend-nutritie-ai\package.json
+FISIER: backend-nutritie-ai\package.json
 ================================================================================
 
 {
@@ -28532,7 +30095,7 @@ FIȘIER: backend-nutritie-ai\package.json
 
 
 ================================================================================
-FIȘIER: backend-nutritie-ai\server.js
+FISIER: backend-nutritie-ai\server.js
 ================================================================================
 
 const express = require('express');
@@ -28693,8 +30256,8 @@ const getGeminiModelsList = () => {
     process.env.GEMINI_MODEL,
     "gemini-2.5-flash",
     "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro"
+    "gemini-2.5-pro",
+    "gemini-flash-latest"
   ].filter((v, i, a) => v && a.indexOf(v) === i);
 };
 
@@ -28990,6 +30553,31 @@ app.post('/api/estimeaza-mancare-text', requireAuth, aiRateLimiter, async (req, 
 });
 
 // ==========================================
+// RUTA 2.1 (C3): PROXY PENTRU OPENFOODFACTS BARCODE
+// ==========================================
+app.get('/api/produs-barcode/:code', requireAuth, async (req, res) => {
+  try {
+    const code = (req.params.code || '').trim();
+    if (!code) return res.status(400).json({ eroare: "Cod de bare invalid." });
+
+    const fetchPromise = fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`, {
+      headers: { 'User-Agent': 'NutriAI - React Native App - Contact: tudortone' }
+    });
+    const resp = await callWithTimeout(fetchPromise, 12000);
+    if (!resp.ok) return res.status(404).json({ eroare: "Produs negăsit." });
+
+    const data = await resp.json();
+    if (data.status !== 1 || !data.product) {
+      return res.status(404).json({ eroare: "Produs negăsit în OpenFoodFacts." });
+    }
+    res.json(data.product);
+  } catch (err) {
+    console.error("Eroare interogare barcode OpenFoodFacts proxy:", err.message);
+    res.status(500).json({ eroare: "Eroare la interogarea codului de bare." });
+  }
+});
+
+// ==========================================
 // RUTA 3: CALCUL PROFIL NUTRIȚIONAL (DETERMINIST)
 // Securizată cu requireAuth
 // ==========================================
@@ -29165,7 +30753,7 @@ if (require.main === module) {
 }
 
 ================================================================================
-FIȘIER: backend-nutritie-ai\tests\server.test.js
+FISIER: backend-nutritie-ai\tests\server.test.js
 ================================================================================
 
 const request = require('supertest');
