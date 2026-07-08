@@ -1,29 +1,44 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, KeyboardAvoidingView, Platform, Keyboard
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../supabase';
 import { API_URL } from '@/constants/config';
 import { useFocusEffect } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
-import { Bot, Send, Sparkles } from 'lucide-react-native';
+import { Bot, Send, Sparkles, Refrigerator, Utensils, Flame, Clock } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import BouncingDot from '../../components/BouncingDot';
+import { RecipeGeneratorModal } from '../../components/RecipeGeneratorModal';
+
+interface ChatMessage {
+  role: 'ai' | 'user' | string;
+  text: string;
+}
 
 export default function ChatScreen() {
   const { colors } = useTheme();
+  const { session } = useAuth();
   const [chatInput, setChatInput] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
-  const [mesaje, setMesaje] = useState([
+  const [recipeModalVisible, setRecipeModalVisible] = useState(false);
+  const [mesaje, setMesaje] = useState<ChatMessage[]>([
     { role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
   ]);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const mesajeRef = useRef(mesaje);
+
+  useEffect(() => {
+    mesajeRef.current = mesaje;
+  }, [mesaje]);
   
   const { 
     totalCalorii, 
@@ -36,10 +51,46 @@ export default function ChatScreen() {
   useFocusEffect(
     useCallback(() => {
       refresh();
-    }, [refresh])
+    }, [])
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const saved = await AsyncStorage.getItem('chat_history');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMesaje(parsed);
+          }
+        }
+      } catch (e) {
+        console.error('Eroare la încărcarea istoricului chat:', e);
+      }
+    };
+    loadHistory();
+  }, []);
+
+  useEffect(() => {
+    const saveHistory = async () => {
+      try {
+        if (mesaje.length > 1) {
+          await AsyncStorage.setItem('chat_history', JSON.stringify(mesaje.slice(-50)));
+        }
+      } catch (e) {
+        console.error('Eroare la salvarea istoricului chat:', e);
+      }
+    };
+    saveHistory();
+  }, [mesaje]);
+
+  useEffect(() => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 200);
+  }, [mesaje, loadingChat]);
+
+  useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
       'keyboardDidShow',
       () => {
@@ -58,18 +109,12 @@ export default function ChatScreen() {
     };
   }, []);
 
-  const trimiteMesaj = async () => {
-    if (!chatInput.trim()) return;
+  const executaTrimitereMesaj = async (mesajText: string) => {
+    if (!mesajText.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const inputCurent = chatInput;
-    setChatInput('');
-    setMesaje(prev => [...prev, { role: 'user', text: inputCurent }]);
+    setMesaje(prev => [...prev, { role: 'user', text: mesajText }]);
     setLoadingChat(true);
 
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) {
-      console.error("Eroare sesiune chat:", sessionError);
-    }
     if (!session) {
       setMesaje(prev => [...prev, { role: 'ai', text: "Nu ești autentificat. Te rog să te conectezi din nou." }]);
       setLoadingChat(false);
@@ -77,6 +122,7 @@ export default function ChatScreen() {
     }
 
     try {
+      const istoricActivat = [...mesajeRef.current, { role: 'user' as const, text: mesajText }];
       const raspuns = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 
@@ -84,8 +130,8 @@ export default function ChatScreen() {
           'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({ 
-          mesaj: inputCurent,
-          mesaje: [...mesaje, { role: 'user', text: inputCurent }],
+          mesaj: mesajText,
+          mesaje: istoricActivat,
           caloriiConsumate: totalCalorii,
           caloriiTinta,
           proteineConsumate: totalProteine,
@@ -103,9 +149,20 @@ export default function ChatScreen() {
     }
   };
 
+  const trimiteMesaj = async () => {
+    if (!chatInput.trim()) return;
+    const inputCurent = chatInput;
+    setChatInput('');
+    await executaTrimitereMesaj(inputCurent);
+  };
+
+  const trimitePromptDirect = async (mesajText: string) => {
+    await executaTrimitereMesaj(mesajText);
+  };
+
   const inputBottomPadding = isKeyboardVisible 
     ? 10 
-    : (Platform.OS === 'ios' ? 64 : 40);
+    : (Platform.OS === 'ios' ? 24 : 14);
 
   return (
     <View style={[styles.outerContainer, { backgroundColor: colors.background }]}>
@@ -190,6 +247,43 @@ export default function ChatScreen() {
           )}
         </ScrollView>
 
+        {/* Quick AI Action Chips */}
+        <Animated.View entering={FadeInDown.duration(500).delay(150)} style={styles.chipsRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+            <TouchableOpacity 
+              style={[styles.actionChip, { backgroundColor: colors.accent, borderColor: colors.accent }]}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setRecipeModalVisible(true); }}
+            >
+              <Text style={{ fontSize: 14 }}>🥗</Text>
+              <Text style={[styles.actionChipText, { color: colors.background, fontWeight: '800' }]}>Generator Rețete</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+              onPress={() => trimitePromptDirect("Ce pot găti rapid și sănătos în mai puțin de 15 minute?")}
+            >
+              <Text style={{ fontSize: 14 }}>⚡</Text>
+              <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Cină rapidă (&lt;15 min)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+              onPress={() => trimitePromptDirect(`Care este cea mai eficientă rețetă bogată în proteine pentru a-mi atinge ținta de ${proteineTinta}g?`)}
+            >
+              <Text style={{ fontSize: 14 }}>💪</Text>
+              <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Bomba de proteine</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+              onPress={() => trimitePromptDirect("Analizează mesele mele de azi și dă-mi o evaluare generală și un sfat pentru seară.")}
+            >
+              <Text style={{ fontSize: 14 }}>📊</Text>
+              <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Analiză zi curentă</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </Animated.View>
+
         {/* Input */}
         <Animated.View
           entering={FadeInDown.duration(600).delay(200)}
@@ -223,6 +317,14 @@ export default function ChatScreen() {
         </Animated.View>
 
       </KeyboardAvoidingView>
+
+      <RecipeGeneratorModal
+        visible={recipeModalVisible}
+        onClose={() => setRecipeModalVisible(false)}
+        onGenerate={(prompt) => trimitePromptDirect(prompt)}
+        caloriiRamase={caloriiTinta - totalCalorii}
+        proteineRamase={proteineTinta - totalProteine}
+      />
     </View>
   );
 }
@@ -262,4 +364,9 @@ const styles = StyleSheet.create({
   input: { flex: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, maxHeight: 120, minHeight: 44, fontSize: 16 },
   sendBtn: { width: 44, height: 44, borderRadius: 16, overflow: 'hidden', marginLeft: 8 },
   sendGrad: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  chipsRow: { paddingBottom: 6 },
+  chipsScroll: { gap: 8, paddingHorizontal: 16 },
+  actionChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1 },
+  actionChipText: { fontSize: 12, fontWeight: '700' },
 });

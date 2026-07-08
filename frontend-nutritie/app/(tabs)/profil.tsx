@@ -1,59 +1,75 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Alert, ActivityIndicator, Platform
+  ScrollView, Alert, ActivityIndicator, Platform, Switch
 } from 'react-native';
 import { supabase } from '../../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette } from 'lucide-react-native';
+import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { themes, themeDisplayNames, ThemeName } from '../../constants/theme';
-import type { Session } from '@supabase/supabase-js';
+import { useNotifications } from '../../hooks/useNotifications';
+import { useAuth } from '../../context/AuthContext';
+import { useBiometrics } from '../../hooks/useBiometrics';
+import { useHealthSync, HEALTH_PROVIDERS } from '../../hooks/useHealthSync';
+import { useNotificationBanner } from '../../context/NotificationBannerContext';
 
 export default function ProfilScreen() {
   const router = useRouter();
   const { colors, themeName, setTheme } = useTheme();
-  const [session, setSession] = useState<Session | null>(null);
+  const { enabled: notificationsEnabled, toggleReminders, isExpoGo } = useNotifications();
+  const { isSupported, biometricType, isEnabled, toggleBiometric } = useBiometrics();
+  const { isEnabled: healthSyncEnabled, platformName, toggleSync: toggleHealthSync, selectedProvider, setProvider } = useHealthSync();
+  const { session, user, loadingAuth } = useAuth();
+  const { showBanner } = useNotificationBanner();
   const [greutate, setGreutate] = useState('75');
+  const [greutateTinta, setGreutateTinta] = useState('70');
   const [caloriiTinta, setCaloriiTinta] = useState('2000');
   const [proteineTinta, setProteineTinta] = useState('150');
+  const [carbiTinta, setCarbiTinta] = useState('250');
+  const [grasimiTinta, setGrasimiTinta] = useState('70');
   
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
     const initProfile = async () => {
+      if (loadingAuth) return;
       setCheckingSession(true);
       try {
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-        if (error) {
-          console.error("Eroare sesiune Supabase:", error.message);
-        }
-        
-        if (currentSession) {
-          setSession(currentSession);
-          
-          const { data: { user } } = await supabase.auth.getUser();
-          const metadata = user?.user_metadata || currentSession.user.user_metadata || {};
+        if (session) {
+          const metadata = user?.user_metadata || session.user.user_metadata || {};
           let g = metadata.greutate;
+          let gt = metadata.greutateTinta;
           let c = metadata.caloriiTinta;
           let p = metadata.proteineTinta;
+          let cb = metadata.carbiTinta;
+          let gr = metadata.grasimiTinta;
 
           if (!g) g = await AsyncStorage.getItem('greutate');
+          if (!gt) gt = await AsyncStorage.getItem('greutateTinta');
           if (!c) c = await AsyncStorage.getItem('caloriiTinta');
           if (!p) p = await AsyncStorage.getItem('proteineTinta');
+          if (!cb) cb = await AsyncStorage.getItem('carbiTinta');
+          if (!gr) gr = await AsyncStorage.getItem('grasimiTinta');
 
           setGreutate(g ? String(g) : '75');
+          setGreutateTinta(gt ? String(gt) : '70');
           setCaloriiTinta(c ? String(c) : '2000');
           setProteineTinta(p ? String(p) : '150');
+          setCarbiTinta(cb ? String(cb) : '250');
+          setGrasimiTinta(gr ? String(gr) : '70');
 
           if (g) await AsyncStorage.setItem('greutate', String(g));
+          if (gt) await AsyncStorage.setItem('greutateTinta', String(gt));
           if (c) await AsyncStorage.setItem('caloriiTinta', String(c));
           if (p) await AsyncStorage.setItem('proteineTinta', String(p));
+          if (cb) await AsyncStorage.setItem('carbiTinta', String(cb));
+          if (gr) await AsyncStorage.setItem('grasimiTinta', String(gr));
         }
       } catch (e) {
         console.error("Eroare la inițializarea profilului:", e);
@@ -63,43 +79,58 @@ export default function ProfilScreen() {
     };
 
     initProfile();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      setSession(currentSession);
-    });
-
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
-  }, []);
+  }, [session, user, loadingAuth]);
 
   const salveaza = async () => {
-    if (!greutate || !caloriiTinta || !proteineTinta) {
-      Alert.alert("Eroare", "Te rog să completezi toate obiectivele.");
+    if (!greutate || !greutateTinta || !caloriiTinta || !proteineTinta || !carbiTinta || !grasimiTinta) {
+      showBanner({
+        title: "Date incomplete",
+        message: "Te rog să completezi toate obiectivele.",
+        type: 'warning'
+      });
       return;
     }
     
     setLoading(true);
     try {
       await AsyncStorage.setItem('greutate', greutate);
+      await AsyncStorage.setItem('greutateTinta', greutateTinta);
       await AsyncStorage.setItem('caloriiTinta', caloriiTinta);
       await AsyncStorage.setItem('proteineTinta', proteineTinta);
+      await AsyncStorage.setItem('carbiTinta', carbiTinta);
+      await AsyncStorage.setItem('grasimiTinta', grasimiTinta);
 
       const { error } = await supabase.auth.updateUser({
         data: {
-          greutate: parseInt(greutate) || 75,
+          greutate: parseFloat(greutate) || 75,
+          greutateTinta: parseFloat(greutateTinta) || 70,
           caloriiTinta: parseInt(caloriiTinta) || 2000,
-          proteineTinta: parseInt(proteineTinta) || 150
+          proteineTinta: parseInt(proteineTinta) || 150,
+          carbiTinta: parseInt(carbiTinta) || 250,
+          grasimiTinta: parseInt(grasimiTinta) || 70
         }
       });
 
       if (error) {
-        Alert.alert("Eroare salvare", `Eroare salvare în Cloud: ${error.message}`);
+        showBanner({
+          title: "Eroare salvare",
+          message: `Eroare salvare în Cloud: ${error.message}`,
+          type: 'warning'
+        });
       } else {
-        Alert.alert("✅ Salvat", "Profilul tău a fost actualizat în siguranță.");
+        showBanner({
+          title: "Profil Actualizat",
+          message: "Obiectivele tale au fost salvate cu succes.",
+          type: 'success',
+          duration: 3500,
+        });
       }
     } catch {
-      Alert.alert("Eroare", "A apărut o problemă la conexiune. Datele au fost salvate doar local.");
+      showBanner({
+        title: "Salvat local",
+        message: "Conexiune indisponibilă. Datele au fost salvate local.",
+        type: 'info'
+      });
     } finally {
       setLoading(false);
     }
@@ -191,6 +222,138 @@ export default function ProfilScreen() {
           </View>
         </Animated.View>
 
+        {/* Notifications section */}
+        <Animated.View entering={FadeInDown.duration(600).delay(80)}>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>REMINDERE & NOTIFICĂRI</Text>
+          <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 20 }]}>
+            <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
+              <View style={[styles.inputRow, { alignItems: 'center' }]}>
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <Bell size={18} color={colors.accent} />
+                </View>
+                <View style={[styles.inputContent, { flex: 1 }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Remindere Zilnice de Masă</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Primești 3 notificări la 08:00, 13:00 și 19:30</Text>
+                </View>
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={(val) => { toggleReminders(val); }}
+                  trackColor={{ false: '#3f3f3f', true: colors.accent + '80' }}
+                  thumbColor={notificationsEnabled ? colors.accent : '#f4f3f4'}
+                />
+              </View>
+              {isExpoGo && (
+                <View style={{ paddingHorizontal: 20, paddingBottom: 14 }}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 11, fontStyle: 'italic' }}>
+                    ℹ️ Expo Go: Notificările push necesită development build. Reminderele locale orare rămân active.
+                  </Text>
+                </View>
+              )}
+            </LinearGradient>
+          </BlurView>
+        </Animated.View>
+
+        {/* Security / Biometric section */}
+        {isSupported && (
+          <Animated.View entering={FadeInDown.duration(600).delay(90)}>
+            <View style={styles.sectionHeaderRow}>
+              <ShieldCheck size={16} color={colors.accent} />
+              <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>SECURITATE AVANSATĂ</Text>
+            </View>
+            <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 20, marginTop: 12 }]}>
+              <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
+                <View style={[styles.inputRow, { alignItems: 'center' }]}>
+                  <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                    <Lock size={18} color={colors.accent} />
+                  </View>
+                  <View style={[styles.inputContent, { flex: 1 }]}>
+                    <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Blocare cu {biometricType}</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Solicită autentificare la pornire și după 5 min inactivitate</Text>
+                  </View>
+                  <Switch
+                    value={isEnabled}
+                    onValueChange={(val) => { toggleBiometric(val); }}
+                    trackColor={{ false: '#3f3f3f', true: colors.accent + '80' }}
+                    thumbColor={isEnabled ? colors.accent : '#f4f3f4'}
+                  />
+                </View>
+              </LinearGradient>
+            </BlurView>
+          </Animated.View>
+        )}
+
+        {/* Apple HealthKit / Google Fit section */}
+        <Animated.View entering={FadeInDown.duration(600).delay(95)}>
+          <View style={styles.sectionHeaderRow}>
+            <Activity size={16} color={colors.accent} />
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>CONECTIVITATE FITNESS & BRĂȚĂRI</Text>
+          </View>
+          <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 20, marginTop: 12 }]}>
+            <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
+              <View style={[styles.inputRow, { alignItems: 'center' }]}>
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <Footprints size={18} color={colors.accent} />
+                </View>
+                <View style={[styles.inputContent, { flex: 1 }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Sincronizare Activă ({platformName})</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Preluare automată pași și calcul calorii arse în jurnal</Text>
+                </View>
+                <Switch
+                  value={healthSyncEnabled}
+                  onValueChange={(val) => { 
+                    toggleHealthSync(val); 
+                    if (val) AsyncStorage.removeItem('ascundeCardHealth');
+                  }}
+                  trackColor={{ false: '#3f3f3f', true: colors.accent + '80' }}
+                  thumbColor={healthSyncEnabled ? colors.accent : '#f4f3f4'}
+                />
+              </View>
+
+              {/* Furnizori de fitness interactivi */}
+              <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 16 }}>
+                <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '700', marginBottom: 10, textTransform: 'uppercase' }}>
+                  Alege Aplicația sau Brățara de Fitness:
+                </Text>
+                <View style={{ gap: 8 }}>
+                  {HEALTH_PROVIDERS.map((p) => {
+                    const active = selectedProvider === p.id;
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: 12,
+                          borderRadius: 14,
+                          borderWidth: 1,
+                          borderColor: active ? colors.accent : 'rgba(255,255,255,0.08)',
+                          backgroundColor: active ? colors.accent + '15' : 'rgba(255,255,255,0.02)',
+                          gap: 12,
+                        }}
+                        onPress={() => setProvider(p.id)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={{ fontSize: 22 }}>{p.icon}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: active ? colors.accent : colors.textPrimary, fontWeight: active ? '800' : '600', fontSize: 14 }}>
+                            {p.name}
+                          </Text>
+                          <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }}>
+                            {p.description}
+                          </Text>
+                        </View>
+                        {active && (
+                          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent }} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </LinearGradient>
+          </BlurView>
+        </Animated.View>
+
         {/* Targets section */}
         <Animated.View entering={FadeInDown.duration(600).delay(100)}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>OBIECTIVELE TALE</Text>
@@ -233,6 +396,25 @@ export default function ProfilScreen() {
                   <Target size={18} color={colors.accent} />
                 </View>
                 <View style={styles.inputContent}>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Greutate Țintă (kg)</Text>
+                  <TextInput
+                    style={[styles.inputField, { color: colors.textPrimary }]}
+                    value={greutateTinta}
+                    onChangeText={setGreutateTinta}
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                    selectionColor={colors.accent}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.separator} />
+
+              <View style={styles.inputRow}>
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <Target size={18} color={colors.accent} />
+                </View>
+                <View style={styles.inputContent}>
                   <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Țintă Calorii (kcal/zi)</Text>
                   <TextInput
                     style={[styles.inputField, { color: colors.textPrimary }]}
@@ -257,6 +439,44 @@ export default function ProfilScreen() {
                     style={[styles.inputField, { color: colors.textPrimary }]}
                     value={proteineTinta}
                     onChangeText={setProteineTinta}
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                    selectionColor={colors.accent}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.separator} />
+
+              <View style={styles.inputRow}>
+                <View style={[styles.inputIcon, { backgroundColor: colors.accentTertiary + '1F' }]}>
+                  <Zap size={18} color={colors.accentTertiary} />
+                </View>
+                <View style={styles.inputContent}>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Țintă Carbohidrați (g/zi)</Text>
+                  <TextInput
+                    style={[styles.inputField, { color: colors.textPrimary }]}
+                    value={carbiTinta}
+                    onChangeText={setCarbiTinta}
+                    keyboardType="numeric"
+                    placeholderTextColor={colors.textSecondary}
+                    selectionColor={colors.accent}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.separator} />
+
+              <View style={styles.inputRow}>
+                <View style={[styles.inputIcon, { backgroundColor: colors.warning + '1F' }]}>
+                  <Zap size={18} color={colors.warning} />
+                </View>
+                <View style={styles.inputContent}>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Țintă Grăsimi (g/zi)</Text>
+                  <TextInput
+                    style={[styles.inputField, { color: colors.textPrimary }]}
+                    value={grasimiTinta}
+                    onChangeText={setGrasimiTinta}
                     keyboardType="numeric"
                     placeholderTextColor={colors.textSecondary}
                     selectionColor={colors.accent}

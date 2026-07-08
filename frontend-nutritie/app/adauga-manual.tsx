@@ -1,0 +1,306 @@
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TextInput, 
+  TouchableOpacity, 
+  ScrollView, 
+  ActivityIndicator, 
+  Alert, 
+  Platform, 
+  KeyboardAvoidingView 
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { ArrowLeft, Check, PlusCircle, Flame, Activity, Zap, Heart, Sparkles, Trash2 } from 'lucide-react-native';
+import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../supabase';
+import { useFavorite, AlimentFavorit } from '../hooks/useFavorite';
+
+export default function AdaugaManualScreen() {
+  const router = useRouter();
+  const { colors } = useTheme();
+  const { user } = useAuth();
+  const { favorite, addFavorite, removeFavorite, isFavorite } = useFavorite();
+
+  const [nume, setNume] = useState('');
+  const [grame, setGrame] = useState('');
+  const [calorii, setCalorii] = useState('');
+  const [proteine, setProteine] = useState('');
+  const [carbohidrati, setCarbohidrati] = useState('');
+  const [grasimi, setGrasimi] = useState('');
+  
+  const [loading, setLoading] = useState(false);
+
+  const handleSave = async () => {
+    if (!nume.trim()) {
+      Alert.alert("Date incomplete", "Vă rugăm să introduceți numele alimentului sau al mesei.");
+      return;
+    }
+
+    const cal = parseInt(calorii) || 0;
+    if (cal === 0 && !calorii) {
+      Alert.alert("Calorii lipsă", "Introduceți numărul estimat de calorii pentru această masă.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (!user) {
+        Alert.alert("Eroare", "Trebuie să te autentifici pentru a adăuga mese.");
+        return;
+      }
+
+      const numeFinal = grame.trim() ? `${nume.trim()} (${grame.trim()}g)` : nume.trim();
+
+      const { error: insertError } = await supabase
+        .from('mese')
+        .insert({
+          user_id: user.id,
+          nume: numeFinal,
+          calorii: cal,
+          proteine: parseInt(proteine) || 0,
+          carbohidrati: parseInt(carbohidrati) || 0,
+          grasimi: parseInt(grasimi) || 0,
+        });
+
+      if (insertError) {
+        Alert.alert("Eroare salvare", insertError.message);
+      } else {
+        Alert.alert(
+          "✅ Masă adăugată!", 
+          `"${numeFinal}" a fost înregistrată cu succes în jurnalul tău.`,
+          [{ text: "Super", onPress: () => router.back() }]
+        );
+      }
+    } catch (e) {
+      Alert.alert("Eroare", "A apărut o problemă neașteptată la salvare.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
+      <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
+
+      <View style={styles.header}>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: colors.surfaceBg }]} onPress={() => router.back()}>
+          <ArrowLeft size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Adaugă Masă Manual</Text>
+        <View style={{ width: 44 }} />
+      </View>
+
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+          
+          {/* Favorite Foods Section */}
+          {favorite.length > 0 && (
+            <Animated.View entering={FadeInDown.duration(500)} style={{ marginBottom: 20 }}>
+              <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>❤️ ALIMENTE FRECVENTE / FAVORITE</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
+                {favorite.map((fav) => (
+                  <TouchableOpacity
+                    key={fav.id}
+                    style={[styles.favChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                    onPress={() => {
+                      setNume(fav.nume);
+                      setCalorii(String(fav.calorii));
+                      setProteine(String(fav.proteine));
+                      setCarbohidrati(String(fav.carbohidrati));
+                      setGrasimi(String(fav.grasimi));
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.favChipTitle, { color: colors.textPrimary }]}>{fav.nume}</Text>
+                      <TouchableOpacity onPress={() => removeFavorite(fav.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Trash2 size={13} color={colors.textTertiary} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={[styles.favChipSub, { color: colors.accent }]}>
+                      {fav.calorii} kcal • {fav.proteine}g P
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </Animated.View>
+          )}
+
+          <Animated.View entering={FadeInDown.duration(500)} style={[styles.card, { borderColor: colors.cardBorder }]}>
+            <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
+              <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>1. Despre ce aliment este vorba?</Text>
+                
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Nume aliment / preparat *</Text>
+                <TextInput
+                  style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
+                  placeholder="Ex: Porție orez cu pui, măr, shake proteic..."
+                  placeholderTextColor={colors.textTertiary}
+                  value={nume}
+                  onChangeText={setNume}
+                  selectionColor={colors.accent}
+                />
+
+                <Text style={[styles.label, { color: colors.textSecondary, marginTop: 16 }]}>Gramaj estimat (opțional)</Text>
+                <TextInput
+                  style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
+                  placeholder="Ex: 250 (g)"
+                  placeholderTextColor={colors.textTertiary}
+                  value={grame}
+                  onChangeText={setGrame}
+                  keyboardType="numeric"
+                  selectionColor={colors.accent}
+                />
+              </LinearGradient>
+            </BlurView>
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.duration(600).delay(100)} style={[styles.card, { borderColor: colors.cardBorder, marginTop: 20 }]}>
+            <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
+              <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>2. Valori Nutriționale</Text>
+
+                <View style={styles.row}>
+                  <View style={styles.col}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>🔥 Calorii (kcal) *</Text>
+                    <TextInput
+                      style={[styles.input, { color: colors.accent, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
+                      placeholder="0"
+                      placeholderTextColor={colors.textTertiary}
+                      value={calorii}
+                      onChangeText={setCalorii}
+                      keyboardType="numeric"
+                      selectionColor={colors.accent}
+                    />
+                  </View>
+
+                  <View style={styles.col}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>🥩 Proteine (g)</Text>
+                    <TextInput
+                      style={[styles.input, { color: colors.accentSecondary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
+                      placeholder="0"
+                      placeholderTextColor={colors.textTertiary}
+                      value={proteine}
+                      onChangeText={setProteine}
+                      keyboardType="numeric"
+                      selectionColor={colors.accent}
+                    />
+                  </View>
+                </View>
+
+                <View style={[styles.row, { marginTop: 16 }]}>
+                  <View style={styles.col}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>🌾 Carbohidrați (g)</Text>
+                    <TextInput
+                      style={[styles.input, { color: colors.accentTertiary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
+                      placeholder="0"
+                      placeholderTextColor={colors.textTertiary}
+                      value={carbohidrati}
+                      onChangeText={setCarbohidrati}
+                      keyboardType="numeric"
+                      selectionColor={colors.accent}
+                    />
+                  </View>
+
+                  <View style={styles.col}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>🥑 Grăsimi (g)</Text>
+                    <TextInput
+                      style={[styles.input, { color: colors.warning, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
+                      placeholder="0"
+                      placeholderTextColor={colors.textTertiary}
+                      value={grasimi}
+                      onChangeText={setGrasimi}
+                      keyboardType="numeric"
+                      selectionColor={colors.accent}
+                    />
+                  </View>
+                </View>
+              </LinearGradient>
+            </BlurView>
+          </Animated.View>
+
+          <Animated.View entering={FadeInUp.duration(600).delay(200)} style={{ marginTop: 28 }}>
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading} activeOpacity={0.85}>
+              <LinearGradient colors={colors.accentGradient} style={styles.saveBtnGrad}>
+                {loading ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <>
+                    <Check size={22} color="#000" strokeWidth={3} />
+                    <Text style={styles.saveBtnText}>Salvează în Jurnal</Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Save to Favorites Button */}
+          <Animated.View entering={FadeInUp.duration(600).delay(250)} style={{ marginTop: 12 }}>
+            <TouchableOpacity 
+              style={[styles.favSaveBtn, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
+              onPress={() => {
+                if (!nume.trim()) {
+                  Alert.alert("Eroare", "Introduceți numele alimentului înainte de a-l salva ca favorit.");
+                  return;
+                }
+                addFavorite({
+                  nume: nume.trim(),
+                  calorii: parseInt(calorii) || 0,
+                  proteine: parseInt(proteine) || 0,
+                  carbohidrati: parseInt(carbohidrati) || 0,
+                  grasimi: parseInt(grasimi) || 0,
+                });
+              }}
+              activeOpacity={0.8}
+            >
+              <Heart size={18} color="#f43f5e" fill={isFavorite(nume) ? "#f43f5e" : "transparent"} />
+              <Text style={[styles.favSaveBtnText, { color: colors.textPrimary }]}>
+                {isFavorite(nume) ? "Deja salvat la Favorite" : "Salvează în lista de Favorite ❤️"}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  glowTop: { position: 'absolute', top: -150, right: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.05 },
+  glowBottom: { position: 'absolute', bottom: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.05 },
+
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 56 : 36, paddingHorizontal: 20, paddingBottom: 16 },
+  backBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  headerTitle: { fontSize: 20, fontWeight: '800' },
+
+  scroll: { paddingHorizontal: 20, paddingBottom: 80, paddingTop: 12 },
+
+  card: { borderRadius: 24, overflow: 'hidden', borderWidth: 1 },
+  cardBlur: { overflow: 'hidden' },
+  cardGrad: { padding: 22 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', marginBottom: 16 },
+
+  label: { fontSize: 13, fontWeight: '700', marginBottom: 8 },
+  input: { height: 52, borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, fontSize: 16, fontWeight: '600' },
+
+  row: { flexDirection: 'row', gap: 14 },
+  col: { flex: 1 },
+
+  saveBtn: { borderRadius: 20, overflow: 'hidden', shadowColor: '#00e5ff', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 10 },
+  saveBtnGrad: { height: 58, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
+  saveBtnText: { color: '#000', fontSize: 18, fontWeight: '900' },
+  favHeaderTitle: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 },
+  favChip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, borderWidth: 1, minWidth: 120 },
+  favChipTitle: { fontSize: 14, fontWeight: '700' },
+  favChipSub: { fontSize: 11, fontWeight: '800', marginTop: 3 },
+  favSaveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: 18, borderWidth: 1, gap: 8 },
+  favSaveBtnText: { fontSize: 14, fontWeight: '700' },
+});

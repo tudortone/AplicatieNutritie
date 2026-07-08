@@ -9,6 +9,8 @@ import { Sparkles, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { useNotificationBanner } from '../context/NotificationBannerContext';
 
 interface SelectionRowProps {
   label: string;
@@ -45,6 +47,8 @@ const SelectionRow = ({ label, options, current, onChange }: SelectionRowProps) 
 export default function CalculatorAI() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { session } = useAuth();
+  const { showBanner } = useNotificationBanner();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     varsta: '',
@@ -59,19 +63,22 @@ export default function CalculatorAI() {
 
   const calculeaza = async () => {
     if (!form.varsta || !form.greutate || !form.inaltime) {
-      Alert.alert("Eroare", "Te rog să introduci vârsta, greutatea și înălțimea.");
+      showBanner({
+        title: "Date incomplete",
+        message: "Te rog să introduci vârsta, greutatea și înălțimea.",
+        type: 'warning'
+      });
       return;
     }
 
     setLoading(true);
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) {
-        Alert.alert("Eroare", `Eroare sesiune: ${sessionError.message}`);
-        return;
-      }
       if (!session) {
-        Alert.alert("Eroare", "Trebuie să fii autentificat.");
+        showBanner({
+          title: "Eroare autentificare",
+          message: "Trebuie să fii autentificat.",
+          type: 'warning'
+        });
         return;
       }
 
@@ -86,16 +93,24 @@ export default function CalculatorAI() {
       const date = await raspuns.json();
 
       if (date.eroare) {
-        Alert.alert("Eroare AI", date.eroare);
+        showBanner({
+          title: "Eroare AI",
+          message: date.eroare,
+          type: 'warning'
+        });
       } else {
         await AsyncStorage.setItem('caloriiTinta', String(date.caloriiTinta));
         await AsyncStorage.setItem('proteineTinta', String(date.proteineTinta));
+        if (date.carbiTinta) await AsyncStorage.setItem('carbiTinta', String(date.carbiTinta));
+        if (date.grasimiTinta) await AsyncStorage.setItem('grasimiTinta', String(date.grasimiTinta));
         await AsyncStorage.setItem('greutate', form.greutate);
         
         const { error: updateError } = await supabase.auth.updateUser({
           data: {
             caloriiTinta: date.caloriiTinta,
             proteineTinta: date.proteineTinta,
+            carbiTinta: date.carbiTinta || 250,
+            grasimiTinta: date.grasimiTinta || 70,
             greutate: parseInt(form.greutate)
           }
         });
@@ -104,14 +119,20 @@ export default function CalculatorAI() {
           console.error("Eroare sincronizare metadata Supabase:", updateError.message);
         }
         
-        Alert.alert(
-          "✅ Profil Generat", 
-          `Țintele tale au fost setate la:\n\n🔥 Calorii: ${date.caloriiTinta} kcal\n🥩 Proteine: ${date.proteineTinta}g`,
-          [{ text: "Super!", onPress: () => router.back() }]
-        );
+        showBanner({
+          title: "Profil Actualizat",
+          message: `Țintă calorică: ${date.caloriiTinta} kcal • Proteine: ${date.proteineTinta}g`,
+          type: 'success',
+          duration: 4500,
+        });
+        router.back();
       }
     } catch {
-      Alert.alert("Eroare", "Nu am putut contacta serverul. Verifică conexiunea.");
+      showBanner({
+        title: "Eroare conexiune",
+        message: "Nu am putut contacta serverul. Verifică conexiunea.",
+        type: 'warning'
+      });
     } finally {
       setLoading(false);
     }

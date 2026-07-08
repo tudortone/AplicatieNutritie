@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView,
   Dimensions, Alert, ActivityIndicator, KeyboardAvoidingView, Platform
@@ -8,30 +8,46 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../supabase';
 import { API_URL } from '@/constants/config';
 import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
-import { X, Scan, Zap, ChevronDown, Plus } from 'lucide-react-native';
+import { X, Scan, Zap, ChevronDown, Plus, Heart, Image as ImageIcon } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { AlimentAI } from '../types';
-import type { Session } from '@supabase/supabase-js';
+import { useFavorite } from '../hooks/useFavorite';
 
 const { width, height } = Dimensions.get('window');
 const SCAN_BOX_SIZE = width * 0.78;
 
 export default function CameraScreen() {
   const { colors } = useTheme();
+  const { session } = useAuth();
+  const { addFavorite, isFavorite } = useFavorite();
   const [permission, requestPermission] = useCameraPermissions();
   const [seIncarca, setSeIncarca] = useState(false);
   const [rezultat, setRezultat] = useState<AlimentAI[] | null>(null);
   const [grame, setGrame] = useState<number[]>([]);
-  const [session, setSession] = useState<Session | null>(null);
   const cameraRef = useRef<CameraView>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef(true);
   const router = useRouter();
 
-  React.useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => setSession(currentSession));
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
+
+  const anuleazaScanare = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setSeIncarca(false);
+    setRezultat(null);
+  };
 
   const totalCalculat = useMemo(() => {
     return rezultat
@@ -47,21 +63,18 @@ export default function CameraScreen() {
       : { calorii: 0, proteine: 0, grasimi: 0, carbohidrati: 0 };
   }, [rezultat, grame]);
 
-  const analizeazaFoto = async () => {
-    if (!cameraRef.current || seIncarca || !session) return;
+  const proceseazaImagineUri = async (uri: string) => {
+    if (seIncarca || !session) return;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setSeIncarca(true);
     setRezultat(null);
     try {
-      const foto = await cameraRef.current.takePictureAsync({
-        quality: 0.6, base64: true, shutterSound: false
-      });
-      if (!foto) {
-        setSeIncarca(false);
-        return;
-      }
-
       const formData = new FormData();
-      formData.append('imagine', { uri: foto.uri, name: 'mancare.jpg', type: 'image/jpeg' } as any);
+      formData.append('imagine', { uri, name: 'mancare.jpg', type: 'image/jpeg' } as any);
 
       const raspuns = await fetch(`${API_URL}/api/analizeaza-mancare-structurat`, {
         method: 'POST', body: formData,
@@ -69,11 +82,12 @@ export default function CameraScreen() {
           'Accept': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
+        signal: controller.signal
       });
       const date = await raspuns.json();
 
       if (date.eroare) {
-        Alert.alert("Eroare AI", date.eroare);
+        if (isMountedRef.current) Alert.alert("Eroare AI", date.eroare);
       } else {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         const rawArr = Array.isArray(date) ? date : [date];
@@ -85,13 +99,55 @@ export default function CameraScreen() {
           grasimi_per_100g: Number(item.grasimi_per_100g) || 0,
           carbohidrati_per_100g: Number(item.carbohidrati_per_100g) || 0,
         }));
-        setRezultat(arr);
-        setGrame(arr.map(item => Math.round(item.estimare_grame) || 100));
+        if (isMountedRef.current) {
+          setRezultat(arr);
+          setGrame(arr.map(item => Math.round(item.estimare_grame) || 100));
+        }
       }
-    } catch {
-      Alert.alert("Eroare", "Nu am putut contacta serverul AI. Verifică conexiunea.");
+    } catch (err: any) {
+      if (err.name !== 'AbortError' && isMountedRef.current) {
+        Alert.alert("Eroare", "Nu am putut contacta serverul AI. Verifică conexiunea.");
+      }
     } finally {
-      setSeIncarca(false);
+      if (isMountedRef.current) setSeIncarca(false);
+    }
+  };
+
+  const analizeazaFoto = async () => {
+    if (!cameraRef.current || seIncarca || !session) return;
+    try {
+      const foto = await cameraRef.current.takePictureAsync({
+        quality: 0.6, base64: false, shutterSound: false
+      });
+      if (foto && foto.uri) {
+        proceseazaImagineUri(foto.uri);
+      }
+    } catch (e) {
+      console.error("Eroare captură foto:", e);
+    }
+  };
+
+  const alegeDinGalerie = async () => {
+    if (seIncarca || !session) return;
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert("Permisiune necesară", "Vă rugăm să acordați acces la galeria de poze pentru a putea selecta imagini.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        proceseazaImagineUri(result.assets[0].uri);
+      }
+    } catch (e) {
+      console.error("Eroare galerie:", e);
+      Alert.alert("Eroare", "Nu s-a putut deschide galeria.");
     }
   };
 
@@ -183,7 +239,7 @@ export default function CameraScreen() {
 
       {/* Top Bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+        <TouchableOpacity onPress={() => { anuleazaScanare(); router.back(); }} style={styles.closeBtn}>
           <BlurView intensity={20} tint="dark" style={styles.closeBtnBlur}>
             <X color="#fff" size={24} />
           </BlurView>
@@ -211,6 +267,12 @@ export default function CameraScreen() {
               <BlurView intensity={20} tint="dark" style={styles.scanningBlur}>
                 <ActivityIndicator color={colors.accent} size="large" />
                 <Text style={[styles.scanningText, { color: colors.accent }]}>Analizez cu AI...</Text>
+                <TouchableOpacity 
+                  style={{ marginTop: 16, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12 }}
+                  onPress={anuleazaScanare}
+                >
+                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>✕ Anulează</Text>
+                </TouchableOpacity>
               </BlurView>
             </Animated.View>
           )}
@@ -250,6 +312,22 @@ export default function CameraScreen() {
                         />
                         <Text style={[styles.gramUnit, { color: colors.accent }]}>g</Text>
                       </View>
+                      <TouchableOpacity
+                        style={{ paddingHorizontal: 6, justifyContent: 'center' }}
+                        onPress={() => {
+                          const g = grame[index] || item.estimare_grame || 100;
+                          const rap = g / 100;
+                          addFavorite({
+                            nume: item.nume,
+                            calorii: Math.round(item.calorii_per_100g * rap),
+                            proteine: Math.round(item.proteine_per_100g * rap),
+                            carbohidrati: Math.round((item.carbohidrati_per_100g || 0) * rap),
+                            grasimi: Math.round((item.grasimi_per_100g || 0) * rap),
+                          });
+                        }}
+                      >
+                        <Heart size={20} color="#f43f5e" fill={isFavorite(item.nume) ? "#f43f5e" : "transparent"} />
+                      </TouchableOpacity>
                     </View>
                   ))}
                   
@@ -287,7 +365,7 @@ export default function CameraScreen() {
                   </LinearGradient>
                 </TouchableOpacity>
                 
-                <TouchableOpacity style={styles.retryBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setRezultat(null); }}>
+                <TouchableOpacity style={styles.retryBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); anuleazaScanare(); }}>
                   <Text style={styles.retryBtnText}>🔄 Anulează & Scanează din nou</Text>
                 </TouchableOpacity>
               </LinearGradient>
@@ -296,25 +374,38 @@ export default function CameraScreen() {
         </KeyboardAvoidingView>
       )}
 
-      {/* Shutter button */}
+      {/* Shutter & Gallery button */}
       {!rezultat && (
         <Animated.View entering={FadeInUp.duration(600).delay(200)} style={styles.shutterArea}>
-          <TouchableOpacity
-            style={[styles.shutterBtn, { shadowColor: colors.accent, borderColor: colors.accent + '4D' }]}
-            onPress={analizeazaFoto}
-            disabled={seIncarca}
-          >
-            <LinearGradient
-              colors={seIncarca ? ['#333', '#222'] : colors.accentGradient}
-              style={styles.shutterGrad}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 28 }}>
+            <TouchableOpacity
+              style={[styles.galleryBtn, { borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.5)' }]}
+              onPress={alegeDinGalerie}
+              disabled={seIncarca}
             >
-              {seIncarca
-                ? <ActivityIndicator color={colors.background} />
-                : <Scan size={32} color={colors.background} strokeWidth={2.5} />
-              }
-            </LinearGradient>
-          </TouchableOpacity>
-          <Text style={styles.shutterLabel}>Apasă pentru a analiza</Text>
+              <ImageIcon size={22} color="#FFFFFF" />
+              <Text style={styles.galleryBtnText}>Galerie</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.shutterBtn, { shadowColor: colors.accent, borderColor: colors.accent + '4D' }]}
+              onPress={analizeazaFoto}
+              disabled={seIncarca}
+            >
+              <LinearGradient
+                colors={seIncarca ? ['#333', '#222'] : colors.accentGradient}
+                style={styles.shutterGrad}
+              >
+                {seIncarca
+                  ? <ActivityIndicator color={colors.background} />
+                  : <Scan size={32} color={colors.background} strokeWidth={2.5} />
+                }
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <View style={{ width: 72 }} />
+          </View>
+          <Text style={styles.shutterLabel}>Apasă pe buton sau alege o poză din galerie</Text>
         </Animated.View>
       )}
     </View>
@@ -386,5 +477,7 @@ const styles = StyleSheet.create({
   shutterArea: { position: 'absolute', bottom: 60, left: 0, right: 0, alignItems: 'center' },
   shutterBtn: { width: 80, height: 80, borderRadius: 40, overflow: 'hidden', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.6, shadowRadius: 24, elevation: 20, borderWidth: 3 },
   shutterGrad: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  shutterLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '500', marginTop: 16, letterSpacing: 0.5 },
+  shutterLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '600', marginTop: 16, letterSpacing: 0.5 },
+  galleryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 20, borderWidth: 1 },
+  galleryBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 });

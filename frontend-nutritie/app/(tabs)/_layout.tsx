@@ -2,7 +2,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Home, List, MessageCircle, User } from 'lucide-react-native';
+import { Home, List, MessageCircle, User, BarChart3 } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 
 export default function TabLayout() {
@@ -40,6 +40,13 @@ export default function TabLayout() {
         options={{
           title: 'Jurnal',
           tabBarIcon: ({ color, size }) => <List size={size} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />,
+        }}
+      />
+      <Tabs.Screen
+        name="statistici"
+        options={{
+          title: 'Statistici',
+          tabBarIcon: ({ color, size }) => <BarChart3 size={size} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />,
         }}
       />
       <Tabs.Screen

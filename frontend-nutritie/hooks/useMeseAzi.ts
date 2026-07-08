@@ -1,11 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Masa } from '../types';
 import type { User } from '@supabase/supabase-js';
 
-export function useMeseAzi() {
+export function useMeseAzi(dataSelectata?: Date) {
   const [mese, setMese] = useState<Masa[]>([]);
+  const [zileCuMese, setZileCuMese] = useState<string[]>([]);
   const [totalCalorii, setTotalCalorii] = useState(0);
   const [totalProteine, setTotalProteine] = useState(0);
   const [totalGrasimi, setTotalGrasimi] = useState(0);
@@ -15,9 +16,13 @@ export function useMeseAzi() {
   
   const [caloriiTinta, setCaloriiTinta] = useState(2000);
   const [proteineTinta, setProteineTinta] = useState(150);
+  const [carbiTinta, setCarbiTinta] = useState(250);
+  const [grasimiTinta, setGrasimiTinta] = useState(70);
   const [greutate, setGreutate] = useState(75);
 
   const [loading, setLoading] = useState(true);
+
+  const dateKey = dataSelectata?.toDateString() ?? '';
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -35,6 +40,8 @@ export function useMeseAzi() {
       
       let cTinta = userMetadata.caloriiTinta;
       let pTinta = userMetadata.proteineTinta;
+      let cbTinta = userMetadata.carbiTinta;
+      let grTinta = userMetadata.grasimiTinta;
       let g = userMetadata.greutate;
 
       // Fallback la AsyncStorage
@@ -46,6 +53,14 @@ export function useMeseAzi() {
         const storedP = await AsyncStorage.getItem('proteineTinta');
         pTinta = storedP ? parseInt(storedP) : 150;
       }
+      if (!cbTinta) {
+        const storedCb = await AsyncStorage.getItem('carbiTinta');
+        cbTinta = storedCb ? parseInt(storedCb) : 250;
+      }
+      if (!grTinta) {
+        const storedGr = await AsyncStorage.getItem('grasimiTinta');
+        grTinta = storedGr ? parseInt(storedGr) : 70;
+      }
       if (!g) {
         const storedG = await AsyncStorage.getItem('greutate');
         g = storedG ? parseInt(storedG) : 75;
@@ -53,17 +68,23 @@ export function useMeseAzi() {
 
       setCaloriiTinta(Number(cTinta));
       setProteineTinta(Number(pTinta));
+      setCarbiTinta(Number(cbTinta));
+      setGrasimiTinta(Number(grTinta));
       setGreutate(Number(g));
 
-      // 2. Încarcă mesele din ziua curentă
-      const inceputulZilei = new Date();
+      // 2. Încarcă mesele din ziua selectată sau curentă
+      const targetDate = dataSelectata || new Date();
+      const inceputulZilei = new Date(targetDate);
       inceputulZilei.setHours(0, 0, 0, 0);
+      const sfarsitulZilei = new Date(targetDate);
+      sfarsitulZilei.setHours(23, 59, 59, 999);
 
       const { data, error } = await supabase
         .from('mese')
         .select('*')
         .eq('user_id', currentUser.id)
         .gte('created_at', inceputulZilei.toISOString())
+        .lte('created_at', sfarsitulZilei.toISOString())
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -85,15 +106,39 @@ export function useMeseAzi() {
         setTotalCarbohidrati(totalCarbs);
         setNumarMese(parsedMese.length);
       }
+
+      // 3. Fetch data pentru zile marcate (ultimele 90 de zile + viitor)
+      const startDeVerificat = new Date();
+      startDeVerificat.setDate(startDeVerificat.getDate() - 90);
+      const { data: toateMesele } = await supabase
+        .from('mese')
+        .select('created_at')
+        .eq('user_id', currentUser.id)
+        .gte('created_at', startDeVerificat.toISOString());
+        
+      if (toateMesele) {
+        const setZile = new Set<string>();
+        toateMesele.forEach(m => {
+          if (m.created_at) {
+            setZile.add(m.created_at.split('T')[0]);
+          }
+        });
+        setZileCuMese(Array.from(setZile));
+      }
     } catch (e) {
       console.error("Eroare neașteptată în hook-ul useMeseAzi:", e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dateKey]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   return {
     mese,
+    zileCuMese,
     totalCalorii,
     totalProteine,
     totalGrasimi,
@@ -101,6 +146,8 @@ export function useMeseAzi() {
     numarMese,
     caloriiTinta,
     proteineTinta,
+    carbiTinta,
+    grasimiTinta,
     greutate,
     user,
     loading,

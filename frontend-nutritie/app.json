@@ -9,9 +9,11 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nutriai.app"
     },
     "android": {
+      "package": "com.nutriai.app",
       "adaptiveIcon": {
         "backgroundColor": "#090C0E",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -22,7 +24,6 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -38,11 +39,24 @@
             "backgroundColor": "#090C0E"
           }
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "18cf8908-194b-4386-a700-22dea945da47"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/18cf8908-194b-4386-a700-22dea945da47"
     }
   }
 }

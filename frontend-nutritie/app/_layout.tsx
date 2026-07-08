@@ -2,12 +2,16 @@ import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { View, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
-import type { Session } from '@supabase/supabase-js';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { supabase } from '../supabase';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
+import { AuthProvider, useAuth } from '../context/AuthContext';
+import { useAppStore } from '../hooks/useAppStore';
+import { useBiometrics } from '../hooks/useBiometrics';
+import LockScreen from '../components/LockScreen';
+import { NotificationBannerProvider } from '../context/NotificationBannerContext';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -27,48 +31,42 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
 
 function RootNavigator() {
   const { colors } = useTheme();
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { session, loadingAuth } = useAuth();
+  const { isOnboardingDone, syncFromAsyncStorage } = useAppStore();
+  const { isLocked, biometricType, unlockApp } = useBiometrics();
   const router = useRouter();
   const segments = useSegments();
 
-  const AppDarkTheme = {
+  useEffect(() => {
+    syncFromAsyncStorage();
+  }, [syncFromAsyncStorage]);
+
+  const AppDarkTheme = useMemo(() => ({
     ...DarkTheme,
     colors: {
       ...DarkTheme.colors,
       background: colors.background,
     },
-  };
+  }), [colors.background]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (loading) return;
+    if (loadingAuth) return;
 
     const inAuthGroup = segments[0] === 'auth';
+    const inOnboarding = segments[0] === 'onboarding';
     
     if (!session && !inAuthGroup) {
       router.replace('/auth');
-    } else if (session && inAuthGroup) {
-      router.replace('/(tabs)');
+    } else if (session) {
+      if (!isOnboardingDone && !inOnboarding) {
+        router.replace('/onboarding');
+      } else if (inAuthGroup || (isOnboardingDone && inOnboarding)) {
+        router.replace('/(tabs)');
+      }
     }
-  }, [session, loading, segments, router]);
+  }, [session, loadingAuth, isOnboardingDone, segments, router]);
 
-  if (loading) {
+  if (loadingAuth) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.accent} />
@@ -78,11 +76,15 @@ function RootNavigator() {
 
   return (
     <ThemeProvider value={AppDarkTheme}>
-      <Stack screenOptions={{ headerShown: false, animation: 'fade_from_bottom' }}>
+      <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
         <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
         <Stack.Screen name="auth" options={{ animation: 'fade' }} />
+        <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
         <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
       </Stack>
+      {session && isLocked && (
+        <LockScreen biometricType={biometricType} onUnlock={unlockApp} />
+      )}
       <StatusBar style="light" />
     </ThemeProvider>
   );
@@ -90,8 +92,15 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <AppThemeProvider>
-      <RootNavigator />
-    </AppThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AppThemeProvider>
+        <AuthProvider>
+          <NotificationBannerProvider>
+            <RootNavigator />
+          </NotificationBannerProvider>
+        </AuthProvider>
+      </AppThemeProvider>
+    </GestureHandlerRootView>
   );
 }
+

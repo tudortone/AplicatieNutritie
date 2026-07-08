@@ -23,15 +23,55 @@ export default function AuthScreen() {
       return; 
     }
     setLoading(true);
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email, password: parola });
-      if (error) Alert.alert("Eroare", error.message);
-      else Alert.alert("Cont creat!", "Verifică-ți emailul pentru confirmare.");
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password: parola });
-      if (error) Alert.alert("Eroare", error.message);
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({ email, password: parola });
+        if (error) Alert.alert("Eroare", error.message);
+        else Alert.alert("Cont creat!", "Verifică-ți emailul pentru confirmare.");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password: parola });
+        if (error) Alert.alert("Eroare", error.message);
+      }
+    } catch (e: any) {
+      console.error("Auth submit error:", e);
+      Alert.alert("Eroare neașteptată", e?.message || "Nu s-a putut realiza conexiunea la server.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  const resetParola = async () => {
+    if (!email) {
+      Alert.alert("Email necesar", "Introduceți adresa de email pentru a vă reseta parola.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      if (error) {
+        Alert.alert("Eroare", error.message);
+      } else {
+        Alert.alert("Email trimis", "Verificați căsuța de email pentru instrucțiunile de resetare a parolei.");
+      }
+    } catch (e: any) {
+      console.error("Reset password error:", e);
+      Alert.alert("Eroare neașteptată", e?.message || "Nu s-a putut realiza conexiunea la server.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signInWithOAuth = async (provider: 'google' | 'apple') => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithOAuth({ provider });
+      if (error) Alert.alert("Eroare OAuth", error.message);
+    } catch (e: any) {
+      console.error("OAuth error:", e);
+      Alert.alert("Eroare OAuth", e?.message || "A apărut o problemă de conexiune.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -95,6 +135,12 @@ export default function AuthScreen() {
                   />
                 </View>
 
+                {!isSignUp && (
+                  <TouchableOpacity style={styles.forgotBtn} onPress={resetParola}>
+                    <Text style={[styles.forgotText, { color: colors.accent }]}>Ai uitat parola?</Text>
+                  </TouchableOpacity>
+                )}
+
                 {/* Submit */}
                 <TouchableOpacity style={[styles.submitBtn, { shadowColor: colors.accent }]} onPress={submit} disabled={loading}>
                   <LinearGradient colors={colors.accentGradient} style={styles.submitGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
@@ -116,6 +162,21 @@ export default function AuthScreen() {
                     <Text style={[styles.toggleAccent, { color: colors.accent }]}>{isSignUp ? 'Conectează-te' : 'Înregistrează-te'}</Text>
                   </Text>
                 </TouchableOpacity>
+
+                <View style={styles.dividerWrap}>
+                  <View style={[styles.dividerLine, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+                  <Text style={[styles.dividerText, { color: colors.textSecondary }]}>sau</Text>
+                  <View style={[styles.dividerLine, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+                </View>
+
+                <View style={styles.oauthWrap}>
+                  <TouchableOpacity style={[styles.oauthBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]} onPress={() => signInWithOAuth('google')}>
+                    <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]}>🟢 Google</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.oauthBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]} onPress={() => signInWithOAuth('apple')}>
+                    <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]}>🍎 Apple</Text>
+                  </TouchableOpacity>
+                </View>
 
               </LinearGradient>
             </BlurView>
@@ -158,4 +219,12 @@ const styles = StyleSheet.create({
   toggleBtn: { padding: 16, alignItems: 'center', marginTop: 8 },
   toggleText: { fontSize: 15, fontWeight: '500' },
   toggleAccent: { fontWeight: '700' },
+  forgotBtn: { alignSelf: 'flex-end', marginBottom: 14, paddingVertical: 4 },
+  forgotText: { fontSize: 13, fontWeight: '700' },
+  dividerWrap: { flexDirection: 'row', alignItems: 'center', marginVertical: 18, gap: 12 },
+  dividerLine: { flex: 1, height: 1 },
+  dividerText: { fontSize: 13, fontWeight: '600' },
+  oauthWrap: { flexDirection: 'row', gap: 12 },
+  oauthBtn: { flex: 1, height: 50, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  oauthBtnText: { fontSize: 15, fontWeight: '700' },
 });
