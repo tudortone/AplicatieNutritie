@@ -11,7 +11,7 @@ import {
 import { useFocusEffect } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Dumbbell, Flame, Plus, Trash2, Trophy, Sparkles } from 'lucide-react-native';
+import { Dumbbell, Flame, Plus, Trash2, Trophy } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '../../context/ThemeContext';
@@ -25,7 +25,6 @@ export default function AntrenamenteScreen() {
     totalCaloriiArse,
     numarAntrenamente,
     stergeAntrenament,
-    loading,
     refresh
   } = useAntrenamente();
 

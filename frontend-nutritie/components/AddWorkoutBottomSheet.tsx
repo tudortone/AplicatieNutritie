@@ -125,7 +125,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
 
         bottomSheetRef.current?.close();
         if (onSuccess) onSuccess();
-      } catch (err: any) {
+      } catch {
         Alert.alert("Eroare", "Nu am putut salva antrenamentul. Verifică dacă tabela 'antrenamente' există în Supabase.");
       } finally {
         setLoading(false);
@@ -342,3 +342,5 @@ const styles = StyleSheet.create({
   saveBtn: { height: 54, justifyContent: 'center', alignItems: 'center' },
   saveText: { color: '#000', fontSize: 16, fontWeight: '800' },
 });
+
+AddWorkoutBottomSheet.displayName = 'AddWorkoutBottomSheet';

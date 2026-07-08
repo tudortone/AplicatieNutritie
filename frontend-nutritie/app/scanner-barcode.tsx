@@ -12,8 +12,7 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ScanLine, X, Plus, Check, Search, Package, Trash2, ArrowLeft } from 'lucide-react-native';
+import { ScanLine, X, Plus, Package, Trash2, ArrowLeft } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '../context/ThemeContext';
@@ -26,7 +25,7 @@ export default function ScannerBarcodeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { showBanner } = useNotificationBanner();
-  const { produse, loading: loadingCamara, adaugaProdus, stergeProdus } = useCamara();
+  const { produse, adaugaProdus, stergeProdus } = useCamara();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [scanLocked, setScanLocked] = useState(false);

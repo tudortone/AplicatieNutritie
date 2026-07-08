@@ -1,11 +1,11 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, RefreshControl } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Scan, TrendingUp, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell } from 'lucide-react-native';
+import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTheme } from '../../context/ThemeContext';
@@ -76,7 +76,7 @@ export default function HomeScreen() {
     refresh 
   } = useMeseAzi();
   const { pahare, tinta: tintaPahare, adaugaPahar, scadePahar } = useApa();
-  const { steps, activeCalories, stepGoal, isEnabled, platformName, providerInfo, addSimulatedSteps, refreshSteps } = useHealthSync();
+  const { steps, activeCalories, stepGoal, isEnabled, platformName, providerInfo, refreshSteps } = useHealthSync();
   const { totalCaloriiArse, refresh: refreshAntrenamente } = useAntrenamente();
   const [ascundeCardHealth, setAscundeCardHealth] = useState(false);
 
@@ -89,7 +89,7 @@ export default function HomeScreen() {
         if (val === 'true') setAscundeCardHealth(true);
         else setAscundeCardHealth(false);
       });
-    }, [])
+    }, [refresh, refreshSteps, refreshAntrenamente])
   );
 
   const caloriiConsumate = totalCalorii;

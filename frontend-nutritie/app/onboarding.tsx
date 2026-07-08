@@ -1,17 +1,16 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Dimensions,
-  ScrollView, Animated as RNAnimated
+  ScrollView
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Camera, Bot, TrendingUp, ArrowRight, Check } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useAppStore } from '../hooks/useAppStore';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const SLIDES = [
   {

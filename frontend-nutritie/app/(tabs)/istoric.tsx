@@ -1,11 +1,10 @@
-import React, { useCallback, useState, useMemo, useRef } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   ScrollView, 
   RefreshControl, 
-  ActivityIndicator, 
   Platform, 
   TouchableOpacity, 
   Alert 
@@ -20,7 +19,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../supabase';
 import { Masa } from '../../types';
 import { FlashList } from '@shopify/flash-list';
-import * as Haptics from 'expo-haptics';
 import { SkeletonLoader } from '../../components/SkeletonLoader';
 import { MacroRing } from '../../components/MacroRing';
 import { AddMealBottomSheet, AddMealBottomSheetRef } from '../../components/AddMealBottomSheet';
@@ -41,11 +39,6 @@ export default function HistoryScreen() {
     refresh 
   } = useMeseAzi(dataSelectata);
 
-  const schimbaZile = (zile: number) => {
-    const nouaData = new Date(dataSelectata);
-    nouaData.setDate(nouaData.getDate() + zile);
-    setDataSelectata(nouaData);
-  };
 
   const esteAzi = new Date().toDateString() === dataSelectata.toDateString();
   const esteIeri = (() => {
@@ -63,7 +56,7 @@ export default function HistoryScreen() {
   useFocusEffect(
     useCallback(() => {
       refresh();
-    }, [])
+    }, [refresh])
   );
 
   const onRefresh = useCallback(async () => {

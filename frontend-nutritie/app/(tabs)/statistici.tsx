@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Platform, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Platform, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeInUp, Layout, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
-import { Flame, Activity, TrendingUp, Award, Calendar, Zap, Scale, TrendingDown, Sparkles, Plus, Target } from 'lucide-react-native';
+import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import { Flame, Activity, TrendingUp, Award, Scale, TrendingDown, Sparkles, Plus, Target } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../supabase';
@@ -34,7 +34,7 @@ const AnimatedTrendArrow = ({ isLoss, color }: { isLoss: boolean; color: string 
       -1,
       true
     );
-  }, [isLoss]);
+  }, [isLoss, translateY]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -64,7 +64,7 @@ export default function StatisticiScreen() {
   // Weight Tab States
   const [greutateCurenta, setGreutateCurenta] = useState(75.0);
   const [greutateTinta, setGreutateTinta] = useState(70.0);
-  const [istoricGreutate, setIstoricGreutate] = useState<Array<{ data: string; ziNume: string; greutate: number }>>([]);
+  const [istoricGreutate, setIstoricGreutate] = useState<{ data: string; ziNume: string; greutate: number }[]>([]);
   const [zileChart, setZileChart] = useState<'7' | '30'>('7');
   const [modalGreutateVisible, setModalGreutateVisible] = useState(false);
   const [modalInitialTab, setModalInitialTab] = useState<'curenta' | 'tinta'>('curenta');

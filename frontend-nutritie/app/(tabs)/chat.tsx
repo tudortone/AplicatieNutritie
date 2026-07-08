@@ -4,13 +4,12 @@ import {
   ScrollView, KeyboardAvoidingView, Platform, Keyboard, Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../../supabase';
 import { API_URL } from '@/constants/config';
 import { useFocusEffect } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
-import { Bot, Send, Sparkles, Refrigerator, Utensils, Flame, Clock, SquarePen } from 'lucide-react-native';
+import { Bot, Send, Sparkles, SquarePen } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTheme } from '../../context/ThemeContext';
@@ -51,7 +50,7 @@ export default function ChatScreen() {
   useFocusEffect(
     useCallback(() => {
       refresh();
-    }, [])
+    }, [refresh])
   );
 
   useEffect(() => {

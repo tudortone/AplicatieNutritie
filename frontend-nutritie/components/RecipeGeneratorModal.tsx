@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, Platform, Dimensions } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp, FadeOutDown } from 'react-native-reanimated';
 import { Sparkles, X, Plus, Check, Clock, Utensils, Refrigerator } from 'lucide-react-native';

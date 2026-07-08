@@ -15,11 +15,11 @@ import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { ArrowLeft, Check, PlusCircle, Flame, Activity, Zap, Heart, Sparkles, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Check, Heart, Trash2 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase';
-import { useFavorite, AlimentFavorit } from '../hooks/useFavorite';
+import { useFavorite } from '../hooks/useFavorite';
 
 export default function AdaugaManualScreen() {
   const router = useRouter();
@@ -77,7 +77,7 @@ export default function AdaugaManualScreen() {
           [{ text: "Super", onPress: () => router.back() }]
         );
       }
-    } catch (e) {
+    } catch {
       Alert.alert("Eroare", "A apărut o problemă neașteptată la salvare.");
     } finally {
       setLoading(false);

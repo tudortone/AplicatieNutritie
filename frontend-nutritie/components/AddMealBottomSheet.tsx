@@ -14,10 +14,9 @@ import BottomSheet, {
   BottomSheetTextInput 
 } from '@gorhom/bottom-sheet';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Check, X, Heart, Trash2, AlertCircle, Scale, Sparkles } from 'lucide-react-native';
+import { Check, X, Heart, Trash2, Scale } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
 
 import { API_URL } from '../constants/config';
 import { useTheme } from '../context/ThemeContext';
@@ -185,7 +184,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         } else {
           Alert.alert("Eroare AI", "Nu am putut estima valorile. Încearcă să le introduci manual.");
         }
-      } catch (err) {
+      } catch {
         Alert.alert("Eroare conexiune", "Verifică conexiunea la internet.");
       } finally {
         setAiEstimating(false);
@@ -966,3 +965,5 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+
+AddMealBottomSheet.displayName = 'AddMealBottomSheet';
