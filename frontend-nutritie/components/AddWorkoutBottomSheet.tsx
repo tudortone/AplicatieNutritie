@@ -22,6 +22,8 @@ import { useAuth } from '../context/AuthContext';
 import { useNotificationBanner } from '../context/NotificationBannerContext';
 import { exercitiiPresets, ExercitiuPreset, calculeazaCaloriiArse } from '../constants/exercitii';
 import { useAntrenamente } from '../hooks/useAntrenamente';
+import { useGamificare } from '../hooks/useGamificare';
+import { useNotify } from '../hooks/useNotify';
 
 export interface AddWorkoutBottomSheetRef {
   open: () => void;
@@ -37,6 +39,8 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
     const { colors } = useTheme();
     const { user } = useAuth();
     const { showBanner } = useNotificationBanner();
+    const notify = useNotify();
+    const { adaugaProgres } = useGamificare();
     const { adaugaAntrenament } = useAntrenamente();
 
     const bottomSheetRef = useRef<BottomSheet>(null);
@@ -117,11 +121,14 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         } catch {}
 
-        showBanner({
-          title: "Antrenament salvat!",
-          message: `+${estimatedKcal} kcal adăugate la bugetul tău de azi.`,
-          type: "success",
-        });
+        adaugaProgres('antrenamente', 1);
+        adaugaProgres('minute_miscare', durNumber);
+        adaugaProgres('calorii_arse', estimatedKcal);
+
+        notify.reward(
+          'Antrenament salvat!',
+          `+${estimatedKcal} kcal adăugate & XP câștigat!`
+        );
 
         bottomSheetRef.current?.close();
         if (onSuccess) onSuccess();

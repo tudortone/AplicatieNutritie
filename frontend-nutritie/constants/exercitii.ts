@@ -1,30 +1,610 @@
+export type GrupaMusculara =
+  | 'piept'
+  | 'spate'
+  | 'umeri'
+  | 'biceps'
+  | 'triceps'
+  | 'cvadriceps'
+  | 'ischiogambieri'
+  | 'fesieri'
+  | 'gambe'
+  | 'abdomen'
+  | 'cardio'
+  | 'corp_intreg';
+
+export type Categorie = 'superior' | 'inferior' | 'brate' | 'core' | 'cardio' | 'corp_intreg';
+export type Dificultate = 'usor' | 'mediu' | 'greu';
+export type Echipament = 'corp' | 'gantere' | 'bara' | 'aparat' | 'kettlebell' | 'banda' | 'niciun';
+
+export interface Exercitiu {
+  id: string;
+  nume: string;
+  categorie: Categorie;
+  grupe: GrupaMusculara[];
+  dificultate: Dificultate;
+  echipament: Echipament;
+  met: number;
+  seriiDefault: number;
+  repetariDefault: number;
+  descriere: string;
+  instructiuni: string[];
+  greseliComune?: string[];
+  icon?: string;
+}
+
+export const CATEGORII: { id: Categorie; nume: string; grupe: GrupaMusculara[] }[] = [
+  { id: 'superior', nume: 'Partea superioară', grupe: ['piept', 'spate', 'umeri'] },
+  { id: 'brate', nume: 'Brațe', grupe: ['biceps', 'triceps'] },
+  { id: 'inferior', nume: 'Partea inferioară', grupe: ['cvadriceps', 'ischiogambieri', 'fesieri', 'gambe'] },
+  { id: 'core', nume: 'Core / Abdomen', grupe: ['abdomen'] },
+  { id: 'cardio', nume: 'Cardio', grupe: ['cardio'] },
+  { id: 'corp_intreg', nume: 'Tot corpul', grupe: ['corp_intreg'] },
+];
+
+export const EXERCITII: Exercitiu[] = [
+  // SUPERIOR (6)
+  {
+    id: 'flotari',
+    nume: 'Flotări',
+    categorie: 'superior',
+    grupe: ['piept', 'triceps', 'umeri'],
+    dificultate: 'usor',
+    echipament: 'corp',
+    met: 4.5,
+    seriiDefault: 3,
+    repetariDefault: 15,
+    descriere: 'Exercițiu de bază pentru împins, excelent pentru piept, triceps și stabilitatea umerilor.',
+    instructiuni: [
+      'Așază-te în poziție de plank cu mâinile puțin mai late decât nivelul umerilor.',
+      'Menține trunchiul drept și încordează abdomenul și fesierii.',
+      'Coboară lent pieptul spre sol prin flexarea coatelor la un unghi de 45 grade.',
+      'Împinge exploziv în palme până la extensia completă a brațelor.',
+    ],
+    greseliComune: [
+      'Lăsarea bazinului să coboare sub linia corpului.',
+      'Poziționarea coatelor la 90 de grade (prea depărtate de trunchi).',
+    ],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'impins_gantere_piept',
+    nume: 'Împins la piept cu gantere',
+    categorie: 'superior',
+    grupe: ['piept', 'triceps', 'umeri'],
+    dificultate: 'mediu',
+    echipament: 'gantere',
+    met: 5.5,
+    seriiDefault: 4,
+    repetariDefault: 10,
+    descriere: 'Exercițiu pe bancă orizontală pentru dezvoltarea masei musculare pectorale.',
+    instructiuni: [
+      'Așază-te pe bancă cu o ganteră în fiecare mână, sprijinite pe coapse.',
+      'Ridic-te pe spate și adu ganterele deasupra pieptului cu brațele întinse.',
+      'Coboară ganterele controlat lateral până la nivelul pieptului.',
+      'Împinge ganterele în sus contractând mușchii pectorali la vârf.',
+    ],
+    greseliComune: ['Arcuirea excesivă a spatelui.', 'Coborârea necontrolată a greutății.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'tractiuni',
+    nume: 'Tracțiuni la bară',
+    categorie: 'superior',
+    grupe: ['spate', 'biceps'],
+    dificultate: 'greu',
+    echipament: 'bara',
+    met: 6.5,
+    seriiDefault: 3,
+    repetariDefault: 8,
+    descriere: 'Cel mai eficient exercițiu cu greutatea corpului pentru lățirea și dezvoltarea spatelui.',
+    instructiuni: [
+      'Prinde bara cu o priză pronație (palmele înainte), mai lată decât umerii.',
+      'Activează omoplații trăgându-i în jos înainte de a iniția mișcarea.',
+      'Trage-te în sus până când bărbia trece de nivelul barei.',
+      'Coboară lent și complet controlat până la extensia brațelor.',
+    ],
+    greseliComune: ['Folosirea balansului corpului pentru a urca.', 'Nu se efectuează o mișcare completă.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'ramat_gantera',
+    nume: 'Ramat cu gantera cu un braț',
+    categorie: 'superior',
+    grupe: ['spate', 'biceps'],
+    dificultate: 'mediu',
+    echipament: 'gantere',
+    met: 5.0,
+    seriiDefault: 3,
+    repetariDefault: 12,
+    descriere: 'Exercițiu unilateral excelent pentru marele dorsal și corectarea asimetriilor musculare.',
+    instructiuni: [
+      'Sprijină genunchiul și palma opusă pe o bancă plană.',
+      'Prinde gantera cu brațul liber, menținând spatele perfect drept și paralel cu solul.',
+      'Trage cotul spre șold, contractând mușchiul spatelui sus.',
+      'Coboară gantera lent până simți o întindere completă a dorsalului.',
+    ],
+    greseliComune: ['Răsucirea trunchiului la ridicarea greutății.', 'Tragerea cu bicepsul în loc de spate.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'ohp',
+    nume: 'Împins deasupra capului (OHP)',
+    categorie: 'superior',
+    grupe: ['umeri', 'triceps'],
+    dificultate: 'mediu',
+    echipament: 'gantere',
+    met: 5.5,
+    seriiDefault: 4,
+    repetariDefault: 10,
+    descriere: 'Exercițiu fundamental pentru masa și forța umerilor (deltoizi anteriori și medieni).',
+    instructiuni: [
+      'Păstrează spatele drept și ține ganterele la nivelul umerilor.',
+      'Împinge greutățile vertical deasupra capului până la extensia completă.',
+      'Nu arcui excesiv zona lombară; menține abdomenul încordat.',
+      'Coboară ganterele controlat înapoi la înălțimea umerilor.',
+    ],
+    greseliComune: ['Arcuirea spatelui inferior.', 'Blocarea bruscă a coatelor sus.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'ridicari_laterale',
+    nume: 'Ridicări laterale cu gantere',
+    categorie: 'superior',
+    grupe: ['umeri'],
+    dificultate: 'usor',
+    echipament: 'gantere',
+    met: 4.0,
+    seriiDefault: 3,
+    repetariDefault: 15,
+    descriere: 'Izolare excelentă pentru deltoidul median, oferind aspectul de umeri lați.',
+    instructiuni: [
+      'Stai drept cu ganterele lateral, coatele ușor flexate.',
+      'Ridic-ă brațele lateral până la nivelul umerilor.',
+      'Gândește-te că torni apă dintr-un vas la capătul de sus al mișcării.',
+      'Coboară lent fără a lăsa ganterele să atingă coapsele.',
+    ],
+    greseliComune: ['Ridicarea umerilor spre urechi (activarea trapezului).', 'Folosirea greutăților prea mari.'],
+    icon: 'Dumbbell',
+  },
+
+  // BRAȚE (5)
+  {
+    id: 'flexii_biceps_gantere',
+    nume: 'Flexii biceps cu gantere',
+    categorie: 'brate',
+    grupe: ['biceps'],
+    dificultate: 'usor',
+    echipament: 'gantere',
+    met: 4.0,
+    seriiDefault: 3,
+    repetariDefault: 12,
+    descriere: 'Exercițiu clasic de izolare pentru dezvoltarea vârfului bicepsului.',
+    instructiuni: [
+      'Stai în picioare cu ganterele pe lângă corp, palmele orientate spre interior.',
+      'Flexează coatele rotind palmele în sus pe măsură ce urci gantera.',
+      'Strânge puternic bicepsul la finalul mișcării.',
+      'Coboară lent și controlat la poziția de start.',
+    ],
+    greseliComune: ['Balansarea trunchiului.', 'Mișcarea coatelor înainte.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'flexii_ciocan',
+    nume: 'Flexii ciocan (Hammer Curls)',
+    categorie: 'brate',
+    grupe: ['biceps'],
+    dificultate: 'usor',
+    echipament: 'gantere',
+    met: 4.0,
+    seriiDefault: 3,
+    repetariDefault: 12,
+    descriere: 'Dezvoltă brahialul și antebrațul, adăugând grosime brațului.',
+    instructiuni: [
+      'Ține ganterele cu priză neutră (palmele față în față).',
+      'Ridic-ă ganterele menținând coatele fixe pe lângă corp.',
+      'Menține priza neutră pe toată durata mișcării.',
+      'Coboară controlat fără a relaxa complet tensiunea jos.',
+    ],
+    greseliComune: ['Ridicare cu impuls din spate.', 'Rotirea încheieturii.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'extensii_triceps_cap',
+    nume: 'Extensii triceps deasupra capului',
+    categorie: 'brate',
+    grupe: ['triceps'],
+    dificultate: 'mediu',
+    echipament: 'gantere',
+    met: 4.5,
+    seriiDefault: 3,
+    repetariDefault: 12,
+    descriere: 'Întinde complet capătul lung al tricepsului pentru o contracție maximă.',
+    instructiuni: [
+      'Ține o ganteră cu ambele mâini deasupra capului cu brațele întinse.',
+      'Flexează coatele și coboară gantera în spatele capului.',
+      'Menține coatele orientate înainte și aproape de urechi.',
+      'Extinde brațele sus contractând tricepsul.',
+    ],
+    greseliComune: ['Deschiderea coatelor în lateral.', 'Mergerea prea rapid jos.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'dips_banca',
+    nume: 'Dips pe bancă (Flotări la bancă)',
+    categorie: 'brate',
+    grupe: ['triceps', 'piept'],
+    dificultate: 'usor',
+    echipament: 'corp',
+    met: 4.8,
+    seriiDefault: 3,
+    repetariDefault: 15,
+    descriere: 'Exercițiu accesibil cu greutatea corpului care vizează intens tricepsul.',
+    instructiuni: [
+      'Sprijină palmele pe marginea unei bănci, cu degetele orientate înainte.',
+      'Întinde picioarele în față cu călcâiele pe sol.',
+      'Coboară bazinul spre sol îndoind coatele până la aproximativ 90 de grade.',
+      'Împinge în palme pentru a reveni sus.',
+    ],
+    greseliComune: ['Distanțarea trunchiului prea mult de bancă.', 'Coborâre excesivă ce stresează umărul.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'flexii_bara',
+    nume: 'Flexii la bară Z / dreaptă',
+    categorie: 'brate',
+    grupe: ['biceps'],
+    dificultate: 'mediu',
+    echipament: 'bara',
+    met: 4.5,
+    seriiDefault: 4,
+    repetariDefault: 10,
+    descriere: 'Permite încărcarea unor greutăți mai mari pentru stimularea forței în bicepși.',
+    instructiuni: [
+      'Prinde bara la lățimea umerilor cu palmele orientate în sus.',
+      'Flexează antebrațele menținând coatele strânse lângă trunchi.',
+      'Oprește-te sus și contractă bicepsul timp de o secundă.',
+      'Coboară lent până la extensia completă.',
+    ],
+    greseliComune: ['Aplecarea pe spate pentru a ridica bara.', 'Lăsarea coatelor să plece în față.'],
+    icon: 'Dumbbell',
+  },
+
+  // INFERIOR (6)
+  {
+    id: 'genuflexiuni_corp',
+    nume: 'Genuflexiuni cu greutatea corpului',
+    categorie: 'inferior',
+    grupe: ['cvadriceps', 'fesieri', 'gambe'],
+    dificultate: 'usor',
+    echipament: 'corp',
+    met: 5.0,
+    seriiDefault: 3,
+    repetariDefault: 20,
+    descriere: 'Mișcare fundamentală pentru picioare puternice și mobilitatea șoldurilor.',
+    instructiuni: [
+      'Poziționează picioarele puțin mai lat decât umerii, cu vârfurile ușor spre exterior.',
+      'Inițiază coborârea ducând bazinul în spate ca și cum te-ai așeza pe un scaun.',
+      'Coboară până când coapsele sunt paralele cu solul.',
+      'Împinge prin călcâie pentru a reveni în poziție verticală.',
+    ],
+    greseliComune: ['Căderea genunchilor spre interior.', 'Ridicarea călcâielor de pe sol.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'genuflexiuni_bara',
+    nume: 'Genuflexiuni cu bară pe spate',
+    categorie: 'inferior',
+    grupe: ['cvadriceps', 'fesieri', 'ischiogambieri'],
+    dificultate: 'greu',
+    echipament: 'bara',
+    met: 6.5,
+    seriiDefault: 4,
+    repetariDefault: 8,
+    descriere: 'Regele exercițiilor de forță pentru partea inferioară a corpului.',
+    instructiuni: [
+      'Așază bara stabil pe trapezul superior și prinde-o ferm cu ambele mâini.',
+      'Încordează core-ul, trage aer în piept și coboară sub paralelă.',
+      'Menține pieptul ridicat și privirea înainte.',
+      'Împinge exploziv în sus menținând stabilitatea genunchilor.',
+    ],
+    greseliComune: ['Aplecarea trunchiului prea mult înainte.', 'Rotunjirea zonei lombare.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'fandari',
+    nume: 'Fandări alternative pe loc',
+    categorie: 'inferior',
+    grupe: ['cvadriceps', 'fesieri'],
+    dificultate: 'mediu',
+    echipament: 'gantere',
+    met: 5.5,
+    seriiDefault: 3,
+    repetariDefault: 12,
+    descriere: 'Îmbunătățește echilibrul, coordonarea și dezvoltă separat fiecare picior.',
+    instructiuni: [
+      'Fă un pas amplu înainte și coboară genunchiul din spate aproape de sol.',
+      'Genunchiul din față trebuie să rămână aliniat cu glezna la 90 de grade.',
+      'Împinge ferm în piciorul din față pentru a reveni la start.',
+      'Alternați picioarele la fiecare repetare.',
+    ],
+    greseliComune: ['Depășirea excesivă a vârfului piciorului cu genunchiul.', 'Pierderea echilibrului lateral.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'indreptari_romanesti',
+    nume: 'Îndreptări românești (RDL)',
+    categorie: 'inferior',
+    grupe: ['ischiogambieri', 'fesieri'],
+    dificultate: 'mediu',
+    echipament: 'gantere',
+    met: 5.5,
+    seriiDefault: 4,
+    repetariDefault: 10,
+    descriere: 'Exercițiu excelent pentru lanțul posterior (femurali și fesieri).',
+    instructiuni: [
+      'Ține ganterele sau bara în fața coapselor, cu genunchii ușor flexați.',
+      'Împinge șoldurile în spate lăsând trunchiul să coboare spre paralelă.',
+      'Coborârea se face menținând spatele perfect drept și greutățile aproape de tibie.',
+      'Contractă fesierii pentru a aduce șoldurile în față la urcare.',
+    ],
+    greseliComune: ['Îndoirea prea mare a genunchilor (transformare în genuflexiune).', 'Rotunjirea spatelui inferior.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'ridicari_varfuri',
+    nume: 'Ridicări pe vârfuri pentru gambe',
+    categorie: 'inferior',
+    grupe: ['gambe'],
+    dificultate: 'usor',
+    echipament: 'corp',
+    met: 3.8,
+    seriiDefault: 4,
+    repetariDefault: 20,
+    descriere: 'Izolare concentrată pe mușchii gastrocnemius și solear ai gambei.',
+    instructiuni: [
+      'Stai cu vârfurile picioarelor pe o treaptă sau pe sol drept.',
+      'Ridic-ă călcâiele cât mai sus posibil, stând pe vârfuri.',
+      'Menține contracția maximă timp de o secundă sus.',
+      'Coboară lent călcâiele sub nivelul treptei pentru o întindere bună.',
+    ],
+    greseliComune: ['Execuție prea rapidă cu arc.', 'Cursă incompletă de mișcare.'],
+    icon: 'Dumbbell',
+  },
+  {
+    id: 'hip_thrust',
+    nume: 'Hip Thrust cu bară / gantere',
+    categorie: 'inferior',
+    grupe: ['fesieri', 'ischiogambieri'],
+    dificultate: 'mediu',
+    echipament: 'bara',
+    met: 5.5,
+    seriiDefault: 3,
+    repetariDefault: 12,
+    descriere: 'Cel mai bun exercițiu pentru activarea și creșterea mușchilor fesieri.',
+    instructiuni: [
+      'Sprijină omoplații pe marginea unei bănci și plasează greutatea pe bazin.',
+      'Tălpile fixate ferm pe sol la o distanță care formează unghi de 90 grade sus.',
+      'Împinge în călcâie și extinde șoldurile până când trunchiul este orizontal.',
+      'Strânge fesierii maxim sus și coboară controlat.',
+    ],
+    greseliComune: ['Arcuirea gâtului pe spate.', 'Neextinderea completă a șoldului sus.'],
+    icon: 'Dumbbell',
+  },
+
+  // CORE / ABDOMEN (5)
+  {
+    id: 'plank',
+    nume: 'Plank izometric',
+    categorie: 'core',
+    grupe: ['abdomen'],
+    dificultate: 'usor',
+    echipament: 'corp',
+    met: 4.0,
+    seriiDefault: 3,
+    repetariDefault: 45,
+    descriere: 'Exercițiu izometric excelent pentru stabilitatea și duritatea întregului trunchi.',
+    instructiuni: [
+      'Sprijină-te pe antebrațe și pe vârfurile picioarelor.',
+      'Aliniază capul, umerii, bazinul și călcâiele într-o linie dreaptă.',
+      'Încordează activ abdomenul și fesierii pentru a preveni lăsarea spatelui.',
+      'Menține poziția respirând ritmic.',
+    ],
+    greseliComune: ['Ridicarea bazinului prea sus.', 'Coborârea zonei lombare spre sol.'],
+    icon: 'Activity',
+  },
+  {
+    id: 'crunches',
+    nume: 'Crunches (Abdomene scurte)',
+    categorie: 'core',
+    grupe: ['abdomen'],
+    dificultate: 'usor',
+    echipament: 'corp',
+    met: 3.8,
+    seriiDefault: 3,
+    repetariDefault: 20,
+    descriere: 'Izolează mușchiul drept abdominal superior.',
+    instructiuni: [
+      'Stai întins pe spate cu genunchii îndoiți și tălpile pe sol.',
+      'Așază mâinile ușor la tâmple fără a trage de gât.',
+      'Ridic-ă umerii și omoplații de pe sol contractând abdomenul.',
+      'Coboară lent înapoi fără a te relaxa total pe sol.',
+    ],
+    greseliComune: ['Tragerea cu mâinile de cap și gât.', 'Ridicarea completă a trunchiului din șold.'],
+    icon: 'Activity',
+  },
+  {
+    id: 'ridicari_picioare',
+    nume: 'Ridicări de picioare din culcat',
+    categorie: 'core',
+    grupe: ['abdomen'],
+    dificultate: 'mediu',
+    echipament: 'corp',
+    met: 4.2,
+    seriiDefault: 3,
+    repetariDefault: 15,
+    descriere: 'Lucrează intens abdomenul inferior și flexorii șoldului.',
+    instructiuni: [
+      'Așază-te pe spate cu palmele sub bazin pentru susținerea lombară.',
+      'Menține picioarele întinse și ridică-le până ajung perpendiculare pe sol.',
+      'Coboară picioarele lent spre sol fără ca lombele să se desprindă de podea.',
+      'Oprește puțin înainte de a atinge solul și repetă.',
+    ],
+    greseliComune: ['Arcuirea zonei lombare la coborâre.', 'Balansarea rapidă a picioarelor.'],
+    icon: 'Activity',
+  },
+  {
+    id: 'russian_twists',
+    nume: 'Russian Twists',
+    categorie: 'core',
+    grupe: ['abdomen'],
+    dificultate: 'mediu',
+    echipament: 'corp',
+    met: 4.5,
+    seriiDefault: 3,
+    repetariDefault: 20,
+    descriere: 'Vizează oblicii abdominali și stabilitatea de rotație a trunchiului.',
+    instructiuni: [
+      'Așază-te pe sol, ridică ușor tălpile și înclină trunchiul la 45 grade.',
+      'Împreunează mâinile sau ține o greutate mică în față.',
+      'Rotește umerii și trunchiul de la dreapta la stânga controlat.',
+      'Păstrează privirea orientată în direcția mișcării.',
+    ],
+    greseliComune: ['Mișcarea doar a brațelor fără rotirea umerilor.', 'Cocoșarea spatelui.'],
+    icon: 'Activity',
+  },
+  {
+    id: 'mountain_climbers',
+    nume: 'Mountain Climbers',
+    categorie: 'core',
+    grupe: ['abdomen', 'cardio'],
+    dificultate: 'mediu',
+    echipament: 'corp',
+    met: 8.0,
+    seriiDefault: 3,
+    repetariDefault: 30,
+    descriere: 'Exercițiu dinamic ce combină activarea abdominală cu efortul cardio.',
+    instructiuni: [
+      'Pornește din poziția de flotare înaltă cu mâinile sub umeri.',
+      'Adu un genunchi rapid spre piept păstrând spatele drept.',
+      'Schimbă alternativ picioarele într-un ritm rapid de alergare pe loc.',
+      'Menține bazinul stabil pe toată durata.',
+    ],
+    greseliComune: ['Ridicarea bazinului în aer.', 'Privirea în jos spre picioare în loc de înainte.'],
+    icon: 'Activity',
+  },
+
+  // CARDIO (5)
+  {
+    id: 'alergare',
+    nume: 'Alergare (ușor / moderat)',
+    categorie: 'cardio',
+    grupe: ['cardio', 'cvadriceps', 'gambe'],
+    dificultate: 'usor',
+    echipament: 'niciun',
+    met: 9.0,
+    seriiDefault: 1,
+    repetariDefault: 20,
+    descriere: 'Antrenament aerobioc excelent pentru sănătatea cardiovasculară și arderea caloriilor.',
+    instructiuni: [
+      'Începe cu 3-5 minute de mers rapid pentru încălzire.',
+      'Păstrează o postură dreaptă cu umerii relaxați.',
+      'Aterizează ușor pe mijlocul tălpii și menține un ritm constant.',
+      'Respiră regulat pe nas și gură.',
+    ],
+    icon: 'Activity',
+  },
+  {
+    id: 'sarituri_coarda',
+    nume: 'Sărituri cu coarda',
+    categorie: 'cardio',
+    grupe: ['cardio', 'gambe'],
+    dificultate: 'mediu',
+    echipament: 'niciun',
+    met: 10.5,
+    seriiDefault: 3,
+    repetariDefault: 100,
+    descriere: 'Unul dintre cele mai eficiente exerciții cardio pentru coordonare și agilitate.',
+    instructiuni: [
+      'Ține mânerele corzii ferm și rotește din încheieturi, nu din brațe.',
+      'Sari ușor pe vârfuri doar cât să treacă coarda sub picioare.',
+      'Păstrează coatele apropiate de corp și genunchii ușor flexați.',
+    ],
+    icon: 'Activity',
+  },
+  {
+    id: 'jumping_jacks',
+    nume: 'Jumping Jacks',
+    categorie: 'cardio',
+    grupe: ['cardio', 'corp_intreg'],
+    dificultate: 'usor',
+    echipament: 'corp',
+    met: 8.0,
+    seriiDefault: 3,
+    repetariDefault: 40,
+    descriere: 'Mișcare calistenică ritmică excelentă pentru încălzire sau circuite HIIT.',
+    instructiuni: [
+      'Stai drept cu picioarele apropiate și brațele pe lângă corp.',
+      'Sari depărtând picioarele în timp ce ridici brațele deasupra capului.',
+      'Sari din nou pentru a reveni rapid în poziția de start.',
+    ],
+    icon: 'Activity',
+  },
+  {
+    id: 'burpees',
+    nume: 'Burpees complete',
+    categorie: 'cardio',
+    grupe: ['cardio', 'corp_intreg', 'piept'],
+    dificultate: 'greu',
+    echipament: 'corp',
+    met: 11.0,
+    seriiDefault: 3,
+    repetariDefault: 12,
+    descriere: 'Exercițiu exploziv total body ce ridică rapid ritmul cardiac.',
+    instructiuni: [
+      'Coboară în genuflexiune și pune palmele pe sol.',
+      'Aruncă picioarele în spate și execută o flotare completă.',
+      'Sari cu picioarele înapoi lângă mâini.',
+      'Ridică-te și execută o săritură verticală cu bătăi din palme deasupra capului.',
+    ],
+    icon: 'Activity',
+  },
+  {
+    id: 'bicicleta_statica',
+    nume: 'Ciclism / Bicicletă statică',
+    categorie: 'cardio',
+    grupe: ['cardio', 'cvadriceps'],
+    dificultate: 'usor',
+    echipament: 'aparat',
+    met: 7.5,
+    seriiDefault: 1,
+    repetariDefault: 30,
+    descriere: 'Cardio cu impact redus asupra articulațiilor genunchiului.',
+    instructiuni: [
+      'Reglează șaua la înălțimea șoldului pentru o extensie corectă a piciorului.',
+      'Păstrează spatele drept și pedalează cu o cadență constantă.',
+      'Mărește rezistența pentru intervale de intensitate ridicată.',
+    ],
+    icon: 'Activity',
+  },
+];
+
 export interface ExercitiuPreset {
   id: string;
   nume: string;
   tip: string;
   icon: string;
-  met: number; // Metabolic Equivalent of Task
+  met: number;
 }
 
-export const exercitiiPresets: ExercitiuPreset[] = [
-  { id: 'alergat', nume: 'Alergat (ușor/mediu)', tip: 'cardio', icon: '🏃', met: 9.8 },
-  { id: 'ciclism', nume: 'Ciclism / Bicicletă', tip: 'cardio', icon: '🚴', met: 7.5 },
-  { id: 'forta', nume: 'Antrenament cu greutăți / Forță', tip: 'strength', icon: '🏋️', met: 6.0 },
-  { id: 'inot', nume: 'Înot', tip: 'cardio', icon: '🏊', met: 8.3 },
-  { id: 'mers', nume: 'Mers alert', tip: 'cardio', icon: '🚶', met: 3.5 },
-  { id: 'hiit', nume: 'HIIT / Circuit cardio intens', tip: 'cardio', icon: '⚡', met: 10.0 },
-  { id: 'yoga', nume: 'Yoga / Stretching / Pilates', tip: 'flexibility', icon: '🧘', met: 2.5 },
-  { id: 'fotbal', nume: 'Fotbal / Baschet / Sport de echipă', tip: 'sport', icon: '⚽', met: 7.0 },
-  { id: 'box', nume: 'Box / Sac de box', tip: 'cardio', icon: '🥊', met: 9.0 },
-  { id: 'banda', nume: 'Bandă de alergat / Înclinație', tip: 'cardio', icon: '🏔️', met: 6.5 },
-];
+export const exercitiiPresets: ExercitiuPreset[] = EXERCITII.map((e) => ({
+  id: e.id,
+  nume: e.nume,
+  tip: e.categorie,
+  icon: e.icon || 'Dumbbell',
+  met: e.met,
+}));
 
-/**
- * Calculează caloriile arse folosind formula MET standard:
- * kcal = MET * greutate_kg * ore
- */
 export function calculeazaCaloriiArse(met: number, greutateKg: number, durataMin: number): number {
   if (!met || !greutateKg || !durataMin) return 0;
-  const ore = durataMin / 60;
-  return Math.round(met * greutateKg * ore);
+  return Math.round(met * greutateKg * (durataMin / 60));
 }

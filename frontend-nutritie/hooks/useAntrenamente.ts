@@ -27,7 +27,9 @@ export function useAntrenamente(dataSelectata?: Date) {
   const fetchAntrenamente = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
       if (!currentUser) {
         setLoading(false);
         return;
@@ -49,7 +51,10 @@ export function useAntrenamente(dataSelectata?: Date) {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.warn('Eroare la citirea antrenamentelor (posibil tabela nu exista inca):', error.message);
+        console.warn(
+          'Eroare la citirea antrenamentelor (posibil tabela nu exista inca):',
+          error.message
+        );
         setAntrenamente([]);
         setTotalCaloriiArse(0);
         setNumarAntrenamente(0);
@@ -76,14 +81,15 @@ export function useAntrenamente(dataSelectata?: Date) {
     durata_min: number;
     calorii_arse?: number;
     met?: number;
-  }) => {
+  }): Promise<Antrenament | null> => {
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
       if (!currentUser) throw new Error('Nu ești autentificat.');
 
       let calorii = payload.calorii_arse || 0;
       if (!calorii && payload.met) {
-        // Citim greutatea utilizatorului din metadata sau AsyncStorage
         let greutateKg = currentUser.user_metadata?.greutate;
         if (!greutateKg) {
           const storedG = await AsyncStorage.getItem('greutate');
@@ -101,11 +107,7 @@ export function useAntrenamente(dataSelectata?: Date) {
         created_at: new Date().toISOString(),
       };
 
-      const { data, error } = await supabase
-        .from('antrenamente')
-        .insert([row])
-        .select()
-        .single();
+      const { data, error } = await supabase.from('antrenamente').insert([row]).select().single();
 
       if (error) throw error;
       await fetchAntrenamente();
@@ -116,12 +118,28 @@ export function useAntrenamente(dataSelectata?: Date) {
     }
   };
 
-  const stergeAntrenament = async (id: string) => {
+  const adaugaExercitiu = async (payload: {
+    nume: string;
+    calorii: number;
+    durataMin: number;
+    seturi?: number;
+    repetari?: number;
+    greutateKg?: number;
+    icon?: string;
+    tip?: string;
+    exercitiuId?: string;
+  }): Promise<Antrenament | null> => {
+    return adaugaAntrenament({
+      nume: payload.nume,
+      tip: payload.tip || 'strength',
+      durata_min: payload.durataMin || 15,
+      calorii_arse: payload.calorii || 80,
+    });
+  };
+
+  const stergeAntrenament = async (id: string): Promise<void> => {
     try {
-      const { error } = await supabase
-        .from('antrenamente')
-        .delete()
-        .eq('id', id);
+      const { error } = await supabase.from('antrenamente').delete().eq('id', id);
 
       if (error) throw error;
       await fetchAntrenamente();
@@ -136,6 +154,7 @@ export function useAntrenamente(dataSelectata?: Date) {
     totalCaloriiArse,
     numarAntrenamente,
     adaugaAntrenament,
+    adaugaExercitiu,
     stergeAntrenament,
     loading,
     refresh: fetchAntrenamente,

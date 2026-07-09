@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity } from 'lucide-react-native';
+import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Award, Trophy, Dumbbell, Flame, Crown, Star } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { themes, themeDisplayNames, ThemeName } from '../../constants/theme';
@@ -17,6 +17,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useBiometrics } from '../../hooks/useBiometrics';
 import { useHealthSync, HEALTH_PROVIDERS } from '../../hooks/useHealthSync';
 import { useNotificationBanner } from '../../context/NotificationBannerContext';
+import { useNotify } from '../../hooks/useNotify';
+import { useGamificare } from '../../hooks/useGamificare';
+import { INSIGNE_LIST } from '../../constants/insigne';
 
 export default function ProfilScreen() {
   const router = useRouter();
@@ -26,6 +29,8 @@ export default function ProfilScreen() {
   const { isEnabled: healthSyncEnabled, platformName, toggleSync: toggleHealthSync, selectedProvider, setProvider } = useHealthSync();
   const { session, user, loadingAuth } = useAuth();
   const { showBanner } = useNotificationBanner();
+  const notify = useNotify();
+  const { insigne } = useGamificare();
   const [greutate, setGreutate] = useState('75');
   const [greutateTinta, setGreutateTinta] = useState('70');
   const [caloriiTinta, setCaloriiTinta] = useState('2000');
@@ -118,12 +123,7 @@ export default function ProfilScreen() {
           type: 'warning'
         });
       } else {
-        showBanner({
-          title: "Profil Actualizat",
-          message: "Obiectivele tale au fost salvate cu succes.",
-          type: 'success',
-          duration: 3500,
-        });
+        notify.success('Profil actualizat', 'Ținte noi salvate');
       }
     } catch {
       showBanner({
@@ -352,6 +352,74 @@ export default function ProfilScreen() {
               </View>
             </LinearGradient>
           </BlurView>
+        </Animated.View>
+
+        {/* Secțiune Insigne & Gamificare */}
+        <Animated.View entering={FadeInDown.duration(600).delay(80)}>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+            INSIGNE & RECOMPENSE ({insigne.length}/{INSIGNE_LIST.length})
+          </Text>
+
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
+            {INSIGNE_LIST.map((insign) => {
+              const unlocked = insigne.includes(insign.id);
+              return (
+                <View
+                  key={insign.id}
+                  style={{
+                    width: '48%',
+                    backgroundColor: unlocked ? colors.accent + '14' : 'rgba(255,255,255,0.03)',
+                    borderColor: unlocked ? colors.accent + '44' : 'rgba(255,255,255,0.07)',
+                    borderWidth: 1,
+                    borderRadius: 14,
+                    padding: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 19,
+                      backgroundColor: unlocked ? colors.accent + '25' : 'rgba(255,255,255,0.05)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {unlocked ? (
+                      <Trophy size={18} color={colors.accent} />
+                    ) : (
+                      <Lock size={16} color={colors.textTertiary} />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: '700',
+                        color: unlocked ? colors.textPrimary : colors.textTertiary,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {insign.nume}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        color: colors.textSecondary,
+                        marginTop: 2,
+                      }}
+                      numberOfLines={2}
+                    >
+                      {insign.conditie}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
         </Animated.View>
 
         {/* Targets section */}

@@ -12,6 +12,7 @@ import { useAppStore } from '../hooks/useAppStore';
 import { useBiometrics } from '../hooks/useBiometrics';
 import LockScreen from '../components/LockScreen';
 import { NotificationBannerProvider } from '../context/NotificationBannerContext';
+import { GamificareProvider } from '../context/GamificareContext';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -96,7 +97,9 @@ export default function RootLayout() {
       <AppThemeProvider>
         <AuthProvider>
           <NotificationBannerProvider>
-            <RootNavigator />
+            <GamificareProvider>
+              <RootNavigator />
+            </GamificareProvider>
           </NotificationBannerProvider>
         </AuthProvider>
       </AppThemeProvider>

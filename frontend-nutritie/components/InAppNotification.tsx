@@ -1,20 +1,20 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CheckCircle2, AlertTriangle, Info, Bell, X } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
-import { useTheme } from '../context/ThemeContext';
-
-export type BannerType = 'success' | 'info' | 'warning' | 'reminder';
+import { CheckCircle2, AlertTriangle, Info, Bell, XCircle, Trophy } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { Colors, Radius, Spacing } from '../constants/theme';
+import { NotificationType } from '../context/NotificationBannerContext';
 
 export interface InAppNotificationProps {
   visible: boolean;
   title: string;
   message?: string;
-  type?: BannerType;
+  type?: NotificationType;
+  actionLabel?: string;
+  actionRoute?: string;
   onDismiss: () => void;
 }
 
@@ -23,105 +23,98 @@ export default function InAppNotification({
   title,
   message,
   type = 'info',
+  actionLabel,
+  actionRoute,
   onDismiss,
 }: InAppNotificationProps) {
-  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-
-  useEffect(() => {
-    if (visible) {
-      if (type === 'success') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      } else if (type === 'warning') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
-      } else {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-      }
-    }
-  }, [visible, type]);
 
   if (!visible) return null;
 
   const getIcon = () => {
     switch (type) {
       case 'success':
-        return <CheckCircle2 size={22} color={colors.accent} />;
+        return <CheckCircle2 size={20} color={Colors.accent} />;
       case 'warning':
-        return <AlertTriangle size={22} color={colors.warning} />;
+        return <AlertTriangle size={20} color={Colors.warning} />;
+      case 'error':
+        return <XCircle size={20} color={Colors.danger} />;
+      case 'reward':
+        return <Trophy size={20} color={Colors.accentSecondary} />;
       case 'reminder':
-        return <Bell size={22} color={colors.accent} />;
+        return <Bell size={20} color={Colors.accentTertiary} />;
       case 'info':
       default:
-        return <Info size={22} color={colors.accentSecondary} />;
+        return <Info size={20} color={Colors.accentTertiary} />;
     }
   };
 
-  const getBorderColor = () => {
+  const getTypeColor = () => {
     switch (type) {
-      case 'warning':
-        return `${colors.warning}44`;
-      case 'info':
-        return `${colors.accentSecondary}44`;
       case 'success':
+        return Colors.accent;
+      case 'reward':
+        return Colors.accentSecondary;
+      case 'warning':
+        return Colors.warning;
+      case 'error':
+        return Colors.danger;
       case 'reminder':
+      case 'info':
       default:
-        return `${colors.accent}44`;
+        return Colors.accentTertiary;
     }
   };
 
-  const topPosition = Math.max(insets.top + 8, Platform.OS === 'ios' ? 48 : 24);
+  const topPosition = Math.max(insets.top + Spacing.sm, Platform.OS === 'ios' ? 48 : 24);
+
+  const handlePress = () => {
+    onDismiss();
+    if (actionRoute) {
+      router.push(actionRoute as any);
+    }
+  };
 
   return (
     <Animated.View
       entering={FadeInDown.duration(350).springify()}
       exiting={FadeOutUp.duration(250)}
-      style={[
-        styles.container,
-        {
-          top: topPosition,
-        },
-      ]}
+      style={[styles.container, { top: topPosition }]}
     >
       <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={onDismiss}
+        activeOpacity={0.92}
+        onPress={handlePress}
         style={styles.touchable}
         accessibilityRole="button"
-        accessibilityLabel="Închide notificarea"
+        accessibilityLabel="Notificare NutriAI"
       >
         <BlurView
-          intensity={Platform.OS === 'ios' ? 40 : 30}
+          intensity={Platform.OS === 'ios' ? 45 : 35}
           tint="dark"
-          style={[
-            styles.blurCard,
-            {
-              borderColor: getBorderColor(),
-            },
-          ]}
+          style={[styles.blurCard, { borderColor: `${getTypeColor()}33` }]}
         >
-          <LinearGradient
-            colors={[`${colors.accent}14`, 'rgba(0,0,0,0)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.gradient}
-          />
+          <View style={[styles.indicatorBar, { backgroundColor: getTypeColor() }]} />
 
-          <View style={styles.contentRow}>
-            <View style={styles.iconContainer}>{getIcon()}</View>
-
-            <View style={styles.textContainer}>
-              <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-              {!!message && (
-                <Text style={[styles.message, { color: colors.textTertiary }]} numberOfLines={2}>
-                  {message}
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.closeBtn}>
-              <X size={18} color={colors.textTertiary} />
-            </View>
+          <View style={[styles.iconCircle, { backgroundColor: `${getTypeColor()}1F` }]}>
+            {getIcon()}
           </View>
+
+          <View style={styles.content}>
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
+            </Text>
+            {message ? (
+              <Text style={styles.message} numberOfLines={2}>
+                {message}
+              </Text>
+            ) : null}
+          </View>
+
+          {actionLabel ? (
+            <View style={styles.actionPill}>
+              <Text style={[styles.actionText, { color: getTypeColor() }]}>{actionLabel}</Text>
+            </View>
+          ) : null}
         </BlurView>
       </TouchableOpacity>
     </Animated.View>
@@ -131,48 +124,64 @@ export default function InAppNotification({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    left: 16,
-    right: 16,
-    zIndex: 9999,
-    elevation: 10,
+    left: Spacing.lg,
+    right: Spacing.lg,
+    zIndex: 99999,
   },
   touchable: {
-    width: '100%',
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
   },
   blurCard: {
-    borderRadius: 22,
-    borderWidth: 1,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(9, 12, 14, 0.78)',
-  },
-  gradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: 'rgba(18, 22, 26, 0.88)',
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    paddingVertical: Spacing.md,
+    paddingRight: Spacing.md,
   },
-  iconContainer: {
-    marginRight: 12,
+  indicatorBar: {
+    width: 4,
+    height: '100%',
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+  },
+  iconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: Spacing.md,
+    marginRight: Spacing.md,
   },
-  textContainer: {
+  content: {
     flex: 1,
-    marginRight: 8,
+    justifyContent: 'center',
   },
   title: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    marginBottom: 2,
+    color: Colors.textPrimary,
   },
   message: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
-  closeBtn: {
-    padding: 4,
+  actionPill: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginLeft: Spacing.sm,
+  },
+  actionText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

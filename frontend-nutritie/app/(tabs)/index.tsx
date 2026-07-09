@@ -5,8 +5,9 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell } from 'lucide-react-native';
+import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell, Bell } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { useNotificationBanner } from '../../context/NotificationBannerContext';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTheme } from '../../context/ThemeContext';
 import { useApa } from '../../hooks/useApa';
@@ -58,6 +59,7 @@ function RingProgress({ procent, color, bgColor }: { procent: number; color: str
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { unreadCount } = useNotificationBanner();
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
 
   const { 
@@ -176,11 +178,49 @@ export default function HomeScreen() {
               <Text style={[s.caloriiInline, { color: calState.ringColor }]}>  {calState.emoji} {calState.mesaj}</Text>
             </View>
           </View>
-          <View style={s.streakBadge}>
-            <LinearGradient colors={colors.accentGradient} style={s.streakGrad}>
-              <Flame size={14} color={colors.background} />
-              <Text style={[s.streakText, { color: colors.background }]}>{numarMese} mese</Text>
-            </LinearGradient>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => router.push('/notificari' as any)}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 19,
+                backgroundColor: 'rgba(255,255,255,0.06)',
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.1)',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Bell size={18} color={colors.textPrimary} />
+              {unreadCount > 0 ? (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: -2,
+                    right: -2,
+                    minWidth: 16,
+                    height: 16,
+                    borderRadius: 8,
+                    backgroundColor: colors.danger,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingHorizontal: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFF' }}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+
+            <View style={s.streakBadge}>
+              <LinearGradient colors={colors.accentGradient} style={s.streakGrad}>
+                <Flame size={14} color={colors.background} />
+                <Text style={[s.streakText, { color: colors.background }]}>{numarMese} mese</Text>
+              </LinearGradient>
+            </View>
           </View>
         </Animated.View>
 
