@@ -261,10 +261,59 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
       }
     }
 
-    if (!result || !result.response) {
-      throw lastError || new Error("Toate modelele Gemini au eșuat. Verifică valabilitatea cheii API în .env.");
+    let text = null;
+    if (result && result.response) {
+      text = result.response.text();
+    } else {
+      console.warn("⚠️ Toate modelele Gemini au eșuat. Încercăm fallback la Groq Vision AI...");
+      try {
+        const groqVisionModels = ["llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"];
+        for (const groqModel of groqVisionModels) {
+          const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${groqApiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: groqModel,
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: prompt },
+                    {
+                      type: "image_url",
+                      image_url: {
+                        url: `data:${req.file.mimetype};base64,${fileBuffer.toString("base64")}`
+                      }
+                    }
+                  ]
+                }
+              ],
+              temperature: 0.2,
+              max_tokens: 1000
+            })
+          });
+          if (groqRes.ok) {
+            const groqData = await groqRes.json();
+            text = groqData.choices?.[0]?.message?.content;
+            if (text) {
+              console.log(`✅ Succes Groq Vision cu modelul: ${groqModel}`);
+              break;
+            }
+          } else {
+            console.warn(`⚠️ Groq Vision [${groqModel}] eșuat: ${groqRes.status}`);
+          }
+        }
+      } catch (groqErr) {
+        console.warn("⚠️ Eroare la fallback Groq Vision:", groqErr.message);
+      }
+
+      if (!text) {
+        throw lastError || new Error("Toate modelele AI (Gemini + Groq) au eșuat. Verifică cheile API în Render.");
+      }
     }
-    const text = result.response.text();
 
     let cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     let parsed;
