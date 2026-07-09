@@ -164,10 +164,9 @@ const getGeminiModelsList = () => {
   return [
     process.env.GEMINI_MODEL,
     "gemini-1.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash-002",
     "gemini-1.5-pro",
-    "gemini-1.5-flash-8b"
+    "gemini-1.5-flash-8b",
+    "gemini-2.0-flash-lite"
   ].filter((v, i, a) => v && a.indexOf(v) === i);
 };
 
@@ -257,38 +256,59 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
 
     let text = null;
     let lastError = null;
+    const imageBase64 = fileBuffer.toString("base64");
+    const imageMime = req.file.mimetype;
 
-    // 1) Încercăm toate cheile și modelele Gemini
-    const geminiKeys = getApiKeysList('GEMINI_API_KEY');
-    const modelsToTry = getGeminiModelsList();
-    for (const key of geminiKeys) {
-      const client = new GoogleGenerativeAI(key);
-      for (const modelName of modelsToTry) {
+    // 1) PRIORITATE: OpenAI GPT-4o-mini Vision (cea mai fiabilă cheie)
+    const openaiKeys = getApiKeysList('OPENAI_API_KEY');
+    if (openaiKeys.length > 0) {
+      console.log("🔄 Încerc OpenAI GPT-4o-mini Vision...");
+      for (const key of openaiKeys) {
         try {
-          const model = client.getGenerativeModel({ model: modelName });
-          const responsePromise = model.generateContent({
-            contents: [{ role: "user", parts: [{ text: prompt }, imagePart] }],
-            generationConfig: { responseMimeType: "application/json" }
+          const oaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${key}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: "gpt-4o-mini",
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: prompt },
+                    {
+                      type: "image_url",
+                      image_url: { url: `data:${imageMime};base64,${imageBase64}` }
+                    }
+                  ]
+                }
+              ],
+              temperature: 0.2,
+              max_tokens: 1500
+            })
           });
-          const result = await callWithTimeout(responsePromise);
-          if (result && result.response) {
-            text = result.response.text();
+          if (oaiRes.ok) {
+            const oaiData = await oaiRes.json();
+            text = oaiData.choices?.[0]?.message?.content;
             if (text) {
-              console.log(`✅ Succes Gemini cu modelul: ${modelName}`);
+              console.log("✅ Succes OpenAI GPT-4o-mini Vision!");
               break;
             }
+          } else {
+            const errBody = await oaiRes.text();
+            console.warn(`⚠️ OpenAI Vision eșuat (${oaiRes.status}):`, errBody.substring(0, 150));
           }
-        } catch (err) {
-          lastError = err;
-          console.warn(`⚠️ Gemini [${modelName}] eșuat:`, err.message ? err.message.substring(0, 100) : err);
+        } catch (e) {
+          console.warn("⚠️ OpenAI Vision excepție:", e.message);
         }
       }
-      if (text) break;
     }
 
-    // 2) Dacă Gemini a eșuat, încercăm toate cheile și modelele Groq Vision AI
+    // 2) Groq Vision AI (llama vision - gratuit și rapid)
     if (!text) {
-      console.warn("⚠️ Toate cheile/modelele Gemini au eșuat. Comutăm pe Groq Vision AI...");
+      console.warn("⚠️ OpenAI nu a funcționat. Încerc Groq Vision AI...");
       const groqKeys = getApiKeysList('GROQ_API_KEY');
       const groqVisionModels = ["llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"];
       for (const key of groqKeys) {
@@ -309,9 +329,7 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
                       { type: "text", text: prompt },
                       {
                         type: "image_url",
-                        image_url: {
-                          url: `data:${req.file.mimetype};base64,${fileBuffer.toString("base64")}`
-                        }
+                        image_url: { url: `data:${imageMime};base64,${imageBase64}` }
                       }
                     ]
                   }
@@ -327,65 +345,54 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
                 console.log(`✅ Succes Groq Vision cu modelul: ${groqModel}`);
                 break;
               }
+            } else {
+              const errBody = await groqRes.text();
+              console.warn(`⚠️ Groq [${groqModel}] (${groqRes.status}):`, errBody.substring(0, 100));
             }
           } catch (groqErr) {
-            console.warn(`⚠️ Groq Vision [${groqModel}] eșuat:`, groqErr.message);
+            console.warn(`⚠️ Groq Vision [${groqModel}] excepție:`, groqErr.message);
           }
         }
         if (text) break;
       }
     }
 
-    // 3) OpenAI Vision API fallback (dacă există OPENAI_API_KEY / OPENAI_API_KEYS)
+    // 3) Gemini AI fallback (cu toate cheile disponibile)
     if (!text) {
-      const openaiKeys = getApiKeysList('OPENAI_API_KEY');
-      if (openaiKeys.length > 0) {
-        console.warn("⚠️ Încercăm fallback pe OpenAI Vision API...");
-        for (const key of openaiKeys) {
+      console.warn("⚠️ Groq eșuat. Încerc Gemini API...");
+      const geminiKeys = getApiKeysList('GEMINI_API_KEY');
+      const modelsToTry = getGeminiModelsList();
+      for (const key of geminiKeys) {
+        const client = new GoogleGenerativeAI(key);
+        for (const modelName of modelsToTry) {
           try {
-            const oaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${key}`,
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                model: "gpt-4o-mini",
-                messages: [
-                  {
-                    role: "user",
-                    content: [
-                      { type: "text", text: prompt },
-                      {
-                        type: "image_url",
-                        image_url: {
-                          url: `data:${req.file.mimetype};base64,${fileBuffer.toString("base64")}`
-                        }
-                      }
-                    ]
-                  }
-                ],
-                temperature: 0.2
-              })
+            const model = client.getGenerativeModel({ model: modelName });
+            const responsePromise = model.generateContent({
+              contents: [{ role: "user", parts: [{ text: prompt }, imagePart] }],
+              generationConfig: { responseMimeType: "application/json" }
             });
-            if (oaiRes.ok) {
-              const oaiData = await oaiRes.json();
-              text = oaiData.choices?.[0]?.message?.content;
+            const result = await callWithTimeout(responsePromise);
+            if (result && result.response) {
+              text = result.response.text();
               if (text) {
-                console.log("✅ Succes OpenAI Vision!");
+                console.log(`✅ Succes Gemini cu modelul: ${modelName}`);
                 break;
               }
             }
-          } catch (e) {}
+          } catch (err) {
+            lastError = err;
+            console.warn(`⚠️ Gemini [${modelName}] eșuat:`, err.message ? err.message.substring(0, 100) : err);
+          }
         }
+        if (text) break;
       }
     }
 
-    // 4) OpenRouter Vision fallback (dacă există OPENROUTER_API_KEY / OPENROUTER_API_KEYS)
+    // 4) OpenRouter Vision fallback (dacă există OPENROUTER_API_KEY)
     if (!text) {
       const orKeys = getApiKeysList('OPENROUTER_API_KEY');
       if (orKeys.length > 0) {
-        console.warn("⚠️ Încercăm fallback pe OpenRouter AI...");
+        console.warn("⚠️ Încerc OpenRouter AI...");
         for (const key of orKeys) {
           try {
             const orRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -395,7 +402,7 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
                 "Content-Type": "application/json"
               },
               body: JSON.stringify({
-                model: "google/gemini-2.0-flash-exp:free",
+                model: "google/gemini-flash-1.5",
                 messages: [
                   {
                     role: "user",
@@ -403,9 +410,7 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
                       { type: "text", text: prompt },
                       {
                         type: "image_url",
-                        image_url: {
-                          url: `data:${req.file.mimetype};base64,${fileBuffer.toString("base64")}`
-                        }
+                        image_url: { url: `data:${imageMime};base64,${imageBase64}` }
                       }
                     ]
                   }
@@ -426,7 +431,7 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
     }
 
     if (!text) {
-      throw lastError || new Error("Toate sistemele AI (Gemini + Groq + Fallbacks) au eșuat. Verifică cheile API în panoul Render.");
+      throw lastError || new Error("Toate sistemele AI (OpenAI + Groq + Gemini) au eșuat. Verifică cheile API în panoul Render.");
     }
 
     let cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
