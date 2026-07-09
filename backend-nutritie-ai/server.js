@@ -115,6 +115,9 @@ const validateImageMagicBytes = (buffer) => {
   if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return true;
   // WEBP (RIFF....WEBP)
   if (buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') return true;
+  // HEIC / HEIF / ISO Media (ftyp box)
+  const ftyp = buffer.toString('ascii', 4, 8);
+  if (ftyp === 'ftyp') return true;
   return false;
 };
 
@@ -161,9 +164,10 @@ const getGeminiModelsList = () => {
   return [
     process.env.GEMINI_MODEL,
     "gemini-1.5-flash",
-    "gemini-1.5-flash-latest",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash-002",
     "gemini-1.5-pro",
-    "gemini-2.0-flash-exp"
+    "gemini-1.5-flash-8b"
   ].filter((v, i, a) => v && a.indexOf(v) === i);
 };
 
@@ -262,40 +266,55 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
     }
     const text = result.response.text();
 
+    let cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     let parsed;
     try {
-      parsed = JSON.parse(text);
+      parsed = JSON.parse(cleanedText);
     } catch (e) {
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        return res.status(500).json({ eroare: "AI nu a returnat JSON valid." });
+      const jsonMatch = cleanedText.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch (e2) {}
       }
-      try {
-        parsed = JSON.parse(jsonMatch[0]);
-      } catch (e2) {
-        return res.status(500).json({ eroare: "AI nu a returnat JSON valid." });
+      if (!parsed) {
+        const objMatch = cleanedText.match(/\{[\s\S]*\}/);
+        if (objMatch) {
+          try {
+            parsed = JSON.parse(objMatch[0]);
+          } catch (e3) {}
+        }
+      }
+      if (!parsed) {
+        return res.status(500).json({ eroare: "AI nu a returnat un format JSON valid." });
       }
     }
 
     if (!Array.isArray(parsed)) {
-       parsed = [parsed]; // Fallback in caz ca returneaza obiect in loc de array
+      const arrayProp = Object.values(parsed).find(val => Array.isArray(val));
+      if (arrayProp) {
+        parsed = arrayProp;
+      } else {
+        parsed = [parsed];
+      }
     }
 
     // Schema de validare / normalizare
     const validated = parsed.map(item => ({
-      nume: String(item.nume || "Aliment necunoscut"),
-      estimare_grame: Number(item.estimare_grame) || 100,
-      calorii_per_100g: Number(item.calorii_per_100g) || 0,
-      proteine_per_100g: Number(item.proteine_per_100g) || 0,
-      grasimi_per_100g: Number(item.grasimi_per_100g) || 0,
-      carbohidrati_per_100g: Number(item.carbohidrati_per_100g) || 0,
-      incredere: String(item.incredere || "mediu")
+      nume: String(item.nume || item.aliment || "Aliment identificat"),
+      estimare_grame: Number(item.estimare_grame || item.grame) || 100,
+      calorii_per_100g: Number(item.calorii_per_100g || item.calorii) || 0,
+      proteine_per_100g: Number(item.proteine_per_100g || item.proteine) || 0,
+      grasimi_per_100g: Number(item.grasimi_per_100g || item.grasimi) || 0,
+      carbohidrati_per_100g: Number(item.carbohidrati_per_100g || item.carbohidrati) || 0,
+      incredere: String(item.incredere || "ridicat")
     }));
 
     res.json(validated);
   } catch (error) {
-    console.error("Eroare Gemini structurat:", error.message);
-    res.status(500).json({ eroare: "Eroare la procesarea imaginii prin Gemini." });
+    console.error("Eroare Gemini structurat:", error.message || error);
+    const msg = error?.message || "Eroare necunoscută de la AI";
+    res.status(500).json({ eroare: `Eroare AI Gemini: ${msg}` });
   } finally {
     // 1.2 Ștergerea asincronă a fișierului temporar în blocul finally
     if (req.file && req.file.path) {
