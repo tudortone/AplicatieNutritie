@@ -6,6 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/config';
 import { useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
@@ -25,6 +26,7 @@ interface ChatMessage {
 export default function ChatScreen() {
   const { colors } = useTheme();
   const { session } = useAuth();
+  const insets = useSafeAreaInsets();
   const [chatInput, setChatInput] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
   const [recipeModalVisible, setRecipeModalVisible] = useState(false);
@@ -185,7 +187,7 @@ export default function ChatScreen() {
 
   const inputBottomPadding = isKeyboardVisible 
     ? 10 
-    : (Platform.OS === 'ios' ? 24 : 14);
+    : (Platform.OS === 'ios' ? Math.max(insets.bottom, 24) : 14);
 
   return (
     <View style={[styles.outerContainer, { backgroundColor: colors.background }]}>

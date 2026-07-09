@@ -131,44 +131,44 @@ export default function AntrenamenteScreen() {
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <View>
-              <Text style={styles.headerSub}>ANTRENAMENTE & QUESTURI</Text>
-              <Text style={styles.headerTitle}>Sala ta NutriAI</Text>
+              <Text style={[styles.headerSub, { color: colors.accent }]}>ANTRENAMENTE & QUESTURI</Text>
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Sala ta NutriAI</Text>
             </View>
 
             <View style={styles.streakBadge}>
               <LinearGradient colors={colors.accentGradient} style={styles.streakGrad}>
-                <Zap size={14} color={Colors.background} />
-                <Text style={styles.streakText}>{streak} Zile</Text>
+                <Zap size={14} color={colors.background} />
+                <Text style={[styles.streakText, { color: colors.background }]}>{streak} Zile</Text>
               </LinearGradient>
             </View>
           </View>
 
           {/* Card nivel și XP */}
-          <View style={styles.xpCard}>
+          <View style={[styles.xpCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.xpHeaderRow}>
               <View style={styles.levelBadge}>
-                <Award size={16} color={Colors.accent} />
-                <Text style={styles.levelText}>
+                <Award size={16} color={colors.accent} />
+                <Text style={[styles.levelText, { color: colors.textPrimary }]}>
                   Nivel {detaliiNivel.nivel} — {detaliiNivel.titlu}
                 </Text>
               </View>
-              <Text style={styles.xpTotalText}>{xpTotal} XP total</Text>
+              <Text style={[styles.xpTotalText, { color: colors.accentSecondary }]}>{xpTotal} XP total</Text>
             </View>
 
             <View style={styles.progressBarWrap}>
               <View
                 style={[
                   styles.progressBarFill,
-                  { width: `${detaliiNivel.procentNivel}%` },
+                  { width: `${detaliiNivel.procentNivel}%`, backgroundColor: colors.accent },
                 ]}
               />
             </View>
 
             <View style={styles.xpProgressLabels}>
-              <Text style={styles.xpSubText}>
+              <Text style={[styles.xpSubText, { color: colors.textTertiary }]}>
                 Progres Nivel {detaliiNivel.nivel}
               </Text>
-              <Text style={styles.xpSubText}>
+              <Text style={[styles.xpSubText, { color: colors.textTertiary }]}>
                 {detaliiNivel.xpCurentInNivel} / {detaliiNivel.xpNecesarUrmatorulNivel} XP
               </Text>
             </View>
@@ -176,44 +176,44 @@ export default function AntrenamenteScreen() {
         </View>
 
         {/* Card Rezumat Astăzi */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryStatsRow}>
-            <View style={styles.statBox}>
-              <Flame size={20} color={Colors.accent} />
-              <Text style={styles.statVal}>{totalCaloriiArse}</Text>
-              <Text style={styles.statLabel}>kcal arse azi</Text>
+        <View style={[styles.summaryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent + '33' }]}>
+            <View style={styles.summaryStatsRow}>
+              <View style={styles.statBox}>
+                <Flame size={20} color={colors.accent} />
+                <Text style={[styles.statVal, { color: colors.textPrimary }]}>{totalCaloriiArse}</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>kcal arse azi</Text>
             </View>
 
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
 
             <View style={styles.statBox}>
-              <Dumbbell size={20} color={Colors.accentSecondary} />
-              <Text style={styles.statVal}>{numarAntrenamente}</Text>
-              <Text style={styles.statLabel}>sesiuni azi</Text>
+              <Dumbbell size={20} color={colors.accentSecondary} />
+              <Text style={[styles.statVal, { color: colors.textPrimary }]}>{numarAntrenamente}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>sesiuni azi</Text>
             </View>
           </View>
 
           <TouchableOpacity
-            style={styles.addCustomBtn}
+            style={[styles.addCustomBtn, { backgroundColor: colors.accent }]}
             activeOpacity={0.88}
             onPress={() => bottomSheetRef.current?.open()}
           >
-            <Plus size={18} color={Colors.background} />
-            <Text style={styles.addCustomBtnText}>Înregistrează antrenament rapid</Text>
+            <Plus size={18} color={colors.background} />
+            <Text style={[styles.addCustomBtnText, { color: colors.background }]}>Înregistrează antrenament rapid</Text>
           </TouchableOpacity>
         </View>
 
         {/* Secțiunea Obiectivele Zilei (Quests) */}
         <View style={styles.sectionWrap}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>OBIECTIVELE ZILEI</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>OBIECTIVELE ZILEI</Text>
             {toateQuesturileCompletate && (
               <TouchableOpacity
                 onPress={revendicaRecompensaZilnica}
-                style={styles.bonusBtn}
+                style={[styles.bonusBtn, { backgroundColor: colors.accent + '20' }]}
               >
-                <Sparkles size={14} color={Colors.accent} />
-                <Text style={styles.bonusBtnText}>Bonus complet</Text>
+                <Sparkles size={14} color={colors.accent} />
+                <Text style={[styles.bonusBtnText, { color: colors.accent }]}>Bonus complet</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -224,14 +224,15 @@ export default function AntrenamenteScreen() {
                 key={quest.id}
                 style={[
                   styles.questCard,
-                  quest.completat && styles.questCardDone,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  quest.completat && [styles.questCardDone, { borderColor: colors.accent + '44', backgroundColor: colors.accent + '0A' }],
                 ]}
               >
                 <View style={styles.questIconCol}>
                   {quest.completat ? (
-                    <CheckCircle2 size={22} color={Colors.accent} />
+                    <CheckCircle2 size={22} color={colors.accent} />
                   ) : (
-                    <View style={styles.questCircleEmpty} />
+                    <View style={[styles.questCircleEmpty, { borderColor: colors.textTertiary }]} />
                   )}
                 </View>
 
@@ -239,31 +240,33 @@ export default function AntrenamenteScreen() {
                   <Text
                     style={[
                       styles.questDesc,
-                      quest.completat && styles.questDescDone,
+                      { color: colors.textPrimary },
+                      quest.completat && [styles.questDescDone, { color: colors.textSecondary }],
                     ]}
                   >
                     {quest.descriere}
                   </Text>
                   <View style={styles.questBarWrap}>
-                    <View
-                      style={[
-                        styles.questBarFill,
-                        {
-                          width: `${Math.min(
-                            100,
-                            (quest.progres / quest.tinta) * 100
-                          )}%`,
-                        },
-                      ]}
-                    />
+                      <View
+                        style={[
+                          styles.questBarFill,
+                          {
+                            width: `${Math.min(
+                              100,
+                              (quest.progres / quest.tinta) * 100
+                            )}%`,
+                            backgroundColor: colors.accentSecondary,
+                          },
+                        ]}
+                      />
                   </View>
-                  <Text style={styles.questProgressText}>
+                  <Text style={[styles.questProgressText, { color: colors.textTertiary }]}>
                     {quest.progres} / {quest.tinta} completat
                   </Text>
                 </View>
 
                 <View style={styles.questXpBadge}>
-                  <Text style={styles.questXpText}>+{quest.xp} XP</Text>
+                  <Text style={[styles.questXpText, { color: colors.accent }]}>+{quest.xp} XP</Text>
                 </View>
               </View>
             ))}
@@ -273,15 +276,15 @@ export default function AntrenamenteScreen() {
         {/* Istoric Antrenamente de azi (dacă există) */}
         {antrenamente.length > 0 && (
           <View style={styles.sectionWrap}>
-            <Text style={styles.sectionTitle}>SESIUNI ÎNREGISTRATE AZI</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>SESIUNI ÎNREGISTRATE AZI</Text>
             {antrenamente.map((item) => (
-              <View key={item.id} style={styles.historyCard}>
-                <View style={styles.historyIconWrap}>
-                  <Dumbbell size={18} color={Colors.accent} />
+              <View key={item.id} style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[styles.historyIconWrap, { backgroundColor: colors.accent + '20' }]}>
+                  <Dumbbell size={18} color={colors.accent} />
                 </View>
                 <View style={styles.historyInfo}>
-                  <Text style={styles.historyName}>{item.nume}</Text>
-                  <Text style={styles.historyMeta}>
+                  <Text style={[styles.historyName, { color: colors.textPrimary }]}>{item.nume}</Text>
+                  <Text style={[styles.historyMeta, { color: colors.textSecondary }]}>
                     {item.durata_min} min • arse ~{item.calorii_arse} kcal
                   </Text>
                 </View>
@@ -289,7 +292,7 @@ export default function AntrenamenteScreen() {
                   onPress={() => handleStergere(item)}
                   style={styles.deleteBtn}
                 >
-                  <Trash2 size={18} color={Colors.danger} />
+                  <Trash2 size={18} color={colors.danger} />
                 </TouchableOpacity>
               </View>
             ))}
@@ -298,15 +301,15 @@ export default function AntrenamenteScreen() {
 
         {/* Selector Categorii & Căutare Exerciții */}
         <View style={styles.sectionWrap}>
-          <Text style={styles.sectionTitle}>CATALOG EXERCIȚII ({exercitiiFiltrate.length})</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textTertiary }]}>CATALOG EXERCIȚII ({exercitiiFiltrate.length})</Text>
 
           {/* Search Bar */}
-          <View style={styles.searchWrap}>
-            <Search size={18} color={Colors.textTertiary} />
+          <View style={[styles.searchWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Search size={18} color={colors.textTertiary} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: colors.textPrimary }]}
               placeholder="Caută exercițiu sau grupă (ex: piept, flotări)..."
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={colors.textTertiary}
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -319,41 +322,45 @@ export default function AntrenamenteScreen() {
             contentContainerStyle={styles.chipsScroll}
           >
             <TouchableOpacity
-              onPress={() => setSelectedCategorie('toate')}
-              style={[
-                styles.chip,
-                selectedCategorie === 'toate' && styles.chipActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  selectedCategorie === 'toate' && styles.chipTextActive,
-                ]}
-              >
-                Toate
-              </Text>
-            </TouchableOpacity>
-
-            {CATEGORII.map((cat) => (
-              <TouchableOpacity
-                key={cat.id}
-                onPress={() => setSelectedCategorie(cat.id)}
+                onPress={() => setSelectedCategorie('toate')}
                 style={[
                   styles.chip,
-                  selectedCategorie === cat.id && styles.chipActive,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  selectedCategorie === 'toate' && [styles.chipActive, { backgroundColor: colors.accent, borderColor: colors.accent }],
                 ]}
               >
                 <Text
                   style={[
                     styles.chipText,
-                    selectedCategorie === cat.id && styles.chipTextActive,
+                    { color: colors.textSecondary },
+                    selectedCategorie === 'toate' && [styles.chipTextActive, { color: colors.background }],
                   ]}
                 >
-                  {cat.nume}
+                  Toate
                 </Text>
-              </TouchableOpacity>
-            ))}
+            </TouchableOpacity>
+
+              {CATEGORII.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  onPress={() => setSelectedCategorie(cat.id)}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: colors.surface, borderColor: colors.border },
+                    selectedCategorie === cat.id && [styles.chipActive, { backgroundColor: colors.accent, borderColor: colors.accent }],
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      { color: colors.textSecondary },
+                      selectedCategorie === cat.id && [styles.chipTextActive, { color: colors.background }],
+                    ]}
+                  >
+                    {cat.nume}
+                  </Text>
+                </TouchableOpacity>
+              ))}
           </ScrollView>
 
           {/* Grid/Lista de Exerciții */}
@@ -361,17 +368,17 @@ export default function AntrenamenteScreen() {
             {exercitiiFiltrate.map((ex) => (
               <TouchableOpacity
                 key={ex.id}
-                style={styles.exCard}
+                style={[styles.exCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 activeOpacity={0.78}
                 onPress={() => router.push(`/exercitiu/${ex.id}` as any)}
               >
                 <View style={styles.exIconCircle}>
-                  <Dumbbell size={18} color={Colors.accent} />
+                  <Dumbbell size={18} color={colors.accent} />
                 </View>
 
                 <View style={styles.exContent}>
                   <View style={styles.exHeaderRow}>
-                    <Text style={styles.exName} numberOfLines={1}>
+                    <Text style={[styles.exName, { color: colors.textPrimary }]} numberOfLines={1}>
                       {ex.nume}
                     </Text>
                     <View
@@ -391,12 +398,12 @@ export default function AntrenamenteScreen() {
                     </View>
                   </View>
 
-                  <Text style={styles.exMuscles} numberOfLines={1}>
+                  <Text style={[styles.exMuscles, { color: colors.textSecondary }]} numberOfLines={1}>
                     Mușchi: {ex.grupe.join(', ')}
                   </Text>
                 </View>
 
-                <ChevronRight size={18} color={Colors.textTertiary} />
+                <ChevronRight size={18} color={colors.textTertiary} />
               </TouchableOpacity>
             ))}
           </View>
@@ -429,13 +436,11 @@ const styles = StyleSheet.create({
   headerSub: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.accent,
     letterSpacing: 1,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: Colors.textPrimary,
   },
   streakBadge: {
     borderRadius: Radius.pill,
@@ -451,14 +456,11 @@ const styles = StyleSheet.create({
   streakText: {
     fontSize: 13,
     fontWeight: '800',
-    color: Colors.background,
   },
   xpCard: {
-    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   xpHeaderRow: {
     flexDirection: 'row',
@@ -474,12 +476,10 @@ const styles = StyleSheet.create({
   levelText: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.textPrimary,
   },
   xpTotalText: {
     fontSize: 12,
     fontWeight: '600',
-    color: Colors.accentSecondary,
   },
   progressBarWrap: {
     height: 8,
@@ -490,7 +490,6 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: Colors.accent,
     borderRadius: 4,
   },
   xpProgressLabels: {
@@ -499,14 +498,11 @@ const styles = StyleSheet.create({
   },
   xpSubText: {
     fontSize: 11,
-    color: Colors.textTertiary,
   },
   summaryCard: {
-    backgroundColor: Colors.surfaceElevated,
     borderRadius: Radius.lg,
     padding: Spacing.lg,
     borderWidth: 1,
-    borderColor: `${Colors.accent}33`,
     marginBottom: Spacing.xl,
   },
   summaryStatsRow: {
@@ -522,31 +518,26 @@ const styles = StyleSheet.create({
   statVal: {
     fontSize: 22,
     fontWeight: '800',
-    color: Colors.textPrimary,
     marginTop: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: Colors.textSecondary,
   },
   statDivider: {
     width: 1,
     height: 36,
-    backgroundColor: Colors.border,
   },
   addCustomBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: Colors.accent,
     borderRadius: Radius.md,
     paddingVertical: 12,
   },
   addCustomBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.background,
   },
   sectionWrap: {
     marginBottom: Spacing.xl,
@@ -560,14 +551,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.textTertiary,
     letterSpacing: 0.8,
   },
   bonusBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: `${Colors.accent}20`,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: Radius.pill,
@@ -575,7 +564,6 @@ const styles = StyleSheet.create({
   bonusBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.accent,
   },
   questList: {
     gap: Spacing.sm,
@@ -583,16 +571,12 @@ const styles = StyleSheet.create({
   questCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     padding: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
     gap: Spacing.md,
   },
   questCardDone: {
-    borderColor: `${Colors.accent}44`,
-    backgroundColor: `${Colors.accent}0A`,
   },
   questIconCol: {
     width: 26,
@@ -603,7 +587,6 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: Colors.textTertiary,
   },
   questContent: {
     flex: 1,
@@ -611,12 +594,10 @@ const styles = StyleSheet.create({
   questDesc: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textPrimary,
     marginBottom: 6,
   },
   questDescDone: {
     textDecorationLine: 'line-through',
-    color: Colors.textSecondary,
   },
   questBarWrap: {
     height: 4,
@@ -627,12 +608,10 @@ const styles = StyleSheet.create({
   },
   questBarFill: {
     height: '100%',
-    backgroundColor: Colors.accentSecondary,
     borderRadius: 2,
   },
   questProgressText: {
     fontSize: 11,
-    color: Colors.textTertiary,
   },
   questXpBadge: {
     backgroundColor: 'rgba(255,255,255,0.06)',
@@ -643,23 +622,19 @@ const styles = StyleSheet.create({
   questXpText: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.accent,
   },
   historyCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     padding: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
     marginBottom: Spacing.sm,
   },
   historyIconWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: `${Colors.accent}20`,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.md,
@@ -670,11 +645,9 @@ const styles = StyleSheet.create({
   historyName: {
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.textPrimary,
   },
   historyMeta: {
     fontSize: 12,
-    color: Colors.textSecondary,
     marginTop: 2,
   },
   deleteBtn: {
@@ -683,10 +656,8 @@ const styles = StyleSheet.create({
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: Colors.border,
     paddingHorizontal: Spacing.md,
     marginBottom: Spacing.md,
     gap: Spacing.sm,
@@ -694,7 +665,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     paddingVertical: 12,
-    color: Colors.textPrimary,
     fontSize: 14,
   },
   chipsScroll: {
@@ -705,21 +675,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: Radius.pill,
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   chipActive: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
+    borderWidth: 1,
   },
   chipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textSecondary,
   },
   chipTextActive: {
-    color: Colors.background,
   },
   exList: {
     gap: Spacing.sm,
@@ -727,11 +692,9 @@ const styles = StyleSheet.create({
   exCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     padding: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
     gap: Spacing.md,
   },
   exIconCircle: {
@@ -753,7 +716,6 @@ const styles = StyleSheet.create({
   exName: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.textPrimary,
     flex: 1,
     marginRight: 8,
   },
@@ -769,7 +731,6 @@ const styles = StyleSheet.create({
   },
   exMuscles: {
     fontSize: 12,
-    color: Colors.textSecondary,
     marginTop: 3,
   },
 });

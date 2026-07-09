@@ -261,24 +261,44 @@ export default function CameraScreen() {
           <View style={[styles.corner, styles.cornerTR, { borderColor: colors.accent }]} />
           <View style={[styles.corner, styles.cornerBL, { borderColor: colors.accent }]} />
           <View style={[styles.corner, styles.cornerBR, { borderColor: colors.accent }]} />
-          
-          {seIncarca && (
-            <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay}>
-              <BlurView intensity={20} tint="dark" style={styles.scanningBlur}>
-                <ActivityIndicator color={colors.accent} size="large" />
-                <Text style={[styles.scanningText, { color: colors.accent }]}>Analizez cu AI...</Text>
-                <TouchableOpacity 
-                  style={{ marginTop: 16, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12 }}
-                  onPress={anuleazaScanare}
-                >
-                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>✕ Anulează</Text>
-                </TouchableOpacity>
-              </BlurView>
-            </Animated.View>
-          )}
         </Animated.View>
         <Text style={styles.scanHint}>Îndreaptă camera spre farfurie</Text>
       </View>
+
+      {/* Full Screen AI Loading Overlay */}
+      {seIncarca && (
+        <Animated.View entering={FadeIn.duration(300)} style={StyleSheet.absoluteFill}>
+          <BlurView intensity={80} tint="dark" style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <View style={{
+              padding: 28,
+              borderRadius: 24,
+              backgroundColor: 'rgba(15, 19, 24, 0.85)',
+              borderWidth: 1,
+              borderColor: colors.accent + '44',
+              alignItems: 'center',
+              width: '85%',
+              shadowColor: colors.accent,
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.3,
+              shadowRadius: 20,
+            }}>
+              <ActivityIndicator color={colors.accent} size="large" />
+              <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 18, marginTop: 18, textAlign: 'center' }}>
+                Analizăm imaginea cu AI...
+              </Text>
+              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 6, textAlign: 'center' }}>
+                Identificăm alimentele și calculăm macronutrienții
+              </Text>
+              <TouchableOpacity 
+                style={{ marginTop: 22, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }}
+                onPress={anuleazaScanare}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>✕ Anulează</Text>
+              </TouchableOpacity>
+            </View>
+          </BlurView>
+        </Animated.View>
+      )}
 
       {/* Result sheet */}
       {rezultat && (

@@ -385,7 +385,7 @@ export default function HomeScreen() {
                 {greutate || 75} kg
               </Text>
             </View>
-            <Text style={[s.weightLink, { color: colors.accent }]}>Editează &rarr;</Text>
+            <Text style={[s.weightLink, { color: colors.accent }]}>Editează →</Text>
           </TouchableOpacity>
         </Animated.View>
 
@@ -540,7 +540,7 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   glowTop: { position: 'absolute', top: -200, right: -100, width: 400, height: 400, borderRadius: 200, opacity: 0.04 },
   glowBottom: { position: 'absolute', bottom: -150, left: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.06 },
-  scroll: { paddingTop: Platform.OS === 'ios' ? 56 : 36, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 160 : 50 },
+  scroll: { paddingTop: Platform.OS === 'ios' ? 56 : 36, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 160 : 100 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 15, fontWeight: '500' },
 
@@ -579,7 +579,7 @@ const s = StyleSheet.create({
 
   // Macro Row
   macroRow: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
-  macroItem: { flex: 1, alignItems: 'center' },
+  macroItem: { flex: 1, alignItems: 'center', minWidth: 0 },
   macroIconBg: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   macroValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2, marginBottom: 3 },
   macroValue: { fontSize: 16, fontWeight: '900' },

@@ -273,8 +273,8 @@ export default function ProfilScreen() {
                   <Switch
                     value={isEnabled}
                     onValueChange={(val) => { toggleBiometric(val); }}
-                    trackColor={{ false: '#3f3f3f', true: colors.accent + '80' }}
-                    thumbColor={isEnabled ? colors.accent : '#f4f3f4'}
+                    trackColor={{ false: colors.surfaceElevated, true: colors.accent }}
+                    thumbColor={Platform.OS === 'ios' ? '#FFFFFF' : (isEnabled ? colors.background : '#f4f3f4')}
                   />
                 </View>
               </LinearGradient>
@@ -304,8 +304,8 @@ export default function ProfilScreen() {
                     toggleHealthSync(val); 
                     if (val) AsyncStorage.removeItem('ascundeCardHealth');
                   }}
-                  trackColor={{ false: '#3f3f3f', true: colors.accent + '80' }}
-                  thumbColor={healthSyncEnabled ? colors.accent : '#f4f3f4'}
+                  trackColor={{ false: colors.surfaceElevated, true: colors.accent }}
+                  thumbColor={Platform.OS === 'ios' ? '#FFFFFF' : (healthSyncEnabled ? colors.background : '#f4f3f4')}
                 />
               </View>
 

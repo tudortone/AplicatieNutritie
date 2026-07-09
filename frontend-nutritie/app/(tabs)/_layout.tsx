@@ -17,7 +17,16 @@ export default function TabLayout() {
         tabBarHideOnKeyboard: true,
         tabBarStyle: [
           styles.tabBar,
-          Platform.OS === 'android' && { backgroundColor: colors.background, position: 'relative' as const, height: 74, paddingBottom: 18, paddingTop: 10 }
+          Platform.OS === 'android' && {
+            backgroundColor: colors.surface + 'F2',
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            position: 'absolute' as const,
+            height: 74,
+            paddingBottom: 18,
+            paddingTop: 10,
+            elevation: 16,
+          }
         ],
         tabBarBackground: Platform.OS === 'ios' ? () => (
           <BlurView

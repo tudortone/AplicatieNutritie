@@ -542,7 +542,7 @@ const styles = StyleSheet.create({
   glowTop: { position: 'absolute', top: -150, right: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.05 },
   glowBottom: { position: 'absolute', bottom: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.05 },
 
-  scroll: { paddingTop: Platform.OS === 'ios' ? 48 : 28, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 160 : 50 },
+  scroll: { paddingTop: Platform.OS === 'ios' ? 48 : 28, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 160 : 100 },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 15, fontWeight: '500' },
