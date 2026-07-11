@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useRef, useEff
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
+import Constants from 'expo-constants';
 import InAppNotification from '../components/InAppNotification';
 
 export type NotificationType = 'success' | 'info' | 'warning' | 'error' | 'reward' | 'reminder';
@@ -180,19 +181,22 @@ export function NotificationBannerProvider({ children }: { children: React.React
 
   // Ascultător pentru notificări push (foreground)
   useEffect(() => {
-    const subscription = Notifications.addNotificationReceivedListener((notification) => {
-      const content = notification.request.content;
-      showNotification({
-        title: content.title || 'NutriAI Reminder',
-        message: content.body || undefined,
-        type: 'reminder',
-        duration: 4000,
+    if (Constants.appOwnership === 'expo') return; // Expo Go SDK 53+ nu mai suportă Android Push remote notifications
+    try {
+      const subscription = Notifications.addNotificationReceivedListener((notification) => {
+        const content = notification.request.content;
+        showNotification({
+          title: content.title || 'NutriAI Reminder',
+          message: content.body || undefined,
+          type: 'reminder',
+          duration: 4000,
+        });
       });
-    });
 
-    return () => {
-      subscription.remove();
-    };
+      return () => {
+        subscription.remove();
+      };
+    } catch {}
   }, [showNotification]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;

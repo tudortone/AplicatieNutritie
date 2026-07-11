@@ -7,21 +7,20 @@ import { useNotificationBanner } from '../context/NotificationBannerContext';
 
 export const isExpoGo = Constants.appOwnership === 'expo';
 
-// Set handler for when notification arrives while app is in foreground
-// P0.1: Dezactivăm afișarea nativă OS când aplicația este activă,
-// deoarece notificarea va fi interceptată și afișată ca banner in-app NutriAI.
-try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: false,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowBanner: false,
-      shouldShowList: true,
-    }),
-  });
-} catch (e) {
-  // Ignorăm în Expo Go (SDK 53+)
+if (!isExpoGo) {
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: false,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: false,
+        shouldShowList: true,
+      }),
+    });
+  } catch (e) {
+    // Ignorăm
+  }
 }
 
 const STORAGE_KEY = 'notifications_enabled';
