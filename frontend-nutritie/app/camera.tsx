@@ -29,14 +29,28 @@ export default function CameraScreen() {
   const [seIncarca, setSeIncarca] = useState(false);
   const [rezultat, setRezultat] = useState<AlimentAI[] | null>(null);
   const [grame, setGrame] = useState<number[]>([]);
+  const [selectedAI, setSelectedAI] = useState<'auto' | 'gemini' | 'openai'>('auto');
+  const [aiStatus, setAiStatus] = useState<Record<string, { nume: string; status: string; secundeRamase: number; mesaj: string }>>({});
   const cameraRef = useRef<CameraView>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
   const router = useRouter();
 
   useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/ai-status`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMountedRef.current) setAiStatus(data);
+        }
+      } catch {}
+    };
+    fetchStatus();
+    const timer = setInterval(fetchStatus, 3000);
     return () => {
       isMountedRef.current = false;
+      clearInterval(timer);
     };
   }, []);
 
@@ -74,7 +88,10 @@ export default function CameraScreen() {
     setRezultat(null);
     try {
       const formData = new FormData();
-      formData.append('imagine', { uri, name: 'mancare.jpg', type: 'image/jpeg' } as any);
+      const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+      formData.append('imagine', { uri, name: `mancare.${ext}`, type: mimeType } as any);
+      formData.append('provider', selectedAI);
 
       const raspuns = await fetch(`${API_URL}/api/analizeaza-mancare-structurat`, {
         method: 'POST', body: formData,
@@ -85,6 +102,10 @@ export default function CameraScreen() {
         signal: controller.signal
       });
       const date = await raspuns.json();
+
+      if (date.stareAI && isMountedRef.current) {
+        setAiStatus(date.stareAI);
+      }
 
       if (date.eroare) {
         if (isMountedRef.current) Alert.alert("Eroare AI", date.eroare);
@@ -252,6 +273,45 @@ export default function CameraScreen() {
             <ChevronDown size={14} color="#6B7280" />
           </BlurView>
         </View>
+      </View>
+
+      {/* Selector Model AI & Cooldown Status */}
+      <View style={styles.aiSelectorBar}>
+        {(['auto', 'gemini', 'openai'] as const).map((prov) => {
+          const statusObj = aiStatus[prov];
+          const isCooldown = statusObj?.status === 'cooldown' && (statusObj?.secundeRamase || 0) > 0;
+          const isSelected = selectedAI === prov;
+
+          return (
+            <TouchableOpacity
+              key={prov}
+              style={[
+                styles.aiChip,
+                isSelected && { backgroundColor: colors.accent, borderColor: colors.accent },
+                isCooldown && { backgroundColor: 'rgba(239, 68, 68, 0.3)', borderColor: '#ef4444' }
+              ]}
+              onPress={() => {
+                if (isCooldown) {
+                  Alert.alert(
+                    `AI Blocat Temporar (${statusObj?.secundeRamase}s)`,
+                    statusObj?.mesaj || "Modelul a atins limita de interogări. Așteaptă expirarea sau alege alt model."
+                  );
+                  return;
+                }
+                setSelectedAI(prov);
+              }}
+            >
+              <Text style={[
+                styles.aiChipText,
+                isSelected && { color: '#0F172A', fontWeight: '800' },
+                isCooldown && { color: '#fca5a5', fontWeight: '700' }
+              ]}>
+                {prov === 'auto' ? '⚡ Auto' : prov === 'gemini' ? '🔮 Gemini 2.5' : '🟢 OpenAI'}
+                {isCooldown ? ` (${statusObj?.secundeRamase}s)` : ''}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Scan Frame */}
@@ -500,4 +560,8 @@ const styles = StyleSheet.create({
   shutterLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '600', marginTop: 16, letterSpacing: 0.5 },
   galleryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 20, borderWidth: 1 },
   galleryBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+
+  aiSelectorBar: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginVertical: 8, paddingHorizontal: 16 },
+  aiChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', backgroundColor: 'rgba(15,23,42,0.65)' },
+  aiChipText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' },
 });

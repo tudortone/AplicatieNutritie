@@ -31,6 +31,7 @@ export default function ScannerBarcodeScreen() {
   const [scanLocked, setScanLocked] = useState(false);
   const [searching, setSearching] = useState(false);
   const [produsGasit, setProdusGasit] = useState<ProdusScanat | null>(null);
+  const [codNegasit, setCodNegasit] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'scan' | 'camara'>('scan');
 
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
@@ -49,16 +50,16 @@ export default function ScannerBarcodeScreen() {
 
     if (res) {
       setProdusGasit(res);
+      setCodNegasit(null);
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch {}
     } else {
-      Alert.alert(
-        "Produs negăsit",
-        `Codul EAN "${data}" nu a fost găsit în baza OpenFoodFacts. Poți adăuga produsul manual la masă.`,
-        [{ text: "OK" }]
-      );
-      setTimeout(() => setScanLocked(false), 2000);
+      setProdusGasit(null);
+      setCodNegasit(data);
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      } catch {}
     }
   }, [scanLocked, searching, activeTab]);
 
@@ -266,6 +267,64 @@ export default function ScannerBarcodeScreen() {
                   style={[styles.actionBtnPrimary, { backgroundColor: colors.accent }]}
                 >
                   <Text style={styles.actionPrimaryText}>Adaugă la Masă (g)</Text>
+                </TouchableOpacity>
+              </View>
+            </BlurView>
+          )}
+
+          {codNegasit && !produsGasit && (
+            <BlurView intensity={70} tint="dark" style={[styles.resultCard, { borderColor: colors.warning }]}>
+              <View style={styles.resHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.resTitle, { color: colors.textPrimary }]}>Produs negăsit în baza de date</Text>
+                  <Text style={[styles.resBrand, { color: colors.textSecondary }]}>Ultimul cod scanat: {codNegasit}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setCodNegasit(null);
+                    setScanLocked(false);
+                  }}
+                  style={styles.resClose}
+                  accessibilityLabel="Închide detaliile codului negăsit"
+                  accessibilityRole="button"
+                >
+                  <X size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ color: colors.textSecondary, fontSize: 13, marginVertical: 10 }}>
+                Nu am găsit acest produs în catalog sau OpenFoodFacts. Îl poți adăuga manual la masă sau poți estima valorile după nume.
+              </Text>
+
+              <View style={styles.resActions}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setCodNegasit(null);
+                    setScanLocked(false);
+                    addMealSheetRef.current?.open();
+                  }}
+                  style={[styles.actionBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                >
+                  <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>Completează manual</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    const cod = codNegasit;
+                    setCodNegasit(null);
+                    setScanLocked(false);
+                    addMealSheetRef.current?.openWithItem({
+                      nume: `Produs EAN ${cod}`,
+                      calorii: 100,
+                      proteine: 5,
+                      carbohidrati: 15,
+                      grasimi: 2,
+                      gramajDefault: 100,
+                    });
+                  }}
+                  style={[styles.actionBtnPrimary, { backgroundColor: colors.accent }]}
+                >
+                  <Text style={styles.actionPrimaryText}>Estimează după nume</Text>
                 </TouchableOpacity>
               </View>
             </BlurView>

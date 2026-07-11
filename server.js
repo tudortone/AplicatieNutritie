@@ -163,10 +163,10 @@ const genAI = new GoogleGenerativeAI(geminiApiKey);
 const getGeminiModelsList = () => {
   return [
     process.env.GEMINI_MODEL,
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
     "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash-8b",
-    "gemini-2.0-flash-lite"
+    "gemini-1.5-pro"
   ].filter((v, i, a) => v && a.indexOf(v) === i);
 };
 
@@ -310,7 +310,7 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
     if (!text) {
       console.warn("⚠️ OpenAI nu a funcționat. Încerc Groq Vision AI...");
       const groqKeys = getApiKeysList('GROQ_API_KEY');
-      const groqVisionModels = ["llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"];
+      const groqVisionModels = ["meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"];
       for (const key of groqKeys) {
         for (const groqModel of groqVisionModels) {
           try {
@@ -431,7 +431,12 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
     }
 
     if (!text) {
-      throw lastError || new Error("Toate sistemele AI (OpenAI + Groq + Gemini) au eșuat. Verifică cheile API în panoul Render.");
+      console.error("AI vision fail. Chei prezente:", {
+        openai: getApiKeysList('OPENAI_API_KEY').length,
+        groq: getApiKeysList('GROQ_API_KEY').length,
+        gemini: getApiKeysList('GEMINI_API_KEY').length,
+      });
+      throw lastError || new Error("Toate sistemele AI au eșuat. Verifică cheile API și numele modelelor.");
     }
 
     let cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -443,14 +448,18 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
       if (jsonMatch) {
         try {
           parsed = JSON.parse(jsonMatch[0]);
-        } catch (e2) {}
+        } catch (e2) {
+          console.warn("⚠️ Eroare parsing array JSON din text:", e2.message);
+        }
       }
       if (!parsed) {
         const objMatch = cleanedText.match(/\{[\s\S]*\}/);
         if (objMatch) {
           try {
             parsed = JSON.parse(objMatch[0]);
-          } catch (e3) {}
+          } catch (e3) {
+            console.warn("⚠️ Eroare parsing obiect JSON din text:", e3.message);
+          }
         }
       }
       if (!parsed) {

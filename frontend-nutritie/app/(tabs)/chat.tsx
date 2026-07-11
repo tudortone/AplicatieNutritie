@@ -6,11 +6,10 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/config';
 import { useFocusEffect } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
-import { Bot, Send, Sparkles, SquarePen } from 'lucide-react-native';
+import { Send } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTheme } from '../../context/ThemeContext';
@@ -26,7 +25,6 @@ interface ChatMessage {
 export default function ChatScreen() {
   const { colors } = useTheme();
   const { session } = useAuth();
-  const insets = useSafeAreaInsets();
   const [chatInput, setChatInput] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
   const [recipeModalVisible, setRecipeModalVisible] = useState(false);
@@ -185,9 +183,11 @@ export default function ChatScreen() {
     );
   };
 
-  const inputBottomPadding = isKeyboardVisible 
-    ? 10 
-    : (Platform.OS === 'ios' ? Math.max(insets.bottom, 24) : 14);
+  const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 96 : 74;
+  const INPUT_FLOAT_OFFSET = Platform.OS === 'ios' ? 18 : 16;
+  const inputBottomPadding = isKeyboardVisible
+    ? 10
+    : Math.max(18, TAB_BAR_HEIGHT - 28 + INPUT_FLOAT_OFFSET);
 
   return (
     <View style={[styles.outerContainer, { backgroundColor: colors.background }]}>
@@ -198,128 +198,184 @@ export default function ChatScreen() {
 
         {/* Header */}
         <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
-          <View style={styles.headerLeft}>
-            <LinearGradient colors={colors.accentSecondaryGradient} style={styles.botAvatar}>
-              <Sparkles size={20} color={colors.textPrimary} />
-            </LinearGradient>
-            <View>
-              <Text style={[styles.title, { color: colors.textPrimary }]}>Asistent AI</Text>
-              <View style={styles.onlineRow}>
-                <View style={[styles.onlineDot, { backgroundColor: colors.accent }]} />
-                <Text style={[styles.onlineText, { color: colors.accent }]}>Online</Text>
+          <View style={styles.headerMainRow}>
+            <View style={styles.headerIdentity}>
+              <View style={[styles.aiAvatar, { borderColor: colors.accentSecondary + '44' }]}>
+                <LinearGradient colors={colors.accentSecondaryGradient} style={styles.aiAvatarGradient}>
+                  <Text style={styles.aiAvatarText}>NC</Text>
+                </LinearGradient>
               </View>
-            </View>
-          </View>
-
-          {/* Header Right / Actions */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={[styles.contextChip, { backgroundColor: colors.accent + '14', borderColor: colors.accent + '26' }]}>
-              <Text style={[styles.contextChipText, { color: colors.accent }]}>{totalCalorii} kcal / {caloriiTinta} kcal</Text>
+              <View style={styles.aiMeta}>
+                <Text style={[styles.title, { color: colors.textPrimary }]}>NutriAI Coach</Text>
+                <Text style={[styles.aiSubtitle, { color: colors.textSecondary }]}>nutriție, mese, progres</Text>
+                <View style={styles.onlineRow}>
+                  <View style={[styles.onlineDot, { backgroundColor: colors.accent }]} />
+                  <Text style={[styles.onlineText, { color: colors.accent }]}>online acum</Text>
+                </View>
+              </View>
             </View>
 
             <TouchableOpacity
               onPress={handleResetChat}
-              style={[
-                styles.newChatBtn,
-                { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }
-              ]}
-              accessibilityLabel="Începe o conversație nouă și șterge istoricul"
-              accessibilityRole="button"
+              style={[styles.newChatPill, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+              activeOpacity={0.85}
             >
-              <SquarePen size={18} color={colors.textPrimary} />
+              <Text style={[styles.newChatPillText, { color: colors.textPrimary }]}>Chat nou</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.headerStatsRow}>
+            <View style={[styles.contextChip, { backgroundColor: colors.accent + '14', borderColor: colors.accent + '26' }]}>
+              <Text style={[styles.contextChipText, { color: colors.accent }]}>{totalCalorii} / {caloriiTinta} kcal</Text>
+            </View>
+            <View style={[styles.contextChip, { backgroundColor: colors.accentSecondary + '14', borderColor: colors.accentSecondary + '26' }]}>
+              <Text style={[styles.contextChipText, { color: colors.accentSecondary }]}>{totalProteine} / {proteineTinta} g proteine</Text>
+            </View>
           </View>
         </Animated.View>
 
-        {/* Messages */}
-        <ScrollView
-          ref={scrollViewRef}
-          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-          style={styles.chatScroll}
-          contentContainerStyle={{ padding: 20, paddingBottom: 20 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {mesaje.map((msg, index) => (
-            <Animated.View
-              key={index}
-              entering={FadeInDown.duration(400).springify()}
-              layout={Layout.springify()}
-              style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleAI]}
-            >
-              {msg.role === 'ai' && (
-                <LinearGradient colors={colors.accentSecondaryGradient} style={styles.botIcon}>
-                  <Bot size={16} color={colors.textPrimary} />
-                </LinearGradient>
-              )}
-              {msg.role === 'user' ? (
-                <LinearGradient colors={colors.accentGradient} style={styles.bubbleContentUser}>
-                  <Text style={[styles.textUser, { color: colors.background }]}>{msg.text}</Text>
-                </LinearGradient>
-              ) : (
-                <BlurView intensity={30} tint="dark" style={[styles.bubbleContentAI, { borderColor: colors.accentSecondary + '26' }]}>
-                  <LinearGradient colors={[colors.accentSecondary + '14', 'rgba(0,0,0,0)']} style={styles.bubbleContentAIGrad}>
-                    <Text style={[styles.textAI, { color: colors.textPrimary }]}>{msg.text}</Text>
-                  </LinearGradient>
-                </BlurView>
-              )}
-            </Animated.View>
-          ))}
-
-          {loadingChat && (
-            <Animated.View entering={FadeInDown.duration(300)} style={[styles.bubble, styles.bubbleAI]}>
-              <LinearGradient colors={colors.accentSecondaryGradient} style={styles.botIcon}>
-                <Bot size={16} color={colors.textPrimary} />
+        {/* Messages / Empty State */}
+        {mesaje.length <= 1 ? (
+          <View style={styles.emptyChatContainer}>
+            <BlurView intensity={40} tint="dark" style={[styles.emptyHeroCard, { borderColor: colors.cardBorder }]}>
+              <LinearGradient colors={[colors.accentSecondary + '18', 'rgba(0,0,0,0.18)']} style={styles.emptyHeroGradient}>
+                <View style={[styles.emptyAvatar, { backgroundColor: colors.accentSecondary + '22' }]}>
+                  <Text style={styles.emptyAvatarText}>NC</Text>
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Salut, eu sunt NutriAI Coach</Text>
+                <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                  Îți pot analiza ziua, sugera mese și ajusta aportul după ce ai mâncat deja.
+                </Text>
               </LinearGradient>
-              <BlurView intensity={30} tint="dark" style={[styles.bubbleContentAI, { borderColor: colors.accentSecondary + '26' }]}>
-                <LinearGradient colors={[colors.accentSecondary + '14', 'rgba(0,0,0,0)']} style={styles.bubbleContentAIGrad}>
-                  <View style={styles.typingRow}>
-                    <BouncingDot delay={0} color={colors.accentSecondary} />
-                    <BouncingDot delay={150} color={colors.accentSecondary} />
-                    <BouncingDot delay={300} color={colors.accentSecondary} />
-                  </View>
-                </LinearGradient>
-              </BlurView>
+            </BlurView>
+
+            <View style={styles.quickActionsList}>
+              <TouchableOpacity
+                style={[styles.quickActionCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                onPress={() => trimitePromptDirect('Analizează mesele mele de azi și spune-mi ce să mai mănânc până diseară.')}
+              >
+                <Text style={styles.quickActionEmoji}>📊</Text>
+                <View style={styles.quickActionBody}>
+                  <Text style={[styles.quickActionTitle, { color: colors.textPrimary }]}>Analiza zilei</Text>
+                  <Text style={[styles.quickActionText, { color: colors.textSecondary }]}>Vezi unde ești cu kcal și proteine</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickActionCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                onPress={() => trimitePromptDirect('Sugerează-mi o masă bogată în proteine, sub 600 kcal.')}
+              >
+                <Text style={styles.quickActionEmoji}>💪</Text>
+                <View style={styles.quickActionBody}>
+                  <Text style={[styles.quickActionTitle, { color: colors.textPrimary }]}>Masă bogată în proteine</Text>
+                  <Text style={[styles.quickActionText, { color: colors.textSecondary }]}>Rapid, simplu, util</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickActionCard, { backgroundColor: colors.accent, borderColor: colors.accent }]}
+                onPress={() => setRecipeModalVisible(true)}
+              >
+                <Text style={styles.quickActionEmoji}>🥗</Text>
+                <View style={styles.quickActionBody}>
+                  <Text style={[styles.quickActionTitle, { color: colors.background }]}>Generator rețete</Text>
+                  <Text style={[styles.quickActionText, { color: colors.background }]}>Rețete după ce ți-a mai rămas azi</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <>
+            <ScrollView
+              ref={scrollViewRef}
+              onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+              style={styles.chatScroll}
+              contentContainerStyle={{
+                paddingHorizontal: 20,
+                paddingTop: 18,
+                paddingBottom: isKeyboardVisible ? 20 : 84,
+              }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {mesaje.map((msg, index) => (
+                <Animated.View
+                  key={index}
+                  entering={FadeInDown.duration(400).springify()}
+                  layout={Layout.springify()}
+                  style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleAI]}
+                >
+                  {msg.role !== 'user' && (
+                    <Text style={[styles.aiBubbleLabel, { color: colors.textTertiary }]}>NutriAI Coach</Text>
+                  )}
+                  {msg.role === 'user' ? (
+                    <LinearGradient colors={colors.accentGradient} style={styles.bubbleContentUser}>
+                      <Text style={[styles.textUser, { color: colors.background }]}>{msg.text}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <BlurView intensity={50} tint="dark" style={[styles.bubbleContentAI, { borderColor: colors.accentSecondary + '40' }]}>
+                      <LinearGradient colors={[colors.accentSecondary + '26', 'rgba(0,0,0,0.3)']} style={styles.bubbleContentAIGrad}>
+                        <Text style={[styles.textAI, { color: colors.textPrimary }]}>{msg.text}</Text>
+                      </LinearGradient>
+                    </BlurView>
+                  )}
+                </Animated.View>
+              ))}
+
+              {loadingChat && (
+                <Animated.View entering={FadeInDown.duration(300)} style={[styles.bubble, styles.bubbleAI]}>
+                  <Text style={[styles.aiBubbleLabel, { color: colors.textTertiary }]}>NutriAI Coach</Text>
+                  <BlurView intensity={50} tint="dark" style={[styles.bubbleContentAI, { borderColor: colors.accentSecondary + '40' }]}>
+                    <LinearGradient colors={[colors.accentSecondary + '26', 'rgba(0,0,0,0.3)']} style={styles.bubbleContentAIGrad}>
+                      <View style={styles.typingRow}>
+                        <BouncingDot delay={0} color={colors.accentSecondary} />
+                        <BouncingDot delay={150} color={colors.accentSecondary} />
+                        <BouncingDot delay={300} color={colors.accentSecondary} />
+                      </View>
+                    </LinearGradient>
+                  </BlurView>
+                </Animated.View>
+              )}
+            </ScrollView>
+
+            {/* Quick AI Action Chips in Active Chat */}
+            <Animated.View entering={FadeInDown.duration(500).delay(150)} style={styles.chipsRow}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+                <TouchableOpacity 
+                  style={[styles.actionChip, { backgroundColor: colors.accent, borderColor: colors.accent }]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setRecipeModalVisible(true); }}
+                >
+                  <Text style={{ fontSize: 14 }}>🥗</Text>
+                  <Text style={[styles.actionChipText, { color: colors.background, fontWeight: '800' }]}>Generator Rețete</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                  onPress={() => trimitePromptDirect("Ce pot găti rapid și sănătos în mai puțin de 15 minute?")}
+                >
+                  <Text style={{ fontSize: 14 }}>⚡</Text>
+                  <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Cină rapidă (&lt;15 min)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                  onPress={() => trimitePromptDirect(`Care este cea mai eficientă rețetă bogată în proteine pentru a-mi atinge ținta de ${proteineTinta}g?`)}
+                >
+                  <Text style={{ fontSize: 14 }}>💪</Text>
+                  <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Bomba de proteine</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                  onPress={() => trimitePromptDirect("Analizează mesele mele de azi și dă-mi o evaluare generală și un sfat pentru seară.")}
+                >
+                  <Text style={{ fontSize: 14 }}>📊</Text>
+                  <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Analiză zi curentă</Text>
+                </TouchableOpacity>
+              </ScrollView>
             </Animated.View>
-          )}
-        </ScrollView>
-
-        {/* Quick AI Action Chips */}
-        <Animated.View entering={FadeInDown.duration(500).delay(150)} style={styles.chipsRow}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
-            <TouchableOpacity 
-              style={[styles.actionChip, { backgroundColor: colors.accent, borderColor: colors.accent }]}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setRecipeModalVisible(true); }}
-            >
-              <Text style={{ fontSize: 14 }}>🥗</Text>
-              <Text style={[styles.actionChipText, { color: colors.background, fontWeight: '800' }]}>Generator Rețete</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-              onPress={() => trimitePromptDirect("Ce pot găti rapid și sănătos în mai puțin de 15 minute?")}
-            >
-              <Text style={{ fontSize: 14 }}>⚡</Text>
-              <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Cină rapidă (&lt;15 min)</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-              onPress={() => trimitePromptDirect(`Care este cea mai eficientă rețetă bogată în proteine pentru a-mi atinge ținta de ${proteineTinta}g?`)}
-            >
-              <Text style={{ fontSize: 14 }}>💪</Text>
-              <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Bomba de proteine</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-              onPress={() => trimitePromptDirect("Analizează mesele mele de azi și dă-mi o evaluare generală și un sfat pentru seară.")}
-            >
-              <Text style={{ fontSize: 14 }}>📊</Text>
-              <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Analiză zi curentă</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </Animated.View>
+          </>
+        )}
 
         {/* Input */}
         <Animated.View
@@ -372,39 +428,187 @@ const styles = StyleSheet.create({
   glowTop: { position: 'absolute', top: -100, right: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.06 },
   glowBottom: { position: 'absolute', bottom: 100, left: -80, width: 280, height: 280, borderRadius: 140, opacity: 0.04 },
 
-  header: { paddingTop: Platform.OS === 'ios' ? 44 : 24, paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 },
-  botAvatar: { width: 44, height: 44, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 20, fontWeight: '900', letterSpacing: -0.3 },
-  onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 44 : 24,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.04)',
+  },
+  headerMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  headerIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  aiAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    marginRight: 12,
+  },
+  aiAvatarGradient: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  aiMeta: {
+    flex: 1,
+  },
+  aiSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  newChatPill: {
+    minHeight: 40,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newChatPillText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  headerStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  title: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
+  onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   onlineDot: { width: 7, height: 7, borderRadius: 4 },
   onlineText: { fontSize: 12, fontWeight: '600' },
-  contextRow: { flexDirection: 'row', gap: 8 },
   contextChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
   contextChipText: { fontSize: 12, fontWeight: '700' },
-  newChatBtn: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
 
   chatScroll: { flex: 1 },
-  bubble: { flexDirection: 'row', marginBottom: 16, alignItems: 'flex-end' },
-  bubbleUser: { justifyContent: 'flex-end' },
-  bubbleAI: { justifyContent: 'flex-start' },
-  botIcon: { width: 34, height: 34, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
-  bubbleContentUser: { padding: 16, borderRadius: 22, borderBottomRightRadius: 6, maxWidth: '78%' },
-  bubbleContentAI: { borderRadius: 22, borderBottomLeftRadius: 6, maxWidth: '78%', overflow: 'hidden', borderWidth: 1 },
+  aiBubbleLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 6,
+    marginLeft: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  bubble: {
+    marginBottom: 16,
+    width: '100%',
+  },
+  bubbleUser: {
+    alignItems: 'flex-end',
+  },
+  bubbleAI: {
+    alignItems: 'flex-start',
+  },
+  bubbleContentUser: {
+    padding: 16,
+    borderRadius: 22,
+    borderBottomRightRadius: 6,
+    maxWidth: '88%',
+  },
+  bubbleContentAI: {
+    borderRadius: 22,
+    borderBottomLeftRadius: 8,
+    maxWidth: '88%',
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
   bubbleContentAIGrad: { padding: 16 },
   textUser: { fontSize: 15, lineHeight: 22, fontWeight: '600' },
   textAI: { fontSize: 15, lineHeight: 22 },
   typingRow: { flexDirection: 'row', gap: 6, paddingVertical: 4, paddingHorizontal: 4 },
 
   inputWrapper: { paddingHorizontal: 16, paddingTop: 4 },
-  inputContainer: { borderRadius: 28, overflow: 'hidden', borderWidth: 1 },
+  inputContainer: { borderRadius: 24, overflow: 'hidden', borderWidth: 1 },
   inputGrad: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 8, paddingVertical: 8 },
-  input: { flex: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, maxHeight: 120, minHeight: 44, fontSize: 16 },
-  sendBtn: { width: 44, height: 44, borderRadius: 16, overflow: 'hidden', marginLeft: 8 },
+  input: { flex: 1, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, maxHeight: 110, minHeight: 42, fontSize: 15, lineHeight: 20 },
+  sendBtn: { width: 42, height: 42, borderRadius: 14, overflow: 'hidden', marginLeft: 8 },
   sendGrad: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   chipsRow: { paddingBottom: 6 },
   chipsScroll: { gap: 8, paddingHorizontal: 16 },
   actionChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1 },
   actionChipText: { fontSize: 12, fontWeight: '700' },
+
+  emptyChatContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 28,
+    paddingBottom: 40,
+  },
+  emptyHeroCard: {
+    borderRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 1,
+    marginBottom: 18,
+  },
+  emptyHeroGradient: {
+    padding: 22,
+    alignItems: 'flex-start',
+  },
+  emptyAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  emptyAvatarText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  quickActionsList: {
+    gap: 12,
+  },
+  quickActionCard: {
+    minHeight: 76,
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  quickActionEmoji: {
+    fontSize: 24,
+  },
+  quickActionBody: {
+    flex: 1,
+  },
+  quickActionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  quickActionText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
 });

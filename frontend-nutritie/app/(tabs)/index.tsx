@@ -558,7 +558,7 @@ const s = StyleSheet.create({
   streakText: { fontWeight: '800', fontSize: 13 },
 
   // Ring Card
-  ringCard: { borderRadius: 32, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
+  ringCard: { width: '100%', maxWidth: 520, alignSelf: 'center', borderRadius: 32, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
   ringCardBlur: { overflow: 'hidden' },
   ringCardGrad: { padding: 24 },
   ringCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
@@ -590,7 +590,7 @@ const s = StyleSheet.create({
   macroDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 4 },
 
   // Scan CTA
-  scanCTA: { borderRadius: 24, overflow: 'hidden', marginBottom: 20, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 12 },
+  scanCTA: { width: '100%', maxWidth: 520, alignSelf: 'center', borderRadius: 24, overflow: 'hidden', marginBottom: 20, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 12 },
   scanCTAGrad: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 16 },
   scanCTAIcon: { width: 56, height: 56, borderRadius: 18, backgroundColor: 'rgba(9,12,14,0.15)', justifyContent: 'center', alignItems: 'center' },
   scanCTAText: { flex: 1 },
@@ -599,7 +599,7 @@ const s = StyleSheet.create({
   scanCTAArrow: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(9,12,14,0.15)', justifyContent: 'center', alignItems: 'center' },
 
   // Manual CTA
-  manualCTA: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1, marginBottom: 20, gap: 14 },
+  manualCTA: { width: '100%', maxWidth: 520, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1, marginBottom: 20, gap: 14 },
   manualCTAIcon: { width: 46, height: 46, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   manualCTAText: { flex: 1 },
   manualCTATitle: { fontSize: 16, fontWeight: '800' },
@@ -607,7 +607,7 @@ const s = StyleSheet.create({
   manualCTAArrow: { fontSize: 18, fontWeight: '800' },
 
   // Water Card
-  waterCard: { borderRadius: 24, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
+  waterCard: { width: '100%', maxWidth: 520, alignSelf: 'center', borderRadius: 24, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
   waterBlur: { overflow: 'hidden' },
   waterGrad: { padding: 20 },
   waterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },

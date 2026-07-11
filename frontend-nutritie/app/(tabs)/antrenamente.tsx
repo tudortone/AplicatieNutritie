@@ -5,26 +5,22 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
-  FlatList,
   Platform,
   ScrollView,
   TextInput,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Dumbbell,
   Flame,
   Plus,
   Trash2,
-  Trophy,
   Zap,
   Award,
   Search,
   CheckCircle2,
   ChevronRight,
-  Clock,
   Sparkles,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -34,7 +30,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAntrenamente, Antrenament } from '../../hooks/useAntrenamente';
 import { useGamificare } from '../../hooks/useGamificare';
 import { useNotify } from '../../hooks/useNotify';
-import { EXERCITII, CATEGORII, Categorie, Exercitiu } from '../../constants/exercitii';
+import { EXERCITII, CATEGORII, Categorie } from '../../constants/exercitii';
 import { AddWorkoutBottomSheet, AddWorkoutBottomSheetRef } from '../../components/AddWorkoutBottomSheet';
 
 export default function AntrenamenteScreen() {
@@ -52,7 +48,6 @@ export default function AntrenamenteScreen() {
 
   const {
     xpTotal,
-    nivel,
     streak,
     questuriAzi,
     detaliiNivel,
@@ -135,11 +130,20 @@ export default function AntrenamenteScreen() {
               <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Sala ta NutriAI</Text>
             </View>
 
-            <View style={styles.streakBadge}>
-              <LinearGradient colors={colors.accentGradient} style={styles.streakGrad}>
-                <Zap size={14} color={colors.background} />
-                <Text style={[styles.streakText, { color: colors.background }]}>{streak} Zile</Text>
-              </LinearGradient>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => router.push('/jurnal-antrenamente' as any)}
+                style={[styles.jurnalBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+              >
+                <Text style={[styles.jurnalBtnText, { color: colors.textPrimary }]}>📖 Jurnal</Text>
+              </TouchableOpacity>
+
+              <View style={styles.streakBadge}>
+                <LinearGradient colors={colors.accentGradient} style={styles.streakGrad}>
+                  <Zap size={14} color={colors.background} />
+                  <Text style={[styles.streakText, { color: colors.background }]}>{streak} Zile</Text>
+                </LinearGradient>
+              </View>
             </View>
           </View>
 
@@ -456,6 +460,16 @@ const styles = StyleSheet.create({
   streakText: {
     fontSize: 13,
     fontWeight: '800',
+  },
+  jurnalBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+  },
+  jurnalBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   xpCard: {
     borderRadius: Radius.lg,

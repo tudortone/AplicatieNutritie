@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ArrowLeft, Dumbbell, AlertTriangle, CheckCircle2, Flame, Clock, PlusCircle } from 'lucide-react-native';
+import { ArrowLeft, Dumbbell, AlertTriangle, Flame, Clock, PlusCircle } from 'lucide-react-native';
 import { Colors, Radius, Spacing } from '../../constants/theme';
 import { EXERCITII } from '../../constants/exercitii';
 import { calculeazaCaloriiEx } from '../../lib/exercitiu';
@@ -46,17 +46,27 @@ export default function ExercitiuDetailScreen() {
 
   const caloriiEst = calculeazaCaloriiEx(exercitiu, greutateKg);
 
+  const seriiDefault = exercitiu.seriiDefault ?? 3;
+  const repetariDefault = exercitiu.repetariDefault ?? 12;
+  const instructiuni = exercitiu.instructiuni && exercitiu.instructiuni.length > 0
+    ? exercitiu.instructiuni
+    : ['Execută mișcarea controlat, concentrându-te pe contracția musculară.'];
+  const descriere = exercitiu.descriere || 'Exercițiu eficient pentru planul tău de antrenament.';
+
   const handleQuickAdd = async () => {
+    const seturi = Array.from({ length: seriiDefault }, (_, i) => ({
+      serie: i + 1,
+      repetari: repetariDefault,
+      greutate: 0,
+    }));
+
     await adaugaExercitiu({
+      exercitiuId: exercitiu.id,
       nume: exercitiu.nume,
       calorii: caloriiEst,
-      durataMin: exercitiu.seriiDefault * 3,
-      seturi: exercitiu.seriiDefault,
-      repetari: exercitiu.repetariDefault,
-      greutateKg: 0,
-      icon: exercitiu.icon || 'Dumbbell',
+      durataMin: seriiDefault * 3,
+      seturi,
       tip: exercitiu.categorie,
-      exercitiuId: exercitiu.id,
     });
 
     notify.success('Exercițiu adăugat!', `${exercitiu.nume} (${caloriiEst} kcal)`);
@@ -106,7 +116,7 @@ export default function ExercitiuDetailScreen() {
             <Dumbbell size={24} color={Colors.accent} />
           </View>
 
-          <Text style={styles.heroDesc}>{exercitiu.descriere}</Text>
+          <Text style={styles.heroDesc}>{descriere}</Text>
 
           {/* Metric bar */}
           <View style={styles.metricsBar}>
@@ -119,7 +129,7 @@ export default function ExercitiuDetailScreen() {
             <View style={styles.metricItem}>
               <Clock size={16} color={Colors.accentSecondary} />
               <Text style={styles.metricValue}>
-                {exercitiu.seriiDefault} serii × {exercitiu.repetariDefault}
+                {seriiDefault} serii × {repetariDefault}
               </Text>
               <Text style={styles.metricLabel}>recomandat</Text>
             </View>
@@ -138,7 +148,7 @@ export default function ExercitiuDetailScreen() {
         {/* Instrucțiuni execuție */}
         <Text style={styles.sectionHeading}>CUM SE EXECUTĂ CORECT</Text>
         <View style={styles.stepsWrap}>
-          {exercitiu.instructiuni.map((pas, idx) => (
+          {instructiuni.map((pas, idx) => (
             <View key={idx} style={styles.stepCard}>
               <View style={styles.stepNumBubble}>
                 <Text style={styles.stepNumText}>{idx + 1}</Text>

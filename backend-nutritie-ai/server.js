@@ -45,8 +45,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Rate Limiting general pentru API
 const generalLimiter = rateLimit({
@@ -163,10 +163,10 @@ const genAI = new GoogleGenerativeAI(geminiApiKey);
 const getGeminiModelsList = () => {
   return [
     process.env.GEMINI_MODEL,
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash-8b",
-    "gemini-2.0-flash-lite"
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash"
   ].filter((v, i, a) => v && a.indexOf(v) === i);
 };
 
@@ -193,6 +193,48 @@ const getApiKeysList = (envPrefix) => {
   }
   return keys.filter((v, i, a) => v && a.indexOf(v) === i);
 };
+
+// ==========================================
+// REGISTRU STARE FURNIZORI AI (COOLDOWN & STATUS)
+// ==========================================
+const aiStatusRegistry = {
+  gemini: { nume: "Google Gemini 2.5", status: "active", blockedUntil: 0, ultimulMesaj: "Disponibil" },
+  openai: { nume: "OpenAI GPT-4o-mini", status: "active", blockedUntil: 0, ultimulMesaj: "Disponibil" },
+  groq: { nume: "Groq Vision", status: "active", blockedUntil: 0, ultimulMesaj: "Disponibil" },
+  openrouter: { nume: "OpenRouter Vision", status: "active", blockedUntil: 0, ultimulMesaj: "Disponibil" }
+};
+
+const blockProvider = (providerKey, cooldownSeconds, motiv) => {
+  if (aiStatusRegistry[providerKey]) {
+    aiStatusRegistry[providerKey].status = "cooldown";
+    aiStatusRegistry[providerKey].blockedUntil = Date.now() + cooldownSeconds * 1000;
+    aiStatusRegistry[providerKey].ultimulMesaj = motiv;
+  }
+};
+
+const getProviderStatus = (providerKey) => {
+  const p = aiStatusRegistry[providerKey];
+  if (!p) return { id: providerKey, nume: providerKey, status: "active", secundeRamase: 0, mesaj: "Disponibil" };
+  const acum = Date.now();
+  if (p.blockedUntil > acum) {
+    const sec = Math.ceil((p.blockedUntil - acum) / 1000);
+    return { id: providerKey, nume: p.nume, status: "cooldown", secundeRamase: sec, mesaj: `Blocat (${sec}s): ${p.ultimulMesaj}` };
+  } else {
+    p.status = "active";
+    p.blockedUntil = 0;
+    p.ultimulMesaj = "Disponibil";
+    return { id: providerKey, nume: p.nume, status: "active", secundeRamase: 0, mesaj: "Disponibil" };
+  }
+};
+
+app.get('/api/ai-status', (req, res) => {
+  res.json({
+    gemini: getProviderStatus('gemini'),
+    openai: getProviderStatus('openai'),
+    groq: getProviderStatus('groq'),
+    openrouter: getProviderStatus('openrouter')
+  });
+});
 
 // ==========================================
 // RUTE DE HEALTH CHECK & ROOT
@@ -258,10 +300,23 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
     let lastError = null;
     const imageBase64 = fileBuffer.toString("base64");
     const imageMime = req.file.mimetype;
+    const requestedProvider = (req.body?.provider || req.query?.provider || 'auto').toLowerCase();
 
-    // 1) PRIORITATE: OpenAI GPT-4o-mini Vision (cea mai fiabilă cheie)
+    if (requestedProvider !== 'auto' && aiStatusRegistry[requestedProvider]) {
+      const st = getProviderStatus(requestedProvider);
+      if (st.status === 'cooldown') {
+        return res.status(429).json({
+          eroare: `Modelul selectat (${st.nume}) este blocat temporar pentru încă ${st.secundeRamase}s (${st.mesaj}). Alege alt model sau modul Auto.`,
+          providerStatus: 'cooldown',
+          secundeRamase: st.secundeRamase
+        });
+      }
+    }
+
+    // 1) PRIORITATE: OpenAI GPT-4o-mini Vision (sau dacă s-a cerut specific openai)
+    const runOpenAI = (requestedProvider === 'auto' || requestedProvider === 'openai');
     const openaiKeys = getApiKeysList('OPENAI_API_KEY');
-    if (openaiKeys.length > 0) {
+    if (runOpenAI && openaiKeys.length > 0) {
       console.log("🔄 Încerc OpenAI GPT-4o-mini Vision...");
       for (const key of openaiKeys) {
         try {
@@ -297,6 +352,7 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
               break;
             }
           } else {
+            if (oaiRes.status === 429) blockProvider('openai', 60, "Limită de cereri (429)");
             const errBody = await oaiRes.text();
             console.warn(`⚠️ OpenAI Vision eșuat (${oaiRes.status}):`, errBody.substring(0, 150));
           }
@@ -310,7 +366,7 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
     if (!text) {
       console.warn("⚠️ OpenAI nu a funcționat. Încerc Groq Vision AI...");
       const groqKeys = getApiKeysList('GROQ_API_KEY');
-      const groqVisionModels = ["llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"];
+      const groqVisionModels = ["meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"];
       for (const key of groqKeys) {
         for (const groqModel of groqVisionModels) {
           try {
@@ -381,7 +437,9 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
             }
           } catch (err) {
             lastError = err;
-            console.warn(`⚠️ Gemini [${modelName}] eșuat:`, err.message ? err.message.substring(0, 100) : err);
+            const errMsg = err.message || String(err);
+            if (errMsg.includes('429')) blockProvider('gemini', 60, "Limită de cereri Gemini (429)");
+            console.warn(`⚠️ Gemini [${modelName}] eșuat:`, errMsg.substring(0, 100));
           }
         }
         if (text) break;
@@ -431,7 +489,15 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
     }
 
     if (!text) {
-      throw lastError || new Error("Toate sistemele AI (OpenAI + Groq + Gemini) au eșuat. Verifică cheile API în panoul Render.");
+      console.error("AI vision fail.");
+      return res.status(503).json({
+        eroare: "Toate sistemele AI au eșuat sau sunt temporar în limită de cereri (cooldown). Încearcă din nou peste un minut sau schimbă modelul AI.",
+        stareAI: {
+          gemini: getProviderStatus('gemini'),
+          openai: getProviderStatus('openai'),
+          groq: getProviderStatus('groq')
+        }
+      });
     }
 
     let cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -443,14 +509,18 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
       if (jsonMatch) {
         try {
           parsed = JSON.parse(jsonMatch[0]);
-        } catch (e2) {}
+        } catch (e2) {
+          console.warn("⚠️ Eroare parsing array JSON din text:", e2.message);
+        }
       }
       if (!parsed) {
         const objMatch = cleanedText.match(/\{[\s\S]*\}/);
         if (objMatch) {
           try {
             parsed = JSON.parse(objMatch[0]);
-          } catch (e3) {}
+          } catch (e3) {
+            console.warn("⚠️ Eroare parsing obiect JSON din text:", e3.message);
+          }
         }
       }
       if (!parsed) {
@@ -565,33 +635,51 @@ Sarcina ta: Răspunde prietenos, ținând cont de istoricul discuției și de ca
       totalTokens = getEstimatedTokens(messages);
     }
 
-    const fetchPromise = fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${groqApiKey}`
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 800
-      })
-    });
+    try {
+      const fetchPromise = fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${groqApiKey}`
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 800
+        })
+      });
 
-    const response = await callWithTimeout(fetchPromise, 35000);
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Eroare Groq API (${response.status}): ${errorText}`);
+      const response = await callWithTimeout(fetchPromise, 35000);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Eroare Groq API (${response.status}): ${errorText}`);
+      }
+
+      const data = await response.json();
+      const raspunsText = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : "Nu am putut genera un răspuns.";
+      return res.json({ raspuns: raspunsText });
+    } catch (groqError) {
+      console.warn("Eroare Groq API în /api/chat, activăm fallback Gemini text:", groqError.message || groqError);
+      
+      const geminiPrompt = `${systemPrompt}\n\nIstoricul conversației și întrebarea curentă:\n${messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n')}\n\nASSISTANT:`;
+      const modelList = getGeminiModelsList().filter(Boolean);
+      for (const modelName of modelList) {
+        try {
+          const model = genAI.getGenerativeModel({ model: modelName });
+          const result = await callWithTimeout(model.generateContent(geminiPrompt), 30000);
+          const raspunsText = result.response.text();
+          if (raspunsText) {
+            return res.json({ raspuns: raspunsText });
+          }
+        } catch (gemErr) {
+          console.warn(`Fallback Gemini (${modelName}) a eșuat în /api/chat:`, gemErr.message);
+        }
+      }
+      throw groqError;
     }
-
-    const data = await response.json();
-    const raspunsText = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : "Nu am putut genera un răspuns.";
-    
-    res.json({ raspuns: raspunsText });
-    
   } catch (error) {
-    console.error("Eroare la generarea chat-ului Groq:", error);
+    console.error("Eroare la generarea chat-ului AI:", error);
     res.status(500).json({ raspuns: "A apărut o problemă de conexiune cu asistentul AI. Te rugăm să mai încerci peste câteva momente!" });
   }
 });
@@ -646,27 +734,123 @@ app.post('/api/estimeaza-mancare-text', requireAuth, aiRateLimiter, async (req, 
 });
 
 // ==========================================
-// RUTA 2.1 (C3): PROXY PENTRU OPENFOODFACTS BARCODE
+// RUTA 2.1: PROXY PENTRU OPENFOODFACTS BARCODE + STRAT 1 CACHE LOCAL + STRAT 3 FALLBACK
 // ==========================================
 app.get('/api/produs-barcode/:code', requireAuth, async (req, res) => {
   try {
     const code = (req.params.code || '').trim();
-    if (!code) return res.status(400).json({ eroare: "Cod de bare invalid." });
+    if (!code || code.length < 4) {
+      return res.status(400).json({ eroare: "Cod de bare invalid." });
+    }
 
+    // STRAT 1: Verificare Cache Local Supabase
+    try {
+      const { data: cachedItem } = await supabaseAdmin
+        .from('barcode_cache')
+        .select('*')
+        .eq('code', code)
+        .maybeSingle();
+
+      if (cachedItem) {
+        return res.json({
+          source: 'cache',
+          produs: {
+            codBare: code,
+            nume: cachedItem.name,
+            brand: cachedItem.brand || '',
+            cantitate: cachedItem.quantity || '',
+            calorii: Number(cachedItem.kcal_100g || 0),
+            proteine: Number(cachedItem.protein_100g || 0),
+            carbohidrati: Number(cachedItem.carbs_100g || 0),
+            grasimi: Number(cachedItem.fat_100g || 0),
+          }
+        });
+      }
+    } catch (cacheErr) {
+      console.warn("Avertisment citire barcode_cache:", cacheErr.message);
+    }
+
+    // STRAT 2: Căutare în OpenFoodFacts API
     const fetchPromise = fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`, {
       headers: { 'User-Agent': 'NutriAI - React Native App - Contact: tudortone' }
     });
     const resp = await callWithTimeout(fetchPromise, 12000);
-    if (!resp.ok) return res.status(404).json({ eroare: "Produs negăsit." });
+    if (resp.ok) {
+      const data = await resp.json();
+      const product = data?.product;
+      if (data?.status === 1 && product) {
+        const nutriments = product.nutriments || {};
+        const normalized = {
+          codBare: code,
+          nume: product.product_name || product.product_name_ro || 'Produs necunoscut',
+          brand: product.brands || '',
+          cantitate: product.quantity || '',
+          calorii: Number(nutriments['energy-kcal_100g'] || nutriments['energy-kcal'] || 0),
+          proteine: Number(nutriments.proteins_100g || 0),
+          carbohidrati: Number(nutriments.carbohydrates_100g || 0),
+          grasimi: Number(nutriments.fat_100g || 0),
+        };
 
-    const data = await resp.json();
-    if (data.status !== 1 || !data.product) {
-      return res.status(404).json({ eroare: "Produs negăsit în OpenFoodFacts." });
+        try {
+          await supabaseAdmin.from('barcode_cache').upsert({
+            code,
+            source: 'openfoodfacts',
+            brand: normalized.brand,
+            name: normalized.nume,
+            quantity: normalized.cantitate,
+            kcal_100g: normalized.calorii,
+            protein_100g: normalized.proteine,
+            carbs_100g: normalized.carbohidrati,
+            fat_100g: normalized.grasimi,
+            payload: product,
+            updated_at: new Date().toISOString(),
+          });
+        } catch (saveErr) {
+          console.warn("Nu s-a putut salva în barcode_cache:", saveErr.message);
+        }
+
+        return res.json({ source: 'openfoodfacts', produs: normalized });
+      }
     }
-    res.json(data.product);
+
+    // STRAT 3: Fallback controlat - Produs negăsit
+    return res.status(404).json({
+      eroare: "Produsul nu a fost găsit.",
+      allowManualEntry: true,
+      suggestedAction: "manual_or_ai_text",
+    });
   } catch (err) {
     console.error("Eroare interogare barcode OpenFoodFacts proxy:", err.message);
-    res.status(500).json({ eroare: "Eroare la interogarea codului de bare." });
+    return res.status(500).json({ eroare: "Eroare la interogarea codului de bare." });
+  }
+});
+
+// ==========================================
+// RUTA 2.2: SALVARE PRODUS BARCODE COMPLETAT MANUAL ÎN CACHE LOCAL
+// ==========================================
+app.post('/api/salveaza-produs-barcode', requireAuth, async (req, res) => {
+  try {
+    const { code, name, brand, quantity, kcal_100g, protein_100g, carbs_100g, fat_100g } = req.body;
+    if (!code || !name) {
+      return res.status(400).json({ eroare: "Codul și numele produsului sunt obligatorii." });
+    }
+    await supabaseAdmin.from('barcode_cache').upsert({
+      code: String(code).trim(),
+      source: 'user_manual',
+      brand: brand || '',
+      name: String(name).trim(),
+      quantity: quantity || '',
+      kcal_100g: Number(kcal_100g || 0),
+      protein_100g: Number(protein_100g || 0),
+      carbs_100g: Number(carbs_100g || 0),
+      fat_100g: Number(fat_100g || 0),
+      payload: req.body,
+      updated_at: new Date().toISOString(),
+    });
+    return res.json({ succes: true, message: "Produs salvat în cache-ul local." });
+  } catch (err) {
+    console.error("Eroare la salvare produs barcode:", err.message);
+    return res.status(500).json({ eroare: "Eroare la salvarea produsului." });
   }
 });
 

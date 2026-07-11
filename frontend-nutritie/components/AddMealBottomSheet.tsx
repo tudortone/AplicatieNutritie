@@ -23,6 +23,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase';
 import { useFavorite } from '../hooks/useFavorite';
+import { useGamificareContext } from '../context/GamificareContext';
 import { Masa } from '../types';
 import { foodPresets, categories, FoodPreset } from '../constants/foodPresets';
 
@@ -56,6 +57,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const { colors } = useTheme();
     const { user } = useAuth();
     const { favorite, addFavorite, removeFavorite, isFavorite } = useFavorite();
+    const { adaugaProgres } = useGamificareContext();
     const bottomSheetRef = useRef<BottomSheet>(null);
     const scrollViewRef = useRef<any>(null);
     const [gramajSectionY, setGramajSectionY] = useState<number>(0);
@@ -76,6 +78,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const [searchQuery, setSearchQuery] = useState('');
     const [aiEstimating, setAiEstimating] = useState(false);
     const [baseNutrition, setBaseNutrition] = useState<BaseNutrition | null>(null);
+    const [selectedPreset, setSelectedPreset] = useState<FoodPreset | null>(null);
 
     const filteredPresets = useMemo(() => {
       if (searchQuery.trim() === '' && !selectedCategory) {
@@ -117,7 +120,8 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     }, [baseNutrition]);
 
     const applyPreset = useCallback((preset: FoodPreset) => {
-      const defaultGr = preset.gramajDefault || 100;
+      setSelectedPreset(preset);
+      const defaultGr = preset.gramajDefault || preset.gramajImplicit || 100;
       setNume(preset.nume);
       setGrame(String(defaultGr));
       setCalorii(String(preset.calorii));
@@ -137,6 +141,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         Haptics.selectionAsync();
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } catch {}
+
+      if (preset.mergeDirectLaGramaj) {
+        setSearchQuery('');
+      }
 
       scrollToGramajSection();
     }, [scrollToGramajSection]);
@@ -305,6 +313,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch {}
 
+          adaugaProgres('proteine', payload.proteine);
           bottomSheetRef.current?.close();
           onSuccess?.();
         }
@@ -603,6 +612,47 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                 selectionColor={colors.accent}
               />
 
+              {/* Porții și unități aproximative pentru fructe / preset-uri */}
+              {selectedPreset?.unitati && selectedPreset.unitati.length > 0 && (
+                <View style={{ marginTop: 10, marginBottom: 4 }}>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary, marginBottom: 6, fontSize: 13 }]}>
+                    Alege cantitatea (porții rapide):
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                    {selectedPreset.unitati.map((unit) => {
+                      const isActive = grame === String(unit.grame);
+                      return (
+                        <TouchableOpacity
+                          key={unit.label}
+                          style={[
+                            styles.gramChip,
+                            {
+                              backgroundColor: isActive ? colors.accent : colors.surfaceBg,
+                              borderColor: isActive ? colors.accent : colors.cardBorder,
+                              paddingHorizontal: 14,
+                            },
+                          ]}
+                          onPress={() => handleGramajChange(String(unit.grame))}
+                          activeOpacity={0.8}
+                        >
+                          <Text
+                            style={[
+                              styles.gramChipText,
+                              {
+                                color: isActive ? '#000000' : colors.textPrimary,
+                                fontWeight: isActive ? '800' : '600',
+                              },
+                            ]}
+                          >
+                            {unit.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
               {/* Butoane rapide gramaj (P0.2) */}
               <View style={styles.gramChipsRow}>
                 {['50', '100', '150', '200', '250'].map((val) => {
@@ -803,7 +853,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 160,
   },
   header: {
     flexDirection: 'row',
@@ -917,6 +967,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   label: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  inputLabel: {
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 6,

@@ -4,6 +4,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculeazaCaloriiArse } from '../constants/exercitii';
 import type { User } from '@supabase/supabase-js';
 
+export interface SetExercitiu {
+  serie: number;
+  repetari: number;
+  greutate?: number;
+}
+
+export interface ExercitiuInAntrenament {
+  exercitiuId: string;
+  nume: string;
+  seturi: SetExercitiu[];
+  durataMin?: number;
+  kcal: number;
+}
+
 export interface Antrenament {
   id: string;
   user_id: string;
@@ -11,6 +25,8 @@ export interface Antrenament {
   tip: string;
   durata_min: number;
   calorii_arse: number;
+  exercitii?: ExercitiuInAntrenament[];
+  volum_total?: number;
   created_at: string;
 }
 
@@ -69,7 +85,37 @@ export function useAntrenamente(dataSelectata?: Date) {
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateKey]);
+
+  const fetchIstoric = useCallback(async (zile: number = 30): Promise<Antrenament[]> => {
+    try {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+      if (!currentUser) return [];
+
+      const pastDate = new Date();
+      pastDate.setDate(pastDate.getDate() - zile);
+      pastDate.setHours(0, 0, 0, 0);
+
+      const { data, error } = await supabase
+        .from('antrenamente')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .gte('created_at', pastDate.toISOString())
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn('Eroare fetch istoric antrenamente:', error.message);
+        return [];
+      }
+      return (data || []) as Antrenament[];
+    } catch (e) {
+      console.warn('Eroare fetchIstoric:', e);
+      return [];
+    }
+  }, []);
 
   useEffect(() => {
     fetchAntrenamente();
@@ -81,6 +127,8 @@ export function useAntrenamente(dataSelectata?: Date) {
     durata_min: number;
     calorii_arse?: number;
     met?: number;
+    exercitii?: ExercitiuInAntrenament[];
+    volum_total?: number;
   }): Promise<Antrenament | null> => {
     try {
       const {
@@ -104,6 +152,8 @@ export function useAntrenamente(dataSelectata?: Date) {
         tip: payload.tip,
         durata_min: payload.durata_min,
         calorii_arse: calorii,
+        exercitii: payload.exercitii ?? [],
+        volum_total: payload.volum_total ?? 0,
         created_at: new Date().toISOString(),
       };
 
@@ -119,21 +169,47 @@ export function useAntrenamente(dataSelectata?: Date) {
   };
 
   const adaugaExercitiu = async (payload: {
+    exercitiuId?: string;
     nume: string;
     calorii: number;
     durataMin: number;
-    seturi?: number;
+    seturi?: SetExercitiu[] | number;
     repetari?: number;
     greutateKg?: number;
     icon?: string;
     tip?: string;
-    exercitiuId?: string;
+    volum?: number;
   }): Promise<Antrenament | null> => {
+    let seturiArray: SetExercitiu[] = [];
+    if (Array.isArray(payload.seturi)) {
+      seturiArray = payload.seturi;
+    } else if (typeof payload.seturi === 'number') {
+      const nr = payload.seturi || 1;
+      seturiArray = Array.from({ length: nr }, (_, i) => ({
+        serie: i + 1,
+        repetari: payload.repetari || 10,
+        greutate: payload.greutateKg || 0,
+      }));
+    }
+
+    const volumCalc =
+      payload.volum ?? seturiArray.reduce((s, x) => s + x.repetari * (x.greutate || 0), 0);
+
     return adaugaAntrenament({
       nume: payload.nume,
-      tip: payload.tip || 'strength',
+      tip: payload.tip || 'forta',
       durata_min: payload.durataMin || 15,
       calorii_arse: payload.calorii || 80,
+      exercitii: [
+        {
+          exercitiuId: payload.exercitiuId || 'custom',
+          nume: payload.nume,
+          seturi: seturiArray,
+          durataMin: payload.durataMin,
+          kcal: payload.calorii,
+        },
+      ],
+      volum_total: volumCalc,
     });
   };
 
@@ -150,12 +226,14 @@ export function useAntrenamente(dataSelectata?: Date) {
   };
 
   return {
+    user,
     antrenamente,
     totalCaloriiArse,
     numarAntrenamente,
     adaugaAntrenament,
     adaugaExercitiu,
     stergeAntrenament,
+    fetchIstoric,
     loading,
     refresh: fetchAntrenamente,
   };

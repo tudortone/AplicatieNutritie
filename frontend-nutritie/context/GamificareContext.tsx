@@ -20,6 +20,9 @@ export interface StareGamificare {
   ultimaZiActiva: string;
   questuriAzi: QuestZilnic[];
   insigne: string[];
+  totalAntrenamente?: number;
+  totalMinuteCardio?: number;
+  zileProteineAtinse?: number;
 }
 
 export function xpNecesarPanaLaNivel(n: number): number {
@@ -186,9 +189,8 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
           loaded.questuriAzi.length > 0 && loaded.questuriAzi.every((q) => q.completat);
 
         if (loaded.ultimaZiActiva === yesterday && toateIeri) {
-          nextState.streak = (loaded.streak || 0) + 1;
-        } else if (loaded.ultimaZiActiva !== yesterday && loaded.ultimaZiActiva !== today) {
-          // Zi sărită complet -> streak 0
+          nextState.streak = Math.max(1, loaded.streak || 1);
+        } else {
           nextState.streak = 0;
         }
 
@@ -278,15 +280,33 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
           };
         });
 
-        // Verificare insigne
-        if (!noiInsigne.includes('prima_transpiratie') && tip === 'antrenamente' && valoare > 0) {
-          noiInsigne.push('prima_transpiratie');
-          showNotification({
-            type: 'reward',
-            title: 'Insignă deblocată!',
-            message: 'Prima Transpirație — Ai finalizat un antrenament',
-            icon: 'Trophy',
-          });
+        const totalAntr = (prev.totalAntrenamente || 0) + (tip === 'antrenamente' ? valoare : 0);
+        const totalCardio = (prev.totalMinuteCardio || 0) + (tip === 'minute_miscare' ? valoare : 0);
+        const zileProt = (prev.zileProteineAtinse || 0) + (tip === 'proteine' && questCompletatAcum ? 1 : 0);
+
+        const verificaInsigna = (id: string, titlu: string, msg: string) => {
+          if (!noiInsigne.includes(id)) {
+            noiInsigne.push(id);
+            showNotification({
+              type: 'reward',
+              title: titlu,
+              message: msg,
+              icon: 'Trophy',
+            });
+          }
+        };
+
+        if (tip === 'antrenamente' && valoare > 0) {
+          verificaInsigna('prima_transpiratie', 'Insignă deblocată! 🔥', 'Prima Transpirație — Ai finalizat primul antrenament');
+        }
+        if (totalAntr >= 10) {
+          verificaInsigna('forta_bruta', 'Insignă deblocată! 🏋️', 'Forță Brută — Ai finalizat 10 antrenamente');
+        }
+        if (totalCardio >= 100) {
+          verificaInsigna('maratonist', 'Insignă deblocată! 🏃', 'Maratonist Cardio — Ai acumulat 100 minute cardio');
+        }
+        if (zileProt >= 5) {
+          verificaInsigna('maestru_proteine', 'Insignă deblocată! 🥩', 'Maestru al Proteinei — Ai atins ținta de proteine 5 zile');
         }
 
         const toateCompletate = questuriNoi.every((q) => q.completat);
@@ -301,9 +321,9 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
             duration: 5000,
           });
 
-          if (noulStreak >= 3 && !noiInsigne.includes('streak_3')) noiInsigne.push('streak_3');
-          if (noulStreak >= 7 && !noiInsigne.includes('streak_7')) noiInsigne.push('streak_7');
-          if (noulStreak >= 30 && !noiInsigne.includes('streak_30')) noiInsigne.push('streak_30');
+          if (noulStreak >= 3) verificaInsigna('streak_3', 'Insignă deblocată! ⚡', 'Consecvență 3 Zile');
+          if (noulStreak >= 7) verificaInsigna('streak_7', 'Insignă deblocată! 🏆', 'Războinic Săptămânal — 7 zile consecutiv');
+          if (noulStreak >= 30) verificaInsigna('streak_30', 'Insignă deblocată! 👑', 'De neoprit — 30 de zile consecutiv');
         }
 
         const calc = calculeazaNivel(nouXp);
@@ -315,8 +335,8 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
             icon: 'Award',
             duration: 5000,
           });
-          if (calc.nivel >= 5 && !noiInsigne.includes('nivel_5')) noiInsigne.push('nivel_5');
-          if (calc.nivel >= 10 && !noiInsigne.includes('nivel_10')) noiInsigne.push('nivel_10');
+          if (calc.nivel >= 5) verificaInsigna('nivel_5', 'Insignă deblocată! 🏅', 'Atlet NutriAI — Ai atins Nivelul 5');
+          if (calc.nivel >= 10) verificaInsigna('nivel_10', 'Insignă deblocată! ⭐', 'Războinic de Elită — Ai atins Nivelul 10');
         } else if (questCompletatAcum) {
           showNotification({
             type: 'reward',
@@ -333,6 +353,9 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
           streak: noulStreak,
           questuriAzi: questuriNoi,
           insigne: noiInsigne,
+          totalAntrenamente: totalAntr,
+          totalMinuteCardio: totalCardio,
+          zileProteineAtinse: zileProt,
         };
 
         saveStare(nextState);

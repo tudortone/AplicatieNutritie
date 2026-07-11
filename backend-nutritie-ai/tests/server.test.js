@@ -102,6 +102,18 @@ describe('Backend API Tests', () => {
       expect(res.statusCode).toBe(400);
       expect(res.body.eroare).toContain('Sexul selectat este invalid');
     });
+
+    it('ar trebui să calculeze corect și determinist valorile numerice (Mifflin-St Jeor)', async () => {
+      const res = await request(app)
+        .post('/api/calculeaza-profil')
+        .set('Authorization', 'Bearer token_valid')
+        .send({ varsta: 30, greutate: 80, inaltime: 180, sex: 'Masculin', activitate: 'Moderat', obiectiv: 'Menținere' });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.caloriiTinta).toBe(2759);
+      expect(res.body.proteineTinta).toBe(128);
+      expect(res.body.grasimiTinta).toBe(77);
+      expect(res.body.carbiTinta).toBe(389);
+    });
   });
 
   describe('Validări Faza 1 /api/analizeaza-mancare-structurat', () => {

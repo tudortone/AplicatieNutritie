@@ -374,7 +374,7 @@ export default function StatisticiScreen() {
                   </View>
 
                   <View style={styles.chartArea}>
-                    {(zileChart === '7' ? istoricGreutate.slice(-7) : istoricGreutate.slice(-14)).map((zi, index, arr) => {
+                    {(zileChart === '7' ? istoricGreutate.slice(-7) : istoricGreutate.slice(-30)).map((zi, index, arr) => {
                       const minW = Math.min(...arr.map(a => a.greutate)) - 1;
                       const maxW = Math.max(...arr.map(a => a.greutate)) + 1;
                       const range = maxW - minW || 5;

@@ -14,6 +14,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp, FadeInDown, Layout } from 'react-native-reanimated';
 import { Flame, Activity, Clock, Trash2, Pencil, PlusCircle } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../supabase';
@@ -226,6 +227,17 @@ export default function HistoryScreen() {
                 <Text style={[styles.summaryUnit, { color: colors.textSecondary }]}>mese</Text>
               </View>
             </View>
+
+            <TouchableOpacity 
+              style={[styles.addMealBtn, { backgroundColor: colors.accent }]} 
+              activeOpacity={0.85}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                mealSheetRef.current?.open();
+              }}
+            >
+              <Text style={[styles.addMealBtnText, { color: colors.background }]}>Adaugă masă</Text>
+            </TouchableOpacity>
           </LinearGradient>
         </BlurView>
       </Animated.View>
@@ -239,11 +251,15 @@ export default function HistoryScreen() {
           <Text style={{ fontSize: 48 }}>🍽️</Text>
         </LinearGradient>
       </View>
-      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Nicio masă înregistrată</Text>
-      <Text style={[styles.emptySub, { color: colors.textSecondary }]}>Apăsați butonul de adăugare din colțul sus sau deschideți scannerul AI pentru prima masă.</Text>
+      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Nicio masă azi.</Text>
+      <Text style={[styles.emptySub, { color: colors.textSecondary }]}>Apasă + ca să adaugi prima masă.</Text>
       <TouchableOpacity 
         style={[styles.emptyAddBtn, { backgroundColor: colors.accent }]}
-        onPress={() => mealSheetRef.current?.open()}
+        activeOpacity={0.85}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          mealSheetRef.current?.open();
+        }}
       >
         <Text style={styles.emptyAddBtnText}>+ Adaugă Masă Acum</Text>
       </TouchableOpacity>
@@ -302,7 +318,7 @@ const styles = StyleSheet.create({
   glowTop: { position: 'absolute', top: -150, right: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.04 },
   glowBottom: { position: 'absolute', bottom: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.04 },
 
-  scroll: { paddingTop: Platform.OS === 'ios' ? 48 : 28, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 160 : 50 },
+  scroll: { paddingTop: Platform.OS === 'ios' ? 48 : 28, paddingHorizontal: 20, paddingBottom: Math.max(Platform.OS === 'ios' ? 160 : 110, 110) },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 15, fontWeight: '500' },
@@ -339,6 +355,8 @@ const styles = StyleSheet.create({
   summaryUnit: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
   summaryDivider: { width: 1, height: 60, backgroundColor: 'rgba(255,255,255,0.06)' },
   summaryEmoji: { fontSize: 20 },
+  addMealBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, paddingVertical: 14, marginTop: 20 },
+  addMealBtnText: { fontSize: 15, fontWeight: '800' },
 
   // Empty state
   emptyState: { alignItems: 'center', marginTop: 40, paddingHorizontal: 32 },

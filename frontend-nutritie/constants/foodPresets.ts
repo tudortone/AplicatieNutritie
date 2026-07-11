@@ -1,16 +1,537 @@
 export interface FoodPreset {
   id: string;
   nume: string;
-  categorie: 'mic-dejun' | 'pranz' | 'cina' | 'gustare' | 'bautura';
+  categorie: 'fructe' | 'mic-dejun' | 'pranz' | 'cina' | 'gustare' | 'bautura' | string;
   calorii: number;
   proteine: number;
   carbohidrati: number;
   grasimi: number;
   gramajDefault: number;
   icon: string; // emoji
+  gramajImplicit?: number;
+  mergeDirectLaGramaj?: boolean;
+  unitati?: Array<{
+    label: string;
+    grame: number;
+  }>;
 }
 
 export const foodPresets: FoodPreset[] = [
+  // ==========================================
+  // FRUCTE (30+ fructe cu portii/unitati rapide)
+  // ==========================================
+  {
+    id: 'mar',
+    nume: 'Măr proaspăt',
+    categorie: 'fructe',
+    calorii: 78,
+    proteine: 0.4,
+    carbohidrati: 20.7,
+    grasimi: 0.3,
+    gramajDefault: 150,
+    gramajImplicit: 150,
+    icon: '🍎',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1/2 măr', grame: 75 },
+      { label: '1 măr mic', grame: 120 },
+      { label: '1 măr mediu', grame: 150 },
+      { label: '1 măr mare', grame: 200 }
+    ]
+  },
+  {
+    id: 'banana',
+    nume: 'Banană proaspătă',
+    categorie: 'fructe',
+    calorii: 107,
+    proteine: 1.3,
+    carbohidrati: 27.4,
+    grasimi: 0.4,
+    gramajDefault: 120,
+    gramajImplicit: 120,
+    icon: '🍌',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1/2 banană', grame: 60 },
+      { label: '1 banană mică', grame: 100 },
+      { label: '1 banană medie', grame: 120 },
+      { label: '1 banană mare', grame: 150 }
+    ]
+  },
+  {
+    id: 'para',
+    nume: 'Pară proaspătă',
+    categorie: 'fructe',
+    calorii: 85,
+    proteine: 0.6,
+    carbohidrati: 22.5,
+    grasimi: 0.2,
+    gramajDefault: 150,
+    gramajImplicit: 150,
+    icon: '🍐',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 pară mică', grame: 120 },
+      { label: '1 pară medie', grame: 150 },
+      { label: '1 pară mare', grame: 200 }
+    ]
+  },
+  {
+    id: 'piersica',
+    nume: 'Piersică suculentă',
+    categorie: 'fructe',
+    calorii: 58,
+    proteine: 1.4,
+    carbohidrati: 14.3,
+    grasimi: 0.4,
+    gramajDefault: 150,
+    gramajImplicit: 150,
+    icon: '🍑',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 piersică mică', grame: 110 },
+      { label: '1 piersică medie', grame: 150 },
+      { label: '1 piersică mare', grame: 180 }
+    ]
+  },
+  {
+    id: 'nectarina',
+    nume: 'Nectarină proaspătă',
+    categorie: 'fructe',
+    calorii: 62,
+    proteine: 1.5,
+    carbohidrati: 15,
+    grasimi: 0.4,
+    gramajDefault: 140,
+    gramajImplicit: 140,
+    icon: '🍑',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 buc mică', grame: 110 },
+      { label: '1 buc medie', grame: 140 },
+      { label: '1 buc mare', grame: 180 }
+    ]
+  },
+  {
+    id: 'prune',
+    nume: 'Prune proaspete',
+    categorie: 'fructe',
+    calorii: 46,
+    proteine: 0.7,
+    carbohidrati: 11.4,
+    grasimi: 0.3,
+    gramajDefault: 100,
+    gramajImplicit: 100,
+    icon: '🫐',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '3 prune', grame: 90 },
+      { label: '5 prune', grame: 150 },
+      { label: '1 castronel (~200g)', grame: 200 }
+    ]
+  },
+  {
+    id: 'struguri',
+    nume: 'Struguri albi sau negri',
+    categorie: 'fructe',
+    calorii: 104,
+    proteine: 1.1,
+    carbohidrati: 27,
+    grasimi: 0.2,
+    gramajDefault: 150,
+    gramajImplicit: 150,
+    icon: '🍇',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 ciorchine mic (~100g)', grame: 100 },
+      { label: '1 porție medie (~150g)', grame: 150 },
+      { label: '1 ciorchine mare (~250g)', grame: 250 }
+    ]
+  },
+  {
+    id: 'cirese',
+    nume: 'Cireșe proaspete',
+    categorie: 'fructe',
+    calorii: 63,
+    proteine: 1.1,
+    carbohidrati: 16,
+    grasimi: 0.2,
+    gramajDefault: 100,
+    gramajImplicit: 100,
+    icon: '🍒',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 pumn (~100g)', grame: 100 },
+      { label: '1 bol mic (~150g)', grame: 150 },
+      { label: '1 bol mediu (~250g)', grame: 250 }
+    ]
+  },
+  {
+    id: 'visine',
+    nume: 'Vișine proaspete',
+    categorie: 'fructe',
+    calorii: 50,
+    proteine: 1.0,
+    carbohidrati: 12,
+    grasimi: 0.3,
+    gramajDefault: 100,
+    gramajImplicit: 100,
+    icon: '🍒',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 pumn (~100g)', grame: 100 },
+      { label: '1 bol mic (~150g)', grame: 150 },
+      { label: '1 bol mediu (~200g)', grame: 200 }
+    ]
+  },
+  {
+    id: 'afine',
+    nume: 'Afine proaspete',
+    categorie: 'fructe',
+    calorii: 57,
+    proteine: 0.7,
+    carbohidrati: 14.5,
+    grasimi: 0.3,
+    gramajDefault: 100,
+    gramajImplicit: 100,
+    icon: '🫐',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 caserolă mică (125g)', grame: 125 },
+      { label: '1 pumn (~50g)', grame: 50 },
+      { label: '1 bol (~100g)', grame: 100 }
+    ]
+  },
+  {
+    id: 'zmeura',
+    nume: 'Zmeură proaspătă',
+    categorie: 'fructe',
+    calorii: 52,
+    proteine: 1.2,
+    carbohidrati: 12,
+    grasimi: 0.6,
+    gramajDefault: 100,
+    gramajImplicit: 100,
+    icon: '🍓',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 caserolă (125g)', grame: 125 },
+      { label: '1 pumn (~60g)', grame: 60 },
+      { label: '1 porție (~100g)', grame: 100 }
+    ]
+  },
+  {
+    id: 'mure',
+    nume: 'Mure proaspete',
+    categorie: 'fructe',
+    calorii: 43,
+    proteine: 1.4,
+    carbohidrati: 9.6,
+    grasimi: 0.5,
+    gramajDefault: 100,
+    gramajImplicit: 100,
+    icon: '🫐',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 caserolă (125g)', grame: 125 },
+      { label: '1 pumn (~60g)', grame: 60 },
+      { label: '1 porție (~100g)', grame: 100 }
+    ]
+  },
+  {
+    id: 'capsuni',
+    nume: 'Căpșuni proaspete',
+    categorie: 'fructe',
+    calorii: 48,
+    proteine: 1.0,
+    carbohidrati: 11.5,
+    grasimi: 0.4,
+    gramajDefault: 150,
+    gramajImplicit: 150,
+    icon: '🍓',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '5 căpșuni', grame: 75 },
+      { label: '10 căpșuni', grame: 150 },
+      { label: '1 caserolă (250g)', grame: 250 }
+    ]
+  },
+  {
+    id: 'pepene-rosu-buc',
+    nume: 'Pepene roșu (felie)',
+    categorie: 'fructe',
+    calorii: 90,
+    proteine: 1.8,
+    carbohidrati: 22,
+    grasimi: 0.4,
+    gramajDefault: 300,
+    gramajImplicit: 300,
+    icon: '🍉',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 felie mică (~200g)', grame: 200 },
+      { label: '1 felie medie (~300g)', grame: 300 },
+      { label: '1 felie mare (~450g)', grame: 450 }
+    ]
+  },
+  {
+    id: 'pepene-galben',
+    nume: 'Pepene galben (felie)',
+    categorie: 'fructe',
+    calorii: 68,
+    proteine: 1.6,
+    carbohidrati: 16,
+    grasimi: 0.3,
+    gramajDefault: 200,
+    gramajImplicit: 200,
+    icon: '🍈',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 felie mică (~150g)', grame: 150 },
+      { label: '1 felie medie (~200g)', grame: 200 },
+      { label: '1 felie mare (~300g)', grame: 300 }
+    ]
+  },
+  {
+    id: 'kiwi',
+    nume: 'Kiwi proaspăt',
+    categorie: 'fructe',
+    calorii: 46,
+    proteine: 0.8,
+    carbohidrati: 11,
+    grasimi: 0.4,
+    gramajDefault: 75,
+    gramajImplicit: 75,
+    icon: '🥝',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 kiwi (~75g)', grame: 75 },
+      { label: '2 kiwi (~150g)', grame: 150 }
+    ]
+  },
+  {
+    id: 'portocala',
+    nume: 'Portocală proaspătă',
+    categorie: 'fructe',
+    calorii: 70,
+    proteine: 1.4,
+    carbohidrati: 17.5,
+    grasimi: 0.2,
+    gramajDefault: 150,
+    gramajImplicit: 150,
+    icon: '🍊',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 portocală mică', grame: 120 },
+      { label: '1 portocală medie', grame: 150 },
+      { label: '1 portocală mare', grame: 200 }
+    ]
+  },
+  {
+    id: 'mandarina',
+    nume: 'Mandarină / Clementină',
+    categorie: 'fructe',
+    calorii: 40,
+    proteine: 0.6,
+    carbohidrati: 10,
+    grasimi: 0.2,
+    gramajDefault: 80,
+    gramajImplicit: 80,
+    icon: '🍊',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 mandarină (~80g)', grame: 80 },
+      { label: '2 mandarine (~160g)', grame: 160 },
+      { label: '3 mandarine (~240g)', grame: 240 }
+    ]
+  },
+  {
+    id: 'grapefruit',
+    nume: 'Grapefruit roz / alb',
+    categorie: 'fructe',
+    calorii: 84,
+    proteine: 1.5,
+    carbohidrati: 21,
+    grasimi: 0.3,
+    gramajDefault: 200,
+    gramajImplicit: 200,
+    icon: '🍊',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1/2 grapefruit (~120g)', grame: 120 },
+      { label: '1 grapefruit (~220g)', grame: 220 }
+    ]
+  },
+  {
+    id: 'ananas',
+    nume: 'Ananas proaspăt',
+    categorie: 'fructe',
+    calorii: 75,
+    proteine: 0.8,
+    carbohidrati: 19.5,
+    grasimi: 0.2,
+    gramajDefault: 150,
+    gramajImplicit: 150,
+    icon: '🍍',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 felie (~100g)', grame: 100 },
+      { label: '2 felii (~200g)', grame: 200 }
+    ]
+  },
+  {
+    id: 'mango',
+    nume: 'Mango proaspăt',
+    categorie: 'fructe',
+    calorii: 90,
+    proteine: 1.2,
+    carbohidrati: 22.5,
+    grasimi: 0.6,
+    gramajDefault: 150,
+    gramajImplicit: 150,
+    icon: '🥭',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1/2 mango (~100g)', grame: 100 },
+      { label: '1 mango mediu (~200g)', grame: 200 }
+    ]
+  },
+  {
+    id: 'papaya',
+    nume: 'Papaya proaspătă',
+    categorie: 'fructe',
+    calorii: 64,
+    proteine: 0.9,
+    carbohidrati: 16,
+    grasimi: 0.4,
+    gramajDefault: 150,
+    gramajImplicit: 150,
+    icon: '🍈',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 porție (~150g)', grame: 150 },
+      { label: '1/2 papaya (~250g)', grame: 250 }
+    ]
+  },
+  {
+    id: 'rodie',
+    nume: 'Rodie (boabe proaspete)',
+    categorie: 'fructe',
+    calorii: 83,
+    proteine: 1.7,
+    carbohidrati: 19,
+    grasimi: 1.2,
+    gramajDefault: 100,
+    gramajImplicit: 100,
+    icon: '🍎',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1/2 rodie (~80g)', grame: 80 },
+      { label: '1 rodie (~150g)', grame: 150 }
+    ]
+  },
+  {
+    id: 'smochine',
+    nume: 'Smochine proaspete',
+    categorie: 'fructe',
+    calorii: 74,
+    proteine: 0.8,
+    carbohidrati: 19,
+    grasimi: 0.3,
+    gramajDefault: 100,
+    gramajImplicit: 100,
+    icon: '🫐',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '2 smochine (~100g)', grame: 100 },
+      { label: '3 smochine (~150g)', grame: 150 }
+    ]
+  },
+  {
+    id: 'curmale',
+    nume: 'Curmale uscate',
+    categorie: 'fructe',
+    calorii: 140,
+    proteine: 1.2,
+    carbohidrati: 37,
+    grasimi: 0.2,
+    gramajDefault: 50,
+    gramajImplicit: 50,
+    icon: '🫒',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '3 curmale (~30g)', grame: 30 },
+      { label: '5 curmale (~50g)', grame: 50 }
+    ]
+  },
+  {
+    id: 'avocado',
+    nume: 'Avocado proaspăt',
+    categorie: 'fructe',
+    calorii: 240,
+    proteine: 3.0,
+    carbohidrati: 12.8,
+    grasimi: 22,
+    gramajDefault: 150,
+    gramajImplicit: 150,
+    icon: '🥑',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1/2 avocado (~75g)', grame: 75 },
+      { label: '1 avocado mediu (~150g)', grame: 150 }
+    ]
+  },
+  {
+    id: 'lamaie',
+    nume: 'Lămâie proaspătă (suc)',
+    categorie: 'fructe',
+    calorii: 15,
+    proteine: 0.5,
+    carbohidrati: 4.5,
+    grasimi: 0.1,
+    gramajDefault: 50,
+    gramajImplicit: 50,
+    icon: '🍋',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 jumătate (~30g)', grame: 30 },
+      { label: '1 lămâie (~60g)', grame: 60 }
+    ]
+  },
+  {
+    id: 'lime',
+    nume: 'Lime / Lămâie verde',
+    categorie: 'fructe',
+    calorii: 12,
+    proteine: 0.3,
+    carbohidrati: 3.5,
+    grasimi: 0.1,
+    gramajDefault: 40,
+    gramajImplicit: 40,
+    icon: '🍋',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '1 lime (~40g)', grame: 40 }
+    ]
+  },
+  {
+    id: 'caisa',
+    nume: 'Caise proaspete',
+    categorie: 'fructe',
+    calorii: 48,
+    proteine: 1.4,
+    carbohidrati: 11,
+    grasimi: 0.4,
+    gramajDefault: 100,
+    gramajImplicit: 100,
+    icon: '🍑',
+    mergeDirectLaGramaj: true,
+    unitati: [
+      { label: '2 caise (~70g)', grame: 70 },
+      { label: '3 caise (~105g)', grame: 105 },
+      { label: '5 caise (~175g)', grame: 175 }
+    ]
+  },
   // ==========================================
   // MIC DEJUN (25+ preparate)
   // ==========================================
@@ -236,9 +757,11 @@ export const foodPresets: FoodPreset[] = [
 ];
 
 export const categories = [
+  { id: 'fructe', name: 'Fructe', icon: '🍎' },
   { id: 'mic-dejun', name: 'Mic Dejun', icon: '🌅' },
   { id: 'pranz', name: 'Prânz', icon: '☀️' },
   { id: 'cina', name: 'Cină', icon: '🌙' },
-  { id: 'gustare', name: 'Gustare', icon: '🍿' },
-  { id: 'bautura', name: 'Băutură', icon: '🥤' },
+  { id: 'gustare', name: 'Gustări', icon: '🍿' },
+  { id: 'bautura', name: 'Băuturi', icon: '🥤' },
 ];
+

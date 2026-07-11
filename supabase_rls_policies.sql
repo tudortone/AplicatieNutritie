@@ -57,8 +57,13 @@ CREATE TABLE IF NOT EXISTS antrenamente (
   tip TEXT NOT NULL,
   durata_min INTEGER NOT NULL DEFAULT 30,
   calorii_arse INTEGER NOT NULL DEFAULT 0,
+  exercitii JSONB DEFAULT '[]'::jsonb,
+  volum_total NUMERIC DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE IF EXISTS antrenamente ADD COLUMN IF NOT EXISTS exercitii JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS antrenamente ADD COLUMN IF NOT EXISTS volum_total NUMERIC DEFAULT 0;
 
 ALTER TABLE IF EXISTS antrenamente ENABLE ROW LEVEL SECURITY;
 
@@ -98,3 +103,49 @@ CREATE POLICY "Users can access their own pantry products" ON produse_camara
 -- Copiază și rulează acest conținut în SQL Editor din dashboard-ul tău Supabase
 -- pentru a asigura izolare completă a datelor între utilizatori (Zero Trust).
 -- ==============================================================================
+
+-- ==============================================================================
+-- 7. TABELA BARCODE CACHE (V5) — Cache produse & supermarketuri locale (Lidl, Kaufland, Penny, etc.)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS barcode_cache (
+  code TEXT PRIMARY KEY,
+  source TEXT,
+  brand TEXT,
+  name TEXT NOT NULL,
+  quantity TEXT,
+  kcal_100g NUMERIC,
+  protein_100g NUMERIC,
+  carbs_100g NUMERIC,
+  fat_100g NUMERIC,
+  payload JSONB,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS barcode_cache_updated_at_idx ON barcode_cache(updated_at DESC);
+
+-- ==============================================================================
+-- 8. TABELA GAMIFICARE (G1) — XP, nivel, streak și insigne utilizator
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS gamificare (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
+  xp_total INTEGER DEFAULT 0,
+  nivel INTEGER DEFAULT 1,
+  streak INTEGER DEFAULT 0,
+  ultima_zi_activa TEXT,
+  questuri_azi JSONB DEFAULT '[]'::jsonb,
+  insigne JSONB DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS gamificare_user_id_idx ON gamificare(user_id);
+
+ALTER TABLE IF EXISTS gamificare ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can manage their own gamification" ON gamificare;
+CREATE POLICY "Users can manage their own gamification" ON gamificare
+  FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+

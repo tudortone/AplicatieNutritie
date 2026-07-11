@@ -17,19 +17,25 @@ export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
 
+  const isValidEmail = (str: string) => /\S+@\S+\.\S+/.test(str.trim());
+
   const submit = async () => {
     if (!email || !parola) { 
       Alert.alert("Completează câmpurile", "Email și parolă sunt obligatorii."); 
       return; 
     }
+    if (!isValidEmail(email)) {
+      Alert.alert("Email invalid", "Te rugăm să introduci o adresă de email validă.");
+      return;
+    }
     setLoading(true);
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password: parola });
+        const { error } = await supabase.auth.signUp({ email: email.trim(), password: parola });
         if (error) Alert.alert("Eroare", error.message);
         else Alert.alert("Cont creat!", "Verifică-ți emailul pentru confirmare.");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password: parola });
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: parola });
         if (error) Alert.alert("Eroare", error.message);
       }
     } catch (e: any) {
@@ -45,9 +51,13 @@ export default function AuthScreen() {
       Alert.alert("Email necesar", "Introduceți adresa de email pentru a vă reseta parola.");
       return;
     }
+    if (!isValidEmail(email)) {
+      Alert.alert("Email invalid", "Te rugăm să introduci o adresă de email validă.");
+      return;
+    }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
       if (error) {
         Alert.alert("Eroare", error.message);
       } else {

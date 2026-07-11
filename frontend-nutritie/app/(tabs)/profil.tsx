@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Alert, ActivityIndicator, Platform, Switch
+  ScrollView, Alert, ActivityIndicator, Platform, Switch, Image
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 import { supabase } from '../../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Award, Trophy, Dumbbell, Flame, Crown, Star } from 'lucide-react-native';
+import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Trophy, Camera, CheckCircle2, User, Pencil } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { themes, themeDisplayNames, ThemeName } from '../../constants/theme';
@@ -37,6 +39,9 @@ export default function ProfilScreen() {
   const [proteineTinta, setProteineTinta] = useState('150');
   const [carbiTinta, setCarbiTinta] = useState('250');
   const [grasimiTinta, setGrasimiTinta] = useState('70');
+  const [nume, setNume] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [showSuccessAnim, setShowSuccessAnim] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
@@ -62,6 +67,14 @@ export default function ProfilScreen() {
           if (!cb) cb = await AsyncStorage.getItem('carbiTinta');
           if (!gr) gr = await AsyncStorage.getItem('grasimiTinta');
 
+          let nm = metadata.nume || metadata.display_name;
+          let av = metadata.avatar_url;
+          if (!nm) nm = await AsyncStorage.getItem('nume_profil');
+          if (!av) av = await AsyncStorage.getItem('avatar_url');
+
+          setNume(nm ? String(nm) : (session.user.email?.split('@')[0] || 'Utilizator'));
+          setAvatarUrl(av ? String(av) : null);
+
           setGreutate(g ? String(g) : '75');
           setGreutateTinta(gt ? String(gt) : '70');
           setCaloriiTinta(c ? String(c) : '2000');
@@ -86,6 +99,30 @@ export default function ProfilScreen() {
     initProfile();
   }, [session, user, loadingAuth]);
 
+  const alegePozaProfil = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const permisiune = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permisiune.granted) {
+        Alert.alert("Permisiune necesară", "Avem nevoie de acces la galeria foto pentru a alege o poză de profil.");
+        return;
+      }
+      const rezultat = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+      if (!rezultat.canceled && rezultat.assets && rezultat.assets.length > 0) {
+        const nouaUri = rezultat.assets[0].uri;
+        setAvatarUrl(nouaUri);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (e) {
+      console.error("Eroare selecție poză:", e);
+    }
+  };
+
   const salveaza = async () => {
     if (!greutate || !greutateTinta || !caloriiTinta || !proteineTinta || !carbiTinta || !grasimiTinta) {
       showBanner({
@@ -104,9 +141,13 @@ export default function ProfilScreen() {
       await AsyncStorage.setItem('proteineTinta', proteineTinta);
       await AsyncStorage.setItem('carbiTinta', carbiTinta);
       await AsyncStorage.setItem('grasimiTinta', grasimiTinta);
+      await AsyncStorage.setItem('nume_profil', nume);
+      if (avatarUrl) await AsyncStorage.setItem('avatar_url', avatarUrl);
 
       const { error } = await supabase.auth.updateUser({
         data: {
+          nume: nume.trim() || session?.user.email?.split('@')[0],
+          avatar_url: avatarUrl || '',
           greutate: parseFloat(greutate) || 75,
           greutateTinta: parseFloat(greutateTinta) || 70,
           caloriiTinta: parseInt(caloriiTinta) || 2000,
@@ -123,7 +164,10 @@ export default function ProfilScreen() {
           type: 'warning'
         });
       } else {
-        notify.success('Profil actualizat', 'Ținte noi salvate');
+        notify.success('Profil actualizat', 'Modificările au fost salvate');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setShowSuccessAnim(true);
+        setTimeout(() => setShowSuccessAnim(false), 2600);
       }
     } catch {
       showBanner({
@@ -171,12 +215,21 @@ export default function ProfilScreen() {
 
         {/* Avatar header */}
         <Animated.View entering={FadeInDown.duration(500)} style={styles.avatarSection}>
-          <LinearGradient colors={colors.accentGradient} style={[styles.avatarRing, { shadowColor: colors.accent }]}>
-            <View style={[styles.avatarInner, { backgroundColor: '#0F1318' }]}>
-              <Text style={[styles.avatarText, { color: colors.accent }]}>{initials}</Text>
+          <TouchableOpacity activeOpacity={0.85} onPress={alegePozaProfil}>
+            <LinearGradient colors={colors.accentGradient} style={[styles.avatarRing, { shadowColor: colors.accent }]}>
+              <View style={[styles.avatarInner, { backgroundColor: '#0F1318', overflow: 'hidden' }]}>
+                {avatarUrl ? (
+                  <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 29 }} />
+                ) : (
+                  <Text style={[styles.avatarText, { color: colors.accent }]}>{initials}</Text>
+                )}
+              </View>
+            </LinearGradient>
+            <View style={[styles.cameraBadge, { backgroundColor: colors.accent, borderColor: colors.background }]}>
+              <Camera size={14} color="#000" />
             </View>
-          </LinearGradient>
-          <Text style={[styles.displayName, { color: colors.textPrimary }]}>{session.user.email?.split('@')[0]}</Text>
+          </TouchableOpacity>
+          <Text style={[styles.displayName, { color: colors.textPrimary }]}>{nume || session.user.email?.split('@')[0]}</Text>
           <Text style={[styles.emailText, { color: colors.textSecondary }]}>{session.user.email}</Text>
 
           <View style={[styles.planBadge, { borderColor: colors.accent + '33' }]}>
@@ -185,6 +238,34 @@ export default function ProfilScreen() {
               <Text style={[styles.planBadgeText, { color: colors.accent }]}>AI Premium Plan</Text>
             </LinearGradient>
           </View>
+        </Animated.View>
+
+        {/* Personal Details: Name / Display Name */}
+        <Animated.View entering={FadeInDown.duration(550).delay(30)}>
+          <View style={styles.sectionHeaderRow}>
+            <User size={16} color={colors.accent} />
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>DATE PERSONALE</Text>
+          </View>
+          <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 24, marginTop: 12 }]}>
+            <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
+              <View style={styles.inputRow}>
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <Pencil size={18} color={colors.accent} />
+                </View>
+                <View style={styles.inputContent}>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Nume / Pseudonim Afișat</Text>
+                  <TextInput
+                    style={[styles.inputField, { color: colors.textPrimary, fontSize: 18 }]}
+                    value={nume}
+                    onChangeText={setNume}
+                    placeholder="Introdu numele tău..."
+                    placeholderTextColor={colors.textSecondary}
+                    selectionColor={colors.accent}
+                  />
+                </View>
+              </View>
+            </LinearGradient>
+          </BlurView>
         </Animated.View>
 
         {/* Visual Theme Section */}
@@ -591,8 +672,22 @@ export default function ProfilScreen() {
             <Text style={[styles.logoutText, { color: colors.danger }]}>Deconectare</Text>
           </TouchableOpacity>
         </Animated.View>
-
       </ScrollView>
+
+      {/* Success Animation Modal Overlay */}
+      {showSuccessAnim && (
+        <Animated.View entering={FadeInDown.duration(350).springify()} style={styles.successOverlay}>
+          <BlurView intensity={85} tint="dark" style={[styles.successCard, { borderColor: colors.accent }]}>
+            <LinearGradient colors={[colors.accent + '25', 'rgba(0,0,0,0.85)']} style={styles.successGrad}>
+              <Animated.View entering={FadeInUp.duration(400).delay(100).springify()} style={[styles.successIconCircle, { backgroundColor: colors.accent }]}>
+                <CheckCircle2 size={44} color="#000" />
+              </Animated.View>
+              <Text style={[styles.successTitle, { color: colors.textPrimary }]}>Profil Actualizat!</Text>
+              <Text style={[styles.successSub, { color: colors.textSecondary }]}>Modificările tale (poză, nume și obiective) au fost salvate cu succes.</Text>
+            </LinearGradient>
+          </BlurView>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -657,4 +752,12 @@ const styles = StyleSheet.create({
   // Logout
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 20, borderRadius: 20, borderWidth: 1 },
   logoutText: { fontSize: 16, fontWeight: '700' },
+
+  cameraBadge: { position: 'absolute', bottom: 10, right: 0, width: 30, height: 30, borderRadius: 15, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
+  successOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28, zIndex: 999, backgroundColor: 'rgba(0,0,0,0.5)' },
+  successCard: { width: '100%', maxWidth: 350, borderRadius: 28, overflow: 'hidden', borderWidth: 1.5 },
+  successGrad: { paddingHorizontal: 28, paddingVertical: 36, alignItems: 'center' },
+  successIconCircle: { width: 84, height: 84, borderRadius: 42, justifyContent: 'center', alignItems: 'center', marginBottom: 20, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 12 },
+  successTitle: { fontSize: 24, fontWeight: '900', textAlign: 'center', marginBottom: 8, letterSpacing: -0.5 },
+  successSub: { fontSize: 14, lineHeight: 21, textAlign: 'center' },
 });
