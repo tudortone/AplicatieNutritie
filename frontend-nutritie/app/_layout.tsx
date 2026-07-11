@@ -3,8 +3,16 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect, useMemo } from 'react';
-import { View, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import { View, ActivityIndicator, Text, TouchableOpacity, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+// Ignorăm avertismentele specifice rulării în Expo Go pe Android SDK 53
+LogBox.ignoreLogs([
+  'expo-notifications: Android Push notifications',
+  '`expo-notifications` functionality is not fully supported in Expo Go',
+  'Could not find the table',
+  'Eroare la citirea antrenamentelor',
+]);
 
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
