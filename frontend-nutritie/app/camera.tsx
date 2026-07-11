@@ -11,7 +11,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../supabase';
 import { API_URL } from '@/constants/config';
-import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { X, Scan, Zap, ChevronDown, Plus, Heart, Image as ImageIcon } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -29,7 +29,8 @@ export default function CameraScreen() {
   const [seIncarca, setSeIncarca] = useState(false);
   const [rezultat, setRezultat] = useState<AlimentAI[] | null>(null);
   const [grame, setGrame] = useState<number[]>([]);
-  const [selectedAI, setSelectedAI] = useState<'auto' | 'gemini' | 'openai'>('auto');
+  const [selectedAI, setSelectedAI] = useState<'auto' | 'gemini' | 'openai' | 'groq'>('auto');
+  const [aiMenuVisible, setAiMenuVisible] = useState(false);
   const [aiStatus, setAiStatus] = useState<Record<string, { nume: string; status: string; secundeRamase: number; mesaj: string }>>({});
   const cameraRef = useRef<CameraView>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -266,53 +267,95 @@ export default function CameraScreen() {
           </BlurView>
         </TouchableOpacity>
 
-        <View style={[styles.topBadge, { borderColor: colors.accent + '33' }]}>
-          <BlurView intensity={20} tint="dark" style={styles.topBadgeBlur}>
+        <TouchableOpacity
+          style={[styles.topBadge, { borderColor: colors.accent + '55' }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            setAiMenuVisible(!aiMenuVisible);
+          }}
+          activeOpacity={0.8}
+        >
+          <BlurView intensity={30} tint="dark" style={styles.topBadgeBlur}>
             <Zap size={14} color={colors.accent} />
-            <Text style={[styles.topBadgeText, { color: colors.accent }]}>SCANNER NUTRIAI</Text>
-            <ChevronDown size={14} color="#6B7280" />
+            <Text style={[styles.topBadgeText, { color: colors.accent }]}>
+              {selectedAI === 'auto'
+                ? 'NUTRIAI: AUTO'
+                : selectedAI === 'gemini'
+                ? 'NUTRIAI: GEMINI 2.5'
+                : selectedAI === 'openai'
+                ? 'NUTRIAI: OPENAI'
+                : 'NUTRIAI: GROQ'}
+            </Text>
+            <ChevronDown
+              size={14}
+              color={colors.accent}
+              style={{ transform: [{ rotate: aiMenuVisible ? '180deg' : '0deg' }] }}
+            />
           </BlurView>
-        </View>
+        </TouchableOpacity>
       </View>
 
-      {/* Selector Model AI & Cooldown Status */}
-      <View style={styles.aiSelectorBar}>
-        {(['auto', 'gemini', 'openai'] as const).map((prov) => {
-          const statusObj = aiStatus[prov];
-          const isCooldown = statusObj?.status === 'cooldown' && (statusObj?.secundeRamase || 0) > 0;
-          const isSelected = selectedAI === prov;
+      {/* Dropdown meniu elegant pentru alegerea modelului AI */}
+      {aiMenuVisible && (
+        <Animated.View entering={FadeInDown.duration(220)} style={styles.aiDropdownMenu}>
+          <BlurView intensity={90} tint="dark" style={styles.aiDropdownBlur}>
+            <Text style={styles.aiDropdownHeader}>ALEGE FURNIZORUL AI PENTRU ANALIZĂ</Text>
+            {(
+              [
+                { id: 'auto', name: '⚡ Auto (Recomandat)', desc: 'Selecție inteligentă în cascadă' },
+                { id: 'gemini', name: '🔮 Google Gemini 2.5', desc: 'Rapid, 4 chei API în rotație' },
+                { id: 'openai', name: '🟢 OpenAI GPT-4o', desc: 'Analiză vizuală de referință' },
+                { id: 'groq', name: '⚡ Groq Llama Vision', desc: 'Open-source ultrarapid' },
+              ] as const
+            ).map((item) => {
+              const statusObj = aiStatus[item.id];
+              const isCooldown = statusObj?.status === 'cooldown' && (statusObj?.secundeRamase || 0) > 0;
+              const isSelected = selectedAI === item.id;
 
-          return (
-            <TouchableOpacity
-              key={prov}
-              style={[
-                styles.aiChip,
-                isSelected && { backgroundColor: colors.accent, borderColor: colors.accent },
-                isCooldown && { backgroundColor: 'rgba(239, 68, 68, 0.3)', borderColor: '#ef4444' }
-              ]}
-              onPress={() => {
-                if (isCooldown) {
-                  Alert.alert(
-                    `AI Blocat Temporar (${statusObj?.secundeRamase}s)`,
-                    statusObj?.mesaj || "Modelul a atins limita de interogări. Așteaptă expirarea sau alege alt model."
-                  );
-                  return;
-                }
-                setSelectedAI(prov);
-              }}
-            >
-              <Text style={[
-                styles.aiChipText,
-                isSelected && { color: '#0F172A', fontWeight: '800' },
-                isCooldown && { color: '#fca5a5', fontWeight: '700' }
-              ]}>
-                {prov === 'auto' ? '⚡ Auto' : prov === 'gemini' ? '🔮 Gemini 2.5' : '🟢 OpenAI'}
-                {isCooldown ? ` (${statusObj?.secundeRamase}s)` : ''}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.aiDropdownItem,
+                    isSelected && { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: colors.accent + '44' },
+                  ]}
+                  onPress={() => {
+                    if (isCooldown) {
+                      Alert.alert(
+                        `AI Blocat Temporar (${statusObj?.secundeRamase}s)`,
+                        statusObj?.mesaj || 'Modelul este temporar în limită de cereri.'
+                      );
+                      return;
+                    }
+                    Haptics.selectionAsync().catch(() => {});
+                    setSelectedAI(item.id);
+                    setAiMenuVisible(false);
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.aiDropdownTitle, isSelected && { color: colors.accent }]}>
+                      {item.name}
+                    </Text>
+                    <Text style={styles.aiDropdownDesc}>{item.desc}</Text>
+                  </View>
+                  {isCooldown ? (
+                    <View style={styles.cooldownBadge}>
+                      <Text style={styles.cooldownBadgeText}>{statusObj?.secundeRamase}s</Text>
+                    </View>
+                  ) : (
+                    <View
+                      style={[
+                        styles.statusIndicator,
+                        isSelected && { backgroundColor: colors.accent },
+                      ]}
+                    />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </BlurView>
+        </Animated.View>
+      )}
 
       {/* Scan Frame */}
       <View style={styles.scanArea}>
@@ -561,7 +604,13 @@ const styles = StyleSheet.create({
   galleryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 20, borderWidth: 1 },
   galleryBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 
-  aiSelectorBar: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginVertical: 8, paddingHorizontal: 16 },
-  aiChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', backgroundColor: 'rgba(15,23,42,0.65)' },
-  aiChipText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' },
+  aiDropdownMenu: { position: 'absolute', top: 100, left: 24, right: 24, zIndex: 1000, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.5, shadowRadius: 24, elevation: 15 },
+  aiDropdownBlur: { padding: 18, backgroundColor: 'rgba(15, 23, 42, 0.88)' },
+  aiDropdownHeader: { fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.45)', letterSpacing: 1.2, marginBottom: 12 },
+  aiDropdownItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'transparent' },
+  aiDropdownTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  aiDropdownDesc: { color: 'rgba(255,255,255,0.55)', fontSize: 12 },
+  cooldownBadge: { backgroundColor: 'rgba(239, 68, 68, 0.25)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: '#ef4444' },
+  cooldownBadgeText: { color: '#ef4444', fontSize: 12, fontWeight: '800' },
+  statusIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.25)' },
 });

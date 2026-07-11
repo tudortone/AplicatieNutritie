@@ -362,9 +362,10 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
       }
     }
 
-    // 2) Groq Vision AI (llama vision - gratuit și rapid)
-    if (!text) {
-      console.warn("⚠️ OpenAI nu a funcționat. Încerc Groq Vision AI...");
+    // 2) Groq Vision AI (sau dacă s-a cerut specific groq)
+    const runGroq = (!text && (requestedProvider === 'auto' || requestedProvider === 'groq'));
+    if (runGroq) {
+      console.log("🔄 Încerc Groq Vision AI...");
       const groqKeys = getApiKeysList('GROQ_API_KEY');
       const groqVisionModels = ["meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"];
       for (const key of groqKeys) {
@@ -394,6 +395,7 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
                 max_tokens: 1000
               })
             });
+
             if (groqRes.ok) {
               const groqData = await groqRes.json();
               text = groqData.choices?.[0]?.message?.content;
@@ -402,6 +404,7 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
                 break;
               }
             } else {
+              if (groqRes.status === 429) blockProvider('groq', 60, "Limită de cereri Groq (429)");
               const errBody = await groqRes.text();
               console.warn(`⚠️ Groq [${groqModel}] (${groqRes.status}):`, errBody.substring(0, 100));
             }
@@ -413,9 +416,10 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
       }
     }
 
-    // 3) Gemini AI fallback (cu toate cheile disponibile)
-    if (!text) {
-      console.warn("⚠️ Groq eșuat. Încerc Gemini API...");
+    // 3) Gemini AI fallback (sau dacă s-a cerut specific gemini)
+    const runGemini = (!text && (requestedProvider === 'auto' || requestedProvider === 'gemini'));
+    if (runGemini) {
+      console.warn("🔄 Încerc Gemini API...");
       const geminiKeys = getApiKeysList('GEMINI_API_KEY');
       const modelsToTry = getGeminiModelsList();
       for (const key of geminiKeys) {
