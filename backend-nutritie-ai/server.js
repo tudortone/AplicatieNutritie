@@ -243,7 +243,7 @@ app.get('/', (req, res) => {
   res.json({
     status: "OK",
     service: "NutriAI Secure Backend",
-    version: "2.1.0-secured",
+    version: "2.2.0-ai-selector",
     timestamp: new Date().toISOString()
   });
 });
