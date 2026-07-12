@@ -13,7 +13,7 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { ScanLine, X, Plus, Package, Trash2, ArrowLeft, CheckCircle2, Sparkles, ShoppingBag } from 'lucide-react-native';
+import { ScanLine, X, Plus, Package, Trash2, ArrowLeft, CheckCircle2, Sparkles, ShoppingBag, Snowflake, ChefHat, Clock, Layers } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '../context/ThemeContext';
@@ -26,7 +26,9 @@ export default function ScannerBarcodeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { showBanner } = useNotificationBanner();
-  const { produse, adaugaProdus, stergeProdus } = useCamara();
+  const { produse, adaugaProdus, modificaCantitate, toggleCongelator, stergeProdus } = useCamara();
+
+  const [manualModalVisible, setManualModalVisible] = useState(false);
 
   const [permission, requestPermission] = useCameraPermissions();
   const [scanLocked, setScanLocked] = useState(false);
@@ -119,17 +121,70 @@ export default function ScannerBarcodeScreen() {
     );
   }
 
+  const handleAskGrokRecipes = () => {
+    Haptics.selectionAsync();
+    if (produse.length === 0) {
+      showBanner({ title: 'Cămara este goală', message: 'Scanează sau adaugă ingrediente înainte de a cere rețete AI.', type: 'warning' });
+      return;
+    }
+    const ingredienteList = produse.map(p => `${p.nume} (${p.cantitate || 1}x${p.is_congelat ? ' - la congelator ❄️' : ''})`).join(', ');
+    const promptGrok = `Salut Grok! Am în Cămara Mea următoarele ingrediente: ${ingredienteList}. Ce rețete sănătoase, bogate în proteine și rapide pot găti astăzi folosind aceste alimente? Ține cont și de cele la congelator sau care expiră curând.`;
+    router.push({
+      pathname: '/(tabs)/chat',
+      params: { prompt: promptGrok }
+    });
+  };
+
   const renderCamaraItem = ({ item }: { item: ProdusCamara }) => (
-    <View style={[styles.pantryCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+    <View style={[styles.pantryCard, { backgroundColor: colors.cardBg, borderColor: item.is_congelat ? '#00F0FF66' : colors.cardBorder }]}>
       <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <View style={{ backgroundColor: colors.accent + '26', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+            <Text style={{ fontSize: 11, fontWeight: '900', color: colors.accent }}>{item.cantitate || 1}x STACK</Text>
+          </View>
+          {item.is_congelat ? (
+            <View style={{ backgroundColor: '#00F0FF26', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Snowflake size={11} color="#00F0FF" />
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#00F0FF' }}>CONGELAT • ~90 zile</Text>
+            </View>
+          ) : (
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Clock size={11} color={colors.textSecondary} />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>Expiră în ~{item.zile_valabilitate || 14} zile</Text>
+            </View>
+          )}
+        </View>
+
         <Text style={[styles.pantryTitle, { color: colors.textPrimary }]}>{item.nume}</Text>
         {!!item.brand && <Text style={[styles.pantryBrand, { color: colors.textSecondary }]}>{item.brand}</Text>}
         <Text style={[styles.pantryMacro, { color: colors.accent }]}>
-          {item.calorii_100g} kcal / 100g • P: {item.proteine_100g}g • C: {item.carbohidrati_100g}g • G: {item.grasimi_100g}g
+          {item.calorii_100g} kcal/100g • P: {item.proteine_100g}g • C: {item.carbohidrati_100g}g • G: {item.grasimi_100g}g
         </Text>
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        {/* Butoane stack +/- */}
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.selectionAsync();
+            modificaCantitate(item.id, 1);
+          }}
+          style={[styles.stackBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
+        >
+          <Plus size={14} color={colors.textPrimary} />
+        </TouchableOpacity>
+
+        {/* Buton Congelator Toggle ❄️ */}
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.selectionAsync();
+            toggleCongelator(item.id);
+          }}
+          style={[styles.stackBtn, { backgroundColor: item.is_congelat ? '#00F0FF26' : 'rgba(255,255,255,0.06)' }]}
+        >
+          <Snowflake size={16} color={item.is_congelat ? '#00F0FF' : colors.textSecondary} />
+        </TouchableOpacity>
+
         <TouchableOpacity
           onPress={() => handleAdaugaLaMasa(item)}
           style={[styles.addMasaBtn, { backgroundColor: colors.accent }]}
@@ -336,6 +391,50 @@ export default function ScannerBarcodeScreen() {
         </View>
       ) : (
         <View style={styles.pantryWrap}>
+          <View style={{ paddingHorizontal: 20, paddingTop: 14, gap: 10 }}>
+            {/* Buton AI Chef Grok Rețete */}
+            <TouchableOpacity
+              onPress={handleAskGrokRecipes}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 12,
+                borderRadius: 16,
+                backgroundColor: '#00F0FF1F',
+                borderWidth: 1.5,
+                borderColor: '#00F0FF'
+              }}
+            >
+              <ChefHat size={18} color="#00F0FF" />
+              <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#00F0FF' }}>
+                Rețete AI Grok cu ingredientele din Cămară
+              </Text>
+            </TouchableOpacity>
+
+            {/* Buton + Adaugă Manual (Ouă, Carne, Legume) */}
+            <TouchableOpacity
+              onPress={() => setManualModalVisible(true)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                paddingVertical: 10,
+                borderRadius: 14,
+                backgroundColor: colors.surfaceBg,
+                borderWidth: 1,
+                borderColor: colors.cardBorder
+              }}
+            >
+              <Plus size={16} color={colors.accent} />
+              <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textPrimary }}>
+                + Adaugă Produs Manual (Ouă, Carne, Legume...)
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <FlatList
             data={produse}
             keyExtractor={(item) => item.id}
@@ -421,6 +520,78 @@ export default function ScannerBarcodeScreen() {
         </View>
       </Modal>
 
+      {/* Modal Adăugare Manuală în Cămară */}
+      <Modal
+        visible={manualModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setManualModalVisible(false)}
+      >
+        <View style={styles.successModalBackdrop}>
+          <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={[styles.successModalCard, { backgroundColor: colors.surfaceBg, borderColor: colors.accent, width: '92%' }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 14 }}>
+              <Text style={{ fontSize: 18, fontWeight: '900', color: colors.textPrimary }}>+ Adaugă Produs Manual</Text>
+              <TouchableOpacity onPress={() => setManualModalVisible(false)}>
+                <X size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 14, textAlign: 'center' }}>
+              Alege o presetare rapidă sau adaugă ingrediente fără cod de bare (ex. Ouă, Carne, Legume proaspete).
+            </Text>
+
+            <View style={{ gap: 8, width: '100%', marginBottom: 20 }}>
+              {[
+                { nume: 'Ouă proaspete (10 buc)', cal: 155, p: 13, c: 1, g: 11, exp: 14, cong: false },
+                { nume: 'Carne de pui piept proaspăt (500g)', cal: 165, p: 31, c: 0, g: 3.6, exp: 90, cong: true },
+                { nume: 'Carne de vită slabă (500g)', cal: 250, p: 26, c: 0, g: 15, exp: 90, cong: true },
+                { nume: 'Brânză de vaci slabă (300g)', cal: 98, p: 18, c: 3.5, g: 1.2, exp: 10, cong: false },
+                { nume: 'Legume proaspete mix (1 kg)', cal: 45, p: 2, c: 9, g: 0.3, exp: 7, cong: false },
+              ].map((preset, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={async () => {
+                    Haptics.selectionAsync();
+                    await adaugaProdus(
+                      {
+                        barcode: 'MANUAL',
+                        nume: preset.nume,
+                        calorii_100g: preset.cal,
+                        proteine_100g: preset.p,
+                        carbohidrati_100g: preset.c,
+                        grasimi_100g: preset.g
+                      },
+                      { zileValabilitate: preset.exp, isCongelat: preset.cong, cantitate: 1 }
+                    );
+                    setManualModalVisible(false);
+                    showBanner({ title: 'Produs Adăugat', message: `✅ ${preset.nume} a fost adăugat în Cămară!`, type: 'success' });
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: 14,
+                    borderRadius: 14,
+                    backgroundColor: preset.cong ? '#00F0FF14' : colors.cardBg,
+                    borderWidth: 1,
+                    borderColor: preset.cong ? '#00F0FF40' : colors.cardBorder
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: colors.textPrimary }}>{preset.nume}</Text>
+                    <Text style={{ fontSize: 12, color: colors.accent, marginTop: 2 }}>
+                      {preset.cal} kcal • P: {preset.p}g {preset.cong ? '• ❄️ CONGELATOR' : `• ⏳ ~${preset.exp} zile`}
+                    </Text>
+                  </View>
+                  <Plus size={18} color={colors.accent} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <AddMealBottomSheet ref={addMealSheetRef} />
     </View>
   );
@@ -490,6 +661,7 @@ const styles = StyleSheet.create({
 
   addMasaBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   deleteBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  stackBtn: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
 
   emptyPantry: { alignItems: 'center', padding: 40, marginTop: 40 },
   emptyPTitle: { fontSize: 20, fontWeight: '900', marginTop: 16, marginBottom: 8 },

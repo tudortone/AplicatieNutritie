@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/config';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp, FadeOut, Layout } from 'react-native-reanimated';
@@ -54,6 +54,13 @@ export default function ChatScreen() {
       refresh();
     }, [refresh])
   );
+
+  const params = useLocalSearchParams<{ prompt?: string }>();
+  useEffect(() => {
+    if (params?.prompt && typeof params.prompt === 'string' && params.prompt.trim()) {
+      setChatInput(params.prompt);
+    }
+  }, [params?.prompt]);
 
   useEffect(() => {
     const loadHistory = async () => {

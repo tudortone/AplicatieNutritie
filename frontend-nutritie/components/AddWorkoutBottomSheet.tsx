@@ -23,6 +23,7 @@ import { EXERCITII, CATEGORII, Exercitiu, calculeazaCaloriiArse } from '../const
 import { useAntrenamente, SetExercitiu } from '../hooks/useAntrenamente';
 import { useGamificare } from '../hooks/useGamificare';
 import { useNotify } from '../hooks/useNotify';
+import { Holographic3DAnatomyBody } from '../app/exercitiu/[id]';
 
 export interface AddWorkoutBottomSheetRef {
   open: () => void;
@@ -240,6 +241,23 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
       return seturi.reduce((s, x) => s + x.repetari * (x.greutate || 0), 0);
     }, [seturi]);
 
+    const scorIntensitateEditor = useMemo(() => {
+      if (!exercitiuEditor) return 20;
+      const avgKg = seturi.reduce((s, x) => s + (x.greutate || 0), 0) / (seturi.length || 1);
+      const avgRep = seturi.reduce((s, x) => s + x.repetari, 0) / (seturi.length || 1);
+      return Math.min(100, Math.max(15, Math.round(
+        (avgKg * 0.95) + (avgRep * 2.3) + (seturi.length * 6.5) + (exercitiuEditor.dificultate === 'greu' ? 18 : exercitiuEditor.dificultate === 'mediu' ? 10 : 0)
+      )));
+    }, [exercitiuEditor, seturi]);
+
+    const rankInfoEditor = useMemo(() => {
+      const scor = scorIntensitateEditor;
+      if (scor >= 85) return { rank: 'RANK S+ • ELITE PRO 👑⚡', badgeColor: '#FACC15', stele: '⭐⭐⭐⭐⭐' };
+      if (scor >= 65) return { rank: 'RANK A • ADVANCED HYPERTROPHY 🔥', badgeColor: '#00F0FF', stele: '⭐⭐⭐⭐' };
+      if (scor >= 45) return { rank: 'RANK B • INTERMEDIATE STRENGTH 💪', badgeColor: '#4ADE80', stele: '⭐⭐⭐' };
+      return { rank: 'RANK C • FOUNDATION & FORM 🌊', badgeColor: '#38BDF8', stele: '⭐⭐' };
+    }, [scorIntensitateEditor]);
+
     const salveazaDinEditor = async () => {
       if (!exercitiuEditor) return;
       try {
@@ -333,6 +351,35 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
               <TouchableOpacity onPress={() => setExercitiuEditor(null)} style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]}>
                 <X size={20} color={colors.textPrimary} />
               </TouchableOpacity>
+            </View>
+
+            {/* 3D Holographic Anatomy Body & Dynamic Mastery Rank */}
+            <View style={{ marginBottom: 14 }}>
+              <Holographic3DAnatomyBody
+                activeGroups={exercitiuEditor.grupe || ['Corp complet']}
+                intensityScore={scorIntensitateEditor}
+                accentColor={colors.accent}
+                secondaryColor={colors.accentSecondary}
+                cardBg={colors.cardBg}
+                textPrimary={colors.textPrimary}
+                rankBadgeColor={rankInfoEditor.badgeColor}
+                volumTotalKg={volumTotalCalc}
+              />
+
+              <View style={[styles.editorRankBox, { backgroundColor: colors.surfaceBg, borderColor: rankInfoEditor.badgeColor }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '900', color: rankInfoEditor.badgeColor }}>
+                    {rankInfoEditor.rank}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: colors.textPrimary }}>{rankInfoEditor.stele}</Text>
+                </View>
+                <View style={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 8 }}>
+                  <View style={{ height: '100%', width: `${scorIntensitateEditor}%`, backgroundColor: rankInfoEditor.badgeColor }} />
+                </View>
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                  Efort: <Text style={{ fontWeight: '800', color: rankInfoEditor.badgeColor }}>{scorIntensitateEditor}/100 PTS</Text> • Volum total: <Text style={{ fontWeight: '800', color: colors.textPrimary }}>{volumTotalCalc} kg</Text>
+                </Text>
+              </View>
             </View>
 
             {exercitiuEditor.categorie === 'cardio' ? (
@@ -582,6 +629,7 @@ const styles = StyleSheet.create({
   durataText: { fontSize: 18, fontWeight: '800' },
 
   saveMainBtn: { borderRadius: 18, overflow: 'hidden', marginTop: 10 },
+  editorRankBox: { borderRadius: 16, borderWidth: 1.5, padding: 14, marginBottom: 14 },
   saveGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, gap: 10 },
   saveMainText: { fontSize: 15, fontWeight: '800' }
 });
