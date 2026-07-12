@@ -208,8 +208,26 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
       Haptics.selectionAsync();
       setSeturi(prev => prev.map((item, i) => {
         if (i !== idx) return item;
-        const val = (item[camp] || 0) + delta;
-        return { ...item, [camp]: Math.max(0, val) };
+        const val = Math.max(0, (item[camp] || 0) + delta);
+        const rounded = camp === 'greutate' ? Math.round(val * 10) / 10 : Math.round(val);
+        return {
+          ...item,
+          [camp]: rounded,
+          [`${camp}Str`]: String(rounded),
+        };
+      }));
+    };
+
+    const setSerieValoareDirect = (idx: number, camp: 'repetari' | 'greutate', valStr: string) => {
+      const cleanStr = valStr.replace(/[^0-9.]/g, '');
+      const num = camp === 'greutate' ? parseFloat(cleanStr) : parseInt(cleanStr, 10);
+      setSeturi(prev => prev.map((item, i) => {
+        if (i !== idx) return item;
+        return {
+          ...item,
+          [camp]: isNaN(num) ? 0 : num,
+          [`${camp}Str`]: valStr,
+        };
       }));
     };
 
@@ -327,7 +345,16 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                   >
                     <Text style={[styles.counterText, { color: colors.textPrimary }]}>-</Text>
                   </TouchableOpacity>
-                  <Text style={[styles.durataText, { color: colors.textPrimary }]}>{durataMin} min</Text>
+                  <BottomSheetTextInput
+                    style={[styles.durataInputText, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.background }]}
+                    value={String(durataMin)}
+                    onChangeText={(txt) => {
+                      const num = parseInt(txt.replace(/[^0-9]/g, ''), 10);
+                      setDurataMin(isNaN(num) ? 0 : num);
+                    }}
+                    keyboardType="numeric"
+                    selectTextOnFocus
+                  />
                   <TouchableOpacity
                     style={[styles.counterBtn, { backgroundColor: colors.cardBorder }]}
                     onPress={() => setDurataMin(durataMin + 5)}
@@ -353,7 +380,15 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                       <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'repetari', -1)} style={styles.miniBtn}>
                         <Text style={[styles.miniBtnText, { color: colors.textPrimary }]}>-</Text>
                       </TouchableOpacity>
-                      <Text style={[styles.serieVal, { color: colors.textPrimary }]}>{item.repetari}</Text>
+                      <BottomSheetTextInput
+                        style={[styles.serieInputText, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.background }]}
+                        value={(item as any).repetariStr !== undefined ? (item as any).repetariStr : String(item.repetari || '')}
+                        onChangeText={(txt) => setSerieValoareDirect(idx, 'repetari', txt)}
+                        keyboardType="numeric"
+                        selectTextOnFocus
+                        placeholder="0"
+                        placeholderTextColor={colors.textSecondary}
+                      />
                       <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'repetari', 1)} style={styles.miniBtn}>
                         <Text style={[styles.miniBtnText, { color: colors.textPrimary }]}>+</Text>
                       </TouchableOpacity>
@@ -363,7 +398,15 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                       <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'greutate', -2.5)} style={styles.miniBtn}>
                         <Text style={[styles.miniBtnText, { color: colors.textPrimary }]}>-</Text>
                       </TouchableOpacity>
-                      <Text style={[styles.serieVal, { color: colors.textPrimary }]}>{item.greutate || 0}</Text>
+                      <BottomSheetTextInput
+                        style={[styles.serieInputText, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.background }]}
+                        value={(item as any).greutateStr !== undefined ? (item as any).greutateStr : String(item.greutate || '')}
+                        onChangeText={(txt) => setSerieValoareDirect(idx, 'greutate', txt)}
+                        keyboardType="numeric"
+                        selectTextOnFocus
+                        placeholder="0"
+                        placeholderTextColor={colors.textSecondary}
+                      />
                       <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'greutate', 2.5)} style={styles.miniBtn}>
                         <Text style={[styles.miniBtnText, { color: colors.textPrimary }]}>+</Text>
                       </TouchableOpacity>
@@ -524,6 +567,8 @@ const styles = StyleSheet.create({
   miniBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', alignItems: 'center' },
   miniBtnText: { fontSize: 16, fontWeight: '700' },
   serieVal: { minWidth: 28, textAlign: 'center', fontSize: 15, fontWeight: '700' },
+  serieInputText: { width: 54, height: 32, textAlign: 'center', fontSize: 14, fontWeight: '700', borderRadius: 8, borderWidth: 1, paddingHorizontal: 4, paddingVertical: 2 },
+  durataInputText: { width: 70, height: 44, textAlign: 'center', fontSize: 18, fontWeight: '800', borderRadius: 12, borderWidth: 1 },
   delBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
 
   addSerieBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', marginTop: 6, marginBottom: 20 },

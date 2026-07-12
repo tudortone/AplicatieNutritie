@@ -1,15 +1,15 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, KeyboardAvoidingView, Platform, Keyboard, Alert
+  ScrollView, KeyboardAvoidingView, Platform, Keyboard, Alert, Modal
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/config';
 import { useFocusEffect } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
-import { Send } from 'lucide-react-native';
+import Animated, { FadeInDown, FadeInUp, FadeOut, Layout } from 'react-native-reanimated';
+import { Send, Sparkles, RotateCcw, MessageSquarePlus, CheckCircle2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTheme } from '../../context/ThemeContext';
@@ -28,6 +28,8 @@ export default function ChatScreen() {
   const [chatInput, setChatInput] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
   const [recipeModalVisible, setRecipeModalVisible] = useState(false);
+  const [newChatModalVisible, setNewChatModalVisible] = useState(false);
+  const [showNewChatBanner, setShowNewChatBanner] = useState(false);
   const [mesaje, setMesaje] = useState<ChatMessage[]>([
     { role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
   ]);
@@ -160,27 +162,24 @@ export default function ChatScreen() {
   };
 
   const handleResetChat = () => {
-    Alert.alert(
-      "Începi o conversație nouă?",
-      "Istoricul curent va fi șters și vei începe o conversație proaspătă cu asistentul AI.",
-      [
-        { text: "Anulează", style: "cancel" },
-        {
-          text: "Chat nou",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            } catch {}
-            const initialMsg: ChatMessage[] = [
-              { role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
-            ];
-            setMesaje(initialMsg);
-            await AsyncStorage.removeItem('chat_history');
-          }
-        }
-      ]
-    );
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch {}
+    setNewChatModalVisible(true);
+  };
+
+  const confirmResetChat = async () => {
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {}
+    const initialMsg: ChatMessage[] = [
+      { role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
+    ];
+    setMesaje(initialMsg);
+    await AsyncStorage.removeItem('chat_history');
+    setNewChatModalVisible(false);
+    setShowNewChatBanner(true);
+    setTimeout(() => setShowNewChatBanner(false), 3200);
   };
 
   const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 96 : 74;
@@ -194,7 +193,11 @@ export default function ChatScreen() {
       <View style={[styles.glowTop, { backgroundColor: colors.accentSecondary }]} />
       <View style={[styles.glowBottom, { backgroundColor: colors.accentTertiary }]} />
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        style={styles.container}
+      >
 
         {/* Header */}
         <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
@@ -234,9 +237,23 @@ export default function ChatScreen() {
           </View>
         </Animated.View>
 
+        {showNewChatBanner && (
+          <Animated.View entering={FadeInUp.duration(400)} exiting={FadeOut.duration(300)} style={[styles.newChatBanner, { backgroundColor: colors.accentSecondary + '22', borderColor: colors.accentSecondary }]}>
+            <Sparkles size={16} color={colors.accentSecondary} />
+            <Text style={[styles.newChatBannerText, { color: colors.textPrimary }]}>
+              Conversație nouă pornită — Gata să te ajut!
+            </Text>
+          </Animated.View>
+        )}
+
         {/* Messages / Empty State */}
         {mesaje.length <= 1 ? (
-          <View style={styles.emptyChatContainer}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={[styles.emptyChatContainer, { paddingBottom: isKeyboardVisible ? 120 : 30 }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             <BlurView intensity={40} tint="dark" style={[styles.emptyHeroCard, { borderColor: colors.cardBorder }]}>
               <LinearGradient colors={[colors.accentSecondary + '18', 'rgba(0,0,0,0.18)']} style={styles.emptyHeroGradient}>
                 <View style={[styles.emptyAvatar, { backgroundColor: colors.accentSecondary + '22' }]}>
@@ -283,7 +300,7 @@ export default function ChatScreen() {
                 </View>
               </TouchableOpacity>
             </View>
-          </View>
+          </ScrollView>
         ) : (
           <>
             <ScrollView
@@ -410,6 +427,44 @@ export default function ChatScreen() {
         </Animated.View>
 
       </KeyboardAvoidingView>
+
+      {/* Modal design UI animat pentru Începere Conversație Nouă */}
+      <Modal
+        visible={newChatModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNewChatModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={[styles.modalCard, { backgroundColor: colors.surfaceBg, borderColor: colors.accentSecondary }]}>
+            <View style={[styles.modalIconRing, { backgroundColor: colors.accentSecondary + '20', borderColor: colors.accentSecondary }]}>
+              <RotateCcw size={36} color={colors.accentSecondary} />
+            </View>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Începi o conversație nouă?</Text>
+            <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+              Istoricul curent va fi șters din sesiune și vei începe o conversație proaspătă cu asistentul AI.
+            </Text>
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+                onPress={() => setNewChatModalVisible(false)}
+              >
+                <Text style={[styles.modalCancelText, { color: colors.textPrimary }]}>Anulează</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalConfirmBtn, { backgroundColor: colors.accentSecondary }]}
+                onPress={confirmResetChat}
+              >
+                <Sparkles size={16} color="#FFF" />
+                <Text style={styles.modalConfirmText}>Chat Nou</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <RecipeGeneratorModal
         visible={recipeModalVisible}
@@ -610,5 +665,86 @@ const styles = StyleSheet.create({
   quickActionText: {
     fontSize: 13,
     lineHeight: 18,
+  },
+  newChatBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginHorizontal: 20,
+    marginTop: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  newChatBannerText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    borderRadius: 28,
+    borderWidth: 1.5,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalIconRing: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  modalConfirmBtn: {
+    flex: 1.2,
+    height: 48,
+    borderRadius: 16,
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '900',
   },
 });

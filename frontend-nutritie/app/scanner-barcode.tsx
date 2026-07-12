@@ -7,12 +7,13 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Platform
+  Platform,
+  Modal
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { ScanLine, X, Plus, Package, Trash2, ArrowLeft } from 'lucide-react-native';
+import { ScanLine, X, Plus, Package, Trash2, ArrowLeft, CheckCircle2, Sparkles, ShoppingBag } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '../context/ThemeContext';
@@ -33,6 +34,7 @@ export default function ScannerBarcodeScreen() {
   const [produsGasit, setProdusGasit] = useState<ProdusScanat | null>(null);
   const [codNegasit, setCodNegasit] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'scan' | 'camara'>('scan');
+  const [camaraSuccessModal, setCamaraSuccessModal] = useState<{ visible: boolean; produs: ProdusScanat | null }>({ visible: false, produs: null });
 
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
 
@@ -65,18 +67,20 @@ export default function ScannerBarcodeScreen() {
 
   const handleSalveazaInCamara = async () => {
     if (!produsGasit) return;
+    const p = produsGasit;
     try {
-      await adaugaProdus(produsGasit);
+      await adaugaProdus(p);
       showBanner({
         title: "Salvat în Cămara Mea!",
-        message: `${produsGasit.nume} este acum disponibil pentru acces rapid.`,
+        message: `${p.nume} este acum disponibil pentru acces rapid.`,
         type: "success",
       });
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       setProdusGasit(null);
-      setScanLocked(false);
-    } catch {
-      Alert.alert("Eroare", "Nu am putut salva în Cămară. Verifică dacă tabela există în Supabase.");
+      setCamaraSuccessModal({ visible: true, produs: p });
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Eroare", "Nu am putut salva în Cămară. Verifică conexiunea.");
     }
   };
 
@@ -358,6 +362,65 @@ export default function ScannerBarcodeScreen() {
         </View>
       )}
 
+      {/* Animatie UI & confirmare vizuala cand pui in Camara */}
+      <Modal
+        visible={camaraSuccessModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setCamaraSuccessModal({ visible: false, produs: null });
+          setScanLocked(false);
+        }}
+      >
+        <View style={styles.successModalBackdrop}>
+          <BlurView intensity={60} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={[styles.successModalCard, { backgroundColor: colors.surfaceBg, borderColor: colors.accent }]}>
+            <View style={[styles.successIconBubble, { backgroundColor: colors.accent + '22', borderColor: colors.accent }]}>
+              <CheckCircle2 size={44} color={colors.accent} />
+            </View>
+            <Text style={[styles.successModalTitle, { color: colors.textPrimary }]}>Salvat în Cămară!</Text>
+            <Text style={[styles.successModalSubtitle, { color: colors.textSecondary }]}>
+              {camaraSuccessModal.produs?.nume} a fost adăugat cu succes în cămara ta digitală.
+            </Text>
+
+            {camaraSuccessModal.produs && (
+              <View style={[styles.successProductPreview, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+                <Text style={[styles.successProductName, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {camaraSuccessModal.produs.nume}
+                </Text>
+                <Text style={[styles.successProductMacros, { color: colors.accent }]}>
+                  {camaraSuccessModal.produs.calorii_100g} kcal/100g • P: {camaraSuccessModal.produs.proteine_100g}g
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.successModalActions}>
+              <TouchableOpacity
+                style={[styles.successBtnSecondary, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+                onPress={() => {
+                  setCamaraSuccessModal({ visible: false, produs: null });
+                  setScanLocked(false);
+                }}
+              >
+                <Text style={[styles.successBtnSecondaryText, { color: colors.textPrimary }]}>Continuă Scanarea</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.successBtnPrimary, { backgroundColor: colors.accent }]}
+                onPress={() => {
+                  setCamaraSuccessModal({ visible: false, produs: null });
+                  setScanLocked(false);
+                  setActiveTab('camara');
+                }}
+              >
+                <ShoppingBag size={18} color="#000" />
+                <Text style={styles.successBtnPrimaryText}>Vezi Cămara</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <AddMealBottomSheet ref={addMealSheetRef} />
     </View>
   );
@@ -433,4 +496,18 @@ const styles = StyleSheet.create({
   emptyPSub: { fontSize: 14, lineHeight: 22, textAlign: 'center', marginBottom: 24 },
   emptyPBtn: { paddingHorizontal: 20, paddingVertical: 14, borderRadius: 14 },
   emptyPBtnText: { color: '#000', fontSize: 15, fontWeight: '800' },
+
+  successModalBackdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  successModalCard: { width: '100%', borderRadius: 28, borderWidth: 1.5, padding: 24, alignItems: 'center' },
+  successIconBubble: { width: 84, height: 84, borderRadius: 42, borderWidth: 2, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  successModalTitle: { fontSize: 22, fontWeight: '900', marginBottom: 8 },
+  successModalSubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
+  successProductPreview: { width: '100%', padding: 14, borderRadius: 16, borderWidth: 1, marginBottom: 24, alignItems: 'center' },
+  successProductName: { fontSize: 16, fontWeight: '800', marginBottom: 4 },
+  successProductMacros: { fontSize: 13, fontWeight: '700' },
+  successModalActions: { flexDirection: 'row', gap: 12, width: '100%' },
+  successBtnSecondary: { flex: 1, height: 50, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  successBtnSecondaryText: { fontSize: 14, fontWeight: '800' },
+  successBtnPrimary: { flex: 1.3, height: 50, borderRadius: 16, flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center' },
+  successBtnPrimaryText: { color: '#000', fontSize: 14, fontWeight: '900' },
 });

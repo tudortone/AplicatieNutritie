@@ -60,6 +60,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const { adaugaProgres } = useGamificareContext();
     const bottomSheetRef = useRef<BottomSheet>(null);
     const scrollViewRef = useRef<any>(null);
+    const [formSectionY, setFormSectionY] = useState<number>(0);
     const [gramajSectionY, setGramajSectionY] = useState<number>(0);
     const [highlightGramaj, setHighlightGramaj] = useState(false);
 
@@ -94,14 +95,17 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
     const scrollToGramajSection = useCallback(() => {
       setHighlightGramaj(true);
-      setTimeout(() => setHighlightGramaj(false), 1600);
-      if (scrollViewRef.current && gramajSectionY > 0) {
-        scrollViewRef.current.scrollTo({
-          y: Math.max(0, gramajSectionY - 20),
-          animated: true,
-        });
-      }
-    }, [gramajSectionY]);
+      setTimeout(() => setHighlightGramaj(false), 2000);
+      setTimeout(() => {
+        if (scrollViewRef.current) {
+          const targetY = Math.max(0, formSectionY + gramajSectionY - 20);
+          scrollViewRef.current.scrollTo({
+            y: targetY,
+            animated: true,
+          });
+        }
+      }, 150);
+    }, [formSectionY, gramajSectionY]);
 
     const handleGramajChange = useCallback((newGrameStr: string) => {
       setGrame(newGrameStr);
@@ -142,10 +146,8 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } catch {}
 
-      if (preset.mergeDirectLaGramaj) {
-        setSearchQuery('');
-      }
-
+      setSearchQuery('');
+      setSelectedCategory(null);
       scrollToGramajSection();
     }, [scrollToGramajSection]);
 
@@ -188,6 +190,8 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           try { 
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); 
           } catch {}
+          setSearchQuery('');
+          setSelectedCategory(null);
           scrollToGramajSection();
         } else {
           Alert.alert("Eroare AI", "Nu am putut estima valorile. Încearcă să le introduci manual.");
@@ -366,9 +370,12 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       setProteine(String(fav.proteine));
                       setCarbohidrati(String(fav.carbohidrati));
                       setGrasimi(String(fav.grasimi));
+                      setSearchQuery('');
+                      setSelectedCategory(null);
                       try {
                         Haptics.selectionAsync();
                       } catch {}
+                      scrollToGramajSection();
                     }}
                     activeOpacity={0.8}
                   >
@@ -508,7 +515,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             </View>
           )}
 
-          <View style={styles.formSection}>
+          <View style={styles.formSection} onLayout={(e) => setFormSectionY(e.nativeEvent.layout.y)}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>Nume aliment / preparat *</Text>
             <BottomSheetTextInput
               style={[
