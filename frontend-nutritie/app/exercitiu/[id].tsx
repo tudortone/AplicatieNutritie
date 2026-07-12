@@ -3,11 +3,11 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Path, Circle, Rect, G } from 'react-native-svg';
+import Svg, { Path, Circle, Rect, G, Line } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ArrowLeft, Dumbbell, AlertTriangle, Flame, Clock, PlusCircle,
-  Zap, TrendingUp, Activity, Layers, Award, RotateCcw
+  Zap, TrendingUp, Activity, Layers, Award, RotateCcw, ShieldCheck, Sparkles
 } from 'lucide-react-native';
 
 import { useTheme } from '../../context/ThemeContext';
@@ -26,7 +26,10 @@ interface HumanBodyProps {
   textPrimary: string;
 }
 
-function HumanBodyMuscleMap({
+/**
+ * Model Anatomic Wireframe / Holografic inspirat din ilustrația vector ANATOMY
+ */
+function AnatomyWireframeBody({
   activeGroups,
   intensityScore,
   accentColor,
@@ -36,7 +39,6 @@ function HumanBodyMuscleMap({
 }: HumanBodyProps) {
   const [viewSide, setViewSide] = useState<'anterior' | 'posterior'>('anterior');
 
-  // Evaluăm ce grupe sunt active
   const isPiept = activeGroups.some(g => /piept|pectorali/i.test(g));
   const isUmeri = activeGroups.some(g => /umeri|deltoid/i.test(g));
   const isBrate = activeGroups.some(g => /brațe|brate|biceps|triceps|brahial/i.test(g));
@@ -44,167 +46,183 @@ function HumanBodyMuscleMap({
   const isPicioare = activeGroups.some(g => /picioare|cvadriceps|fesieri|gambe|ischiogambieri|femurali/i.test(g));
   const isSpate = activeGroups.some(g => /spate|dorsali|trapez|romboizi/i.test(g));
 
-  // Culoarea de activare depinde de intensitate (mai intens = glow mai puternic)
-  const activeColor = intensityScore >= 75
-    ? accentColor
-    : intensityScore >= 45
-    ? secondaryColor
-    : '#4ADE80';
-
-  const inactiveFill = 'rgba(255,255,255,0.08)';
-  const inactiveStroke = 'rgba(255,255,255,0.18)';
+  const neonCyan = '#00F0FF';
+  const activeColor = intensityScore >= 80 ? neonCyan : intensityScore >= 50 ? accentColor : '#38BDF8';
+  const wireframeInactive = 'rgba(0, 240, 255, 0.12)';
+  const wireframeStrokeInactive = 'rgba(0, 240, 255, 0.25)';
 
   return (
     <View style={bodyStyles.container}>
       <View style={bodyStyles.headerRow}>
         <View style={bodyStyles.titleBox}>
-          <Text style={[bodyStyles.titleText, { color: textPrimary }]}>Harta Musculară Activă</Text>
-          <Text style={[bodyStyles.subText, { color: accentColor }]}>
-            Intensitate pompare: {intensityScore}% • {activeGroups.join(', ')}
+          <View style={bodyStyles.hudBadgeRow}>
+            <View style={[bodyStyles.hudDot, { backgroundColor: activeColor }]} />
+            <Text style={[bodyStyles.hudLabel, { color: activeColor }]}>ANATOMY SCAN • VECTOR MESH</Text>
+          </View>
+          <Text style={[bodyStyles.titleText, { color: textPrimary }]}>Harta Anatomică & Recrutare Musculară</Text>
+          <Text style={[bodyStyles.subText, { color: secondaryColor }]}>
+            Grupe active: {activeGroups.join(', ')} ({intensityScore}% stimulare)
           </Text>
         </View>
 
         <View style={[bodyStyles.switchPill, { backgroundColor: cardBg }]}>
           <TouchableOpacity
             onPress={() => setViewSide('anterior')}
-            style={[bodyStyles.switchBtn, viewSide === 'anterior' && { backgroundColor: accentColor }]}
+            style={[bodyStyles.switchBtn, viewSide === 'anterior' && { backgroundColor: activeColor }]}
           >
-            <Text style={[bodyStyles.switchText, { color: viewSide === 'anterior' ? '#000' : textPrimary }]}>Față</Text>
+            <Text style={[bodyStyles.switchText, { color: viewSide === 'anterior' ? '#000' : textPrimary }]}>ANTERIOR</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setViewSide('posterior')}
-            style={[bodyStyles.switchBtn, viewSide === 'posterior' && { backgroundColor: accentColor }]}
+            style={[bodyStyles.switchBtn, viewSide === 'posterior' && { backgroundColor: activeColor }]}
           >
-            <Text style={[bodyStyles.switchText, { color: viewSide === 'posterior' ? '#000' : textPrimary }]}>Spate</Text>
+            <Text style={[bodyStyles.switchText, { color: viewSide === 'posterior' ? '#000' : textPrimary }]}>POSTERIOR</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <View style={bodyStyles.svgWrap}>
-        <Svg width="200" height="260" viewBox="0 0 240 320">
-          {/* Siluetă cap & gât */}
-          <Circle cx="120" cy="34" r="18" fill={inactiveFill} stroke={inactiveStroke} strokeWidth="1.5" />
-          <Path d="M112,50 L128,50 L132,68 L108,68 Z" fill={inactiveFill} stroke={inactiveStroke} strokeWidth="1.5" />
+        <Svg width="220" height="300" viewBox="0 0 260 360">
+          {/* Linii HUD de scanare medicală sci-fi */}
+          <Line x1="20" y1="60" x2="240" y2="60" stroke="rgba(0,240,255,0.08)" strokeDasharray="3,3" />
+          <Line x1="20" y1="180" x2="240" y2="180" stroke="rgba(0,240,255,0.08)" strokeDasharray="3,3" />
+          <Line x1="20" y1="300" x2="240" y2="300" stroke="rgba(0,240,255,0.08)" strokeDasharray="3,3" />
+          <Line x1="130" y1="15" x2="130" y2="345" stroke="rgba(0,240,255,0.12)" strokeDasharray="2,4" />
+
+          {/* Cranium & Gât Wireframe */}
+          <Circle cx="130" cy="38" r="18" fill="rgba(0,240,255,0.06)" stroke={wireframeStrokeInactive} strokeWidth="1.2" />
+          <Path d="M122,54 L138,54 L142,72 L118,72 Z" fill="rgba(0,240,255,0.06)" stroke={wireframeStrokeInactive} strokeWidth="1.2" />
 
           {viewSide === 'anterior' ? (
             <G>
-              {/* Umeri (Deltoizi anteriori) */}
+              {/* Umeri (Deltoizi anteriori & laterali - stânga & dreapta) */}
               <Path
-                d="M74,72 C64,78 60,94 62,108 C68,110 76,108 80,102 L86,76 Z"
-                fill={isUmeri ? activeColor : inactiveFill}
-                stroke={isUmeri ? activeColor : inactiveStroke}
+                d="M78,76 C66,82 60,98 62,114 C68,116 78,114 84,106 L90,78 Z"
+                fill={isUmeri ? activeColor + '44' : wireframeInactive}
+                stroke={isUmeri ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isUmeri ? "2.5" : "1.2"}
               />
               <Path
-                d="M166,72 C176,78 180,94 178,108 C172,110 164,108 160,102 L154,76 Z"
-                fill={isUmeri ? activeColor : inactiveFill}
-                stroke={isUmeri ? activeColor : inactiveStroke}
+                d="M182,76 C194,82 200,98 198,114 C192,116 182,114 176,106 L170,78 Z"
+                fill={isUmeri ? activeColor + '44' : wireframeInactive}
+                stroke={isUmeri ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isUmeri ? "2.5" : "1.2"}
               />
 
-              {/* Piept (Pectorali stânga & dreapta) */}
+              {/* Piept (Pectoralis Major - stânga & dreapta poligon striat) */}
               <Path
-                d="M86,76 C96,74 116,74 118,74 L118,110 C106,114 92,108 86,96 Z"
-                fill={isPiept ? activeColor : inactiveFill}
-                stroke={isPiept ? activeColor : inactiveStroke}
+                d="M90,78 C102,76 126,76 128,76 L128,118 C114,122 98,114 90,100 Z"
+                fill={isPiept ? activeColor + '55' : wireframeInactive}
+                stroke={isPiept ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isPiept ? "2.5" : "1.2"}
               />
               <Path
-                d="M154,76 C144,74 124,74 122,74 L122,110 C134,114 148,108 154,96 Z"
-                fill={isPiept ? activeColor : inactiveFill}
-                stroke={isPiept ? activeColor : inactiveStroke}
+                d="M170,78 C158,76 134,76 132,76 L132,118 C146,122 162,114 170,100 Z"
+                fill={isPiept ? activeColor + '55' : wireframeInactive}
+                stroke={isPiept ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isPiept ? "2.5" : "1.2"}
               />
 
-              {/* Brațe (Biceps & Antebraț) */}
+              {/* Brațe (Biceps / Antebraț striat wireframe) */}
               <Path
-                d="M62,110 C58,128 58,150 62,170 C68,172 74,168 76,162 C78,144 80,126 80,110 Z"
-                fill={isBrate ? activeColor : inactiveFill}
-                stroke={isBrate ? activeColor : inactiveStroke}
+                d="M62,116 C56,136 56,160 62,182 C68,184 76,180 78,172 C82,152 84,132 84,116 Z"
+                fill={isBrate ? activeColor + '44' : wireframeInactive}
+                stroke={isBrate ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isBrate ? "2.5" : "1.2"}
               />
               <Path
-                d="M178,110 C182,128 182,150 178,170 C172,172 166,168 164,162 C162,144 160,126 160,110 Z"
-                fill={isBrate ? activeColor : inactiveFill}
-                stroke={isBrate ? activeColor : inactiveStroke}
+                d="M198,116 C204,136 204,160 198,182 C192,184 184,180 182,172 C178,152 176,132 176,116 Z"
+                fill={isBrate ? activeColor + '44' : wireframeInactive}
+                stroke={isBrate ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isBrate ? "2.5" : "1.2"}
               />
 
-              {/* Abdomen & Core */}
+              {/* Abdomen 6-Pack Mesh & Oblici */}
               <Path
-                d="M92,116 L148,116 L142,180 L98,180 Z"
-                fill={isAbdomen ? activeColor : inactiveFill}
-                stroke={isAbdomen ? activeColor : inactiveStroke}
+                d="M96,124 L164,124 L156,196 L104,196 Z"
+                fill={isAbdomen ? activeColor + '55' : wireframeInactive}
+                stroke={isAbdomen ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isAbdomen ? "2.5" : "1.2"}
               />
+              {/* Linii separatoare 6-pack */}
+              <Line x1="106" y1="148" x2="154" y2="148" stroke={isAbdomen ? activeColor : wireframeStrokeInactive} strokeWidth="1" />
+              <Line x1="108" y1="172" x2="152" y2="172" stroke={isAbdomen ? activeColor : wireframeStrokeInactive} strokeWidth="1" />
 
-              {/* Picioare (Cvadriceps stânga & dreapta) */}
+              {/* Picioare (Cvadriceps & Gambe poligon striat) */}
               <Path
-                d="M96,186 L116,186 L114,264 L98,304 L88,304 L90,250 Z"
-                fill={isPicioare ? activeColor : inactiveFill}
-                stroke={isPicioare ? activeColor : inactiveStroke}
+                d="M102,204 L126,204 L124,286 L106,334 L92,334 L96,274 Z"
+                fill={isPicioare ? activeColor + '55' : wireframeInactive}
+                stroke={isPicioare ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isPicioare ? "2.5" : "1.2"}
               />
               <Path
-                d="M144,186 L124,186 L126,264 L142,304 L152,304 L150,250 Z"
-                fill={isPicioare ? activeColor : inactiveFill}
-                stroke={isPicioare ? activeColor : inactiveStroke}
+                d="M158,204 L134,204 L136,286 L154,334 L168,334 L164,274 Z"
+                fill={isPicioare ? activeColor + '55' : wireframeInactive}
+                stroke={isPicioare ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isPicioare ? "2.5" : "1.2"}
               />
+
+              {/* Noduri Cibernetice Anatomice (glowing nodes) */}
+              <Circle cx="130" cy="76" r="3.5" fill={isPiept ? activeColor : '#00F0FF'} />
+              <Circle cx="84" cy="94" r="3" fill={isUmeri || isPiept ? activeColor : '#00F0FF'} />
+              <Circle cx="176" cy="94" r="3" fill={isUmeri || isPiept ? activeColor : '#00F0FF'} />
+              <Circle cx="72" cy="148" r="3" fill={isBrate ? activeColor : '#00F0FF'} />
+              <Circle cx="188" cy="148" r="3" fill={isBrate ? activeColor : '#00F0FF'} />
+              <Circle cx="130" cy="158" r="3.5" fill={isAbdomen ? activeColor : '#00F0FF'} />
+              <Circle cx="114" cy="278" r="3.5" fill={isPicioare ? activeColor : '#00F0FF'} />
+              <Circle cx="146" cy="278" r="3.5" fill={isPicioare ? activeColor : '#00F0FF'} />
             </G>
           ) : (
             <G>
               {/* Umeri & Trapez Posterior */}
               <Path
-                d="M78,74 L162,74 L148,102 L92,102 Z"
-                fill={isSpate || isUmeri ? activeColor : inactiveFill}
-                stroke={isSpate || isUmeri ? activeColor : inactiveStroke}
+                d="M82,78 L178,78 L160,110 L100,110 Z"
+                fill={isSpate || isUmeri ? activeColor + '44' : wireframeInactive}
+                stroke={isSpate || isUmeri ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isSpate || isUmeri ? "2.5" : "1.2"}
               />
 
-              {/* Spate (Dorsali / Marele Dorsal) */}
+              {/* Spate (Marele Dorsal / Lats) */}
               <Path
-                d="M86,106 L154,106 L144,166 L96,166 Z"
-                fill={isSpate ? activeColor : inactiveFill}
-                stroke={isSpate ? activeColor : inactiveStroke}
+                d="M92,114 L168,114 L156,182 L104,182 Z"
+                fill={isSpate ? activeColor + '55' : wireframeInactive}
+                stroke={isSpate ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isSpate ? "2.5" : "1.2"}
               />
 
               {/* Brațe Spate (Triceps) */}
               <Path
-                d="M62,94 L76,94 L74,166 L60,166 Z"
-                fill={isBrate ? activeColor : inactiveFill}
-                stroke={isBrate ? activeColor : inactiveStroke}
+                d="M66,102 L80,102 L78,178 L62,178 Z"
+                fill={isBrate ? activeColor + '44' : wireframeInactive}
+                stroke={isBrate ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isBrate ? "2.5" : "1.2"}
               />
               <Path
-                d="M178,94 L164,94 L166,166 L180,166 Z"
-                fill={isBrate ? activeColor : inactiveFill}
-                stroke={isBrate ? activeColor : inactiveStroke}
+                d="M194,102 L180,102 L182,178 L198,178 Z"
+                fill={isBrate ? activeColor + '44' : wireframeInactive}
+                stroke={isBrate ? activeColor : wireframeStrokeInactive}
                 strokeWidth={isBrate ? "2.5" : "1.2"}
               />
 
-              {/* Zonă lombară & Fesieri */}
+              {/* Fesieri & Ischiogambieri (Posterior Thigh & Calves) */}
               <Path
-                d="M94,170 L146,170 L148,210 L92,210 Z"
-                fill={isPicioare || isAbdomen ? activeColor : inactiveFill}
-                stroke={isPicioare || isAbdomen ? activeColor : inactiveStroke}
-                strokeWidth={isPicioare || isAbdomen ? "2.5" : "1.2"}
+                d="M100,188 L128,188 L124,284 L102,332 L90,332 L94,272 Z"
+                fill={isPicioare ? activeColor + '55' : wireframeInactive}
+                stroke={isPicioare ? activeColor : wireframeStrokeInactive}
+                strokeWidth={isPicioare ? "2.5" : "1.2"}
+              />
+              <Path
+                d="M160,188 L132,188 L136,284 L158,332 L170,332 L166,272 Z"
+                fill={isPicioare ? activeColor + '55' : wireframeInactive}
+                stroke={isPicioare ? activeColor : wireframeStrokeInactive}
+                strokeWidth={isPicioare ? "2.5" : "1.2"}
               />
 
-              {/* Picioare posterior (Ischiogambieri / Gambe) */}
-              <Path
-                d="M92,216 L118,216 L114,298 L94,298 Z"
-                fill={isPicioare ? activeColor : inactiveFill}
-                stroke={isPicioare ? activeColor : inactiveStroke}
-                strokeWidth={isPicioare ? "2.5" : "1.2"}
-              />
-              <Path
-                d="M148,216 L122,216 L126,298 L146,298 Z"
-                fill={isPicioare ? activeColor : inactiveFill}
-                stroke={isPicioare ? activeColor : inactiveStroke}
-                strokeWidth={isPicioare ? "2.5" : "1.2"}
-              />
+              {/* Noduri Cibernetice Anatomice Posterior */}
+              <Circle cx="130" cy="94" r="3.5" fill={isSpate ? activeColor : '#00F0FF'} />
+              <Circle cx="130" cy="148" r="3" fill={isSpate ? activeColor : '#00F0FF'} />
+              <Circle cx="114" cy="278" r="3.5" fill={isPicioare ? activeColor : '#00F0FF'} />
+              <Circle cx="146" cy="278" r="3.5" fill={isPicioare ? activeColor : '#00F0FF'} />
             </G>
           )}
         </Svg>
@@ -216,17 +234,33 @@ function HumanBodyMuscleMap({
 const bodyStyles = StyleSheet.create({
   container: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(0, 240, 255, 0.22)',
     padding: Spacing.md,
     marginBottom: Spacing.xl,
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    backgroundColor: 'rgba(0, 15, 25, 0.45)',
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  hudBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  hudDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  hudLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.2,
   },
   titleBox: {
     flex: 1,
@@ -251,13 +285,13 @@ const bodyStyles = StyleSheet.create({
     borderRadius: 9,
   },
   switchText: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '900',
   },
   svgWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
 });
 
@@ -309,27 +343,58 @@ export default function ExercitiuDetailScreen() {
     : ['Execută mișcarea controlat, concentrându-te pe contracția musculară.'];
   const descriere = exercitiu.descriere || 'Exercițiu eficient pentru planul tău de antrenament.';
 
-  // Calcul adaptiv pentru Scor Intensitate, Volum și Clasificare antrenament
+  // Calcul adaptiv pentru Scor și Sistem Specific de Rank
   const kgVal = parseFloat(greutateSetaKg.replace(',', '.')) || 0;
   const repVal = parseInt(repetariSeta, 10) || repetariDefault;
   const volumTotal = kgVal * repVal * seriiSeta;
 
-  // Scorul de intensitate (0-100) calibrat după greutate, repetări și volum
   const scorIntensitate = Math.min(100, Math.max(15, Math.round(
-    (kgVal * 0.9) + (repVal * 2.2) + (seriiSeta * 6)
+    (kgVal * 0.95) + (repVal * 2.3) + (seriiSeta * 6.5) + (exercitiu.dificultate === 'greu' ? 18 : exercitiu.dificultate === 'mediu' ? 10 : 0)
   )));
 
-  const getTipStimuare = () => {
-    if (kgVal >= 65 || (kgVal >= 40 && repVal <= 6)) {
-      return { titlu: 'FORȚĂ EXPLOZIVĂ ⚡', descriere: 'Încărcare ridicată — adaptare neurologică maximă.' };
+  // Sistem specific de Rank pentru Exerciții (EXERCISE MASTERY RANK)
+  const getExerciseRankInfo = () => {
+    if (scorIntensitate >= 85) {
+      return {
+        rank: 'RANK S+ • ELITE PRO 👑⚡',
+        badgeColor: '#FACC15',
+        stele: '⭐⭐⭐⭐⭐',
+        eficienta: 'Recrutare 99% Fibre Musculare',
+        mesaj: 'Stimulare hipertrofică maximă — nivel competițional absolut.',
+        hintNext: 'Ai atins nivelul maxim de măiestrie pentru acest exercițiu!'
+      };
     }
-    if (kgVal >= 20 || repVal >= 8) {
-      return { titlu: 'HIPERTROFIE MAXIMĂ 🔥', descriere: 'Pompare intensă & acumulare optimă de fibre.' };
+    if (scorIntensitate >= 65) {
+      return {
+        rank: 'RANK A • ADVANCED HYPERTROPHY 🔥',
+        badgeColor: '#00F0FF',
+        stele: '⭐⭐⭐⭐',
+        eficienta: 'Recrutare 92% Fibre Musculare',
+        mesaj: 'Tensiune mecanică intensă & adaptare structurală profundă.',
+        hintNext: `Adaugă +${Math.max(2, Math.round((85 - scorIntensitate) / 2))} kg sau 1 serie pentru a debloca Rank S+`
+      };
     }
-    return { titlu: 'TONIFIERE & REZISTENȚĂ 🌊', descriere: 'Volum controlat și anduranță musculară.' };
+    if (scorIntensitate >= 45) {
+      return {
+        rank: 'RANK B • INTERMEDIATE STRENGTH 💪',
+        badgeColor: '#4ADE80',
+        stele: '⭐⭐⭐',
+        eficienta: 'Recrutare 78% Fibre Musculare',
+        mesaj: 'Volum solid de lucru pentru creștere progresivă și tonifiere.',
+        hintNext: `Adaugă +${Math.max(2, Math.round((65 - scorIntensitate) / 2))} kg sau 2 repetări pentru Rank A`
+      };
+    }
+    return {
+      rank: 'RANK C • FOUNDATION & FORM 🌊',
+      badgeColor: '#38BDF8',
+      stele: '⭐⭐',
+      eficienta: 'Recrutare 60% Fibre Musculare',
+      mesaj: 'Execuție tehnică controlată și activare metabolică de bază.',
+      hintNext: `Crește greutatea sau adaugă repetări pentru a atinge Rank B`
+    };
   };
 
-  const stimulare = getTipStimuare();
+  const rankInfo = getExerciseRankInfo();
 
   const handleQuickAdd = async () => {
     const seturi = Array.from({ length: seriiSeta }, (_, i) => ({
@@ -349,7 +414,7 @@ export default function ExercitiuDetailScreen() {
 
     notify.success(
       'Exercițiu adăugat!',
-      `${exercitiu.nume} • Volum: ${volumTotal} kg • Scor: ${scorIntensitate} PTS`
+      `${exercitiu.nume} • ${rankInfo.rank} • ${volumTotal} kg volum`
     );
     router.back();
   };
@@ -426,8 +491,8 @@ export default function ExercitiuDetailScreen() {
           </View>
         </View>
 
-        {/* Corp Uman Interactiv - Vizualizare Grupe & Pompare */}
-        <HumanBodyMuscleMap
+        {/* Corp Uman Interactiv - ANATOMY WIREFRAME MESH */}
+        <AnatomyWireframeBody
           activeGroups={exercitiu.grupe}
           intensityScore={scorIntensitate}
           accentColor={colors.accent}
@@ -436,33 +501,42 @@ export default function ExercitiuDetailScreen() {
           textPrimary={colors.textPrimary}
         />
 
-        {/* Scor Antrenament & Adaptabilitate */}
-        <View style={[styles.scoreCard, { backgroundColor: colors.surfaceBg, borderColor: colors.accentSecondary + '44' }]}>
-          <View style={styles.scoreTopRow}>
-            <View style={styles.scoreTitleRow}>
-              <Award size={20} color={colors.accentSecondary} />
-              <Text style={[styles.scoreCardTitle, { color: colors.textPrimary }]}>Scor Intensitate Antrenament</Text>
+        {/* SISTEM SPECIFIC DE RANK PENTRU EXERCIȚII (EXERCISE MASTERY RANK) */}
+        <View style={[styles.rankCard, { backgroundColor: colors.surfaceBg, borderColor: rankInfo.badgeColor }]}>
+          <View style={styles.rankTopRow}>
+            <View style={styles.rankTitleRow}>
+              <ShieldCheck size={22} color={rankInfo.badgeColor} />
+              <View>
+                <Text style={[styles.rankCategoryTitle, { color: colors.textSecondary }]}>MASTERY RANK SYSTEM</Text>
+                <Text style={[styles.rankBadgeTitle, { color: rankInfo.badgeColor }]}>{rankInfo.rank}</Text>
+              </View>
             </View>
-            <View style={[styles.scoreBadgePill, { backgroundColor: colors.accentSecondary + '22', borderColor: colors.accentSecondary }]}>
-              <Text style={[styles.scoreBadgeText, { color: colors.accentSecondary }]}>{scorIntensitate} / 100 PTS</Text>
-            </View>
+            <Text style={styles.rankStarsText}>{rankInfo.stele}</Text>
           </View>
 
-          {/* Bara progres scor */}
-          <View style={styles.scoreProgressTrack}>
+          {/* Progres scor către următorul rank */}
+          <View style={styles.rankProgressTrack}>
             <LinearGradient
-              colors={[colors.accent, colors.accentSecondary]}
+              colors={[rankInfo.badgeColor, colors.accentSecondary]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={[styles.scoreProgressFill, { width: `${scorIntensitate}%` }]}
+              style={[styles.rankProgressFill, { width: `${scorIntensitate}%` }]}
             />
           </View>
 
-          <View style={styles.scoreFooterRow}>
-            <Text style={[styles.scoreStimulareTitle, { color: colors.accent }]}>{stimulare.titlu}</Text>
-            <Text style={[styles.scoreVolumeText, { color: colors.textSecondary }]}>Volum: {volumTotal} kg</Text>
+          <View style={styles.rankStatsRow}>
+            <Text style={[styles.rankEfficiencyText, { color: colors.textPrimary }]}>
+              Eficiență: <Text style={{ color: rankInfo.badgeColor, fontWeight: '900' }}>{rankInfo.eficienta}</Text>
+            </Text>
+            <Text style={[styles.rankScoreText, { color: colors.textSecondary }]}>{scorIntensitate} / 100 PTS</Text>
           </View>
-          <Text style={[styles.scoreStimulareDesc, { color: colors.textSecondary }]}>{stimulare.descriere}</Text>
+
+          <Text style={[styles.rankDescText, { color: colors.textSecondary }]}>{rankInfo.mesaj}</Text>
+
+          <View style={[styles.rankHintBox, { backgroundColor: rankInfo.badgeColor + '14', borderColor: rankInfo.badgeColor + '33' }]}>
+            <Sparkles size={14} color={rankInfo.badgeColor} />
+            <Text style={[styles.rankHintText, { color: colors.textPrimary }]}>{rankInfo.hintNext}</Text>
+          </View>
         </View>
 
         {/* Configurare rapidă greutate & repetări + serii */}
@@ -553,7 +627,7 @@ export default function ExercitiuDetailScreen() {
           onPress={handleQuickAdd}
         >
           <PlusCircle size={20} color="#000" />
-          <Text style={[styles.actionBtnText, { color: '#000' }]}>Adaugă în antrenament ({volumTotal} kg)</Text>
+          <Text style={[styles.actionBtnText, { color: '#000' }]}>Adaugă în antrenament ({volumTotal} kg • {rankInfo.rank.split(' • ')[0]})</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -660,65 +734,79 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  scoreCard: {
+  rankCard: {
     borderRadius: Radius.lg,
-    padding: 16,
+    padding: 18,
     borderWidth: 1.5,
     marginBottom: Spacing.lg,
   },
-  scoreTopRow: {
+  rankTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    marginBottom: 14,
   },
-  scoreTitleRow: {
+  rankTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
-  scoreCardTitle: {
-    fontSize: 15,
+  rankCategoryTitle: {
+    fontSize: 11,
     fontWeight: '800',
+    letterSpacing: 0.8,
   },
-  scoreBadgePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  scoreBadgeText: {
-    fontSize: 12,
+  rankBadgeTitle: {
+    fontSize: 16,
     fontWeight: '900',
+    marginTop: 2,
   },
-  scoreProgressTrack: {
+  rankStarsText: {
+    fontSize: 13,
+  },
+  rankProgressTrack: {
     height: 8,
     borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  scoreProgressFill: {
+  rankProgressFill: {
     height: '100%',
     borderRadius: 4,
   },
-  scoreFooterRow: {
+  rankStatsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  scoreStimulareTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  scoreVolumeText: {
+  rankEfficiencyText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
   },
-  scoreStimulareDesc: {
+  rankScoreText: {
     fontSize: 12,
-    lineHeight: 17,
+    fontWeight: '800',
+  },
+  rankDescText: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  rankHintBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  rankHintText: {
+    fontSize: 12,
+    fontWeight: '700',
+    flex: 1,
   },
   quickConfigBox: {
     borderRadius: Radius.lg,
@@ -853,7 +941,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   actionBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
   },
 });

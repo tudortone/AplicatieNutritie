@@ -601,16 +601,15 @@ const styles = StyleSheet.create({
   actionChipText: { fontSize: 12, fontWeight: '700' },
 
   emptyChatContainer: {
-    flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 28,
+    paddingTop: 12,
     paddingBottom: 40,
   },
   emptyHeroCard: {
     borderRadius: 28,
     overflow: 'hidden',
     borderWidth: 1,
-    marginBottom: 18,
+    marginBottom: 14,
   },
   emptyHeroGradient: {
     padding: 22,
