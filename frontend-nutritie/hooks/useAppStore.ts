@@ -16,7 +16,7 @@ try {
     getBoolean: (key: string) => mmkv.getBoolean(key),
     set: (key: string, value: boolean | string | number) => mmkv.set(key, value),
   };
-} catch (e) {
+} catch {
   // Fallback de siguranță în memorie + AsyncStorage pentru Expo Go unde nu există NitroModules
   const memoryCache: Record<string, any> = {};
   

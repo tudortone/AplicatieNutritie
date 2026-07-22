@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,13 +12,21 @@ import {
 
 import { useTheme } from '../../context/ThemeContext';
 import { Radius, Spacing } from '../../constants/theme';
-import { EXERCITII } from '../../constants/exercitii';
+import { EXERCITII_DB } from '../../constants/exercitii';
 import { calculeazaCaloriiEx } from '../../lib/exercitiu';
 import { useAntrenamente } from '../../hooks/useAntrenamente';
 import { useNotify } from '../../hooks/useNotify';
+import { MuscleBody } from '../../components/fitness/MuscleBody';
+import type { MuscleId } from '../../components/fitness/heatColor';
+import { SeriesConfigurator, type SeriesValue } from '../../components/fitness/SeriesConfigurator';
+import { classifyMeasurement, computeSessionLoad, type MeasurementSpec } from '../../lib/measurement';
+import { mapToCanonicalMuscleIds } from '../../lib/fitnessEngine';
+import MuscleHeatmap3D from '@/components/fitness/MuscleHeatmap3D';
+import { intensityForExercise } from '@/components/fitness/exerciseIntensity';
 
 interface HumanBodyProps {
   activeGroups: string[];
+  muschiTinta?: Partial<Record<string, number>>;
   intensityScore: number; // 0 - 100
   accentColor: string;
   secondaryColor: string;
@@ -29,11 +37,13 @@ interface HumanBodyProps {
 }
 
 /**
- * Corp Uman 3D Holografic (Anatomy 3D Cyber Render) inspirat din poza 3
- * Redă o siluetă anatomică volumetrică cu câmp de energie, rețea constelație și iluminare dinamică
+ * Corp Uman Anatomic Proporționat și Hiper-realist (Athletic Bio-Scan 3D)
+ * Sistem termic Heatmap clar direct pe mușchi (FĂRĂ BILE):
+ * Colorare continuă în funcție de intensitatea de recrutare
  */
 export function Holographic3DAnatomyBody({
   activeGroups,
+  muschiTinta,
   intensityScore,
   accentColor,
   secondaryColor,
@@ -42,202 +52,133 @@ export function Holographic3DAnatomyBody({
   rankBadgeColor = '#00F0FF',
   volumTotalKg = 0
 }: HumanBodyProps) {
-  const [viewSide, setViewSide] = useState<'anterior' | 'posterior'>('anterior');
-
+  const isSpate = activeGroups.some(g => /spate|dorsali|trapez|romboizi|fesieri|ischiogambieri|femurali|triceps|lombari/i.test(g));
   const isPiept = activeGroups.some(g => /piept|pectorali/i.test(g));
   const isUmeri = activeGroups.some(g => /umeri|deltoid/i.test(g));
   const isBrate = activeGroups.some(g => /brațe|brate|biceps|triceps|brahial/i.test(g));
   const isAbdomen = activeGroups.some(g => /abdomen|core|oblici/i.test(g));
   const isPicioare = activeGroups.some(g => /picioare|cvadriceps|fesieri|gambe|ischiogambieri|femurali/i.test(g));
-  const isSpate = activeGroups.some(g => /spate|dorsali|trapez|romboizi/i.test(g));
 
-  const activeColor = rankBadgeColor || (intensityScore >= 80 ? '#FACC15' : intensityScore >= 55 ? '#00F0FF' : '#4ADE80');
-  const wireframeInactive = 'rgba(0, 240, 255, 0.11)';
-  const wireframeStrokeInactive = 'rgba(0, 240, 255, 0.28)';
+  const initialSide = useMemo(() => {
+    const isBackPrimary = activeGroups.length > 0 && /spate|dorsali|trapez|romboizi|fesieri|ischiogambieri|femurali|triceps|lombari/i.test(activeGroups[0]);
+    return isBackPrimary ? 'posterior' : 'anterior';
+  }, [activeGroups]);
+
+  const [viewSide, setViewSide] = useState<'anterior' | 'posterior'>(initialSide);
+
+  // Culorile din sistemul termic Heatmap conform heatColor.ts (Secțiunea 3.1):
+  const COLOR_PRIMARY = '#FF003C';   // 🔴 Roșu maxim (100% Țintă Principală)
+  const COLOR_SECONDARY = '#FF7B00'; // 🟠 Portocaliu intens (75% Sinergici)
+  const COLOR_STAB = '#FACC15';      // 🟡 Galben mediu (40% Stabilizare)
+  const COLOR_REST = '#38BDF8';      // 🔵 Albastru (0% Repaus)
+
+  // Determinăm culoarea fiecărei grupe musculare bazat pe ierarhia exercițiului
+  const getGroupColor = (groupType: 'piept' | 'umeri' | 'brate' | 'spate' | 'picioare' | 'abdomen') => {
+    if (groupType === 'piept' && isPiept) return COLOR_PRIMARY;
+    if (groupType === 'spate' && isSpate) return COLOR_PRIMARY;
+    if (groupType === 'picioare' && isPicioare) return COLOR_PRIMARY;
+    if (groupType === 'umeri' && isUmeri) return isPiept || isSpate ? COLOR_SECONDARY : COLOR_PRIMARY;
+    if (groupType === 'brate' && isBrate) return isPiept || isSpate ? COLOR_SECONDARY : COLOR_PRIMARY;
+    if (groupType === 'abdomen' && isAbdomen) return COLOR_STAB;
+    return COLOR_REST;
+  };
+
+  const pieptColor = getGroupColor('piept');
+  const umeriColor = getGroupColor('umeri');
+  const brateColor = getGroupColor('brate');
+  const spateColor = getGroupColor('spate');
+  const picioareColor = getGroupColor('picioare');
+  const absColor = getGroupColor('abdomen');
+
+  const mainActiveColor = isPiept || isSpate || isPicioare ? COLOR_PRIMARY : isUmeri || isBrate ? COLOR_SECONDARY : COLOR_STAB;
+
+  const intensityMap = useMemo(() => {
+    const out: Partial<Record<MuscleId, number>> = {};
+    if (muschiTinta && Object.keys(muschiTinta).length > 0) {
+      for (const [k, pct] of Object.entries(muschiTinta)) {
+        const canonicals = mapToCanonicalMuscleIds(k);
+        for (const { id, weight } of canonicals) {
+          out[id] = Math.max(out[id] ?? 0, (Number(pct) / 100) * weight);
+        }
+      }
+    } else {
+      activeGroups.forEach((g, idx) => {
+        const factor = idx === 0 ? 1.0 : idx === 1 ? 0.75 : 0.5;
+        const canonicals = mapToCanonicalMuscleIds(g);
+        for (const { id, weight } of canonicals) {
+          out[id] = Math.max(out[id] ?? 0, factor * weight);
+        }
+      });
+    }
+    return out;
+  }, [muschiTinta, activeGroups]);
 
   return (
-    <View style={[bodyStyles.container, { borderColor: activeColor + '44' }]}>
-      {/* HUD Header Anatomic */}
+    <View style={[bodyStyles.container, { borderColor: mainActiveColor + '55' }]}>
+      {/* Header Anatomic Pro */}
       <View style={bodyStyles.headerRow}>
         <View style={bodyStyles.titleBox}>
           <View style={bodyStyles.hudBadgeRow}>
-            <View style={[bodyStyles.hudDot, { backgroundColor: activeColor }]} />
-            <Text style={[bodyStyles.hudLabel, { color: activeColor }]}>3D HOLOGRAPHIC ANATOMY • BIO SCAN</Text>
+            <View style={[bodyStyles.hudDot, { backgroundColor: mainActiveColor }]} />
+            <Text style={[bodyStyles.hudLabel, { color: mainActiveColor }]}>SCANARE BIO-TERMICĂ • RECUPERARE & INTENSITATE</Text>
           </View>
-          <Text style={[bodyStyles.titleText, { color: textPrimary }]}>Recrutare Anatomică Volumetrică</Text>
-          <Text style={[bodyStyles.subText, { color: activeColor }]} numberOfLines={1}>
-            {activeGroups.join(', ')} • {intensityScore}% Pompă
+          <Text style={[bodyStyles.titleText, { color: textPrimary }]}>Anatomie Realistă & Heatmap Muscular</Text>
+          <Text style={[bodyStyles.subText, { color: mainActiveColor }]} numberOfLines={2}>
+            {activeGroups.join(' • ')} ({intensityScore}% intensitate)
           </Text>
         </View>
 
         <View style={[bodyStyles.switchPill, { backgroundColor: cardBg }]}>
           <TouchableOpacity
             onPress={() => setViewSide('anterior')}
-            style={[bodyStyles.switchBtn, viewSide === 'anterior' && { backgroundColor: activeColor }]}
+            style={[bodyStyles.switchBtn, viewSide === 'anterior' && { backgroundColor: mainActiveColor }]}
           >
-            <Text style={[bodyStyles.switchText, { color: viewSide === 'anterior' ? '#000' : textPrimary }]}>FAȚĂ</Text>
+            <Text style={[bodyStyles.switchText, { color: viewSide === 'anterior' ? '#FFFFFF' : textPrimary }]}>FAȚĂ</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setViewSide('posterior')}
-            style={[bodyStyles.switchBtn, viewSide === 'posterior' && { backgroundColor: activeColor }]}
+            style={[bodyStyles.switchBtn, viewSide === 'posterior' && { backgroundColor: mainActiveColor }]}
           >
-            <Text style={[bodyStyles.switchText, { color: viewSide === 'posterior' ? '#000' : textPrimary }]}>SPATE</Text>
+            <Text style={[bodyStyles.switchText, { color: viewSide === 'posterior' ? '#FFFFFF' : textPrimary }]}>SPATE</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* SVG 3D Holographic Cyber Render */}
-      <View style={bodyStyles.svgWrap}>
-        <Svg width="230" height="300" viewBox="0 0 260 360">
-          <Defs>
-            <RadialGradient id="hologramAura" cx="50%" cy="50%" rx="50%" ry="50%" fx="50%" fy="50%">
-              <Stop offset="0%" stopColor={activeColor} stopOpacity="0.32" />
-              <Stop offset="60%" stopColor={activeColor} stopOpacity="0.08" />
-              <Stop offset="100%" stopColor={activeColor} stopOpacity="0" />
-            </RadialGradient>
-          </Defs>
+      {/* SISTEM HIBRID PRO: Ilustrație Anatomică Medicală + Colorare Directă pe Mușchi (MuscleBody) */}
+      <View style={[bodyStyles.svgWrap, { position: 'relative', height: 350, justifyContent: 'center', alignItems: 'center' }]}>
+        {/* Fundal aură scanare biomecanică */}
+        <View style={{ position: 'absolute', width: 220, height: 220, borderRadius: 110, backgroundColor: mainActiveColor, opacity: 0.12 }} />
 
-          {/* Câmp de aură volumetrică 3D în spatele corpului */}
-          <Circle cx="130" cy="170" r="110" fill="url(#hologramAura)" />
+        {/* Strat SVG cu Heatmap Muscular Continuu */}
+        <MuscleBody
+          side={viewSide === 'anterior' ? 'front' : 'back'}
+          intensity={intensityMap}
+          width={240}
+          height={330}
+        />
+      </View>
 
-          {/* Linii HUD și grid orizontal 3D */}
-          <Line x1="15" y1="50" x2="245" y2="50" stroke={activeColor + '22'} strokeDasharray="3,4" />
-          <Line x1="15" y1="170" x2="245" y2="170" stroke={activeColor + '22'} strokeDasharray="3,4" />
-          <Line x1="15" y1="290" x2="245" y2="290" stroke={activeColor + '22'} strokeDasharray="3,4" />
-          <Line x1="130" y1="10" x2="130" y2="350" stroke={activeColor + '28'} strokeDasharray="2,3" />
-
-          {/* Cranium & Gât 3D Mesh */}
-          <Circle cx="130" cy="38" r="18" fill="rgba(0,240,255,0.08)" stroke={wireframeStrokeInactive} strokeWidth="1.3" />
-          <Path d="M121,54 L139,54 L143,72 L117,72 Z" fill="rgba(0,240,255,0.08)" stroke={wireframeStrokeInactive} strokeWidth="1.3" />
-
-          {viewSide === 'anterior' ? (
-            <G>
-              {/* Umeri (Deltoizi anteriori volumetrici) */}
-              <Path
-                d="M78,76 C64,82 58,98 60,114 C66,116 78,114 84,106 L90,78 Z"
-                fill={isUmeri ? activeColor + '55' : wireframeInactive}
-                stroke={isUmeri ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isUmeri ? "2.6" : "1.2"}
-              />
-              <Path
-                d="M182,76 C196,82 202,98 200,114 C194,116 182,114 176,106 L170,78 Z"
-                fill={isUmeri ? activeColor + '55' : wireframeInactive}
-                stroke={isUmeri ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isUmeri ? "2.6" : "1.2"}
-              />
-
-              {/* Piept (Pectoralis Major volumetric 3D) */}
-              <Path
-                d="M90,78 C102,76 126,76 128,76 L128,118 C114,122 98,114 90,100 Z"
-                fill={isPiept ? activeColor + '66' : wireframeInactive}
-                stroke={isPiept ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isPiept ? "2.6" : "1.2"}
-              />
-              <Path
-                d="M170,78 C158,76 134,76 132,76 L132,118 C146,122 162,114 170,100 Z"
-                fill={isPiept ? activeColor + '66' : wireframeInactive}
-                stroke={isPiept ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isPiept ? "2.6" : "1.2"}
-              />
-
-              {/* Brațe (Biceps / Antebraț sculptat) */}
-              <Path
-                d="M60,116 C54,136 54,160 60,182 C66,184 74,180 76,172 C80,152 82,132 82,116 Z"
-                fill={isBrate ? activeColor + '55' : wireframeInactive}
-                stroke={isBrate ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isBrate ? "2.6" : "1.2"}
-              />
-              <Path
-                d="M200,116 C206,136 206,160 200,182 C194,184 186,180 184,172 C180,152 178,132 178,116 Z"
-                fill={isBrate ? activeColor + '55' : wireframeInactive}
-                stroke={isBrate ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isBrate ? "2.6" : "1.2"}
-              />
-
-              {/* Abdomen 6-Pack Grid & Oblici */}
-              <Path
-                d="M96,124 L164,124 L156,196 L104,196 Z"
-                fill={isAbdomen ? activeColor + '66' : wireframeInactive}
-                stroke={isAbdomen ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isAbdomen ? "2.6" : "1.2"}
-              />
-              <Line x1="106" y1="148" x2="154" y2="148" stroke={isAbdomen ? activeColor : wireframeStrokeInactive} strokeWidth="1.2" />
-              <Line x1="108" y1="172" x2="152" y2="172" stroke={isAbdomen ? activeColor : wireframeStrokeInactive} strokeWidth="1.2" />
-
-              {/* Cvadriceps & Gambe */}
-              <Path
-                d="M102,204 L126,204 L124,286 L106,334 L92,334 L96,274 Z"
-                fill={isPicioare ? activeColor + '66' : wireframeInactive}
-                stroke={isPicioare ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isPicioare ? "2.6" : "1.2"}
-              />
-              <Path
-                d="M158,204 L134,204 L136,286 L154,334 L168,334 L164,274 Z"
-                fill={isPicioare ? activeColor + '66' : wireframeInactive}
-                stroke={isPicioare ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isPicioare ? "2.6" : "1.2"}
-              />
-
-              {/* Constelație cibernetică de puncte luminoase (Nodes) */}
-              <Circle cx="130" cy="76" r="4" fill={isPiept ? activeColor : '#00F0FF'} />
-              <Circle cx="84" cy="94" r="3.5" fill={isUmeri || isPiept ? activeColor : '#00F0FF'} />
-              <Circle cx="176" cy="94" r="3.5" fill={isUmeri || isPiept ? activeColor : '#00F0FF'} />
-              <Circle cx="70" cy="148" r="3.5" fill={isBrate ? activeColor : '#00F0FF'} />
-              <Circle cx="190" cy="148" r="3.5" fill={isBrate ? activeColor : '#00F0FF'} />
-              <Circle cx="130" cy="158" r="4" fill={isAbdomen ? activeColor : '#00F0FF'} />
-              <Circle cx="114" cy="278" r="4" fill={isPicioare ? activeColor : '#00F0FF'} />
-              <Circle cx="146" cy="278" r="4" fill={isPicioare ? activeColor : '#00F0FF'} />
-            </G>
-          ) : (
-            <G>
-              {/* Umeri & Trapez Posterior */}
-              <Path
-                d="M82,78 L178,78 L160,110 L100,110 Z"
-                fill={isSpate || isUmeri ? activeColor + '55' : wireframeInactive}
-                stroke={isSpate || isUmeri ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isSpate || isUmeri ? "2.6" : "1.2"}
-              />
-              {/* Dorsali / Lats 3D */}
-              <Path
-                d="M92,114 L168,114 L156,182 L104,182 Z"
-                fill={isSpate ? activeColor + '66' : wireframeInactive}
-                stroke={isSpate ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isSpate ? "2.6" : "1.2"}
-              />
-              {/* Triceps Posterior */}
-              <Path
-                d="M64,102 L80,102 L78,178 L62,178 Z"
-                fill={isBrate ? activeColor + '55' : wireframeInactive}
-                stroke={isBrate ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isBrate ? "2.6" : "1.2"}
-              />
-              <Path
-                d="M196,102 L180,102 L182,178 L198,178 Z"
-                fill={isBrate ? activeColor + '55' : wireframeInactive}
-                stroke={isBrate ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isBrate ? "2.6" : "1.2"}
-              />
-              {/* Fesieri & Femurali */}
-              <Path
-                d="M100,188 L128,188 L124,284 L102,332 L90,332 L94,272 Z"
-                fill={isPicioare ? activeColor + '66' : wireframeInactive}
-                stroke={isPicioare ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isPicioare ? "2.6" : "1.2"}
-              />
-              <Path
-                d="M160,188 L132,188 L136,284 L158,332 L170,332 L166,272 Z"
-                fill={isPicioare ? activeColor + '66' : wireframeInactive}
-                stroke={isPicioare ? activeColor : wireframeStrokeInactive}
-                strokeWidth={isPicioare ? "2.6" : "1.2"}
-              />
-
-              <Circle cx="130" cy="94" r="4" fill={isSpate ? activeColor : '#00F0FF'} />
-              <Circle cx="130" cy="148" r="3.5" fill={isSpate ? activeColor : '#00F0FF'} />
-              <Circle cx="114" cy="278" r="4" fill={isPicioare ? activeColor : '#00F0FF'} />
-              <Circle cx="146" cy="278" r="4" fill={isPicioare ? activeColor : '#00F0FF'} />
-            </G>
-          )}
-        </Svg>
+      {/* LEGENDA COLORISTICĂ HEATMAP INTERACTIVĂ */}
+      <View style={bodyStyles.legendCard}>
+        <Text style={[bodyStyles.legendTitle, { color: textPrimary }]}>Culoare & Intensitate Recrutare:</Text>
+        <View style={bodyStyles.legendGrid}>
+          <View style={bodyStyles.legendItem}>
+            <View style={[bodyStyles.legendDot, { backgroundColor: COLOR_PRIMARY }]} />
+            <Text style={[bodyStyles.legendText, { color: COLOR_PRIMARY }]}>🔴 100% Țintă Principală</Text>
+          </View>
+          <View style={bodyStyles.legendItem}>
+            <View style={[bodyStyles.legendDot, { backgroundColor: COLOR_SECONDARY }]} />
+            <Text style={[bodyStyles.legendText, { color: COLOR_SECONDARY }]}>🟠 75% Mușchi Sinergici</Text>
+          </View>
+          <View style={bodyStyles.legendItem}>
+            <View style={[bodyStyles.legendDot, { backgroundColor: COLOR_STAB }]} />
+            <Text style={[bodyStyles.legendText, { color: COLOR_STAB }]}>🟡 40% Stabilizare / Core</Text>
+          </View>
+          <View style={bodyStyles.legendItem}>
+            <View style={[bodyStyles.legendDot, { backgroundColor: COLOR_REST }]} />
+            <Text style={[bodyStyles.legendText, { color: COLOR_REST }]}>🔵 0% Mușchi în Repaus</Text>
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -249,7 +190,7 @@ const bodyStyles = StyleSheet.create({
     borderWidth: 1.5,
     padding: Spacing.md,
     marginBottom: Spacing.lg,
-    backgroundColor: 'rgba(5, 15, 28, 0.65)',
+    backgroundColor: 'rgba(5, 15, 28, 0.75)',
   },
   headerRow: {
     flexDirection: 'row',
@@ -278,7 +219,7 @@ const bodyStyles = StyleSheet.create({
     paddingRight: 8,
   },
   titleText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
   },
   subText: {
@@ -292,8 +233,8 @@ const bodyStyles = StyleSheet.create({
     padding: 3,
   },
   switchBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 9,
   },
   switchText: {
@@ -303,7 +244,38 @@ const bodyStyles = StyleSheet.create({
   svgWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 12,
+  },
+  legendCard: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  legendTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  legendGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    width: '45%',
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });
 
@@ -312,7 +284,7 @@ export default function ExercitiuDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const notify = useNotify();
-  const { adaugaExercitiu } = useAntrenamente();
+  const { adaugaAntrenament, adaugaExercitiu } = useAntrenamente();
   const { colors } = useTheme();
 
   const [greutateKg, setGreutateKg] = useState(75);
@@ -326,7 +298,30 @@ export default function ExercitiuDetailScreen() {
     });
   }, []);
 
-  const exercitiu = EXERCITII.find((e) => e.id === id);
+  const exercitiu = EXERCITII_DB.find((e) => e.id === id);
+  const DEFAULT_MEASUREMENT_SPEC: MeasurementSpec = {
+    type: 'reps_weight',
+    allowsWeight: true,
+    weightOptional: true,
+    defaultSets: 3,
+    defaultReps: 12,
+    defaultWeightKg: 20,
+    unitLabel: 'Repetări',
+    bodyweightFactor: 1.0,
+  };
+  const spec: MeasurementSpec = exercitiu ? (exercitiu.masurare ?? classifyMeasurement(exercitiu)) : DEFAULT_MEASUREMENT_SPEC;
+
+  const seriiDefault = exercitiu ? (spec.defaultSets ?? exercitiu.seriiDefault ?? 3) : 3;
+  const repetariDefault = exercitiu ? (spec.defaultReps ?? exercitiu.repetariDefault ?? 12) : 12;
+  const greutateDefault = spec.defaultWeightKg ?? 20;
+  const durataDefault = spec.defaultDurationSec ?? 45;
+
+  const [seriesValue, setSeriesValue] = useState<SeriesValue>({
+    sets: seriiDefault,
+    reps: repetariDefault,
+    weightKg: greutateDefault,
+    durationSec: durataDefault,
+  });
 
   if (!exercitiu) {
     return (
@@ -344,23 +339,31 @@ export default function ExercitiuDetailScreen() {
 
   const caloriiEst = calculeazaCaloriiEx(exercitiu, greutateKg);
 
-  const seriiDefault = exercitiu.seriiDefault ?? 4;
-  const repetariDefault = exercitiu.repetariDefault ?? 10;
-  const [seriiSeta, setSeriiSeta] = useState(seriiDefault);
-  const [greutateSetaKg, setGreutateSetaKg] = useState('20');
-  const [repetariSeta, setRepetariSeta] = useState(String(repetariDefault));
+  const heatmapIntensity = useMemo(
+    () =>
+      intensityForExercise({
+        target_muscles: exercitiu.target_muscles || exercitiu.grupe,
+        activation: (exercitiu.activation || exercitiu.muschiTinta) as any,
+      }),
+    [exercitiu],
+  );
 
   const instructiuni = exercitiu.instructiuni && exercitiu.instructiuni.length > 0
     ? exercitiu.instructiuni
     : ['Execută mișcarea controlat, concentrându-te pe contracția musculară.'];
   const descriere = exercitiu.descriere || 'Exercițiu eficient pentru planul tău de antrenament.';
 
-  const kgVal = parseFloat(greutateSetaKg.replace(',', '.')) || 0;
-  const repVal = parseInt(repetariSeta, 10) || repetariDefault;
-  const volumTotal = kgVal * repVal * seriiSeta;
+  const sessionLoad = computeSessionLoad(spec, {
+    sets: seriesValue.sets,
+    reps: seriesValue.reps,
+    weightKg: seriesValue.weightKg,
+    durationSec: seriesValue.durationSec,
+    bodyweightKg: greutateKg || 75,
+  });
+  const volumTotal = Math.round(sessionLoad);
 
   const scorIntensitate = Math.min(100, Math.max(15, Math.round(
-    (kgVal * 0.95) + (repVal * 2.3) + (seriiSeta * 6.5) + (exercitiu.dificultate === 'greu' ? 18 : exercitiu.dificultate === 'mediu' ? 10 : 0)
+    (seriesValue.weightKg * 0.95) + (seriesValue.reps * 2.3) + (seriesValue.sets * 6.5) + (exercitiu.dificultate === 'greu' ? 18 : exercitiu.dificultate === 'mediu' ? 10 : 0)
   )));
 
   const getExerciseRankInfo = () => {
@@ -407,26 +410,40 @@ export default function ExercitiuDetailScreen() {
   const rankInfo = getExerciseRankInfo();
 
   const handleQuickAdd = async () => {
-    const seturi = Array.from({ length: seriiSeta }, (_, i) => ({
-      serie: i + 1,
-      repetari: repVal,
-      greutate: kgVal,
-    }));
+    try {
+      const p = exercitiu.caloriiPeMinut ?? 6;
+      const d = Math.max(15, seriesValue.sets * 3);
+      const kcalArse = Math.round(p * d);
 
-    await adaugaExercitiu({
-      exercitiuId: exercitiu.id,
-      nume: exercitiu.nume,
-      calorii: caloriiEst,
-      durataMin: seriiSeta * 3,
-      seturi,
-      tip: exercitiu.categorie,
-    });
+      await adaugaAntrenament({
+        nume: exercitiu.nume,
+        tip: exercitiu.categorie,
+        durata_min: d,
+        calorii_arse: kcalArse,
+        volum_total: volumTotal,
+        exercitii: [
+          {
+            exercitiuId: exercitiu.id,
+            nume: exercitiu.nume,
+            seturi: Array.from({ length: seriesValue.sets }, (_, idx) => ({
+              serie: idx + 1,
+              repetari: seriesValue.reps,
+              greutate: seriesValue.weightKg,
+            })),
+            durataMin: d,
+            kcal: kcalArse,
+          },
+        ],
+      });
 
-    notify.success(
-      'Exercițiu adăugat!',
-      `${exercitiu.nume} • ${rankInfo.rank} • ${volumTotal} kg volum`
-    );
-    router.back();
+      notify.success(
+        'Adăugat în antrenament',
+        `${exercitiu.nume} a fost înregistrat cu succes!`
+      );
+      router.back();
+    } catch (err: any) {
+      notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+    }
   };
 
   const getDificultateColor = () => {
@@ -474,18 +491,19 @@ export default function ExercitiuDetailScreen() {
 
           <Text style={[styles.heroDesc, { color: colors.textSecondary }]}>{descriere}</Text>
 
-          {/* Metric bar */}
-          <View style={styles.metricsBar}>
+          <View style={[styles.metricsBar, { borderColor: colors.cardBorder }]}>
             <View style={styles.metricItem}>
-              <Flame size={16} color={colors.accent} />
-              <Text style={[styles.metricValue, { color: colors.textPrimary }]}>~{caloriiEst} kcal</Text>
-              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>ardere estimată</Text>
+              <Flame size={16} color={colors.warning} />
+              <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
+                ~{caloriiEst} kcal
+              </Text>
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>/ sesiune (est.)</Text>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricItem}>
               <Clock size={16} color={colors.accentSecondary} />
               <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
-                {seriiSeta} serii × {repVal}
+                {seriesValue.sets} serii × {spec.type === 'timed' || spec.type === 'timed_weight' ? `${seriesValue.durationSec}s` : `${seriesValue.reps} rep`}
               </Text>
               <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>recomandat</Text>
             </View>
@@ -501,13 +519,14 @@ export default function ExercitiuDetailScreen() {
           </View>
         </View>
 
-        {/* CORP UMAN 3D HOLOGRAFIC */}
+        {/* CORP UMAN HOLOGRAFIC - COMIC BOOK STYLE ANATOMY & HEATMAP */}
         <Holographic3DAnatomyBody
-          activeGroups={exercitiu.grupe}
+          activeGroups={exercitiu.target_muscles || exercitiu.grupe || ['Corp complet']}
+          muschiTinta={exercitiu.activation || exercitiu.muschiTinta}
           intensityScore={scorIntensitate}
           accentColor={colors.accent}
           secondaryColor={colors.accentSecondary}
-          cardBg={colors.cardBg}
+          cardBg={colors.surfaceBg}
           textPrimary={colors.textPrimary}
           rankBadgeColor={rankInfo.badgeColor}
           volumTotalKg={volumTotal}
@@ -561,56 +580,12 @@ export default function ExercitiuDetailScreen() {
           </View>
         </View>
 
-        {/* Configurare rapidă greutate & repetări */}
-        <View style={[styles.quickConfigBox, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
-          <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>CONFIGURARE RAPIDĂ SERII</Text>
-          <View style={styles.quickConfigRow}>
-            <View style={styles.configField}>
-              <Text style={[styles.configLabel, { color: colors.textSecondary }]}>Serii</Text>
-              <View style={styles.seriiRow}>
-                <TouchableOpacity
-                  onPress={() => setSeriiSeta(Math.max(1, seriiSeta - 1))}
-                  style={[styles.stepperBtn, { backgroundColor: colors.cardBg }]}
-                >
-                  <Text style={[styles.stepperTxt, { color: colors.textPrimary }]}>-</Text>
-                </TouchableOpacity>
-                <Text style={[styles.seriiNumber, { color: colors.textPrimary }]}>{seriiSeta}</Text>
-                <TouchableOpacity
-                  onPress={() => setSeriiSeta(seriiSeta + 1)}
-                  style={[styles.stepperBtn, { backgroundColor: colors.cardBg }]}
-                >
-                  <Text style={[styles.stepperTxt, { color: colors.textPrimary }]}>+</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.configField}>
-              <Text style={[styles.configLabel, { color: colors.textSecondary }]}>Greutate (kg)</Text>
-              <TextInput
-                style={[styles.configInput, { color: colors.textPrimary, backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
-                value={greutateSetaKg}
-                onChangeText={setGreutateSetaKg}
-                keyboardType="numeric"
-                selectTextOnFocus
-                placeholder="0"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-
-            <View style={styles.configField}>
-              <Text style={[styles.configLabel, { color: colors.textSecondary }]}>Repetări / serie</Text>
-              <TextInput
-                style={[styles.configInput, { color: colors.textPrimary, backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
-                value={repetariSeta}
-                onChangeText={setRepetariSeta}
-                keyboardType="numeric"
-                selectTextOnFocus
-                placeholder="10"
-                placeholderTextColor={colors.textSecondary}
-              />
-            </View>
-          </View>
-        </View>
+        {/* Configurare rapidă serii adaptivă dup tipul de măsurare */}
+        <SeriesConfigurator
+          spec={spec}
+          value={seriesValue}
+          onChange={setSeriesValue}
+        />
 
         {/* Instrucțiuni execuție */}
         <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 8 }]}>CUM SE EXECUTĂ CORECT</Text>
@@ -641,7 +616,7 @@ export default function ExercitiuDetailScreen() {
         )}
       </ScrollView>
 
-      {/* Bară de acțiune inferioară */}
+      {/* Bară de acțiune inferioară adaptată la tipul de măsurare conform specificației v6 */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, Spacing.md), borderTopColor: colors.border, backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={[styles.actionBtn, { backgroundColor: rankInfo.badgeColor }]}
@@ -650,7 +625,16 @@ export default function ExercitiuDetailScreen() {
         >
           <PlusCircle size={20} color="#000" />
           <Text style={[styles.actionBtnText, { color: '#000' }]}>
-            Adaugă în antrenament ({volumTotal} kg • {rankInfo.rank.split(' • ')[0]})
+            {(() => {
+              const hasWeight = spec.type === 'weight_reps' || spec.type === 'reps_weight' || spec.type === 'reps_assisted' || seriesValue.weightKg > 0;
+              if (spec.type === 'reps' && !hasWeight) {
+                return `Adaugă (${seriesValue.sets * seriesValue.reps} repetări)`;
+              }
+              if (spec.type === 'timed') {
+                return `Adaugă (${seriesValue.sets} × ${seriesValue.durationSec}s)`;
+              }
+              return `Adaugă (${volumTotal} kg • ${rankInfo.rank.split(' • ')[0]})`;
+            })()}
           </Text>
         </TouchableOpacity>
       </View>
@@ -681,7 +665,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     padding: Spacing.lg,
-    paddingBottom: 110,
+    paddingBottom: 160,
   },
   heroCard: {
     borderRadius: Radius.lg,

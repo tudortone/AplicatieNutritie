@@ -6,7 +6,7 @@ export function useApa() {
   const getTodayKey = () => `apa_${new Date().toISOString().split('T')[0]}`;
   
   const [pahare, setPahareState] = useState<number>(0);
-  const [tinta, setTinta] = useState<number>(8);
+  const tinta = 8;
   const [loading, setLoading] = useState<boolean>(true);
 
   const loadApa = useCallback(async () => {

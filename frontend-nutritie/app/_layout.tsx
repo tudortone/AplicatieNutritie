@@ -3,15 +3,15 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect, useMemo } from 'react';
-import { View, ActivityIndicator, Text, TouchableOpacity, LogBox } from 'react-native';
+import { View, ActivityIndicator, Text, TouchableOpacity, LogBox, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-// Ignorăm avertismentele specifice rulării în Expo Go pe Android SDK 53
+// Ignorăm DOAR avertismentele legitime de mediu (Expo Go nu suportă push nativ).
+// NU mai ascundem erori reale de runtime/Supabase — acestea trebuie vizibile în dev.
 LogBox.ignoreLogs([
   'expo-notifications: Android Push notifications',
   '`expo-notifications` functionality is not fully supported in Expo Go',
-  'Could not find the table',
-  'Eroare la citirea antrenamentelor',
 ]);
 
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
@@ -21,6 +21,7 @@ import { useBiometrics } from '../hooks/useBiometrics';
 import LockScreen from '../components/LockScreen';
 import { NotificationBannerProvider } from '../context/NotificationBannerContext';
 import { GamificareProvider } from '../context/GamificareContext';
+import { useDailySync } from '../hooks/useDailySync';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -43,6 +44,7 @@ function RootNavigator() {
   const { session, loadingAuth } = useAuth();
   const { isOnboardingDone, syncFromAsyncStorage } = useAppStore();
   const { isLocked, biometricType, unlockApp } = useBiometrics();
+  useDailySync();
   const router = useRouter();
   const segments = useSegments();
 
@@ -85,11 +87,70 @@ function RootNavigator() {
 
   return (
     <ThemeProvider value={AppDarkTheme}>
-      <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
-        <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
-        <Stack.Screen name="auth" options={{ animation: 'fade' }} />
-        <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
-        <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          // Activăm gestul de swipe-back pe iOS pentru toate ecranele
+          gestureEnabled: true,
+          // Animație implicită: slide din dreapta (activează swipe-back iOS nativ)
+          animation: Platform.OS === 'ios' ? 'slide_from_right' : 'fade_from_bottom',
+          // Permite swipe de oriunde pe ecran (nu doar de la margine)
+          fullScreenGestureEnabled: true,
+          // Culoarea de fundal la tranzitie să fie consistentă cu tema
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      >
+        {/* Tab-urile nu au animație vizibilă la comutare */}
+        <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
+        <Stack.Screen name="auth" options={{ animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="onboarding" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
+        {/* Ecrane push — swipe-back iOS activat */}
+        <Stack.Screen
+          name="camera"
+          options={{
+            presentation: 'fullScreenModal',
+            animation: 'slide_from_bottom',
+            gestureEnabled: true,
+            gestureDirection: 'vertical',
+          }}
+        />
+        <Stack.Screen
+          name="scanner-barcode"
+          options={{
+            presentation: 'fullScreenModal',
+            animation: 'slide_from_bottom',
+            gestureEnabled: true,
+            gestureDirection: 'vertical',
+          }}
+        />
+        <Stack.Screen
+          name="adauga-manual"
+          options={{
+            animation: Platform.OS === 'ios' ? 'slide_from_right' : 'fade_from_bottom',
+            gestureEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="calculator-ai"
+          options={{
+            animation: Platform.OS === 'ios' ? 'slide_from_right' : 'fade_from_bottom',
+            gestureEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="jurnal-antrenamente"
+          options={{
+            animation: Platform.OS === 'ios' ? 'slide_from_right' : 'fade_from_bottom',
+            gestureEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="notificari"
+          options={{
+            animation: Platform.OS === 'ios' ? 'slide_from_right' : 'fade_from_bottom',
+            gestureEnabled: true,
+          }}
+        />
       </Stack>
       {session && isLocked && (
         <LockScreen biometricType={biometricType} onUnlock={unlockApp} />
@@ -102,15 +163,17 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AppThemeProvider>
-        <AuthProvider>
-          <NotificationBannerProvider>
-            <GamificareProvider>
-              <RootNavigator />
-            </GamificareProvider>
-          </NotificationBannerProvider>
-        </AuthProvider>
-      </AppThemeProvider>
+      <SafeAreaProvider style={{ flex: 1 }}>
+        <AppThemeProvider>
+          <AuthProvider>
+            <NotificationBannerProvider>
+              <GamificareProvider>
+                <RootNavigator />
+              </GamificareProvider>
+            </NotificationBannerProvider>
+          </AuthProvider>
+        </AppThemeProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

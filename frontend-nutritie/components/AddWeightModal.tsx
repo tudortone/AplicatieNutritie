@@ -96,7 +96,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
                 </Text>
               </View>
             </View>
-            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} onPress={onClose}>
+            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} onPress={onClose} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>

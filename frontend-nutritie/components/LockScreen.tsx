@@ -2,7 +2,16 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
+import Animated, { 
+  FadeIn, 
+  FadeInDown, 
+  ZoomIn, 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withRepeat, 
+  withTiming, 
+  withSequence 
+} from 'react-native-reanimated';
 import { Lock, ShieldCheck } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
@@ -16,6 +25,33 @@ interface LockScreenProps {
 
 export default function LockScreen({ biometricType, onUnlock }: LockScreenProps) {
   const { colors } = useTheme();
+  const pulseScale = useSharedValue(1);
+  const btnScale = useSharedValue(1);
+
+  React.useEffect(() => {
+    pulseScale.value = withRepeat(
+      withTiming(1.07, { duration: 1300 }),
+      -1,
+      true
+    );
+  }, [pulseScale]);
+
+  const shieldAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseScale.value }],
+  }));
+
+  const btnAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: btnScale.value }],
+  }));
+
+  const handleUnlockPress = async () => {
+    btnScale.value = withSequence(
+      withTiming(0.93, { duration: 100 }),
+      withTiming(1, { duration: 100 })
+    );
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    await onUnlock();
+  };
 
   return (
     <Animated.View style={[styles.container, { backgroundColor: colors.background }]} entering={FadeIn.duration(300)}>
@@ -26,7 +62,7 @@ export default function LockScreen({ biometricType, onUnlock }: LockScreenProps)
       <BlurView intensity={Platform.OS === 'ios' ? 80 : 100} tint="dark" style={StyleSheet.absoluteFillObject} />
 
       <View style={styles.content}>
-        <Animated.View entering={ZoomIn.delay(100).duration(500)} style={styles.iconRingOuter}>
+        <Animated.View entering={ZoomIn.delay(100).duration(500)} style={[styles.iconRingOuter, shieldAnimatedStyle]}>
           <View style={[styles.iconRingInner, { borderColor: colors.accent, backgroundColor: `${colors.accent}15` }]}>
             <ShieldCheck size={64} color={colors.accent} />
           </View>
@@ -39,14 +75,11 @@ export default function LockScreen({ biometricType, onUnlock }: LockScreenProps)
           </Text>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(300).duration(400)} style={styles.buttonContainer}>
+        <Animated.View entering={FadeInDown.delay(300).duration(400)} style={[styles.buttonContainer, btnAnimatedStyle]}>
           <TouchableOpacity
             style={[styles.unlockButton, { backgroundColor: colors.accent }]}
-            activeOpacity={0.8}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              onUnlock();
-            }}
+            activeOpacity={0.85}
+            onPress={handleUnlockPress}
           >
             <Lock size={20} color={colors.background} style={styles.btnIcon} />
             <Text style={[styles.unlockText, { color: colors.background }]}>

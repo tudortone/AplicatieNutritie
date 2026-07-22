@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import type { ProdusScanat } from '../lib/openfoodfacts';
+import { calculateDaysUntilExpiry } from './useDaysUntilExpiry';
+import { checkAndSchedulePantryExpiryNotification } from '../lib/pantryNotifications';
 
 export interface ProdusCamara {
   id: string;
@@ -18,7 +20,7 @@ export interface ProdusCamara {
   cantitate?: number; // număr de bucăți / stack
   cantitate_g?: number; // grame per bucată
   data_expirare?: string; // data de expirare YYYY-MM-DD
-  zile_valabilitate?: number; // zile rămase până la expirare
+  zile_valabilitate?: number; // zile rămase până la expirare (dinamic)
   is_congelat?: boolean; // opțiunea de congelator (carne, fructe congelate)
 }
 
@@ -27,6 +29,7 @@ const LOCAL_CAMARA_KEY = 'nutriai_camara_local_v3';
 export function useCamara() {
   const [produse, setProduse] = useState<ProdusCamara[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const fetchProduse = useCallback(async () => {
     setLoading(true);
@@ -58,16 +61,32 @@ export function useCamara() {
 
       const combinedMap = new Map<string, ProdusCamara>();
       for (const p of remoteProduse) {
+        let dataExp = p.data_expirare;
+        if (!dataExp) {
+          const zile = typeof p.zile_valabilitate === 'number' ? p.zile_valabilitate : (p.is_congelat ? 90 : 14);
+          dataExp = new Date(new Date(p.created_at || Date.now()).getTime() + zile * 86_400_000).toISOString().split('T')[0];
+        }
+        const dLeft = calculateDaysUntilExpiry(dataExp);
         combinedMap.set(p.id, {
           ...p,
           cantitate: p.cantitate || 1,
+          data_expirare: dataExp,
+          zile_valabilitate: dLeft !== null ? dLeft : (p.is_congelat ? 90 : (p.zile_valabilitate || 14)),
         });
       }
       for (const p of localProduse) {
         if (!combinedMap.has(p.id)) {
+          let dataExp = p.data_expirare;
+          if (!dataExp) {
+            const zile = typeof p.zile_valabilitate === 'number' ? p.zile_valabilitate : (p.is_congelat ? 90 : 14);
+            dataExp = new Date(new Date(p.created_at || Date.now()).getTime() + zile * 86_400_000).toISOString().split('T')[0];
+          }
+          const dLeft = calculateDaysUntilExpiry(dataExp);
           combinedMap.set(p.id, {
             ...p,
             cantitate: p.cantitate || 1,
+            data_expirare: dataExp,
+            zile_valabilitate: dLeft !== null ? dLeft : (p.is_congelat ? 90 : (p.zile_valabilitate || 14)),
           });
         }
       }
@@ -77,6 +96,7 @@ export function useCamara() {
       );
 
       setProduse(merged);
+      checkAndSchedulePantryExpiryNotification(merged).catch(() => {});
     } catch (e) {
       console.warn('Eroare fetch camara:', e);
     } finally {
@@ -91,6 +111,7 @@ export function useCamara() {
   const salveazaLocalList = async (list: ProdusCamara[]) => {
     try {
       await AsyncStorage.setItem(LOCAL_CAMARA_KEY, JSON.stringify(list));
+      checkAndSchedulePantryExpiryNotification(list).catch(() => {});
     } catch (e) {
       console.warn('Eroare salvare locala camara:', e);
     }
@@ -111,7 +132,6 @@ export function useCamara() {
     const { data: { user } } = await supabase.auth.getUser();
     const now = new Date().toISOString();
 
-    // Verificăm dacă produsul există deja în Cămară (după barcode sau nume identic) pentru STACARE
     const existentIndex = produse.findIndex(
       (p) =>
         (item.barcode && item.barcode !== 'MANUAL' && p.barcode === item.barcode) ||
@@ -119,14 +139,20 @@ export function useCamara() {
     );
 
     if (existentIndex >= 0) {
-      // Stacăm: creștem cantitatea
       const produsExistent = produse[existentIndex];
       const nouaCantitate = (produsExistent.cantitate || 1) + (options?.cantitate || 1);
+      let dataExp = options?.dataExpirare ?? produsExistent.data_expirare;
+      if (!dataExp) {
+        const zile = options?.zileValabilitate ?? produsExistent.zile_valabilitate ?? (options?.isCongelat ? 90 : 14);
+        dataExp = new Date(Date.now() + zile * 86_400_000).toISOString().split('T')[0];
+      }
+      const dLeft = calculateDaysUntilExpiry(dataExp);
       const actualizat: ProdusCamara = {
         ...produsExistent,
         cantitate: nouaCantitate,
         is_congelat: options?.isCongelat ?? produsExistent.is_congelat,
-        data_expirare: options?.dataExpirare ?? produsExistent.data_expirare,
+        data_expirare: dataExp,
+        zile_valabilitate: dLeft !== null ? dLeft : (options?.zileValabilitate || (options?.isCongelat ? 90 : produsExistent.zile_valabilitate)),
       };
 
       const nouaLista = produse.map((p, i) => (i === existentIndex ? actualizat : p));
@@ -145,6 +171,9 @@ export function useCamara() {
     }
 
     const localId = `camara_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const zileVal = options?.zileValabilitate || (options?.isCongelat ? 90 : 14);
+    const dataExp = options?.dataExpirare || new Date(Date.now() + zileVal * 86_400_000).toISOString().split('T')[0];
+    const dLeft = calculateDaysUntilExpiry(dataExp);
     const nouProdus: ProdusCamara = {
       id: localId,
       user_id: user ? user.id : 'local_user',
@@ -158,8 +187,8 @@ export function useCamara() {
       imagine_url: item.imagine_url || undefined,
       created_at: now,
       cantitate: options?.cantitate || 1,
-      data_expirare: options?.dataExpirare,
-      zile_valabilitate: options?.zileValabilitate || (options?.isCongelat ? 90 : 14),
+      data_expirare: dataExp,
+      zile_valabilitate: dLeft !== null ? dLeft : zileVal,
       is_congelat: options?.isCongelat || false,
     };
 
@@ -198,26 +227,24 @@ export function useCamara() {
     return nouProdus;
   };
 
-  /**
-   * Comută starea de CONGELATOR ❄️ (extinde valabilitatea pentru carne/alimente)
-   */
   const toggleCongelator = async (id: string) => {
     const nouaLista = produse.map((p) => {
       if (p.id !== id) return p;
       const willFreeze = !p.is_congelat;
+      const zile = willFreeze ? 90 : 7;
+      const dataExp = new Date(Date.now() + zile * 86_400_000).toISOString().split('T')[0];
+      const dLeft = calculateDaysUntilExpiry(dataExp);
       return {
         ...p,
         is_congelat: willFreeze,
-        zile_valabilitate: willFreeze ? 90 : 7,
+        data_expirare: dataExp,
+        zile_valabilitate: dLeft !== null ? dLeft : zile,
       };
     });
     setProduse(nouaLista);
     await salveazaLocalList(nouaLista);
   };
 
-  /**
-   * Scade cantitatea unui produs din Cămară (sau îl șterge când ajunge la 0)
-   */
   const modificaCantitate = async (id: string, delta: number) => {
     const existent = produse.find((p) => p.id === id);
     if (!existent) return;
@@ -256,9 +283,39 @@ export function useCamara() {
     );
   };
 
+  /**
+   * Modul 4.B Selecție ingrediente & link către RecipeBuilder (useInRecipe)
+   */
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(produse.map((p) => p.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const useInRecipe = (): ProdusCamara[] => {
+    if (selectedIds.size === 0) return produse;
+    return produse.filter((p) => selectedIds.has(p.id));
+  };
+
   return {
     produse,
     loading,
+    selectedIds,
+    toggleSelect,
+    selectAll,
+    clearSelection,
+    useInRecipe,
     adaugaProdus,
     modificaCantitate,
     toggleCongelator,

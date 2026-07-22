@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const rootDir = __dirname;
-const outputFile = path.join(rootDir, 'cod_sursa_complet_nutriai_fara_chei.txt');
+const outputFile = path.join(rootDir, 'cod_complet_nutriai_fara_chei.txt');
 
 const EXCLUDED_DIRS = new Set([
   'node_modules',
@@ -24,6 +24,7 @@ const ALLOWED_EXTENSIONS = new Set([
 
 const EXCLUDED_FILES = new Set([
   'package-lock.json',
+  'cod_complet_nutriai_fara_chei.txt',
   'cod_sursa_complet_nutriai_fara_chei.txt',
   'cod_sursa_fara_chei.txt',
   'cod_sursa_pentru_ai.txt',

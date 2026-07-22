@@ -15,6 +15,8 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import { useAntrenamente, Antrenament } from '../hooks/useAntrenamente';
 import { useNotify } from '../hooks/useNotify';
+import { ConfirmSheet } from '../components/ui/ConfirmSheet';
+import KeyboardAwareScreen, { CONTENT_BOTTOM_PADDING } from '@/components/ui/KeyboardAwareScreen';
 
 interface ZiGrupata {
   titlu: string;
@@ -31,6 +33,7 @@ export default function JurnalAntrenamenteScreen() {
   const [istoric, setIstoric] = useState<Antrenament[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+  const [toDelete, setToDelete] = useState<Antrenament | null>(null);
 
   const incarcaJurnal = useCallback(async () => {
     setLoading(true);
@@ -55,26 +58,7 @@ export default function JurnalAntrenamenteScreen() {
 
   const handleStergere = (item: Antrenament) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      'Ștergere antrenament',
-      `Sigur dorești să ștergi "${item.nume}" din jurnal?`,
-      [
-        { text: 'Anulează', style: 'cancel' },
-        {
-          text: 'Șterge',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await stergeAntrenament(item.id);
-              notify.info('Antrenament șters', item.nume);
-              await incarcaJurnal();
-            } catch {
-              notify.error('Eroare', 'Nu s-a putut șterge antrenamentul.');
-            }
-          }
-        }
-      ]
-    );
+    setToDelete(item);
   };
 
   // Grupare pe zile (Azi, Ieri, ro-RO)
@@ -118,8 +102,8 @@ export default function JurnalAntrenamenteScreen() {
   }, [istoric]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
+    <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: colors.surfaceBg }]}>
           <ArrowLeft size={20} color={colors.textPrimary} />
@@ -139,8 +123,9 @@ export default function JurnalAntrenamenteScreen() {
         <FlatList
           data={zileGrupate}
           keyExtractor={(item) => item.dataScurta}
-          contentContainerStyle={[styles.listContent, { width: '100%', maxWidth: 520, alignSelf: 'center' }]}
+          contentContainerStyle={[styles.listContent, { width: '100%', maxWidth: 520, alignSelf: 'center', paddingBottom: CONTENT_BOTTOM_PADDING }]}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             <View style={[styles.summaryCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
               <View style={styles.statBox}>
@@ -256,7 +241,30 @@ export default function JurnalAntrenamenteScreen() {
           )}
         />
       )}
-    </View>
+
+      {/* CONFIRM SHEET (Secțiunea 5.1) */}
+      <ConfirmSheet
+        visible={!!toDelete}
+        title="Ștergere antrenament"
+        message={toDelete ? `Sigur dorești să ștergi "${toDelete.nume}" din jurnal?` : ''}
+        confirmLabel="Șterge"
+        cancelLabel="Anulează"
+        destructive={true}
+        onCancel={() => setToDelete(null)}
+        onConfirm={async () => {
+          if (!toDelete) return;
+          const item = toDelete;
+          setToDelete(null);
+          try {
+            await stergeAntrenament(item.id);
+            notify.info('Antrenament șters', item.nume);
+            await incarcaJurnal();
+          } catch (error) {
+            notify.error('Eroare', 'Nu s-a putut șterge antrenamentul.');
+          }
+        }}
+      />
+    </KeyboardAwareScreen>
   );
 }
 

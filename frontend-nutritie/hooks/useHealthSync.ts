@@ -45,7 +45,7 @@ export interface HealthSyncState {
 
 export function useHealthSync(): HealthSyncState {
   const [isAvailable, setIsAvailable] = useState<boolean>(false);
-  const [isEnabled, setIsEnabled] = useState<boolean>(false);
+  const [isEnabled, setIsEnabled] = useState<boolean>(true);
   const [steps, setSteps] = useState<number>(0);
   const [activeCalories, setActiveCalories] = useState<number>(0);
   const [stepGoal, setStepGoal] = useState<number>(10000);
@@ -73,7 +73,7 @@ export function useHealthSync(): HealthSyncState {
       const manualSteps = manualStr ? parseInt(manualStr, 10) : 0;
 
       let sensorSteps = 0;
-      if (sensorAvailable && Platform.OS === 'ios') {
+      if (sensorAvailable) {
         const end = new Date();
         const start = new Date();
         start.setHours(0, 0, 0, 0);
@@ -83,7 +83,7 @@ export function useHealthSync(): HealthSyncState {
             sensorSteps = result.steps;
           }
         } catch (err) {
-          console.log('Notă: Citirea istorică a pașilor nu este disponibilă pe iOS:', err);
+          console.log('Notă: Citirea istorică din Pedometer (getStepCountAsync):', err);
         }
       }
 
@@ -108,14 +108,14 @@ export function useHealthSync(): HealthSyncState {
       try {
         const permResult = await Pedometer.requestPermissionsAsync();
         available = permResult.granted || (await Pedometer.isAvailableAsync());
-      } catch (err) {
+      } catch {
         available = await Pedometer.isAvailableAsync();
       }
       setIsAvailable(available);
 
-      // Citim starea de activare din AsyncStorage
+      // Citim starea de activare din AsyncStorage (implicit activat)
       const storedEnabled = await AsyncStorage.getItem(HEALTH_SYNC_ENABLED_KEY);
-      const enabled = storedEnabled === 'true';
+      const enabled = storedEnabled !== 'false';
       setIsEnabled(enabled);
 
       // Citim obiectivul de pași
@@ -198,7 +198,7 @@ export function useHealthSync(): HealthSyncState {
           const permResult = await Pedometer.requestPermissionsAsync();
           avail = permResult.granted || (await Pedometer.isAvailableAsync());
           setIsAvailable(avail);
-        } catch (err) {}
+        } catch {}
         setIsEnabled(true);
         await AsyncStorage.setItem(HEALTH_SYNC_ENABLED_KEY, 'true');
         await fetchStepsToday(avail);

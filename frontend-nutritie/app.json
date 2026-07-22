@@ -10,13 +10,25 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nutriai.app"
+      "bundleIdentifier": "com.nutriai.app",
+      "infoPlist": {
+        "NSMotionUsageDescription": "NutriAI utilizează senzorul de mișcare pentru a contoriza pașii zilnici și caloriile arse.",
+        "NSCameraUsageDescription": "NutriAI are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.",
+        "NSPhotoLibraryUsageDescription": "NutriAI accesează galeria pentru a selecta poze cu mâncare."
+      }
     },
     "android": {
       "package": "com.nutriai.app",
+      "icon": "./assets/images/icon.png",
+      "permissions": [
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#090C0E",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "foregroundImage": "./assets/images/icon.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
@@ -40,7 +52,25 @@
           }
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "NutriAI are nevoie de acces la cameră pentru a analiza mâncarea din farfurie."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "NutriAI are nevoie de acces la galerie pentru a selecta poze cu mâncare."
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "NutriAI utilizează senzorul de mișcare pentru a număra pașii zilnici."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -6,9 +6,10 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/config';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeInUp, FadeOut, Layout } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut, Layout } from 'react-native-reanimated';
 import { Send, Sparkles, RotateCcw, MessageSquarePlus, CheckCircle2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
@@ -16,20 +17,85 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import BouncingDot from '../../components/BouncingDot';
 import { RecipeGeneratorModal } from '../../components/RecipeGeneratorModal';
+import { supabase } from '../../supabase';
+import { ConfirmSheet } from '../../components/ui/ConfirmSheet';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import KeyboardAwareScreen, { CONTENT_BOTTOM_PADDING } from '@/components/ui/KeyboardAwareScreen';
+
+interface MealProposalItem {
+  name: string;
+  qty: number;
+  unit: string;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  kcal: number;
+}
+interface MealProposal {
+  type: string;
+  items: MealProposalItem[];
+  totals: {
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
+    kcal: number;
+  };
+}
 
 interface ChatMessage {
   role: 'ai' | 'user' | string;
   text: string;
 }
 
+function parseMealProposal(text: any): MealProposal | null {
+  if (!text) return null;
+  if (typeof text === 'object' && text.type === 'MEAL_PROPOSAL' && Array.isArray(text.items)) {
+    return text as MealProposal;
+  }
+  
+  let stringToParse = typeof text === 'string' ? text : JSON.stringify(text);
+  
+  try {
+    // Căutăm exact bucata de JSON, ignorând markdown-ul
+    const startIndex = stringToParse.indexOf('{');
+    const endIndex = stringToParse.lastIndexOf('}');
+    
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+      const pureJsonString = stringToParse.substring(startIndex, endIndex + 1);
+      const parsed = JSON.parse(pureJsonString);
+      
+      // Forțăm structura dacă lipsesc elemente, dar avem items
+      if (parsed && Array.isArray(parsed.items)) {
+        return {
+          type: "MEAL_PROPOSAL",
+          items: parsed.items,
+          totals: parsed.totals || { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
+        };
+      }
+    }
+  } catch (error) {
+    console.error("❌ Eroare la tăierea JSON-ului:", error);
+  }
+  return null;
+}
+
+const isMealLogIntent = (text: string) => {
+  const lower = text.toLowerCase();
+  return /am m[aâ]ncat|am consumat|am servit|am b[aă]ut|logheaz[aă]|[iî]nregistreaz[aă]|inregistreaza|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa|mic dejun|pr[aâ]nz|cin[aă]|gustare|calorii|grame|por[tț]ie/i.test(lower);
+};
+
 export default function ChatScreen() {
   const { colors } = useTheme();
   const { session } = useAuth();
+  const insets = useSafeAreaInsets();
   const [chatInput, setChatInput] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
   const [recipeModalVisible, setRecipeModalVisible] = useState(false);
   const [newChatModalVisible, setNewChatModalVisible] = useState(false);
   const [showNewChatBanner, setShowNewChatBanner] = useState(false);
+  const [mealProposal, setMealProposal] = useState<MealProposal | null>(null);
+  const [mealProposalVisible, setMealProposalVisible] = useState(false);
+  const [savingProposal, setSavingProposal] = useState(false);
   const [mesaje, setMesaje] = useState<ChatMessage[]>([
     { role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
   ]);
@@ -49,10 +115,12 @@ export default function ChatScreen() {
     refresh 
   } = useMeseAzi();
 
-  useFocusEffect(
+  useFocusRefresh(
     useCallback(() => {
       refresh();
-    }, [refresh])
+    }, [refresh]),
+    5000,
+    [refresh]
   );
 
   const params = useLocalSearchParams<{ prompt?: string }>();
@@ -148,7 +216,37 @@ export default function ChatScreen() {
       });
       const date = await raspuns.json();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setMesaje(prev => [...prev, { role: 'ai', text: date.raspuns || "Eroare la procesarea răspunsului." }]);
+      
+      let raspunsText = date.raspuns || "Eroare la procesarea răspunsului.";
+      let parsed = parseMealProposal(date) || parseMealProposal(raspunsText);
+
+      if (!parsed && isMealLogIntent(mesajText)) {
+        try {
+          const logResp = await fetch(`${API_URL}/api/log-food-from-chat`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({ mesaj: mesajText }),
+          });
+          if (logResp.ok) {
+            const logDate = await logResp.json();
+            parsed = parseMealProposal(logDate) || parseMealProposal(logDate.raspuns);
+          }
+        } catch (errLog) {
+          console.warn('Eroare fallback /api/log-food-from-chat:', errLog);
+        }
+      }
+
+      if (parsed && (parsed.type === 'MEAL_PROPOSAL' || Array.isArray(parsed.items))) {
+        if (Array.isArray(parsed.items)) parsed.type = 'MEAL_PROPOSAL';
+        setMealProposal(parsed);
+        setMealProposalVisible(true);
+        raspunsText = "Am identificat alimentele! Apasă pe butonul de confirmare care a apărut pe ecran.";
+      }
+
+      setMesaje(prev => [...prev, { role: 'ai', text: raspunsText }]);
     } catch {
       setMesaje(prev => [...prev, { role: 'ai', text: "Eroare de conexiune cu serverul AI. Te rog încearcă din nou mai târziu." }]);
     } finally {
@@ -162,6 +260,68 @@ export default function ChatScreen() {
     const inputCurent = chatInput;
     setChatInput('');
     await executaTrimitereMesaj(inputCurent);
+  };
+
+  const confirmMealProposal = async () => {
+    // 1. Verificări stricte cu mesaje de eroare vizibile
+    if (!mealProposal) {
+      Alert.alert("Eroare", "Datele mesei lipsesc sau sunt corupte.");
+      return;
+    }
+    if (!session?.user?.id) {
+      Alert.alert("Eroare Autentificare", "Sesiunea a expirat. Te rog să te reconectezi din Profil.");
+      return;
+    }
+
+    setSavingProposal(true);
+
+    try {
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const oraStr = now.toTimeString().split(' ')[0].substring(0, 5);
+
+      // 2. Extractor brutal de numere (scoate 'g', 'kcal', spații etc.)
+      const parseStrictNumber = (val: any) => {
+        if (val === undefined || val === null) return 0;
+        const numStr = String(val).replace(/[^0-9.-]+/g, "");
+        const parsed = Number(numStr);
+        return isNaN(parsed) ? 0 : parsed;
+      };
+
+      // 3. Inserarea fiecărui item cu interceptare de erori Supabase
+      for (const item of mealProposal.items) {
+        const { error } = await supabase.from('mese').insert({
+          user_id: session.user.id,
+          nume: `${item.name} (${item.qty}${item.unit || 'g'})`,
+          calorii: Math.round(parseStrictNumber(item.kcal)),
+          proteine: Math.round(parseStrictNumber(item.protein_g)),
+          carbohidrati: Math.round(parseStrictNumber(item.carbs_g)),
+          grasimi: Math.round(parseStrictNumber(item.fat_g)),
+        });
+
+        if (error) {
+          console.error("Eroare Supabase:", error);
+          Alert.alert("Eroare la Salvare", `Baza de date a refuzat produsul ${item.name}: ${error.message}`);
+          throw error; // Oprește execuția ca să nu arate mesaj de succes fals
+        }
+      }
+
+      // 4. Finalizare cu succes
+      refresh();
+      setMealProposalVisible(false);
+      setMealProposal(null);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setMesaje(prev => [...prev, { role: 'ai', text: '✅ Masa a fost confirmată și adăugată cu succes în Jurnal!' }]);
+      
+    } catch (e: any) {
+      console.error('Eroare salvare propunere masă:', e);
+      // Dacă eroarea nu e de la Supabase, o prindem aici
+      if (!e.message?.includes('Baza de date')) {
+          Alert.alert('Eroare Sistem', 'Nu s-a putut procesa salvarea. Verifică conexiunea la internet.');
+      }
+    } finally {
+      setSavingProposal(false);
+    }
   };
 
   const trimitePromptDirect = async (mesajText: string) => {
@@ -189,22 +349,14 @@ export default function ChatScreen() {
     setTimeout(() => setShowNewChatBanner(false), 3200);
   };
 
-  const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 96 : 74;
-  const INPUT_FLOAT_OFFSET = Platform.OS === 'ios' ? 18 : 16;
-  const inputBottomPadding = isKeyboardVisible
-    ? 10
-    : Math.max(18, TAB_BAR_HEIGHT - 28 + INPUT_FLOAT_OFFSET);
+  const inputBottomPadding = isKeyboardVisible ? 10 : insets.bottom + 60;
 
   return (
     <View style={[styles.outerContainer, { backgroundColor: colors.background }]}>
       <View style={[styles.glowTop, { backgroundColor: colors.accentSecondary }]} />
       <View style={[styles.glowBottom, { backgroundColor: colors.accentTertiary }]} />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        style={styles.container}
-      >
+      <KeyboardAwareScreen style={styles.container}>
 
         {/* Header */}
         <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
@@ -257,7 +409,7 @@ export default function ChatScreen() {
         {mesaje.length <= 1 ? (
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={[styles.emptyChatContainer, { paddingBottom: isKeyboardVisible ? 120 : 30 }]}
+            contentContainerStyle={[styles.emptyChatContainer, { paddingBottom: CONTENT_BOTTOM_PADDING }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
@@ -317,7 +469,7 @@ export default function ChatScreen() {
               contentContainerStyle={{
                 paddingHorizontal: 20,
                 paddingTop: 18,
-                paddingBottom: isKeyboardVisible ? 20 : 84,
+                paddingBottom: CONTENT_BOTTOM_PADDING,
               }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -325,7 +477,7 @@ export default function ChatScreen() {
               {mesaje.map((msg, index) => (
                 <Animated.View
                   key={index}
-                  entering={FadeInDown.duration(400).springify()}
+                  entering={FadeIn.duration(400)}
                   layout={Layout.springify()}
                   style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleAI]}
                 >
@@ -433,7 +585,7 @@ export default function ChatScreen() {
           </BlurView>
         </Animated.View>
 
-      </KeyboardAvoidingView>
+      </KeyboardAwareScreen>
 
       {/* Modal design UI animat pentru Începere Conversație Nouă */}
       <Modal
@@ -472,6 +624,20 @@ export default function ChatScreen() {
           </View>
         </View>
       </Modal>
+
+      <ConfirmSheet
+        visible={mealProposalVisible}
+        title="✨ Confirmare Jurnal Alimentar"
+        message={mealProposal ? `Alimente: ${mealProposal.items.map(i => `${i.name} (${i.qty}${i.unit})`).join(', ')}\nTotal: ${mealProposal.totals?.kcal || 0} kcal | ${mealProposal.totals?.protein_g || 0}g P` : ''}
+        confirmLabel={savingProposal ? 'Se salvează...' : 'Adaugă în Jurnal'}
+        cancelLabel="Anulează"
+        destructive={false}
+        onConfirm={confirmMealProposal}
+        onCancel={() => {
+          setMealProposalVisible(false);
+          setMealProposal(null);
+        }}
+      />
 
       <RecipeGeneratorModal
         visible={recipeModalVisible}

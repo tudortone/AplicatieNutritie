@@ -6,6 +6,11 @@
 -- 1. ACTIVARE RLS PE TABELA DE MESE
 ALTER TABLE IF EXISTS mese ENABLE ROW LEVEL SECURITY;
 
+-- Adăugare coloane noi pentru categorii mese (Mic Dejun, Prânz, Cină, Gustări) și alimente detaliate (JSONB)
+ALTER TABLE IF EXISTS mese ADD COLUMN IF NOT EXISTS tip_masa VARCHAR;
+ALTER TABLE IF EXISTS mese ADD COLUMN IF NOT EXISTS alimente JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS mese ADD COLUMN IF NOT EXISTS fibre INTEGER DEFAULT 0;
+
 -- 2. POLITICĂ PENTRU TABELA 'mese': Utilizatorii își pot accesa doar propriile mese
 DROP POLICY IF EXISTS "Users can only access their own meals" ON mese;
 
@@ -147,5 +152,84 @@ CREATE POLICY "Users can manage their own gamification" ON gamificare
   FOR ALL
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
+
+-- ==============================================================================
+-- 9. MIGRĂRI IDEMPOTENTE NUTRIAI v6 (AGENT B & AGENT C)
+-- ==============================================================================
+
+-- Extindere produse_camara pentru catalog personal & introducere manuală (B6)
+ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS brand TEXT;
+ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS barcode TEXT;
+ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS kcal_100g NUMERIC;
+ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS proteine_100g NUMERIC;
+ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS carbohidrati_100g NUMERIC;
+ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS grasimi_100g NUMERIC;
+ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS fibre_100g NUMERIC;
+ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS portie_label TEXT;
+ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS portie_grame NUMERIC;
+ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual';
+ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+CREATE INDEX IF NOT EXISTS produse_camara_user_id_idx ON produse_camara(user_id);
+CREATE INDEX IF NOT EXISTS produse_camara_lower_nume_idx ON produse_camara(LOWER(nume));
+CREATE INDEX IF NOT EXISTS produse_camara_barcode_idx ON produse_camara(barcode) WHERE barcode IS NOT NULL;
+
+-- Extindere antrenamente pentru Body Heatmap, Volum kg & Mastery Rank (C7)
+ALTER TABLE IF EXISTS antrenamente ADD COLUMN IF NOT EXISTS muscle_load JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE IF EXISTS antrenamente ADD COLUMN IF NOT EXISTS external_volume_kg NUMERIC DEFAULT 0;
+ALTER TABLE IF EXISTS antrenamente ADD COLUMN IF NOT EXISTS equivalent_volume_kg NUMERIC;
+ALTER TABLE IF EXISTS antrenamente ADD COLUMN IF NOT EXISTS session_score INTEGER;
+ALTER TABLE IF EXISTS antrenamente ADD COLUMN IF NOT EXISTS rank_key TEXT;
+ALTER TABLE IF EXISTS antrenamente ADD COLUMN IF NOT EXISTS rank_label TEXT;
+ALTER TABLE IF EXISTS antrenamente ADD COLUMN IF NOT EXISTS calculation_version INTEGER DEFAULT 1;
+ALTER TABLE IF EXISTS antrenamente ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+
+-- ==============================================================================
+-- 10. MIGRĂRI IDEMPOTENTE NUTRIAI v7 — FITNESS ADAPTIV (exercises + workout_logs)
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS exercises (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  equipment text NOT NULL CHECK (equipment IN ('barbell','dumbbell','machine','cable','bodyweight','kettlebell','band')),
+  target_muscles text[] NOT NULL,
+  input_type text NOT NULL CHECK (input_type IN ('hold','bodyweight_reps','weighted_reps')),
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE IF EXISTS exercises ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can read exercises catalog" ON exercises;
+CREATE POLICY "Anyone can read exercises catalog" ON exercises
+  FOR SELECT
+  USING (true);
+
+CREATE TABLE IF NOT EXISTS workout_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  exercise_id uuid NOT NULL REFERENCES exercises(id),
+  performed_at timestamptz NOT NULL DEFAULT now(),
+  set_index int NOT NULL,
+  reps int,
+  weight_kg numeric(6,2),
+  time_seconds int,
+  CONSTRAINT valid_metrics CHECK (
+    (reps IS NULL OR reps > 0) AND
+    (weight_kg IS NULL OR weight_kg > 0) AND
+    (time_seconds IS NULL OR time_seconds > 0)
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_workout_logs_user_date ON workout_logs(user_id, performed_at DESC);
+
+ALTER TABLE IF EXISTS workout_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can manage their own workout logs" ON workout_logs;
+CREATE POLICY "Users can manage their own workout logs" ON workout_logs
+  FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+
 
 

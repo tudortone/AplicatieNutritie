@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp, FadeOutDown } from 'react-native-reanimated';
 import { Sparkles, X, Plus, Check, Clock, Utensils, Refrigerator } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
+import { useCamara } from '../hooks/useCamara';
 
 const { height } = Dimensions.get('window');
 
@@ -34,10 +35,21 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
   proteineRamase,
 }) => {
   const { colors } = useTheme();
+  const { produse } = useCamara();
   const [ingredienteSelectate, setIngredienteSelectate] = useState<string[]>(['Ouă', 'Roșii', 'Brânză / Telemea']);
   const [inputCustom, setInputCustom] = useState('');
   const [tipMasa, setTipMasa] = useState('Orice');
   const [timp, setTimp] = useState('Rapid (< 15 min)');
+
+  const ingredienteCamara = React.useMemo(() => {
+    return Array.from(new Set((produse || []).map(p => p.nume).filter(Boolean)));
+  }, [produse]);
+
+  useEffect(() => {
+    if (visible && ingredienteCamara.length > 0) {
+      setIngredienteSelectate(prev => Array.from(new Set([...prev, ...ingredienteCamara.slice(0, 5)])));
+    }
+  }, [visible, ingredienteCamara]);
 
   const toggleIngredient = (ing: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -63,7 +75,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    const prompt = `Am în casă următoarele ingrediente: ${ingredienteSelectate.join(', ')}. Te rog să îmi generezi o rețetă delicioasă și sănătoasă potrivită pentru ${tipMasa === 'Orice' ? 'orice masă a zilei' : tipMasa.toLowerCase()}, cu timp de preparare ${timp.toLowerCase()}. Țintele mele nutriționale rămase pentru astăzi sunt de aproximativ ${Math.max(caloriiRamase, 300)} kcal și ${Math.max(proteineRamase, 15)}g proteine. Include: 1) Numele rețetei, 2) Ingredientele exacte și cantități, 3) Modul de preparare pas cu pas pe scurt, 4) Valorile nutriționale estimate (Calorii, Proteine, Carbohidrați, Grăsimi).`;
+    const prompt = `Am în casă următoarele ingrediente disponibile în cămară: ${ingredienteSelectate.join(', ')}. Te rog să îmi generezi o rețetă delicioasă și sănătoasă potrivită pentru ${tipMasa === 'Orice' ? 'orice masă a zilei' : tipMasa.toLowerCase()}, cu timp de preparare ${timp.toLowerCase()}. Țintele mele nutriționale rămase pentru astăzi sunt de aproximativ ${Math.max(caloriiRamase, 300)} kcal și ${Math.max(proteineRamase, 15)}g proteine. Include: 1) Numele rețetei, 2) Ingredientele exacte și cantități, 3) Modul de preparare pas cu pas pe scurt, 4) Valorile nutriționale estimate (Calorii, Proteine, Carbohidrați, Grăsimi).`;
 
     onGenerate(prompt);
     onClose();
@@ -89,7 +101,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
                 <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Gătește inteligent din ce ai în frigider</Text>
               </View>
             </View>
-            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} onPress={onClose}>
+            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} onPress={onClose} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -113,8 +125,30 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
             </View>
 
             {/* Tag-uri ingrediente */}
+            {ingredienteCamara.length > 0 && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={[styles.sectionTitle, { color: colors.accent, marginBottom: 8 }]}>📦 DISPONIBILE ÎN CĂMARĂ ({ingredienteCamara.length})</Text>
+                <View style={styles.tagsGrid}>
+                  {ingredienteCamara.map((ing) => {
+                    const bifeat = ingredienteSelectate.includes(ing);
+                    return (
+                      <TouchableOpacity
+                        key={`camara-${ing}`}
+                        style={[styles.tag, bifeat ? { backgroundColor: colors.accent, borderColor: colors.accent } : { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                        onPress={() => toggleIngredient(ing)}
+                      >
+                        {bifeat ? <Check size={14} color={colors.background} strokeWidth={3} /> : <Plus size={14} color={colors.textSecondary} />}
+                        <Text style={[styles.tagText, bifeat ? { color: colors.background, fontWeight: '800' } : { color: colors.textSecondary }]}>{ing}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 8 }]}>ALTE INGREDIENTE SUGERATE</Text>
             <View style={styles.tagsGrid}>
-              {ingredienteSelectate.map((ing) => (
+              {ingredienteSelectate.filter(i => !ingredienteCamara.includes(i)).map((ing) => (
                 <TouchableOpacity
                   key={ing}
                   style={[styles.tag, { backgroundColor: colors.accent, borderColor: colors.accent }]}
@@ -124,7 +158,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
                   <Text style={[styles.tagText, { color: colors.background, fontWeight: '800' }]}>{ing}</Text>
                 </TouchableOpacity>
               ))}
-              {INGREDIENTE_PREDEFINITE.filter(i => !ingredienteSelectate.includes(i)).map((ing) => (
+              {INGREDIENTE_PREDEFINITE.filter(i => !ingredienteSelectate.includes(i) && !ingredienteCamara.includes(i)).map((ing) => (
                 <TouchableOpacity
                   key={ing}
                   style={[styles.tag, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}

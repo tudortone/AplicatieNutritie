@@ -1,3 +1,5 @@
+import { classifyMeasurement, type MeasurementSpec } from '../lib/measurement';
+
 export type GrupaMusculara = string;
 export type Echipament = string;
 
@@ -15,17 +17,28 @@ export interface CategorieInfo {
   grupe?: string[];
 }
 
+export interface MuscleActivation {
+  muscle: string;
+  role: 'primary' | 'secondary' | 'stabilizer';
+  factor: number;
+}
+
 export interface Exercitiu {
   id: string;
   nume: string;
   categorie: Categorie;
   grupe: string[];
+  muscleActivations?: MuscleActivation[];
   dificultate: Dificultate;
   echipament?: string;
   met: number;
   caloriiPeMinut?: number;
   descriere?: string;
   instructiuni?: string[];
+  muschiTinta?: Record<string, number>;
+  target_muscles?: string[];
+  activation?: Partial<Record<string, number>>;
+  masurare?: MeasurementSpec;
   greseliComune?: string[];
   sfaturi?: string[];
   seriiDefault: number;
@@ -61,6 +74,7 @@ export const EXERCITII: Exercitiu[] = [
     caloriiPeMinut: 7,
     seriiDefault: 4,
     repetariDefault: 10,
+    muschiTinta: { pectorali: 100, triceps: 75, deltoid_anterior: 75, abdomen: 40 },
     descriere: 'Exercițiul de bază pentru masa pectoralilor.',
     instructiuni: [
       'Întins pe bancă, priza puțin mai lată decât umerii.',
@@ -202,6 +216,16 @@ export const EXERCITII: Exercitiu[] = [
     caloriiPeMinut: 8,
     seriiDefault: 3,
     repetariDefault: 10,
+    masurare: {
+      type: 'reps_weight',
+      allowsWeight: true,
+      weightOptional: true,
+      defaultSets: 3,
+      defaultReps: 10,
+      defaultWeightKg: 0,
+      unitLabel: 'Repetări',
+      bodyweightFactor: 0.8,
+    },
   },
 
   // ---- SPATE ----
@@ -1157,8 +1181,66 @@ export const EXERCITII: Exercitiu[] = [
   },
 ];
 
+import type { MuscleId } from '../components/fitness/heatColor';
+
+export function deriveMuschiTinta(ex: Exercitiu): Partial<Record<MuscleId, number>> {
+  if (ex.muschiTinta) {
+    return ex.muschiTinta as Partial<Record<MuscleId, number>>;
+  }
+  const out: Partial<Record<MuscleId, number>> = {};
+  const mapGroupToMuscleIds = (group: string): { id: MuscleId; pct: number }[] => {
+    const g = group.toLowerCase().trim();
+    if (/pectorali|piept|pectoral/i.test(g)) return [{ id: 'pectorali', pct: 100 }];
+    if (/deltoid anterior|umeri anteriori/i.test(g)) return [{ id: 'deltoid_anterior', pct: 85 }];
+    if (/deltoid lateral|umeri laterali/i.test(g)) return [{ id: 'deltoid_lateral', pct: 85 }];
+    if (/deltoid posterior|umeri posteriori/i.test(g)) return [{ id: 'deltoid_posterior', pct: 80 }];
+    if (/umeri|deltoizi/i.test(g)) return [
+      { id: 'deltoid_anterior', pct: 80 },
+      { id: 'deltoid_lateral', pct: 65 },
+    ];
+    if (/biceps/i.test(g)) return [{ id: 'biceps', pct: 90 }];
+    if (/triceps/i.test(g)) return [{ id: 'triceps', pct: 90 }];
+    if (/antebrate|brahial|brate|brațe/i.test(g)) return [{ id: 'antebrate', pct: 60 }];
+    if (/abdomen|abdomeni|core/i.test(g)) return [{ id: 'abdomen', pct: 90 }];
+    if (/oblici/i.test(g)) return [{ id: 'oblici', pct: 80 }];
+    if (/trapez/i.test(g)) return [{ id: 'trapez', pct: 80 }];
+    if (/dorsali|spate/i.test(g)) return [{ id: 'dorsali', pct: 95 }];
+    if (/lombari|coloană/i.test(g)) return [{ id: 'lombari', pct: 75 }];
+    if (/romboizi/i.test(g)) return [{ id: 'romboizi', pct: 70 }];
+    if (/fesieri|șolduri/i.test(g)) return [{ id: 'fesieri', pct: 85 }];
+    if (/cvadriceps|picioare/i.test(g)) return [{ id: 'cvadriceps', pct: 95 }];
+    if (/ischiogambieri|femurali/i.test(g)) return [{ id: 'ischiogambieri', pct: 85 }];
+    if (/gambe/i.test(g)) return [{ id: 'gambe', pct: 75 }];
+    if (/adductori/i.test(g)) return [{ id: 'adductori', pct: 65 }];
+    if (/full-body|corp_intreg|cardio/i.test(g)) return [
+      { id: 'cvadriceps', pct: 60 },
+      { id: 'pectorali', pct: 50 },
+      { id: 'dorsali', pct: 50 },
+      { id: 'abdomen', pct: 50 },
+    ];
+    return [];
+  };
+
+  ex.grupe.forEach((g, idx) => {
+    const factor = idx === 0 ? 1.0 : idx === 1 ? 0.75 : 0.5;
+    const mapped = mapGroupToMuscleIds(g);
+    mapped.forEach(({ id, pct }) => {
+      const value = Math.round(pct * factor);
+      out[id] = Math.max(out[id] ?? 0, value);
+    });
+  });
+
+  return out;
+}
+
+export const EXERCITII_DB: Exercitiu[] = EXERCITII.map((e) => ({
+  ...e,
+  masurare: e.masurare ?? classifyMeasurement(e),
+  muschiTinta: e.muschiTinta ?? deriveMuschiTinta(e),
+}));
+
 export const getExercitiuById = (id: string): Exercitiu | undefined =>
-  EXERCITII.find((e) => e.id === id);
+  EXERCITII_DB.find((e) => e.id === id);
 
 export const getExercitiiByCategorie = (categorie: Categorie): Exercitiu[] =>
-  EXERCITII.filter((e) => e.categorie === categorie);
+  EXERCITII_DB.filter((e) => e.categorie === categorie);

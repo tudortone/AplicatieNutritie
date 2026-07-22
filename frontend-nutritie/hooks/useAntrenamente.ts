@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculeazaCaloriiArse } from '../constants/exercitii';
+import { computeWorkoutMetrics } from '../lib/fitnessEngine';
 import type { User } from '@supabase/supabase-js';
 
 export interface SetExercitiu {
@@ -27,11 +28,34 @@ export interface Antrenament {
   calorii_arse: number;
   exercitii?: ExercitiuInAntrenament[];
   volum_total?: number;
+  muscle_load?: Record<string, number>;
+  external_volume_kg?: number;
+  equivalent_volume_kg?: number;
+  session_score?: number;
+  rank_key?: string;
+  rank_label?: string;
   created_at: string;
   is_local?: boolean;
 }
 
 const LOCAL_WORKOUTS_KEY = 'nutriai_antrenamente_local_v2';
+
+export function normalizeAntrenament(row: Antrenament): Antrenament {
+  if (row.external_volume_kg !== undefined && row.muscle_load && Object.keys(row.muscle_load).length > 0) {
+    return row;
+  }
+  const computed = computeWorkoutMetrics(row.exercitii || []);
+  return {
+    ...row,
+    muscle_load: row.muscle_load || computed.muscleLoad,
+    external_volume_kg: row.external_volume_kg ?? computed.externalVolumeKg,
+    equivalent_volume_kg: row.equivalent_volume_kg ?? computed.equivalentVolumeKg,
+    session_score: row.session_score ?? computed.sessionScore,
+    rank_key: row.rank_key || computed.rank.key,
+    rank_label: row.rank_label || computed.rank.label,
+    volum_total: row.volum_total ?? computed.externalVolumeKg,
+  };
+}
 
 export function useAntrenamente(dataSelectata?: Date) {
   const [antrenamente, setAntrenamente] = useState<Antrenament[]>([]);
@@ -104,9 +128,9 @@ export function useAntrenamente(dataSelectata?: Date) {
         }
       });
 
-      const merged = Array.from(combinedMap.values()).sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+      const merged = Array.from(combinedMap.values())
+        .map(normalizeAntrenament)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
       setAntrenamente(merged);
       const total = merged.reduce((sum, item) => sum + (item.calorii_arse || 0), 0);
@@ -150,9 +174,9 @@ export function useAntrenamente(dataSelectata?: Date) {
         if (!map.has(x.id)) map.set(x.id, x);
       });
 
-      return Array.from(map.values()).sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+      return Array.from(map.values())
+        .map(normalizeAntrenament)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     } catch (e) {
       console.warn('Eroare fetchIstoric:', e);
       return [];
@@ -161,6 +185,23 @@ export function useAntrenamente(dataSelectata?: Date) {
 
   useEffect(() => {
     fetchAntrenamente();
+
+    const checkDailyReset = async () => {
+      try {
+        const todayStr = new Date().toDateString();
+        const lastReset = await AsyncStorage.getItem('nutriai_last_workout_reset_date');
+        if (lastReset && lastReset !== todayStr) {
+          await AsyncStorage.removeItem('nutriai_active_workout_timer');
+          await AsyncStorage.setItem('nutriai_last_workout_reset_date', todayStr);
+          fetchAntrenamente();
+        } else if (!lastReset) {
+          await AsyncStorage.setItem('nutriai_last_workout_reset_date', todayStr);
+        }
+      } catch (e) {
+        console.warn('Eroare verificare reset zilnic:', e);
+      }
+    };
+    checkDailyReset();
   }, [fetchAntrenamente]);
 
   const adaugaAntrenament = async (payload: {
@@ -187,6 +228,8 @@ export function useAntrenamente(dataSelectata?: Date) {
         calorii = calculeazaCaloriiArse(payload.met, greutateKg || 75, payload.durata_min);
       }
 
+      const computed = computeWorkoutMetrics(payload.exercitii ?? []);
+
       const row: Antrenament = {
         id: `local_workout_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         user_id: currentUser?.id || 'local_user',
@@ -195,7 +238,13 @@ export function useAntrenamente(dataSelectata?: Date) {
         durata_min: payload.durata_min,
         calorii_arse: calorii,
         exercitii: payload.exercitii ?? [],
-        volum_total: payload.volum_total ?? 0,
+        volum_total: payload.volum_total ?? computed.externalVolumeKg,
+        muscle_load: computed.muscleLoad,
+        external_volume_kg: computed.externalVolumeKg,
+        equivalent_volume_kg: computed.equivalentVolumeKg,
+        session_score: computed.sessionScore,
+        rank_key: computed.rank.key,
+        rank_label: computed.rank.label,
         created_at: new Date().toISOString(),
       };
 
@@ -217,6 +266,12 @@ export function useAntrenamente(dataSelectata?: Date) {
                 calorii_arse: row.calorii_arse,
                 exercitii: row.exercitii,
                 volum_total: row.volum_total,
+                muscle_load: row.muscle_load,
+                external_volume_kg: row.external_volume_kg,
+                equivalent_volume_kg: row.equivalent_volume_kg,
+                session_score: row.session_score,
+                rank_key: row.rank_key,
+                rank_label: row.rank_label,
                 created_at: row.created_at,
               },
             ])
@@ -291,7 +346,7 @@ export function useAntrenamente(dataSelectata?: Date) {
       await saveLocalWorkouts(localList.filter((item) => item.id !== id));
 
       if (user && !id.startsWith('local_')) {
-        await supabase.from('antrenamente').delete().eq('id', id);
+        await supabase.from('antrenamente').delete().eq('id', id).eq('user_id', user.id);
       }
       await fetchAntrenamente();
     } catch (error) {

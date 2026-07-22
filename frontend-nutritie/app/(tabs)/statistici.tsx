@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Platform, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
@@ -11,6 +12,7 @@ import { supabase } from '../../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Masa } from '../../types';
 import { AddWeightModal } from '../../components/AddWeightModal';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 interface ZiStatistica {
   data: string;
@@ -53,6 +55,7 @@ const AnimatedTrendArrow = ({ isLoss, color }: { isLoss: boolean; color: string 
 
 export default function StatisticiScreen() {
   const { colors } = useTheme();
+  const { scrollPaddingTop, scrollPaddingBottom } = useResponsiveLayout();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'calorii' | 'greutate'>('calorii');
   const [caloriiTinta, setCaloriiTinta] = useState(2000);
@@ -231,10 +234,12 @@ export default function StatisticiScreen() {
     };
   };
 
-  useFocusEffect(
+  useFocusRefresh(
     useCallback(() => {
       fetchStatistici();
-    }, [fetchStatistici])
+    }, [fetchStatistici]),
+    5000,
+    [fetchStatistici]
   );
 
   const maxCalorii = Math.max(...zile.map((z) => z.calorii), caloriiTinta, 2500);
@@ -255,7 +260,7 @@ export default function StatisticiScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}
         refreshControl={
           <RefreshControl refreshing={false} onRefresh={fetchStatistici} tintColor={colors.accent} colors={[colors.accent]} />
         }
@@ -542,7 +547,7 @@ const styles = StyleSheet.create({
   glowTop: { position: 'absolute', top: -150, right: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.05 },
   glowBottom: { position: 'absolute', bottom: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.05 },
 
-  scroll: { paddingTop: Platform.OS === 'ios' ? 48 : 28, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 160 : 100 },
+  scroll: { paddingHorizontal: 20 },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 15, fontWeight: '500' },

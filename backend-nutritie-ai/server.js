@@ -93,7 +93,16 @@ const upload = multer({
 
 // Inițializare Supabase pentru validarea token-ului JWT și operațiuni DB sigure
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey;
+
+// Supabase Admin (service_role) — ocolește RLS pentru operațiuni server-side.
+// ⚠️ NU folosim fallback la anon key: ar face ca operațiunile admin să pice silențios
+//    sau să ocolească incorect RLS-ul. Cerem cheia service_role explicit.
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseServiceKey) {
+  console.error('EROARE CRITICĂ: Lipsește SUPABASE_SERVICE_ROLE_KEY — operațiunile admin (audit log etc.) nu pot rula sigur.');
+  console.error('Setează SUPABASE_SERVICE_ROLE_KEY în variabilele de mediu ale backend-ului.');
+  process.exit(1);
+}
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // Cache in-memory TTL (60 secunde) pentru token-uri JWT
@@ -162,12 +171,10 @@ const requireAuth = async (req, res, next) => {
 const genAI = new GoogleGenerativeAI(geminiApiKey);
 const getGeminiModelsList = () => {
   return [
-    process.env.GEMINI_MODEL,
     "gemini-2.5-flash",
     "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash"
-  ].filter((v, i, a) => v && a.indexOf(v) === i);
+    "gemini-2.0-flash-lite"
+  ];
 };
 
 // Helper pentru timeout cereri Gemini (30 secunde)
@@ -367,7 +374,7 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
     if (runGroq) {
       console.log("🔄 Încerc Groq Vision AI...");
       const groqKeys = getApiKeysList('GROQ_API_KEY');
-      const groqVisionModels = ["meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"];
+      const groqVisionModels = ["llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview"];
       for (const key of groqKeys) {
         for (const groqModel of groqVisionModels) {
           try {
@@ -609,6 +616,16 @@ Instrucțiuni de formatare și stil:
 1. Folosește emoji-uri relevante la începutul propozițiilor sau ideilor importante (de exemplu 🥗, 🔥, 🥩, 💡, ✅).
 2. Structurează răspunsul cu bullet points dacă oferi mai mult de 2 sugestii sau opțiuni de mese.
 3. Răspunde concis, clar și la obiect. Poți folosi maximum 6-8 propoziții dacă utilizatorul cere explicații detaliate sau planuri de mese.
+4. REGULĂ JURNAL ALIMENTAR DIN CHAT: Dacă utilizatorul menționează că a mâncat, a consumat sau dorește să înregistreze o masă/un aliment (ex: "am mâncat 200g piept de pui și orez", "loghează o salată"), NU confirma și NU declara nimic salvat! Răspunde STRICT și EXCLUSIV cu un obiect JSON valid exact în formatul:
+{
+  "type": "MEAL_PROPOSAL",
+  "meal_type": "mic_dejun",
+  "items": [
+    { "name": "nume aliment", "qty": 100, "unit": "g", "protein_g": 20, "carbs_g": 0, "fat_g": 5, "kcal": 130, "fiber_g": 0 }
+  ],
+  "totals": { "protein_g": 20, "carbs_g": 0, "fat_g": 5, "kcal": 130, "fiber_g": 0 }
+}
+Nu include absolut niciun alt caracter sau text în fața ori după acest obiect JSON când propui o masă! Cheia "meal_type" TREBUIE să fie neapărat una din valorile: "mic_dejun", "pranz", "cina", "gustare" (dedusă inteligent din alimentele consumate: ex. cereale/ouă/cafea = mic_dejun, ciorbă/meniu complet = pranz, cină ușoară = cina, fruct/snack = gustare).
 
 Sarcina ta: Răspunde prietenos, ținând cont de istoricul discuției și de caloriile/proteinele rămase astăzi.`;
 
@@ -640,18 +657,24 @@ Sarcina ta: Răspunde prietenos, ținând cont de istoricul discuției și de ca
     }
 
     try {
+      const isMealLog = /am m[aâ]ncat|am consumat|logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa/i.test(ultimulMesaj);
+      const groqBody = {
+        model: "llama-3.3-70b-versatile",
+        messages: messages,
+        temperature: isMealLog ? 0.2 : 0.7,
+        max_tokens: 800
+      };
+      if (isMealLog) {
+        groqBody.response_format = { type: "json_object" };
+      }
+
       const fetchPromise = fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${groqApiKey}`
         },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: messages,
-          temperature: 0.7,
-          max_tokens: 800
-        })
+        body: JSON.stringify(groqBody)
       });
 
       const response = await callWithTimeout(fetchPromise, 35000);
@@ -685,6 +708,94 @@ Sarcina ta: Răspunde prietenos, ținând cont de istoricul discuției și de ca
   } catch (error) {
     console.error("Eroare la generarea chat-ului AI:", error);
     res.status(500).json({ raspuns: "A apărut o problemă de conexiune cu asistentul AI. Te rugăm să mai încerci peste câteva momente!" });
+  }
+});
+
+// ==========================================
+// RUTA DEDICATĂ: LOGARE MASĂ DIN CHAT (JSON STRICT MEAL_PROPOSAL)
+// ==========================================
+app.post('/api/log-food-from-chat', requireAuth, aiRateLimiter, async (req, res) => {
+  try {
+    const { mesaj } = req.body;
+    if (!mesaj || typeof mesaj !== 'string') {
+      return res.status(400).json({ eroare: "Mesaj invalid pentru logare." });
+    }
+    const textCurat = mesaj.replace(/[\x00-\x1F\x7F]/g, "").trim().substring(0, 500);
+
+    const prompt = `Utilizatorul dorește să înregistreze o masă din următorul text: "${textCurat}".
+EXTRAGE toate alimentele menționate, valorile lor nutriționale (calorii, proteine g, carbohidrați g, grăsimi g, fibre g) și DEDUCE cheia "meal_type" ("mic_dejun" | "pranz" | "cina" | "gustare" în funcție de aliment sau oră: ex. cereale = mic_dejun, ciorbă/friptură = pranz, snack = gustare).
+RETURNEAZĂ STRICT UN OBIECT JSON valid, exact în acest format și cu exact acești parametri (fără text explicativ în afară de JSON):
+{
+  "type": "MEAL_PROPOSAL",
+  "meal_type": "mic_dejun",
+  "items": [
+    { "name": "nume aliment", "qty": 100, "unit": "g", "protein_g": 20, "carbs_g": 0, "fat_g": 5, "kcal": 130, "fiber_g": 0 }
+  ],
+  "totals": { "protein_g": 20, "carbs_g": 0, "fat_g": 5, "kcal": 130, "fiber_g": 0 }
+}`;
+
+    const fetchPromise = fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${groqApiKey}`
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.1,
+        max_tokens: 600,
+        response_format: { type: "json_object" }
+      })
+    });
+
+    const response = await callWithTimeout(fetchPromise, 25000);
+    if (!response.ok) {
+      throw new Error(`Eroare Groq /api/log-food-from-chat (${response.status})`);
+    }
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Răspuns gol primit de la AI.");
+
+    let curatat = content
+      .replace(/```[a-z]*\s*/gi, '')
+      .replace(/```/g, '')
+      .trim();
+
+    const firstBrace = curatat.indexOf('{');
+    const lastBrace = curatat.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      curatat = curatat.substring(firstBrace, lastBrace + 1);
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(curatat);
+    } catch {
+      const match = content.match(/\{[\s\S]*\}/);
+      if (match) {
+        const fallbackCuratat = match[0].replace(/```[a-z]*\s*/gi, '').replace(/```/g, '');
+        parsed = JSON.parse(fallbackCuratat);
+      } else {
+        throw new Error("Format JSON neidentificat.");
+      }
+    }
+
+    if (!parsed || (parsed.type !== 'MEAL_PROPOSAL' && !Array.isArray(parsed.items))) {
+      throw new Error("JSON invalid pentru MEAL_PROPOSAL.");
+    }
+
+    if (Array.isArray(parsed.items)) {
+      parsed.type = 'MEAL_PROPOSAL';
+      if (!parsed.meal_type || !['mic_dejun', 'pranz', 'cina', 'gustare'].includes(parsed.meal_type)) {
+        parsed.meal_type = 'gustare';
+      }
+    }
+
+    return res.json(parsed);
+  } catch (err) {
+    console.error("Eroare în /api/log-food-from-chat:", err.message);
+    return res.status(500).json({ eroare: "Nu s-a putut genera propunerea de masă." });
   }
 });
 
@@ -738,9 +849,187 @@ app.post('/api/estimeaza-mancare-text', requireAuth, aiRateLimiter, async (req, 
 });
 
 // ==========================================
+// RUTA 1.3: CORECTARE SI COMBINARE / VISION FALLBACK (SMART MERGE SAU REPLACE)
+// ==========================================
+const handleVisionFallbackOrCorrection = async (req, res) => {
+  try {
+    const currentIngredients = req.body.current_ingredients || req.body.imageIngredients || [];
+    const userPrompt = req.body.user_prompt || req.body.userExplanation;
+
+    if (!userPrompt || typeof userPrompt !== 'string' || !userPrompt.trim()) {
+      return res.status(400).json({ eroare: "Explicația text (user_prompt) este obligatorie." });
+    }
+
+    const prompt = `Ești un asistent nutrițional expert și precis. 
+Ai o listă de ingrediente detectate inițial sau curent: ${JSON.stringify(currentIngredients)}
+Și o instrucțiune/explicație de la utilizator: "${userPrompt}"
+
+IMPORTANT - SMART MERGE SAU REPLACE LOGIC:
+1. Analizează intenția utilizatorului:
+   - DACĂ utilizatorul spune că un aliment identificat este COMPLET ALTCEVA (sau că nu este acel aliment deloc, ex: "Nu e sos roșu, sunt cârnăciori", "That's not tomato sauce, it's sausage", "Șterge orezul, am mâncat doar carne"), atunci ȘTERGE complet elementul/elementele vechi invalidate și returnează DOAR noile alimente corecte. Setează "action_taken": "replaced".
+   - DACĂ utilizatorul adaugă un aliment nou sau corectează/modifică gramajul unui aliment existent (ex: "Am mai adăugat 50g brânză", "Cartofii au 200g, nu 100g", "I also added 50g of cheddar cheese and the potatoes are actually 200g"), combină/actualizează lista păstrând elementele valide și adăugându-le/corectându-le pe cele cerute. Setează "action_taken": "appended".
+
+2. Calculează macronutrienții reali și rezonabili per 100g și estimează cantitatea în grame ("estimare_grame") pentru fiecare ingredient din lista finală.
+
+Returnează DOAR JSON valid exact în formatul:
+{
+  "action_taken": "replaced" sau "appended",
+  "ingredients": [
+    {
+      "nume": "string (numele alimentului în română)",
+      "calorii_per_100g": number,
+      "proteine_per_100g": number,
+      "carbohidrati_per_100g": number,
+      "grasimi_per_100g": number,
+      "estimare_grame": number
+    }
+  ],
+  "new_totals": {
+    "kcal": number,
+    "proteine": number,
+    "grasimi": number,
+    "carbohidrati": number
+  }
+}
+Nu adăuga markdown, explicații sau text adițional în afara obiectului JSON valid.`;
+
+    const groqKeys = getApiKeysList('GROQ_API_KEY');
+    let content = null;
+    let lastErr = null;
+
+    for (const key of groqKeys) {
+      try {
+        const fetchPromise = fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "llama-3.3-70b-versatile",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.15,
+            response_format: { type: "json_object" }
+          })
+        });
+
+        const response = await callWithTimeout(fetchPromise, 30000);
+        if (response.ok) {
+          const data = await response.json();
+          content = data.choices?.[0]?.message?.content;
+          if (content) break;
+        } else {
+          lastErr = new Error(`Groq API (${response.status})`);
+          console.warn(`⚠️ Groq vision-fallback eșuat (${response.status})`);
+        }
+      } catch (e) {
+        lastErr = e;
+        console.warn("⚠️ Eroare Groq vision-fallback:", e.message);
+      }
+    }
+
+    if (!content) {
+      const openaiKeys = getApiKeysList('OPENAI_API_KEY');
+      for (const key of openaiKeys) {
+        try {
+          const fetchPromise = fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "gpt-4o-mini",
+              messages: [{ role: "user", content: prompt }],
+              temperature: 0.15,
+              response_format: { type: "json_object" }
+            })
+          });
+          const response = await callWithTimeout(fetchPromise, 30000);
+          if (response.ok) {
+            const data = await response.json();
+            content = data.choices?.[0]?.message?.content;
+            if (content) break;
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (!content) {
+      const geminiKeys = getApiKeysList('GEMINI_API_KEY');
+      const modelsToTry = getGeminiModelsList();
+      for (const key of geminiKeys) {
+        const client = new GoogleGenerativeAI(key);
+        for (const modelName of modelsToTry) {
+          try {
+            const model = client.getGenerativeModel({ model: modelName });
+            const responsePromise = model.generateContent({
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              generationConfig: { responseMimeType: "application/json" }
+            });
+            const result = await callWithTimeout(responsePromise, 30000);
+            if (result && result.response) {
+              content = result.response.text();
+              if (content) break;
+            }
+          } catch (e) {}
+        }
+        if (content) break;
+      }
+    }
+
+    if (!content) {
+      throw lastErr || new Error("Toate modelele AI au eșuat pentru corecție/fallback.");
+    }
+
+    let parsed = null;
+    if (content && typeof content === 'string') {
+      let clean = content.replace(/```[a-z]*\s*/gi, '').replace(/```/g, '').trim();
+      try {
+        parsed = JSON.parse(clean);
+      } catch {
+        const match = clean.match(/\{[\s\S]*?(?:"action_taken"|"ingredients")[\s\S]*?\}/);
+        if (match) {
+          try { parsed = JSON.parse(match[0].replace(/,\s*([\]}])/g, '$1')); } catch {}
+        }
+      }
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error("Format JSON incorect sau incomplet de la AI.");
+    }
+
+    const actionTaken = parsed?.action_taken === "replaced" ? "replaced" : "appended";
+    const ingredients = Array.isArray(parsed?.ingredients) ? parsed.ingredients.map(item => ({
+      nume: String(item?.nume || 'Ingredient').trim(),
+      calorii_per_100g: Number(item?.calorii_per_100g || 0),
+      proteine_per_100g: Number(item?.proteine_per_100g || 0),
+      carbohidrati_per_100g: Number(item?.carbohidrati_per_100g || 0),
+      grasimi_per_100g: Number(item?.grasimi_per_100g || 0),
+      estimare_grame: Math.max(1, Number(item?.estimare_grame || 100))
+    })) : [];
+
+    // Recalculăm new_totals cu precizie maximă în backend din ingredientele procesate
+    const totals = { kcal: 0, proteine: 0, grasimi: 0, carbohidrati: 0 };
+    ingredients.forEach(item => {
+      const gr = item.estimare_grame;
+      totals.kcal += Math.round((item.calorii_per_100g * gr) / 100);
+      totals.proteine += Math.round((item.proteine_per_100g * gr) / 100);
+      totals.carbohidrati += Math.round((item.carbohidrati_per_100g * gr) / 100);
+      totals.grasimi += Math.round((item.grasimi_per_100g * gr) / 100);
+    });
+
+    res.json({
+      action_taken: actionTaken,
+      ingredients: ingredients,
+      new_totals: totals
+    });
+  } catch (err) {
+    console.error("Eroare corectare vizual+text / vision-fallback:", err.message);
+    res.status(500).json({ eroare: "Nu s-a putut procesa corecția cu AI." });
+  }
+};
+
+app.post('/api/vision-fallback', requireAuth, aiRateLimiter, handleVisionFallbackOrCorrection);
+app.post('/api/corecteaza-mancare-vizual-text', requireAuth, aiRateLimiter, handleVisionFallbackOrCorrection);
+
+// ==========================================
 // RUTA 2.1: PROXY PENTRU OPENFOODFACTS BARCODE + STRAT 1 CACHE LOCAL + STRAT 3 FALLBACK
 // ==========================================
-app.get('/api/produs-barcode/:code', requireAuth, async (req, res) => {
+app.get('/api/produs-barcode/:code', requireAuth, generalLimiter, async (req, res) => {
   try {
     const code = (req.params.code || '').trim();
     if (!code || code.length < 4) {
@@ -817,7 +1106,89 @@ app.get('/api/produs-barcode/:code', requireAuth, async (req, res) => {
       }
     }
 
-    // STRAT 3: Fallback controlat - Produs negăsit
+    // STRAT 3: Fallback AI - Estimați din cod sau propuneți profil rezonabil
+    try {
+      console.warn(`Barcode ${code} negăsit în cache sau OpenFoodFacts, activăm estimare AI...`);
+      const aiPrompt = `Utilizatorul din România a scanat codul de bare EAN/UPC "${code}" dar nu a fost găsit în baza internațională.
+Dacă cunoști cu certitudine acest cod de bare și produsul asociat (ex. un brand românesc recunoscut, apă, iaurt, mezeluri, dulciuri), returnează detaliile reale.
+Dacă nu știi cu exactitate produsul corespunzător codului "${code}", generează un profil generic plauzibil pentru un produs alimentar ambalat (ex. Nume: "Produs alimentar ambalat (${code})", calorii ~250, proteine ~10, carbohidrați ~30, grăsimi ~10).
+RETURNEAZĂ STRICT EXCLUSIV UN OBIECT JSON valid în acest format:
+{
+  "codBare": "${code}",
+  "nume": "Numele produsului (sau Produs alimentar ambalat)",
+  "brand": "Brand recunoscut sau Estimat",
+  "cantitate": "100g",
+  "calorii": 250,
+  "proteine": 10,
+  "carbohidrati": 30,
+  "grasimi": 10
+}`;
+
+      const fetchPromiseAi = fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${groqApiKey}`
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [{ role: "user", content: aiPrompt }],
+          temperature: 0.1,
+          max_tokens: 400,
+          response_format: { type: "json_object" }
+        })
+      });
+
+      const aiResp = await callWithTimeout(fetchPromiseAi, 18000);
+      if (aiResp.ok) {
+        const aiData = await aiResp.json();
+        const content = aiData.choices?.[0]?.message?.content;
+        if (content) {
+          let parsed;
+          try {
+            parsed = JSON.parse(content);
+          } catch {
+            const match = content.match(/\{[\s\S]*\}/);
+            if (match) parsed = JSON.parse(match[0]);
+          }
+
+          if (parsed && parsed.nume) {
+            const normalizedAi = {
+              codBare: code,
+              nume: parsed.nume,
+              brand: parsed.brand || 'AI Estimat',
+              cantitate: parsed.cantitate || '100g',
+              calorii: Number(parsed.calorii || 0),
+              proteine: Number(parsed.proteine || 0),
+              carbohidrati: Number(parsed.carbohidrati || 0),
+              grasimi: Number(parsed.grasimi || 0)
+            };
+
+            try {
+              await supabaseAdmin.from('barcode_cache').upsert({
+                code,
+                source: 'estimare_ai',
+                brand: normalizedAi.brand,
+                name: normalizedAi.nume,
+                quantity: normalizedAi.cantitate,
+                kcal_100g: normalizedAi.calorii,
+                protein_100g: normalizedAi.proteine,
+                carbs_100g: normalizedAi.carbohidrati,
+                fat_100g: normalizedAi.grasimi,
+                payload: parsed,
+                updated_at: new Date().toISOString()
+              });
+            } catch (sErr) {}
+
+            return res.json({ source: 'estimare_ai', produs: normalizedAi });
+          }
+        }
+      }
+    } catch (aiErr) {
+      console.warn("Eroare la estimarea AI a codului de bare:", aiErr.message);
+    }
+
+    // Dacă nici AI nu a putut estima, returnăm 404
     return res.status(404).json({
       eroare: "Produsul nu a fost găsit.",
       allowManualEntry: true,
@@ -948,13 +1319,44 @@ app.delete('/api/mese/:id', requireAuth, async (req, res) => {
 // ==========================================
 // RUTA 5: EDITARE MASĂ
 // ==========================================
+// ==========================================
+// RUTA 5: EDITARE MASĂ (CU SUPPORT PENTRU JSONB & TIP_MASA)
+// ==========================================
 app.put('/api/mese/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nume, calorii, proteine, grasimi, carbohidrati } = req.body;
+    const { nume, calorii, proteine, grasimi, carbohidrati, tip_masa, alimente, fibre } = req.body;
+    if (!nume || typeof nume !== 'string' || !nume.trim()) {
+      return res.status(400).json({ eroare: "Numele mesei este obligatoriu." });
+    }
+    const cal = Number(calorii);
+    const prot = Number(proteine);
+    const gras = Number(grasimi);
+    const carb = Number(carbohidrati);
+    const fib = Number(fibre);
+    if (isNaN(cal) || cal < 0 || cal > 10000) {
+      return res.status(400).json({ eroare: "Caloriile trebuie să fie un număr valid între 0 și 10000." });
+    }
+    if (isNaN(prot) || prot < 0 || prot > 1000) {
+      return res.status(400).json({ eroare: "Proteinele trebuie să fie un număr valid între 0 și 1000." });
+    }
+    const updatePayload = {
+      nume: nume.trim(),
+      calorii: Math.round(cal),
+      proteine: Math.round(prot),
+      grasimi: isNaN(gras) ? 0 : Math.round(gras),
+      carbohidrati: isNaN(carb) ? 0 : Math.round(carb),
+      fibre: isNaN(fib) ? 0 : Math.round(fib)
+    };
+    if (tip_masa && ['mic_dejun', 'pranz', 'cina', 'gustare'].includes(tip_masa)) {
+      updatePayload.tip_masa = tip_masa;
+    }
+    if (Array.isArray(alimente)) {
+      updatePayload.alimente = alimente;
+    }
     const { data, error } = await supabaseAdmin
       .from('mese')
-      .update({ nume, calorii: Number(calorii), proteine: Number(proteine), grasimi: Number(grasimi), carbohidrati: Number(carbohidrati) })
+      .update(updatePayload)
       .eq('id', id)
       .eq('user_id', req.user.id)
       .select();
@@ -962,6 +1364,46 @@ app.put('/api/mese/:id', requireAuth, async (req, res) => {
     res.json({ succes: true, masa: data[0] });
   } catch (error) {
     res.status(500).json({ eroare: "Eroare la actualizarea mesei." });
+  }
+});
+
+// ==========================================
+// RUTA 5.1: SALVARE NOUĂ MASĂ (POST /api/mese PENTRU JSONB & TIP_MASA)
+// ==========================================
+app.post('/api/mese', requireAuth, async (req, res) => {
+  try {
+    const { nume, calorii, proteine, grasimi, carbohidrati, tip_masa, alimente, fibre, data, ora } = req.body;
+    if (!nume || typeof nume !== 'string' || !nume.trim()) {
+      return res.status(400).json({ eroare: "Numele mesei este obligatoriu." });
+    }
+    const cal = Number(calorii) || 0;
+    const prot = Number(proteine) || 0;
+    const gras = Number(grasimi) || 0;
+    const carb = Number(carbohidrati) || 0;
+    const fib = Number(fibre) || 0;
+
+    const insertPayload = {
+      user_id: req.user.id,
+      nume: nume.trim(),
+      calorii: Math.round(cal),
+      proteine: Math.round(prot),
+      grasimi: Math.round(gras),
+      carbohidrati: Math.round(carb),
+      fibre: Math.round(fib),
+      tip_masa: tip_masa && ['mic_dejun', 'pranz', 'cina', 'gustare'].includes(tip_masa) ? tip_masa : 'gustare',
+      alimente: Array.isArray(alimente) ? alimente : []
+    };
+    if (data) insertPayload.data = data;
+    if (ora) insertPayload.ora = ora;
+
+    const { data: result, error } = await supabaseAdmin
+      .from('mese')
+      .insert([insertPayload])
+      .select();
+    if (error) return res.status(500).json({ eroare: error.message });
+    res.json({ succes: true, masa: result[0] });
+  } catch (error) {
+    res.status(500).json({ eroare: "Eroare la adăugarea mesei." });
   }
 });
 

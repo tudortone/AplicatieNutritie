@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -11,7 +11,7 @@ import {
   Platform, 
   KeyboardAvoidingView 
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
@@ -20,6 +20,9 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase';
 import { useFavorite } from '../hooks/useFavorite';
+import { TipMasa, AlimentDetaliat } from '../types';
+import { getTipMasaDupaOra, MEAL_CATEGORIES } from '../lib/mealUtils';
+import * as Haptics from 'expo-haptics';
 
 export default function AdaugaManualScreen() {
   const router = useRouter();
@@ -27,14 +30,61 @@ export default function AdaugaManualScreen() {
   const { user } = useAuth();
   const { favorite, addFavorite, removeFavorite, isFavorite } = useFavorite();
 
+  const [tipMasa, setTipMasa] = useState<TipMasa>(() => getTipMasaDupaOra());
   const [nume, setNume] = useState('');
   const [grame, setGrame] = useState('');
   const [calorii, setCalorii] = useState('');
   const [proteine, setProteine] = useState('');
   const [carbohidrati, setCarbohidrati] = useState('');
   const [grasimi, setGrasimi] = useState('');
+  const [fibre, setFibre] = useState('');
+  const [alimenteList, setAlimenteList] = useState<AlimentDetaliat[]>([]);
   
   const [loading, setLoading] = useState(false);
+  const params = useLocalSearchParams();
+
+  useEffect(() => {
+    if (params?.alimente && typeof params.alimente === 'string') {
+      try {
+        const parsed = JSON.parse(params.alimente);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const first = parsed[0];
+          const numeCompus = parsed.map((a: any) => a.nume).join(', ');
+          const totalCal = parsed.reduce((s: number, a: any) => s + Math.round((a.calorii_per_100g * a.estimare_grame) / 100), 0);
+          const totalProt = parsed.reduce((s: number, a: any) => s + Math.round((a.proteine_per_100g * a.estimare_grame) / 100), 0);
+          const totalCarbs = parsed.reduce((s: number, a: any) => s + Math.round((a.carbohidrati_per_100g * a.estimare_grame) / 100), 0);
+          const totalGras = parsed.reduce((s: number, a: any) => s + Math.round((a.grasimi_per_100g * a.estimare_grame) / 100), 0);
+          const totalGrame = parsed.reduce((s: number, a: any) => s + (Number(a.estimare_grame) || 0), 0);
+
+          setNume(numeCompus);
+          setGrame(totalGrame > 0 ? String(Math.round(totalGrame)) : '');
+          setCalorii(totalCal > 0 ? String(totalCal) : '');
+          setProteine(totalProt > 0 ? String(totalProt) : '');
+          setCarbohidrati(totalCarbs > 0 ? String(totalCarbs) : '');
+          setGrasimi(totalGras > 0 ? String(totalGras) : '');
+
+          const detailedItems: AlimentDetaliat[] = parsed.map((a: any, idx: number) => ({
+            id: String(idx + 1),
+            nume: a.nume || 'Aliment',
+            grame: Number(a.estimare_grame) || 100,
+            calorii: Math.round((a.calorii_per_100g * a.estimare_grame) / 100) || 0,
+            proteine: Math.round((a.proteine_per_100g * a.estimare_grame) / 100) || 0,
+            carbohidrati: Math.round((a.carbohidrati_per_100g * a.estimare_grame) / 100) || 0,
+            grasimi: Math.round((a.grasimi_per_100g * a.estimare_grame) / 100) || 0,
+            fibre: Number(a.fibre) || 0
+          }));
+          setAlimenteList(detailedItems);
+        }
+      } catch (e) {
+        console.warn('Eroare parsare alimente param:', e);
+      }
+    }
+    if (params?.tip_masa && typeof params.tip_masa === 'string') {
+      if (['mic_dejun', 'pranz', 'cina', 'gustare'].includes(params.tip_masa)) {
+        setTipMasa(params.tip_masa as TipMasa);
+      }
+    }
+  }, [params?.alimente, params?.tip_masa]);
 
   const handleSave = async () => {
     if (!nume.trim()) {
@@ -57,6 +107,22 @@ export default function AdaugaManualScreen() {
 
       const numeFinal = grame.trim() ? `${nume.trim()} (${grame.trim()}g)` : nume.trim();
 
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const oraStr = now.toTimeString().split(' ')[0].substring(0, 5);
+
+      const alimentePayload: AlimentDetaliat[] = alimenteList.length > 0 ? alimenteList : [
+        {
+          nume: nume.trim(),
+          grame: parseInt(grame) || 0,
+          calorii: cal,
+          proteine: parseInt(proteine) || 0,
+          carbohidrati: parseInt(carbohidrati) || 0,
+          grasimi: parseInt(grasimi) || 0,
+          fibre: parseInt(fibre) || 0,
+        }
+      ];
+
       const { error: insertError } = await supabase
         .from('mese')
         .insert({
@@ -66,6 +132,11 @@ export default function AdaugaManualScreen() {
           proteine: parseInt(proteine) || 0,
           carbohidrati: parseInt(carbohidrati) || 0,
           grasimi: parseInt(grasimi) || 0,
+          fibre: parseInt(fibre) || 0,
+          tip_masa: tipMasa,
+          alimente: alimentePayload,
+          data: todayStr,
+          ora: oraStr,
         });
 
       if (insertError) {
@@ -132,6 +203,38 @@ export default function AdaugaManualScreen() {
               </ScrollView>
             </Animated.View>
           )}
+
+          {/* Meal Category Selector Section */}
+          <Animated.View entering={FadeInDown.duration(450)} style={{ marginBottom: 20 }}>
+            <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>🍽️ SELECTEAZĂ CATEGORIA MESEI *</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
+              {MEAL_CATEGORIES.map((cat) => {
+                const isSelected = tipMasa === cat.id;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.catChip,
+                      {
+                        backgroundColor: isSelected ? colors.accent + '25' : colors.surfaceBg,
+                        borderColor: isSelected ? colors.accent : colors.cardBorder,
+                      }
+                    ]}
+                    onPress={() => {
+                      try { Haptics.selectionAsync(); } catch {}
+                      setTipMasa(cat.id);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
+                    <Text style={[styles.catChipText, { color: isSelected ? colors.accent : colors.textPrimary, fontWeight: isSelected ? '800' : '600' }]}>
+                      {cat.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Animated.View>
 
           <Animated.View entering={FadeInDown.duration(500)} style={[styles.card, { borderColor: colors.cardBorder }]}>
             <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
@@ -222,6 +325,22 @@ export default function AdaugaManualScreen() {
                     />
                   </View>
                 </View>
+
+                <View style={[styles.row, { marginTop: 16 }]}>
+                  <View style={styles.col}>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>🌿 Fibre (g) (opțional)</Text>
+                    <TextInput
+                      style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
+                      placeholder="0"
+                      placeholderTextColor={colors.textTertiary}
+                      value={fibre}
+                      onChangeText={setFibre}
+                      keyboardType="numeric"
+                      selectionColor={colors.accent}
+                    />
+                  </View>
+                  <View style={styles.col} />
+                </View>
               </LinearGradient>
             </BlurView>
           </Animated.View>
@@ -303,4 +422,6 @@ const styles = StyleSheet.create({
   favChipSub: { fontSize: 11, fontWeight: '800', marginTop: 3 },
   favSaveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: 18, borderWidth: 1, gap: 8 },
   favSaveBtnText: { fontSize: 14, fontWeight: '700' },
+  catChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, borderWidth: 1, gap: 8 },
+  catChipText: { fontSize: 14 },
 });

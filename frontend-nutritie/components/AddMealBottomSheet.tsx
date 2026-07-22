@@ -6,7 +6,8 @@ import {
   TouchableOpacity, 
   Alert, 
   ActivityIndicator, 
-  ScrollView
+  ScrollView,
+  Modal
 } from 'react-native';
 import BottomSheet, { 
   BottomSheetScrollView, 
@@ -14,7 +15,7 @@ import BottomSheet, {
   BottomSheetTextInput 
 } from '@gorhom/bottom-sheet';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Check, X, Heart, Trash2, Scale } from 'lucide-react-native';
+import { Check, X, Heart, Trash2, Scale, Search } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -24,11 +25,13 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase';
 import { useFavorite } from '../hooks/useFavorite';
 import { useGamificareContext } from '../context/GamificareContext';
-import { Masa } from '../types';
+import { Masa, TipMasa, AlimentDetaliat } from '../types';
+import { getTipMasaDupaOra, MEAL_CATEGORIES } from '../lib/mealUtils';
 import { foodPresets, categories, FoodPreset } from '../constants/foodPresets';
+import { ProductSearch } from './food/ProductSearch';
 
 export interface AddMealBottomSheetRef {
-  open: (masaToEdit?: Masa) => void;
+  open: (masaToEdit?: Masa | null, defaultCategory?: TipMasa) => void;
   openWithItem: (item: {
     nume: string;
     calorii: number;
@@ -67,17 +70,20 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const snapPoints = useMemo(() => ['75%', '90%'], []);
 
     const [editingMasaId, setEditingMasaId] = useState<string | null>(null);
+    const [tipMasa, setTipMasa] = useState<TipMasa>(() => getTipMasaDupaOra());
     const [nume, setNume] = useState('');
     const [grame, setGrame] = useState('');
     const [calorii, setCalorii] = useState('');
     const [proteine, setProteine] = useState('');
     const [carbohidrati, setCarbohidrati] = useState('');
     const [grasimi, setGrasimi] = useState('');
+    const [fibre, setFibre] = useState('');
     const [loading, setLoading] = useState(false);
 
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [aiEstimating, setAiEstimating] = useState(false);
+    const [productSearchModalVisible, setProductSearchModalVisible] = useState(false);
     const [baseNutrition, setBaseNutrition] = useState<BaseNutrition | null>(null);
     const [selectedPreset, setSelectedPreset] = useState<FoodPreset | null>(null);
 
@@ -204,24 +210,28 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     };
 
     useImperativeHandle(ref, () => ({
-      open: (masaToEdit?: Masa) => {
+      open: (masaToEdit?: Masa | null, defaultCategory?: TipMasa) => {
         if (masaToEdit) {
           setEditingMasaId(masaToEdit.id);
+          setTipMasa(masaToEdit.tip_masa || defaultCategory || getTipMasaDupaOra());
           setNume(masaToEdit.nume || '');
           setCalorii(String(masaToEdit.calorii || 0));
           setProteine(String(masaToEdit.proteine || 0));
           setCarbohidrati(String(masaToEdit.carbohidrati || 0));
           setGrasimi(String(masaToEdit.grasimi || 0));
+          setFibre(masaToEdit.fibre != null ? String(masaToEdit.fibre) : '');
           setGrame('');
           setBaseNutrition(null);
         } else {
           setEditingMasaId(null);
+          setTipMasa(defaultCategory || getTipMasaDupaOra());
           setNume('');
           setGrame('');
           setCalorii('');
           setProteine('');
           setCarbohidrati('');
           setGrasimi('');
+          setFibre('');
           setBaseNutrition(null);
         }
         try {
@@ -291,14 +301,32 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
       setLoading(true);
       try {
-        const numeFinal = grame.trim() && !editingMasaId ? `${nume.trim()} (${grame.trim()}g)` : nume.trim();
-        const payload = {
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+        const oraStr = now.toTimeString().split(' ')[0].substring(0, 5);
+
+        const alimentePayload: AlimentDetaliat[] = [
+          {
+            nume: nume.trim(),
+            grame: parseFloat(grame) || 0,
+            calorii: calNumber,
+            proteine: parseInt(proteine, 10) || 0,
+            carbohidrati: parseInt(carbohidrati, 10) || 0,
+            grasimi: parseInt(grasimi, 10) || 0,
+            fibre: parseInt(fibre, 10) || 0
+          }
+        ];
+
+        const payload: any = {
           user_id: user.id,
-          nume: numeFinal,
+          nume: nume.trim(),
           calorii: calNumber,
           proteine: parseInt(proteine, 10) || 0,
           carbohidrati: parseInt(carbohidrati, 10) || 0,
           grasimi: parseInt(grasimi, 10) || 0,
+          fibre: parseInt(fibre, 10) || 0,
+          tip_masa: tipMasa,
+          alimente: alimentePayload,
         };
 
         let err = null;
@@ -306,6 +334,8 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           const { error } = await supabase.from('mese').update(payload).eq('id', editingMasaId);
           err = error;
         } else {
+          payload.data = todayStr;
+          payload.ora = oraStr;
           const { error } = await supabase.from('mese').insert(payload);
           err = error;
         }
@@ -350,7 +380,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             <Text style={[styles.title, { color: colors.textPrimary }]}>
               {editingMasaId ? 'Editează Masa' : 'Adaugă Masă Nouă'}
             </Text>
-            <TouchableOpacity onPress={() => bottomSheetRef.current?.close()} style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]}>
+            <TouchableOpacity onPress={() => bottomSheetRef.current?.close()} style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -400,6 +430,28 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>
                 🍽️ ALEGE DIN PRESETURI RAPIDE
               </Text>
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  borderRadius: 12,
+                  backgroundColor: colors.accent + '18',
+                  borderWidth: 1,
+                  borderColor: colors.accent + '55',
+                  marginBottom: 10,
+                  gap: 8,
+                }}
+                onPress={() => setProductSearchModalVisible(true)}
+              >
+                <Search size={16} color={colors.accent} />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.accent }}>
+                  🔍 Caută Produs, Brand sau Introducere Complet Manuală
+                </Text>
+              </TouchableOpacity>
 
               {/* Search */}
               <BottomSheetTextInput
@@ -516,6 +568,46 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           )}
 
           <View style={styles.formSection} onLayout={(e) => setFormSectionY(e.nativeEvent.layout.y)}>
+            {/* Meal Category Selector */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>🍽️ Categoria Mesei *</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {MEAL_CATEGORIES.map((cat) => {
+                  const isSelected = tipMasa === cat.id;
+                  return (
+                    <TouchableOpacity
+                      key={cat.id}
+                      style={[
+                        styles.categoryChip,
+                        {
+                          backgroundColor: isSelected ? colors.accent : colors.surfaceBg,
+                          borderColor: isSelected ? colors.accent : colors.cardBorder,
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6
+                        }
+                      ]}
+                      onPress={() => {
+                        try { Haptics.selectionAsync(); } catch {}
+                        setTipMasa(cat.id);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
+                      <Text style={[
+                        styles.categoryText,
+                        { color: isSelected ? '#000000' : colors.textPrimary, fontWeight: isSelected ? '800' : '600' }
+                      ]}>
+                        {cat.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
             <Text style={[styles.label, { color: colors.textSecondary }]}>Nume aliment / preparat *</Text>
             <BottomSheetTextInput
               style={[
@@ -784,6 +876,22 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               </View>
             </View>
 
+            <View style={[styles.row, { marginTop: 12 }]}>
+              <View style={styles.halfWidth}>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>Fibre (g) (opțional)</Text>
+                <BottomSheetTextInput
+                  style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
+                  placeholder="Ex: 5"
+                  placeholderTextColor={colors.textTertiary}
+                  keyboardType="numeric"
+                  value={fibre}
+                  onChangeText={setFibre}
+                  selectionColor={colors.accent}
+                />
+              </View>
+              <View style={styles.halfWidth} />
+            </View>
+
             {/* Quick Favorites CTA */}
             {isFormValid && (
               <TouchableOpacity
@@ -852,6 +960,30 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             </TouchableOpacity>
           </View>
         </BottomSheetScrollView>
+
+        <Modal
+          visible={productSearchModalVisible}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setProductSearchModalVisible(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: colors.background, padding: 16 }}>
+            <ProductSearch
+              onSelectProductWithGrams={(prod, gr) => {
+                const al = prod;
+                setNume(al.brand ? `${al.name} (${al.brand})` : al.name);
+                const factor = gr / 100;
+                setCalorii(String(Math.round(al.kcalPer100g * factor)));
+                setProteine(String(Math.round(al.proteinPer100g * factor * 10) / 10));
+                setCarbohidrati(String(Math.round(al.carbsPer100g * factor * 10) / 10));
+                setGrasimi(String(Math.round(al.fatPer100g * factor * 10) / 10));
+                handleGramajChange(String(gr));
+                setProductSearchModalVisible(false);
+              }}
+              onClose={() => setProductSearchModalVisible(false)}
+            />
+          </View>
+        </Modal>
       </BottomSheet>
     );
   }

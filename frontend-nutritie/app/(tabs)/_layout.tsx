@@ -2,11 +2,15 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, List, MessageCircle, User, BarChart3, Dumbbell } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 
 export default function TabLayout() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 14);
+  const tabHeight = 58 + bottomInset;
 
   return (
     <Tabs
@@ -17,14 +21,16 @@ export default function TabLayout() {
         tabBarHideOnKeyboard: true,
         tabBarStyle: [
           styles.tabBar,
+          {
+            height: tabHeight,
+            paddingBottom: bottomInset,
+            paddingTop: 10,
+          },
           Platform.OS === 'android' && {
-            backgroundColor: colors.surface + 'F2',
+            backgroundColor: colors.surface + 'F8',
             borderTopWidth: 1,
             borderTopColor: colors.border,
             position: 'absolute' as const,
-            height: 74,
-            paddingBottom: 18,
-            paddingTop: 10,
             elevation: 16,
           }
         ],
@@ -89,9 +95,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
     elevation: 0,
     backgroundColor: 'transparent',
-    height: Platform.OS === 'ios' ? 96 : 74,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 18,
-    paddingTop: 10,
   },
   tabBarBg: {
     borderTopWidth: 1,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Platform, Alert } from 'react-native';
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
@@ -18,7 +18,7 @@ if (!isExpoGo) {
         shouldShowList: true,
       }),
     });
-  } catch (e) {
+  } catch {
     // Ignorăm
   }
 }
@@ -75,7 +75,7 @@ export function useNotifications() {
       }
 
       return permissionGranted;
-    } catch (e) {
+    } catch {
       return true;
     }
   };

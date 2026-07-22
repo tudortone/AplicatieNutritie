@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView,
-  Dimensions, Alert, ActivityIndicator, KeyboardAvoidingView, Platform
+  ActivityIndicator, Pressable, Text, View, StyleSheet, TouchableOpacity,
+  TextInput, ScrollView, Dimensions, Alert, KeyboardAvoidingView, Platform, Modal
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { BlurView } from 'expo-blur';
@@ -12,11 +12,17 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../supabase';
 import { API_URL } from '@/constants/config';
 import Animated, { FadeIn, FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
-import { X, Scan, Zap, ChevronDown, Plus, Heart, Image as ImageIcon } from 'lucide-react-native';
+import { X, Scan, Zap, ChevronDown, Plus, Heart, Image as ImageIcon, Send, Sparkles } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { useAuth } from '../context/AuthContext';
-import { AlimentAI } from '../types';
+import { useAuth } from '@/context/AuthContext';
 import { useFavorite } from '../hooks/useFavorite';
+import { ProductSearch } from '../components/food/ProductSearch';
+import { foodProductToAlimentAI } from '../components/food/types';
+import FoodScanSuccessModal, {
+  type AlimentScanat,
+} from '@/components/food/FoodScanSuccessModal';
+import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInput';
 
 const { width, height } = Dimensions.get('window');
 const SCAN_BOX_SIZE = width * 0.78;
@@ -26,12 +32,21 @@ export default function CameraScreen() {
   const { session } = useAuth();
   const { addFavorite, isFavorite } = useFavorite();
   const [permission, requestPermission] = useCameraPermissions();
+  
+  const [rezultat, setRezultat] = useState<AlimentScanat[]>([]);
+  const [totaluri, setTotaluri] = useState<{ kcal: number; proteine: number; grasimi: number; carbohidrati: number } | null>(null);
+  const ingredienteIdentificate = rezultat;
+  const setIngredienteIdentificate = setRezultat;
+  const [successVisible, setSuccessVisible] = useState(false);
+  const [isSavingDiary, setIsSavingDiary] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+
   const [seIncarca, setSeIncarca] = useState(false);
-  const [rezultat, setRezultat] = useState<AlimentAI[] | null>(null);
-  const [grame, setGrame] = useState<number[]>([]);
   const [selectedAI, setSelectedAI] = useState<'auto' | 'gemini' | 'openai' | 'groq'>('auto');
   const [aiMenuVisible, setAiMenuVisible] = useState(false);
+  const [cautareProdusVisible, setCautareProdusVisible] = useState(false);
   const [aiStatus, setAiStatus] = useState<Record<string, { nume: string; status: string; secundeRamase: number; mesaj: string }>>({});
+
   const cameraRef = useRef<CameraView>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
@@ -55,94 +70,198 @@ export default function CameraScreen() {
     };
   }, []);
 
-  const anuleazaScanare = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setSeIncarca(false);
-    setRezultat(null);
-  };
+  const updateIngredient = useCallback(
+    (index: number, patch: Partial<AlimentScanat>) => {
+      setTotaluri(null);
+      setRezultat((current) =>
+        current.map((ingredient, itemIndex) =>
+          itemIndex === index ? { ...ingredient, ...patch } : ingredient,
+        ),
+      );
+    },
+    [],
+  );
 
-  const totalCalculat = useMemo(() => {
-    return rezultat
-      ? rezultat.reduce((acc, item, index) => {
-          const factor = (grame[index] || 0) / 100;
-          return {
-            calorii: acc.calorii + (item.calorii_per_100g || 0) * factor,
-            proteine: acc.proteine + (item.proteine_per_100g || 0) * factor,
-            grasimi: acc.grasimi + (item.grasimi_per_100g || 0) * factor,
-            carbohidrati: acc.carbohidrati + (item.carbohidrati_per_100g || 0) * factor,
-          };
-        }, { calorii: 0, proteine: 0, grasimi: 0, carbohidrati: 0 })
-      : { calorii: 0, proteine: 0, grasimi: 0, carbohidrati: 0 };
-  }, [rezultat, grame]);
-
-  const proceseazaImagineUri = async (uri: string) => {
-    if (seIncarca || !session) return;
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-    setSeIncarca(true);
-    setRezultat(null);
-    try {
-      const formData = new FormData();
-      const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-      formData.append('imagine', { uri, name: `mancare.${ext}`, type: mimeType } as any);
-      formData.append('provider', selectedAI);
-
-      const raspuns = await fetch(`${API_URL}/api/analizeaza-mancare-structurat`, {
-        method: 'POST', body: formData,
-        headers: { 
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        signal: controller.signal
-      });
-      const date = await raspuns.json();
-
-      if (date.stareAI && isMountedRef.current) {
-        setAiStatus(date.stareAI);
+  const analizeazaImaginea = useCallback(
+    async (imageUri: string) => {
+      if (!session?.access_token) {
+        setScanError('Sesiunea a expirat. Autentifică-te din nou.');
+        return;
       }
 
-      if (date.eroare) {
-        if (isMountedRef.current) Alert.alert("Eroare AI", date.eroare);
-      } else {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        const rawArr = Array.isArray(date) ? date : [date];
-        const arr = rawArr.map((item: any) => ({
-          nume: item.nume || 'Aliment identificat',
-          estimare_grame: Number(item.estimare_grame) || 100,
-          calorii_per_100g: Number(item.calorii_per_100g) || 0,
-          proteine_per_100g: Number(item.proteine_per_100g) || 0,
-          grasimi_per_100g: Number(item.grasimi_per_100g) || 0,
-          carbohidrati_per_100g: Number(item.carbohidrati_per_100g) || 0,
-        }));
-        if (isMountedRef.current) {
-          setRezultat(arr);
-          setGrame(arr.map(item => Math.round(item.estimare_grame) || 100));
+      abortControllerRef.current?.abort();
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      setScanError(null);
+      setRezultat([]);
+      setSeIncarca(true);
+
+      try {
+        const formData = new FormData();
+
+        formData.append('imagine', {
+          uri: imageUri,
+          name: `nutriai-${Date.now()}.jpg`,
+          type: 'image/jpeg',
+        } as unknown as Blob);
+        formData.append('provider', selectedAI);
+
+        const response = await fetch(
+          `${API_URL}/api/analizeaza-mancare-structurat`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: formData,
+            signal: controller.signal,
+          },
+        );
+
+        const payload = (await response.json()) as
+          | AlimentScanat[]
+          | { eroare?: string; stareAI?: any };
+
+        if (controller.signal.aborted) return;
+
+        if (payload && !Array.isArray(payload) && payload.stareAI && isMountedRef.current) {
+          setAiStatus(payload.stareAI);
+        }
+
+        if (!response.ok || !Array.isArray(payload)) {
+          let message = 'Nu am putut identifica alimentele din imagine.';
+          if (!Array.isArray(payload) && payload && payload.eroare) {
+            message = payload.eroare;
+          } else if (response.status === 404) {
+            message = `Eroare 404: Endpoint-ul de analiză vizuală nu a fost găsit pe server (${API_URL}).`;
+          } else if (response.status === 401) {
+            message = 'Eroare de autentificare. Vă rugăm să vă reconectați în aplicație.';
+          } else if (response.status >= 500) {
+            message = `Eroare server (${response.status}): Serviciul AI întâmpină probleme temporare.`;
+          }
+          throw new Error(message);
+        }
+
+        const normalized = payload
+          .map((item) => ({
+            nume: String(item.nume || 'Aliment identificat'),
+            estimare_grame: Math.max(1, Number(item.estimare_grame) || 100),
+            calorii_per_100g: Math.max(0, Number(item.calorii_per_100g) || 0),
+            proteine_per_100g: Math.max(0, Number(item.proteine_per_100g) || 0),
+            grasimi_per_100g: Math.max(0, Number(item.grasimi_per_100g) || 0),
+            carbohidrati_per_100g: Math.max(
+              0,
+              Number(item.carbohidrati_per_100g) || 0,
+            ),
+          }))
+          .filter((item) => item.nume.trim().length > 0);
+
+        setRezultat(normalized);
+        setSuccessVisible(true);
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
+      } catch (error) {
+        if (controller.signal.aborted) return;
+
+        setScanError(
+          error instanceof Error
+            ? error.message
+            : 'A apărut o eroare la analiza imaginii.',
+        );
+      } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
+        if (isMountedRef.current) setSeIncarca(false);
+      }
+    },
+    [session?.access_token, selectedAI],
+  );
+
+  const anuleazaScanarea = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setTotaluri(null);
+    setRezultat([]);
+    setSuccessVisible(false);
+    setScanError(null);
+    setSeIncarca(false);
+  }, []);
+
+  const trimiteCorectieText = async (textCorectie: string) => {
+    try {
+      console.log("👉 Trimit corecție:", textCorectie);
+      
+      const response = await fetch(`${API_URL}/api/corecteaza-mancare-vizual-text`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        // Backend-ul are nevoie exact de acești parametri
+        body: JSON.stringify({ 
+          current_ingredients: ingredienteIdentificate, 
+          user_prompt: textCorectie 
+        })
+      });
+
+      // 1. Citim răspunsul serverului INDIFERENT dacă a crăpat sau nu, ca să vedem mesajul real
+      const data = await response.json(); 
+      console.log("✅ Răspuns corecție backend:", data);
+
+      // 2. Dacă a crăpat (400, 401, 500 etc), afișăm motivul exact pe ecran
+      if (!response.ok) {
+         Alert.alert("Eroare Server AI", data.eroare || "A apărut o problemă necunoscută la conectare.");
+         throw new Error(data.eroare || "Eroare de la server");
+      }
+
+      // 3. Dacă e totul în regulă, actualizăm datele pe ecran
+      if (data.ingredients) {
+        setIngredienteIdentificate(data.ingredients);
+        // Depinde de cum ai denumit starea pentru totaluri, asigură-te că numele funcției e corect (ex: setTotaluri)
+        if (data.new_totals) {
+            setTotaluri(data.new_totals); 
         }
       }
-    } catch (err: any) {
-      if (err.name !== 'AbortError' && isMountedRef.current) {
-        Alert.alert("Eroare", "Nu am putut contacta serverul AI. Verifică conexiunea.");
-      }
-    } finally {
-      if (isMountedRef.current) setSeIncarca(false);
+    } catch (error) {
+      console.error("❌ Eroare fallback detaliată:", error);
     }
   };
+  const sendCorrectionToAI = trimiteCorectieText;
+
+  const totalCalculat = useMemo(() => {
+    if (totaluri) {
+      return {
+        calorii: totaluri.kcal,
+        proteine: totaluri.proteine,
+        grasimi: totaluri.grasimi,
+        carbohidrati: totaluri.carbohidrati,
+      };
+    }
+    return (rezultat || []).reduce((acc, item) => {
+      const factor = (item.estimare_grame || 0) / 100;
+      return {
+        calorii: acc.calorii + (item.calorii_per_100g || 0) * factor,
+        proteine: acc.proteine + (item.proteine_per_100g || 0) * factor,
+        grasimi: acc.grasimi + (item.grasimi_per_100g || 0) * factor,
+        carbohidrati: acc.carbohidrati + (item.carbohidrati_per_100g || 0) * factor,
+      };
+    }, { calorii: 0, proteine: 0, grasimi: 0, carbohidrati: 0 });
+  }, [rezultat, totaluri]);
 
   const analizeazaFoto = async () => {
     if (!cameraRef.current || seIncarca || !session) return;
     try {
       const foto = await cameraRef.current.takePictureAsync({
-        quality: 0.6, base64: false, shutterSound: false
+        quality: 0.5,
+        base64: false,
+        shutterSound: false,
+        skipProcessing: Platform.OS === 'android'
       });
       if (foto && foto.uri) {
-        proceseazaImagineUri(foto.uri);
+        analizeazaImaginea(foto.uri);
       }
     } catch (e) {
       console.error("Eroare captură foto:", e);
@@ -165,7 +284,7 @@ export default function CameraScreen() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        proceseazaImagineUri(result.assets[0].uri);
+        analizeazaImaginea(result.assets[0].uri);
       }
     } catch (e) {
       console.error("Eroare galerie:", e);
@@ -173,29 +292,20 @@ export default function CameraScreen() {
     }
   };
 
-  const adaugaElementManual = () => {
-    const nouAliment: AlimentAI = {
-      nume: 'Aliment nou',
-      estimare_grame: 100,
-      calorii_per_100g: 100,
-      proteine_per_100g: 5,
-      grasimi_per_100g: 2,
-      carbohidrati_per_100g: 15
-    };
-    setRezultat(prev => prev ? [...prev, nouAliment] : [nouAliment]);
-    setGrame(prev => [...prev, 100]);
-  };
-
   const adaugaInJurnal = async () => {
-    if (!rezultat || !session) return;
-    setSeIncarca(true);
+    if (!rezultat || rezultat.length === 0 || !session || isSavingDiary) return;
+    setIsSavingDiary(true);
     try {
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const oraStr = now.toTimeString().split(' ')[0].substring(0, 5);
+
       const totalCalorii = totalCalculat.calorii;
       const totalProteine = totalCalculat.proteine;
       const totalGrasimi = totalCalculat.grasimi;
       const totalCarbohidrati = totalCalculat.carbohidrati;
 
-      const numeMese = rezultat.map((r, i) => `${r.nume} (${grame[i]}g)`).join(', ');
+      const numeMese = rezultat.map((r) => `${r.nume} (${Math.round(r.estimare_grame)}g)`).join(', ');
 
       const { error } = await supabase.from('mese').insert({
         user_id: session.user.id,
@@ -203,7 +313,9 @@ export default function CameraScreen() {
         calorii: Math.round(totalCalorii),
         proteine: Math.round(totalProteine),
         grasimi: Math.round(totalGrasimi),
-        carbohidrati: Math.round(totalCarbohidrati)
+        carbohidrati: Math.round(totalCarbohidrati),
+        data: todayStr,
+        ora: oraStr
       });
 
       if (error) {
@@ -217,7 +329,7 @@ export default function CameraScreen() {
     } catch {
       Alert.alert("Eroare", "A apărut o eroare la salvarea mesei.");
     } finally {
-      setSeIncarca(false);
+      setIsSavingDiary(false);
     }
   };
 
@@ -253,212 +365,154 @@ export default function CameraScreen() {
     );
   }
 
-
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <CameraView style={StyleSheet.absoluteFillObject} ref={cameraRef} />
-
-      {/* Top Bar */}
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => { anuleazaScanare(); router.back(); }} style={styles.closeBtn}>
-          <BlurView intensity={20} tint="dark" style={styles.closeBtnBlur}>
-            <X color="#fff" size={24} />
-          </BlurView>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.topBadge, { borderColor: colors.accent + '55' }]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            setAiMenuVisible(!aiMenuVisible);
-          }}
-          activeOpacity={0.8}
-        >
-          <BlurView intensity={30} tint="dark" style={styles.topBadgeBlur}>
-            <Zap size={14} color={colors.accent} />
-            <Text style={[styles.topBadgeText, { color: colors.accent }]}>
-              {selectedAI === 'auto'
-                ? 'NUTRIAI: AUTO'
-                : selectedAI === 'gemini'
-                ? 'NUTRIAI: GEMINI 2.5'
-                : selectedAI === 'openai'
-                ? 'NUTRIAI: OPENAI'
-                : 'NUTRIAI: GROQ'}
-            </Text>
-            <ChevronDown
-              size={14}
-              color={colors.accent}
-              style={{ transform: [{ rotate: aiMenuVisible ? '180deg' : '0deg' }] }}
-            />
-          </BlurView>
-        </TouchableOpacity>
-      </View>
-
-      {/* Dropdown meniu elegant pentru alegerea modelului AI */}
-      {aiMenuVisible && (
-        <Animated.View entering={FadeInDown.duration(220)} style={styles.aiDropdownMenu}>
-          <BlurView intensity={90} tint="dark" style={styles.aiDropdownBlur}>
-            <Text style={styles.aiDropdownHeader}>ALEGE FURNIZORUL AI PENTRU ANALIZĂ</Text>
-            {(
-              [
-                { id: 'auto', name: '⚡ Auto (Recomandat)', desc: 'Selecție inteligentă în cascadă' },
-                { id: 'gemini', name: '🔮 Google Gemini 2.5', desc: 'Rapid, 4 chei API în rotație' },
-                { id: 'openai', name: '🟢 OpenAI GPT-4o', desc: 'Analiză vizuală de referință' },
-                { id: 'groq', name: '⚡ Groq Llama Vision', desc: 'Open-source ultrarapid' },
-              ] as const
-            ).map((item) => {
-              const statusObj = aiStatus[item.id];
-              const isCooldown = statusObj?.status === 'cooldown' && (statusObj?.secundeRamase || 0) > 0;
-              const isSelected = selectedAI === item.id;
-
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[
-                    styles.aiDropdownItem,
-                    isSelected && { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: colors.accent + '44' },
-                  ]}
-                  onPress={() => {
-                    if (isCooldown) {
-                      Alert.alert(
-                        `AI Blocat Temporar (${statusObj?.secundeRamase}s)`,
-                        statusObj?.mesaj || 'Modelul este temporar în limită de cereri.'
-                      );
-                      return;
-                    }
-                    Haptics.selectionAsync().catch(() => {});
-                    setSelectedAI(item.id);
-                    setAiMenuVisible(false);
-                  }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.aiDropdownTitle, isSelected && { color: colors.accent }]}>
-                      {item.name}
-                    </Text>
-                    <Text style={styles.aiDropdownDesc}>{item.desc}</Text>
-                  </View>
-                  {isCooldown ? (
-                    <View style={styles.cooldownBadge}>
-                      <Text style={styles.cooldownBadgeText}>{statusObj?.secundeRamase}s</Text>
-                    </View>
-                  ) : (
-                    <View
-                      style={[
-                        styles.statusIndicator,
-                        isSelected && { backgroundColor: colors.accent },
-                      ]}
-                    />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </BlurView>
-        </Animated.View>
-      )}
-
-      {/* Scan Frame */}
-      <View style={styles.scanArea}>
-        <Animated.View entering={ZoomIn.duration(600).delay(100)} style={styles.scanBox}>
-          <View style={[styles.corner, styles.cornerTL, { borderColor: colors.accent }]} />
-          <View style={[styles.corner, styles.cornerTR, { borderColor: colors.accent }]} />
-          <View style={[styles.corner, styles.cornerBL, { borderColor: colors.accent }]} />
-          <View style={[styles.corner, styles.cornerBR, { borderColor: colors.accent }]} />
-        </Animated.View>
-        <Text style={styles.scanHint}>Îndreaptă camera spre farfurie</Text>
-      </View>
-
-      {/* Full Screen AI Loading Overlay */}
-      {seIncarca && (
-        <Animated.View entering={FadeIn.duration(300)} style={StyleSheet.absoluteFill}>
-          <BlurView intensity={80} tint="dark" style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-            <View style={{
-              padding: 28,
-              borderRadius: 24,
-              backgroundColor: 'rgba(15, 19, 24, 0.85)',
-              borderWidth: 1,
-              borderColor: colors.accent + '44',
-              alignItems: 'center',
-              width: '85%',
-              shadowColor: colors.accent,
-              shadowOffset: { width: 0, height: 10 },
-              shadowOpacity: 0.3,
-              shadowRadius: 20,
-            }}>
-              <ActivityIndicator color={colors.accent} size="large" />
-              <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 18, marginTop: 18, textAlign: 'center' }}>
-                Analizăm imaginea cu AI...
+    <View style={styles.container}>
+      <View style={styles.topHeader}>
+        {/* Selector AI în Stânga */}
+        <View style={styles.aiSelectorContainer}>
+          <TouchableOpacity
+            style={[styles.topBadge, { backgroundColor: 'transparent', borderWidth: 0, zIndex: 9999 }]}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setAiMenuVisible(prev => !prev);
+            }}
+          >
+            <View style={[styles.topBadgeBlur, { paddingVertical: 8 }]}>
+              <Zap size={14} color={colors.accent} fill={colors.accent} />
+              <Text style={[styles.topBadgeText, { color: colors.textPrimary }]}>
+                {selectedAI === 'auto' ? 'AI Inteligent' : selectedAI.toUpperCase()}
               </Text>
-              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 6, textAlign: 'center' }}>
-                Identificăm alimentele și calculăm macronutrienții
-              </Text>
-              <TouchableOpacity 
-                style={{ marginTop: 22, paddingHorizontal: 24, paddingVertical: 10, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }}
-                onPress={anuleazaScanare}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>✕ Anulează</Text>
-              </TouchableOpacity>
+              <ChevronDown size={14} color={colors.textSecondary} />
             </View>
-          </BlurView>
-        </Animated.View>
-      )}
+          </TouchableOpacity>
+        </View>
 
-      {/* Result sheet */}
-      {rezultat && (
+        {/* Buton X în Dreapta (Fără să se suprapună) */}
+        <TouchableOpacity style={styles.closeButton} onPress={() => { anuleazaScanarea(); router.back(); }}>
+          <Text style={styles.closeButtonText}>X</Text>
+        </TouchableOpacity>
+      </View>
+      <CameraView ref={cameraRef} style={StyleSheet.absoluteFillObject} facing="back">
+        <LinearGradient
+          colors={['rgba(5,8,13,0.85)', 'rgba(5,8,13,0)', 'rgba(5,8,13,0.95)']}
+          style={StyleSheet.absoluteFillObject}
+          pointerEvents="none"
+        />
+
+        {/* Meniu alegere AI */}
+        {aiMenuVisible && (
+          <Animated.View entering={FadeIn.duration(200)} style={[styles.aiDropdownMenu, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
+            <BlurView intensity={80} tint="dark" style={styles.aiDropdownBlur}>
+              <Text style={styles.aiDropdownHeader}>SELECTEAZĂ CREIERUL AI</Text>
+              
+              {(['auto', 'gemini', 'openai', 'groq'] as const).map((aiKey) => {
+                const info = aiStatus[aiKey === 'auto' ? 'gemini' : aiKey];
+                const isCooldown = info?.status === 'cooldown' || info?.status === 'rate_limit';
+                const isSelected = selectedAI === aiKey;
+
+                return (
+                  <TouchableOpacity
+                    key={aiKey}
+                    style={[
+                      styles.aiDropdownItem,
+                      isSelected && { backgroundColor: colors.accent + '22', borderColor: colors.accent }
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setSelectedAI(aiKey);
+                      setAiMenuVisible(false);
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.aiDropdownTitle, isSelected && { color: colors.accent }]}>
+                        {aiKey === 'auto' ? '✨ NutriAI Auto-Routing (Recomandat)' : 
+                         aiKey === 'gemini' ? '🧠 Google Gemini Pro Vision' :
+                         aiKey === 'openai' ? '👁️ OpenAI GPT-4o Mini' : '⚡ Groq LLaVA Fast'}
+                      </Text>
+                      <Text style={styles.aiDropdownDesc}>
+                        {isCooldown ? `⏳ Cooldown (${info?.secundeRamase}s)` : '✅ Activ și pregătit'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </BlurView>
+          </Animated.View>
+        )}
+
+        {/* Box Scanare */}
+        <View style={styles.scanArea}>
+          <View style={[styles.scanBox, { borderColor: colors.cardBorder }]}>
+            <View style={[styles.corner, styles.cornerTL, { borderColor: colors.accent }]} />
+            <View style={[styles.corner, styles.cornerTR, { borderColor: colors.accent }]} />
+            <View style={[styles.corner, styles.cornerBL, { borderColor: colors.accent }]} />
+            <View style={[styles.corner, styles.cornerBR, { borderColor: colors.accent }]} />
+
+            {seIncarca && (
+              <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay}>
+                <BlurView intensity={60} tint="dark" style={styles.scanningBlur}>
+                  <ActivityIndicator size="large" color={colors.accent} />
+                  <Text style={[styles.scanningText, { color: colors.accent }]}>Analizez farfuria...</Text>
+                </BlurView>
+              </Animated.View>
+            )}
+          </View>
+          <Text style={styles.scanHint}>Încadrează farfuria clar și luminos</Text>
+        </View>
+      </CameraView>
+
+      {/* Result section & sheet */}
+      {rezultat.length > 0 && (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <Animated.View entering={FadeInUp.duration(500).springify()} style={[styles.resultSheet, { borderColor: colors.accent + '26' }]}>
             <BlurView intensity={50} tint="dark" style={styles.resultBlur}>
               <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={styles.resultGrad}>
                 <View style={styles.resultHandle} />
                 
-                <Text style={[styles.resultTitle, { color: colors.textPrimary }]}>Ce am găsit în farfurie:</Text>
-                
-                <ScrollView style={styles.itemsList} showsVerticalScrollIndicator={false}>
-                  {rezultat.map((item, index) => (
-                    <View key={index} style={styles.foodRow}>
-                      <TextInput 
-                        style={[styles.foodNameInput, { color: colors.textPrimary }]} 
-                        value={item.nume} 
-                        onChangeText={(t) => {
-                          setRezultat(prev => prev ? prev.map((item, i) => i === index ? { ...item, nume: t } : item) : null);
-                        }}
-                      />
-                      <View style={[styles.gramContainer, { borderColor: colors.accent + '33' }]}>
-                        <TextInput
-                          style={[styles.gramInput, { color: colors.accent }]}
-                          keyboardType="numeric"
-                          value={grame[index] !== undefined ? String(grame[index]) : '0'}
-                          onChangeText={(text) => {
-                            const val = parseInt(text) || 0;
-                            setGrame(prev => prev.map((g, i) => i === index ? val : g));
-                          }}
-                        />
-                        <Text style={[styles.gramUnit, { color: colors.accent }]}>g</Text>
+                <View style={styles.resultSection}>
+                  <Text style={[styles.resultTitle, { color: colors.textPrimary }]}>Ingredientele detectate</Text>
+
+                  <ScrollView style={styles.itemsList} showsVerticalScrollIndicator={false}>
+                    {rezultat.map((ingredient, index) => (
+                      <View key={`${ingredient.nume}-${index}`} style={styles.ingredientRow}>
+                        <Text style={[styles.ingredientName, { color: colors.textPrimary }]}>{ingredient.nume}</Text>
+                        <View style={[styles.gramContainer, { borderColor: colors.accent + '33' }]}>
+                          <TextInput
+                            style={[styles.gramInput, { color: colors.accent }]}
+                            keyboardType="numeric"
+                            value={String(Math.round(ingredient.estimare_grame))}
+                            onChangeText={(text) => {
+                              const val = Math.max(1, parseInt(text) || 0);
+                              updateIngredient(index, { estimare_grame: val });
+                            }}
+                          />
+                          <Text style={[styles.gramUnit, { color: colors.accent }]}>g</Text>
+                        </View>
                       </View>
-                      <TouchableOpacity
-                        style={{ paddingHorizontal: 6, justifyContent: 'center' }}
-                        onPress={() => {
-                          const g = grame[index] || item.estimare_grame || 100;
-                          const rap = g / 100;
-                          addFavorite({
-                            nume: item.nume,
-                            calorii: Math.round(item.calorii_per_100g * rap),
-                            proteine: Math.round(item.proteine_per_100g * rap),
-                            carbohidrati: Math.round((item.carbohidrati_per_100g || 0) * rap),
-                            grasimi: Math.round((item.grasimi_per_100g || 0) * rap),
-                          });
-                        }}
-                      >
-                        <Heart size={20} color="#f43f5e" fill={isFavorite(item.nume) ? "#f43f5e" : "transparent"} />
-                      </TouchableOpacity>
+                    ))}
+
+                    <TouchableOpacity
+                      style={[styles.addExtraBtn, { borderColor: colors.accent }]}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setCautareProdusVisible(true);
+                      }}
+                    >
+                      <Plus size={16} color={colors.accent} />
+                      <Text style={[styles.addExtraText, { color: colors.accent, fontWeight: '700' }]}>
+                        + Adaugă alt produs
+                      </Text>
+                    </TouchableOpacity>
+
+                    <View style={{ marginTop: 12 }}>
+                      <IngredientCorrectionInput
+                        ingredienteCurente={rezultat}
+                        onCorectat={setRezultat}
+                        onSend={sendCorrectionToAI}
+                      />
                     </View>
-                  ))}
-                  
-                  <TouchableOpacity style={styles.addExtraBtn} onPress={adaugaElementManual}>
-                    <Plus size={16} color={colors.textSecondary} />
-                    <Text style={[styles.addExtraText, { color: colors.textSecondary }]}>Adaugă element extra</Text>
-                  </TouchableOpacity>
-                </ScrollView>
+                  </ScrollView>
+                </View>
 
                 <View style={styles.macroRow}>
                   <View style={styles.macroItem}>
@@ -488,7 +542,7 @@ export default function CameraScreen() {
                   </LinearGradient>
                 </TouchableOpacity>
                 
-                <TouchableOpacity style={styles.retryBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); anuleazaScanare(); }}>
+                <TouchableOpacity style={styles.retryBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); anuleazaScanarea(); }}>
                   <Text style={styles.retryBtnText}>🔄 Anulează & Scanează din nou</Text>
                 </TouchableOpacity>
               </LinearGradient>
@@ -497,8 +551,60 @@ export default function CameraScreen() {
         </KeyboardAvoidingView>
       )}
 
+      {scanError && (
+        <View style={styles.errorCard}>
+          <Text style={styles.errorText}>{scanError}</Text>
+          <Pressable onPress={() => setScanError(null)}>
+            <Text style={styles.retryText}>Închide</Text>
+          </Pressable>
+        </View>
+      )}
+
+      <FoodScanSuccessModal
+        visible={successVisible}
+        alimente={rezultat}
+        onClose={() => setSuccessVisible(false)}
+        onAddToDiary={async () => {
+          setSuccessVisible(false);
+          await adaugaInJurnal();
+        }}
+      />
+
+      {isSavingDiary && (
+        <View style={styles.savingOverlay}>
+          <ActivityIndicator size="large" color="#CCFF00" />
+          <Text style={styles.savingText}>Salvez în jurnal...</Text>
+        </View>
+      )}
+
+      {/* Modal Căutare Produs Extra */}
+      <Modal
+        visible={cautareProdusVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setCautareProdusVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: colors.background, paddingHorizontal: 16, paddingTop: 16 }}>
+          <ProductSearch
+            onSelectProductWithGrams={(prod, gr) => {
+              const aliment = foodProductToAlimentAI(prod, gr);
+              setRezultat(prev => [...prev, {
+                nume: aliment.nume,
+                estimare_grame: aliment.estimare_grame || 100,
+                calorii_per_100g: aliment.calorii_per_100g || 0,
+                proteine_per_100g: aliment.proteine_per_100g || 0,
+                grasimi_per_100g: aliment.grasimi_per_100g || 0,
+                carbohidrati_per_100g: aliment.carbohidrati_per_100g || 0,
+              }]);
+              setCautareProdusVisible(false);
+            }}
+            onClose={() => setCautareProdusVisible(false)}
+          />
+        </View>
+      </Modal>
+
       {/* Shutter & Gallery button */}
-      {!rezultat && (
+      {rezultat.length === 0 && (
         <Animated.View entering={FadeInUp.duration(600).delay(200)} style={styles.shutterArea}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 28 }}>
             <TouchableOpacity
@@ -549,6 +655,36 @@ const styles = StyleSheet.create({
   cancelLink: { marginTop: 24, padding: 12 },
   cancelLinkText: { fontSize: 16, fontWeight: '600' },
 
+  topHeader: {
+    position: 'absolute',
+    top: 50, // sub notch
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  aiSelectorContainer: {
+    // Asigură-te că AiSelector are fundal opac
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+  },
+  closeButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+
   topBar: { position: 'absolute', top: 60, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24 },
   closeBtn: { borderRadius: 20, overflow: 'hidden' },
   closeBtnBlur: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
@@ -576,14 +712,16 @@ const styles = StyleSheet.create({
   resultGrad: { padding: 32, paddingTop: 20 },
   resultHandle: { width: 48, height: 5, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 3, alignSelf: 'center', marginBottom: 24 },
   resultTitle: { fontSize: 20, fontWeight: '800', marginBottom: 16, letterSpacing: -0.3 },
+  resultSection: { width: '100%' },
   
   itemsList: { maxHeight: 220, marginBottom: 20 },
-  foodRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  foodNameInput: { fontSize: 16, fontWeight: '600', flex: 1, marginRight: 12, paddingVertical: 4 },
+  ingredientRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  ingredientName: { fontSize: 16, fontWeight: '600', flex: 1, marginRight: 12, paddingVertical: 4 },
+  ingredientAmount: { fontSize: 15, fontWeight: '700', color: '#CCFF00' },
   gramContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 12, paddingHorizontal: 12, borderWidth: 1 },
   gramInput: { fontSize: 16, fontWeight: '800', paddingVertical: 8, minWidth: 40, textAlign: 'center' },
   gramUnit: { fontSize: 14, fontWeight: '600', marginLeft: 4 },
-  addExtraBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, marginTop: 4, gap: 6 },
+  addExtraBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, marginTop: 4, gap: 6, borderWidth: 1, borderRadius: 14 },
   addExtraText: { fontSize: 14, fontWeight: '600' },
 
   macroRow: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, padding: 20, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
@@ -597,6 +735,13 @@ const styles = StyleSheet.create({
   retryBtn: { padding: 16, alignItems: 'center', marginTop: 12, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' },
   retryBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
 
+  errorCard: { position: 'absolute', top: 120, left: 20, right: 20, backgroundColor: 'rgba(239,68,68,0.9)', padding: 16, borderRadius: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 999 },
+  errorText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14, flex: 1, marginRight: 12 },
+  retryText: { color: '#FFFFFF', fontWeight: '900', fontSize: 14, textDecorationLine: 'underline' },
+
+  savingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(5,8,13,0.85)', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
+  savingText: { color: '#CCFF00', fontSize: 18, fontWeight: '800', marginTop: 16 },
+
   shutterArea: { position: 'absolute', bottom: 60, left: 0, right: 0, alignItems: 'center' },
   shutterBtn: { width: 80, height: 80, borderRadius: 40, overflow: 'hidden', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.6, shadowRadius: 24, elevation: 20, borderWidth: 3 },
   shutterGrad: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -604,7 +749,7 @@ const styles = StyleSheet.create({
   galleryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 20, borderWidth: 1 },
   galleryBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 
-  aiDropdownMenu: { position: 'absolute', top: 100, left: 24, right: 24, zIndex: 1000, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.5, shadowRadius: 24, elevation: 15 },
+  aiDropdownMenu: { position: 'absolute', top: 100, left: 24, right: 24, zIndex: 10000, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.5, shadowRadius: 24, elevation: 15 },
   aiDropdownBlur: { padding: 18, backgroundColor: 'rgba(15, 23, 42, 0.88)' },
   aiDropdownHeader: { fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.45)', letterSpacing: 1.2, marginBottom: 12 },
   aiDropdownItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'transparent' },

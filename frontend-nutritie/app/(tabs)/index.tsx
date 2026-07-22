@@ -5,9 +5,10 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell, Bell } from 'lucide-react-native';
+import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell, Bell, RotateCcw, X } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useNotificationBanner } from '../../context/NotificationBannerContext';
+import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTheme } from '../../context/ThemeContext';
 import { useApa } from '../../hooks/useApa';
@@ -16,6 +17,10 @@ import { useHealthSync } from '../../hooks/useHealthSync';
 import { useAntrenamente } from '../../hooks/useAntrenamente';
 import { getCalorieState } from '../../lib/calorieState';
 import { SkeletonLoader } from '../../components/SkeletonLoader';
+import { LiveMuscleBody } from '../../components/fitness/LiveMuscleBody';
+import { computeDailyMuscleIntensity, normalizeMuscleLoadToIntensity } from '../../lib/fitnessEngine';
+import { EXERCITII_DB } from '../../constants/exercitii';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 function RingProgress({ procent, color, bgColor }: { procent: number; color: string; bgColor: string }) {
   const radius = 55;
@@ -79,19 +84,68 @@ export default function HomeScreen() {
   } = useMeseAzi();
   const { pahare, tinta: tintaPahare, adaugaPahar, scadePahar } = useApa();
   const { steps, activeCalories, stepGoal, isEnabled, platformName, providerInfo, refreshSteps } = useHealthSync();
-  const { totalCaloriiArse, refresh: refreshAntrenamente } = useAntrenamente();
+  const { totalCaloriiArse, antrenamente, refresh: refreshAntrenamente } = useAntrenamente();
   const [ascundeCardHealth, setAscundeCardHealth] = useState(false);
+  const [viewSideHome, setViewSideHome] = useState<'front' | 'back'>('front');
+  const [isTipVisible, setIsTipVisible] = useState(true);
+  const { topInset, scrollPaddingBottom, scrollPaddingTop } = useResponsiveLayout();
 
-  useFocusEffect(
-    useCallback(() => {
-      refresh();
+  React.useEffect(() => {
+    const checkTipClosed = async () => {
+      try {
+        const todayStr = new Date().toDateString();
+        const closedDate = await AsyncStorage.getItem('nutriai_tip_closed_date');
+        if (closedDate === todayStr) {
+          setIsTipVisible(false);
+        }
+      } catch {}
+    };
+    checkTipClosed();
+  }, []);
+
+  const handleCloseTip = async () => {
+    setIsTipVisible(false);
+    try {
+      const todayStr = new Date().toDateString();
+      await AsyncStorage.setItem('nutriai_tip_closed_date', todayStr);
+    } catch {}
+  };
+
+  const dailyIntensityHome = React.useMemo(() => {
+    const sesiuniAzi = (antrenamente || []).flatMap(w => (w.exercitii || []).map(ex => ({
+      exercitiuId: ex.exercitiuId,
+      serii: Array.isArray(ex.seturi) ? ex.seturi.length : 1,
+      volumKg: Array.isArray(ex.seturi) ? ex.seturi.reduce((acc, st) => acc + (st.repetari || 0) * (st.greutate || 0), 0) : 0,
+      durataSec: (ex.durataMin || 0) * 60,
+    })));
+    const fromSesiuni = computeDailyMuscleIntensity(sesiuniAzi, EXERCITII_DB);
+
+    const map: Record<string, number> = {};
+    for (const [k, v] of Object.entries(fromSesiuni)) {
+      if (v !== undefined) map[k] = (map[k] || 0) + v * 100;
+    }
+    for (const w of antrenamente || []) {
+      if (w.muscle_load) {
+        for (const [k, v] of Object.entries(w.muscle_load)) {
+          map[k] = (map[k] || 0) + v;
+        }
+      }
+    }
+    if (Object.keys(map).length > 0) {
+      return normalizeMuscleLoadToIntensity(map);
+    }
+    return fromSesiuni;
+  }, [antrenamente]);
+
+  // Throttle: max 1 refresh la 5 sec la tab-switch (evită 5 apeluri Supabase simultane)
+  useFocusRefresh(
+    () => {
+      refresh(true);
       refreshSteps();
       refreshAntrenamente();
-      AsyncStorage.getItem('ascundeCardHealth').then((val) => {
-        if (val === 'true') setAscundeCardHealth(true);
-        else setAscundeCardHealth(false);
-      });
-    }, [refresh, refreshSteps, refreshAntrenamente])
+    },
+    5000,
+    [refresh, refreshSteps, refreshAntrenamente],
   );
 
   const caloriiConsumate = totalCalorii;
@@ -136,7 +190,7 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <View style={[s.container, { backgroundColor: colors.background, paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 60 : 40 }]}>
+      <View style={[s.container, { backgroundColor: colors.background, paddingHorizontal: 20, paddingTop: topInset }]}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 }}>
           <View>
             <SkeletonLoader width={140} height={20} borderRadius={8} style={{ marginBottom: 8 }} />
@@ -161,9 +215,9 @@ export default function HomeScreen() {
 
       <ScrollView 
         showsVerticalScrollIndicator={false} 
-        contentContainerStyle={s.scroll}
+        contentContainerStyle={[s.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} />
+          <RefreshControl refreshing={loading} onRefresh={() => refresh(false, true)} tintColor={colors.accent} colors={[colors.accent]} />
         }
       >
         {/* Header */}
@@ -446,8 +500,7 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* Apple HealthKit / Google Fit & Pași Card */}
-        {!ascundeCardHealth && (
-          <Animated.View entering={FadeInDown.duration(700).delay(335)} style={[s.healthCard, { borderColor: isEnabled ? colors.accent + '40' : 'rgba(255,255,255,0.08)' }]}>
+        <Animated.View entering={FadeInDown.duration(700).delay(335)} style={[s.healthCard, { borderColor: isEnabled ? colors.accent + '40' : 'rgba(255,255,255,0.08)' }]}>
             <TouchableOpacity 
               activeOpacity={0.8}
               onPress={() => {
@@ -471,18 +524,6 @@ export default function HomeScreen() {
                       </View>
                     </View>
 
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <TouchableOpacity 
-                        style={s.closeCardBtn}
-                        onPress={async (e) => {
-                          e.stopPropagation();
-                          setAscundeCardHealth(true);
-                          await AsyncStorage.setItem('ascundeCardHealth', 'true');
-                        }}
-                      >
-                        <Text style={{ fontSize: 16, color: colors.textTertiary, fontWeight: '800' }}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
                   </View>
 
                   {isEnabled ? (
@@ -516,17 +557,71 @@ export default function HomeScreen() {
               </BlurView>
             </TouchableOpacity>
           </Animated.View>
-        )}
+
+        {/* HARTĂ MUSCULARĂ LIVE Card pe ecranul Acasă (Secțiunea 4.4) */}
+        <Animated.View entering={FadeInDown.duration(700).delay(345)}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => router.push('/(tabs)/antrenamente' as any)}
+            style={[s.liveHeatmapCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
+          >
+            <View style={s.liveHeatmapHeader}>
+              <View style={s.liveHeatmapTitleRow}>
+                <View style={[s.liveHeatmapDot, { backgroundColor: '#FF003C' }]} />
+                <Text style={[s.liveHeatmapTitle, { color: colors.textPrimary }]}>HARTĂ MUSCULARĂ LIVE</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setViewSideHome(v => v === 'front' ? 'back' : 'front')}
+                style={[s.liveHeatmapToggle, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                activeOpacity={0.8}
+              >
+                <RotateCcw size={12} color={colors.accent} />
+                <Text style={[s.liveHeatmapToggleText, { color: colors.accent }]}>
+                  {viewSideHome === 'front' ? 'FAȚĂ' : 'SPATE'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[s.liveHeatmapBodyWrap, { height: 260, justifyContent: 'center', alignItems: 'center' }]}>
+              <LiveMuscleBody
+                side={viewSideHome}
+                intensity={dailyIntensityHome}
+                width={200}
+                height={260}
+              />
+            </View>
+
+            <View style={s.liveHeatmapFooter}>
+              <Dumbbell size={14} color={colors.accentSecondary} />
+              <Text style={[s.liveHeatmapFooterText, { color: colors.textSecondary }]}>
+                {antrenamente && antrenamente.length > 0
+                  ? `${antrenamente.length} antrenamente azi • intensitate musculară în timp real`
+                  : 'Niciun antrenament înregistrat azi • atinge pentru a începe'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
 
         {/* Tips card */}
-        <Animated.View entering={FadeInDown.duration(700).delay(350)} style={[s.tipsCard, { borderColor: colors.accentSecondary + '25' }]}>
-          <BlurView intensity={20} tint="dark" style={s.tipsBlur}>
-            <LinearGradient colors={[colors.accentSecondary + '14', 'rgba(0,0,0,0)']} style={s.tipsGrad}>
-              <Text style={[s.tipsTitle, { color: colors.textPrimary }]}>✨ Sfat NutriAI al Zilei</Text>
-              <Text style={[s.tipsText, { color: colors.textTertiary }]}>{sfatAles}</Text>
-            </LinearGradient>
-          </BlurView>
-        </Animated.View>
+        {isTipVisible && (
+          <Animated.View entering={FadeInDown.duration(700).delay(350)} style={[s.tipsCard, { borderColor: colors.accentSecondary + '25' }]}>
+            <BlurView intensity={20} tint="dark" style={s.tipsBlur}>
+              <LinearGradient colors={[colors.accentSecondary + '14', 'rgba(0,0,0,0)']} style={s.tipsGrad}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={[s.tipsTitle, { color: colors.textPrimary, marginBottom: 0 }]}>✨ Sfat NutriAI al Zilei</Text>
+                  <TouchableOpacity
+                    onPress={handleCloseTip}
+                    style={{ padding: 4 }}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
+                    <X size={18} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={[s.tipsText, { color: colors.textTertiary }]}>{sfatAles}</Text>
+              </LinearGradient>
+            </BlurView>
+          </Animated.View>
+        )}
 
       </ScrollView>
 
@@ -540,7 +635,7 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   glowTop: { position: 'absolute', top: -200, right: -100, width: 400, height: 400, borderRadius: 200, opacity: 0.04 },
   glowBottom: { position: 'absolute', bottom: -150, left: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.06 },
-  scroll: { paddingTop: Platform.OS === 'ios' ? 56 : 36, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 160 : 100 },
+  scroll: { paddingHorizontal: 20 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 15, fontWeight: '500' },
 
@@ -664,4 +759,15 @@ const s = StyleSheet.create({
   weightLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
   weightValue: { fontSize: 20, fontWeight: '900', marginTop: 2 },
   weightLink: { fontSize: 13, fontWeight: '800' },
+
+  liveHeatmapCard: { borderRadius: 24, borderWidth: 1, padding: 16, marginBottom: 20 },
+  liveHeatmapHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  liveHeatmapTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  liveHeatmapDot: { width: 8, height: 8, borderRadius: 4 },
+  liveHeatmapTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 0.6 },
+  liveHeatmapToggle: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1 },
+  liveHeatmapToggleText: { fontSize: 11, fontWeight: '800' },
+  liveHeatmapBodyWrap: { height: 245, alignItems: 'center', justifyContent: 'center' },
+  liveHeatmapFooter: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' },
+  liveHeatmapFooterText: { fontSize: 12, fontWeight: '600' },
 });

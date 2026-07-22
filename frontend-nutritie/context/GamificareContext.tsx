@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import { useNotificationBanner } from './NotificationBannerContext';
+import { useDailyReset } from '../hooks/useDailyReset';
 
 export interface QuestZilnic {
   id: string;
@@ -11,6 +12,7 @@ export interface QuestZilnic {
   progres: number;
   completat: boolean;
   xp: number;
+  [key: string]: any;
 }
 
 export interface StareGamificare {
@@ -107,6 +109,7 @@ function getQuesturiDefault(): QuestZilnic[] {
 }
 
 interface GamificareContextType extends StareGamificare {
+  setQuesturiAzi: (updater: any) => void;
   adaugaProgres: (tip: QuestZilnic['tip'], valoare: number) => void;
   revendicaRecompensaZilnica: () => void;
   refreshGamificare: () => Promise<void>;
@@ -127,6 +130,7 @@ const GamificareContext = createContext<GamificareContextType>({
   ultimaZiActiva: getTodayString(),
   questuriAzi: getQuesturiDefault(),
   insigne: [],
+  setQuesturiAzi: () => {},
   adaugaProgres: () => {},
   revendicaRecompensaZilnica: () => {},
   refreshGamificare: async () => {},
@@ -189,7 +193,7 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
           loaded.questuriAzi.length > 0 && loaded.questuriAzi.every((q) => q.completat);
 
         if (loaded.ultimaZiActiva === yesterday && toateIeri) {
-          nextState.streak = Math.max(1, loaded.streak || 1);
+          nextState.streak = Math.max(1, (loaded.streak || 0) + 1);
         } else {
           nextState.streak = 0;
         }
@@ -254,6 +258,21 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     refreshGamificare();
   }, []);
+
+  const setQuesturiAzi = useCallback((updater: React.SetStateAction<any[]>) => {
+    setStare((prev) => {
+      const nextQuesturi = typeof updater === 'function' ? updater(prev.questuriAzi) : updater;
+      const nextState = { ...prev, questuriAzi: nextQuesturi };
+      saveStare(nextState);
+      return nextState;
+    });
+    refreshGamificare();
+  }, [saveStare, refreshGamificare]);
+
+  useDailyReset({
+    questuriAzi: stare.questuriAzi,
+    setQuesturiAzi,
+  });
 
   const adaugaProgres = useCallback(
     (tip: QuestZilnic['tip'], valoare: number) => {
@@ -396,6 +415,7 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
     <GamificareContext.Provider
       value={{
         ...stare,
+        setQuesturiAzi,
         adaugaProgres,
         revendicaRecompensaZilnica,
         refreshGamificare,

@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { AppState, AppStateStatus, Platform } from 'react-native';
+import { AppState, AppStateStatus } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 
 const BIOMETRIC_STORAGE_KEY = 'biometric_lock_enabled';
 const LAST_ACTIVE_KEY = 'biometric_last_active_timestamp';
-const AUTO_LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minute conform punctului 2.1.2 din Audit
+// AUTO_LOCK_TIMEOUT_MS rezervat pentru funcționalitate viitoare (5 min)
+// const AUTO_LOCK_TIMEOUT_MS = 5 * 60 * 1000;
 
 export function useBiometrics() {
   const [isSupported, setIsSupported] = useState<boolean>(false);

@@ -22,6 +22,7 @@ import { useNotificationBanner } from '../../context/NotificationBannerContext';
 import { useNotify } from '../../hooks/useNotify';
 import { useGamificare } from '../../hooks/useGamificare';
 import { INSIGNE_LIST } from '../../constants/insigne';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 export default function ProfilScreen() {
   const router = useRouter();
@@ -33,6 +34,7 @@ export default function ProfilScreen() {
   const { showBanner } = useNotificationBanner();
   const notify = useNotify();
   const { insigne } = useGamificare();
+  const { scrollPaddingTop, scrollPaddingBottom } = useResponsiveLayout();
   const [greutate, setGreutate] = useState('75');
   const [greutateTinta, setGreutateTinta] = useState('70');
   const [caloriiTinta, setCaloriiTinta] = useState('2000');
@@ -211,7 +213,7 @@ export default function ProfilScreen() {
       <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
       <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}>
 
         {/* Avatar header */}
         <Animated.View entering={FadeInDown.duration(500)} style={styles.avatarSection}>
@@ -697,7 +699,7 @@ const styles = StyleSheet.create({
   glowTop: { position: 'absolute', top: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.04 },
   glowBottom: { position: 'absolute', bottom: 50, right: -80, width: 280, height: 280, borderRadius: 140, opacity: 0.05 },
 
-  scroll: { paddingTop: Platform.OS === 'ios' ? 48 : 28, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 160 : 50 },
+  scroll: { paddingHorizontal: 20 },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 15, fontWeight: '500' },

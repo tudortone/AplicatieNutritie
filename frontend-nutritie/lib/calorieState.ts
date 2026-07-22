@@ -72,12 +72,26 @@ export function getCalorieState(
     };
   }
 
+  const ora = new Date().getHours();
+  let mesajStart = 'Hai să începem dimineața cu energie!';
+  let emojiStart = '🌅';
+  if (ora >= 12 && ora < 18) {
+    mesajStart = 'Timp perfect pentru un prânz nutritiv!';
+    emojiStart = '🌤️';
+  } else if (ora >= 18 && ora < 23) {
+    mesajStart = 'Pregătește o seară echilibrată!';
+    emojiStart = '🌙';
+  } else if (ora < 5 || ora >= 23) {
+    mesajStart = 'Odihnă plăcută și refacere!';
+    emojiStart = '✨';
+  }
+
   return {
     key: 'start',
     ringColor: defaultAccent,
     glowColor: defaultSecondary,
-    mesaj: 'Hai să începem ziua!',
-    emoji: '🌅',
+    mesaj: mesajStart,
+    emoji: emojiStart,
     isOver: false,
     surplusKcal: 0,
   };
