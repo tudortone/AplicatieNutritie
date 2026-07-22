@@ -12,10 +12,8 @@ export interface MuscleMapProps extends SvgProps {
 function normalizeId(id: string): string {
   return id
     .toLowerCase()
-    .replace(/&#200;&#153;/g, 's')
-    .replace(/&#196;&#131;/g, 'a')
-    .replace(/&#200;&#154;/g, 't')
-    .replace(/&#200;&#152;/g, 's')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .trim();
 }
 

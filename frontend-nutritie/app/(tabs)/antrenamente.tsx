@@ -84,7 +84,7 @@ function getRankData(kg: number) {
       return {
         rankLabel,
         nextRankLabel,
-        nextRankKg: next.maxKg || 1000,
+        nextRankKg: next.minKg || 1000,
         stars: current.stars,
         tier: current.tier,
         title: current.title,
@@ -446,9 +446,9 @@ export default function AntrenamenteScreen() {
 
           <View style={[styles.muscleBodyWrap, { height: 400, width: '100%', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }]}>
             {viewMode === 'front' ? (
-              <MuscleMapFront side="front" intensity={aggregatedIntensityMap} activeMuscles={activeMusclesList} />
+              <MuscleMapFront side="front" intensity={aggregatedIntensityMap} activeMuscles={activeMusclesList} style={{ width: '100%', height: '100%' }} />
             ) : (
-              <MuscleMapBack side="back" intensity={aggregatedIntensityMap} activeMuscles={activeMusclesList} />
+              <MuscleMapBack side="back" intensity={aggregatedIntensityMap} activeMuscles={activeMusclesList} style={{ width: '100%', height: '100%' }} />
             )}
           </View>
 

@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
 
   /* Anatomy */
   anatomyWrap: {
-    height: 310,
+    height: 340,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
