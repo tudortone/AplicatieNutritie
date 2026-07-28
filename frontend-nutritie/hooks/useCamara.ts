@@ -29,10 +29,19 @@ const LOCAL_CAMARA_KEY = 'nutriai_camara_local_v3';
 export function useCamara() {
   const [produse, setProduse] = useState<ProdusCamara[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // refs for cleanup and avoid race-conditions
+  const isMounted = React.useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
 
   const fetchProduse = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       let remoteProduse: ProdusCamara[] = [];
       const { data: { user } } = await supabase.auth.getUser();
@@ -95,12 +104,15 @@ export function useCamara() {
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
 
-      setProduse(merged);
-      checkAndSchedulePantryExpiryNotification(merged).catch(() => {});
+      if (isMounted.current) {
+        setProduse(merged);
+        checkAndSchedulePantryExpiryNotification(merged).catch(() => {});
+      }
     } catch (e) {
       console.warn('Eroare fetch camara:', e);
+      if (isMounted.current) setError('Eroare la încărcarea produselor din cămară.');
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
   }, []);
 
@@ -231,14 +243,32 @@ export function useCamara() {
     const nouaLista = produse.map((p) => {
       if (p.id !== id) return p;
       const willFreeze = !p.is_congelat;
-      const zile = willFreeze ? 90 : 7;
-      const dataExp = new Date(Date.now() + zile * 86_400_000).toISOString().split('T')[0];
+
+      // Calculează data de expirare păstrând timpul deja scurs de la adăugare
+      let dataExp: string;
+      const now = Date.now();
+
+      // Folosește created_at (timestamp ISO) pentru a calcula cât timp a trecut
+      const addedTime = p.created_at ? new Date(p.created_at).getTime() : now;
+      const elapsedDays = Math.max(0, (now - addedTime) / 86_400_000);
+
+      if (willFreeze) {
+        // Înghețare: shelf life-ul rămas se extinde (aprox 6x)
+        const freshShelfDays = 14; // perioada default la adăugare
+        const remainingDays = Math.max(1, freshShelfDays - elapsedDays);
+        const frozenDays = Math.max(90, Math.ceil(remainingDays * 6));
+        dataExp = new Date(now + frozenDays * 86_400_000).toISOString().split('T')[0];
+      } else {
+        // Dezghețare: shelf life scurt (7 zile de acum)
+        dataExp = new Date(now + 7 * 86_400_000).toISOString().split('T')[0];
+      }
+
       const dLeft = calculateDaysUntilExpiry(dataExp);
       return {
         ...p,
         is_congelat: willFreeze,
         data_expirare: dataExp,
-        zile_valabilitate: dLeft !== null ? dLeft : zile,
+        zile_valabilitate: dLeft !== null ? dLeft : (willFreeze ? 90 : 7),
       };
     });
     setProduse(nouaLista);
@@ -261,7 +291,8 @@ export function useCamara() {
   const stergeProdus = async (id: string) => {
     try {
       try {
-        await supabase.from('produse_camara').delete().eq('id', id);
+        const { data: { user } } = await supabase.auth.getUser();
+        await supabase.from('produse_camara').delete().eq('id', id).eq('user_id', user?.id);
       } catch {}
 
       const nouaLista = produse.filter((p) => p.id !== id);
@@ -286,31 +317,32 @@ export function useCamara() {
   /**
    * Modul 4.B Selecție ingrediente & link către RecipeBuilder (useInRecipe)
    */
-  const toggleSelect = (id: string) => {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  };
+  }, []);
 
-  const selectAll = () => {
+  const selectAll = useCallback(() => {
     setSelectedIds(new Set(produse.map((p) => p.id)));
-  };
+  }, [produse]);
 
-  const clearSelection = () => {
+  const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
-  };
+  }, []);
 
-  const useInRecipe = (): ProdusCamara[] => {
+  const useInRecipe = useCallback((): ProdusCamara[] => {
     if (selectedIds.size === 0) return produse;
     return produse.filter((p) => selectedIds.has(p.id));
-  };
+  }, [produse, selectedIds]);
 
   return {
     produse,
     loading,
+    error,
     selectedIds,
     toggleSelect,
     selectAll,

@@ -5,10 +5,15 @@ import { calculeazaCaloriiArse } from '../constants/exercitii';
 import { computeWorkoutMetrics } from '../lib/fitnessEngine';
 import type { User } from '@supabase/supabase-js';
 
+export type SetType = 'warmup' | 'working' | 'dropset' | 'failure';
+
 export interface SetExercitiu {
   serie: number;
   repetari: number;
   greutate?: number;
+  set_type?: SetType;
+  rpe?: number; // 1-10
+  completed?: boolean;
 }
 
 export interface ExercitiuInAntrenament {
@@ -17,6 +22,8 @@ export interface ExercitiuInAntrenament {
   seturi: SetExercitiu[];
   durataMin?: number;
   kcal: number;
+  superset_id?: string;
+  rest_time_seconds?: number;
 }
 
 export interface Antrenament {
@@ -66,6 +73,7 @@ export function useAntrenamente(dataSelectata?: Date) {
 
   const targetDate = dataSelectata || new Date();
   const dateKey = targetDate.toDateString();
+  const fetchReqId = React.useRef(0);
 
   const getLocalWorkouts = async (): Promise<Antrenament[]> => {
     try {
@@ -85,13 +93,11 @@ export function useAntrenamente(dataSelectata?: Date) {
   };
 
   const fetchAntrenamente = useCallback(async () => {
+    fetchReqId.current += 1;
+    const currentReq = fetchReqId.current;
+
     setLoading(true);
     try {
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
-      setUser(currentUser || null);
-
       const startOfDay = new Date(targetDate);
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(targetDate);
@@ -99,12 +105,20 @@ export function useAntrenamente(dataSelectata?: Date) {
 
       // Citim din stocarea locală mai întâi
       const localAll = await getLocalWorkouts();
+      if (currentReq !== fetchReqId.current) return;
+
       const localFiltered = localAll.filter((w) => {
         const d = new Date(w.created_at);
         return d >= startOfDay && d <= endOfDay;
       });
 
       let cloudData: Antrenament[] = [];
+      const sessionData = await supabase.auth.getSession();
+      const currentUser = sessionData?.data?.session?.user;
+
+      if (!user && currentUser) setUser(currentUser);
+      if (user && !currentUser) setUser(null);
+
       if (currentUser) {
         const { data, error } = await supabase
           .from('antrenamente')
@@ -118,6 +132,8 @@ export function useAntrenamente(dataSelectata?: Date) {
           cloudData = data as Antrenament[];
         }
       }
+
+      if (currentReq !== fetchReqId.current) return;
 
       // Combinăm cloud și local fără duplicate
       const combinedMap = new Map<string, Antrenament>();
@@ -259,6 +275,7 @@ export function useAntrenamente(dataSelectata?: Date) {
             .from('antrenamente')
             .insert([
               {
+                id: row.id,
                 user_id: currentUser.id,
                 nume: row.nume,
                 tip: row.tip,

@@ -175,10 +175,13 @@ export function useHealthSync(): HealthSyncState {
   }, [initHealth]);
 
   // Monitorizare AppState pentru reîmprospătare la revenire în aplicație
+  const enableRef = useRef(isEnabled);
+  useEffect(() => { enableRef.current = isEnabled; }, [isEnabled]);
+
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        if (isEnabled) {
+        if (enableRef.current) {
           fetchStepsToday();
         }
       }
@@ -186,7 +189,7 @@ export function useHealthSync(): HealthSyncState {
     };
     const sub = AppState.addEventListener('change', handleAppStateChange);
     return () => sub.remove();
-  }, [isEnabled, isAvailable, weight]);
+  }, [fetchStepsToday]);
 
   // 4. Comutare activare sincronizare
   const toggleSync = async (enable: boolean): Promise<boolean> => {

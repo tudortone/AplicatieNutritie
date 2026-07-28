@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import { useNotificationBanner } from './NotificationBannerContext';
@@ -152,6 +152,8 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
     questuriAzi: getQuesturiDefault(),
     insigne: [],
   });
+  const stareRef = useRef(stare);
+  stareRef.current = stare;
 
   const saveStare = useCallback(async (newState: StareGamificare) => {
     setStare(newState);
@@ -248,12 +250,12 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
       if (localState) {
         await initSauCheckZiNoua(localState);
       } else {
-        await initSauCheckZiNoua(stare);
+        await initSauCheckZiNoua(stareRef.current);
       }
     } catch {
-      await initSauCheckZiNoua(stare);
+      await initSauCheckZiNoua(stareRef.current);
     }
-  }, [initSauCheckZiNoua, stare]);
+  }, [initSauCheckZiNoua]); // Înlăturăm 'stare' din deps pentru a evita recalcularea; folosim stareRef.current
 
   useEffect(() => {
     refreshGamificare();
@@ -411,18 +413,26 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
   const detaliiNivel = calculeazaNivel(stare.xpTotal);
   const toateQuesturileCompletate = stare.questuriAzi.every((q) => q.completat);
 
+  const value = React.useMemo(() => ({
+    ...stare,
+    setQuesturiAzi,
+    adaugaProgres,
+    revendicaRecompensaZilnica,
+    refreshGamificare,
+    toateQuesturileCompletate,
+    detaliiNivel,
+  }), [
+    stare,
+    setQuesturiAzi,
+    adaugaProgres,
+    revendicaRecompensaZilnica,
+    refreshGamificare,
+    toateQuesturileCompletate,
+    detaliiNivel
+  ]);
+
   return (
-    <GamificareContext.Provider
-      value={{
-        ...stare,
-        setQuesturiAzi,
-        adaugaProgres,
-        revendicaRecompensaZilnica,
-        refreshGamificare,
-        toateQuesturileCompletate,
-        detaliiNivel,
-      }}
-    >
+    <GamificareContext.Provider value={value}>
       {children}
     </GamificareContext.Provider>
   );

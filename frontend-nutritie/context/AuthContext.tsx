@@ -25,6 +25,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(session);
       setUser(session?.user ?? null);
       setLoadingAuth(false);
+    }).catch((err) => {
+      console.warn('Eroare la obținerea sesiunii:', err.message);
+      setLoadingAuth(false);
     });
 
     // 2. Ascultăm modificările de stare auth
@@ -39,8 +42,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  const value = React.useMemo(() => ({
+    session,
+    user,
+    loadingAuth
+  }), [session, user, loadingAuth]);
+
   return (
-    <AuthContext.Provider value={{ session, user, loadingAuth }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
