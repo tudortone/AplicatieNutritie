@@ -25,8 +25,8 @@ const SLIDES = [
     id: '2',
     icon: Bot,
     title: 'Asistent NutriAI Personal',
-    description: 'Bucură-te de consiliere nutrițională 24/7. Poți vorbi vocal sau prin chat cu asistentul tău pentru rețete, ajustări și recomandări de diete.',
-    badge: 'VOCE & CHAT INTERACTIV',
+    description: 'Bucură-te de consiliere nutrițională 24/7. Poți vorbi prin chat cu asistentul tău pentru rețete, ajustări și recomandări de diete.',
+    badge: 'CHAT INTERACTIV',
     color: '#00e5ff',
   },
   {

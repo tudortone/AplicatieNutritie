@@ -2,6 +2,21 @@
 
 Acest fișier înregistrează toate modificările efectuate în proiectul NutriAI conform instrucțiunilor din NutriAI v4, grupate pe agenți specializați.
 
+[2026-07-24] —
+Agent: Antigravity AI Senior Architect
+Fișiere atinse:
+- frontend-nutritie/app/camera.tsx
+- frontend-nutritie/components/AddMealBottomSheet.tsx
+- frontend-nutritie/app/adauga-manual.tsx
+- frontend-nutritie/app/(tabs)/chat.tsx
+- frontend-nutritie/components/MuscleMapFront.tsx
+- backend-nutritie-ai/server.js
+Ce am schimbat:
+- [Fix 1] Eliminat proprietățile inexistente `data` și `ora` din payload-urile de inserare Supabase în `camera.tsx`, `AddMealBottomSheet.tsx`, `adauga-manual.tsx` și `server.js` (remediind eroarea `Could not find the 'data' column of 'mese' in the schema cache`).
+- [Fix 2] Actualizat `MuscleMapFront.tsx` pentru a folosi `inactiveColor` (#2A323D) la starea de repaus/fără antrenament în loc de culoarea statică roșie comix veche (#FA4B49), asigurând o siluetă anatomică modernă dark-mode care se aprinde în culori termice doar pe grupele musculare lucrate activ azi.
+- [Fix 3] Actualizat ruta backend `/api/log-food-from-chat` din `server.js` și apelul din `chat.tsx` pentru a transmite istoricul recent al conversației (`mesaje`), permițând AI-ului să extragă alimentele și valorile nutriționale estimate anterior când utilizatorul trimite comenzi precum "pune în jurnal".
+- [Fix 3b] Consolidat parsarea `parseMealProposal` în `chat.tsx` pentru a calcula automat `totals` din `items` și a salva valorile nutriționale reale cu tot cu `tip_masa` în tabela `mese` din Supabase.
+
 [2026-07-22] —
 Agent: UI/Anatomy & Fitness Specialist
 Fișiere atinse:

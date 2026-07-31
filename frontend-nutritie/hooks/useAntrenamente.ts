@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculeazaCaloriiArse } from '../constants/exercitii';

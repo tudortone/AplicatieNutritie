@@ -12,6 +12,7 @@ import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Trophy, Camera, CheckCircle2, User, Pencil } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { themes, themeDisplayNames, ThemeName } from '../../constants/theme';
 import { useNotifications } from '../../hooks/useNotifications';
@@ -26,6 +27,7 @@ import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 export default function ProfilScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { colors, themeName, setTheme } = useTheme();
   const { enabled: notificationsEnabled, toggleReminders, isExpoGo } = useNotifications();
   const { isSupported, biometricType, isEnabled, toggleBiometric } = useBiometrics();
@@ -137,15 +139,7 @@ export default function ProfilScreen() {
     
     setLoading(true);
     try {
-      await AsyncStorage.setItem('greutate', greutate);
-      await AsyncStorage.setItem('greutateTinta', greutateTinta);
-      await AsyncStorage.setItem('caloriiTinta', caloriiTinta);
-      await AsyncStorage.setItem('proteineTinta', proteineTinta);
-      await AsyncStorage.setItem('carbiTinta', carbiTinta);
-      await AsyncStorage.setItem('grasimiTinta', grasimiTinta);
-      await AsyncStorage.setItem('nume_profil', nume);
-      if (avatarUrl) await AsyncStorage.setItem('avatar_url', avatarUrl);
-
+      // Salvăm întâi în Supabase
       const { error } = await supabase.auth.updateUser({
         data: {
           nume: nume.trim() || session?.user.email?.split('@')[0],
@@ -159,18 +153,22 @@ export default function ProfilScreen() {
         }
       });
 
-      if (error) {
-        showBanner({
-          title: "Eroare salvare",
-          message: `Eroare salvare în Cloud: ${error.message}`,
-          type: 'warning'
-        });
-      } else {
-        notify.success('Profil actualizat', 'Modificările au fost salvate');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setShowSuccessAnim(true);
-        setTimeout(() => setShowSuccessAnim(false), 2600);
-      }
+      if (error) throw error;
+
+      // Apoi salvăm local (doar după ce Supabase a confirmat)
+      await AsyncStorage.setItem('greutate', greutate);
+      await AsyncStorage.setItem('greutateTinta', greutateTinta);
+      await AsyncStorage.setItem('caloriiTinta', caloriiTinta);
+      await AsyncStorage.setItem('proteineTinta', proteineTinta);
+      await AsyncStorage.setItem('carbiTinta', carbiTinta);
+      await AsyncStorage.setItem('grasimiTinta', grasimiTinta);
+      await AsyncStorage.setItem('nume_profil', nume);
+      if (avatarUrl) await AsyncStorage.setItem('avatar_url', avatarUrl);
+
+      notify.success('Profil actualizat', 'Modificările au fost salvate');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowSuccessAnim(true);
+      setTimeout(() => setShowSuccessAnim(false), 2600);
     } catch {
       showBanner({
         title: "Salvat local",
@@ -185,7 +183,28 @@ export default function ProfilScreen() {
   const deconectare = async () => {
     Alert.alert("Deconectare", "Ești sigur că vrei să te deconectezi?", [
       { text: "Anulează", style: "cancel" },
-      { text: "Deconectează", style: "destructive", onPress: () => supabase.auth.signOut() }
+      { 
+        text: "Deconectează", 
+        style: "destructive", 
+        onPress: async () => {
+          // Ștergem toate datele utilizatorului din AsyncStorage
+          const allKeys = await AsyncStorage.getAllKeys();
+          const userKeys = allKeys.filter(k =>
+            k.startsWith('chat_history_') ||
+            ['greutate', 'greutateTinta', 'caloriiTinta', 'proteineTinta',
+             'carbiTinta', 'grasimiTinta', 'nume_profil', 'greutate_istoric',
+             'current_workout_session', 'nutriai_workouts', 'gamificare_v1',
+             'notificari_v1', 'nutriai_theme', 'favorite_foods',
+             'health_sync_enabled', 'health_step_goal', 'health_sync_provider',
+             'nutriai_tip_closed_date', 'avatar_url', 'onboarding_done',
+             'chat_history'].includes(k)
+          );
+          if (userKeys.length > 0) {
+            await AsyncStorage.multiRemove(userKeys);
+          }
+          await supabase.auth.signOut();
+        } 
+      }
     ]);
   };
 
@@ -246,7 +265,7 @@ export default function ProfilScreen() {
         <Animated.View entering={FadeInDown.duration(550).delay(30)}>
           <View style={styles.sectionHeaderRow}>
             <User size={16} color={colors.accent} />
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>DATE PERSONALE</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>{t('profile.personal_details')}</Text>
           </View>
           <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 24, marginTop: 12 }]}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
@@ -392,7 +411,6 @@ export default function ProfilScreen() {
                 />
               </View>
 
-              {/* Furnizori de fitness interactivi */}
               <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 16 }}>
                 <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '700', marginBottom: 10, textTransform: 'uppercase' }}>
                   Alege Aplicația sau Brățara de Fitness:
@@ -507,7 +525,7 @@ export default function ProfilScreen() {
 
         {/* Targets section */}
         <Animated.View entering={FadeInDown.duration(600).delay(100)}>
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>OBIECTIVELE TALE</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('profile.daily_targets')}</Text>
 
           <TouchableOpacity style={[styles.aiSetupBtn, { borderColor: colors.accent + '33' }]} onPress={() => router.push('/calculator-ai')}>
             <LinearGradient colors={[colors.accent + '25', 'rgba(0,0,0,0)']} style={styles.aiSetupGrad}>
@@ -648,7 +666,7 @@ export default function ProfilScreen() {
               ) : (
                 <>
                   <Save size={20} color={colors.background} strokeWidth={2.5} />
-                  <Text style={[styles.saveBtnText, { color: colors.background }]}>Salvează Modificările</Text>
+                  <Text style={[styles.saveBtnText, { color: colors.background }]}>{t('profile.save')}</Text>
                 </>
               )}
             </LinearGradient>

@@ -1,0 +1,15 @@
+{
+  "profile": {
+    "title": "Profil",
+    "personal_details": "DATE PERSONALE",
+    "weight": "Greutate (kg)",
+    "target_weight": "Țintă Greutate (kg)",
+    "daily_targets": "OBIECTIVE ZILNICE",
+    "calories": "Calorii",
+    "protein": "Proteine",
+    "carbs": "Carbohidrați",
+    "fats": "Grăsimi",
+    "save": "SALVEAZĂ PROFIL",
+    "logout": "Deconectare"
+  }
+}

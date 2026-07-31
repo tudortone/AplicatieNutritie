@@ -9,17 +9,23 @@ const EXCLUDED_DIRS = new Set([
   '.git',
   '.expo',
   'dist',
+  'dist-test',
+  'scratch',
   '.claude',
   '.vscode',
   '.gemini',
   '.system_generated',
-  'brain'
+  'brain',
+  '.agents',
+  '.zcode',
+  'components',
+  'scripts'
 ]);
 
 const ALLOWED_EXTENSIONS = new Set([
   '.js', '.jsx', '.ts', '.tsx',
   '.json', '.md', '.sql', '.html',
-  '.css', '.bat', '.env'
+  '.css', '.env'
 ]);
 
 const EXCLUDED_FILES = new Set([
@@ -29,8 +35,22 @@ const EXCLUDED_FILES = new Set([
   'cod_sursa_fara_chei.txt',
   'cod_sursa_pentru_ai.txt',
   'generate_clean_dump.js',
-  'Instructiuni_Gemini_Redesign_Antrenamente.txt',
-  'Raport_Imbunatatiri_NutriAI.txt'
+  'export_code.js',
+  'fix_contexts.js',
+  'fix_healthsync.js',
+  'fix_healthsync2.js',
+  'fix_hooks.sh',
+  'fix_meseazi.js',
+  'fix_meseazi2.js',
+  'update_healthsync.js',
+  'update_meseazi.js',
+  'backend_check.sh',
+  'porneste_aplicatia.bat',
+  'CHANGELOG_AI.md',
+  'INSTRUCTIUNI_AI.md',
+  'INSTRUCTIUNI_AI_v5.md',
+  'INSTRUCTIUNI_GEMINI_v6.md',
+  'toate_fisierele_cod.txt'
 ]);
 
 function getAllFiles(dir, fileList = []) {
@@ -46,8 +66,15 @@ function getAllFiles(dir, fileList = []) {
       }
     } else {
       if (EXCLUDED_FILES.has(entry.name)) continue;
+      
+      // Include only source code directories or root sql schema
+      const isAppSource = relPath.startsWith('frontend-nutritie/') || 
+                          relPath.startsWith('backend-nutritie-ai/') || 
+                          relPath === 'supabase_rls_policies.sql';
+
+      if (!isAppSource) continue;
+
       const ext = path.extname(entry.name).toLowerCase();
-      // include if allowed extension or if it's .env
       if (ALLOWED_EXTENSIONS.has(ext) || entry.name.startsWith('.env')) {
         fileList.push(relPath);
       }
@@ -55,6 +82,46 @@ function getAllFiles(dir, fileList = []) {
   }
 
   return fileList;
+}
+
+function buildTree(fileList) {
+  const tree = {};
+  for (const filePath of fileList) {
+    const parts = filePath.split('/');
+    let current = tree;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (i === parts.length - 1) {
+        current[part] = null;
+      } else {
+        if (!current[part]) current[part] = {};
+        current = current[part];
+      }
+    }
+  }
+  return tree;
+}
+
+function renderTree(node, prefix = '') {
+  let result = '';
+  const keys = Object.keys(node).sort((a, b) => {
+    const aIsDir = node[a] !== null;
+    const bIsDir = node[b] !== null;
+    if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
+    return a.localeCompare(b);
+  });
+
+  keys.forEach((key, index) => {
+    const isLast = index === keys.length - 1;
+    const connector = isLast ? '└── ' : '├── ';
+    const isDir = node[key] !== null;
+    result += `${prefix}${connector}${key}${isDir ? '/' : ''}\n`;
+    if (isDir) {
+      const childPrefix = prefix + (isLast ? '    ' : '│   ');
+      result += renderTree(node[key], childPrefix);
+    }
+  });
+  return result;
 }
 
 function redactSecrets(content, relPath) {
@@ -95,15 +162,21 @@ function redactSecrets(content, relPath) {
 
 function generateDump() {
   const files = getAllFiles(rootDir).sort();
+  const tree = buildTree(files);
 
   let output = '';
   output += '================================================================================\n';
-  output += 'COD SURSA COMPLET NUTRITIE AI & FITNESS (FARA CHEI API / SECRETE)\n';
+  output += 'COD SURSA EXCLUSIV NUTRITIE AI & FITNESS (FARA CHEI API / SECRETE)\n';
   output += `GENERAT LA: ${new Date().toISOString()}\n`;
-  output += `NUMAR FISIERE: ${files.length}\n`;
+  output += `NUMAR FISIERE SURSA: ${files.length}\n`;
   output += '================================================================================\n\n';
 
-  output += 'CUPRINS FISIERE:\n';
+  output += 'HARTA ARBORE A STRUCTURII DE FIȘIERE (PROJECT TREE MAP):\n';
+  output += '.\n';
+  output += renderTree(tree);
+  output += '\n================================================================================\n\n';
+
+  output += 'CUPRINS NUMEROTAT AL FIȘIERELOR:\n';
   files.forEach((file, index) => {
     output += `${index + 1}. ${file}\n`;
   });
@@ -124,7 +197,8 @@ function generateDump() {
 
   fs.writeFileSync(outputFile, output, 'utf8');
   console.log(`Dump generat cu succes in: ${outputFile}`);
-  console.log(`Total fisiere procesate: ${files.length}`);
+  console.log(`Total fisiere sursa procesate: ${files.length}`);
 }
 
 generateDump();
+

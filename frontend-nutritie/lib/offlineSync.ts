@@ -1,5 +1,10 @@
 /**
  * offlineSync.ts — Sistem Offline-first + Sync FIFO (Outbox & Optimistic UI).
+ * ⚠️ ATENȚIE: Acest modul NU este integrat momentan în aplicație.
+ * Mutatiile se fac direct prin Supabase fără coadă de offline sync.
+ * Poate fi integrat ulterior prin înlocuirea apelurilor directe
+ * cu apeluri prin `offlineSync.enqueueMutation()`.
+ *
  * Conform specificației NutriAI v7 (Secțiunea 3.C).
  * - Sursă de adevăr locală (AsyncStorage)
  * - Fiecare mutație scrisă local imediat cu _syncStatus: 'pending' + uuid client

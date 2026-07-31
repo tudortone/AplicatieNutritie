@@ -17,9 +17,9 @@ import { useHealthSync } from '../../hooks/useHealthSync';
 import { useAntrenamente } from '../../hooks/useAntrenamente';
 import { getCalorieState } from '../../lib/calorieState';
 import { SkeletonLoader } from '../../components/SkeletonLoader';
-import { LiveMuscleBody } from '../../components/fitness/LiveMuscleBody';
+import { MuscleBody } from '../../components/fitness/MuscleBody';
 import { computeDailyMuscleIntensity, normalizeMuscleLoadToIntensity } from '../../lib/fitnessEngine';
-import { EXERCITII_DB } from '../../constants/exercitii';
+import { useExercitii } from '../../hooks/useExercitii';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 function RingProgress({ procent, color, bgColor }: { procent: number; color: string; bgColor: string }) {
@@ -85,6 +85,7 @@ export default function HomeScreen() {
   const { pahare, tinta: tintaPahare, adaugaPahar, scadePahar } = useApa();
   const { steps, activeCalories, stepGoal, isEnabled, platformName, providerInfo, refreshSteps } = useHealthSync();
   const { totalCaloriiArse, antrenamente, refresh: refreshAntrenamente } = useAntrenamente();
+  const { exercitii } = useExercitii();
   const [ascundeCardHealth, setAscundeCardHealth] = useState(false);
   const [viewSideHome, setViewSideHome] = useState<'front' | 'back'>('front');
   const [isTipVisible, setIsTipVisible] = useState(true);
@@ -112,30 +113,36 @@ export default function HomeScreen() {
   };
 
   const dailyIntensityHome = React.useMemo(() => {
-    const sesiuniAzi = (antrenamente || []).flatMap(w => (w.exercitii || []).map(ex => ({
-      exercitiuId: ex.exercitiuId,
-      serii: Array.isArray(ex.seturi) ? ex.seturi.length : 1,
-      volumKg: Array.isArray(ex.seturi) ? ex.seturi.reduce((acc, st) => acc + (st.repetari || 0) * (st.greutate || 0), 0) : 0,
-      durataSec: (ex.durataMin || 0) * 60,
-    })));
-    const fromSesiuni = computeDailyMuscleIntensity(sesiuniAzi, EXERCITII_DB);
+    const hasServerLoad = (antrenamente ?? []).some(
+      (w) => w.muscle_load && Object.keys(w.muscle_load).length > 0
+    );
 
-    const map: Record<string, number> = {};
-    for (const [k, v] of Object.entries(fromSesiuni)) {
-      if (v !== undefined) map[k] = (map[k] || 0) + v * 100;
-    }
-    for (const w of antrenamente || []) {
-      if (w.muscle_load) {
-        for (const [k, v] of Object.entries(w.muscle_load)) {
-          map[k] = (map[k] || 0) + v;
+    if (hasServerLoad) {
+      // Folosește DOAR muscle_load din server (nu dubla cu computeDailyMuscleIntensity)
+      const map: Record<string, number> = {};
+      for (const w of antrenamente ?? []) {
+        if (w.muscle_load) {
+          for (const [k, v] of Object.entries(w.muscle_load)) {
+            map[k] = (map[k] ?? 0) + v;
+          }
         }
       }
-    }
-    if (Object.keys(map).length > 0) {
       return normalizeMuscleLoadToIntensity(map);
     }
-    return fromSesiuni;
-  }, [antrenamente]);
+
+    // Fallback: calculează din sesiuni
+    const sesiuniAzi = (antrenamente || []).flatMap((w) =>
+      (w.exercitii || []).map((ex) => ({
+        exercitiuId: ex.exercitiuId,
+        serii: Array.isArray(ex.seturi) ? ex.seturi.length : 1,
+        volumKg: Array.isArray(ex.seturi)
+          ? ex.seturi.reduce((acc, st) => acc + (st.repetari || 0) * (st.greutate || 0), 0)
+          : 0,
+        durataSec: (ex.durataMin || 0) * 60,
+      }))
+    );
+    return computeDailyMuscleIntensity(sesiuniAzi, exercitii);
+  }, [antrenamente, exercitii]);
 
   // Throttle: max 1 refresh la 5 sec la tab-switch (evită 5 apeluri Supabase simultane)
   useFocusRefresh(
@@ -150,9 +157,18 @@ export default function HomeScreen() {
 
   const caloriiConsumate = totalCalorii;
   const proteineConsumate = totalProteine;
-  const caloriiRamase = caloriiTinta - caloriiConsumate + (isEnabled ? activeCalories : 0) + totalCaloriiArse;
-  const procentCalorii = Math.min((caloriiConsumate / caloriiTinta) * 100, 100);
-  const procentProteine = Math.min((proteineConsumate / proteineTinta) * 100, 100);
+  const trackerCalories = isEnabled ? activeCalories : 0;
+  // Caloriile din tracker (pași) și cele din antrenamente sunt complementare:
+  // tracker-ul măsoară mișcarea generală, antrenamentele sunt sesiuni dedicate.
+  // Le adunăm pentru totalul ars. Dacă observi suprapuneri, dezactivează una din surse.
+  const caloriiArseTotal = trackerCalories + totalCaloriiArse;
+  const caloriiRamase = caloriiTinta - caloriiConsumate + caloriiArseTotal;
+  
+  // Guard împotriva împărțirii la zero (NaN)
+  const safeCaloriiTinta = caloriiTinta > 0 ? caloriiTinta : 1;
+  const safeProteineTinta = proteineTinta > 0 ? proteineTinta : 1;
+  const procentCalorii = Math.min((caloriiConsumate / safeCaloriiTinta) * 100, 100);
+  const procentProteine = Math.min((proteineConsumate / safeProteineTinta) * 100, 100);
 
   const calState = getCalorieState(caloriiConsumate, caloriiTinta, colors.accent, colors.accentSecondary);
 
@@ -284,10 +300,14 @@ export default function HomeScreen() {
             <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={s.ringCardGrad}>
               <View style={s.ringCardTop}>
                 <View style={s.ringCardInfo}>
-                  <Text style={[s.ringCardTitle, { color: colors.textSecondary }]}>CALORII RĂMASE</Text>
+                  <Text style={[s.ringCardTitle, { color: caloriiRamase < 0 ? colors.danger : colors.textSecondary }]}>
+                    {caloriiRamase < 0 ? 'CALORII DEPĂȘITE' : 'CALORII RĂMASE'}
+                  </Text>
                   <View style={s.ringCardValueRow}>
-                    <Text style={[s.ringCardValue, { color: colors.textPrimary }]}>{Math.max(caloriiRamase, 0)}</Text>
-                    <Text style={[s.ringCardUnit, { color: colors.accent }]}>kcal</Text>
+                    <Text style={[s.ringCardValue, { color: caloriiRamase < 0 ? colors.danger : colors.textPrimary }]}>
+                      {caloriiRamase < 0 ? Math.abs(caloriiRamase) : caloriiRamase}
+                    </Text>
+                    <Text style={[s.ringCardUnit, { color: caloriiRamase < 0 ? colors.danger : colors.accent }]}>kcal</Text>
                   </View>
                   <View style={s.ringCardSubRow}>
                     <Text style={[s.ringCardSubLabel, { color: colors.textSecondary }]}>Consumat: </Text>
@@ -435,8 +455,8 @@ export default function HomeScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[s.weightLabel, { color: colors.textSecondary }]}>GREUTATE & PROGRES</Text>
-              <Text style={[s.weightValue, { color: colors.textPrimary }]}>
-                {greutate || 75} kg
+              <Text style={[s.weightValue, { color: colors.textPrimary, fontSize: greutate ? 20 : 14 }]}>
+                {greutate ? `${greutate} kg` : 'Atinge pentru a adăuga'}
               </Text>
             </View>
             <Text style={[s.weightLink, { color: colors.accent }]}>Editează →</Text>
@@ -583,12 +603,12 @@ export default function HomeScreen() {
             </View>
 
             <View style={[s.liveHeatmapBodyWrap, { height: 260, justifyContent: 'center', alignItems: 'center' }]}>
-              <LiveMuscleBody
-                side={viewSideHome}
-                intensity={dailyIntensityHome}
-                width={200}
-                height={260}
-              />
+                <MuscleBody
+                  side={viewSideHome}
+                  intensity={dailyIntensityHome}
+                  width={200}
+                  height={260}
+                />
             </View>
 
             <View style={s.liveHeatmapFooter}>

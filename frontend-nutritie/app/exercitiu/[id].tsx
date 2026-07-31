@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Path, Circle, Defs, RadialGradient, Stop, LinearGradient as SvgLinearGradient, G, Line, Rect } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ArrowLeft, Dumbbell, AlertTriangle, Flame, Clock, PlusCircle,
@@ -12,17 +11,16 @@ import {
 
 import { useTheme } from '../../context/ThemeContext';
 import { Radius, Spacing } from '../../constants/theme';
-import { EXERCITII_DB } from '../../constants/exercitii';
+import { useExercitii } from '../../hooks/useExercitii';
 import { calculeazaCaloriiEx } from '../../lib/exercitiu';
-import { useAntrenamente } from '../../hooks/useAntrenamente';
+import { SetLogger } from '../../components/fitness/SetLogger';
+import { useAntrenamente, Antrenament, SetExercitiu } from '../../hooks/useAntrenamente';
 import { useNotify } from '../../hooks/useNotify';
 import { MuscleBody } from '../../components/fitness/MuscleBody';
 import type { MuscleId } from '../../components/fitness/heatColor';
 import { SeriesConfigurator, type SeriesValue } from '../../components/fitness/SeriesConfigurator';
 import { classifyMeasurement, computeSessionLoad, type MeasurementSpec } from '../../lib/measurement';
 import { mapToCanonicalMuscleIds } from '../../lib/fitnessEngine';
-import MuscleHeatmap3D from '@/components/fitness/MuscleHeatmap3D';
-import { intensityForExercise } from '@/components/fitness/exerciseIntensity';
 
 interface HumanBodyProps {
   activeGroups: string[];
@@ -65,6 +63,11 @@ export function Holographic3DAnatomyBody({
   }, [activeGroups]);
 
   const [viewSide, setViewSide] = useState<'anterior' | 'posterior'>(initialSide);
+
+  // FIX: actualizează viewSide când se schimbă exercițiul
+  useEffect(() => {
+    setViewSide(initialSide);
+  }, [initialSide]);
 
   // Culorile din sistemul termic Heatmap conform heatColor.ts (Secțiunea 3.1):
   const COLOR_PRIMARY = '#FF003C';   // 🔴 Roșu maxim (100% Țintă Principală)
@@ -286,6 +289,7 @@ export default function ExercitiuDetailScreen() {
   const notify = useNotify();
   const { adaugaAntrenament, adaugaExercitiu } = useAntrenamente();
   const { colors } = useTheme();
+  const { exercitii } = useExercitii();
 
   const [greutateKg, setGreutateKg] = useState(75);
 
@@ -298,7 +302,7 @@ export default function ExercitiuDetailScreen() {
     });
   }, []);
 
-  const exercitiu = EXERCITII_DB.find((e) => e.id === id);
+  const exercitiu = exercitii.find((e) => e.id === id);
   const DEFAULT_MEASUREMENT_SPEC: MeasurementSpec = {
     type: 'reps_weight',
     allowsWeight: true,
@@ -310,18 +314,7 @@ export default function ExercitiuDetailScreen() {
     bodyweightFactor: 1.0,
   };
   const spec: MeasurementSpec = exercitiu ? (exercitiu.masurare ?? classifyMeasurement(exercitiu)) : DEFAULT_MEASUREMENT_SPEC;
-
-  const seriiDefault = exercitiu ? (spec.defaultSets ?? exercitiu.seriiDefault ?? 3) : 3;
-  const repetariDefault = exercitiu ? (spec.defaultReps ?? exercitiu.repetariDefault ?? 12) : 12;
-  const greutateDefault = spec.defaultWeightKg ?? 20;
-  const durataDefault = spec.defaultDurationSec ?? 45;
-
-  const [seriesValue, setSeriesValue] = useState<SeriesValue>({
-    sets: seriiDefault,
-    reps: repetariDefault,
-    weightKg: greutateDefault,
-    durationSec: durataDefault,
-  });
+  const [sets, setSets] = useState<SetExercitiu[]>([]);
 
   if (!exercitiu) {
     return (
@@ -339,31 +332,24 @@ export default function ExercitiuDetailScreen() {
 
   const caloriiEst = calculeazaCaloriiEx(exercitiu, greutateKg);
 
-  const heatmapIntensity = useMemo(
-    () =>
-      intensityForExercise({
-        target_muscles: exercitiu.target_muscles || exercitiu.grupe,
-        activation: (exercitiu.activation || exercitiu.muschiTinta) as any,
-      }),
-    [exercitiu],
-  );
-
   const instructiuni = exercitiu.instructiuni && exercitiu.instructiuni.length > 0
     ? exercitiu.instructiuni
     : ['Execută mișcarea controlat, concentrându-te pe contracția musculară.'];
   const descriere = exercitiu.descriere || 'Exercițiu eficient pentru planul tău de antrenament.';
 
   const sessionLoad = computeSessionLoad(spec, {
-    sets: seriesValue.sets,
-    reps: seriesValue.reps,
-    weightKg: seriesValue.weightKg,
-    durationSec: seriesValue.durationSec,
+    sets: sets.length > 0 ? sets.length : 3,
+    reps: sets.length > 0 ? Math.max(...sets.map(s => s.repetari)) : 10,
+    weightKg: sets.length > 0 ? Math.max(...sets.map(s => s.greutate || 0)) : 0,
+    durationSec: 60,
     bodyweightKg: greutateKg || 75,
   });
   const volumTotal = Math.round(sessionLoad);
 
+  const maxWeight = sets.length > 0 ? Math.max(...sets.map(s => s.greutate || 0)) : 0;
+  const totalReps = sets.reduce((sum, s) => sum + s.repetari, 0);
   const scorIntensitate = Math.min(100, Math.max(15, Math.round(
-    (seriesValue.weightKg * 0.95) + (seriesValue.reps * 2.3) + (seriesValue.sets * 6.5) + (exercitiu.dificultate === 'greu' ? 18 : exercitiu.dificultate === 'mediu' ? 10 : 0)
+    (maxWeight * 0.95) + (totalReps * 0.8) + (sets.length * 6.5) + (exercitiu.dificultate === 'greu' ? 18 : exercitiu.dificultate === 'mediu' ? 10 : 0)
   )));
 
   const getExerciseRankInfo = () => {
@@ -412,7 +398,7 @@ export default function ExercitiuDetailScreen() {
   const handleQuickAdd = async () => {
     try {
       const p = exercitiu.caloriiPeMinut ?? 6;
-      const d = Math.max(15, seriesValue.sets * 3);
+      const d = Math.max(15, sets.length * 3);
       const kcalArse = Math.round(p * d);
 
       await adaugaAntrenament({
@@ -425,11 +411,7 @@ export default function ExercitiuDetailScreen() {
           {
             exercitiuId: exercitiu.id,
             nume: exercitiu.nume,
-            seturi: Array.from({ length: seriesValue.sets }, (_, idx) => ({
-              serie: idx + 1,
-              repetari: seriesValue.reps,
-              greutate: seriesValue.weightKg,
-            })),
+            seturi: sets.length > 0 ? sets : [{ serie: 1, repetari: 10, greutate: 0, set_type: 'working', rpe: 8, completed: true }],
             durataMin: d,
             kcal: kcalArse,
           },
@@ -503,9 +485,9 @@ export default function ExercitiuDetailScreen() {
             <View style={styles.metricItem}>
               <Clock size={16} color={colors.accentSecondary} />
               <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
-                {seriesValue.sets} serii × {spec.type === 'timed' || spec.type === 'timed_weight' ? `${seriesValue.durationSec}s` : `${seriesValue.reps} rep`}
+                {sets.length > 0 ? `${sets.length} serii setate` : 'Configurare'}
               </Text>
-              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>recomandat</Text>
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>pentru astăzi</Text>
             </View>
           </View>
 
@@ -580,11 +562,11 @@ export default function ExercitiuDetailScreen() {
           </View>
         </View>
 
-        {/* Configurare rapidă serii adaptivă dup tipul de măsurare */}
-        <SeriesConfigurator
-          spec={spec}
-          value={seriesValue}
-          onChange={setSeriesValue}
+        {/* Jurnalizare Profesionala Set-by-Set */}
+        <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 16 }]}>LOG ANTRENAMENT</Text>
+        <SetLogger 
+          initialSets={sets}
+          onChange={setSets}
         />
 
         {/* Instrucțiuni execuție */}
@@ -626,12 +608,15 @@ export default function ExercitiuDetailScreen() {
           <PlusCircle size={20} color="#000" />
           <Text style={[styles.actionBtnText, { color: '#000' }]}>
             {(() => {
-              const hasWeight = spec.type === 'weight_reps' || spec.type === 'reps_weight' || spec.type === 'reps_assisted' || seriesValue.weightKg > 0;
+              const maxWeight = sets.length > 0 ? Math.max(...sets.map(s => s.greutate || 0)) : 0;
+              const hasWeight = spec.type === 'weight_reps' || spec.type === 'reps_weight' || spec.type === 'reps_assisted' || maxWeight > 0;
+              const totalReps = sets.reduce((sum, s) => sum + s.repetari, 0);
+              
               if (spec.type === 'reps' && !hasWeight) {
-                return `Adaugă (${seriesValue.sets * seriesValue.reps} repetări)`;
+                return `Adaugă (${totalReps} repetări)`;
               }
               if (spec.type === 'timed') {
-                return `Adaugă (${seriesValue.sets} × ${seriesValue.durationSec}s)`;
+                return `Adaugă (${sets.length} serii)`;
               }
               return `Adaugă (${volumTotal} kg • ${rankInfo.rank.split(' • ')[0]})`;
             })()}

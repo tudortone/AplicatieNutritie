@@ -13,11 +13,11 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import Svg, { Path, G, Circle, Defs, RadialGradient, Stop, LinearGradient } from 'react-native-svg';
 import { RotateCcw, Award, Zap, Flame, X, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
-import { MuscleLoadMap, normalizeMuscleLoadToIntensity } from '../../lib/fitnessEngine';
-import { LiveMuscleBody } from './LiveMuscleBody';
+import { MuscleLoadMap, normalizeMuscleLoadToIntensity, RANKS, getRankByTonage } from '../../lib/fitnessEngine';
+import type { TonageRank } from '../../lib/fitnessEngine';
+import { MuscleBody } from './MuscleBody';
 import type { MuscleId } from './heatColor';
 
 /* ─────────────────────────────────────────────────────────── TYPES */
@@ -32,68 +32,9 @@ interface BodyHeatmapProps {
   onMusclePress?: (muscle: string, load: number) => void;
 }
 
-/* ─────────────────────────────────────────────────────────── RANK */
-export interface TonageRank {
-  tier: 'F' | 'E' | 'D' | 'C' | 'B' | 'A' | 'S' | 'SS';
-  title: string;
-  minKg: number;
-  maxKg: number;
-  color: string;
-  glowColor: string;
-  bgColor: string;
-  stars: number;
-  animType: 'pulse' | 'shimmer' | 'fire' | 'lightning' | 'plasma';
-}
-
-export const RANKS: TonageRank[] = [
-  {
-    tier: 'F', title: 'Novice Lifter', minKg: 0, maxKg: 1000,
-    color: '#94A3B8', glowColor: 'rgba(148,163,184,0.3)', bgColor: 'rgba(148,163,184,0.08)',
-    stars: 0, animType: 'pulse',
-  },
-  {
-    tier: 'E', title: 'Iron Rookie', minKg: 1000, maxKg: 5000,
-    color: '#38BDF8', glowColor: 'rgba(56,189,248,0.4)', bgColor: 'rgba(56,189,248,0.1)',
-    stars: 1, animType: 'pulse',
-  },
-  {
-    tier: 'D', title: 'Gym Challenger', minKg: 5000, maxKg: 15000,
-    color: '#34D399', glowColor: 'rgba(52,211,153,0.4)', bgColor: 'rgba(52,211,153,0.1)',
-    stars: 2, animType: 'shimmer',
-  },
-  {
-    tier: 'C', title: 'Bronze Warrior', minKg: 15000, maxKg: 35000,
-    color: '#F59E0B', glowColor: 'rgba(245,158,11,0.45)', bgColor: 'rgba(245,158,11,0.1)',
-    stars: 2, animType: 'shimmer',
-  },
-  {
-    tier: 'B', title: 'Silver Gladiator', minKg: 35000, maxKg: 75000,
-    color: '#E2E8F0', glowColor: 'rgba(226,232,240,0.5)', bgColor: 'rgba(226,232,240,0.1)',
-    stars: 3, animType: 'fire',
-  },
-  {
-    tier: 'A', title: 'Elite Gold Lifter', minKg: 75000, maxKg: 150000,
-    color: '#FFD700', glowColor: 'rgba(255,215,0,0.55)', bgColor: 'rgba(255,215,0,0.12)',
-    stars: 4, animType: 'fire',
-  },
-  {
-    tier: 'S', title: 'Master Beast', minKg: 150000, maxKg: 300000,
-    color: '#FF1E42', glowColor: 'rgba(255,30,66,0.6)', bgColor: 'rgba(255,30,66,0.12)',
-    stars: 5, animType: 'lightning',
-  },
-  {
-    tier: 'SS', title: 'GOD OF IRON',  minKg: 300000, maxKg: 1e7,
-    color: '#00F0FF', glowColor: 'rgba(0,240,255,0.7)', bgColor: 'rgba(0,240,255,0.15)',
-    stars: 5, animType: 'plasma',
-  },
-];
-
-export function getRankByTonage(kg: number): TonageRank {
-  for (let i = RANKS.length - 1; i >= 0; i--) {
-    if (kg >= RANKS[i].minKg) return RANKS[i];
-  }
-  return RANKS[0];
-}
+// Re-export pentru compatibilitate
+export type { TonageRank };
+export { RANKS, getRankByTonage };
 
 /* ─────────────────────────────────────────────────────────── HEAT COLORS */
 export const HEAT_COLORS: Record<0 | 1 | 2 | 3 | 4, string> = {
@@ -200,7 +141,7 @@ export const BodyHeatmap: React.FC<BodyHeatmapProps> = ({
     let frontSum = 0;
     for (const k of keys) {
       const val = computedIntensityMap[k as MuscleId] ?? 0;
-      if (/spate|dorsali|trapez|romboizi|fesieri|ischiogambieri|femurali|triceps|lombari|lower_back/i.test(k)) {
+      if (/spate|dorsali|trapez|romboizi|fesieri|ischiogambieri|femurali|lombari|lower_back|glutes|deltoid_posterior|delts_rear|infraspinatus/i.test(k)) {
         backSum += val;
       } else {
         frontSum += val;
@@ -315,8 +256,8 @@ export const BodyHeatmap: React.FC<BodyHeatmapProps> = ({
           {/* Aura animată de rank */}
           <Animated.View style={[styles.rankAura, { backgroundColor: rank.color, opacity: glowOpacity }]} />
 
-          {/* SVG OVERLAY animat pe mușchi — LiveMuscleBody, singurul model rândat */}
-          <LiveMuscleBody
+          {/* SVG OVERLAY pe mușchi — MuscleBody, singurul model rândat */}
+          <MuscleBody
             side={viewSide}
             intensity={computedIntensityMap}
             width={280}

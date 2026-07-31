@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator, Pressable, Text, View, StyleSheet, TouchableOpacity,
   TextInput, ScrollView, Dimensions, Alert, KeyboardAvoidingView, Platform, Modal
@@ -6,7 +6,7 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../supabase';
@@ -16,6 +16,10 @@ import { X, Scan, Zap, ChevronDown, Plus, Heart, Image as ImageIcon, Send, Spark
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { useNotify } from '../hooks/useNotify';
+import { localDayKey } from '../lib/dateUtils';
+import { getTipMasaDupaOra } from '../lib/mealUtils';
+import { GramInput } from '../components/ui/GramInput';
 import { useFavorite } from '../hooks/useFavorite';
 import { ProductSearch } from '../components/food/ProductSearch';
 import { foodProductToAlimentAI } from '../components/food/types';
@@ -53,22 +57,35 @@ export default function CameraScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/ai-status`);
-        if (res.ok) {
-          const data = await res.json();
-          if (isMountedRef.current) setAiStatus(data);
-        }
-      } catch {}
-    };
-    fetchStatus();
-    const timer = setInterval(fetchStatus, 3000);
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      clearInterval(timer);
     };
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const fetchStatus = async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/ai-status`);
+          if (res.ok) {
+            const data = await res.json();
+            if (active) setAiStatus(data);
+          }
+        } catch {}
+      };
+      fetchStatus();
+      // Bug #7: Interval m\u0103rit de la 3s la 30s pentru a evita 429 pe /api/ (generalLimiter 100 req/15min).
+      // /api/ai-status este acum exclus din rate-limiter \u00een backend, dar men\u021binem intervalul mare
+      // pentru a nu consuma inutil resurse de re\u021bea \u0219i baterie.
+      const timer = setInterval(fetchStatus, 30000);
+      return () => {
+        active = false;
+        clearInterval(timer);
+      };
+    }, [])
+  );
 
   const updateIngredient = useCallback(
     (index: number, patch: Partial<AlimentScanat>) => {
@@ -294,40 +311,63 @@ export default function CameraScreen() {
 
   const adaugaInJurnal = async () => {
     if (!rezultat || rezultat.length === 0 || !session || isSavingDiary) return;
+
+    // Validare gramaj minim înainte de submit
+    const invalide = rezultat.filter((r) => !r.estimare_grame || r.estimare_grame < 1);
+    if (invalide.length > 0) {
+      Alert.alert(
+        'Gramaj lipsă',
+        `Completează gramajul pentru: ${invalide.map((i) => i.nume).join(', ')}`
+      );
+      return;
+    }
+
     setIsSavingDiary(true);
     try {
       const now = new Date();
-      const todayStr = now.toISOString().split('T')[0];
-      const oraStr = now.toTimeString().split(' ')[0].substring(0, 5);
 
-      const totalCalorii = totalCalculat.calorii;
-      const totalProteine = totalCalculat.proteine;
-      const totalGrasimi = totalCalculat.grasimi;
-      const totalCarbohidrati = totalCalculat.carbohidrati;
-
-      const numeMese = rezultat.map((r) => `${r.nume} (${Math.round(r.estimare_grame)}g)`).join(', ');
-
-      const { error } = await supabase.from('mese').insert({
-        user_id: session.user.id,
-        nume: numeMese,
-        calorii: Math.round(totalCalorii),
-        proteine: Math.round(totalProteine),
-        grasimi: Math.round(totalGrasimi),
-        carbohidrati: Math.round(totalCarbohidrati),
-        data: todayStr,
-        ora: oraStr
+      // FIX 2.5: convertim din per-100g în AlimentDetaliat cu valori absolute
+      const alimente = rezultat.map((r) => {
+        const f = r.estimare_grame / 100;
+        return {
+          nume: r.nume,
+          grame: Math.round(r.estimare_grame),
+          calorii: Math.round((r.calorii_per_100g ?? 0) * f),
+          proteine: Math.round((r.proteine_per_100g ?? 0) * f),
+          carbohidrati: Math.round((r.carbohidrati_per_100g ?? 0) * f),
+          grasimi: Math.round((r.grasimi_per_100g ?? 0) * f),
+          fibre: 0,
+        };
       });
 
-      if (error) {
-        Alert.alert("Eroare salvare", `Nu s-a putut salva masa: ${error.message}`);
-      } else {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert("✅ Succes", "Masa a fost adăugată în jurnalul tău.", [
-          { text: "Super!", onPress: () => router.replace('/(tabs)') }
-        ]);
-      }
-    } catch {
-      Alert.alert("Eroare", "A apărut o eroare la salvarea mesei.");
+      const totalCalorii = alimente.reduce((s, a) => s + a.calorii, 0);
+      const totalProteine = alimente.reduce((s, a) => s + a.proteine, 0);
+      const totalGrasimi = alimente.reduce((s, a) => s + a.grasimi, 0);
+      const totalCarbohidrati = alimente.reduce((s, a) => s + a.carbohidrati, 0);
+
+      // FIX 2.1 + 2.4: scriem DIRECT în Supabase, cu data/ora locale
+      const { error } = await supabase.from('mese').insert({
+        user_id: session.user.id,
+        nume: rezultat.map((r) => `${r.nume} (${Math.round(r.estimare_grame)}g)`).join(', '),
+        calorii: totalCalorii,
+        proteine: totalProteine,
+        grasimi: totalGrasimi,
+        carbohidrati: totalCarbohidrati,
+        fibre: 0,
+        tip_masa: getTipMasaDupaOra(now), // FIX: nu mai hardcoda 'gustare'
+        alimente,
+        data: localDayKey(now),
+      });
+
+      if (error) throw error;
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('✅ Succes', 'Masa a fost adăugată în jurnalul tău.', [
+        { text: 'Super!', onPress: () => router.replace('/(tabs)') },
+      ]);
+    } catch (e: any) {
+      console.error('[adaugaInJurnal]', e);
+      Alert.alert('Eroare salvare', e?.message ?? 'Eroare necunoscută la salvarea mesei.');
     } finally {
       setIsSavingDiary(false);
     }
@@ -373,7 +413,7 @@ export default function CameraScreen() {
           <TouchableOpacity
             style={[styles.topBadge, { backgroundColor: 'transparent', borderWidth: 0, zIndex: 9999 }]}
             onPress={() => {
-              Haptics.selectionAsync();
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setAiMenuVisible(prev => !prev);
             }}
           >
@@ -418,7 +458,7 @@ export default function CameraScreen() {
                       isSelected && { backgroundColor: colors.accent + '22', borderColor: colors.accent }
                     ]}
                     onPress={() => {
-                      Haptics.selectionAsync();
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setSelectedAI(aiKey);
                       setAiMenuVisible(false);
                     }}
@@ -477,16 +517,12 @@ export default function CameraScreen() {
                       <View key={`${ingredient.nume}-${index}`} style={styles.ingredientRow}>
                         <Text style={[styles.ingredientName, { color: colors.textPrimary }]}>{ingredient.nume}</Text>
                         <View style={[styles.gramContainer, { borderColor: colors.accent + '33' }]}>
-                          <TextInput
-                            style={[styles.gramInput, { color: colors.accent }]}
-                            keyboardType="numeric"
-                            value={String(Math.round(ingredient.estimare_grame))}
-                            onChangeText={(text) => {
-                              const val = Math.max(1, parseInt(text) || 0);
-                              updateIngredient(index, { estimare_grame: val });
-                            }}
+                          <GramInput
+                            value={ingredient.estimare_grame}
+                            onChange={(g) => updateIngredient(index, { estimare_grame: g })}
+                            borderColor="transparent"
+                            color={colors.accent}
                           />
-                          <Text style={[styles.gramUnit, { color: colors.accent }]}>g</Text>
                         </View>
                       </View>
                     ))}
@@ -494,7 +530,7 @@ export default function CameraScreen() {
                     <TouchableOpacity
                       style={[styles.addExtraBtn, { borderColor: colors.accent }]}
                       onPress={() => {
-                        Haptics.selectionAsync();
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setCautareProdusVisible(true);
                       }}
                     >

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   View,
@@ -11,10 +11,11 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { X, Pencil, Trash2, Dumbbell, Flame, Sparkles, CheckCircle2, ShieldCheck } from 'lucide-react-native';
+import { X, Pencil, Trash2, Dumbbell, Flame, Sparkles, CheckCircle2, ShieldCheck, Info } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import { Masa, AminoaciziEsentiali } from '../types';
+import { FoodDetailModal } from './food/FoodDetailModal';
 
 interface Props {
   visible: boolean;
@@ -58,6 +59,8 @@ function getAminoProfile(proteineTotal: number, customAmino?: AminoaciziEsential
 
 export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: Props) {
   const { colors } = useTheme();
+  const [detailAliment, setDetailAliment] = useState<any>(null);
+  const [detailVisible, setDetailVisible] = useState(false);
 
   if (!masa) return null;
 
@@ -155,6 +158,13 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
                     <Text style={[styles.ingredientName, { color: colors.textPrimary }]}>{al.nume}</Text>
                     {al.grame ? <Text style={[styles.ingredientGram, { color: colors.textTertiary }]}>{al.grame}g porție</Text> : null}
                   </View>
+                  <TouchableOpacity
+                    onPress={() => { setDetailAliment(al); setDetailVisible(true); }}
+                    style={styles.detailBtn}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Info size={15} color={colors.accent} />
+                  </TouchableOpacity>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={[styles.ingredientKcal, { color: colors.accent }]}>{al.calorii} kcal</Text>
                     <Text style={[styles.ingredientMacros, { color: colors.textSecondary }]}>
@@ -275,6 +285,12 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
           </View>
         </View>
       </View>
+      {/* Detaliu nutrițional complet */}
+      <FoodDetailModal
+        visible={detailVisible}
+        onClose={() => setDetailVisible(false)}
+        aliment={detailAliment}
+      />
     </Modal>
   );
 }
@@ -387,6 +403,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     marginTop: 2,
+  },
+  detailBtn: {
+    padding: 6,
+    marginRight: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   aminoSection: {
     padding: 16,

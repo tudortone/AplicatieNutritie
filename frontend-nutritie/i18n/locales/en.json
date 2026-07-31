@@ -1,0 +1,15 @@
+{
+  "profile": {
+    "title": "Profile",
+    "personal_details": "PERSONAL DETAILS",
+    "weight": "Weight (kg)",
+    "target_weight": "Target Weight (kg)",
+    "daily_targets": "DAILY TARGETS",
+    "calories": "Calories",
+    "protein": "Protein",
+    "carbs": "Carbs",
+    "fats": "Fats",
+    "save": "SAVE PROFILE",
+    "logout": "Logout"
+  }
+}

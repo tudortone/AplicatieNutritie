@@ -22,6 +22,7 @@ import LockScreen from '../components/LockScreen';
 import { NotificationBannerProvider } from '../context/NotificationBannerContext';
 import { GamificareProvider } from '../context/GamificareContext';
 import { useDailySync } from '../hooks/useDailySync';
+import '../i18n';
 
 export const unstable_settings = {
   anchor: '(tabs)',

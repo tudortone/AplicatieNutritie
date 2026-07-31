@@ -12,6 +12,8 @@ import {
   KeyboardAvoidingView 
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { localDayKey } from '../lib/dateUtils';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
@@ -22,6 +24,7 @@ import { supabase } from '../supabase';
 import { useFavorite } from '../hooks/useFavorite';
 import { TipMasa, AlimentDetaliat } from '../types';
 import { getTipMasaDupaOra, MEAL_CATEGORIES } from '../lib/mealUtils';
+import { GramInput } from '../components/ui/GramInput';
 import * as Haptics from 'expo-haptics';
 
 export default function AdaugaManualScreen() {
@@ -32,7 +35,7 @@ export default function AdaugaManualScreen() {
 
   const [tipMasa, setTipMasa] = useState<TipMasa>(() => getTipMasaDupaOra());
   const [nume, setNume] = useState('');
-  const [grame, setGrame] = useState('');
+  const [grame, setGrame] = useState(0);
   const [calorii, setCalorii] = useState('');
   const [proteine, setProteine] = useState('');
   const [carbohidrati, setCarbohidrati] = useState('');
@@ -57,7 +60,7 @@ export default function AdaugaManualScreen() {
           const totalGrame = parsed.reduce((s: number, a: any) => s + (Number(a.estimare_grame) || 0), 0);
 
           setNume(numeCompus);
-          setGrame(totalGrame > 0 ? String(Math.round(totalGrame)) : '');
+          setGrame(totalGrame > 0 ? Math.round(totalGrame) : 0);
           setCalorii(totalCal > 0 ? String(totalCal) : '');
           setProteine(totalProt > 0 ? String(totalProt) : '');
           setCarbohidrati(totalCarbs > 0 ? String(totalCarbs) : '');
@@ -105,16 +108,16 @@ export default function AdaugaManualScreen() {
         return;
       }
 
-      const numeFinal = grame.trim() ? `${nume.trim()} (${grame.trim()}g)` : nume.trim();
+      const numeFinal = grame > 0 ? `${nume.trim()} (${grame}g)` : nume.trim();
 
       const now = new Date();
-      const todayStr = now.toISOString().split('T')[0];
+      const todayStr = localDayKey(now);
       const oraStr = now.toTimeString().split(' ')[0].substring(0, 5);
 
       const alimentePayload: AlimentDetaliat[] = alimenteList.length > 0 ? alimenteList : [
         {
           nume: nume.trim(),
-          grame: parseInt(grame) || 0,
+          grame: grame || 0,
           calorii: cal,
           proteine: parseInt(proteine) || 0,
           carbohidrati: parseInt(carbohidrati) || 0,
@@ -135,8 +138,6 @@ export default function AdaugaManualScreen() {
           fibre: parseInt(fibre) || 0,
           tip_masa: tipMasa,
           alimente: alimentePayload,
-          data: todayStr,
-          ora: oraStr,
         });
 
       if (insertError) {
@@ -252,14 +253,11 @@ export default function AdaugaManualScreen() {
                 />
 
                 <Text style={[styles.label, { color: colors.textSecondary, marginTop: 16 }]}>Gramaj estimat (opțional)</Text>
-                <TextInput
-                  style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-                  placeholder="Ex: 250 (g)"
-                  placeholderTextColor={colors.textTertiary}
+                <GramInput
                   value={grame}
-                  onChangeText={setGrame}
-                  keyboardType="numeric"
-                  selectionColor={colors.accent}
+                  onChange={setGrame}
+                  borderColor={colors.cardBorder}
+                  color={colors.textPrimary}
                 />
               </LinearGradient>
             </BlurView>

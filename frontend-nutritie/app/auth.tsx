@@ -8,7 +8,7 @@ import { supabase } from '../supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
-import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle } from 'lucide-react-native';
+import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 
@@ -39,6 +39,7 @@ export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const isMinLength = parola.length >= 8;
   const hasUpperCase = /[A-Z]/.test(parola);
@@ -106,7 +107,9 @@ export default function AuthScreen() {
     }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: 'nutriai://auth/callback',
+      });
       if (error) {
         Alert.alert("Eroare", error.message);
       } else {
@@ -123,7 +126,12 @@ export default function AuthScreen() {
   const signInWithOAuth = async (provider: 'google' | 'apple') => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signInWithOAuth({ provider });
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: 'nutriai://auth/callback',
+        },
+      });
       if (error) Alert.alert("Eroare OAuth", error.message);
     } catch (e: any) {
       console.error("OAuth error:", e);
@@ -198,9 +206,19 @@ export default function AuthScreen() {
                     setParola(t);
                     if (authError) setAuthError(null);
                   }}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                   selectionColor={colors.accent}
                 />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={{ padding: 10, marginRight: 6 }}
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} color={colors.textSecondary} />
+                  ) : (
+                    <Eye size={18} color={colors.textSecondary} />
+                  )}
+                </TouchableOpacity>
               </View>
 
               {/* Password Requirements (doar la înregistrare) */}

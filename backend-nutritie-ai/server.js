@@ -18,6 +18,9 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const groqApiKey = process.env.GROQ_API_KEY;
 const corsOriginsEnv = process.env.CORS_ORIGINS || '*';
+if (!process.env.CORS_ORIGINS) {
+  console.warn('⚠️  AVERTISMENT SECURITATE: Variabila CORS_ORIGINS nu este setată — backend-ul acceptă cereri de la orice origine. Setează CORS_ORIGINS în producție.');
+}
 
 const missingVars = [];
 if (!supabaseUrl) missingVars.push('SUPABASE_URL');
@@ -48,20 +51,31 @@ app.use(cors({
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// Rate Limiting general pentru API
+// Rate Limiting general pentru API (cu extragerea User ID daca e blocat in cache validare JWT locala sau token de req)
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minute
-  max: 100, // max 100 cereri per fereastră per IP
+  max: 100, // max 100 cereri per fereastră
+  keyGenerator: (req) => {
+    return req.user?.id || req.headers['authorization'] || req.ip;
+  },
   message: { eroare: "Prea multe cereri. Încearcă mai târziu." },
   standardHeaders: true,
   legacyHeaders: false,
 });
-app.use('/api/', generalLimiter);
+// /api/ai-status este exclus din rate limiter (polling frecvent din camera.tsx)
+// Toate celelalte rute /api/ trec prin generalLimiter
+app.use('/api/', (req, res, next) => {
+  if (req.path === '/ai-status') return next();
+  return generalLimiter(req, res, next);
+});
 
-// 1.4 Rate Limiting strict pentru endpoint-urile AI (15 cereri pe minut)
+// 1.4 Rate Limiting strict pentru endpoint-urile AI (15 cereri pe minut) diferentiat per cont de la JWT auth header.
 const aiRateLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minut
-  max: 15, // max 15 cereri per minut per IP
+  max: 15, // max 15 cereri per minut
+  keyGenerator: (req) => {
+    return req.user?.id || req.headers['authorization'] || req.ip;
+  },
   message: { eroare: "Ai depășit limita de 15 cereri pe minut pentru AI. Te rugăm să aștepți un minut." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -115,37 +129,39 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000).unref();
 
-// Helper pentru validarea magic bytes ale imaginilor
-const validateImageMagicBytes = (buffer) => {
-  if (!buffer || buffer.length < 12) return false;
-  // JPEG (FF D8 FF)
-  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return true;
-  // PNG (89 50 4E 47)
-  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return true;
-  // WEBP (RIFF....WEBP)
-  if (buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') return true;
-  // HEIC / HEIF / ISO Media (ftyp box)
-  const ftyp = buffer.toString('ascii', 4, 8);
-  if (ftyp === 'ftyp') return true;
-  return false;
-};
-
 // Middleware Autentificare cu Cache TTL
 const requireAuth = async (req, res, next) => {
   if (req.method === 'OPTIONS') {
     return next();
   }
-  
+
   const authHeader = req.headers.authorization;
   if (process.env.NODE_ENV === 'development') {
     console.log("=== Incoming Request ===");
     console.log("Method:", req.method);
   }
-  
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ eroare: "Acces neautorizat. Token lipsă." });
   }
+
   const token = authHeader.split(' ')[1];
+
+  // Validare locala simplă a structurii JWT (exp) fara secret, inainte de network
+  try {
+    const payloadBase64 = token.split('.')[1];
+    if (payloadBase64) {
+      const decodedJson = Buffer.from(payloadBase64, 'base64').toString('utf8');
+      const payload = JSON.parse(decodedJson);
+      if (payload.exp && Date.now() >= payload.exp * 1000) {
+        tokenCache.delete(token); // Curata curat local
+        return res.status(401).json({ eroare: "Token expirat (JWT local exp)." });
+      }
+    }
+  } catch (e) {
+    return res.status(401).json({ eroare: "Structura JWT coruptă." });
+  }
+
   const now = Date.now();
   const cached = tokenCache.get(token);
   if (cached && now < cached.expiresAt) {
@@ -157,13 +173,13 @@ const requireAuth = async (req, res, next) => {
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) {
       tokenCache.delete(token);
-      return res.status(401).json({ eroare: "Token invalid sau expirat." });
+      return res.status(401).json({ eroare: "Token invalid sau respins de serverul Auth." });
     }
     tokenCache.set(token, { user, expiresAt: now + CACHE_TTL_MS });
     req.user = user;
     next();
   } catch (error) {
-    return res.status(500).json({ eroare: "Eroare la validarea autentificării." });
+    return res.status(500).json({ eroare: "Eroare la transferul validării autentificării." });
   }
 };
 
@@ -177,12 +193,38 @@ const getGeminiModelsList = () => {
   ];
 };
 
-// Helper pentru timeout cereri Gemini (30 secunde)
-const callWithTimeout = (promise, ms = 30000) => {
-  const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('Cererea către Gemini a expirat (Timeout 30s).')), ms)
-  );
-  return Promise.race([promise, timeout]);
+// Helper pentru timeout cereri cu AbortController real.
+// Dacă promise este un fetch(), pasează { signal: controller.signal } la fetch().
+// Pentru promisiuni Gemini SDK (care nu acceptă signal) funcționează tot, dar nu
+// poate anula la nivel de socket — doar aruncă eroarea de timeout.
+const callWithTimeout = async (promiseOrFactory, ms = 30000) => {
+  const controller = new AbortController();
+  const { signal } = controller;
+
+  // Dacă e o funcție factory, o apelăm cu signal-ul (permite fetch-uri anulabile)
+  const promise = typeof promiseOrFactory === 'function'
+    ? promiseOrFactory(signal)
+    : promiseOrFactory;
+
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`Cererea AI a expirat (Timeout strict de ${ms}ms - conexiune anulată).`));
+    }, ms);
+  });
+
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutId);
+    return result;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Cererea AI a expirat (Timeout strict de ${ms}ms - Socket închis).`);
+    }
+    throw error;
+  }
 };
 
 // Helper pentru extragere chei API multiple din variabile de mediu (rotație automată la eroare/cotă depășită)
@@ -258,6 +300,26 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', healthy: true, uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
+
+// ==========================================
+// VALIDARE MAGIC BYTES IMAGINE (Bug #1)
+// Verifică primii bytes ai fișierului pentru a confirma tipul real,
+// independent de extensie sau Content-Type declarat de client.
+// ==========================================
+function validateImageMagicBytes(buffer) {
+  if (!buffer || buffer.length < 4) return false;
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return true;
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return true;
+  // WEBP: RIFF....WEBP (bytes 0-3 = RIFF, bytes 8-11 = WEBP)
+  if (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+    buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+  ) return true;
+  return false;
+}
 
 // ==========================================
 // RUTE API PROTEJATE CU JWT
@@ -689,12 +751,17 @@ Sarcina ta: Răspunde prietenos, ținând cont de istoricul discuției și de ca
     } catch (groqError) {
       console.warn("Eroare Groq API în /api/chat, activăm fallback Gemini text:", groqError.message || groqError);
       
-      const geminiPrompt = `${systemPrompt}\n\nIstoricul conversației și întrebarea curentă:\n${messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n')}\n\nASSISTANT:`;
+      const geminiPrompt = `${systemPrompt}\n\nIstoricul conversației și întrebarea curentă:\n${messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n')}\n\nASSISTANT:
+Te asiguri că folosești DOAR JSON VALID dacă utilizatorul a cerut înregistrarea mesei (în formatul MEAL_PROPOSAL), sau altfel formatul solicitat.`;
       const modelList = getGeminiModelsList().filter(Boolean);
       for (const modelName of modelList) {
         try {
           const model = genAI.getGenerativeModel({ model: modelName });
-          const result = await callWithTimeout(model.generateContent(geminiPrompt), 30000);
+          const result = await callWithTimeout(model.generateContent({
+            contents: [{ role: "user", parts: [{ text: geminiPrompt }] }],
+            // Pentru chat generic preferăm să nu punem responseMimeType ca să nu spargem flow-ul normal de chat.
+            // Dacă chat-ul e de logare, promptul îl ghidează.
+          }), 30000);
           const raspunsText = result.response.text();
           if (raspunsText) {
             return res.json({ raspuns: raspunsText });
@@ -716,15 +783,27 @@ Sarcina ta: Răspunde prietenos, ținând cont de istoricul discuției și de ca
 // ==========================================
 app.post('/api/log-food-from-chat', requireAuth, aiRateLimiter, async (req, res) => {
   try {
-    const { mesaj } = req.body;
+    const { mesaj, mesaje } = req.body;
     if (!mesaj || typeof mesaj !== 'string') {
       return res.status(400).json({ eroare: "Mesaj invalid pentru logare." });
     }
     const textCurat = mesaj.replace(/[\x00-\x1F\x7F]/g, "").trim().substring(0, 500);
 
-    const prompt = `Utilizatorul dorește să înregistreze o masă din următorul text: "${textCurat}".
-EXTRAGE toate alimentele menționate, valorile lor nutriționale (calorii, proteine g, carbohidrați g, grăsimi g, fibre g) și DEDUCE cheia "meal_type" ("mic_dejun" | "pranz" | "cina" | "gustare" în funcție de aliment sau oră: ex. cereale = mic_dejun, ciorbă/friptură = pranz, snack = gustare).
-RETURNEAZĂ STRICT UN OBIECT JSON valid, exact în acest format și cu exact acești parametri (fără text explicativ în afară de JSON):
+    const istoricText = Array.isArray(mesaje) && mesaje.length > 0
+      ? mesaje.slice(-6).map(m => `${(m.role || m.sender || 'user').toUpperCase()}: ${m.text || m.content || ''}`).join('\n')
+      : '';
+
+    const prompt = `Utilizatorul dorește să înregistreze o masă în Jurnal.
+Context Istoric Chat Recent:
+${istoricText}
+
+Ultimul Mesaj Utilizator: "${textCurat}"
+
+MANDAT: EXTRAGE toate alimentele menționate și valorile lor nutriționale REALE (calorii, proteine g, carbohidrați g, grăsimi g, fibre g).
+Dacă utilizatorul face referire la o masă sau alimente/valori estimate anterior în istoricul conversației (ex: "pune în jurnal", "salvează masa de 460 kcal și 32g proteine", "adaugă-o"), EXTRAGE acele alimente și valorile lor nutriționale exacte din istoricul recent! NU returna 0 la calorii/proteine dacă valorile au fost calculate/menționate în conversație!
+DEDUCE cheia "meal_type" ("mic_dejun" | "pranz" | "cina" | "gustare").
+
+RETURNEAZĂ STRICT UN OBIECT JSON valid în acest format:
 {
   "type": "MEAL_PROPOSAL",
   "meal_type": "mic_dejun",
@@ -1029,7 +1108,7 @@ app.post('/api/corecteaza-mancare-vizual-text', requireAuth, aiRateLimiter, hand
 // ==========================================
 // RUTA 2.1: PROXY PENTRU OPENFOODFACTS BARCODE + STRAT 1 CACHE LOCAL + STRAT 3 FALLBACK
 // ==========================================
-app.get('/api/produs-barcode/:code', requireAuth, generalLimiter, async (req, res) => {
+app.get('/api/produs-barcode/:code', requireAuth, aiRateLimiter, async (req, res) => {
   try {
     const code = (req.params.code || '').trim();
     if (!code || code.length < 4) {
@@ -1082,6 +1161,9 @@ app.get('/api/produs-barcode/:code', requireAuth, generalLimiter, async (req, re
           proteine: Number(nutriments.proteins_100g || 0),
           carbohidrati: Number(nutriments.carbohydrates_100g || 0),
           grasimi: Number(nutriments.fat_100g || 0),
+          aminoacizi_100g: nutriments, // Temporar păstrăm tot pentru compatibilitate / extracție în frontend
+          micronutrienti_100g: nutriments,
+          imagine_url: product.image_front_small_url || product.image_url || null
         };
 
         try {
@@ -1209,17 +1291,42 @@ app.post('/api/salveaza-produs-barcode', requireAuth, async (req, res) => {
     if (!code || !name) {
       return res.status(400).json({ eroare: "Codul și numele produsului sunt obligatorii." });
     }
+
+    const kc = Number(kcal_100g || 0);
+    const p = Number(protein_100g || 0);
+    const c = Number(carbs_100g || 0);
+    const f = Number(fat_100g || 0);
+
+    // Hard validations for injection / sanity limits (pe suta de grame limitile chimice fizice normale sunt max 100g macros / ~900kcal - grasime pura)
+    if (kc > 1000 || kc < 0) return res.status(400).json({eroare: "Număr de calorii imposibil fizic pentru 100g."});
+    if (p > 100 || p < 0 || c > 100 || c < 0 || f > 100 || f < 0) return res.status(400).json({eroare: "Macro-nutrienții gresiti (peste 100g din 100g)."});
+    if ((p + c + f) > 100) return res.status(400).json({eroare: "Suma macro-nutrienților depășește 100g per total de 100g."});
+
+    if (code.length < 4 || code.length > 20) {
+       return res.status(400).json({eroare: "Cod de bare malformat."});
+    }
+
+    // Check ownership / if it's already created by someone else to prevent arbitrary overwrites
+    const { data: ext } = await supabaseAdmin.from('barcode_cache').select('created_by_user').eq('code', String(code).trim()).maybeSingle();
+    // Do not allow if it's a global cache element created by system, or if it wasn't you who created this user_manual entry
+    // unless you are an admin. Implementing simple first-come-first-serve ownership protection logic:
+    if (ext && ext.created_by_user && ext.created_by_user !== req.user.id) {
+       // Omiting throwing an explicit error to not leak information, just dropping modifications quietly
+       return res.json({ succes: true, message: "Aparent produsul exista deja." });
+    }
+
     await supabaseAdmin.from('barcode_cache').upsert({
       code: String(code).trim(),
       source: 'user_manual',
-      brand: brand || '',
-      name: String(name).trim(),
-      quantity: quantity || '',
-      kcal_100g: Number(kcal_100g || 0),
-      protein_100g: Number(protein_100g || 0),
-      carbs_100g: Number(carbs_100g || 0),
-      fat_100g: Number(fat_100g || 0),
-      payload: req.body,
+      created_by_user: req.user.id,
+      brand: String(brand || '').trim().substring(0, 100),
+      name: String(name).trim().substring(0, 150),
+      quantity: String(quantity || '').trim().substring(0, 50),
+      kcal_100g: kc,
+      protein_100g: p,
+      carbs_100g: c,
+      fat_100g: f,
+      payload: { userInputs: true }, // Scapam logarea oarba a intregului req.body periculos
       updated_at: new Date().toISOString(),
     });
     return res.json({ succes: true, message: "Produs salvat în cache-ul local." });
@@ -1309,7 +1416,11 @@ app.delete('/api/mese/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { error } = await supabaseAdmin.from('mese').delete().eq('id', id).eq('user_id', req.user.id);
-    if (error) return res.status(500).json({ eroare: error.message });
+    // Bug #12: Nu expune error.message intern (pot conține nume coloane, constrângeri Postgres)
+    if (error) {
+      console.error('Eroare DB ștergere masă:', error.message);
+      return res.status(500).json({ eroare: 'Eroare la ștergerea mesei. Încearcă din nou.' });
+    }
     res.json({ succes: true });
   } catch (error) {
     res.status(500).json({ eroare: "Eroare la ștergerea mesei." });
@@ -1360,7 +1471,11 @@ app.put('/api/mese/:id', requireAuth, async (req, res) => {
       .eq('id', id)
       .eq('user_id', req.user.id)
       .select();
-    if (error) return res.status(500).json({ eroare: error.message });
+    // Bug #12: Nu expune error.message intern Postgres către client
+    if (error) {
+      console.error('Eroare DB actualizare masă:', error.message);
+      return res.status(500).json({ eroare: 'Eroare la actualizarea mesei. Încearcă din nou.' });
+    }
     res.json({ succes: true, masa: data[0] });
   } catch (error) {
     res.status(500).json({ eroare: "Eroare la actualizarea mesei." });
@@ -1376,27 +1491,44 @@ app.post('/api/mese', requireAuth, async (req, res) => {
     if (!nume || typeof nume !== 'string' || !nume.trim()) {
       return res.status(400).json({ eroare: "Numele mesei este obligatoriu." });
     }
-    const cal = Number(calorii) || 0;
-    const prot = Number(proteine) || 0;
-    const gras = Number(grasimi) || 0;
-    const carb = Number(carbohidrati) || 0;
-    const fib = Number(fibre) || 0;
+    const cal = Number(calorii);
+    const prot = Number(proteine);
+    const gras = Number(grasimi);
+    const carb = Number(carbohidrati);
+    const fib = Number(fibre);
+
+    if (isNaN(cal) || cal < 0 || cal > 10000) {
+      return res.status(400).json({ eroare: "Caloriile trebuie să fie un număr valid între 0 și 10000." });
+    }
+    if (isNaN(prot) || prot < 0 || prot > 1000) {
+      return res.status(400).json({ eroare: "Proteinele trebuie să fie un număr valid între 0 și 1000." });
+    }
+    if (isNaN(gras) || gras < 0 || gras > 1000) {
+      return res.status(400).json({ eroare: "Grăsimile trebuie să fie un număr valid între 0 și 1000." });
+    }
+    if (isNaN(carb) || carb < 0 || carb > 2000) {
+      return res.status(400).json({ eroare: "Carbohidrații trebuie să fie un număr valid între 0 și 2000." });
+    }
 
     const insertPayload = {
       user_id: req.user.id,
       nume: nume.trim(),
       calorii: Math.round(cal),
       proteine: Math.round(prot),
-      grasimi: Math.round(gras),
-      carbohidrati: Math.round(carb),
-      fibre: Math.round(fib),
+      grasimi: isNaN(gras) ? 0 : Math.round(gras),
+      carbohidrati: isNaN(carb) ? 0 : Math.round(carb),
+      fibre: isNaN(fib) ? 0 : Math.round(fib),
       tip_masa: tip_masa && ['mic_dejun', 'pranz', 'cina', 'gustare'].includes(tip_masa) ? tip_masa : 'gustare',
-      alimente: Array.isArray(alimente) ? alimente : []
+      alimente: Array.isArray(alimente) ? alimente : [],
+      data: data || null,
+      ora: ora || null,
     };
-    if (data) insertPayload.data = data;
-    if (ora) insertPayload.ora = ora;
 
-    const { data: result, error } = await supabaseAdmin
+    // RLS reabilitat
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${req.headers.authorization.split(' ')[1]}` } }
+    });
+    const { data: result, error } = await userClient
       .from('mese')
       .insert([insertPayload])
       .select();

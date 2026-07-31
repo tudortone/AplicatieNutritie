@@ -33,6 +33,7 @@ interface MealProposalItem {
 }
 interface MealProposal {
   type: string;
+  meal_type?: string;
   items: MealProposalItem[];
   totals: {
     protein_g: number;
@@ -49,39 +50,59 @@ interface ChatMessage {
 
 function parseMealProposal(text: any): MealProposal | null {
   if (!text) return null;
-  if (typeof text === 'object' && text.type === 'MEAL_PROPOSAL' && Array.isArray(text.items)) {
-    return text as MealProposal;
-  }
   
-  let stringToParse = typeof text === 'string' ? text : JSON.stringify(text);
-  
-  try {
-    // Căutăm exact bucata de JSON, ignorând markdown-ul
-    const startIndex = stringToParse.indexOf('{');
-    const endIndex = stringToParse.lastIndexOf('}');
-    
-    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-      const pureJsonString = stringToParse.substring(startIndex, endIndex + 1);
-      const parsed = JSON.parse(pureJsonString);
-      
-      // Forțăm structura dacă lipsesc elemente, dar avem items
-      if (parsed && Array.isArray(parsed.items)) {
-        return {
-          type: "MEAL_PROPOSAL",
-          items: parsed.items,
-          totals: parsed.totals || { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
-        };
+  let targetObj: any = null;
+  if (typeof text === 'object') {
+    targetObj = text;
+  } else {
+    try {
+      const stringToParse = String(text);
+      const startIndex = stringToParse.indexOf('{');
+      const endIndex = stringToParse.lastIndexOf('}');
+      if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+        targetObj = JSON.parse(stringToParse.substring(startIndex, endIndex + 1));
       }
+    } catch (e) {
+      console.warn("Eroare parsare JSON meal proposal:", e);
     }
-  } catch (error) {
-    console.error("❌ Eroare la tăierea JSON-ului:", error);
+  }
+
+  if (targetObj && Array.isArray(targetObj.items) && targetObj.items.length > 0) {
+    let calcKcal = 0, calcP = 0, calcC = 0, calcF = 0;
+    targetObj.items.forEach((it: any) => {
+      calcKcal += Number(it.kcal || it.calorii || 0);
+      calcP += Number(it.protein_g || it.proteine || 0);
+      calcC += Number(it.carbs_g || it.carbohidrati || 0);
+      calcF += Number(it.fat_g || it.grasimi || 0);
+    });
+
+    const totals = (targetObj.totals && Number(targetObj.totals.kcal || 0) > 0)
+      ? targetObj.totals
+      : { kcal: calcKcal, protein_g: calcP, carbs_g: calcC, fat_g: calcF };
+
+    return {
+      type: "MEAL_PROPOSAL",
+      meal_type: targetObj.meal_type || "gustare",
+      items: targetObj.items.map((it: any) => ({
+        name: it.name || it.nume || "Aliment",
+        qty: Number(it.qty || it.grame || 100),
+        unit: it.unit || "g",
+        protein_g: Number(it.protein_g || it.proteine || 0),
+        carbs_g: Number(it.carbs_g || it.carbohidrati || 0),
+        fat_g: Number(it.fat_g || it.grasimi || 0),
+        kcal: Number(it.kcal || it.calorii || 0)
+      })),
+      totals
+    };
   }
   return null;
 }
 
 const isMealLogIntent = (text: string) => {
-  const lower = text.toLowerCase();
-  return /am m[aâ]ncat|am consumat|am servit|am b[aă]ut|logheaz[aă]|[iî]nregistreaz[aă]|inregistreaza|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa|mic dejun|pr[aâ]nz|cin[aă]|gustare|calorii|grame|por[tț]ie/i.test(lower);
+  const lower = text.toLowerCase().trim();
+  // Doar acțiuni clare de logare/salvare, NU întrebări despre calorii/grame
+  return /^(?:am m[aâ]ncat|am consumat|am servit|am b[aă]ut|logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa)/i.test(lower) ||
+    /(?:logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa)\b/i.test(lower);
 };
 
 export default function ChatScreen() {
@@ -130,10 +151,13 @@ export default function ChatScreen() {
     }
   }, [params?.prompt]);
 
+  const getChatStorageKey = () => `chat_history_${session?.user?.id || 'anon'}`;
+
   useEffect(() => {
     const loadHistory = async () => {
       try {
-        const saved = await AsyncStorage.getItem('chat_history');
+        const storageKey = getChatStorageKey();
+        const saved = await AsyncStorage.getItem(storageKey);
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -151,7 +175,7 @@ export default function ChatScreen() {
     const saveHistory = async () => {
       try {
         if (mesaje.length > 1) {
-          await AsyncStorage.setItem('chat_history', JSON.stringify(mesaje.slice(-50)));
+          await AsyncStorage.setItem(getChatStorageKey(), JSON.stringify(mesaje.slice(-50)));
         }
       } catch (e) {
         console.error('Eroare la salvarea istoricului chat:', e);
@@ -228,7 +252,7 @@ export default function ChatScreen() {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${session.access_token}`
             },
-            body: JSON.stringify({ mesaj: mesajText }),
+            body: JSON.stringify({ mesaj: mesajText, mesaje: istoricActivat }),
           });
           if (logResp.ok) {
             const logDate = await logResp.json();
@@ -276,10 +300,6 @@ export default function ChatScreen() {
     setSavingProposal(true);
 
     try {
-      const now = new Date();
-      const todayStr = now.toISOString().split('T')[0];
-      const oraStr = now.toTimeString().split(' ')[0].substring(0, 5);
-
       // 2. Extractor brutal de numere (scoate 'g', 'kcal', spații etc.)
       const parseStrictNumber = (val: any) => {
         if (val === undefined || val === null) return 0;
@@ -288,22 +308,26 @@ export default function ChatScreen() {
         return isNaN(parsed) ? 0 : parsed;
       };
 
-      // 3. Inserarea fiecărui item cu interceptare de erori Supabase
-      for (const item of mealProposal.items) {
-        const { error } = await supabase.from('mese').insert({
-          user_id: session.user.id,
-          nume: `${item.name} (${item.qty}${item.unit || 'g'})`,
-          calorii: Math.round(parseStrictNumber(item.kcal)),
-          proteine: Math.round(parseStrictNumber(item.protein_g)),
-          carbohidrati: Math.round(parseStrictNumber(item.carbs_g)),
-          grasimi: Math.round(parseStrictNumber(item.fat_g)),
-        });
+      // 3. Inserarea batch a tuturor alimentelor o singură dată
+      const tipMasa = mealProposal.meal_type || 'gustare';
+      const rows = mealProposal.items.map((item: any) => ({
+        user_id: session.user.id,
+        nume: `${item.name} (${item.qty}${item.unit || 'g'})`,
+        calorii: Math.round(parseStrictNumber(item.kcal)), // Caloriile rămân rotunjite
+        proteine: parseStrictNumber(item.protein_g), // Păstrăm zecimalele
+        carbohidrati: parseStrictNumber(item.carbs_g),
+        grasimi: parseStrictNumber(item.fat_g),
+        // Bug #18: fiber_g era prezent în propunerea AI dar nu era salvat → câmpul rămânea 0
+        fibre: Math.round(parseStrictNumber(item.fiber_g)),
+        tip_masa: tipMasa,
+      }));
 
-        if (error) {
-          console.error("Eroare Supabase:", error);
-          Alert.alert("Eroare la Salvare", `Baza de date a refuzat produsul ${item.name}: ${error.message}`);
-          throw error; // Oprește execuția ca să nu arate mesaj de succes fals
-        }
+      const { error } = await supabase.from('mese').insert(rows);
+
+      if (error) {
+        console.error("Eroare Supabase:", error);
+        Alert.alert("Eroare la Salvare", `Baza de date a refuzat produsul: ${error.message}`);
+        throw error;
       }
 
       // 4. Finalizare cu succes
@@ -343,7 +367,7 @@ export default function ChatScreen() {
       { role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
     ];
     setMesaje(initialMsg);
-    await AsyncStorage.removeItem('chat_history');
+    await AsyncStorage.removeItem(getChatStorageKey());
     setNewChatModalVisible(false);
     setShowNewChatBanner(true);
     setTimeout(() => setShowNewChatBanner(false), 3200);
@@ -567,7 +591,7 @@ export default function ChatScreen() {
                 value={chatInput}
                 onChangeText={setChatInput}
                 multiline
-                maxLength={500}
+                maxLength={1000}
                 returnKeyType="send"
                 onSubmitEditing={trimiteMesaj}
                 blurOnSubmit={false}

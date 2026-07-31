@@ -23,6 +23,9 @@ export interface ThemeColors {
   cardBorder: string;
   cardBg: string;
   surfaceBg: string;
+  // Muscle heatmap body
+  muscleBase: string;
+  muscleOutline: string;
 }
 
 const midnight: ThemeColors = {
@@ -44,6 +47,8 @@ const midnight: ThemeColors = {
   cardBorder: 'rgba(255,255,255,0.08)',
   cardBg: '#12161A',
   surfaceBg: '#181D22',
+  muscleBase: '#151A21',
+  muscleOutline: '#0A0D11',
 };
 
 const ocean: ThemeColors = {
@@ -65,6 +70,8 @@ const ocean: ThemeColors = {
   cardBorder: 'rgba(56,189,248,0.12)',
   cardBg: '#0F1E36',
   surfaceBg: '#162846',
+  muscleBase: '#0F1E36',
+  muscleOutline: '#080F1C',
 };
 
 const sunset: ThemeColors = {
@@ -86,6 +93,8 @@ const sunset: ThemeColors = {
   cardBorder: 'rgba(251,146,60,0.12)',
   cardBg: '#261217',
   surfaceBg: '#32191F',
+  muscleBase: '#261217',
+  muscleOutline: '#13090C',
 };
 
 export const themes: Record<ThemeName, ThemeColors> = {

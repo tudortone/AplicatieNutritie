@@ -1,7 +1,7 @@
 import { cautaProdusRomanescLocal } from '../constants/produseRomanesti';
 import { API_URL } from '../constants/config';
 import { supabase } from '../supabase';
-import { AminoaciziEsentiali } from '../types';
+import { AminoaciziEsentiali, Micronutrienti } from '../types';
 
 export interface ProdusScanat {
   barcode: string;
@@ -12,8 +12,89 @@ export interface ProdusScanat {
   grasimi_100g: number;
   carbohidrati_100g: number;
   aminoacizi_100g?: AminoaciziEsentiali;
+  micronutrienti_100g?: Micronutrienti;
   imagine_url?: string;
   sursa?: string;
+}
+
+/** Extrage aminoacizii din răspunsul OpenFoodFacts (mg per 100g) */
+function extractAminoacizi(nutriments: any): AminoaciziEsentiali | undefined {
+  const map: Record<string, keyof AminoaciziEsentiali> = {
+    'leucine_100g': 'leucina',
+    'isoleucine_100g': 'izoleucina',
+    'valine_100g': 'valina',
+    'lysine_100g': 'lizina',
+    'methionine_100g': 'metionina',
+    'phenylalanine_100g': 'fenilalanina',
+    'threonine_100g': 'treonina',
+    'tryptophan_100g': 'triptofan',
+    'histidine_100g': 'istidina',
+  };
+  const result: AminoaciziEsentiali = {};
+  let hasAny = false;
+  for (const [apiKey, localKey] of Object.entries(map)) {
+    const val = Number(nutriments[apiKey]);
+    if (val > 0) {
+      result[localKey] = Math.round(val * 1000); // g → mg
+      hasAny = true;
+    }
+  }
+  return hasAny ? result : undefined;
+}
+
+/** Extrage micronutrienții din răspunsul OpenFoodFacts (per 100g) */
+function extractMicronutrienti(nutriments: any): Micronutrienti | undefined {
+  const mapping: Array<{ apiKey: string; localKey: keyof Micronutrienti; unit: 'mg' | 'ug' | 'g' }> = [
+    // Vitamine
+    { apiKey: 'vitamin-a_100g', localKey: 'vitamina_a', unit: 'ug' },
+    { apiKey: 'vitamin-c_100g', localKey: 'vitamina_c', unit: 'mg' },
+    { apiKey: 'vitamin-d_100g', localKey: 'vitamina_d', unit: 'ug' },
+    { apiKey: 'vitamin-e_100g', localKey: 'vitamina_e', unit: 'mg' },
+    { apiKey: 'vitamin-k_100g', localKey: 'vitamina_k', unit: 'ug' },
+    { apiKey: 'vitamin-b1_100g', localKey: 'vitamina_b1', unit: 'mg' },
+    { apiKey: 'vitamin-b2_100g', localKey: 'vitamina_b2', unit: 'mg' },
+    { apiKey: 'vitamin-pp_100g', localKey: 'vitamina_b3', unit: 'mg' },
+    { apiKey: 'vitamin-b6_100g', localKey: 'vitamina_b6', unit: 'mg' },
+    { apiKey: 'vitamin-b9_100g', localKey: 'vitamina_b9', unit: 'ug' },
+    { apiKey: 'vitamin-b12_100g', localKey: 'vitamina_b12', unit: 'ug' },
+    // Minerale
+    { apiKey: 'calcium_100g', localKey: 'calciu', unit: 'mg' },
+    { apiKey: 'iron_100g', localKey: 'fier', unit: 'mg' },
+    { apiKey: 'magnesium_100g', localKey: 'magneziu', unit: 'mg' },
+    { apiKey: 'phosphorus_100g', localKey: 'fosfor', unit: 'mg' },
+    { apiKey: 'potassium_100g', localKey: 'potasiu', unit: 'mg' },
+    { apiKey: 'sodium_100g', localKey: 'sodiu', unit: 'mg' },
+    { apiKey: 'zinc_100g', localKey: 'zinc', unit: 'mg' },
+    { apiKey: 'copper_100g', localKey: 'cupru', unit: 'mg' },
+    { apiKey: 'manganese_100g', localKey: 'mangan', unit: 'mg' },
+    { apiKey: 'selenium_100g', localKey: 'seleniu', unit: 'ug' },
+    { apiKey: 'iodine_100g', localKey: 'iod', unit: 'ug' },
+    // Altele
+    { apiKey: 'sugars_100g', localKey: 'zaharuri', unit: 'g' },
+    { apiKey: 'saturated-fat_100g', localKey: 'grasimi_saturate', unit: 'g' },
+    { apiKey: 'trans-fat_100g', localKey: 'grasimi_trans', unit: 'g' },
+    { apiKey: 'cholesterol_100g', localKey: 'colesterol', unit: 'mg' },
+    { apiKey: 'fiber_100g', localKey: 'fibra', unit: 'g' },
+  ];
+
+  const result: Micronutrienti = {};
+  let hasAny = false;
+
+  for (const { apiKey, localKey, unit } of mapping) {
+    const val = Number(nutriments[apiKey]);
+    if (val > 0) {
+      if (unit === 'mg') {
+        result[localKey] = Math.round(val * 1000);
+      } else if (unit === 'ug') {
+        result[localKey] = Math.round(val * 1000000);
+      } else {
+        result[localKey] = Math.round(val * 100) / 100;
+      }
+      hasAny = true;
+    }
+  }
+
+  return hasAny ? result : undefined;
 }
 
 /**
@@ -53,6 +134,9 @@ export async function getProdusByBarcode(barcode: string): Promise<ProdusScanat 
             proteine_100g: Math.round(Number(p.proteine || 0)),
             grasimi_100g: Math.round(Number(p.grasimi || 0)),
             carbohidrati_100g: Math.round(Number(p.carbohidrati || 0)),
+            aminoacizi_100g: p.aminoacizi_100g,
+            micronutrienti_100g: p.micronutrienti_100g,
+            imagine_url: p.imagine_url,
             sursa: payload.source || 'backend'
           };
         }
@@ -62,7 +146,7 @@ export async function getProdusByBarcode(barcode: string): Promise<ProdusScanat 
     console.warn('Avertisment interogare backend barcode:', errBackend);
   }
 
-  // 3. Fallback direct la OpenFoodFacts API (dacă nu e conectat sau backend-ul nu răspunde)
+  // 3. Fallback direct la OpenFoodFacts API
   try {
     const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`, {
       headers: {
@@ -70,14 +154,10 @@ export async function getProdusByBarcode(barcode: string): Promise<ProdusScanat 
       }
     });
 
-    if (!response.ok) {
-      return null;
-    }
+    if (!response.ok) return null;
 
     const data = await response.json();
-    if (data.status !== 1 || !data.product) {
-      return null;
-    }
+    if (data.status !== 1 || !data.product) return null;
 
     const p = data.product;
     const nutriments = p.nutriments || {};
@@ -98,6 +178,8 @@ export async function getProdusByBarcode(barcode: string): Promise<ProdusScanat 
       proteine_100g: proteine,
       grasimi_100g: grasimi,
       carbohidrati_100g: carbohidrati,
+      aminoacizi_100g: extractAminoacizi(nutriments),
+      micronutrienti_100g: extractMicronutrienti(nutriments),
       imagine_url: p.image_front_small_url || p.image_url || undefined,
       sursa: 'openfoodfacts'
     };

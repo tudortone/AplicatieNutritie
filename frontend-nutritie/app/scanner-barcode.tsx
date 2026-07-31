@@ -34,7 +34,9 @@ export default function ScannerBarcodeScreen() {
   const [fullManualModalVisible, setFullManualModalVisible] = useState(false);
 
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanLocked, setScanLocked] = useState(false);
+  // ⚠️ useRef sincron — previne race condition (useState e async, lasă ferestre)
+  const lockRef = useRef(false);
+  const lastCodeRef = useRef<{ code: string; at: number }>({ code: '', at: 0 });
   const [searching, setSearching] = useState(false);
   const [produsGasit, setProdusGasit] = useState<ProdusScanat | null>(null);
   const [codNegasit, setCodNegasit] = useState<string | null>(null);
@@ -70,31 +72,53 @@ export default function ScannerBarcodeScreen() {
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
 
   const handleBarcodeScanned = useCallback(async ({ data }: { data: string }) => {
-    if (scanLocked || searching || activeTab !== 'scan') return;
-    setScanLocked(true);
+    const now = Date.now();
+
+    // 1. lock sincron (useRef, nu așteaptă re-render)
+    if (lockRef.current) return;
+    // 2. modal deschis / rezultat pe ecran → nu mai scana
+    if (produsGasit || codNegasit || searching || activeTab !== 'scan') return;
+    // 3. dedupe: același cod în ultimele 3s = ignorat
+    if (lastCodeRef.current.code === data && now - lastCodeRef.current.at < 3000) return;
+    // 4. validare minimă (doar coduri de produs EAN/UPC)
+    if (!/^\d{8,14}$/.test(data)) return;
+
+    lockRef.current = true;
+    lastCodeRef.current = { code: data, at: now };
     setSearching(true);
 
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {}
-
-    const res = await getProdusByBarcode(data);
-    setSearching(false);
-
-    if (res) {
-      setProdusGasit(res);
-      setCodNegasit(null);
       try {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       } catch {}
-    } else {
-      setProdusGasit(null);
+
+      const res = await getProdusByBarcode(data);
+      setSearching(false);
+
+      if (res) {
+        setProdusGasit(res);
+        setCodNegasit(null);
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } catch {}
+      } else {
+        setProdusGasit(null);
+        setCodNegasit(data);
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        } catch {}
+      }
+    } catch (e) {
+      console.error('[barcode]', e);
       setCodNegasit(data);
-      try {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      } catch {}
+      setSearching(false);
+    } finally {
+      // cooldown de 1.5s ÎNAINTE de deblocare (nu instant)
+      setTimeout(() => {
+        lockRef.current = false;
+      }, 1500);
     }
-  }, [scanLocked, searching, activeTab]);
+  }, [produsGasit, codNegasit, searching, activeTab]);
 
   const handleSalveazaInCamara = async () => {
     if (!produsGasit) return;
@@ -123,8 +147,25 @@ export default function ScannerBarcodeScreen() {
       carbohidrati: item.carbohidrati_100g,
       grasimi: item.grasimi_100g,
       gramajDefault: 100,
+      pantryProductName: item.nume,
     });
   };
+
+  const handlePantryUsed = useCallback((productName: string) => {
+    const produsInCamara = produse.find(p =>
+      p.nume.toLowerCase().trim() === productName.toLowerCase().trim()
+    );
+    if (produsInCamara) {
+      const currentQty = produsInCamara.cantitate || 1;
+      if (currentQty <= 1) {
+        stergeProdus(produsInCamara.id);
+        showBanner({ title: '🗑️ Produs consumat', message: `"${productName}" a fost șters din cămară.`, type: 'success' });
+      } else {
+        modificaCantitate(produsInCamara.id, -1);
+        showBanner({ title: '📉 Cantitate actualizată', message: `"${productName}" mai are ${currentQty - 1} bucăți în cămară.`, type: 'info' });
+      }
+    }
+  }, [produse, stergeProdus, modificaCantitate, showBanner]);
 
   if (!permission) {
     return <View style={[styles.container, { backgroundColor: colors.background }]} />;
@@ -292,7 +333,7 @@ export default function ScannerBarcodeScreen() {
             ]}
           >
             <Text style={[styles.tabText, { color: activeTab === 'camara' ? '#000' : colors.textPrimary }]}>
-              Cămara Mea ({produse.length})
+              Inventar ({produse.length})
             </Text>
           </TouchableOpacity>
         </View>
@@ -303,9 +344,12 @@ export default function ScannerBarcodeScreen() {
           <CameraView
             style={StyleSheet.absoluteFill}
             barcodeScannerSettings={{
-              barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code39', 'code128', 'qr', 'itf14', 'pdf417'],
+              barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
             }}
-            onBarcodeScanned={handleBarcodeScanned}
+            // undefined = handler dezactivat nativ — nu mai emite evenimente
+            onBarcodeScanned={
+              produsGasit || codNegasit || searching ? undefined : handleBarcodeScanned
+            }
           />
 
           {/* Target box viewfinder */}
@@ -337,7 +381,7 @@ export default function ScannerBarcodeScreen() {
                 <TouchableOpacity
                   onPress={() => {
                     setProdusGasit(null);
-                    setScanLocked(false);
+                    lockRef.current = false;
                   }}
                   style={styles.resClose}
                   accessibilityLabel="Închide detaliile produsului scanat"
@@ -410,7 +454,7 @@ export default function ScannerBarcodeScreen() {
                 <TouchableOpacity
                   onPress={() => {
                     setCodNegasit(null);
-                    setScanLocked(false);
+                    lockRef.current = false;
                   }}
                   style={styles.resClose}
                   accessibilityLabel="Închide detaliile codului negăsit"
@@ -429,7 +473,7 @@ export default function ScannerBarcodeScreen() {
                 <TouchableOpacity
                   onPress={() => {
                     setCodNegasit(null);
-                    setScanLocked(false);
+                    lockRef.current = false;
                     addMealSheetRef.current?.open();
                   }}
                   style={[styles.actionBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
@@ -441,7 +485,7 @@ export default function ScannerBarcodeScreen() {
                   onPress={() => {
                     const cod = codNegasit;
                     setCodNegasit(null);
-                    setScanLocked(false);
+                    lockRef.current = false;
                     addMealSheetRef.current?.openWithItem({
                       nume: `Produs EAN ${cod}`,
                       calorii: 100,
@@ -581,7 +625,7 @@ export default function ScannerBarcodeScreen() {
         animationType="fade"
         onRequestClose={() => {
           setCamaraSuccessModal({ visible: false, produs: null });
-          setScanLocked(false);
+          lockRef.current = false;
         }}
       >
         <View style={styles.successModalBackdrop}>
@@ -611,7 +655,7 @@ export default function ScannerBarcodeScreen() {
                 style={[styles.successBtnSecondary, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
                 onPress={() => {
                   setCamaraSuccessModal({ visible: false, produs: null });
-                  setScanLocked(false);
+                  lockRef.current = false;
                 }}
               >
                 <Text style={[styles.successBtnSecondaryText, { color: colors.textPrimary }]}>Continuă Scanarea</Text>
@@ -621,7 +665,7 @@ export default function ScannerBarcodeScreen() {
                 style={[styles.successBtnPrimary, { backgroundColor: colors.accent }]}
                 onPress={() => {
                   setCamaraSuccessModal({ visible: false, produs: null });
-                  setScanLocked(false);
+                  lockRef.current = false;
                   setActiveTab('camara');
                 }}
               >
@@ -768,7 +812,7 @@ export default function ScannerBarcodeScreen() {
         </View>
       </Modal>
 
-      <AddMealBottomSheet ref={addMealSheetRef} />
+      <AddMealBottomSheet ref={addMealSheetRef} onPantryUsed={handlePantryUsed} />
     </View>
   );
 }

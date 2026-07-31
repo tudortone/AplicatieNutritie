@@ -153,7 +153,12 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
     insigne: [],
   });
   const stareRef = useRef(stare);
-  stareRef.current = stare;
+  // Bug #23: stareRef.current = stare era scris în corpul componentei — mutarea unui ref
+  // în timpul render-ului este comportament nedefinit cu React 19 + reactCompiler: true.
+  // Mutat într-un useEffect care rulează sincron după fiecare render.
+  useEffect(() => {
+    stareRef.current = stare;
+  });
 
   const saveStare = useCallback(async (newState: StareGamificare) => {
     setStare(newState);
@@ -175,8 +180,9 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
           updated_at: new Date().toISOString(),
         });
       }
-    } catch {
-      // Fail silent
+    } catch (err) {
+      // Bug #24b: Loghează eroarea în loc de fail silent complet (XP se pierdea invizibil offline)
+      console.warn('[Gamificare] saveStare a eșuat (offline sau RLS):', err);
     }
   }, []);
 
@@ -229,11 +235,13 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
       } = await supabase.auth.getSession();
 
       if (session?.user) {
+        // Bug #24a: .single() aruncă PGRST116 pentru orice utilizator nou (0 rânduri).
+        // .maybeSingle() returnează null în loc de eroare când nu există înregistrare.
         const { data, error } = await supabase
           .from('gamificare')
           .select('*')
           .eq('user_id', session.user.id)
-          .single();
+          .maybeSingle();
 
         if (!error && data) {
           localState = {

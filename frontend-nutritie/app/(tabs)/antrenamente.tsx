@@ -1,1659 +1,716 @@
-import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
+  Pressable,
   TextInput,
-  Modal,
-  Platform,
+  Dimensions,
+  type TextStyle,
+  type ViewStyle,
 } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useFocusRefresh } from '../../hooks/useFocusRefresh';
-import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Flame, Target, Play, CheckCircle2, ChevronDown, ChevronUp, Search, Dumbbell, PersonStanding, Activity, MoveUp, Plus } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
-import {
-  Dumbbell,
-  Flame,
-  Plus,
-  Trash2,
-  Zap,
-  Award,
-  Search,
-  CheckCircle2,
-  ChevronRight,
-  Sparkles,
-  Eye,
-  X,
-  Star,
-  Clock,
-  Activity,
-} from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
-import { Radius, Spacing } from '../../constants/theme';
+import KeyboardAwareScreen, {
+  CONTENT_BOTTOM_PADDING,
+} from '../../components/ui/KeyboardAwareScreen';
+import { MuscleBody } from '../../components/fitness/MuscleBody';
+import { mapToCanonicalMuscleIds } from '../../lib/fitnessEngine';
+import type { MuscleId } from '../../components/fitness/heatColor';
+import {
+  CATEGORII,
+  type Categorie,
+  type Exercitiu,
+} from '../../constants/exercitii';
+import { Stepper } from '../../components/ui/Stepper';
+import { Spacing, Radius } from '../../constants/theme';
+import { SkeletonLoader } from '../../components/SkeletonLoader';
 import { useTheme } from '../../context/ThemeContext';
-import { useAntrenamente, Antrenament } from '../../hooks/useAntrenamente';
-import { useGamificare } from '../../hooks/useGamificare';
+import { useAntrenamente, type SetExercitiu } from '../../hooks/useAntrenamente';
 import { useNotify } from '../../hooks/useNotify';
-import { EXERCITII, CATEGORII, Categorie } from '../../constants/exercitii';
-import { WorkoutTimerBar } from '../../components/fitness/WorkoutTimerBar';
-import { ConfirmSheet } from '../../components/ui/ConfirmSheet';
-import { BodyHeatmap } from '../../components/fitness/BodyHeatmap';
-import { normalizeMuscleLoadToIntensity } from '../../lib/fitnessEngine';
+import { useExercitii } from '../../hooks/useExercitii';
 
-import { MuscleBody, MuscleView } from '../../components/fitness/MuscleBody';
-import MuscleMapFront from '../../components/MuscleMapFront';
-import MuscleMapBack from '../../components/MuscleMapBack';
-import RankProgressBar from '../../components/fitness/RankProgressBar';
-import { useDailyReset } from '../../hooks/useDailyReset';
-import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+// ---- Constants --------------------------------------------------------------
 
-const MODERN_COLORS = {
-  bg: '#071218',
-  surface: '#0D2028',
-  border: 'rgba(0,191,255,0.15)',
-  cyan: '#00BFFF',
-  cyanSoft: 'rgba(0,191,255,0.1)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#A0B4C0',
-  textTertiary: '#647A88',
-  gold: '#FFD700',
-  danger: '#FF4D4D',
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const MAP_HEIGHT = 380;
+const CTA_COLOR = '#0EA5E9';
+
+const CATEGORY_ICON: Record<Categorie, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  piept: 'weight-lifter',
+  spate: 'weight',
+  picioare: 'human-handsdown',
+  umeri: 'arm-flex',
+  brate: 'dumbbell',
+  abdomen: 'fire',
+  cardio: 'run-fast',
+  'full-body': 'star-four-points',
+  mobilitate: 'yoga',
+  superior: 'weight-lifter',
+  inferior: 'human-handsdown',
+  core: 'fire',
+  corp_intreg: 'star-four-points',
 };
 
-const RANKS_INFO = [
-  { tier: 'F', title: 'Novice Lifter', minKg: 0, maxKg: 1000, stars: 0 },
-  { tier: 'E', title: 'Iron Rookie', minKg: 1000, maxKg: 5000, stars: 1 },
-  { tier: 'D', title: 'Gym Challenger', minKg: 5000, maxKg: 15000, stars: 2 },
-  { tier: 'C', title: 'Bronze Warrior', minKg: 15000, maxKg: 35000, stars: 2 },
-  { tier: 'B', title: 'Silver Gladiator', minKg: 35000, maxKg: 75000, stars: 3 },
-  { tier: 'A', title: 'Elite Gold Lifter', minKg: 75000, maxKg: 150000, stars: 4 },
-  { tier: 'S', title: 'Master Beast', minKg: 150000, maxKg: 300000, stars: 5 },
-  { tier: 'SS', title: 'GOD OF IRON', minKg: 300000, maxKg: 10000000, stars: 5 },
-];
+// ---- Helpers ----------------------------------------------------------------
 
-function getRankData(kg: number) {
-  for (let i = RANKS_INFO.length - 1; i >= 0; i--) {
-    if (kg >= RANKS_INFO[i].minKg) {
-      const current = RANKS_INFO[i];
-      const next = RANKS_INFO[Math.min(i + 1, RANKS_INFO.length - 1)];
-      const rankLabel = `Rank ${current.tier} • ${current.title}`;
-      const nextRankLabel = current.tier === 'SS' ? 'APEX TITAN' : `Rank ${next.tier} (${next.title})`;
-      return {
-        rankLabel,
-        nextRankLabel,
-        nextRankKg: next.minKg || 1000,
-        stars: current.stars,
-        tier: current.tier,
-        title: current.title,
-      };
-    }
-  }
-  return {
-    rankLabel: 'Rank F • Novice Lifter',
-    nextRankLabel: 'Rank E (Iron Rookie)',
-    nextRankKg: 1000,
-    stars: 0,
-    tier: 'F',
-    title: 'Novice Lifter',
-  };
+const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+const formatNumber = (n: number) =>
+  Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, '');
+
+interface LocalExercitiuInAntrenament {
+  exercitiuId: string;
+  nume: string;
+  seturi: SetExercitiu[];
+  durataMin: number;
+  kcal: number;
 }
 
-const ClashRoyaleResetBanner = () => {
-  const [timeLeft, setTimeLeft] = useState('');
-  const [progressPct, setProgressPct] = useState(0);
-
-  useEffect(() => {
-    const updateTimer = () => {
-      const now = new Date();
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-      const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
-      const diff = tomorrow.getTime() - now.getTime();
-      const totalDayMs = tomorrow.getTime() - startOfDay.getTime();
-      const elapsedMs = now.getTime() - startOfDay.getTime();
-
-      const h = Math.floor((diff / (1000 * 60 * 60)) % 24).toString().padStart(2, '0');
-      const m = Math.floor((diff / 1000 / 60) % 60).toString().padStart(2, '0');
-      const s = Math.floor((diff / 1000) % 60).toString().padStart(2, '0');
-      setTimeLeft(`${h}h ${m}m ${s}s`);
-
-      const pct = Math.min(100, Math.max(0, (elapsedMs / totalDayMs) * 100));
-      setProgressPct(pct);
-    };
-
-    updateTimer();
-    const timer = setInterval(updateTimer, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  return (
-    <View style={styles.clashBannerCard}>
-      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFillObject} />
-      <LinearGradient
-        colors={['rgba(255, 215, 0, 0.12)', 'rgba(0, 191, 255, 0.08)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <View style={styles.clashBannerHeader}>
-        <View style={styles.clashIconWrap}>
-          <Clock size={16} color={MODERN_COLORS.gold} />
-        </View>
-        <Text style={styles.clashBannerTitle}>RESET ZILNIC STATISTICI & QUEST-URI</Text>
-      </View>
-      <Text style={styles.clashCountdownText}>⏳ Se resetează în: {timeLeft}</Text>
-      <View style={styles.clashBarWrap}>
-        <LinearGradient
-          colors={[MODERN_COLORS.gold, MODERN_COLORS.cyan]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[styles.clashBarFill, { width: `${progressPct}%` }]}
-        />
-      </View>
-    </View>
-  );
-};
+// ---- Component --------------------------------------------------------------
 
 export default function AntrenamenteScreen() {
-  const router = useRouter();
+  const { colors } = useTheme();
+  const { adaugaAntrenament } = useAntrenamente();
   const notify = useNotify();
-  const { scrollPaddingTop, scrollPaddingBottom } = useResponsiveLayout();
 
-  const {
-    antrenamente,
-    totalCaloriiArse,
-    numarAntrenamente,
-    stergeAntrenament,
-    adaugaAntrenament,
-    refresh: refreshAntr,
-  } = useAntrenamente();
-
-  const [selectedWorkoutHeatmap, setSelectedWorkoutHeatmap] = useState<Antrenament | null>(null);
-  const [toDelete, setToDelete] = useState<Antrenament | null>(null);
-  const [muscleView, setMuscleView] = useState<MuscleView>('anterior');
-
-  const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
-  const [activeMuscles, setActiveMuscles] = useState<string[]>([]);
-
-  const aggregatedMuscleLoad = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const w of antrenamente) {
-      if (w.muscle_load) {
-        for (const [key, val] of Object.entries(w.muscle_load)) {
-          map[key] = (map[key] || 0) + val;
-        }
-      }
-    }
-    return map;
-  }, [antrenamente]);
-
-  const aggregatedIntensityMap = useMemo(() => {
-    return normalizeMuscleLoadToIntensity(aggregatedMuscleLoad);
-  }, [aggregatedMuscleLoad]);
-
-  const activeMusclesList = useMemo(() => {
-    const intensityKeys = Object.keys(aggregatedIntensityMap).filter(k => ((aggregatedIntensityMap as Record<string, number>)[k] ?? 0) > 0);
-    if (intensityKeys.length > 0) return intensityKeys;
-    return Object.keys(aggregatedMuscleLoad).filter(k => (aggregatedMuscleLoad[k] ?? 0) > 0);
-  }, [aggregatedIntensityMap, aggregatedMuscleLoad]);
-
-  const totalVolumeKg = useMemo(
-    () => antrenamente.reduce((sum, w) => sum + (w.external_volume_kg ?? w.volum_total ?? 0), 0),
-    [antrenamente]
-  );
-
-  const totalDurataMin = useMemo(
-    () => antrenamente.reduce((sum, w) => sum + (w.durata_min ?? 0), 0),
-    [antrenamente]
-  );
-
-  const {
-    streak,
-    questuriAzi: contextQuests,
-    setQuesturiAzi,
-    toateQuesturileCompletate,
-    revendicaRecompensaZilnica,
-    adaugaProgres,
-    refreshGamificare,
-  } = useGamificare();
-
-  const daily = useDailyReset({
-    questuriAzi: contextQuests,
-    setQuesturiAzi,
-  });
-
-  const [expandedExId, setExpandedExId] = useState<string | null>(null);
-  const [inlineSets, setInlineSets] = useState<number>(1);
-  const [inlineReps, setInlineReps] = useState<number>(10);
-  const [inlineWeight, setInlineWeight] = useState<number>(0);
-
-  const [selectedCategorie, setSelectedCategorie] = useState<Categorie | 'toate'>('toate');
+  const [selectedCategory, setSelectedCategory] = useState<Categorie>('piept');
   const [searchQuery, setSearchQuery] = useState('');
+  const { exercitii } = useExercitii();
 
-  const handleInlineLog = async (ex: any) => {
-    try {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const kcalEst = Math.round((ex.met || 4) * 75 * ((inlineSets * inlineReps * 3) / 3600) * 10) / 10 || 45;
-      const volEst = inlineSets * inlineReps * inlineWeight;
+  const [selectedExerciseId, setSelectedExerciseId] = useState<string>('');
 
-      await adaugaAntrenament({
-        nume: ex.nume,
-        tip: ex.categorie || 'general',
-        durata_min: Math.max(10, inlineSets * 3),
-        calorii_arse: Math.max(20, Math.round(kcalEst)),
-        exercitii: [
-          {
-            exercitiuId: ex.id,
-            nume: ex.nume,
-            seturi: Array.from({ length: inlineSets }, (_, i) => ({
-              serie: i + 1,
-              repetari: inlineReps,
-              greutate: inlineWeight,
-            })),
-            durataMin: inlineSets * 3,
-            kcal: Math.max(20, Math.round(kcalEst)),
-          },
-        ],
-        volum_total: volEst,
-      });
+  useEffect(() => {
+    if (!selectedExerciseId && exercitii.length > 0) {
+      const first = exercitii.find((e) => e.categorie === selectedCategory) ?? exercitii[0];
+      if (first) setSelectedExerciseId(first.id);
+    }
+  }, [exercitii, selectedCategory, selectedExerciseId]);
 
+  const [weightInput, setWeightInput] = useState<string>('0');
+  const [repsInput, setRepsInput] = useState<string>('10');
+  const [session, setSession] = useState<Record<string, SetExercitiu[]>>({});
+
+  useEffect(() => {
+    const loadSession = async () => {
       try {
-        await adaugaProgres('antrenamente', 1);
-        await adaugaProgres('minute_miscare', inlineSets * 3);
-        await adaugaProgres('calorii_arse', Math.max(20, Math.round(kcalEst)));
-      } catch {}
+        const data = await AsyncStorage.getItem('current_workout_session');
+        if (data) setSession(JSON.parse(data));
+      } catch (e) {}
+    };
+    loadSession();
+  }, []);
 
-      notify.reward('Exercițiu salvat!', `+100 XP • ${volEst} kg volum`);
-      setExpandedExId(null);
-      refreshAntr();
-    } catch {
-      notify.error('Eroare', 'Nu s-a putut salva exercițiul.');
+  const exercisesInCategory = useMemo(() => {
+    let filtered = exercitii.filter((e) => e.categorie === selectedCategory);
+    if (searchQuery.trim().length > 0) {
+      filtered = filtered.filter(e => e.nume.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+    return filtered;
+  }, [selectedCategory, exercitii, searchQuery]);
+
+  const selectedExercise: Exercitiu | undefined = useMemo(
+    () => exercitii.find((e) => e.id === selectedExerciseId) ?? exercitii[0],
+    [selectedExerciseId, exercitii],
+  );
+
+  const exerciseIntensity = useMemo<Partial<Record<MuscleId, number>>>(() => {
+    const out: Partial<Record<MuscleId, number>> = {};
+    if (!selectedExercise?.muschiTinta) return out;
+    for (const [k, pct] of Object.entries(selectedExercise.muschiTinta)) {
+      const canonicals = mapToCanonicalMuscleIds(k);
+      for (const { id, weight } of canonicals) {
+        out[id] = Math.max(out[id] ?? 0, (Number(pct) / 100) * weight);
+      }
+    }
+    return out;
+  }, [selectedExercise]);
+
+  const activeMuscleCount = useMemo(
+    () => Object.values(exerciseIntensity).filter((v) => (v ?? 0) >= 0.25).length,
+    [exerciseIntensity],
+  );
+
+  const sessionSets = selectedExercise ? (session[selectedExercise.id] ?? []) : [];
+  const nextSetNumber = sessionSets.length + 1;
+
+  if (!selectedExercise || exercitii.length === 0) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, padding: 20, justifyContent: 'center' }}>
+         <SkeletonLoader width="100%" height={200} style={{ marginBottom: 20 }} />
+         <SkeletonLoader width="100%" height={100} style={{ marginBottom: 20 }} />
+         <SkeletonLoader width="100%" height={100} />
+      </View>
+    );
+  }
+
+  const onSelectCategory = (cat: Categorie) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedCategory(cat);
+    const first = exercitii.find((e) => e.categorie === cat);
+    if (first) {
+      setSelectedExerciseId(first.id);
+      setWeightInput(
+        first.masurare?.defaultWeightKg != null ? String(first.masurare.defaultWeightKg) : '0',
+      );
+      setRepsInput(String(first.repetariDefault || 10));
     }
   };
 
-  useFocusRefresh(
-    useCallback(() => {
-      refreshAntr();
-      refreshGamificare();
-    }, [refreshAntr, refreshGamificare]),
-    5000,
-    [refreshAntr, refreshGamificare]
-  );
-
-  const handleStergere = (item: Antrenament) => {
-    setToDelete(item);
+  const onSelectExercise = (ex: Exercitiu) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (selectedExerciseId === ex.id) {
+       // Toggle off? Actually just keep it open or let user scroll. We'll leave it as setting it.
+    }
+    setSelectedExerciseId(ex.id);
+    setWeightInput(
+      ex.masurare?.defaultWeightKg != null ? String(ex.masurare.defaultWeightKg) : '0',
+    );
+    setRepsInput(String(ex.repetariDefault || 10));
   };
 
-  const exercitiiFiltrate = useMemo(() => {
-    return EXERCITII.filter((ex) => {
-      if (selectedCategorie !== 'toate' && ex.categorie !== selectedCategorie) {
-        return false;
-      }
-      if (searchQuery.trim() !== '') {
-        const q = searchQuery.toLowerCase().trim();
-        const matchNume = ex.nume.toLowerCase().includes(q);
-        const matchGrupa = ex.grupe.some((g) => g.toLowerCase().includes(q));
-        if (!matchNume && !matchGrupa) return false;
-      }
-      return true;
+  const adjust = (
+    setter: (v: string) => void,
+    current: string,
+    step: number,
+    min: number,
+    max: number,
+  ) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const parsed = parseFloat(current.replace(',', '.')) || 0;
+    setter(formatNumber(clamp(parsed + step, min, max)));
+  };
+
+  const handleRecordSet = () => {
+    const weight = parseFloat(weightInput.replace(',', '.')) || 0;
+    const reps = parseInt(repsInput, 10) || 0;
+
+    if (reps <= 0) {
+      notify.warning('Repetări invalide', 'Introdu un număr valid de repetări.');
+      return;
+    }
+
+    const newSet: SetExercitiu = {
+      serie: nextSetNumber,
+      repetari: reps,
+      greutate: weight,
+      set_type: 'working',
+      completed: true,
+    };
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setSession((prev) => {
+      const next = {
+        ...prev,
+        [selectedExercise.id]: [...(prev[selectedExercise.id] ?? []), newSet],
+      };
+      AsyncStorage.setItem('current_workout_session', JSON.stringify(next)).catch(() => {});
+      return next;
     });
-  }, [selectedCategorie, searchQuery]);
 
-  const rankData = useMemo(() => getRankData(totalVolumeKg), [totalVolumeKg]);
+    notify.success(
+      `Set ${nextSetNumber} înregistrat`,
+      `${formatNumber(weight)} kg × ${reps} rep`,
+    );
+  };
 
-  const finalizateCount = useMemo(
-    () => daily.questuriAzi.filter((q: any) => q.completat).length,
-    [daily.questuriAzi]
-  );
+  const handleSaveWorkout = async () => {
+    const entries = Object.entries(session);
+    if (entries.length === 0) {
+      notify.warning('Nimic de salvat', 'Înregistrează cel puțin un set.');
+      return;
+    }
 
-  const firstUncompletedIndex = useMemo(() => {
-    const idx = daily.questuriAzi.findIndex((q: any) => !q.completat);
-    return idx === -1 ? 0 : idx;
-  }, [daily.questuriAzi]);
+    const totalSets = entries.reduce((s, [, sets]) => s + sets.length, 0);
+    const durataMin = Math.max(1, Math.round(totalSets * 1.5));
+    const volum = entries.reduce(
+      (s, [, sets]) => s + sets.reduce((v, x) => v + (x.greutate ?? 0) * x.repetari, 0),
+      0,
+    );
+
+    const exercitiiInAntrenament: LocalExercitiuInAntrenament[] = entries
+      .map(([exId, sets]) => {
+        const ex = exercitii.find((e) => e.id === exId);
+        if (!ex) return null;
+        return {
+          exercitiuId: exId,
+          nume: ex.nume,
+          seturi: sets,
+          durataMin,
+          kcal: Math.round((ex.caloriiPeMinut ?? 6) * durataMin),
+        };
+      })
+      .filter((v): v is LocalExercitiuInAntrenament => v !== null);
+
+    await adaugaAntrenament({
+      nume: `Antrenament ${new Date().toLocaleDateString('ro-RO', { weekday: 'long', month: 'short', day: 'numeric' })}`,
+      tip: selectedCategory,
+      durata_min: durataMin,
+      calorii_arse: exercitiiInAntrenament.reduce((s, e) => s + e.kcal, 0),
+      met: selectedExercise.met,
+      exercitii: exercitiiInAntrenament,
+      volum_total: Math.round(volum),
+    });
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    notify.success(
+      'Antrenament salvat',
+      `${totalSets} seturi • ${Math.round(volum)} kg volum`,
+    );
+    setSession({});
+    AsyncStorage.removeItem('current_workout_session').catch(() => {});
+  };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAwareScreen style={{ backgroundColor: colors.background }}>
       <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: CONTENT_BOTTOM_PADDING }]}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}
       >
-        {/* 1. HEADER COMPACT (cu Glassmorphism subtil) */}
-        <View style={styles.headerContainer}>
-          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
-          <View style={styles.headerRow}>
-            <View>
-              <Text style={styles.headerSub}>NUTRIAI FITNESS</Text>
-              <Text style={styles.headerTitle}>Sport</Text>
-            </View>
-
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                onPress={() => router.push('/jurnal-antrenamente' as any)}
-                style={styles.jurnalBtn}
-              >
-                <Text style={styles.jurnalBtnText}>📖 Jurnal</Text>
-              </TouchableOpacity>
-
-              <View style={styles.streakBadge}>
-                <LinearGradient
-                  colors={[MODERN_COLORS.cyan, '#0080FF']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.streakGrad}
-                >
-                  <Zap size={14} color="#FFFFFF" />
-                  <Text style={styles.streakText}>{streak} Zile</Text>
-                </LinearGradient>
-              </View>
-            </View>
+        <View style={styles.header}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Anatomy</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              Select an exercise to see targeted muscles
+            </Text>
           </View>
+        </View>
 
-          <ClashRoyaleResetBanner />
+        <View style={[styles.mapContainer, { backgroundColor: colors.surface }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', width: '100%', height: MAP_HEIGHT - 40, paddingVertical: 10 }}>
+            <MuscleBody
+              side="front"
+              intensity={exerciseIntensity}
+              width={(SCREEN_WIDTH - Spacing.lg * 2) * 0.45}
+              height={MAP_HEIGHT - 40}
+            />
+            <MuscleBody
+              side="back"
+              intensity={exerciseIntensity}
+              width={(SCREEN_WIDTH - Spacing.lg * 2) * 0.45}
+              height={MAP_HEIGHT - 40}
+            />
+          </View>
+          <View style={styles.mapLegend}>
+            <View style={[styles.legendDot, { backgroundColor: colors.accent }]} />
+            <Text style={[styles.legendText, { color: colors.textSecondary }]}>
+              {activeMuscleCount > 0
+                ? `${activeMuscleCount} mușchi activi`
+                : 'Selectează un exercițiu'}
+            </Text>
+          </View>
+        </View>
 
-          <WorkoutTimerBar
-            onLogWorkout={async (durataMin) => {
-              try {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                await adaugaAntrenament({
-                  nume: `Antrenament rapid (${durataMin} min)`,
-                  tip: 'general',
-                  durata_min: durataMin,
-                  calorii_arse: Math.round(durataMin * 7.5),
-                  volum_total: 0,
-                });
-                try {
-                  await adaugaProgres('antrenamente', 1);
-                  await adaugaProgres('minute_miscare', durataMin);
-                  await adaugaProgres('calorii_arse', Math.round(durataMin * 7.5));
-                } catch {}
-                notify.reward('Antrenament înregistrat!', `+100 XP • ${durataMin} min mișcare`);
-                refreshAntr();
-              } catch {
-                notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
-              }
-            }}
+        <View style={[styles.searchContainer, { backgroundColor: colors.surfaceElevated }]}>
+          <Search color={colors.textSecondary} size={20} style={{ marginRight: 10 }} />
+          <TextInput
+            placeholder="Caută exercițiu..."
+            placeholderTextColor={colors.textSecondary}
+            style={[styles.searchInput, { color: colors.textPrimary }]}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
         </View>
 
-        {/* 2. TODAY SNAPSHOT (Centrat, estetic & ordonat) */}
-        <View style={styles.snapshotSection}>
-          <View style={styles.snapshotGrid}>
-            <View style={styles.snapshotCard}>
-              <View style={styles.snapshotIconRow}>
-                <Flame size={20} color={MODERN_COLORS.cyan} />
-                <Text style={styles.snapshotValue}>{totalCaloriiArse}</Text>
-              </View>
-              <Text style={styles.snapshotLabel}>kcal arse</Text>
-            </View>
-
-            <View style={styles.snapshotCard}>
-              <View style={styles.snapshotIconRow}>
-                <Dumbbell size={20} color={MODERN_COLORS.cyan} />
-                <Text style={styles.snapshotValue}>{totalVolumeKg}</Text>
-              </View>
-              <Text style={styles.snapshotLabel}>kg mutați</Text>
-            </View>
-
-            <View style={styles.snapshotCard}>
-              <View style={styles.snapshotIconRow}>
-                <Activity size={20} color={MODERN_COLORS.cyan} />
-                <Text style={styles.snapshotValue}>{numarAntrenamente}</Text>
-              </View>
-              <Text style={styles.snapshotLabel}>sesiuni</Text>
-            </View>
-
-            <View style={styles.snapshotCard}>
-              <View style={styles.snapshotIconRow}>
-                <Clock size={20} color={MODERN_COLORS.cyan} />
-                <Text style={styles.snapshotValue}>{totalDurataMin}</Text>
-              </View>
-              <Text style={styles.snapshotLabel}>minute</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 3. MUSCLE LIVE SECTION */}
-        <View style={styles.sectionCard}>
-          <View style={styles.muscleHeaderRow}>
-            <Text style={styles.sectionTitle}>ACTIVARE MUSCULARĂ LIVE</Text>
-            <View style={styles.viewToggleWrap}>
-              <TouchableOpacity
-                style={[styles.toggleBtn, viewMode === 'front' && styles.toggleBtnActive]}
-                onPress={() => {
-                  setViewMode('front');
-                  setMuscleView('anterior');
-                }}
-              >
-                <Text style={[styles.toggleBtnText, viewMode === 'front' && styles.toggleBtnTextActive]}>
-                  Față
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toggleBtn, viewMode === 'back' && styles.toggleBtnActive]}
-                onPress={() => {
-                  setViewMode('back');
-                  setMuscleView('posterior');
-                }}
-              >
-                <Text style={[styles.toggleBtnText, viewMode === 'back' && styles.toggleBtnTextActive]}>
-                  Spate
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={[styles.muscleBodyWrap, { height: 400, width: '100%', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }]}>
-            {viewMode === 'front' ? (
-              <MuscleMapFront side="front" intensity={aggregatedIntensityMap} activeMuscles={activeMusclesList} style={{ width: '100%', height: '100%' }} />
-            ) : (
-              <MuscleMapBack side="back" intensity={aggregatedIntensityMap} activeMuscles={activeMusclesList} style={{ width: '100%', height: '100%' }} />
-            )}
-          </View>
-
-          <View style={styles.muscleLegendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#505050' }]} />
-              <Text style={styles.legendText}>Inactiv</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#00BFFF' }]} />
-              <Text style={styles.legendText}>Ușor</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#FFD700' }]} />
-              <Text style={styles.legendText}>Mediu</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#FF8C00' }]} />
-              <Text style={styles.legendText}>Intens</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#FF0000' }]} />
-              <Text style={styles.legendText}>Magmă</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 4. RANK SECTION (complet centrată & ordonată cu width 100% corect) */}
-        <View style={[styles.sectionCard, styles.rankCardCentered]}>
-          <Text style={[styles.sectionTitle, { textAlign: 'center', marginBottom: Spacing.sm }]}>
-            TONAJ & MASTERY RANK
-          </Text>
-          
-          <View style={styles.rankCenterInfo}>
-            <Text style={styles.rankBadgeText}>🏆 {rankData.rankLabel}</Text>
-            <Text style={styles.rankTotalKgText}>{totalVolumeKg.toLocaleString('ro-RO')} kg mutați în total</Text>
-            
-            <View style={styles.starsRowCentered}>
-              {[1, 2, 3, 4, 5].map((starIdx) => (
-                <Star
-                  key={starIdx}
-                  size={18}
-                  color={starIdx <= rankData.stars ? MODERN_COLORS.gold : '#334D5C'}
-                  fill={starIdx <= rankData.stars ? MODERN_COLORS.gold : 'transparent'}
-                />
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.rankBarContainer}>
-            <RankProgressBar
-              currentKg={totalVolumeKg}
-              nextRankKg={rankData.nextRankKg}
-              rankLabel={rankData.rankLabel}
-              nextRankLabel={rankData.nextRankLabel}
-            />
-          </View>
-        </View>
-
-        {/* 5. DAILY QUESTS */}
-        <View style={styles.sectionCard}>
-          <View style={styles.questsHeaderRow}>
-            <View>
-              <Text style={styles.sectionTitle}>OBIECTIVELE ZILEI</Text>
-            </View>
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={styles.questsCountText}>
-                {finalizateCount}/{daily.questuriAzi.length} finalizate
-              </Text>
-              {toateQuesturileCompletate && (
-                <TouchableOpacity
-                  onPress={revendicaRecompensaZilnica}
-                  style={styles.bonusBtn}
-                >
-                  <Sparkles size={14} color={MODERN_COLORS.cyan} />
-                  <Text style={styles.bonusBtnText}>Bonus</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.questsList}>
-            {daily.questuriAzi.map((questItem: any, index: number) => {
-              const quest = questItem as any;
-              const isExpanded = index === firstUncompletedIndex && !quest.completat;
-
-              if (isExpanded) {
-                return (
-                  <View key={quest.id} style={styles.questCardExpanded}>
-                    <View style={styles.questExpandedTop}>
-                      <View style={styles.questIconCol}>
-                        <View style={styles.questCircleEmpty} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.questDescText}>{quest.descriere}</Text>
-                        <View style={styles.questBarWrap}>
-                          <View
-                            style={[
-                              styles.questBarFill,
-                              {
-                                width: `${Math.min(
-                                  100,
-                                  (quest.progres / Math.max(1, quest.tinta || 1)) * 100
-                                )}%`,
-                              },
-                            ]}
-                          />
-                        </View>
-                        <Text style={styles.questProgressSub}>
-                          {quest.progres} / {quest.tinta || 1} completat
-                        </Text>
-                      </View>
-                      <View style={styles.questXpBadge}>
-                        <Text style={styles.questXpText}>+{quest.xp || 0} XP</Text>
-                      </View>
-                    </View>
-                  </View>
-                );
-              }
-
-              return (
-                <View
-                  key={quest.id}
-                  style={[styles.questCardCompact, quest.completat && styles.questCardDone]}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                    {quest.completat ? (
-                      <CheckCircle2 size={18} color={MODERN_COLORS.cyan} />
-                    ) : (
-                      <View style={styles.questCircleEmptySmall} />
-                    )}
-                    <Text
-                      style={[
-                        styles.questCompactTitle,
-                        quest.completat && styles.questCompactTitleDone,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {quest.descriere}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Text style={styles.questCompactProgress}>
-                      {quest.progres}/{quest.tinta || 1}
-                    </Text>
-                    <Text style={[styles.questXpText, { fontSize: 12 }]}>+{quest.xp || 0} XP</Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* 6. SESSIONS TODAY */}
-        {antrenamente.length > 0 && (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>SESIUNI ÎNREGISTRATE AZI</Text>
-            <View style={{ gap: Spacing.sm, marginTop: Spacing.sm }}>
-              {antrenamente.map((item) => {
-                const volumKg = item.external_volume_kg ?? item.volum_total ?? 0;
-                const rankLbl = item.rank_label || 'Activ';
-                return (
-                  <View key={item.id} style={styles.sessionRowCard}>
-                    <View style={styles.sessionRowTop}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                        <View style={styles.sessionIconBox}>
-                          <Dumbbell size={16} color={MODERN_COLORS.cyan} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.sessionName} numberOfLines={1}>{item.nume}</Text>
-                          <Text style={styles.sessionMeta}>
-                            {item.durata_min} min • ~{item.calorii_arse} kcal
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <TouchableOpacity
-                          onPress={() => setSelectedWorkoutHeatmap(item)}
-                          style={styles.actionIconButton}
-                        >
-                          <Eye size={16} color={MODERN_COLORS.cyan} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleStergere(item)}
-                          style={[styles.actionIconButton, { backgroundColor: 'rgba(255,77,77,0.1)' }]}
-                        >
-                          <Trash2 size={16} color={MODERN_COLORS.danger} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    <View style={styles.sessionRowBottom}>
-                      <View>
-                        <Text style={styles.sessionStatLabel}>KG MIȘCATE</Text>
-                        <Text style={styles.sessionStatVal}>{volumKg} kg</Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.sessionStatLabel}>MASTERY</Text>
-                        <Text style={styles.sessionStatRank}>🏆 {rankLbl}</Text>
-                      </View>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {/* 7. CATALOG EXERCIȚII & ÎNREGISTRARE ANTRENAMENT INLINE */}
-        <View style={styles.sectionCard}>
-          <View style={styles.catalogHeaderRow}>
-            <Text style={styles.sectionTitle}>CATALOG EXERCIȚII ({exercitiiFiltrate.length})</Text>
-            <Text style={{ fontSize: 11, color: MODERN_COLORS.cyan, fontWeight: '700' }}>✨ Apasă un exercițiu pentru a nota</Text>
-          </View>
-
-          <View style={styles.searchContainer}>
-            <Search size={18} color={MODERN_COLORS.textTertiary} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Caută exercițiu sau grupă..."
-              placeholderTextColor={MODERN_COLORS.textTertiary}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipsScroll}
-          >
-            <TouchableOpacity
-              onPress={() => setSelectedCategorie('toate')}
-              style={[styles.chip, selectedCategorie === 'toate' && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, selectedCategorie === 'toate' && styles.chipTextActive]}>
-                Toate
-              </Text>
-            </TouchableOpacity>
-
-            {CATEGORII.map((cat) => (
-              <TouchableOpacity
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: 10 }]}>Targeted Exercises</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.hScroll}
+        >
+          {CATEGORII.map((cat) => {
+            const active = selectedCategory === cat.id;
+            return (
+              <Pressable
                 key={cat.id}
-                onPress={() => setSelectedCategorie(cat.id)}
-                style={[styles.chip, selectedCategorie === cat.id && styles.chipActive]}
+                onPress={() => onSelectCategory(cat.id)}
+                style={[
+                  styles.pill,
+                  {
+                    backgroundColor: active ? colors.accent : colors.surfaceElevated,
+                    borderColor: active ? colors.accent : colors.cardBorder,
+                  },
+                ]}
               >
-                <Text style={[styles.chipText, selectedCategorie === cat.id && styles.chipTextActive]}>
+                <MaterialCommunityIcons
+                  name={CATEGORY_ICON[cat.id]}
+                  size={18}
+                  color={active ? '#0B0F14' : colors.textSecondary}
+                />
+                <Text style={[styles.pillText, { color: active ? '#0B0F14' : colors.textPrimary }]}>
                   {cat.nume}
                 </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
-          <View style={styles.exList}>
-            {exercitiiFiltrate.map((ex) => {
-              const isExpanded = expandedExId === ex.id;
-              return (
-                <View key={ex.id} style={[styles.exCardWrap, isExpanded && styles.exCardWrapExpanded]}>
-                  <TouchableOpacity
-                    style={styles.exCard}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      if (isExpanded) {
-                        setExpandedExId(null);
-                      } else {
-                        try { Haptics.selectionAsync(); } catch {}
-                        setExpandedExId(ex.id);
-                        setInlineSets(1);
-                        setInlineReps(ex.repetariDefault || 10);
-                        setInlineWeight(0);
-                      }
-                    }}
-                  >
-                    <View style={styles.exIconCircle}>
-                      <Dumbbell size={16} color={MODERN_COLORS.cyan} />
-                    </View>
+        <View style={styles.vScroll}>
+          {exercisesInCategory.map((ex) => {
+            const active = selectedExerciseId === ex.id;
+            const exSets = session[ex.id] || [];
+            
+            return (
+              <View key={ex.id} style={{ marginBottom: Spacing.md }}>
+                <Pressable
+                  onPress={() => onSelectExercise(ex)}
+                  style={[
+                    styles.verticalCard,
+                    {
+                      backgroundColor: active ? colors.surfaceElevated : colors.surface,
+                      borderColor: active ? colors.accent : colors.cardBorder,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: active ? 0.2 : 0.05,
+                      shadowRadius: 8,
+                      elevation: active ? 4 : 1,
+                      borderBottomLeftRadius: active ? 0 : Radius.md,
+                      borderBottomRightRadius: active ? 0 : Radius.md,
+                    },
+                  ]}
+                >
+                  <View style={[styles.verticalIcon, { backgroundColor: active ? colors.accent : colors.surfaceElevated }]}>
+                    {ex.categorie === 'piept' || ex.categorie === 'spate' || ex.categorie === 'brate' || ex.categorie === 'umeri' ? (
+                      <Dumbbell size={20} color={active ? '#0B0F14' : colors.textSecondary} />
+                    ) : ex.categorie === 'picioare' || ex.categorie === 'abdomen' ? (
+                      <PersonStanding size={20} color={active ? '#0B0F14' : colors.textSecondary} />
+                    ) : ex.categorie === 'cardio' ? (
+                      <Activity size={20} color={active ? '#0B0F14' : colors.textSecondary} />
+                    ) : (
+                      <MoveUp size={20} color={active ? '#0B0F14' : colors.textSecondary} />
+                    )}
+                  </View>
+                  
+                  <View style={styles.verticalTextWrap}>
+                    <Text style={[styles.verticalName, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {ex.nume}
+                    </Text>
+                    <Text style={[styles.verticalSub, { color: colors.textTertiary }]} numberOfLines={1}>
+                      {ex.grupe.join(', ')} • {ex.dificultate || 'Medium'}
+                    </Text>
+                  </View>
+                  
+                  <View style={[styles.verticalAction, { backgroundColor: active ? colors.accent : colors.surfaceElevated }]}>
+                    {active ? (
+                      <ChevronUp size={16} color="#0B0F14" />
+                    ) : (
+                      <Play size={16} color={colors.textSecondary} fill={colors.textSecondary} />
+                    )}
+                  </View>
+                </Pressable>
 
-                    <View style={styles.exContent}>
-                      <Text style={styles.exName} numberOfLines={1}>
-                        {ex.nume}
-                      </Text>
-                      <Text style={styles.exMuscles} numberOfLines={1}>
-                        {ex.grupe.join(', ')} • {ex.dificultate}
-                      </Text>
-                    </View>
-
-                    <View style={styles.exQuickBadge}>
-                      <Text style={styles.exQuickBadgeText}>{isExpanded ? '✕ Închide' : '+ Notează'}</Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  {isExpanded && (
-                    <View style={styles.inlineEditorBox}>
-                      <View style={styles.inlineSteppersRow}>
-                        {/* Serii */}
-                        <View style={styles.stepperCol}>
-                          <Text style={styles.stepperLabel}>Serii</Text>
-                          <View style={styles.stepperControls}>
-                            <TouchableOpacity
-                              style={styles.stepperBtn}
-                              onPress={() => {
-                                try { Haptics.selectionAsync(); } catch {}
-                                setInlineSets((s) => Math.max(1, s - 1));
-                              }}
-                            >
-                              <Text style={styles.stepperBtnText}>-</Text>
-                            </TouchableOpacity>
-                            <TextInput
-                              style={styles.stepperInputText}
-                              keyboardType="number-pad"
-                              value={String(inlineSets)}
-                              onChangeText={(txt) => {
-                                const val = parseInt(txt.replace(/[^0-9]/g, ''), 10);
-                                setInlineSets(isNaN(val) ? 1 : Math.max(1, Math.min(50, val)));
-                              }}
-                              selectTextOnFocus
-                            />
-                            <TouchableOpacity
-                              style={styles.stepperBtn}
-                              onPress={() => {
-                                try { Haptics.selectionAsync(); } catch {}
-                                setInlineSets((s) => Math.min(50, s + 1));
-                              }}
-                            >
-                              <Text style={styles.stepperBtnText}>+</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-
-                        {/* Repetari */}
-                        <View style={styles.stepperCol}>
-                          <Text style={styles.stepperLabel}>Repetări</Text>
-                          <View style={styles.stepperControls}>
-                            <TouchableOpacity
-                              style={styles.stepperBtn}
-                              onPress={() => {
-                                try { Haptics.selectionAsync(); } catch {}
-                                setInlineReps((r) => Math.max(1, r - 1));
-                              }}
-                            >
-                              <Text style={styles.stepperBtnText}>-</Text>
-                            </TouchableOpacity>
-                            <TextInput
-                              style={styles.stepperInputText}
-                              keyboardType="number-pad"
-                              value={String(inlineReps)}
-                              onChangeText={(txt) => {
-                                const val = parseInt(txt.replace(/[^0-9]/g, ''), 10);
-                                setInlineReps(isNaN(val) ? 1 : Math.max(1, Math.min(100, val)));
-                              }}
-                              selectTextOnFocus
-                            />
-                            <TouchableOpacity
-                              style={styles.stepperBtn}
-                              onPress={() => {
-                                try { Haptics.selectionAsync(); } catch {}
-                                setInlineReps((r) => Math.min(100, r + 1));
-                              }}
-                            >
-                              <Text style={styles.stepperBtnText}>+</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-
-                        {/* Greutate */}
-                        <View style={styles.stepperCol}>
-                          <Text style={styles.stepperLabel}>Greutate (kg)</Text>
-                          <View style={styles.stepperControls}>
-                            <TouchableOpacity
-                              style={styles.stepperBtn}
-                              onPress={() => {
-                                try { Haptics.selectionAsync(); } catch {}
-                                setInlineWeight((w) => Math.max(0, Number((w - 2.5).toFixed(1))));
-                              }}
-                            >
-                              <Text style={styles.stepperBtnText}>-</Text>
-                            </TouchableOpacity>
-                            <TextInput
-                              style={styles.stepperInputText}
-                              keyboardType="decimal-pad"
-                              value={String(inlineWeight)}
-                              onChangeText={(txt) => {
-                                const clean = txt.replace(/[^0-9.]/g, '');
-                                const val = parseFloat(clean);
-                                setInlineWeight(isNaN(val) ? 0 : Math.max(0, Math.min(600, val)));
-                              }}
-                              selectTextOnFocus
-                            />
-                            <TouchableOpacity
-                              style={styles.stepperBtn}
-                              onPress={() => {
-                                try { Haptics.selectionAsync(); } catch {}
-                                setInlineWeight((w) => Math.min(600, Number((w + 2.5).toFixed(1))));
-                              }}
-                            >
-                              <Text style={styles.stepperBtnText}>+</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      </View>
-
-                      <View style={styles.inlineEstRow}>
-                        <Text style={styles.inlineEstText}>
-                          🔥 ~{Math.round((ex.met || 4) * 75 * ((inlineSets * inlineReps * 3) / 3600) * 10) / 10 || 45} kcal arse
-                        </Text>
-                        <Text style={styles.inlineEstText}>
-                          🏋️ Volum: {inlineSets * inlineReps * inlineWeight} kg
-                        </Text>
-                      </View>
-
-                      <View style={styles.inlineActionsRow}>
-                        <TouchableOpacity
-                          style={styles.inlineSaveBtn}
-                          onPress={() => handleInlineLog(ex)}
-                        >
-                          <LinearGradient
-                            colors={['#00BFFF', '#0080FF']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.inlineSaveGrad}
-                          >
-                            <CheckCircle2 size={16} color="#071218" strokeWidth={2.5} />
-                            <Text style={styles.inlineSaveBtnText}>✅ Salvează Sesiune</Text>
-                          </LinearGradient>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.inlineDetailBtn}
-                          onPress={() => router.push(`/exercitiu/${ex.id}` as any)}
-                        >
-                          <Eye size={16} color={MODERN_COLORS.cyan} />
-                          <Text style={styles.inlineDetailBtnText}>Detalii 3D</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      </ScrollView>
-
-      {selectedWorkoutHeatmap && (
-        <Modal
-          visible={!!selectedWorkoutHeatmap}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={() => setSelectedWorkoutHeatmap(null)}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>{selectedWorkoutHeatmap.nume}</Text>
-                <Text style={styles.modalSub}>
-                  {selectedWorkoutHeatmap.external_volume_kg || selectedWorkoutHeatmap.volum_total || 0} kg volum • {selectedWorkoutHeatmap.rank_label || 'Activ'}
-                </Text>
+                {/* EXPANDABLE TRACKER */}
+                {active && (
+                   <View style={[styles.trackerCardExpanded, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
+                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md }}>
+                        <Text style={[styles.trackerTitle, { color: colors.textPrimary }]}>Track Set</Text>
+                        <Text style={[styles.trackerSubBadge, { color: colors.accent }]}>{exSets.length} sets done</Text>
+                     </View>
+                     
+                     <Stepper
+                       key={`w-${ex.id}`}
+                       label="Greutate"
+                       value={weightInput}
+                       onDec={() => adjust(setWeightInput, weightInput, -2.5, 0, 1000)}
+                       onInc={() => adjust(setWeightInput, weightInput, 2.5, 0, 1000)}
+                       suffix="kg"
+                       onTextChange={setWeightInput}
+                       colors={colors}
+                     />
+                     <Stepper
+                       key={`r-${ex.id}`}
+                       label="Repetări"
+                       value={repsInput}
+                       onDec={() => adjust(setRepsInput, repsInput, -1, 0, 500)}
+                       onInc={() => adjust(setRepsInput, repsInput, 1, 0, 500)}
+                       suffix="rep"
+                       onTextChange={setRepsInput}
+                       colors={colors}
+                     />
+                     
+                     <Pressable
+                       onPress={handleRecordSet}
+                       style={({ pressed }) => [
+                         styles.ctaButton,
+                         { backgroundColor: CTA_COLOR, opacity: pressed ? 0.85 : 1 },
+                       ]}
+                     >
+                       <MaterialCommunityIcons name="check-circle" size={20} color="#FFFFFF" />
+                       <Text style={styles.ctaText}>Add Set</Text>
+                     </Pressable>
+                   </View>
+                )}
               </View>
-              <TouchableOpacity
-                onPress={() => setSelectedWorkoutHeatmap(null)}
-                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-              >
-                <X size={24} color={MODERN_COLORS.textSecondary} />
-              </TouchableOpacity>
-            </View>
+            );
+          })}
+        </View>
 
-            <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-              <BodyHeatmap muscleLoad={selectedWorkoutHeatmap.muscle_load || {}} />
-            </ScrollView>
-          </View>
-        </Modal>
-      )}
-
-      <ConfirmSheet
-        visible={!!toDelete}
-        title="Șterge antrenamentul"
-        message={toDelete ? `Ești sigur că vrei să ștergi "${toDelete.nume}" (-${toDelete.calorii_arse} kcal)?` : ''}
-        confirmLabel="Șterge"
-        cancelLabel="Anulează"
-        destructive={true}
-        onCancel={() => setToDelete(null)}
-        onConfirm={async () => {
-          if (!toDelete) return;
-          const item = toDelete;
-          setToDelete(null);
-          try {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            await stergeAntrenament(item.id);
-            notify.info('Șters', `Antrenamentul ${item.nume} a fost șters.`);
-          } catch (error) {
-            notify.error('Eroare', 'Nu s-a putut șterge antrenamentul.');
-          }
-        }}
-      />
-    </View>
+        {Object.keys(session).length > 0 && (
+          <Pressable
+            onPress={handleSaveWorkout}
+            style={({ pressed }) => [
+              styles.saveButton,
+              { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <MaterialCommunityIcons name="content-save" size={20} color="#0B0F14" />
+            <Text style={[styles.saveText, { color: '#0B0F14' }]}>Salvează antrenamentul</Text>
+          </Pressable>
+        )}
+      </ScrollView>
+    </KeyboardAwareScreen>
   );
 }
 
+// ---- StyleSheet -------------------------------------------------------------
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: MODERN_COLORS.bg,
-  },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    // paddingTop și paddingBottom sunt injectate dinamic prin useResponsiveLayout
-  },
-  headerContainer: {
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.border,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-    backgroundColor: 'rgba(13, 32, 40, 0.65)',
-  },
-  headerRow: {
+    padding: Spacing.lg,
+  } as ViewStyle,
+
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  headerSub: {
-    fontSize: 10,
+    marginBottom: Spacing.md,
+  } as ViewStyle,
+
+  title: {
+    fontSize: 28,
     fontWeight: '800',
-    color: MODERN_COLORS.cyan,
-    letterSpacing: 1.2,
-  },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: MODERN_COLORS.textPrimary,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  jurnalBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.pill,
-    backgroundColor: MODERN_COLORS.surface,
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.border,
-  },
-  jurnalBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: MODERN_COLORS.textPrimary,
-  },
-  streakBadge: {
-    borderRadius: Radius.pill,
-    overflow: 'hidden',
-  },
-  streakGrad: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 6,
-  },
-  streakText: {
+    letterSpacing: -0.5,
+  } as TextStyle,
+
+  subtitle: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  snapshotSection: {
-    marginBottom: Spacing.lg,
-  },
-  snapshotGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: Spacing.sm,
-  },
-  snapshotCard: {
-    flex: 1,
-    backgroundColor: MODERN_COLORS.surface,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.border,
-    paddingVertical: 14,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  snapshotIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-  },
-  snapshotValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: MODERN_COLORS.textPrimary,
-  },
-  snapshotLabel: {
-    fontSize: 10,
-    color: MODERN_COLORS.textSecondary,
-    marginTop: 4,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  quickAddBtn: {
-    backgroundColor: MODERN_COLORS.cyan,
-    borderRadius: Radius.md,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  quickAddBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#071218',
-  },
-  sectionCard: {
-    backgroundColor: MODERN_COLORS.surface,
+    marginTop: 2,
+  } as TextStyle,
+
+  mapContainer: {
+    height: MAP_HEIGHT,
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.border,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  rankCardCentered: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  rankCenterInfo: {
+    overflow: 'hidden',
+    marginBottom: Spacing.xl,
+    paddingTop: 10,
+    paddingBottom: 20,
+  } as ViewStyle,
+
+  searchContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
     marginBottom: Spacing.md,
-  },
-  rankBadgeText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: MODERN_COLORS.textPrimary,
-    textAlign: 'center',
-  },
-  rankTotalKgText: {
-    fontSize: 13,
-    color: MODERN_COLORS.cyan,
-    fontWeight: '700',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  starsRowCentered: {
+  } as ViewStyle,
+
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    padding: 0,
+  } as TextStyle,
+
+  mapLegend: {
+    position: 'absolute',
+    bottom: 12,
     flexDirection: 'row',
-    gap: 4,
-    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
-  },
-  rankBarContainer: {
-    width: '100%',
-    alignSelf: 'stretch',
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: MODERN_COLORS.textTertiary,
-    letterSpacing: 1,
-  },
-  muscleHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  viewToggleWrap: {
-    flexDirection: 'row',
-    backgroundColor: '#071218',
-    borderRadius: Radius.pill,
-    padding: 3,
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.border,
-  },
-  toggleBtn: {
+    backgroundColor: 'rgba(0,0,0,0.4)',
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderRadius: Radius.pill,
-  },
-  toggleBtnActive: {
-    backgroundColor: MODERN_COLORS.cyan,
-  },
-  toggleBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: MODERN_COLORS.textSecondary,
-  },
-  toggleBtnTextActive: {
-    color: '#071218',
-  },
-  muscleBodyWrap: {
-    alignItems: 'center',
-    marginVertical: Spacing.sm,
-  },
-  muscleLegendRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    marginTop: Spacing.sm,
-    paddingTop: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
+  } as ViewStyle,
+
   legendDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
+    marginRight: 8,
+  } as ViewStyle,
+
   legendText: {
-    fontSize: 11,
-    color: MODERN_COLORS.textSecondary,
-    fontWeight: '600',
-  },
-  questsHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
-  },
-  questsCountText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: MODERN_COLORS.cyan,
-  },
-  bonusBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: MODERN_COLORS.cyanSoft,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-  },
-  bonusBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: MODERN_COLORS.cyan,
-  },
-  questsList: {
-    gap: 8,
-  },
-  questCardExpanded: {
-    backgroundColor: '#071218',
-    borderRadius: Radius.md,
-    padding: Spacing.sm,
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.cyan,
-  },
-  questExpandedTop: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  questIconCol: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  questCircleEmpty: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: MODERN_COLORS.textTertiary,
-  },
-  questDescText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: MODERN_COLORS.textPrimary,
-  },
-  questBarWrap: {
-    height: 6,
-    backgroundColor: '#122B36',
-    borderRadius: Radius.pill,
-    marginTop: 6,
-    marginBottom: 4,
-    overflow: 'hidden',
-  },
-  questBarFill: {
-    height: '100%',
-    backgroundColor: MODERN_COLORS.cyan,
-  },
-  questProgressSub: {
-    fontSize: 11,
-    color: MODERN_COLORS.textSecondary,
-  },
-  questXpBadge: {
-    backgroundColor: MODERN_COLORS.cyanSoft,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.pill,
-  },
-  questXpText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: MODERN_COLORS.cyan,
-  },
-  questCardCompact: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#071218',
-    borderRadius: Radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.border,
-  },
-  questCardDone: {
-    borderColor: 'rgba(0, 191, 255, 0.3)',
-    backgroundColor: 'rgba(0, 191, 255, 0.05)',
-  },
-  questCircleEmptySmall: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: MODERN_COLORS.textTertiary,
-  },
-  questCompactTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: MODERN_COLORS.textPrimary,
-  },
-  questCompactTitleDone: {
-    color: MODERN_COLORS.textSecondary,
-    textDecorationLine: 'line-through',
-  },
-  questCompactProgress: {
-    fontSize: 12,
-    color: MODERN_COLORS.textSecondary,
-    fontWeight: '600',
-  },
-  sessionRowCard: {
-    backgroundColor: '#071218',
-    borderRadius: Radius.md,
-    padding: Spacing.sm,
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.border,
-  },
-  sessionRowTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sessionIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.sm,
-    backgroundColor: MODERN_COLORS.cyanSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sessionName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: MODERN_COLORS.textPrimary,
-  },
-  sessionMeta: {
-    fontSize: 11,
-    color: MODERN_COLORS.textSecondary,
-  },
-  actionIconButton: {
-    padding: 8,
-    borderRadius: Radius.sm,
-    backgroundColor: MODERN_COLORS.cyanSoft,
-  },
-  sessionRowBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
-  },
-  sessionStatLabel: {
-    fontSize: 10,
-    color: MODERN_COLORS.textTertiary,
-    fontWeight: '700',
-  },
-  sessionStatVal: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: MODERN_COLORS.cyan,
-  },
-  sessionStatRank: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: MODERN_COLORS.textPrimary,
-  },
-  catalogHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.xs,
-  },
-  headerLogBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: MODERN_COLORS.cyan,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: Radius.pill,
-  },
-  headerLogBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#071218',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#071218',
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.sm,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.border,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    fontSize: 14,
-    color: MODERN_COLORS.textPrimary,
-  },
-  chipsScroll: {
-    gap: 8,
-    paddingBottom: Spacing.sm,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: Radius.pill,
-    backgroundColor: '#071218',
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.border,
-  },
-  chipActive: {
-    backgroundColor: MODERN_COLORS.cyan,
-    borderColor: MODERN_COLORS.cyan,
-  },
-  chipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: MODERN_COLORS.textSecondary,
-  },
-  chipTextActive: {
-    color: '#071218',
-    fontWeight: '800',
-  },
-  exList: {
-    gap: 8,
-    marginTop: Spacing.xs,
-  },
-  exCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#071218',
-    borderRadius: Radius.md,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.border,
-  },
-  exIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: MODERN_COLORS.cyanSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  exContent: {
-    flex: 1,
-  },
-  exName: {
-    fontSize: 14,
+  } as TextStyle,
+
+  sectionTitle: {
+    fontSize: 17,
     fontWeight: '700',
-    color: MODERN_COLORS.textPrimary,
-  },
-  exMuscles: {
-    fontSize: 11,
-    color: MODERN_COLORS.textSecondary,
-    marginTop: 2,
-  },
-  modalContent: {
-    flex: 1,
-    backgroundColor: MODERN_COLORS.bg,
-    padding: Spacing.lg,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: Spacing.md,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: MODERN_COLORS.textPrimary,
-  },
-  modalSub: {
-    fontSize: 13,
-    color: MODERN_COLORS.cyan,
-  },
-  clashBannerCard: {
-    width: '100%',
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: MODERN_COLORS.gold,
-    padding: Spacing.md,
     marginTop: Spacing.sm,
-    marginBottom: Spacing.xs,
-  },
-  clashBannerHeader: {
+  } as TextStyle,
+
+  hScroll: {
+    paddingBottom: Spacing.lg,
+    gap: Spacing.md,
+  } as ViewStyle,
+  
+  vScroll: {
+    marginTop: Spacing.sm,
+    paddingBottom: Spacing.xl,
+  } as ViewStyle,
+
+  pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  clashIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 215, 0, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  clashBannerTitle: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: MODERN_COLORS.gold,
-    letterSpacing: 0.8,
-  },
-  clashCountdownText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 10,
-  },
-  clashBarWrap: {
-    width: '100%',
-    height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  clashBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  exCardWrap: {
-    backgroundColor: '#071218',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.border,
-    overflow: 'hidden',
-  },
-  exCardWrapExpanded: {
-    borderColor: MODERN_COLORS.cyan,
-    backgroundColor: '#0A1A22',
-  },
-  exQuickBadge: {
-    backgroundColor: MODERN_COLORS.cyanSoft,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: 'rgba(0,191,255,0.25)',
-  },
-  exQuickBadgeText: {
-    fontSize: 11,
+    gap: 6,
+  } as ViewStyle,
+
+  pillText: {
+    fontSize: 13,
     fontWeight: '700',
-    color: MODERN_COLORS.cyan,
-  },
-  inlineEditorBox: {
-    padding: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
-    backgroundColor: 'rgba(0, 191, 255, 0.03)',
-  },
-  inlineSteppersRow: {
+  } as TextStyle,
+
+  verticalCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 12,
-  },
-  stepperCol: {
-    flex: 1,
     alignItems: 'center',
-  },
-  stepperLabel: {
-    fontSize: 11,
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  } as ViewStyle,
+
+  verticalIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.md,
+  } as ViewStyle,
+
+  verticalTextWrap: {
+    flex: 1,
+    justifyContent: 'center',
+  } as ViewStyle,
+
+  verticalName: {
+    fontSize: 16,
     fontWeight: '700',
-    color: MODERN_COLORS.textSecondary,
-    marginBottom: 6,
-  },
+    lineHeight: 22,
+  } as TextStyle,
+
+  verticalSub: {
+    fontSize: 12,
+    marginTop: 2,
+  } as TextStyle,
+
+  verticalAction: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: Spacing.md,
+  } as ViewStyle,
+
+  trackerCardExpanded: {
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: Radius.md,
+    borderBottomRightRadius: Radius.md,
+  } as ViewStyle,
+
+  trackerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  } as TextStyle,
+
+  trackerSubBadge: {
+    fontSize: 13,
+    fontWeight: '700',
+  } as TextStyle,
+
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.sm,
+  } as ViewStyle,
+
+  stepperLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  } as TextStyle,
+
   stepperControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#071218',
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.border,
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-  },
-  stepperBtn: {
-    width: 28,
-    height: 28,
+    gap: Spacing.sm,
+  } as ViewStyle,
+
+  stepBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 6,
-  },
-  stepperBtnText: {
+  } as ViewStyle,
+
+  stepperValueWrap: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    minWidth: 72,
+    justifyContent: 'center',
+    gap: 4,
+  } as ViewStyle,
+
+  stepperValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    textAlign: 'center',
+    minWidth: 40,
+    padding: 0,
+  } as TextStyle,
+
+  stepperSuffix: {
+    fontSize: 12,
+    fontWeight: '600',
+  } as TextStyle,
+
+  ctaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    borderRadius: Radius.pill,
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  } as ViewStyle,
+
+  ctaText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  } as TextStyle,
+
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 56,
+    borderRadius: Radius.pill,
+    gap: Spacing.sm,
+    marginTop: Spacing.lg,
+  } as ViewStyle,
+
+  saveText: {
     fontSize: 16,
     fontWeight: '800',
-    color: MODERN_COLORS.textPrimary,
-  },
-  stepperValText: {
-    minWidth: 32,
-    textAlign: 'center',
-    fontSize: 13,
-    fontWeight: '800',
-    color: MODERN_COLORS.cyan,
-  },
-  stepperInputText: {
-    minWidth: 44,
-    textAlign: 'center',
-    fontSize: 14,
-    fontWeight: '800',
-    color: MODERN_COLORS.cyan,
-    backgroundColor: 'rgba(0,191,255,0.1)',
-    borderRadius: 6,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(0,191,255,0.3)',
-  },
-  inlineEstRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: Radius.sm,
-    paddingVertical: 8,
-    marginBottom: 12,
-  },
-  inlineEstText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: MODERN_COLORS.textPrimary,
-  },
-  inlineActionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  inlineSaveBtn: {
-    flex: 2,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
-  inlineSaveGrad: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    gap: 6,
-  },
-  inlineSaveBtnText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#071218',
-  },
-  inlineDetailBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: '#071218',
-    borderWidth: 1,
-    borderColor: MODERN_COLORS.cyan,
-    borderRadius: Radius.md,
-    paddingVertical: 12,
-  },
-  inlineDetailBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: MODERN_COLORS.cyan,
-  },
+  } as TextStyle,
 });

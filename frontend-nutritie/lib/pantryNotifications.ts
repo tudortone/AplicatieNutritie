@@ -45,13 +45,12 @@ export async function checkAndSchedulePantryExpiryNotification(produse: ProdusCa
       }
     }
 
-    // Filtrăm produsele care expiră în <= 2 zile și nu sunt congelate
+    // Filtrăm produsele care expiră mâine (exact 1 zi rămasă)
     const expiringSoon = produse.filter(
       (p) =>
         !p.is_congelat &&
         typeof p.zile_valabilitate === 'number' &&
-        p.zile_valabilitate <= 2 &&
-        p.zile_valabilitate >= 0
+        p.zile_valabilitate === 1
     );
 
     if (expiringSoon.length === 0) {

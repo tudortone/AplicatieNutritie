@@ -9,6 +9,7 @@ import { Flame, Activity, TrendingUp, Award, Scale, TrendingDown, Sparkles, Plus
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../supabase';
+import { localDayKey } from '../../lib/dateUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Masa } from '../../types';
 import { AddWeightModal } from '../../components/AddWeightModal';
@@ -99,6 +100,8 @@ export default function StatisticiScreen() {
         .from('mese')
         .select('*')
         .eq('user_id', user.id)
+        // Aduce datele din ultimele 7 zile. Supabase va face query bazat pe UTC,
+        // dar filtrarea funcționează deoarece toISOString() ține cont de timpul local.
         .gte('created_at', acum7Zile.toISOString())
         .order('created_at', { ascending: true });
 
@@ -114,8 +117,8 @@ export default function StatisticiScreen() {
         for (let i = 0; i < 7; i++) {
           const d = new Date(acum7Zile);
           d.setDate(d.getDate() + i);
-          const iso = d.toISOString().split('T')[0];
-          const esteAzi = new Date().toISOString().split('T')[0] === iso;
+          const iso = localDayKey(d);
+          const esteAzi = localDayKey(new Date()) === iso;
           
           mapZile[iso] = {
             data: iso,
@@ -129,7 +132,8 @@ export default function StatisticiScreen() {
         }
 
         mese.forEach((m) => {
-          const zi = m.created_at.split('T')[0];
+          // Folosim new Date() pentru a obține data locală din timestamp-ul UTC din Supabase
+          const zi = localDayKey(new Date(m.created_at));
           if (mapZile[zi]) {
             mapZile[zi].calorii += m.calorii || 0;
             mapZile[zi].proteine += m.proteine || 0;
@@ -166,18 +170,22 @@ export default function StatisticiScreen() {
       const storedTinta = await AsyncStorage.getItem('greutateTinta');
       setGreutateTinta(storedTinta ? parseFloat(storedTinta) : 70.0);
 
-      const storedIstoric = await AsyncStorage.getItem('greutate_istoric');
+      const storedIstoric = userMeta.greutate_istoric || await AsyncStorage.getItem('greutate_istoric');
       if (storedIstoric) {
         try {
-          setIstoricGreutate(JSON.parse(storedIstoric));
+          const parsed = typeof storedIstoric === 'string' ? JSON.parse(storedIstoric) : storedIstoric;
+          setIstoricGreutate(parsed);
         } catch {}
       } else {
         const d = new Date();
-        const dataStr = d.toISOString().split('T')[0];
+        const dataStr = localDayKey(d);
         const ziNume = d.toLocaleDateString('ro-RO', { weekday: 'short' }).slice(0, 3);
         const initData = [{ data: dataStr, ziNume, greutate: Wc }];
         setIstoricGreutate(initData);
         await AsyncStorage.setItem('greutate_istoric', JSON.stringify(initData));
+        if (user) {
+          await supabase.auth.updateUser({ data: { greutate_istoric: initData } });
+        }
       }
     } catch (e) {
       console.error('Eroare neașteptată în statistici:', e);
@@ -189,16 +197,20 @@ export default function StatisticiScreen() {
   const salveazaGreutate = async (nouaValoare: number) => {
     await AsyncStorage.setItem('greutate', nouaValoare.toString());
     setGreutateCurenta(nouaValoare);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.auth.updateUser({ data: { greutate: nouaValoare } });
-    }
-    const aziStr = new Date().toISOString().split('T')[0];
+
+    const aziStr = localDayKey(new Date());
     const ziNume = new Date().toLocaleDateString('ro-RO', { weekday: 'short' }).slice(0, 3);
-    const rest = istoricGreutate.filter(i => i.data !== aziStr);
-    const nouIstoric = [...rest, { data: aziStr, ziNume, greutate: nouaValoare }].sort((a,b) => a.data.localeCompare(b.data));
+    const restIstoric = istoricGreutate.filter(i => i.data !== aziStr);
+    const nouIstoric = [...restIstoric, { data: aziStr, ziNume, greutate: nouaValoare }].sort((a, b) => a.data.localeCompare(b.data));
+
     setIstoricGreutate(nouIstoric);
     await AsyncStorage.setItem('greutate_istoric', JSON.stringify(nouIstoric));
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.auth.updateUser({ data: { greutate: nouaValoare, greutate_istoric: nouIstoric } });
+    }
+
     setModalGreutateVisible(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
@@ -262,7 +274,7 @@ export default function StatisticiScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}
         refreshControl={
-          <RefreshControl refreshing={false} onRefresh={fetchStatistici} tintColor={colors.accent} colors={[colors.accent]} />
+          <RefreshControl refreshing={loading} onRefresh={fetchStatistici} tintColor={colors.accent} colors={[colors.accent]} />
         }
       >
         <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
@@ -379,37 +391,52 @@ export default function StatisticiScreen() {
                   </View>
 
                   <View style={styles.chartArea}>
-                    {(zileChart === '7' ? istoricGreutate.slice(-7) : istoricGreutate.slice(-30)).map((zi, index, arr) => {
-                      const minW = Math.min(...arr.map(a => a.greutate)) - 1;
-                      const maxW = Math.max(...arr.map(a => a.greutate)) + 1;
+                    {(() => {
+                      const displayData = zileChart === '7' ? istoricGreutate.slice(-7) : istoricGreutate.slice(-30);
+                      const required = zileChart === '7' ? 7 : 30;
+                      const paddedData: any[] = [...displayData];
+                      while (paddedData.length < required) {
+                        paddedData.unshift({ data: `pad-${paddedData.length}`, ziNume: '', greutate: 0, isPadding: true });
+                      }
+                      
+                      const validData = paddedData.filter(p => !p.isPadding);
+                      const minW = validData.length > 0 ? Math.min(...validData.map(a => a.greutate)) - 1 : 0;
+                      const maxW = validData.length > 0 ? Math.max(...validData.map(a => a.greutate)) + 1 : 100;
                       const range = maxW - minW || 5;
-                      const inaltimeBara = Math.max(((zi.greutate - minW) / range) * 150, 15);
-                      const esteCurenta = index === arr.length - 1;
 
-                      return (
-                        <Animated.View key={zi.data + index} entering={FadeInUp.duration(500).delay(index * 40)} style={styles.barContainer}>
-                          <Text style={[styles.barValue, { color: esteCurenta ? colors.accentSecondary : colors.textPrimary, fontSize: zileChart === '30' ? 8 : 10 }]}>
-                            {zi.greutate}
-                          </Text>
-                          
-                          <View style={styles.barTrack}>
-                            <LinearGradient
-                              colors={esteCurenta ? colors.accentSecondaryGradient : [colors.accentSecondary + '80', colors.accentSecondary + '30']}
-                              start={{ x: 0, y: 1 }}
-                              end={{ x: 0, y: 0 }}
-                              style={[
-                                styles.barFill,
-                                { height: inaltimeBara }
-                              ]}
-                            />
-                          </View>
+                      return paddedData.map((zi, index, arr) => {
+                        if (zi.isPadding) {
+                          return <View key={zi.data + index} style={{ flex: 1 }} />;
+                        }
+                        
+                        const inaltimeBara = Math.max(((zi.greutate - minW) / range) * 150, 15);
+                        const esteCurenta = index === arr.length - 1;
 
-                          <Text style={[styles.barLabel, { color: esteCurenta ? colors.accentSecondary : colors.textSecondary, fontWeight: esteCurenta ? '900' : '600', fontSize: zileChart === '30' ? 9 : 11 }]}>
-                            {zi.ziNume}
-                          </Text>
-                        </Animated.View>
-                      );
-                    })}
+                        return (
+                          <Animated.View key={zi.data + index} entering={FadeInUp.duration(500).delay(index * (zileChart === '30' ? 10 : 40))} style={styles.barContainer}>
+                            <Text style={[styles.barValue, { color: esteCurenta ? colors.accentSecondary : colors.textPrimary, fontSize: zileChart === '30' ? 8 : 10 }]}>
+                              {zi.greutate}
+                            </Text>
+                            
+                            <View style={styles.barTrack}>
+                              <LinearGradient
+                                colors={esteCurenta ? colors.accentSecondaryGradient : [colors.accentSecondary + '80', colors.accentSecondary + '30']}
+                                start={{ x: 0, y: 1 }}
+                                end={{ x: 0, y: 0 }}
+                                style={[
+                                  styles.barFill,
+                                  { height: inaltimeBara }
+                                ]}
+                              />
+                            </View>
+
+                            <Text style={[styles.barLabel, { color: esteCurenta ? colors.accentSecondary : colors.textSecondary, fontWeight: esteCurenta ? '900' : '600', fontSize: zileChart === '30' ? 9 : 11 }]}>
+                              {zi.ziNume}
+                            </Text>
+                          </Animated.View>
+                        );
+                      });
+                    })()}
                   </View>
                 </LinearGradient>
               </BlurView>
@@ -429,14 +456,20 @@ export default function StatisticiScreen() {
                     </View>
                   </View>
 
-                  <View style={[styles.predictBox, { backgroundColor: 'rgba(0,0,0,0.2)', borderColor: 'rgba(255,255,255,0.04)' }]}>
-                    <Text style={[styles.predictDate, { color: colors.accent }]}>🎯 {calculPredicieAI().dataEst}</Text>
-                    <Text style={[styles.predictWeeks, { color: colors.textSecondary }]}>În aproximativ {calculPredicieAI().saptamani} săptămâni</Text>
-                  </View>
-
-                  <Text style={[styles.predictText, { color: colors.textSecondary }]}>
-                    {calculPredicieAI().text}
-                  </Text>
+                  {(() => {
+                    const predictie = calculPredicieAI();
+                    return (
+                      <>
+                        <View style={[styles.predictBox, { backgroundColor: 'rgba(0,0,0,0.2)', borderColor: 'rgba(255,255,255,0.04)' }]}>
+                          <Text style={[styles.predictDate, { color: colors.accent }]}>🎯 {predictie.dataEst}</Text>
+                          <Text style={[styles.predictWeeks, { color: colors.textSecondary }]}>În aproximativ {predictie.saptamani} săptămâni</Text>
+                        </View>
+                        <Text style={[styles.predictText, { color: colors.textSecondary }]}>
+                          {predictie.text}
+                        </Text>
+                      </>
+                    );
+                  })()}
                 </LinearGradient>
               </BlurView>
             </Animated.View>

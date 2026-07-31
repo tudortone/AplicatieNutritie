@@ -73,27 +73,20 @@ export function useMeseAzi(dataSelectata?: Date) {
       let grTinta = userMetadata.grasimiTinta;
       let g = userMetadata.greutate;
 
-      // Fallback la AsyncStorage
-      if (!cTinta) {
-        const storedC = await AsyncStorage.getItem('caloriiTinta');
-        cTinta = storedC ? parseInt(storedC) : 2000;
-      }
-      if (!pTinta) {
-        const storedP = await AsyncStorage.getItem('proteineTinta');
-        pTinta = storedP ? parseInt(storedP) : 150;
-      }
-      if (!cbTinta) {
-        const storedCb = await AsyncStorage.getItem('carbiTinta');
-        cbTinta = storedCb ? parseInt(storedCb) : 250;
-      }
-      if (!grTinta) {
-        const storedGr = await AsyncStorage.getItem('grasimiTinta');
-        grTinta = storedGr ? parseInt(storedGr) : 70;
-      }
-      if (!g) {
-        const storedG = await AsyncStorage.getItem('greutate');
-        g = storedG ? parseInt(storedG) : 75;
-      }
+      // Fallback la AsyncStorage paralelizat
+      const [storedC, storedP, storedCb, storedGr, storedG] = await Promise.all([
+        !cTinta ? AsyncStorage.getItem('caloriiTinta') : Promise.resolve(null),
+        !pTinta ? AsyncStorage.getItem('proteineTinta') : Promise.resolve(null),
+        !cbTinta ? AsyncStorage.getItem('carbiTinta') : Promise.resolve(null),
+        !grTinta ? AsyncStorage.getItem('grasimiTinta') : Promise.resolve(null),
+        !g ? AsyncStorage.getItem('greutate') : Promise.resolve(null)
+      ]);
+      
+      if (!cTinta) cTinta = storedC ? parseInt(storedC) : 2000;
+      if (!pTinta) pTinta = storedP ? parseInt(storedP) : 150;
+      if (!cbTinta) cbTinta = storedCb ? parseInt(storedCb) : 250;
+      if (!grTinta) grTinta = storedGr ? parseInt(storedGr) : 70;
+      if (!g) g = storedG ? parseInt(storedG) : 75;
 
       setCaloriiTinta(Number(cTinta));
       setProteineTinta(Number(pTinta));
@@ -184,7 +177,11 @@ export function useMeseAzi(dataSelectata?: Date) {
         setLoading(false);
       }
     }
-  }, [dateKey, dataSelectata]);
+  // Bug #17: dataSelectata (obiect Date) scos din deps — are identitate nouă la fiecare render dacă
+  // părintele pasează `new Date()` inline, provocând loop infinit de re-fetch.
+  // dateKey (string derivat din dataSelectata) acoperă deja semantica de dată și e stabil.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateKey]);
 
   useEffect(() => {
     isMountedRef.current = true;

@@ -219,15 +219,26 @@ export default function JurnalAntrenamenteScreen() {
                             <View key={i} style={styles.exItem}>
                               <Text style={[styles.exName, { color: colors.textPrimary }]}>{ex.nume}</Text>
                               <View style={styles.seturiWrap}>
-                                {ex.seturi?.map((s, j) => (
-                                  <View key={j} style={[styles.setPill, { backgroundColor: colors.background }]}>
-                                    <Text style={[styles.setPillText, { color: colors.textSecondary }]}>Seria #{s.serie}: </Text>
-                                    <Text style={[styles.setPillVal, { color: colors.accent }]}>{s.repetari} rap</Text>
-                                    {s.greutate && s.greutate > 0 ? (
-                                      <Text style={[styles.setPillVal, { color: colors.textPrimary }]}> × {s.greutate} kg</Text>
-                                    ) : null}
-                                  </View>
-                                ))}
+                                {ex.seturi?.map((s, j) => {
+                                  const isWarmup = s.set_type === 'warmup';
+                                  const isDropset = s.set_type === 'dropset';
+                                  const isFailure = s.set_type === 'failure';
+                                  const typeLabel = isWarmup ? 'W' : isDropset ? 'D' : isFailure ? 'F' : `#${s.serie}`;
+                                  const typeColor = isWarmup ? '#F59E0B' : isDropset ? '#8B5CF6' : isFailure ? '#EF4444' : colors.textSecondary;
+                                  
+                                  return (
+                                    <View key={j} style={[styles.setPill, { backgroundColor: colors.background, borderColor: typeColor, borderWidth: s.set_type && s.set_type !== 'working' ? 1 : 0 }]}>
+                                      <Text style={[styles.setPillText, { color: typeColor }]}>{typeLabel}: </Text>
+                                      <Text style={[styles.setPillVal, { color: colors.accent }]}>{s.repetari} rap</Text>
+                                      {s.greutate && s.greutate > 0 ? (
+                                        <Text style={[styles.setPillVal, { color: colors.textPrimary }]}> × {s.greutate} kg</Text>
+                                      ) : null}
+                                      {s.rpe ? (
+                                        <Text style={[styles.setPillVal, { color: colors.warning, marginLeft: 4, fontSize: 10 }]}>@ {s.rpe} RPE</Text>
+                                      ) : null}
+                                    </View>
+                                  );
+                                })}
                               </View>
                             </View>
                           ))

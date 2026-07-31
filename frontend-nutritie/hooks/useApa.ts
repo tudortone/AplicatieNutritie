@@ -32,10 +32,13 @@ export function useApa() {
   const adaugaPahar = async () => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const next = pahare + 1;
-      setPahareState(next);
-      await AsyncStorage.setItem(getTodayKey(), String(next));
-      return next;
+      let newPahare = pahare;
+      setPahareState(prev => {
+        newPahare = prev + 1;
+        AsyncStorage.setItem(getTodayKey(), String(newPahare)).catch(e => console.error('Eroare la salvarea apei:', e));
+        return newPahare;
+      });
+      return newPahare + 1; // Return optimistic value
     } catch (e) {
       console.error('Eroare la salvarea apei:', e);
       return pahare;
@@ -44,12 +47,14 @@ export function useApa() {
 
   const scadePahar = async () => {
     try {
-      if (pahare <= 0) return 0;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const next = pahare - 1;
-      setPahareState(next);
-      await AsyncStorage.setItem(getTodayKey(), String(next));
-      return next;
+      setPahareState(prev => {
+        if (prev <= 0) return 0;
+        const newPahare = prev - 1;
+        AsyncStorage.setItem(getTodayKey(), String(newPahare)).catch(e => console.error('Eroare la scaderea apei:', e));
+        return newPahare;
+      });
+      return pahare > 0 ? pahare - 1 : 0;
     } catch (e) {
       console.error('Eroare la scăderea apei:', e);
       return pahare;

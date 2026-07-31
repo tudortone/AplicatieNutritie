@@ -18,11 +18,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Check, X, Heart, Trash2, Scale, Search } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../supabase';
 
 import { API_URL } from '../constants/config';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../supabase';
 import { useFavorite } from '../hooks/useFavorite';
 import { useGamificareContext } from '../context/GamificareContext';
 import { Masa, TipMasa, AlimentDetaliat } from '../types';
@@ -39,12 +39,16 @@ export interface AddMealBottomSheetRef {
     carbohidrati: number;
     grasimi: number;
     gramajDefault?: number;
+    /** Dacă provine din cămară, numele produsului pentru deducere automată */
+    pantryProductName?: string;
   }) => void;
   close: () => void;
 }
 
 interface AddMealBottomSheetProps {
   onSuccess?: () => void;
+  /** Callback apelat după salvarea unei mese provenite din cămară */
+  onPantryUsed?: (productName: string) => void;
 }
 
 interface BaseNutrition {
@@ -56,7 +60,7 @@ interface BaseNutrition {
 }
 
 export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBottomSheetProps>(
-  ({ onSuccess }, ref) => {
+  ({ onSuccess, onPantryUsed }, ref) => {
     const { colors } = useTheme();
     const { user } = useAuth();
     const { favorite, addFavorite, removeFavorite, isFavorite } = useFavorite();
@@ -66,6 +70,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const [formSectionY, setFormSectionY] = useState<number>(0);
     const [gramajSectionY, setGramajSectionY] = useState<number>(0);
     const [highlightGramaj, setHighlightGramaj] = useState(false);
+    const pantryProductNameRef = useRef<string | undefined>(undefined);
 
     const snapPoints = useMemo(() => ['75%', '90%'], []);
 
@@ -161,7 +166,12 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
       if (!query.trim()) return;
       setAiEstimating(true);
       try {
-        const token = await AsyncStorage.getItem('token');
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) {
+          Alert.alert('Eroare', 'Nu ești autentificat. Reconectează-te.');
+          return;
+        }
         const res = await fetch(`${API_URL}/api/estimeaza-mancare-text`, {
           method: 'POST',
           headers: {
@@ -248,6 +258,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         setProteine(String(item.proteine));
         setCarbohidrati(String(item.carbohidrati));
         setGrasimi(String(item.grasimi));
+        pantryProductNameRef.current = item.pantryProductName;
 
         setBaseNutrition({
           defaultGrame: defaultGr,
@@ -334,8 +345,6 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           const { error } = await supabase.from('mese').update(payload).eq('id', editingMasaId);
           err = error;
         } else {
-          payload.data = todayStr;
-          payload.ora = oraStr;
           const { error } = await supabase.from('mese').insert(payload);
           err = error;
         }
@@ -350,6 +359,11 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           adaugaProgres('proteine', payload.proteine);
           bottomSheetRef.current?.close();
           onSuccess?.();
+          // Deducere automată din cămară
+          if (pantryProductNameRef.current && onPantryUsed) {
+            onPantryUsed(pantryProductNameRef.current);
+            pantryProductNameRef.current = undefined;
+          }
         }
       } catch {
         Alert.alert("Eroare", "A apărut o problemă neașteptată la salvare.");

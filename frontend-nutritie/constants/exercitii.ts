@@ -1,5 +1,6 @@
 import { classifyMeasurement, type MeasurementSpec } from '../lib/measurement';
-
+import { NEW_EXERCISES } from './new_exercises';
+import { NEW_EXERCISES_V2 } from './new_exercises_v2';
 export type GrupaMusculara = string;
 export type Echipament = string;
 
@@ -56,6 +57,11 @@ export const CATEGORII: CategorieInfo[] = [
   { id: 'cardio', nume: 'Cardio', emoji: '🏃', grupe: ['cardio', 'picioare'] },
   { id: 'full-body', nume: 'Full Body', emoji: '⚡', grupe: ['corp_intreg', 'core', 'umeri', 'picioare'] },
   { id: 'mobilitate', nume: 'Mobilitate', emoji: '🧘', grupe: ['mobilitate', 'femurali', 'coloană'] },
+  // Categorii suplimentare folosite de exerciții
+  { id: 'superior', nume: 'Partea Superioară', emoji: '🔼', grupe: ['piept', 'spate', 'umeri', 'brate'] },
+  { id: 'inferior', nume: 'Partea Inferioară', emoji: '🔽', grupe: ['picioare', 'fesieri', 'gambe'] },
+  { id: 'core', nume: 'Core', emoji: '🎯', grupe: ['abdomeni', 'oblici', 'lombari'] },
+  { id: 'corp_intreg', nume: 'Corp Întreg', emoji: '⚡', grupe: ['full-body', 'core', 'picioare', 'umeri'] },
 ];
 
 export const calculeazaCaloriiArse = (met: number, greutateKg: number, minute: number): number =>
@@ -1233,7 +1239,7 @@ export function deriveMuschiTinta(ex: Exercitiu): Partial<Record<MuscleId, numbe
   return out;
 }
 
-export const EXERCITII_DB: Exercitiu[] = EXERCITII.map((e) => ({
+export const EXERCITII_DB: Exercitiu[] = [...EXERCITII, ...NEW_EXERCISES, ...NEW_EXERCISES_V2].map((e) => ({
   ...e,
   masurare: e.masurare ?? classifyMeasurement(e),
   muschiTinta: e.muschiTinta ?? deriveMuschiTinta(e),
