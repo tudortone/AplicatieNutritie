@@ -3,25 +3,58 @@ import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { RotateCcw } from 'lucide-react-native';
 import { MuscleBody } from './MuscleBody';
 import { normalizeMuscleLoadToIntensity, type MuscleLoadMap } from '@/lib/fitnessEngine';
+import { mapToCanonicalMuscleIds } from '@/lib/muscleMapping';
+import type { MuscleId } from './heatColor';
+
+type IntensityMap = Partial<Record<MuscleId, number>>;
+
+export type MuscleHeatmapSVGProps = {
+  /** Tonaj brut pe muschi (kg). Se normalizeaza logaritmic. */
+  muscleLoad?: MuscleLoadMap;
+  /** Intensitati deja normalizate 0..1, cu chei canonice. Are prioritate. */
+  intensity?: IntensityMap;
+};
+
+const clamp01 = (n: number) => Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0));
+
+/** Chei brute -> MuscleId canonic, pastrand valorile deja normalizate 0..1. */
+function canonicalizeRatios(input: Record<string, number>): IntensityMap {
+  const out: IntensityMap = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) continue;
+    for (const { id, weight } of mapToCanonicalMuscleIds(key)) {
+      out[id] = Math.max(out[id] ?? 0, clamp01(value * weight));
+    }
+  }
+  return out;
+}
 
 /**
- * FIX HARTA (Acasa): componenta construia harta direct din cheile brute ale lui
- * `muscleLoad` ("piept", "chest", "lats"...), dar `MuscleBody` cauta dupa MuscleId
- * canonic ("pectorali", "dorsali"...). Nicio cheie nu se potrivea, deci corpul
- * ramanea complet stins chiar si dupa antrenamente salvate.
- *
- * Acum folosim `normalizeMuscleLoadToIntensity`, care trece fiecare cheie prin
- * maparea unica din lib/muscleMapping.ts si aplica scalare logaritmica pe tonaj
- * absolut. Astfel o sesiune usoara nu mai apare rosu-maxim doar pentru ca este
- * singura din zi (normalizarea veche impartea la maximul local).
+ * FIX HARTA (Acasa):
+ * 1. Componenta construia harta din cheile brute ale lui `muscleLoad` ("piept",
+ *    "chest", "lats"...), dar `MuscleBody` cauta dupa MuscleId canonic
+ *    ("pectorali", "dorsali"...). Nicio cheie nu se potrivea, deci corpul ramanea
+ *    complet stins chiar si dupa antrenamente salvate.
+ * 2. Apelantul (MuscleHeatmap) trimite deja valori normalizate 0..1. Daca le-am fi
+ *    trecut din nou prin scalarea logaritmica pe tonaj, totul ar fi cazut la ~0.08,
+ *    adica tot un corp stins. De aceea detectam formatul valorilor.
  */
-export default function MuscleHeatmapSVG({ muscleLoad }: { muscleLoad: MuscleLoadMap }) {
+export default function MuscleHeatmapSVG({ muscleLoad, intensity }: MuscleHeatmapSVGProps) {
   const [side, setSide] = useState<'front' | 'back'>('front');
 
-  const intensityMap = useMemo(
-    () => normalizeMuscleLoadToIntensity(muscleLoad),
-    [muscleLoad],
-  );
+  const intensityMap = useMemo<IntensityMap>(() => {
+    if (intensity && Object.keys(intensity).length > 0) {
+      return canonicalizeRatios(intensity as Record<string, number>);
+    }
+    const raw = muscleLoad ?? {};
+    const values = Object.values(raw).filter(
+      (v): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0,
+    );
+    if (values.length === 0) return {};
+    // Valori <= 1 => sunt deja intensitati; > 1 => tonaj brut in kg.
+    const isRatio = Math.max(...values) <= 1;
+    return isRatio ? canonicalizeRatios(raw) : normalizeMuscleLoadToIntensity(raw);
+  }, [muscleLoad, intensity]);
 
   const activeCount = useMemo(
     () => Object.values(intensityMap).filter((v) => (v ?? 0) >= 0.05).length,
