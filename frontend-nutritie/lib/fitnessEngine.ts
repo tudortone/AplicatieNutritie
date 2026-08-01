@@ -1,6 +1,18 @@
 
 import { Exercitiu, MuscleActivation } from '../constants/exercitii';
 import { ExercitiuInAntrenament } from '../hooks/useAntrenamente';
+import type { MuscleId } from '../components/fitness/heatColor';
+// FIX: maparea denumire -> MuscleId traia in doua locuri (aici, cu regex-uri, si in
+// components/fitness/exerciseIntensity.ts, cu un dictionar de alias-uri) si cele doua
+// se desincronizasera. Acum exista o singura implementare, in lib/muscleMapping.ts.
+import {
+  mapToCanonicalMuscleIds,
+  toCanonicalMuscle,
+  type CanonicalMuscleWeight,
+} from './muscleMapping';
+
+export { mapToCanonicalMuscleIds, toCanonicalMuscle };
+export type { CanonicalMuscleWeight };
 
 export type MuscleLoadMap = Record<string, number>;
 
@@ -121,7 +133,7 @@ export function computeWorkoutMetrics(
 
       // Încărcătură musculară conform formulei sau proxy
       if (catalogEx?.activation && Object.keys(catalogEx.activation).length > 0) {
-        for (const [mKey, afVal] of Object.entries(catalogEx.activation)) {
+        for (const [mKey] of Object.entries(catalogEx.activation)) {
           const mName = mKey.toLowerCase().trim();
           const loadContrib = setIntensity(
             { reps, greutate: weight, time_seconds: timeSec },
@@ -193,85 +205,6 @@ export function computeWorkoutMetrics(
   };
 }
 
-import { ALL_MUSCLE_IDS } from '../components/fitness/heatColor';
-import type { MuscleId } from '../components/fitness/heatColor';
-
-/**
- * Mapează orice denumire (canonică, din catalog sau în română/engleză) către MuscleId canonic.
- */
-export function mapToCanonicalMuscleIds(key: string): { id: MuscleId; weight: number }[] {
-  const g = key.toLowerCase().trim();
-  // Verificare directă dacă este un MuscleId canonic:
-  // FIX: lista era duplicata manual si putea ramane in urma fata de heatColor.ts
-  // (o denumire nou adaugata acolo nu era recunoscuta aici => muschi mort pe harta).
-  const validIds: MuscleId[] = ALL_MUSCLE_IDS as unknown as MuscleId[];
-  if (validIds.includes(g as MuscleId)) {
-    return [{ id: g as MuscleId, weight: 1.0 }];
-  }
-
-  // Mappings din nume comune / grupe spre MuscleId canonic:
-  // IMPORTANT: specific înainte de generic!
-  if (/pectorali|piept|pectoral/i.test(g)) return [{ id: 'pectorali', weight: 1.0 }];
-  if (/deltoid anterior|umeri anteriori/i.test(g)) return [{ id: 'deltoid_anterior', weight: 1.0 }];
-  if (/deltoid lateral|umeri laterali/i.test(g)) return [{ id: 'deltoid_lateral', weight: 1.0 }];
-  if (/deltoid posterior|umeri posteriori/i.test(g)) return [{ id: 'deltoid_posterior', weight: 1.0 }];
-  if (/^umeri$|deltoizi/i.test(g)) return [
-    { id: 'deltoid_anterior', weight: 0.8 },
-    { id: 'deltoid_lateral', weight: 0.8 },
-    { id: 'deltoid_posterior', weight: 0.5 },
-  ];
-  // antrebrate / antebraț trebuie să vină ÎNAINTE de brate/brațe
-  if (/antebrate|antebraț|brahioradial/i.test(g)) return [{ id: 'antebrate', weight: 1.0 }];
-  if (/biceps/i.test(g)) return [{ id: 'biceps', weight: 1.0 }];
-  if (/triceps/i.test(g)) return [{ id: 'triceps', weight: 1.0 }];
-  // Generic: brate/brațe/brahial → distribuie la biceps, triceps și antebraț
-  if (/^brate$|^brațe$|brahial/i.test(g)) return [
-    { id: 'biceps', weight: 0.7 },
-    { id: 'triceps', weight: 0.7 },
-    { id: 'antebrate', weight: 0.4 },
-  ];
-  if (/abdomen|abdomeni|core/i.test(g)) return [{ id: 'abdomen', weight: 1.0 }];
-  if (/oblici/i.test(g)) return [{ id: 'oblici', weight: 0.85 }];
-  if (/trapez/i.test(g)) return [{ id: 'trapez', weight: 0.85 }];
-  // Specific: "spate" ca grup generic → distribuie
-  if (/^spate$/i.test(g)) return [
-    { id: 'dorsali', weight: 1.0 },
-    { id: 'trapez', weight: 0.6 },
-    { id: 'romboizi', weight: 0.6 },
-    { id: 'lombari', weight: 0.4 },
-  ];
-  if (/dorsali/i.test(g)) return [{ id: 'dorsali', weight: 1.0 }];
-  if (/lombari|coloană/i.test(g)) return [{ id: 'lombari', weight: 0.8 }];
-  if (/romboizi/i.test(g)) return [{ id: 'romboizi', weight: 0.75 }];
-  if (/fesieri|șolduri/i.test(g)) return [{ id: 'fesieri', weight: 0.9 }];
-  // Specific: "picioare" generic → distribuie
-  if (/^picioare$/i.test(g)) return [
-    { id: 'cvadriceps', weight: 1.0 },
-    { id: 'ischiogambieri', weight: 0.7 },
-    { id: 'fesieri', weight: 0.7 },
-    { id: 'gambe', weight: 0.4 },
-  ];
-  if (/cvadriceps/i.test(g)) return [{ id: 'cvadriceps', weight: 1.0 }];
-  if (/ischiogambieri|femurali/i.test(g)) return [{ id: 'ischiogambieri', weight: 0.9 }];
-  if (/gambe/i.test(g)) return [{ id: 'gambe', weight: 0.8 }];
-  // abductori INAINTE de adductori (altfel regex-ul /adductori/ prinde și "abductori")
-  if (/abductori|fesier mijlociu/i.test(g)) return [{ id: 'abductori', weight: 1.0 }];
-  if (/adductori/i.test(g)) return [{ id: 'adductori', weight: 0.7 }];
-  // Chei non-musculare: nu genereaza incarcare, dar nici avertisment in consola.
-  if (/mobilitate|stretching|incalzire|echilibru/i.test(g)) return [];
-  if (/full-body|corp_intreg|cardio/i.test(g)) return [
-    { id: 'cvadriceps', weight: 0.7 },
-    { id: 'pectorali', weight: 0.6 },
-    { id: 'dorsali', weight: 0.6 },
-    { id: 'abdomen', weight: 0.6 },
-  ];
-
-  if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    console.warn('[muscle] cheie nemapată:', g);
-  }
-  return [];
-}
-
 export function computeDailyMuscleIntensity(
   sesiuniAzi: Array<{ exercitiuId: string; serii: number; volumKg: number; durataSec: number }>,
   db: Exercitiu[]
@@ -304,7 +237,7 @@ export function normalizeMuscleLoadToIntensity(
 ): Partial<Record<MuscleId, number>> {
   const out: Partial<Record<MuscleId, number>> = {};
   if (!muscleLoad) return out;
-  
+
   const acc: Record<string, number> = {};
   for (const [key, val] of Object.entries(muscleLoad)) {
     if (val <= 0) continue;
