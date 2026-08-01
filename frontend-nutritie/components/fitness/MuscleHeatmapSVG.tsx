@@ -1,37 +1,43 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { RotateCcw } from 'lucide-react-native';
 import { MuscleBody } from './MuscleBody';
-import type { MuscleLoadMap } from '@/lib/fitnessEngine';
+import { normalizeMuscleLoadToIntensity, type MuscleLoadMap } from '@/lib/fitnessEngine';
 
+/**
+ * FIX HARTA (Acasa): componenta construia harta direct din cheile brute ale lui
+ * `muscleLoad` ("piept", "chest", "lats"...), dar `MuscleBody` cauta dupa MuscleId
+ * canonic ("pectorali", "dorsali"...). Nicio cheie nu se potrivea, deci corpul
+ * ramanea complet stins chiar si dupa antrenamente salvate.
+ *
+ * Acum folosim `normalizeMuscleLoadToIntensity`, care trece fiecare cheie prin
+ * maparea unica din lib/muscleMapping.ts si aplica scalare logaritmica pe tonaj
+ * absolut. Astfel o sesiune usoara nu mai apare rosu-maxim doar pentru ca este
+ * singura din zi (normalizarea veche impartea la maximul local).
+ */
 export default function MuscleHeatmapSVG({ muscleLoad }: { muscleLoad: MuscleLoadMap }) {
   const [side, setSide] = useState<'front' | 'back'>('front');
 
-  const intensityMap = React.useMemo(() => {
-    const map: Record<string, number> = {};
-    if (!muscleLoad) return map;
-    const values = Object.values(muscleLoad).filter((v): v is number => typeof v === 'number' && v > 0);
-    const maxVal = values.length > 0 ? Math.max(...values) : 1;
-    for (const [k, v] of Object.entries(muscleLoad)) {
-      if (typeof v === 'number' && v > 0) {
-        map[k] = Math.min(1, v / Math.max(1, maxVal));
-      }
-    }
-    return map;
-  }, [muscleLoad]);
+  const intensityMap = useMemo(
+    () => normalizeMuscleLoadToIntensity(muscleLoad),
+    [muscleLoad],
+  );
 
-  const activeMuscles = React.useMemo(() => {
-    return Object.keys(intensityMap).filter((k) => (intensityMap[k] ?? 0) > 0);
-  }, [intensityMap]);
+  const activeCount = useMemo(
+    () => Object.values(intensityMap).filter((v) => (v ?? 0) >= 0.05).length,
+    [intensityMap],
+  );
 
   return (
     <View style={styles.wrap}>
       <TouchableOpacity
-        onPress={() => setSide(s => s === 'front' ? 'back' : 'front')}
+        onPress={() => setSide((s) => (s === 'front' ? 'back' : 'front'))}
         style={styles.toggle}
         activeOpacity={0.8}
+        accessibilityRole='button'
+        accessibilityLabel={side === 'front' ? 'Arată spatele' : 'Arată fața'}
       >
-        <RotateCcw size={14} color="#00BFFF" />
+        <RotateCcw size={14} color='#00BFFF' />
         <Text style={styles.toggleText}>{side === 'front' ? 'FAȚĂ' : 'SPATE'}</Text>
       </TouchableOpacity>
 
@@ -41,6 +47,12 @@ export default function MuscleHeatmapSVG({ muscleLoad }: { muscleLoad: MuscleLoa
         width={280}
         height={340}
       />
+
+      {activeCount > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{activeCount} mușchi lucrați</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -54,10 +66,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-  },
-  svg: {
-    width: '100%',
-    height: '100%',
   },
   toggle: {
     position: 'absolute',
@@ -78,5 +86,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#00BFFF',
+  },
+  badge: {
+    position: 'absolute',
+    bottom: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
   },
 });
