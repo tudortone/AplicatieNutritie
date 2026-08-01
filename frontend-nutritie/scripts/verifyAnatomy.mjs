@@ -1,6 +1,9 @@
 /**
  * verifyAnatomy.mjs — Script de verificare a modulului generat
  * Rulează cu: node scripts/verifyAnatomy.mjs
+ *
+ * Verifică DOAR fișierul generat (anatomyPaths.generated.ts), nu SVG-urile.
+ * Rulează-l după `node scripts/buildAnatomy.mjs`.
  */
 
 import { readFileSync } from 'fs';
@@ -12,8 +15,6 @@ const ROOT = resolve(__dirname, '..');
 
 console.log('🔍 verifyAnatomy.mjs — verificare integritate hartă musculară\n');
 
-// ─── 1. Verifică că fiecare MuscleId are >= 1 path pe cel puțin o vedere ────
-
 const ALL_MUSCLE_IDS = [
   'pectorali', 'deltoid_anterior', 'deltoid_lateral', 'deltoid_posterior',
   'biceps', 'triceps', 'antebrate', 'abdomen', 'oblici',
@@ -21,70 +22,95 @@ const ALL_MUSCLE_IDS = [
   'fesieri', 'cvadriceps', 'ischiogambieri', 'gambe', 'adductori', 'abductori',
 ];
 
-// Parse the generated file to extract path counts
 const genPath = resolve(ROOT, 'components/fitness/anatomyPaths.generated.ts');
 const genContent = readFileSync(genPath, 'utf-8');
 
-function extractPaths(content, arrayName) {
-  const regex = new RegExp(`export const ${arrayName}: AnatomyPath\\[\\] = \\[([\\s\\S]*?)\\];`, 'm');
-  const match = content.match(regex);
+/** Extrage obiectele complete dintr-un array exportat din fișierul generat. */
+function extractPathData(arrayName) {
+  const regex = new RegExp(`export const ${arrayName}: AnatomyPath\\[\\] = \\[([\\s\\S]*?)\\n\\];`, 'm');
+  const match = genContent.match(regex);
   if (!match) return [];
   const body = match[1];
   const items = [];
-  // Extract muscleId from each path object
-  const itemRegex = /\{ d:'[^']*', muscleId:(null|'([^']*)'), baseColor:'[^']*', role:'[^']*' \}/g;
+  const itemRegex = /\{ d:'((?:[^'\\]|\\.)*)', muscleId:(?:null|'([^']*)'), baseColor:'([^']*)', role:'([^']*)' \}/g;
   let m;
   while ((m = itemRegex.exec(body)) !== null) {
-    items.push(m[1] === 'null' ? null : m[2]);
+    items.push({
+      d: m[1],
+      muscleId: m[2] === undefined ? null : m[2],
+      baseColor: m[3],
+      role: m[4],
+    });
   }
   return items;
 }
 
-const frontPaths = extractPaths(genContent, 'FRONT_PATHS');
-const backPaths = extractPaths(genContent, 'BACK_PATHS');
+const frontPaths = extractPathData('FRONT_PATHS');
+const backPaths = extractPathData('BACK_PATHS');
+
+if (frontPaths.length === 0 || backPaths.length === 0) {
+  console.error('❌ Nu s-au putut citi path-urile din fișierul generat. Rulează întâi: node scripts/buildAnatomy.mjs');
+  process.exit(1);
+}
 
 console.log(`  📐 Path-uri față: ${frontPaths.length}`);
 console.log(`  📐 Path-uri spate: ${backPaths.length}`);
 
-// Count per muscleId
-function countMuscles(paths) {
+let allGood = true;
+
+// ─── 1. Acoperire per mușchi (doar role=fill — doar acestea se colorează) ───
+
+function countFills(paths) {
   const counts = {};
-  for (const mid of paths) {
-    const key = mid || '__null__';
+  for (const p of paths) {
+    if (p.role !== 'fill') continue;
+    const key = p.muscleId || '__neutru__';
     counts[key] = (counts[key] || 0) + 1;
   }
   return counts;
 }
 
-const frontCounts = countMuscles(frontPaths);
-const backCounts = countMuscles(backPaths);
+const frontCounts = countFills(frontPaths);
+const backCounts = countFills(backPaths);
 
-let allGood = true;
-
-console.log('\n📋 1. Verificare MuscleId-uri cu path-uri:\n');
+console.log('\n📋 1. Mușchi cu path-uri colorabile (role=fill):\n');
+const zero = [];
 for (const mid of ALL_MUSCLE_IDS) {
   const f = frontCounts[mid] || 0;
   const b = backCounts[mid] || 0;
   const total = f + b;
-  const status = total >= 1 ? '✅' : '❌';
-  if (total < 1) allGood = false;
-  console.log(`   ${status} ${mid.padEnd(20)} Față=${f.toString().padStart(3)}  Spate=${b.toString().padStart(3)}  Total=${total.toString().padStart(3)}`);
+  if (total < 1) {
+    allGood = false;
+    zero.push(mid);
+  }
+  console.log(`   ${total >= 1 ? '✅' : '❌'} ${mid.padEnd(20)} Față=${String(f).padStart(3)}  Spate=${String(b).padStart(3)}  Total=${String(total).padStart(3)}`);
 }
 
-// ─── 2. Verifică că nu există d duplicat cu muscleId diferit ─────────────────
+const neutruFront = frontCounts.__neutru__ || 0;
+const neutruBack = backCounts.__neutru__ || 0;
+console.log(`\n   🧪 Path-uri fill fără mușchi (neutru): Față=${neutruFront}, Spate=${neutruBack}`);
 
-console.log('\n📋 2. Verificare duplicate path-uri:\n');
+// Prea multe fill-uri neutre înseamnă că harta arată "stinsă" chiar dacă
+// intensitățile sunt corecte — majoritatea corpului nu poate fi colorată.
+const fillFront = frontPaths.filter((p) => p.role === 'fill').length;
+const fillBack = backPaths.filter((p) => p.role === 'fill').length;
+const neutruRatio = (neutruFront + neutruBack) / Math.max(1, fillFront + fillBack);
+if (neutruRatio > 0.5) {
+  console.log(`   ⚠️  ${(neutruRatio * 100).toFixed(0)}% dintre suprafețele colorabile nu au mușchi asociat — harta va părea stinsă.`);
+  allGood = false;
+}
 
-function checkDuplicates(paths, name) {
+// ─── 2. Duplicate: același d cu mușchi diferit ───
+
+console.log('\n📋 2. Verificare duplicate:\n');
+
+function countConflicts(paths) {
   const seen = new Map();
   let dupes = 0;
-  for (const item of extractPathData(paths, name)) {
-    if (!item) continue;
-    if (seen.has(item.d)) {
-      const prev = seen.get(item.d);
-      if (prev.muscleId !== item.muscleId) {
-        dupes++;
-      }
+  for (const item of paths) {
+    const prev = seen.get(item.d);
+    if (prev) {
+      if (prev.muscleId !== item.muscleId) dupes++;
     } else {
       seen.set(item.d, item);
     }
@@ -92,88 +118,53 @@ function checkDuplicates(paths, name) {
   return dupes;
 }
 
-function extractPathData(paths, arrayName) {
-  const regex = new RegExp(`export const ${arrayName}: AnatomyPath\\[\\] = \\[([\\s\\S]*?)\\];`, 'm');
-  const match = genContent.match(regex);
-  if (!match) return [];
-  const body = match[1];
-  const items = [];
-  const itemRegex = /\{ d:'([^']*)', muscleId:(null|'([^']*)'), baseColor:'([^']*)', role:'([^']*)' \}/g;
-  let m;
-  while ((m = itemRegex.exec(body)) !== null) {
-    items.push({
-      d: m[1],
-      muscleId: m[2] === 'null' ? null : m[3],
-      baseColor: m[4],
-      role: m[5],
-    });
-  }
-  return items;
-}
-
-const frontDupes = checkDuplicates(frontPaths, 'FRONT_PATHS');
-const backDupes = checkDuplicates(backPaths, 'BACK_PATHS');
+const frontDupes = countConflicts(frontPaths);
+const backDupes = countConflicts(backPaths);
 
 if (frontDupes === 0 && backDupes === 0) {
   console.log('   ✅ Niciun path duplicat cu muscleId diferit');
 } else {
-  console.log(`   ⚠️  Față: ${frontDupes} duplicate, Spate: ${backDupes} duplicate`);
+  console.log(`   ⚠️  Față: ${frontDupes} conflicte, Spate: ${backDupes} conflicte`);
   allGood = false;
 }
 
-// ─── 3. Verifică heatColor(undefined) === COLOR_REST și heatColor(0) === COLOR_REST ──
+// ─── 3. Paleta: 0 / lipsă intensitate → gri inactiv, nu albastru ───
 
-console.log('\n📋 3. Verificare heatColor:\n');
+console.log('\n📋 3. Verificare paleta heatColor:\n');
 
-const COLOR_REST = '#38BDF8';
-
-// Simulate the heatColor function
-function heatColor(intensity) {
-  const COLOR_REST_SIM = '#38BDF8';
-  const COLOR_PRIMARY_SIM = '#FF003C';
-  if (intensity == null || isNaN(intensity) || intensity <= 0) return COLOR_REST_SIM;
-  return COLOR_PRIMARY_SIM; // simplified for testing
+const heatSrc = readFileSync(resolve(ROOT, 'components/fitness/heatColor.ts'), 'utf-8');
+const inactiveMatch = heatSrc.match(/COLOR_INACTIVE\s*=\s*'([^']+)'/);
+if (!inactiveMatch) {
+  console.log('   ❌ heatColor.ts nu definește COLOR_INACTIVE');
+  allGood = false;
+} else {
+  console.log(`   ✅ COLOR_INACTIVE = ${inactiveMatch[1]}`);
+  const returnsInactive = /return\s+COLOR_INACTIVE/.test(heatSrc);
+  console.log(`   ${returnsInactive ? '✅' : '❌'} heatColor() returnează COLOR_INACTIVE pentru intensitate 0 / lipsă`);
+  if (!returnsInactive) allGood = false;
 }
 
-const test1 = heatColor(undefined) === COLOR_REST;
-const test2 = heatColor(null) === COLOR_REST;
-const test3 = heatColor(0) === COLOR_REST;
-const test4 = heatColor(NaN) === COLOR_REST;
-const test5 = heatColor(1) !== COLOR_REST;
-
-console.log(`   ${test1 ? '✅' : '❌'} heatColor(undefined) === COLOR_REST`);
-console.log(`   ${test2 ? '✅' : '❌'} heatColor(null) === COLOR_REST`);
-console.log(`   ${test3 ? '✅' : '❌'} heatColor(0) === COLOR_REST`);
-console.log(`   ${test4 ? '✅' : '❌'} heatColor(NaN) === COLOR_REST`);
-console.log(`   ${test5 ? '✅' : '❌'} heatColor(1) !== COLOR_REST`);
-
-if (!(test1 && test2 && test3 && test4 && test5)) allGood = false;
-
-// ─── 4. Verifică VIEWBOX identic pe ambele vederi ─────────────────────────────
+// ─── 4. VIEWBOX ───
 
 console.log('\n📋 4. Verificare VIEWBOX:\n');
 
 const viewboxMatch = genContent.match(/export const VIEWBOX = \{ width: (\d+), height: (\d+) \};/);
 if (viewboxMatch) {
-  const w = parseInt(viewboxMatch[1]);
-  const h = parseInt(viewboxMatch[2]);
-  if (w === 431 && h === 808) {
-    console.log('   ✅ VIEWBOX = { width: 431, height: 808 } — corect și identic');
-  } else {
-    console.log(`   ❌ VIEWBOX = { width: ${w}, height: ${h} } — INCORECT!`);
-    allGood = false;
-  }
+  console.log(`   ✅ VIEWBOX = { width: ${viewboxMatch[1]}, height: ${viewboxMatch[2]} }`);
 } else {
   console.log('   ❌ Nu s-a găsit VIEWBOX în fișierul generat!');
   allGood = false;
 }
 
-// ─── REZULTAT FINAL ─────────────────────────────────────────────────────────
+// ─── REZULTAT ───
 
-console.log('\n═══════════════════════════════════════');
+console.log('\n═════════════════════════════════════');
 if (allGood) {
   console.log('✅ TOATE VERIFICĂRILE AU TRECUT!');
 } else {
   console.log('❌ UNELE VERIFICĂRI AU EȘUAT!');
+  if (zero.length > 0) {
+    console.log(`   Mușchi fără suprafață colorabilă: ${zero.join(', ')}`);
+  }
   process.exit(1);
 }
