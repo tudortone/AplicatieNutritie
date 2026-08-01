@@ -1,40 +1,36 @@
 import React from 'react';
-import { View, ViewStyle, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, type StyleProp, type ViewStyle, StyleSheet } from 'react-native';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 export interface SafeAreaBottomWrapperProps {
   children: React.ReactNode;
-  style?: ViewStyle | ViewStyle[];
+  style?: StyleProp<ViewStyle>;
+  /** Spațiu suplimentar după bara de tab; implicit 24 px. */
   extraBottomOffset?: number;
+  /** Folosește false doar pentru ecrane care nu sunt randate într-un navigator tab. */
+  includeTabBar?: boolean;
 }
 
 /**
- * MODULE 1: GLOBAL UI LAYOUT FIX (Bottom Navigation Overlap)
- * Wraps main screen content to account for the absolute bottom tab height.
- * Uses useSafeAreaInsets from react-native-safe-area-context + global paddingBottom: insets.bottom + 60.
+ * Wrapper compatibil pentru ecranele vechi. Înălțimea este derivată din aceeași
+ * sursă ca tab-bar-ul și se actualizează la resize/split-screen.
  */
 export function SafeAreaBottomWrapper({
   children,
   style,
-  extraBottomOffset = 60,
+  extraBottomOffset = 24,
+  includeTabBar = true,
 }: SafeAreaBottomWrapperProps) {
-  const insets = useSafeAreaInsets();
+  const { bottomInset, tabBarHeight } = useResponsiveLayout();
+  const baseBottom = includeTabBar ? tabBarHeight : bottomInset;
 
   return (
-    <View
-      style={[
-        styles.container,
-        style,
-        { paddingBottom: insets.bottom + extraBottomOffset },
-      ]}
-    >
+    <View style={[styles.container, style, { paddingBottom: baseBottom + extraBottomOffset }]}>
       {children}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
 });
