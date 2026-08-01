@@ -609,7 +609,7 @@ export default function ChatScreen() {
                 multiline
                 maxLength={1000}
                 returnKeyType="send"
-                onSubmitEditing={trimiteMesaj}
+                onSubmitEditing={() => { if (!loadingChat && chatInput.trim()) trimiteMesaj(); }}
                 blurOnSubmit={false}
               />
               <TouchableOpacity

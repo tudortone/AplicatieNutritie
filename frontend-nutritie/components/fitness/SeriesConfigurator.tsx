@@ -3,7 +3,7 @@
  * Conform specificației NutriAI v6 (Secțiunea 7.3)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
 import { Minus, Plus, AlertTriangle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -89,12 +89,20 @@ export function SeriesConfigurator({ spec, value, onChange }: Props) {
   const { colors } = useTheme();
   const notify = useNotify();
   const [limitWarning, setLimitWarning] = useState<string | null>(null);
+  const warningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (warningTimer.current) clearTimeout(warningTimer.current);
+    };
+  }, []);
 
   const triggerWarning = (msg: string) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     notify.warning('Limita maximă atinsă', msg);
     setLimitWarning(msg);
-    setTimeout(() => setLimitWarning(null), 3500);
+    if (warningTimer.current) clearTimeout(warningTimer.current);
+    warningTimer.current = setTimeout(() => setLimitWarning(null), 3500);
   };
 
   const set = (patch: Partial<SeriesValue>) => onChange({ ...value, ...patch });
@@ -200,9 +208,9 @@ export function SeriesConfigurator({ spec, value, onChange }: Props) {
         )}
       </View>
       {limitWarning ? (
-        <View style={styles.errorBox}>
-          <AlertTriangle size={14} color="#FF003C" />
-          <Text style={styles.errorText}>{limitWarning}</Text>
+        <View style={[styles.errorBox, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}>
+          <AlertTriangle size={14} color={colors.danger} />
+          <Text style={[styles.errorText, { color: colors.danger }]}>{limitWarning}</Text>
         </View>
       ) : null}
     </View>
@@ -274,8 +282,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FF003C15',
-    borderColor: '#FF003C44',
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -283,7 +289,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   errorText: {
-    color: '#FF003C',
     fontSize: 12,
     fontWeight: '700',
   },

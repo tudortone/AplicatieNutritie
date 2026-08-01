@@ -12,6 +12,7 @@ import Animated, { FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated'
 import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const getFriendlyErrorMessage = (rawMsg: string): string => {
   const m = rawMsg.toLowerCase();
@@ -35,6 +36,7 @@ const getFriendlyErrorMessage = (rawMsg: string): string => {
 
 export default function AuthScreen() {
   const { colors } = useTheme();
+  const { contentMaxWidth, horizontalPadding, fontScale, isTablet } = useResponsiveLayout();
   const [email, setEmail] = useState('');
   const [parola, setParola] = useState('');
   const [loading, setLoading] = useState(false);
@@ -167,14 +169,14 @@ export default function AuthScreen() {
         </Animated.View>
 
         {/* Form card */}
-        <Animated.View entering={FadeInDown.duration(700).delay(400).springify()} style={[styles.formCard, { borderColor: colors.cardBorder }]}>
+        <Animated.View entering={FadeInDown.duration(700).delay(400).springify()} style={[styles.formCard, { borderColor: colors.cardBorder, maxWidth: contentMaxWidth }]}>
           <BlurView intensity={25} tint="dark" style={styles.formBlur}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.formGrad}>
 
               <Text style={[styles.formTitle, { color: colors.textPrimary }]}>{isSignUp ? 'Creare cont nou' : 'Bun venit înapoi'}</Text>
 
               {/* Email */}
-              <View style={styles.inputWrap}>
+              <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}>
                 <View style={styles.inputIconWrap}>
                   <Mail size={18} color={colors.textSecondary} />
                 </View>
@@ -199,7 +201,7 @@ export default function AuthScreen() {
               </View>
 
               {/* Password */}
-              <View style={[styles.inputWrap, authError ? { borderColor: '#FF4D4D' } : {}]}>
+              <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: authError ? colors.danger : colors.inputBorder }]}>
                 <View style={styles.inputIconWrap}>
                   <Lock size={18} color={colors.textSecondary} />
                 </View>
@@ -222,7 +224,7 @@ export default function AuthScreen() {
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
-                  style={{ padding: 10, marginRight: 6 }}
+                  style={{ padding: 14, marginRight: 2 }}
                 >
                   {showPassword ? (
                     <EyeOff size={18} color={colors.textSecondary} />
@@ -234,39 +236,39 @@ export default function AuthScreen() {
 
               {/* Password Requirements (doar la înregistrare) */}
               {isSignUp && (
-                <Animated.View entering={FadeInDown.duration(350)} style={styles.passwordRulesBox}>
+                <Animated.View entering={FadeInDown.duration(350)} style={[styles.passwordRulesBox, { backgroundColor: colors.overlayLight, borderColor: colors.overlayStrong }]}>
                   <Text style={[styles.passwordRulesHeader, { color: colors.textSecondary }]}>
                     Cerințe parolă:
                   </Text>
                   <View style={styles.ruleRow}>
                     {isMinLength ? (
-                      <CheckCircle2 size={16} color="#4ADE80" />
+                      <CheckCircle2 size={16} color={colors.success} />
                     ) : (
-                      <Circle size={16} color="#FF4D4D" />
+                      <Circle size={16} color={colors.danger} />
                     )}
-                    <Text style={[styles.ruleText, { color: isMinLength ? '#4ADE80' : '#FF4D4D' }]}>
+                    <Text style={[styles.ruleText, { color: isMinLength ? colors.success : colors.danger }]}>
                       Minim 8 caractere
                     </Text>
                   </View>
 
                   <View style={styles.ruleRow}>
                     {hasUpperCase ? (
-                      <CheckCircle2 size={16} color="#4ADE80" />
+                      <CheckCircle2 size={16} color={colors.success} />
                     ) : (
-                      <Circle size={16} color="#FF4D4D" />
+                      <Circle size={16} color={colors.danger} />
                     )}
-                    <Text style={[styles.ruleText, { color: hasUpperCase ? '#4ADE80' : '#FF4D4D' }]}>
+                    <Text style={[styles.ruleText, { color: hasUpperCase ? colors.success : colors.danger }]}>
                       O literă mare (A-Z)
                     </Text>
                   </View>
 
                   <View style={styles.ruleRow}>
                     {hasNumber ? (
-                      <CheckCircle2 size={16} color="#4ADE80" />
+                      <CheckCircle2 size={16} color={colors.success} />
                     ) : (
-                      <Circle size={16} color="#FF4D4D" />
+                      <Circle size={16} color={colors.danger} />
                     )}
-                    <Text style={[styles.ruleText, { color: hasNumber ? '#4ADE80' : '#FF4D4D' }]}>
+                    <Text style={[styles.ruleText, { color: hasNumber ? colors.success : colors.danger }]}>
                       O cifră (0-9)
                     </Text>
                   </View>
@@ -275,9 +277,9 @@ export default function AuthScreen() {
 
               {/* Error Banner */}
               {authError && (
-                <Animated.View entering={FadeInDown.duration(300)} style={styles.errorBanner}>
-                  <AlertCircle size={18} color="#FF4D4D" style={{ marginRight: 8 }} />
-                  <Text style={styles.errorText}>{authError}</Text>
+                <Animated.View entering={FadeInDown.duration(300)} style={[styles.errorBanner, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}>
+                  <AlertCircle size={18} color={colors.danger} style={{ marginRight: 8 }} />
+                  <Text style={[styles.errorText, { color: colors.danger }]}>{authError}</Text>
                 </Animated.View>
               )}
 
@@ -324,9 +326,9 @@ export default function AuthScreen() {
               </TouchableOpacity>
 
               <View style={styles.dividerWrap}>
-                <View style={[styles.dividerLine, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+                <View style={[styles.dividerLine, { backgroundColor: colors.overlayStrong }]} />
                 <Text style={[styles.dividerText, { color: colors.textSecondary }]}>sau</Text>
-                <View style={[styles.dividerLine, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+                <View style={[styles.dividerLine, { backgroundColor: colors.overlayStrong }]} />
               </View>
 
               <View style={styles.oauthWrap}>
@@ -367,7 +369,7 @@ const styles = StyleSheet.create({
   formGrad: { padding: 28 },
   formTitle: { fontSize: 20, fontWeight: '800', marginBottom: 24, letterSpacing: -0.3 },
 
-  inputWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginBottom: 14, paddingHorizontal: 16 },
+  inputWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 18, borderWidth: 1, marginBottom: 14, paddingHorizontal: 16 },
   inputIconWrap: { marginRight: 12 },
   input: { flex: 1, paddingVertical: 18, fontSize: 16, fontWeight: '500' },
 
@@ -378,7 +380,7 @@ const styles = StyleSheet.create({
   toggleBtn: { padding: 16, alignItems: 'center', marginTop: 8 },
   toggleText: { fontSize: 15, fontWeight: '500' },
   toggleAccent: { fontWeight: '700' },
-  forgotBtn: { alignSelf: 'flex-end', marginBottom: 14, paddingVertical: 4 },
+  forgotBtn: { alignSelf: 'flex-end', marginBottom: 14, paddingVertical: 8 },
   forgotText: { fontSize: 13, fontWeight: '700' },
   dividerWrap: { flexDirection: 'row', alignItems: 'center', marginVertical: 18, gap: 12 },
   dividerLine: { flex: 1, height: 1 },
@@ -386,10 +388,10 @@ const styles = StyleSheet.create({
   oauthWrap: { flexDirection: 'row', gap: 12 },
   oauthBtn: { flex: 1, height: 50, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
   oauthBtnText: { fontSize: 15, fontWeight: '700' },
-  passwordRulesBox: { backgroundColor: 'rgba(255, 255, 255, 0.03)', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.06)', gap: 8 },
+  passwordRulesBox: { borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, gap: 8 },
   passwordRulesHeader: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ruleText: { fontSize: 13, fontWeight: '600' },
-  errorBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255, 77, 77, 0.12)', borderWidth: 1, borderColor: 'rgba(255, 77, 77, 0.3)', borderRadius: 14, padding: 12, marginBottom: 14 },
-  errorText: { flex: 1, color: '#FF4D4D', fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 12, marginBottom: 14 },
+  errorText: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
 });

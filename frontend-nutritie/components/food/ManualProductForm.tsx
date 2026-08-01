@@ -101,7 +101,7 @@ export function ManualProductForm({
       brand: brand.trim() || undefined,
       barcode: barcode.trim() || undefined,
       servingLabel: portieLabel.trim() || undefined,
-      servingGrams: parseNum(portieGrameStr) || undefined,
+      servingGrams: parseNum(portieGrameStr) > 0 ? parseNum(portieGrameStr) : undefined,
       kcalPer100g: kcal100,
       proteinPer100g: prot100,
       carbsPer100g: carb100,

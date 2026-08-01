@@ -64,9 +64,9 @@ export default function AdaugaManualScreen() {
           const first = parsed[0];
           const numeCompus = parsed.map((a: any) => a.nume).join(', ');
           const totalCal = parsed.reduce((s: number, a: any) => s + Math.round((a.calorii_per_100g * a.estimare_grame) / 100), 0);
-          const totalProt = parsed.reduce((s: number, a: any) => s + Math.round((a.proteine_per_100g * a.estimare_grame) / 100), 0);
-          const totalCarbs = parsed.reduce((s: number, a: any) => s + Math.round((a.carbohidrati_per_100g * a.estimare_grame) / 100), 0);
-          const totalGras = parsed.reduce((s: number, a: any) => s + Math.round((a.grasimi_per_100g * a.estimare_grame) / 100), 0);
+          const totalProt = parsed.reduce((s: number, a: any) => s + Math.round((a.proteine_per_100g * a.estimare_grame) / 100 * 10) / 10, 0);
+          const totalCarbs = parsed.reduce((s: number, a: any) => s + Math.round((a.carbohidrati_per_100g * a.estimare_grame) / 100 * 10) / 10, 0);
+          const totalGras = parsed.reduce((s: number, a: any) => s + Math.round((a.grasimi_per_100g * a.estimare_grame) / 100 * 10) / 10, 0);
           const totalGrame = parsed.reduce((s: number, a: any) => s + (Number(a.estimare_grame) || 0), 0);
 
           setNume(numeCompus);
@@ -81,9 +81,9 @@ export default function AdaugaManualScreen() {
             nume: a.nume || 'Aliment',
             grame: Number(a.estimare_grame) || 100,
             calorii: Math.round((a.calorii_per_100g * a.estimare_grame) / 100) || 0,
-            proteine: Math.round((a.proteine_per_100g * a.estimare_grame) / 100) || 0,
-            carbohidrati: Math.round((a.carbohidrati_per_100g * a.estimare_grame) / 100) || 0,
-            grasimi: Math.round((a.grasimi_per_100g * a.estimare_grame) / 100) || 0,
+            proteine: Math.round((a.proteine_per_100g * a.estimare_grame) / 100 * 10) / 10 || 0,
+            carbohidrati: Math.round((a.carbohidrati_per_100g * a.estimare_grame) / 100 * 10) / 10 || 0,
+            grasimi: Math.round((a.grasimi_per_100g * a.estimare_grame) / 100 * 10) / 10 || 0,
             fibre: Number(a.fibre) || 0
           }));
           setAlimenteList(detailedItems);
@@ -196,28 +196,34 @@ export default function AdaugaManualScreen() {
               <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>❤️ ALIMENTE FRECVENTE / FAVORITE</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
                 {favorite.map((fav) => (
-                  <TouchableOpacity
+                  <View
                     key={fav.id}
                     style={[styles.favChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                    onPress={() => {
-                      setNume(fav.nume);
-                      setCalorii(String(fav.calorii));
-                      setProteine(String(fav.proteine));
-                      setCarbohidrati(String(fav.carbohidrati));
-                      setGrasimi(String(fav.grasimi));
-                    }}
-                    activeOpacity={0.8}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setNume(fav.nume);
+                        setCalorii(String(fav.calorii));
+                        setProteine(String(fav.proteine));
+                        setCarbohidrati(String(fav.carbohidrati));
+                        setGrasimi(String(fav.grasimi));
+                      }}
+                      activeOpacity={0.8}
+                      style={{ flex: 1 }}
+                    >
                       <Text style={[styles.favChipTitle, { color: colors.textPrimary }]}>{fav.nume}</Text>
-                      <TouchableOpacity onPress={() => removeFavorite(fav.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                        <Trash2 size={13} color={colors.textTertiary} />
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={[styles.favChipSub, { color: colors.accent }]}>
-                      {fav.calorii} kcal • {fav.proteine}g P
-                    </Text>
-                  </TouchableOpacity>
+                      <Text style={[styles.favChipSub, { color: colors.accent }]}>
+                        {fav.calorii} kcal • {fav.proteine}g P
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => removeFavorite(fav.id)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={styles.favChipDelete}
+                    >
+                      <Trash2 size={13} color={colors.textTertiary} />
+                    </TouchableOpacity>
+                  </View>
                 ))}
               </ScrollView>
             </Animated.View>
@@ -444,6 +450,7 @@ const styles = StyleSheet.create({
   saveBtnText: { color: '#000', fontSize: 18, fontWeight: '900' },
   favHeaderTitle: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 },
   favChip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, borderWidth: 1, minWidth: 120 },
+  favChipDelete: { position: 'absolute', top: 4, right: 4, padding: 6, borderRadius: 8 },
   favChipTitle: { fontSize: 14, fontWeight: '700' },
   favChipSub: { fontSize: 11, fontWeight: '800', marginTop: 3 },
   favSaveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: 18, borderWidth: 1, gap: 8 },

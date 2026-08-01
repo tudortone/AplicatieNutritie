@@ -37,7 +37,6 @@ import { useExercitii } from '../../hooks/useExercitii';
 // ---- Constants --------------------------------------------------------------
 
 const MAP_HEIGHT = 380;
-const CTA_COLOR = '#0EA5E9';
 const SESSION_KEY = 'current_workout_session';
 const SESSION_META_KEY = 'current_workout_session_meta';
 const REST_DEFAULT_SEC = 90;
@@ -392,25 +391,34 @@ export default function AntrenamenteScreen() {
       })
       .filter((v): v is LocalExercitiuInAntrenament => v !== null);
 
-    await adaugaAntrenament({
-      nume: `Antrenament ${new Date().toLocaleDateString('ro-RO', { weekday: 'long', month: 'short', day: 'numeric' })}`,
-      tip: selectedCategory,
-      durata_min: durataMin,
-      calorii_arse: exercitiiInAntrenament.reduce((s, e) => s + e.kcal, 0),
-      met: selectedExercise.met,
-      exercitii: exercitiiInAntrenament,
-      volum_total: Math.round(sessionStats.volume),
-    });
+    try {
+      const result = await adaugaAntrenament({
+        nume: `Antrenament ${new Date().toLocaleDateString('ro-RO', { weekday: 'long', month: 'short', day: 'numeric' })}`,
+        tip: selectedCategory,
+        durata_min: durataMin,
+        calorii_arse: exercitiiInAntrenament.reduce((s, e) => s + e.kcal, 0),
+        met: selectedExercise.met,
+        exercitii: exercitiiInAntrenament,
+        volum_total: Math.round(sessionStats.volume),
+      });
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    notify.success(
-      'Antrenament salvat',
-      `${totalSets} seturi • ${Math.round(sessionStats.volume)} kg volum`,
-    );
-    setSession({});
-    setStartedAt(null);
-    setRestLeft(0);
-    AsyncStorage.multiRemove([SESSION_KEY, SESSION_META_KEY]).catch(() => {});
+      if (result === null) {
+        notify.error('Eroare la salvare', 'Antrenamentul nu a putut fi salvat. Încearcă din nou.');
+        return;
+      }
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      notify.success(
+        'Antrenament salvat',
+        `${totalSets} seturi • ${Math.round(sessionStats.volume)} kg volum`,
+      );
+      setSession({});
+      setStartedAt(null);
+      setRestLeft(0);
+      AsyncStorage.multiRemove([SESSION_KEY, SESSION_META_KEY]).catch(() => {});
+    } catch (err: any) {
+      notify.error('Eroare la salvare', err?.message || 'Nu s-a putut salva antrenamentul. Verifică conexiunea.');
+    }
   };
 
   const bodyWidth = (SCREEN_WIDTH - Spacing.lg * 2) * 0.45;
@@ -655,7 +663,7 @@ export default function AntrenamenteScreen() {
                        onPress={handleRecordSet}
                        style={({ pressed }) => [
                          styles.ctaButton,
-                         { backgroundColor: CTA_COLOR, opacity: pressed ? 0.85 : 1 },
+                         { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
                        ]}
                      >
                        <Plus size={20} color='#FFFFFF' />

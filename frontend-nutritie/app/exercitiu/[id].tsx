@@ -402,7 +402,7 @@ export default function ExercitiuDetailScreen() {
       const d = Math.max(15, sets.length * 3);
       const kcalArse = Math.round(p * d);
 
-      await adaugaAntrenament({
+      const result = await adaugaAntrenament({
         nume: exercitiu.nume,
         tip: exercitiu.categorie,
         durata_min: d,
@@ -418,6 +418,11 @@ export default function ExercitiuDetailScreen() {
           },
         ],
       });
+
+      if (result === null) {
+        notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+        return;
+      }
 
       notify.success(
         'Adăugat în antrenament',

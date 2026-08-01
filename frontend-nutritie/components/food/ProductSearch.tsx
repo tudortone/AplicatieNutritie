@@ -57,9 +57,9 @@ export function ProductSearch({
           source: 'preset',
           name: p.nume,
           kcalPer100g: Math.round((p.calorii / (p.gramajDefault || 100)) * 100),
-          proteinPer100g: Math.round((p.proteine / (p.gramajDefault || 100)) * 100),
-          carbsPer100g: Math.round((p.carbohidrati / (p.gramajDefault || 100)) * 100),
-          fatPer100g: Math.round((p.grasimi / (p.gramajDefault || 100)) * 100),
+          proteinPer100g: Math.round((p.proteine / (p.gramajDefault || 100)) * 100 * 10) / 10,
+          carbsPer100g: Math.round((p.carbohidrati / (p.gramajDefault || 100)) * 100 * 10) / 10,
+          fatPer100g: Math.round((p.grasimi / (p.gramajDefault || 100)) * 100 * 10) / 10,
           servingGrams: p.gramajDefault || 100,
         });
       }

@@ -2,6 +2,7 @@ import React, { useCallback, useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Minus, Plus, AlertTriangle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useTheme } from '../../context/ThemeContext';
 
 export interface SetData {
   reps: number;
@@ -18,9 +19,10 @@ interface Props {
   inputType?: 'hold' | 'bodyweight_reps' | 'weighted_reps';
 }
 
-function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffix }: {
+function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffix, colors }: {
   label: string; value: number; step: number; min: number; max: number;
   onChange: (v: number) => void; onLimitReached: () => void; suffix?: string;
+  colors: ReturnType<typeof useTheme>['colors'];
 }) {
   const bump = useCallback((delta: number) => {
     const nextVal = Math.round((value + delta) * 100) / 100;
@@ -36,13 +38,13 @@ function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffi
 
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <View style={styles.pill}>
-        <Pressable style={styles.stepBtn} onPress={() => bump(-step)} hitSlop={12}>
-          <Minus size={16} color="#CCFF00" strokeWidth={3} />
+      <Text style={[styles.fieldLabel, { color: colors.textTertiary }]}>{label}</Text>
+      <View style={[styles.pill, { backgroundColor: colors.surfaceBg }]}>
+        <Pressable style={[styles.stepBtn, { backgroundColor: colors.background }]} onPress={() => bump(-step)} hitSlop={12}>
+          <Minus size={16} color={colors.accent} strokeWidth={3} />
         </Pressable>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { color: colors.textPrimary }]}
           value={String(value ?? 0)}
           onChangeText={t => {
             const n = parseFloat(t.replace(',', '.'));
@@ -59,9 +61,9 @@ function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffi
           keyboardType="numeric"
           selectTextOnFocus
         />
-        {suffix ? <Text style={styles.suffix}>{suffix}</Text> : null}
-        <Pressable style={styles.stepBtn} onPress={() => bump(step)} hitSlop={12}>
-          <Plus size={16} color="#CCFF00" strokeWidth={3} />
+        {suffix ? <Text style={[styles.suffix, { color: colors.textSecondary }]}>{suffix}</Text> : null}
+        <Pressable style={[styles.stepBtn, { backgroundColor: colors.background }]} onPress={() => bump(step)} hitSlop={12}>
+          <Plus size={16} color={colors.accent} strokeWidth={3} />
         </Pressable>
       </View>
     </View>
@@ -69,6 +71,7 @@ function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffi
 }
 
 export default function SetInputRow({ index, set, onChange, showWeight = true, showDuration = false, inputType }: Props) {
+  const { colors } = useTheme();
   const [limitError, setLimitError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -89,8 +92,8 @@ export default function SetInputRow({ index, set, onChange, showWeight = true, s
   return (
     <View style={styles.container}>
       <View style={styles.row}>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{index + 1}</Text>
+        <View style={[styles.badge, { backgroundColor: colors.surfaceBg }]}>
+          <Text style={[styles.badgeText, { color: colors.textPrimary }]}>{index + 1}</Text>
         </View>
 
         {isRepsVisible && (
@@ -102,6 +105,7 @@ export default function SetInputRow({ index, set, onChange, showWeight = true, s
             max={100}
             onLimitReached={triggerLimitError}
             onChange={reps => onChange(index, { ...set, reps })}
+            colors={colors}
           />
         )}
 
@@ -115,6 +119,7 @@ export default function SetInputRow({ index, set, onChange, showWeight = true, s
             suffix="kg"
             onLimitReached={triggerLimitError}
             onChange={weight => onChange(index, { ...set, weight })}
+            colors={colors}
           />
         )}
 
@@ -128,14 +133,15 @@ export default function SetInputRow({ index, set, onChange, showWeight = true, s
             suffix="sec"
             onLimitReached={triggerLimitError}
             onChange={duration => onChange(index, { ...set, duration })}
+            colors={colors}
           />
         )}
       </View>
 
       {limitError ? (
-        <View style={styles.errorBox}>
-          <AlertTriangle size={14} color="#FF003C" />
-          <Text style={styles.errorText}>{limitError}</Text>
+        <View style={[styles.errorBox, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}>
+          <AlertTriangle size={14} color={colors.danger} />
+          <Text style={[styles.errorText, { color: colors.danger }]}>{limitError}</Text>
         </View>
       ) : null}
     </View>
@@ -146,26 +152,26 @@ const styles = StyleSheet.create({
   container: { marginBottom: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   badge: {
-    width: 32, height: 32, borderRadius: 10, backgroundColor: '#2A2A36',
+    width: 32, height: 32, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
   },
-  badgeText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+  badgeText: { fontWeight: '700', fontSize: 14 },
   field: { flex: 1 },
-  fieldLabel: { color: '#9CA3AF', fontSize: 12, fontWeight: '600', marginBottom: 6, marginLeft: 4 },
+  fieldLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6, marginLeft: 4 },
   pill: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#2A2A36', borderRadius: 16, paddingHorizontal: 8, paddingVertical: 6,
+    borderRadius: 16, paddingHorizontal: 8, paddingVertical: 6,
   },
   stepBtn: {
-    width: 34, height: 34, borderRadius: 12, backgroundColor: '#1A1A24',
+    width: 34, height: 34, borderRadius: 12,
     alignItems: 'center', justifyContent: 'center',
   },
-  input: { flex: 1, minWidth: 40, color: '#FFFFFF', fontSize: 16, fontWeight: '700', textAlign: 'center', paddingVertical: 2 },
-  suffix: { color: '#6B7280', fontSize: 12, fontWeight: '600' },
+  input: { flex: 1, minWidth: 40, fontSize: 16, fontWeight: '700', textAlign: 'center', paddingVertical: 2 },
+  suffix: { fontSize: 12, fontWeight: '600' },
   errorBox: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(255, 0, 60, 0.15)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
-    marginTop: 6, alignSelf: 'stretch', borderColor: 'rgba(255, 0, 60, 0.3)', borderWidth: 1,
+    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
+    marginTop: 6, alignSelf: 'stretch', borderWidth: 1,
   },
-  errorText: { color: '#FF003C', fontSize: 12, fontWeight: '700' },
+  errorText: { fontSize: 12, fontWeight: '700' },
 });

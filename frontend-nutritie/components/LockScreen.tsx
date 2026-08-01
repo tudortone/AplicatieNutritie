@@ -118,7 +118,7 @@ export default function LockScreen({ biometricType, onUnlock }: LockScreenProps)
           <Pressable
             style={({ pressed }) => [
               styles.unlockButton,
-              { backgroundColor: colors.accent, opacity: pressed || unlocking ? 0.72 : 1 },
+              { backgroundColor: colors.accent, shadowColor: colors.shadow, opacity: pressed || unlocking ? 0.72 : 1 },
             ]}
             onPress={handleUnlockPress}
             disabled={unlocking}

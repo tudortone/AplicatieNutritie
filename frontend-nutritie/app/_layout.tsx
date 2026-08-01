@@ -22,6 +22,7 @@ import LockScreen from '../components/LockScreen';
 import { NotificationBannerProvider } from '../context/NotificationBannerContext';
 import { GamificareProvider } from '../context/GamificareContext';
 import { useDailySync } from '../hooks/useDailySync';
+import { Colors } from '../constants/theme';
 import '../i18n';
 
 export const unstable_settings = {
@@ -37,11 +38,11 @@ const PUSH_DURATION = 260;
 
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#090C0E', padding: 24 }}>
-      <Text style={{ color: '#F87171', fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>A apărut o eroare neașteptată!</Text>
-      <Text style={{ color: '#9CA3AF', fontSize: 14, textAlign: 'center', marginBottom: 24 }}>{error.message}</Text>
-      <TouchableOpacity onPress={retry} style={{ backgroundColor: '#CCFF00', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 16 }}>
-        <Text style={{ color: '#090C0E', fontWeight: 'bold' }}>Reîncearcă</Text>
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background, padding: 24 }}>
+      <Text style={{ color: Colors.danger, fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>A apărut o eroare neașteptată!</Text>
+      <Text style={{ color: Colors.textTertiary, fontSize: 14, textAlign: 'center', marginBottom: 24 }}>{error.message}</Text>
+      <TouchableOpacity onPress={retry} style={{ backgroundColor: Colors.accent, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 16 }}>
+        <Text style={{ color: Colors.background, fontWeight: 'bold' }}>Reîncearcă</Text>
       </TouchableOpacity>
     </View>
   );

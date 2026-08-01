@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Plus, Check, Trash2 } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
@@ -17,6 +17,13 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
   const [sets, setSets] = useState<SetExercitiu[]>(
     initialSets.length > 0 ? initialSets : [{ serie: 1, repetari: 10, greutate: 0, set_type: 'working', rpe: 8, completed: false }]
   );
+
+  // Sincronizează cu prop-ul inițial când se schimbă (ex: editare antrenament existent)
+  useEffect(() => {
+    if (initialSets.length > 0) {
+      setSets(initialSets);
+    }
+  }, [initialSets]);
 
   const notifyChange = (newSets: SetExercitiu[]) => {
     setSets(newSets);
@@ -38,6 +45,7 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
   };
 
   const removeSet = (index: number) => {
+    if (sets.length <= 1) return; // nu permite ștergerea ultimului set
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const newSets = sets.filter((_, i) => i !== index).map((s, i) => ({ ...s, serie: i + 1 }));
     notifyChange(newSets);
@@ -77,6 +85,12 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
     }
   };
 
+  // Helper: adaugă opacitate la o culoare hex (sigur, fără concatenare fragilă)
+  const withAlpha = (hex: string, alpha: number) => {
+    const a = Math.round(alpha * 255).toString(16).padStart(2, '0');
+    return hex + a;
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
@@ -90,7 +104,7 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
       {sets.map((set, idx) => (
         <View key={idx} style={[styles.setRow, set.completed && { opacity: 0.6 }]}>
           <TouchableOpacity 
-            style={[styles.colSet, styles.setBtn, { backgroundColor: getTypeColor(set.set_type) + '22', borderColor: getTypeColor(set.set_type) }]}
+            style={[styles.colSet, styles.setBtn, { backgroundColor: withAlpha(getTypeColor(set.set_type), 0.13), borderColor: getTypeColor(set.set_type) }]}
             onPress={() => cycleSetType(idx)}
           >
             <Text style={[styles.setBtnText, { color: getTypeColor(set.set_type) }]}>
@@ -99,39 +113,43 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
           </TouchableOpacity>
 
           <View style={[styles.colMain, styles.stepperWrap, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
-            <TouchableOpacity onPress={() => updateSet(idx, 'greutate', Math.max(0, (set.greutate || 0) - 2.5))} style={styles.stepBtn}>
+            <TouchableOpacity onPress={() => updateSet(idx, 'greutate', Math.round(Math.max(0, (set.greutate || 0) - 2.5) * 10) / 10)} style={styles.stepBtn} hitSlop={8}>
               <Text style={[styles.stepBtnText, { color: colors.textSecondary }]}>-</Text>
             </TouchableOpacity>
             <Text style={[styles.stepVal, { color: colors.textPrimary }]}>{set.greutate}</Text>
-            <TouchableOpacity onPress={() => updateSet(idx, 'greutate', (set.greutate || 0) + 2.5)} style={styles.stepBtn}>
+            <TouchableOpacity onPress={() => updateSet(idx, 'greutate', Math.round(((set.greutate || 0) + 2.5) * 10) / 10)} style={styles.stepBtn} hitSlop={8}>
               <Text style={[styles.stepBtnText, { color: colors.textSecondary }]}>+</Text>
             </TouchableOpacity>
           </View>
 
           <View style={[styles.colMain, styles.stepperWrap, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
-            <TouchableOpacity onPress={() => updateSet(idx, 'repetari', Math.max(0, set.repetari - 1))} style={styles.stepBtn}>
+            <TouchableOpacity onPress={() => updateSet(idx, 'repetari', Math.max(0, set.repetari - 1))} style={styles.stepBtn} hitSlop={8}>
               <Text style={[styles.stepBtnText, { color: colors.textSecondary }]}>-</Text>
             </TouchableOpacity>
             <Text style={[styles.stepVal, { color: colors.textPrimary }]}>{set.repetari}</Text>
-            <TouchableOpacity onPress={() => updateSet(idx, 'repetari', set.repetari + 1)} style={styles.stepBtn}>
+            <TouchableOpacity onPress={() => updateSet(idx, 'repetari', Math.min(999, set.repetari + 1))} style={styles.stepBtn} hitSlop={8}>
               <Text style={[styles.stepBtnText, { color: colors.textSecondary }]}>+</Text>
             </TouchableOpacity>
           </View>
 
           <View style={[styles.colExtra, styles.rpeWrap, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
-            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.max(1, Math.min(10, (set.rpe || 8) + 1)))}>
-              <Text style={[styles.stepVal, { color: colors.warning }]}>{set.rpe || 8}</Text>
+            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.min(10, (set.rpe || 8) + 1))}>
+              <Text style={[styles.rpeArrow, { color: colors.textTertiary }]}>▲</Text>
+            </TouchableOpacity>
+            <Text style={[styles.stepVal, { color: colors.warning }]}>{set.rpe || 8}</Text>
+            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.max(1, (set.rpe || 8) - 1))}>
+              <Text style={[styles.rpeArrow, { color: colors.textTertiary }]}>▼</Text>
             </TouchableOpacity>
           </View>
 
           <View style={[styles.colAction, styles.actionsWrap]}>
             {!set.completed ? (
-              <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: colors.accent + '22' }]}>
+              <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: withAlpha(colors.accent, 0.13) }]}>
                 <Check size={18} color={colors.accent} />
               </TouchableOpacity>
             ) : (
               <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: colors.success }]}>
-                <Check size={18} color="#000" />
+                <Check size={18} color={colors.background} />
               </TouchableOpacity>
             )}
             <TouchableOpacity onPress={() => removeSet(idx)} style={{ padding: 4 }}>
@@ -168,6 +186,7 @@ const styles = StyleSheet.create({
   stepVal: { fontSize: 15, fontWeight: '800' },
 
   rpeWrap: { height: 36, borderRadius: 18, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  rpeArrow: { fontSize: 8, fontWeight: '700', lineHeight: 10 },
 
   actionsWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'flex-end' },
   actionBtn: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },

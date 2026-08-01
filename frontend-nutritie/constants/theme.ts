@@ -26,6 +26,16 @@ export interface ThemeColors {
   // Muscle heatmap body
   muscleBase: string;
   muscleOutline: string;
+  // Input & form
+  inputBg: string;
+  inputBorder: string;
+  // Danger/success surfaces
+  dangerBg: string;
+  dangerBorder: string;
+  // Shadows & overlays
+  shadow: string;
+  overlayLight: string;
+  overlayStrong: string;
 }
 
 const midnight: ThemeColors = {
@@ -49,6 +59,13 @@ const midnight: ThemeColors = {
   surfaceBg: '#181D22',
   muscleBase: '#151A21',
   muscleOutline: '#0A0D11',
+  inputBg: 'rgba(255,255,255,0.04)',
+  inputBorder: 'rgba(255,255,255,0.06)',
+  dangerBg: 'rgba(255,77,77,0.12)',
+  dangerBorder: 'rgba(255,77,77,0.3)',
+  shadow: '#000000',
+  overlayLight: 'rgba(255,255,255,0.04)',
+  overlayStrong: 'rgba(255,255,255,0.08)',
 };
 
 const ocean: ThemeColors = {
@@ -72,6 +89,13 @@ const ocean: ThemeColors = {
   surfaceBg: '#162846',
   muscleBase: '#0F1E36',
   muscleOutline: '#080F1C',
+  inputBg: 'rgba(56,189,248,0.06)',
+  inputBorder: 'rgba(56,189,248,0.10)',
+  dangerBg: 'rgba(251,113,133,0.12)',
+  dangerBorder: 'rgba(251,113,133,0.3)',
+  shadow: '#000000',
+  overlayLight: 'rgba(56,189,248,0.04)',
+  overlayStrong: 'rgba(56,189,248,0.08)',
 };
 
 const sunset: ThemeColors = {
@@ -95,6 +119,13 @@ const sunset: ThemeColors = {
   surfaceBg: '#32191F',
   muscleBase: '#261217',
   muscleOutline: '#13090C',
+  inputBg: 'rgba(251,146,60,0.06)',
+  inputBorder: 'rgba(251,146,60,0.10)',
+  dangerBg: 'rgba(239,68,68,0.12)',
+  dangerBorder: 'rgba(239,68,68,0.3)',
+  shadow: '#000000',
+  overlayLight: 'rgba(251,146,60,0.04)',
+  overlayStrong: 'rgba(251,146,60,0.08)',
 };
 
 export const themes: Record<ThemeName, ThemeColors> = {
@@ -132,6 +163,13 @@ export const Colors = {
   cardBorder: 'rgba(255,255,255,0.08)',
   cardBg: '#12161A',
   surfaceBg: '#181D22',
+  inputBg: 'rgba(255,255,255,0.04)',
+  inputBorder: 'rgba(255,255,255,0.06)',
+  dangerBg: 'rgba(255,77,77,0.12)',
+  dangerBorder: 'rgba(255,77,77,0.3)',
+  shadow: '#000000',
+  overlayLight: 'rgba(255,255,255,0.04)',
+  overlayStrong: 'rgba(255,255,255,0.08)',
 } as const;
 
 export const Spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;

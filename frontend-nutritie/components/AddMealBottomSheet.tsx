@@ -128,9 +128,9 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
       if (baseNutrition && !isNaN(grNum) && grNum > 0) {
         const factor = grNum / baseNutrition.defaultGrame;
         setCalorii(String(Math.round(baseNutrition.calorii * factor)));
-        setProteine(String(Math.round(baseNutrition.proteine * factor)));
-        setCarbohidrati(String(Math.round(baseNutrition.carbohidrati * factor)));
-        setGrasimi(String(Math.round(baseNutrition.grasimi * factor)));
+        setProteine(String(Math.round(baseNutrition.proteine * factor * 10) / 10));
+        setCarbohidrati(String(Math.round(baseNutrition.carbohidrati * factor * 10) / 10));
+        setGrasimi(String(Math.round(baseNutrition.grasimi * factor * 10) / 10));
       }
     }, [baseNutrition]);
 
@@ -299,6 +299,9 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const isCaloriiValid = !isNaN(calNumber) && calNumber > 0;
     const isFormValid = isNumeValid && isCaloriiValid;
 
+    // Helper: parse macro with 1 decimal precision
+    const parseMacro = (val: string) => Math.round((parseFloat(val) || 0) * 10) / 10;
+
     const handleSave = async () => {
       if (!isFormValid) {
         Alert.alert("Formular invalid", "Verificați ca numele alimentului să aibă cel puțin 2 caractere și caloriile să fie un număr valid mai mare ca 0.");
@@ -321,10 +324,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             nume: nume.trim(),
             grame: parseFloat(grame) || 0,
             calorii: calNumber,
-            proteine: parseInt(proteine, 10) || 0,
-            carbohidrati: parseInt(carbohidrati, 10) || 0,
-            grasimi: parseInt(grasimi, 10) || 0,
-            fibre: parseInt(fibre, 10) || 0
+            proteine: parseMacro(proteine),
+            carbohidrati: parseMacro(carbohidrati),
+            grasimi: parseMacro(grasimi),
+            fibre: parseMacro(fibre)
           }
         ];
 
@@ -332,10 +335,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           user_id: user.id,
           nume: nume.trim(),
           calorii: calNumber,
-          proteine: parseInt(proteine, 10) || 0,
-          carbohidrati: parseInt(carbohidrati, 10) || 0,
-          grasimi: parseInt(grasimi, 10) || 0,
-          fibre: parseInt(fibre, 10) || 0,
+          proteine: parseMacro(proteine),
+          carbohidrati: parseMacro(carbohidrati),
+          grasimi: parseMacro(grasimi),
+          fibre: parseMacro(fibre),
           tip_masa: tipMasa,
           alimente: alimentePayload,
         };
@@ -405,34 +408,40 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>❤️ ALIMENTE FAVORITE RAPIDE</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
                 {favorite.map((fav) => (
-                  <TouchableOpacity
+                  <View
                     key={fav.id}
                     style={[styles.favChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                    onPress={() => {
-                      setNume(fav.nume);
-                      setCalorii(String(fav.calorii));
-                      setProteine(String(fav.proteine));
-                      setCarbohidrati(String(fav.carbohidrati));
-                      setGrasimi(String(fav.grasimi));
-                      setSearchQuery('');
-                      setSelectedCategory(null);
-                      try {
-                        Haptics.selectionAsync();
-                      } catch {}
-                      scrollToGramajSection();
-                    }}
-                    activeOpacity={0.8}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setNume(fav.nume);
+                        setCalorii(String(fav.calorii));
+                        setProteine(String(fav.proteine));
+                        setCarbohidrati(String(fav.carbohidrati));
+                        setGrasimi(String(fav.grasimi));
+                        setSearchQuery('');
+                        setSelectedCategory(null);
+                        try {
+                          Haptics.selectionAsync();
+                        } catch {}
+                        scrollToGramajSection();
+                      }}
+                      activeOpacity={0.8}
+                      style={{ flex: 1 }}
+                    >
                       <Text style={[styles.favChipTitle, { color: colors.textPrimary }]}>{fav.nume}</Text>
-                      <TouchableOpacity onPress={() => removeFavorite(fav.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                        <Trash2 size={13} color={colors.textTertiary} />
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={[styles.favChipSub, { color: colors.accent }]}>
-                      {fav.calorii} kcal • {fav.proteine}g P
-                    </Text>
-                  </TouchableOpacity>
+                      <Text style={[styles.favChipSub, { color: colors.accent }]}>
+                        {fav.calorii} kcal • {fav.proteine}g P
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => removeFavorite(fav.id)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={styles.favChipDelete}
+                    >
+                      <Trash2 size={13} color={colors.textTertiary} />
+                    </TouchableOpacity>
+                  </View>
                 ))}
               </ScrollView>
             </View>
@@ -1035,6 +1044,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     minWidth: 130,
+  },
+  favChipDelete: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    padding: 6,
+    borderRadius: 8,
   },
   favChipTitle: {
     fontSize: 13,

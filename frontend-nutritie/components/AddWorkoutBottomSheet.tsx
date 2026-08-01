@@ -184,7 +184,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
           greutate: 0
         }));
 
-        await adaugaExercitiu({
+        const result = await adaugaExercitiu({
           exercitiuId: ex.id,
           nume: ex.nume,
           calorii: kcal,
@@ -193,13 +193,20 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
           tip: ex.categorie
         });
 
+        if (result === null) {
+          notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+          return;
+        }
+
         await salveazaRecente(ex.id);
 
         try {
           await adaugaProgres('antrenamente', 1);
           await adaugaProgres('minute_miscare', dur);
           await adaugaProgres('calorii_arse', kcal);
-        } catch {}
+        } catch {
+          console.warn('[AddWorkout] Nu s-a putut acorda XP-ul pentru quick add.');
+        }
 
         notify.reward('Exercițiu salvat rapid!', `+50 XP • ${kcal} kcal arse`);
         onSuccess?.();
@@ -316,7 +323,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         setLoading(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-        await adaugaAntrenament({
+        const result = await adaugaAntrenament({
           nume: exercitiuEditor.nume,
           tip: exercitiuEditor.categorie,
           durata_min: durataMin,
@@ -331,13 +338,20 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
           volum_total: volumTotalCalc
         });
 
+        if (result === null) {
+          notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+          return;
+        }
+
         await salveazaRecente(exercitiuEditor.id);
 
         try {
           await adaugaProgres('antrenamente', 1);
           await adaugaProgres('minute_miscare', durataMin);
           await adaugaProgres('calorii_arse', kcalLive);
-        } catch {}
+        } catch {
+          console.warn('[AddWorkout] Nu s-a putut acorda XP-ul pentru editor.');
+        }
 
         notify.reward('Antrenament salvat!', `+100 XP • ${kcalLive} kcal`);
         onSuccess?.();
@@ -356,7 +370,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         setLoading(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-        await adaugaAntrenament({
+        const result = await adaugaAntrenament({
           nume: `${exercitiuEditor.nume} (Copie)`,
           tip: exercitiuEditor.categorie,
           durata_min: durataMin,
@@ -379,6 +393,11 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
           ],
           volum_total: volumTotalCalc * 2,
         });
+
+        if (result === null) {
+          notify.error('Eroare', 'Nu s-a putut duplica exercițiul.');
+          return;
+        }
 
         notify.reward('Exercițiu duplicat!', `+150 XP • ${kcalLive * 2} kcal`);
         onSuccess?.();

@@ -628,12 +628,12 @@ export const foodPresets: FoodPreset[] = [
   // ==========================================
   // GUSTĂRI & DESERTURI (25+ preparate)
   // ==========================================
-  { id: 'mar', nume: 'Măr proaspăt (1 buc ~150g)', categorie: 'gustare', calorii: 78, proteine: 0.5, carbohidrati: 21, grasimi: 0.3, gramajDefault: 150, icon: '🍎' },
-  { id: 'banana', nume: 'Banană (1 buc medie ~120g)', categorie: 'gustare', calorii: 105, proteine: 1.3, carbohidrati: 27, grasimi: 0.4, gramajDefault: 120, icon: '🍌' },
+  { id: 'mar-gustare', nume: 'Măr proaspăt (1 buc ~150g)', categorie: 'gustare', calorii: 78, proteine: 0.5, carbohidrati: 21, grasimi: 0.3, gramajDefault: 150, icon: '🍎' },
+  { id: 'banana-gustare', nume: 'Banană (1 buc medie ~120g)', categorie: 'gustare', calorii: 105, proteine: 1.3, carbohidrati: 27, grasimi: 0.4, gramajDefault: 120, icon: '🍌' },
   { id: 'capsuni-castron', nume: 'Căpșuni proaspete (1 bol ~200g)', categorie: 'gustare', calorii: 64, proteine: 1.4, carbohidrati: 15, grasimi: 0.6, gramajDefault: 200, icon: '🍓' },
   { id: 'afine-castron', nume: 'Afine / Fructe de pădure (~150g)', categorie: 'gustare', calorii: 85, proteine: 1.1, carbohidrati: 21, grasimi: 0.5, gramajDefault: 150, icon: '🫐' },
-  { id: 'struguri', nume: 'Struguri roșii/albi (~150g)', categorie: 'gustare', calorii: 104, proteine: 1, carbohidrati: 27, grasimi: 0.2, gramajDefault: 150, icon: '🍇' },
-  { id: 'portocala', nume: 'Portocală (1 buc ~180g)', categorie: 'gustare', calorii: 86, proteine: 1.7, carbohidrati: 21, grasimi: 0.2, gramajDefault: 180, icon: '🍊' },
+  { id: 'struguri-gustare', nume: 'Struguri roșii/albi (~150g)', categorie: 'gustare', calorii: 104, proteine: 1, carbohidrati: 27, grasimi: 0.2, gramajDefault: 150, icon: '🍇' },
+  { id: 'portocala-gustare', nume: 'Portocală (1 buc ~180g)', categorie: 'gustare', calorii: 86, proteine: 1.7, carbohidrati: 21, grasimi: 0.2, gramajDefault: 180, icon: '🍊' },
   { id: 'migdale-crud', nume: 'Migdale crude / prăjite (1 pumn ~30g)', categorie: 'gustare', calorii: 175, proteine: 6, carbohidrati: 6, grasimi: 15, gramajDefault: 30, icon: '🥜' },
   { id: 'nuci-romanesti', nume: 'Nuci românești / caju (1 pumn ~30g)', categorie: 'gustare', calorii: 195, proteine: 4.5, carbohidrati: 4, grasimi: 19, gramajDefault: 30, icon: '🥜' },
   { id: 'fistic-copt', nume: 'Fistic copt și sărat (~30g)', categorie: 'gustare', calorii: 160, proteine: 6, carbohidrati: 8, grasimi: 13, gramajDefault: 30, icon: '🥜' },
