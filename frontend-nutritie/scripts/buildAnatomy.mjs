@@ -11,7 +11,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
-// ─── HELPERS ────────────────────────────────────────────────────────────────
+// ─── HELPERS ─────────────────────────────────────────────────────
 
 /** 
  * Decode HTML entities where UTF-8 bytes are individually encoded as &#NNN;.
@@ -22,7 +22,6 @@ function decodeEntities(str) {
   // First, collect consecutive &#NNN; sequences that may form UTF-8 sequences
   const bytes = [];
   let result = '';
-  let i = 0;
   const re = /&#(\d+);/g;
   let m;
   let lastIdx = 0;
@@ -81,7 +80,7 @@ function relativeLuminance(hex) {
   return 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
 }
 
-// ─── MUSCLE MAPS ────────────────────────────────────────────────────────────
+// ─── MUSCLE MAPS ───────────────────────────────────────────────
 
 // IDs we skip when walking up the parent tree (placeholder / organizational groups)
 const SKIP_GROUP_IDS = new Set([
@@ -98,7 +97,7 @@ const NEUTRU_IDS = new Set([
   'm_uschi_generali_fata', 'parte_abdomen_trb_rsmsd_spate',
   'corp_fata',
   // SPATE
-  'head_back', 'muschi_spate_generali', 'corp_spate', 'muschi_mana_spate',
+  'head_back', 'muschi_spate_generali', 'corp_spate',
 ]);
 
 // FAȚĂ mappings: slugified SVG id → MuscleId
@@ -159,8 +158,6 @@ const BACK_MAP = {
   triceps_long_left: 'triceps', triceps_long_right: 'triceps',
   // Biceps
   muschiul_brahial_left: 'biceps', muschiul_brahial_right: 'biceps',
-  // Antebrațe
-  // (handled via regex patterns below)
   // Fesieri
   glutes_maximus_left: 'fesieri', glutes_maximus_right: 'fesieri',
   // Abductori
@@ -175,29 +172,53 @@ const BACK_MAP = {
   quads_vastus_lateralis_left: 'cvadriceps', quads_vastus_lateralis_right: 'cvadriceps',
   // Oblici
   obliques_left: 'oblici', obliques_right: 'oblici',
-  // Gambe
-  // (muschiul_soleus handled via pattern)
 };
 
-/** Additional back-side mappings using regex patterns for encoded Romanian names */
-const BACK_REGEX_MAP = [
-  // MUȘCHIUL TRICEPS BRAHIAL → triceps
-  [/muschiul_triceps_brahial/i, 'triceps'],
-  // MUȘCHII EXTENSORI AI ANTEBRAȚULUI → antebrate
-  [/muschii_extensori_ai_antebratului/i, 'antebrate'],
-  // MUȘCHIUL BRAHIAL → biceps
-  [/muschiul_brahial/i, 'biceps'],
-  // Capătul Medial → triceps
-  [/capatul_medial/i, 'triceps'],
-  // Lateral Head → triceps
-  [/lateral_head/i, 'triceps'],
-  // Mușchiul Soleus → gambe
-  [/muschiul_soleus/i, 'gambe'],
-  // mușchi mână spate → antebrate
-  [/muschi_mana_spate/i, 'antebrate'],
+/**
+ * FIX CRITIC: reguli pe tipare, aplicate pe AMBELE vederi.
+ *
+ * Inainte existau doar `BACK_REGEX_MAP` si, din cauza unui bug (`muscleId` era
+ * initializat cu `null`, iar verificarile de dupa testau `=== undefined`), acele
+ * reguli nu se aplicau NICIODATA. Toti muschii cu denumiri romanesti in SVG
+ * ("MUSCHIUL TRICEPS BRAHIAL", "MUSCHII EXTENSORI AI ANTEBRATULUI",
+ * "Muschiul Soleus"...) ieseau cu muscleId = null, deci nu puteau fi colorati
+ * niciodata. De aici "nu se vad toti muschii".
+ *
+ * ORDINEA CONTEAZA: regulile mai specifice trebuie sa fie primele
+ * (antebrate inainte de brate, biceps_femoris inainte de biceps,
+ * glutes_medius inainte de glutes).
+ */
+const PATTERN_MAP = [
+  // Antebrate (inainte de orice regula de brat)
+  [/antebrat|forearm|extensor|brachiorad|brahioradial|muschi_mana/i, 'antebrate'],
+  // Ischiogambieri (inainte de biceps, altfel "biceps femoris" devine biceps)
+  [/biceps_femoris|semitendinos|semimembranos|hamstring|ischiogambier/i, 'ischiogambieri'],
+  // Triceps
+  [/triceps|capatul_medial|lateral_head|long_head/i, 'triceps'],
+  // Biceps
+  [/biceps|brahial|brachii/i, 'biceps'],
+  // Gambe
+  [/soleus|gastrocnem|tibialis|calf|calves|gamba|gambe/i, 'gambe'],
+  // Abductori (inainte de fesieri)
+  [/glutes_medius|gluteus_medius|abductor/i, 'abductori'],
+  [/glute|fesier/i, 'fesieri'],
+  [/adductor/i, 'adductori'],
+  [/quad|vastus|rectus_femoris|sartorius|cvadriceps/i, 'cvadriceps'],
+  // Trunchi
+  [/lats|latissimus|dorsal/i, 'dorsali'],
+  [/rhomboid|romboiz|infraspinatus|teres/i, 'romboizi'],
+  [/lower_back|erector|lombar/i, 'lombari'],
+  [/trapez|traps/i, 'trapez'],
+  [/oblique|oblic|serratus/i, 'oblici'],
+  [/abs_|abdomen|rectus_abdominis/i, 'abdomen'],
+  // Umeri (inainte de piept, ca "delts" sa nu fie prins de altceva)
+  [/delts?_front|front_delt|deltoid_anterior/i, 'deltoid_anterior'],
+  [/delts?_side|delts?_lateral|deltoid_lateral/i, 'deltoid_lateral'],
+  [/delts?_rear|rear_delt|deltoid_posterior/i, 'deltoid_posterior'],
+  [/chest|pector/i, 'pectorali'],
 ];
 
-// ─── PARSE SVG ──────────────────────────────────────────────────────────────
+// ─── PARSE SVG ─────────────────────────────────────────────────
 
 function parseSVG(filePath, map, isFront) {
   let raw = readFileSync(filePath, 'utf-8');
@@ -211,6 +232,7 @@ function parseSVG(filePath, map, isFront) {
 
   // Parse group stack and paths
   const paths = [];
+  const unmapped = new Set();
   const groupStack = []; // [{id, level}]
   
   // Regex to match any tag: <g id="...">, </g>, <path ... />
@@ -239,8 +261,6 @@ function parseSVG(filePath, map, isFront) {
       const fillMatch = attrs.match(/\sfill\s*=\s*"([^"]*)"/i);
       const rawFill = fillMatch ? fillMatch[1] : 'none';
       
-      // Skip paths with url() fills (gradients) or 'none' fill → treat as outline with original color?
-      // Actually, url(#paint...) should become solid. We'll use a fallback.
       let fill = rawFill;
       if (fill.startsWith('url(#')) {
         fill = '#555555'; // fallback for gradients - dark outline
@@ -258,47 +278,64 @@ function parseSVG(filePath, map, isFront) {
       // 1. If path has a non-Vector id → use it directly
       // 2. Otherwise walk up group stack, skip placeholder IDs
       let groupId = null;
+      const ancestors = [];
       if (pathSlug && !isVectorLike && !SKIP_GROUP_IDS.has(pathSlug)) {
         groupId = pathSlug;
-      } else {
-        for (let i = groupStack.length - 1; i >= 0; i--) {
-          const gid = groupStack[i].id;
-          if (!gid) continue;
-          const slug = slugify(gid);
-          if (SKIP_GROUP_IDS.has(slug)) continue;
-          groupId = slug;
-          break;
-        }
+      }
+      for (let i = groupStack.length - 1; i >= 0; i--) {
+        const gid = groupStack[i].id;
+        if (!gid) continue;
+        const slug = slugify(gid);
+        if (SKIP_GROUP_IDS.has(slug)) continue;
+        ancestors.push(slug);
+        if (!groupId) groupId = slug;
       }
 
       if (!groupId) continue; // no meaningful parent
 
-      // Map to muscleId
-      let muscleId = null;
-      
-      // Check direct map
-      if (map[groupId] !== undefined) {
+      // ─── Map to muscleId ───
+      // `undefined` = inca nedecis, `null` = neutru intentionat.
+      // Bug reparat: variabila era initializata cu `null`, deci toate testele
+      // `=== undefined` de mai jos erau moarte si regulile nu rulau niciodata.
+      let muscleId;
+
+      // 1. Mapare directa pe id-ul cel mai apropiat
+      if (Object.prototype.hasOwnProperty.call(map, groupId)) {
         muscleId = map[groupId];
       }
-      
-      // For back, check regex patterns
-      if (muscleId === undefined && !isFront && groupId) {
-        for (const [regex, mid] of BACK_REGEX_MAP) {
-          if (regex.test(groupId)) {
-            muscleId = mid;
+
+      // 2. Mapare directa pe orice stramos (unele path-uri au id-uri generice)
+      if (muscleId === undefined) {
+        for (const anc of ancestors) {
+          if (Object.prototype.hasOwnProperty.call(map, anc)) {
+            muscleId = map[anc];
             break;
           }
         }
       }
 
-      // Check if it's NEUTRU
+      // 3. Neutru explicit
       if (muscleId === undefined && NEUTRU_IDS.has(groupId)) {
         muscleId = null;
       }
 
-      // If still undefined, it's unmapped
+      // 4. Reguli pe tipare, pe id-ul propriu si apoi pe stramosi
       if (muscleId === undefined) {
-        muscleId = null; // treat as neutru
+        for (const candidate of [groupId, ...ancestors]) {
+          for (const [regex, mid] of PATTERN_MAP) {
+            if (regex.test(candidate)) {
+              muscleId = mid;
+              break;
+            }
+          }
+          if (muscleId !== undefined) break;
+        }
+      }
+
+      // 5. Nemapat → neutru, dar il raportam ca sa poata fi adaugat in map
+      if (muscleId === undefined) {
+        unmapped.add(groupId);
+        muscleId = null;
       }
 
       // Determine role based on luminance
@@ -327,28 +364,23 @@ function parseSVG(filePath, map, isFront) {
     }
   }
 
-  return paths;
+  return { paths, unmapped: [...unmapped] };
 }
 
-// ─── MAIN ───────────────────────────────────────────────────────────────────
+// ─── MAIN ──────────────────────────────────────────────────────
 
 console.log('🔧 buildAnatomy.mjs — parsing SVG files...\n');
 
-const frontPaths = parseSVG(
-  resolve(ROOT, 'assets/body/front_body.svg'),
-  FRONT_MAP,
-  true
-);
-const backPaths = parseSVG(
-  resolve(ROOT, 'assets/body/back_body.svg'),
-  BACK_MAP,
-  false
-);
+const front = parseSVG(resolve(ROOT, 'assets/body/front_body.svg'), FRONT_MAP, true);
+const back = parseSVG(resolve(ROOT, 'assets/body/back_body.svg'), BACK_MAP, false);
+
+const frontPaths = front.paths;
+const backPaths = back.paths;
 
 console.log(`  📐 Față: ${frontPaths.length} path-uri`);
 console.log(`  📐 Spate: ${backPaths.length} path-uri`);
 
-// ─── REPORT ─────────────────────────────────────────────────────────────────
+// ─── REPORT ────────────────────────────────────────────────────
 
 const ALL_MUSCLE_IDS = [
   'pectorali', 'deltoid_anterior', 'deltoid_lateral', 'deltoid_posterior',
@@ -360,6 +392,9 @@ const ALL_MUSCLE_IDS = [
 function countByMuscle(paths) {
   const counts = {};
   for (const p of paths) {
+    // Doar path-urile de tip `fill` pot fi colorate; cele `outline` sunt mereu
+    // negre, deci nu conteaza pentru acoperirea hartii.
+    if (p.role !== 'fill') continue;
     const key = p.muscleId || '__neutru__';
     counts[key] = (counts[key] || 0) + 1;
   }
@@ -369,9 +404,9 @@ function countByMuscle(paths) {
 const frontCounts = countByMuscle(frontPaths);
 const backCounts = countByMuscle(backPaths);
 
-console.log('\n📊 RAPORT PATH-URI PER MUSCLE ID:\n');
+console.log('\n📊 RAPORT PATH-URI COLORABILE (role=fill) PER MUSCLE ID:\n');
 console.log('MuscleId          | Față | Spate | Total');
-console.log('──────────────────┼──────┼───────┼──────');
+console.log('──────────────────┬──────┬───────┬──────');
 
 const musclesWithZero = [];
 
@@ -389,76 +424,23 @@ for (const mid of ALL_MUSCLE_IDS) {
 console.log(`\n🧪 NEUTRU: Față=${frontCounts.__neutru__ || 0}, Spate=${backCounts.__neutru__ || 0}`);
 
 if (musclesWithZero.length > 0) {
-  console.log(`\n⚠️  ERORI: Următoarele MuscleId au 0 path-uri pe AMBELE vederi:`);
+  console.log(`\n⚠️  ERORI: Următoarele MuscleId au 0 path-uri colorabile pe AMBELE vederi:`);
   for (const m of musclesWithZero) {
     console.log(`   ❌ ${m}`);
   }
 }
 
-// ─── COLLECT UNMAPPED IDs ───────────────────────────────────────────────────
-
-// We need to collect groupIds that weren't mapped (for diagnostic purposes)
-// We already tracked them during parsing - but we need the original group IDs
-
-function collectGroupIds(filePath) {
-  let raw = readFileSync(filePath, 'utf-8');
-  raw = decodeEntities(raw);
-  const ids = new Set();
-  const tagRegex = /<g\b[^>]*id\s*=\s*"([^"]*)"[^>]*>/gi;
-  let match;
-  while ((match = tagRegex.exec(raw)) !== null) {
-    const slug = slugify(match[1]);
-    if (!SKIP_GROUP_IDS.has(slug)) {
-      ids.add(slug);
-    }
-  }
-  // Also check path-level ids
-  const pathRegex = /<path\b[^>]*id\s*=\s*"([^"]*)"[^>]*\/?>/gi;
-  while ((match = pathRegex.exec(raw)) !== null) {
-    const id = match[1];
-    if (/^vector/i.test(id)) continue;
-    const slug = slugify(id);
-    ids.add(slug);
-  }
-  return ids;
+if (front.unmapped.length > 0) {
+  console.log(`\n🔍 ID-uri FAȚĂ nemapate (${front.unmapped.length}) — adaugă-le în FRONT_MAP sau PATTERN_MAP:`);
+  for (const id of front.unmapped) console.log(`   → ${id}`);
 }
 
-const frontGroupIds = collectGroupIds(resolve(ROOT, 'assets/body/front_body.svg'));
-const backGroupIds = collectGroupIds(resolve(ROOT, 'assets/body/back_body.svg'));
-
-const allKnownIds = new Set([
-  ...Object.keys(FRONT_MAP),
-  ...Object.keys(BACK_MAP),
-  ...NEUTRU_IDS,
-]);
-
-// Also add regex-matched patterns for back
-const backRegexPatterns = BACK_REGEX_MAP.map(([r]) => r);
-
-const unmappedFront = [...frontGroupIds].filter(id => !allKnownIds.has(id));
-const unmappedBack = [...backGroupIds].filter(id => {
-  if (allKnownIds.has(id)) return false;
-  for (const [regex] of BACK_REGEX_MAP) {
-    if (regex.test(id)) return false;
-  }
-  return true;
-});
-
-if (unmappedFront.length > 0) {
-  console.log(`\n🔍 ID-uri FAȚĂ nemapate (${unmappedFront.length}):`);
-  for (const id of unmappedFront) {
-    console.log(`   → ${id}`);
-  }
+if (back.unmapped.length > 0) {
+  console.log(`\n🔍 ID-uri SPATE nemapate (${back.unmapped.length}) — adaugă-le în BACK_MAP sau PATTERN_MAP:`);
+  for (const id of back.unmapped) console.log(`   → ${id}`);
 }
 
-if (unmappedBack.length > 0) {
-  console.log(`\n🔍 ID-uri SPATE nemapate (${unmappedBack.length}):`);
-  for (const id of unmappedBack) {
-    console.log(`   → ${id}`);
-  }
-}
-
-// ─── GENERATE TS FILE ──────────────────────────────────────────────────────
+// ─── GENERATE TS FILE ────────────────────────────────────────────
 
 function escapeString(str) {
   return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
