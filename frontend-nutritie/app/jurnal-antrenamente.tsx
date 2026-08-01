@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
@@ -17,6 +18,7 @@ import { useAntrenamente, Antrenament } from '../hooks/useAntrenamente';
 import { useNotify } from '../hooks/useNotify';
 import { ConfirmSheet } from '../components/ui/ConfirmSheet';
 import KeyboardAwareScreen, { CONTENT_BOTTOM_PADDING } from '@/components/ui/KeyboardAwareScreen';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ZiGrupata {
   titlu: string;
@@ -25,6 +27,7 @@ interface ZiGrupata {
 }
 
 export default function JurnalAntrenamenteScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
   const notify = useNotify();
@@ -104,8 +107,8 @@ export default function JurnalAntrenamenteScreen() {
   return (
     <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
       {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: colors.surfaceBg }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={[styles.backBtn, { backgroundColor: colors.surfaceBg }]}>
           <ArrowLeft size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
@@ -281,7 +284,7 @@ export default function JurnalAntrenamenteScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 50, paddingBottom: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16 },
   backBtn: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 20, fontWeight: '800' },
   headerSub: { fontSize: 13, fontWeight: '500' },

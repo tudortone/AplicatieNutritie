@@ -144,11 +144,14 @@ CREATE INDEX IF NOT EXISTS barcode_cache_updated_at_idx ON barcode_cache(updated
 ALTER TABLE IF EXISTS barcode_cache ADD COLUMN IF NOT EXISTS created_by_user UUID REFERENCES auth.users(id) ON DELETE SET NULL;
 
 -- Activează RLS și restricționează accesul (doar backend-ul cu service_role)
-ALTER TABLE barcode_cache ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS barcode_cache ENABLE ROW LEVEL SECURITY;
 
 -- Policy: nicio operațiune directă din frontend (doar service_role)
 -- Dacă pe viitor vrei să permiți citire publică, înlocuiește cu:
 --   CREATE POLICY "Public read" ON barcode_cache FOR SELECT USING (true);
+-- Fix audit: lipsea DROP POLICY IF EXISTS, deci a doua rulare a scriptului eșua cu
+-- "policy already exists" și oprea toate migrările următoare.
+DROP POLICY IF EXISTS "Backend-only access" ON barcode_cache;
 CREATE POLICY "Backend-only access" ON barcode_cache
   FOR ALL
   USING (FALSE)
@@ -287,9 +290,11 @@ CREATE TABLE IF NOT EXISTS exercitii (
 ALTER TABLE IF EXISTS exercitii ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Authenticated users can read exercises" ON exercitii;
+-- Fix audit: auth.role() este deprecat/eliminat in Supabase; folosim clauza TO authenticated.
 CREATE POLICY "Authenticated users can read exercises" ON exercitii
   FOR SELECT
-  USING (auth.role() = 'authenticated');
+  TO authenticated
+  USING (true);
 
 -- Bug #4: Politica "Admins can manage exercises" referencie tabela admin_users care nu există,
 -- provocând un errror la rularea scriptului. Soluție: creăm tabela admin_users și o populăm
@@ -312,3 +317,26 @@ DROP POLICY IF EXISTS "Admins can manage exercises" ON exercitii;
 -- CREATE POLICY "Admins can manage exercises" ON exercitii
 --   FOR ALL
 --   USING (auth.uid() IN (SELECT user_id FROM admin_users));
+
+-- ==============================================================================
+-- 11. INDEXURI DE PERFORMANTA (Fix audit)
+-- Lipseau indexuri pe coloanele filtrate la fiecare ecran (user_id + data).
+-- Fara ele, fiecare deschidere de ecran facea Seq Scan pe tot tabelul.
+-- ==============================================================================
+CREATE INDEX IF NOT EXISTS mese_user_id_idx ON mese(user_id);
+CREATE INDEX IF NOT EXISTS mese_user_created_idx ON mese(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_log_user_created_idx ON audit_log(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS antrenamente_user_created_idx ON antrenamente(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS gamificare_user_updated_idx ON gamificare(user_id, updated_at DESC);
+
+-- ============================================================
+-- 12. FIX AUDIT: upsert-ul gamificare are nevoie de UNIQUE(user_id)
+-- Fara aceasta constrangere, `.upsert({...}, { onConflict: 'user_id' })`
+-- eueaza sau insereaza randuri duplicate pentru acelasi utilizator.
+-- ============================================================
+DELETE FROM gamificare g USING gamificare g2
+  WHERE g.user_id = g2.user_id AND g.ctid < g2.ctid;
+CREATE UNIQUE INDEX IF NOT EXISTS gamificare_user_id_key ON gamificare(user_id);
+
+-- Index pentru filtrarea meselor pe zi locala (coloana `data` este acum populata).
+CREATE INDEX IF NOT EXISTS mese_user_data_idx ON mese(user_id, data);

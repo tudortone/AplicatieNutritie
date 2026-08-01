@@ -1,3 +1,4 @@
+
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator, Pressable, Text, View, StyleSheet, TouchableOpacity,
@@ -397,7 +398,7 @@ export default function CameraScreen() {
             </TouchableOpacity>
           </Animated.View>
 
-          <TouchableOpacity style={styles.cancelLink} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.cancelLink} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12}>
             <Text style={[styles.cancelLinkText, { color: colors.textSecondary }]}>Înapoi</Text>
           </TouchableOpacity>
         </View>

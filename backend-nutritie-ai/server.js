@@ -9,6 +9,7 @@ const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 
 require('dotenv').config();
 
@@ -51,21 +52,62 @@ app.use(cors({
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// Rate Limiting general pentru API (cu extragerea User ID daca e blocat in cache validare JWT locala sau token de req)
+// ==========================================
+// CHEIE DE RATE-LIMIT STABILA (Fix audit)
+// Inainte se folosea header-ul Authorization brut ca cheie: la fiecare refresh de
+// token utilizatorul primea o cheie noua si putea ocoli complet limita. Acum
+// folosim claim-ul "sub" din JWT, cu fallback pe IP normalizat (IPv6 grupat /64).
+// ==========================================
+const jwtSubject = (req) => {
+  const authHeader = req.headers?.authorization || '';
+  if (!authHeader.startsWith('Bearer ')) return null;
+  const payloadBase64 = authHeader.slice(7).split('.')[1];
+  if (!payloadBase64) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
+    return payload?.sub ? `user:${payload.sub}` : null;
+  } catch {
+    return null;
+  }
+};
+
+const ipFallbackKey = (req) => {
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
+  if (ip.includes(':')) return `ip6:${ip.split(':').slice(0, 4).join(':')}`;
+  return `ip4:${ip}`;
+};
+
+const rateLimitKey = (req) =>
+  (req.user?.id ? `user:${req.user.id}` : jwtSubject(req)) || ipFallbackKey(req);
+
+// Validare UUID (Postgres arunca eroare de sintaxa pentru ID-uri malformate)
+const isUuid = (value) =>
+  typeof value === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+// Rate Limiting general pentru API (cheie stabila per utilizator, altfel per IP)
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minute
   max: 100, // max 100 cereri per fereastră
-  keyGenerator: (req) => {
-    return req.user?.id || req.headers['authorization'] || req.ip;
-  },
+  keyGenerator: rateLimitKey,
   message: { eroare: "Prea multe cereri. Încearcă mai târziu." },
   standardHeaders: true,
   legacyHeaders: false,
 });
-// /api/ai-status este exclus din rate limiter (polling frecvent din camera.tsx)
-// Toate celelalte rute /api/ trec prin generalLimiter
+// Fix audit: /api/ai-status era complet exclus din rate limiting (endpoint public,
+// fara autentificare) => vector de abuz. Il pastram permisiv (polling din camera.tsx),
+// dar cu o limita proprie generoasa.
+const statusLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  keyGenerator: rateLimitKey,
+  message: { eroare: "Prea multe cereri de status. Incearca in cateva secunde." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use('/api/', (req, res, next) => {
-  if (req.path === '/ai-status') return next();
+  if (req.path === '/ai-status') return statusLimiter(req, res, next);
   return generalLimiter(req, res, next);
 });
 
@@ -73,9 +115,7 @@ app.use('/api/', (req, res, next) => {
 const aiRateLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minut
   max: 15, // max 15 cereri per minut
-  keyGenerator: (req) => {
-    return req.user?.id || req.headers['authorization'] || req.ip;
-  },
+  keyGenerator: rateLimitKey,
   message: { eroare: "Ai depășit limita de 15 cereri pe minut pentru AI. Te rugăm să aștepți un minut." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -119,13 +159,18 @@ if (!supabaseServiceKey) {
 }
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-// Cache in-memory TTL (60 secunde) pentru token-uri JWT
+// Cache in-memory TTL (60 secunde) pentru token-uri JWT.
+// Fix audit: nu mai folosim token-ul brut drept cheie (ajungea in heap dumps si in
+// mesajele de eroare), ci hash-ul SHA-256. In plus plafonam numarul de intrari, ca sa
+// nu poata fi umplut cache-ul cu token-uri aleatorii (DoS de memorie).
 const tokenCache = new Map();
 const CACHE_TTL_MS = 60 * 1000;
+const MAX_TOKEN_CACHE_ENTRIES = 5000;
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 setInterval(() => {
   const now = Date.now();
-  for (const [token, data] of tokenCache.entries()) {
-    if (now > data.expiresAt) tokenCache.delete(token);
+  for (const [key, entry] of tokenCache.entries()) {
+    if (now > entry.expiresAt) tokenCache.delete(key);
   }
 }, 5 * 60 * 1000).unref();
 
@@ -145,7 +190,8 @@ const requireAuth = async (req, res, next) => {
     return res.status(401).json({ eroare: "Acces neautorizat. Token lipsă." });
   }
 
-  const token = authHeader.split(' ')[1];
+  const token = authHeader.slice(7);
+  const tokenKey = hashToken(token);
 
   // Validare locala simplă a structurii JWT (exp) fara secret, inainte de network
   try {
@@ -154,7 +200,7 @@ const requireAuth = async (req, res, next) => {
       const decodedJson = Buffer.from(payloadBase64, 'base64').toString('utf8');
       const payload = JSON.parse(decodedJson);
       if (payload.exp && Date.now() >= payload.exp * 1000) {
-        tokenCache.delete(token); // Curata curat local
+        tokenCache.delete(tokenKey);
         return res.status(401).json({ eroare: "Token expirat (JWT local exp)." });
       }
     }
@@ -163,7 +209,7 @@ const requireAuth = async (req, res, next) => {
   }
 
   const now = Date.now();
-  const cached = tokenCache.get(token);
+  const cached = tokenCache.get(tokenKey);
   if (cached && now < cached.expiresAt) {
     req.user = cached.user;
     return next();
@@ -172,10 +218,11 @@ const requireAuth = async (req, res, next) => {
   try {
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) {
-      tokenCache.delete(token);
+      tokenCache.delete(tokenKey);
       return res.status(401).json({ eroare: "Token invalid sau respins de serverul Auth." });
     }
-    tokenCache.set(token, { user, expiresAt: now + CACHE_TTL_MS });
+    if (tokenCache.size >= MAX_TOKEN_CACHE_ENTRIES) tokenCache.clear();
+    tokenCache.set(tokenKey, { user, expiresAt: now + CACHE_TTL_MS });
     req.user = user;
     next();
   } catch (error) {
@@ -185,12 +232,17 @@ const requireAuth = async (req, res, next) => {
 
 // Inițializare AI Gemini și listă modele în cascadă (modele stabile prioritar)
 const genAI = new GoogleGenerativeAI(geminiApiKey);
+const GEMINI_FALLBACK_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-lite"
+];
+
+// Fix audit: GEMINI_MODEL era documentat in .env.example, dar complet ignorat de cod.
 const getGeminiModelsList = () => {
-  return [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite"
-  ];
+  const preferat = (process.env.GEMINI_MODEL || '').trim();
+  if (!preferat) return [...GEMINI_FALLBACK_MODELS];
+  return [preferat, ...GEMINI_FALLBACK_MODELS.filter((m) => m !== preferat)];
 };
 
 // Helper pentru timeout cereri cu AbortController real.
@@ -306,19 +358,25 @@ app.get('/health', (req, res) => {
 // Verifică primii bytes ai fișierului pentru a confirma tipul real,
 // independent de extensie sau Content-Type declarat de client.
 // ==========================================
-function validateImageMagicBytes(buffer) {
-  if (!buffer || buffer.length < 4) return false;
+// Fix audit: returnam si tipul MIME real, ca sa nu mai avem incredere in
+// Content-Type declarat de client (putea trimite JPEG etichetat image/png).
+function detectImageMime(buffer) {
+  if (!buffer || buffer.length < 4) return null;
   // JPEG: FF D8 FF
-  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return true;
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return 'image/jpeg';
   // PNG: 89 50 4E 47 0D 0A 1A 0A
-  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return true;
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return 'image/png';
   // WEBP: RIFF....WEBP (bytes 0-3 = RIFF, bytes 8-11 = WEBP)
   if (
     buffer.length >= 12 &&
     buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
     buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
-  ) return true;
-  return false;
+  ) return 'image/webp';
+  return null;
+}
+
+function validateImageMagicBytes(buffer) {
+  return detectImageMime(buffer) !== null;
 }
 
 // ==========================================
@@ -338,14 +396,20 @@ const handleAnalizaFoto = async (req, res) => {
     }
 
     const fileBuffer = await fs.promises.readFile(req.file.path);
-    if (!validateImageMagicBytes(fileBuffer)) {
+    const detectedMime = detectImageMime(fileBuffer);
+    if (!detectedMime) {
       return res.status(400).json({ eroare: "Tip fișier nepermis. Doar imagini JPEG/PNG/WEBP sunt acceptate." });
     }
 
+    // Fix audit: base64 se calcula de doua ori (dublare consum de memorie ~13MB
+    // pentru o imagine de 5MB) si se folosea mimetype-ul declarat de client.
+    const imageBase64 = fileBuffer.toString("base64");
+    const imageMime = detectedMime;
+
     const imagePart = {
       inlineData: {
-        data: fileBuffer.toString("base64"),
-        mimeType: req.file.mimetype
+        data: imageBase64,
+        mimeType: imageMime
       },
     };
 
@@ -367,8 +431,6 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
 
     let text = null;
     let lastError = null;
-    const imageBase64 = fileBuffer.toString("base64");
-    const imageMime = req.file.mimetype;
     const requestedProvider = (req.body?.provider || req.query?.provider || 'auto').toLowerCase();
 
     if (requestedProvider !== 'auto' && aiStatusRegistry[requestedProvider]) {
@@ -436,7 +498,12 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
     if (runGroq) {
       console.log("🔄 Încerc Groq Vision AI...");
       const groqKeys = getApiKeysList('GROQ_API_KEY');
-      const groqVisionModels = ["llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview"];
+      // Fix audit: modelele llama-3.2-*-vision-preview au fost retrase de Groq, deci
+      // acest pas al cascadei eșua garantat. Lista este acum configurabila prin env.
+      const groqVisionModels = (
+        process.env.GROQ_VISION_MODELS ||
+        "meta-llama/llama-4-scout-17b-16e-instruct,meta-llama/llama-4-maverick-17b-128e-instruct"
+      ).split(',').map((m) => m.trim()).filter(Boolean);
       for (const key of groqKeys) {
         for (const groqModel of groqVisionModels) {
           try {
@@ -700,7 +767,8 @@ Sarcina ta: Răspunde prietenos, ținând cont de istoricul discuției și de ca
       istoric.forEach((m, idx) => {
         let role = m.role === 'user' || m.sender === 'user' ? 'user' : 'assistant';
         let content = m.text || m.content || '';
-        if (idx === istoric.length - 1) content = ultimulMesaj;
+        // Fix audit: suprascriem doar daca ultimul element din istoric e al userului.
+        if (idx === istoric.length - 1 && role === 'user') content = ultimulMesaj;
         if (content.trim()) {
           messages.push({ role, content });
         }
@@ -1111,7 +1179,8 @@ app.post('/api/corecteaza-mancare-vizual-text', requireAuth, aiRateLimiter, hand
 app.get('/api/produs-barcode/:code', requireAuth, aiRateLimiter, async (req, res) => {
   try {
     const code = (req.params.code || '').trim();
-    if (!code || code.length < 4) {
+    // Fix audit: validare stricta (doar cifre, 4-20) inainte de orice interogare.
+    if (!/^[0-9]{4,20}$/.test(code)) {
       return res.status(400).json({ eroare: "Cod de bare invalid." });
     }
 
@@ -1143,6 +1212,8 @@ app.get('/api/produs-barcode/:code', requireAuth, aiRateLimiter, async (req, res
     }
 
     // STRAT 2: Căutare în OpenFoodFacts API
+    // BUG CRITIC (fix audit): URL-ul avea acolade duble literale in template string,
+    // deci fetch-ul catre OpenFoodFacts esua la FIECARE scanare de cod de bare.
     const fetchPromise = fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`, {
       headers: { 'User-Agent': 'NutriAI - React Native App - Contact: tudortone' }
     });
@@ -1288,7 +1359,7 @@ RETURNEAZĂ STRICT EXCLUSIV UN OBIECT JSON valid în acest format:
 app.post('/api/salveaza-produs-barcode', requireAuth, async (req, res) => {
   try {
     const { code, name, brand, quantity, kcal_100g, protein_100g, carbs_100g, fat_100g } = req.body;
-    if (!code || !name) {
+    if (!code || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ eroare: "Codul și numele produsului sunt obligatorii." });
     }
 
@@ -1297,12 +1368,17 @@ app.post('/api/salveaza-produs-barcode', requireAuth, async (req, res) => {
     const c = Number(carbs_100g || 0);
     const f = Number(fat_100g || 0);
 
+    // Fix audit: Number(undefined) => NaN trecea prin toate comparatiile de mai jos.
+    if (![kc, p, c, f].every((n) => Number.isFinite(n))) {
+      return res.status(400).json({ eroare: "Valori nutriționale invalide." });
+    }
+
     // Hard validations for injection / sanity limits (pe suta de grame limitile chimice fizice normale sunt max 100g macros / ~900kcal - grasime pura)
     if (kc > 1000 || kc < 0) return res.status(400).json({eroare: "Număr de calorii imposibil fizic pentru 100g."});
     if (p > 100 || p < 0 || c > 100 || c < 0 || f > 100 || f < 0) return res.status(400).json({eroare: "Macro-nutrienții gresiti (peste 100g din 100g)."});
     if ((p + c + f) > 100) return res.status(400).json({eroare: "Suma macro-nutrienților depășește 100g per total de 100g."});
 
-    if (code.length < 4 || code.length > 20) {
+    if (!/^[0-9]{4,20}$/.test(String(code).trim())) {
        return res.status(400).json({eroare: "Cod de bare malformat."});
     }
 
@@ -1415,11 +1491,24 @@ app.post('/api/calculeaza-profil', requireAuth, async (req, res) => {
 app.delete('/api/mese/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { error } = await supabaseAdmin.from('mese').delete().eq('id', id).eq('user_id', req.user.id);
+    // Fix audit: fara validare de UUID, Postgres raspundea cu eroare de sintaxa => 500 in loc de 400.
+    if (!isUuid(id)) {
+      return res.status(400).json({ eroare: 'ID de masă invalid.' });
+    }
+    const { data, error } = await supabaseAdmin
+      .from('mese')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', req.user.id)
+      .select('id');
     // Bug #12: Nu expune error.message intern (pot conține nume coloane, constrângeri Postgres)
     if (error) {
       console.error('Eroare DB ștergere masă:', error.message);
       return res.status(500).json({ eroare: 'Eroare la ștergerea mesei. Încearcă din nou.' });
+    }
+    // Fix audit: inainte raspundea 200 "succes" si cand masa nu exista / nu era a userului.
+    if (!data || data.length === 0) {
+      return res.status(404).json({ eroare: 'Masa nu a fost găsită.' });
     }
     res.json({ succes: true });
   } catch (error) {
@@ -1436,6 +1525,9 @@ app.delete('/api/mese/:id', requireAuth, async (req, res) => {
 app.put('/api/mese/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    if (!isUuid(id)) {
+      return res.status(400).json({ eroare: 'ID de masă invalid.' });
+    }
     const { nume, calorii, proteine, grasimi, carbohidrati, tip_masa, alimente, fibre } = req.body;
     if (!nume || typeof nume !== 'string' || !nume.trim()) {
       return res.status(400).json({ eroare: "Numele mesei este obligatoriu." });
@@ -1463,7 +1555,8 @@ app.put('/api/mese/:id', requireAuth, async (req, res) => {
       updatePayload.tip_masa = tip_masa;
     }
     if (Array.isArray(alimente)) {
-      updatePayload.alimente = alimente;
+      // Fix audit: plafonam numarul de alimente per masa (protectie payload JSONB).
+      updatePayload.alimente = alimente.slice(0, 100);
     }
     const { data, error } = await supabaseAdmin
       .from('mese')
@@ -1475,6 +1568,10 @@ app.put('/api/mese/:id', requireAuth, async (req, res) => {
     if (error) {
       console.error('Eroare DB actualizare masă:', error.message);
       return res.status(500).json({ eroare: 'Eroare la actualizarea mesei. Încearcă din nou.' });
+    }
+    // Fix audit: inainte returna { succes: true, masa: undefined } cand randul nu exista.
+    if (!data || data.length === 0) {
+      return res.status(404).json({ eroare: 'Masa nu a fost găsită.' });
     }
     res.json({ succes: true, masa: data[0] });
   } catch (error) {
@@ -1519,21 +1616,32 @@ app.post('/api/mese', requireAuth, async (req, res) => {
       carbohidrati: isNaN(carb) ? 0 : Math.round(carb),
       fibre: isNaN(fib) ? 0 : Math.round(fib),
       tip_masa: tip_masa && ['mic_dejun', 'pranz', 'cina', 'gustare'].includes(tip_masa) ? tip_masa : 'gustare',
-      alimente: Array.isArray(alimente) ? alimente : [],
-      data: data || null,
-      ora: ora || null,
+      alimente: Array.isArray(alimente) ? alimente.slice(0, 100) : [],
+      // Fix audit: `data` si `ora` ajungeau nevalidate in coloane DATE/TIME, deci orice
+      // text arunca o eroare Postgres (500). Acceptam doar formatele valide.
+      data: /^\d{4}-\d{2}-\d{2}$/.test(String(data || '')) ? data : null,
+      ora: /^\d{2}:\d{2}(:\d{2})?$/.test(String(ora || '')) ? ora : null,
     };
 
     // RLS reabilitat
+    // Fix audit: acces direct la .split(' ')[1] putea arunca TypeError.
+    const bearerToken = (req.headers.authorization || '').split(' ')[1];
+    if (!bearerToken) {
+      return res.status(401).json({ eroare: "Acces neautorizat. Token lipsă." });
+    }
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${req.headers.authorization.split(' ')[1]}` } }
+      global: { headers: { Authorization: `Bearer ${bearerToken}` } }
     });
     const { data: result, error } = await userClient
       .from('mese')
       .insert([insertPayload])
       .select();
-    if (error) return res.status(500).json({ eroare: error.message });
-    res.json({ succes: true, masa: result[0] });
+    // Fix audit: nu mai expunem error.message brut de la Postgres (scurgere de schema).
+    if (error) {
+      console.error('Eroare DB inserare masă:', error.message);
+      return res.status(500).json({ eroare: 'Eroare la adăugarea mesei. Încearcă din nou.' });
+    }
+    res.json({ succes: true, masa: result?.[0] || null });
   } catch (error) {
     res.status(500).json({ eroare: "Eroare la adăugarea mesei." });
   }
@@ -1552,14 +1660,16 @@ app.use((req, res, next) => {
 app.use((err, req, res, next) => {
   const message = err?.message || '';
   console.error("Eroare globală:", message);
+  // Fix audit: LIMIT_FILE_SIZE este tot o MulterError, deci ramura 413 era cod mort
+  // (fisierele prea mari primeau 400). Verificam codul INAINTE de instanceof.
+  if (err?.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ eroare: "Fișierul este prea mare. Limita este 5MB." });
+  }
   if (err instanceof multer.MulterError) {
     return res.status(400).json({ eroare: message });
   }
   if (message.includes('Tip fișier nepermis')) {
     return res.status(400).json({ eroare: message });
-  }
-  if (err?.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ eroare: "Fișierul este prea mare. Limita este 5MB." });
   }
   res.status(500).json({ eroare: "Eroare internă a serverului." });
 });
@@ -1574,7 +1684,11 @@ module.exports = app;
 const startKeepAliveTicker = (serverPort) => {
   const intervalMinutes = parseFloat(process.env.KEEP_ALIVE_INTERVAL_MINUTES) || 10;
   const intervalMs = intervalMinutes * 60 * 1000;
-  const targetUrl = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL || `http://127.0.0.1:${serverPort}/health`;
+  // Fix audit: RENDER_EXTERNAL_URL indica radacina serviciului, nu /health.
+  const baseUrl = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL;
+  const targetUrl = baseUrl
+    ? `${baseUrl.replace(/\/+$/, '')}${/\/health\/?$/.test(baseUrl) ? '' : '/health'}`
+    : `http://127.0.0.1:${serverPort}/health`;
 
   console.log(`⏱️ Keep-Alive Ticker activat: Ping automat către ${targetUrl} la fiecare ${intervalMinutes} minute.`);
 
@@ -1601,8 +1715,20 @@ const startKeepAliveTicker = (serverPort) => {
 
 // Pornire server doar dacă fișierul este rulat direct (nu importat în teste)
 if (require.main === module) {
-  app.listen(port, '0.0.0.0', () => {
+  const server = app.listen(port, '0.0.0.0', () => {
     console.log(`🚀 Serverul securizat rulează pe http://0.0.0.0:${port}`);
     startKeepAliveTicker(port);
   });
+
+  // Fix audit: lipsea graceful shutdown — la fiecare redeploy cererile in curs erau taiate.
+  const shutdown = (signal) => {
+    console.log(`${signal} primit — inchid serverul elegant...`);
+    server.close(() => {
+      console.log('Server inchis.');
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }

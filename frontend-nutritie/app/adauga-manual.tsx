@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -20,6 +21,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { ArrowLeft, Check, Heart, Trash2 } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../supabase';
 import { useFavorite } from '../hooks/useFavorite';
 import { TipMasa, AlimentDetaliat } from '../types';
@@ -28,6 +30,14 @@ import { GramInput } from '../components/ui/GramInput';
 import * as Haptics from 'expo-haptics';
 
 export default function AdaugaManualScreen() {
+  const insets = useSafeAreaInsets();
+  // FIX: parseInt trunchia zecimalele (12.5 g proteine se salvau ca 12) si nu avea radix.
+  // Acceptam si virgula ca separator zecimal (tastatura romaneasca).
+  const numar = (v: string) => {
+    const n = parseFloat(String(v ?? '').replace(',', '.'));
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 10) / 10 : 0;
+  };
+
   const router = useRouter();
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -95,7 +105,7 @@ export default function AdaugaManualScreen() {
       return;
     }
 
-    const cal = parseInt(calorii) || 0;
+    const cal = Math.round(numar(calorii));
     if (cal === 0 && !calorii) {
       Alert.alert("Calorii lipsă", "Introduceți numărul estimat de calorii pentru această masă.");
       return;
@@ -119,10 +129,10 @@ export default function AdaugaManualScreen() {
           nume: nume.trim(),
           grame: grame || 0,
           calorii: cal,
-          proteine: parseInt(proteine) || 0,
-          carbohidrati: parseInt(carbohidrati) || 0,
-          grasimi: parseInt(grasimi) || 0,
-          fibre: parseInt(fibre) || 0,
+          proteine: numar(proteine),
+          carbohidrati: numar(carbohidrati),
+          grasimi: numar(grasimi),
+          fibre: numar(fibre),
         }
       ];
 
@@ -132,10 +142,13 @@ export default function AdaugaManualScreen() {
           user_id: user.id,
           nume: numeFinal,
           calorii: cal,
-          proteine: parseInt(proteine) || 0,
-          carbohidrati: parseInt(carbohidrati) || 0,
-          grasimi: parseInt(grasimi) || 0,
-          fibre: parseInt(fibre) || 0,
+          proteine: numar(proteine),
+          carbohidrati: numar(carbohidrati),
+          grasimi: numar(grasimi),
+          fibre: numar(fibre),
+          // FIX: todayStr / oraStr erau calculate mai sus dar nu erau folosite niciodata.
+          data: todayStr,
+          ora: oraStr,
           tip_masa: tipMasa,
           alimente: alimentePayload,
         });
@@ -161,8 +174,8 @@ export default function AdaugaManualScreen() {
       <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
       <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
 
-      <View style={styles.header}>
-        <TouchableOpacity style={[styles.backBtn, { backgroundColor: colors.surfaceBg }]} onPress={() => router.back()}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: colors.surfaceBg }]} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Adaugă Masă Manual</Text>
@@ -170,7 +183,12 @@ export default function AdaugaManualScreen() {
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scroll}
+          // FIX UI: fara asta, primul tap pe "Salveaza" doar inchidea tastatura.
+          keyboardShouldPersistTaps="handled"
+        >
           
           {/* Favorite Foods Section */}
           {favorite.length > 0 && (
@@ -277,7 +295,9 @@ export default function AdaugaManualScreen() {
                       placeholderTextColor={colors.textTertiary}
                       value={calorii}
                       onChangeText={setCalorii}
-                      keyboardType="numeric"
+                      keyboardType="decimal-pad"
+                      maxLength={5}
+                      returnKeyType="done"
                       selectionColor={colors.accent}
                     />
                   </View>
@@ -290,7 +310,9 @@ export default function AdaugaManualScreen() {
                       placeholderTextColor={colors.textTertiary}
                       value={proteine}
                       onChangeText={setProteine}
-                      keyboardType="numeric"
+                      keyboardType="decimal-pad"
+                      maxLength={4}
+                      returnKeyType="done"
                       selectionColor={colors.accent}
                     />
                   </View>
@@ -305,7 +327,9 @@ export default function AdaugaManualScreen() {
                       placeholderTextColor={colors.textTertiary}
                       value={carbohidrati}
                       onChangeText={setCarbohidrati}
-                      keyboardType="numeric"
+                      keyboardType="decimal-pad"
+                      maxLength={4}
+                      returnKeyType="done"
                       selectionColor={colors.accent}
                     />
                   </View>
@@ -318,7 +342,9 @@ export default function AdaugaManualScreen() {
                       placeholderTextColor={colors.textTertiary}
                       value={grasimi}
                       onChangeText={setGrasimi}
-                      keyboardType="numeric"
+                      keyboardType="decimal-pad"
+                      maxLength={4}
+                      returnKeyType="done"
                       selectionColor={colors.accent}
                     />
                   </View>
@@ -333,7 +359,9 @@ export default function AdaugaManualScreen() {
                       placeholderTextColor={colors.textTertiary}
                       value={fibre}
                       onChangeText={setFibre}
-                      keyboardType="numeric"
+                      keyboardType="decimal-pad"
+                      maxLength={4}
+                      returnKeyType="done"
                       selectionColor={colors.accent}
                     />
                   </View>
@@ -369,10 +397,10 @@ export default function AdaugaManualScreen() {
                 }
                 addFavorite({
                   nume: nume.trim(),
-                  calorii: parseInt(calorii) || 0,
-                  proteine: parseInt(proteine) || 0,
-                  carbohidrati: parseInt(carbohidrati) || 0,
-                  grasimi: parseInt(grasimi) || 0,
+                  calorii: Math.round(numar(calorii)),
+                  proteine: numar(proteine),
+                  carbohidrati: numar(carbohidrati),
+                  grasimi: numar(grasimi),
                 });
               }}
               activeOpacity={0.8}
@@ -394,7 +422,7 @@ const styles = StyleSheet.create({
   glowTop: { position: 'absolute', top: -150, right: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.05 },
   glowBottom: { position: 'absolute', bottom: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.05 },
 
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 56 : 36, paddingHorizontal: 20, paddingBottom: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16 },
   backBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   headerTitle: { fontSize: 20, fontWeight: '800' },
 

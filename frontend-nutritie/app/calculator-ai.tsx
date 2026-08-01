@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -11,6 +12,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNotificationBanner } from '../context/NotificationBannerContext';
+// FIX UI: tastatura acoperea input-urile de varsta/greutate/inaltime.
+import KeyboardAwareScreen from '../components/ui/KeyboardAwareScreen';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface SelectionRowProps {
   label: string;
@@ -45,6 +49,7 @@ const SelectionRow = ({ label, options, current, onChange }: SelectionRowProps) 
 };
 
 export default function CalculatorAI() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
   const { session } = useAuth();
@@ -139,12 +144,12 @@ export default function CalculatorAI() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
       <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
 
-      <Animated.View entering={FadeInUp.duration(500)} style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+      <Animated.View entering={FadeInUp.duration(500)} style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={styles.backBtn}>
           <BlurView intensity={20} tint="dark" style={styles.backBtnBlur}>
             <ArrowLeft color="#fff" size={24} />
           </BlurView>
@@ -152,7 +157,11 @@ export default function CalculatorAI() {
         <Text style={[styles.title, { color: colors.textPrimary }]}>Asistent Profil</Text>
       </Animated.View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <Animated.View entering={ZoomIn.duration(600).delay(100)} style={[styles.aiBadge, { borderColor: colors.accent + '33' }]}>
           <LinearGradient colors={[colors.accent + '26', 'rgba(0,0,0,0)']} style={styles.aiBadgeGrad}>
             <Sparkles size={24} color={colors.accent} />
@@ -245,7 +254,7 @@ export default function CalculatorAI() {
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
-    </View>
+    </KeyboardAwareScreen>
   );
 }
 
@@ -254,7 +263,7 @@ const styles = StyleSheet.create({
   glowTop: { position: 'absolute', top: -150, right: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.05 },
   glowBottom: { position: 'absolute', bottom: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.05 },
 
-  header: { flexDirection: 'row', alignItems: 'center', paddingTop: 60, paddingHorizontal: 20, paddingBottom: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20 },
   backBtn: { borderRadius: 16, overflow: 'hidden', marginRight: 16 },
   backBtnBlur: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },

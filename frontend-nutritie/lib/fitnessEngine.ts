@@ -1,3 +1,4 @@
+
 import { Exercitiu, MuscleActivation } from '../constants/exercitii';
 import { ExercitiuInAntrenament } from '../hooks/useAntrenamente';
 
@@ -192,6 +193,7 @@ export function computeWorkoutMetrics(
   };
 }
 
+import { ALL_MUSCLE_IDS } from '../components/fitness/heatColor';
 import type { MuscleId } from '../components/fitness/heatColor';
 
 /**
@@ -200,12 +202,9 @@ import type { MuscleId } from '../components/fitness/heatColor';
 export function mapToCanonicalMuscleIds(key: string): { id: MuscleId; weight: number }[] {
   const g = key.toLowerCase().trim();
   // Verificare directă dacă este un MuscleId canonic:
-  const validIds: MuscleId[] = [
-    'pectorali', 'deltoid_anterior', 'deltoid_lateral', 'deltoid_posterior',
-    'biceps', 'triceps', 'antebrate', 'abdomen', 'oblici', 'trapez',
-    'dorsali', 'lombari', 'romboizi', 'fesieri', 'cvadriceps',
-    'ischiogambieri', 'gambe', 'adductori', 'abductori'
-  ];
+  // FIX: lista era duplicata manual si putea ramane in urma fata de heatColor.ts
+  // (o denumire nou adaugata acolo nu era recunoscuta aici => muschi mort pe harta).
+  const validIds: MuscleId[] = ALL_MUSCLE_IDS as unknown as MuscleId[];
   if (validIds.includes(g as MuscleId)) {
     return [{ id: g as MuscleId, weight: 1.0 }];
   }
@@ -258,6 +257,8 @@ export function mapToCanonicalMuscleIds(key: string): { id: MuscleId; weight: nu
   // abductori INAINTE de adductori (altfel regex-ul /adductori/ prinde și "abductori")
   if (/abductori|fesier mijlociu/i.test(g)) return [{ id: 'abductori', weight: 1.0 }];
   if (/adductori/i.test(g)) return [{ id: 'adductori', weight: 0.7 }];
+  // Chei non-musculare: nu genereaza incarcare, dar nici avertisment in consola.
+  if (/mobilitate|stretching|incalzire|echilibru/i.test(g)) return [];
   if (/full-body|corp_intreg|cardio/i.test(g)) return [
     { id: 'cvadriceps', weight: 0.7 },
     { id: 'pectorali', weight: 0.6 },
@@ -384,4 +385,3 @@ export function getRankByTonage(kg: number): TonageRank {
   }
   return RANKS[0];
 }
-

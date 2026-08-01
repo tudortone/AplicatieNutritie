@@ -1,7 +1,7 @@
+
 import React, { useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Dimensions,
-  ScrollView
+  useWindowDimensions, View, Text, StyleSheet, TouchableOpacity, ScrollView
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,7 +10,6 @@ import { Camera, Bot, TrendingUp, ArrowRight, Check } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext';
 import { useAppStore } from '../hooks/useAppStore';
 
-const { width } = Dimensions.get('window');
 
 const SLIDES = [
   {
@@ -40,6 +39,8 @@ const SLIDES = [
 ];
 
 export default function OnboardingScreen() {
+  // FIX UI: Dimensions.get la nivel de modul nu se actualizeaza la rotire/split-screen.
+  const { width } = useWindowDimensions();
   const router = useRouter();
   const { colors } = useTheme();
   const { setOnboardingDone } = useAppStore();

@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -121,7 +122,7 @@ export default function NotificariScreen() {
         ]}
       >
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12}
           style={[styles.backButton, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}
         >
           <ArrowLeft size={20} color={colors.textPrimary} />

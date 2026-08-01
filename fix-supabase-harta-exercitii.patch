@@ -1,0 +1,3367 @@
+diff --git a/backend-nutritie-ai/.env.example b/backend-nutritie-ai/.env.example
+--- a/backend-nutritie-ai/.env.example
++++ b/backend-nutritie-ai/.env.example
+@@ -1,4 +1,3 @@
+-
+ # Exemplu de configurare variabile de mediu pentru serverul NutriAI Backend
+ PORT=[REDACTED]
+ HOST=[REDACTED]
+@@ -21,3 +20,16 @@
+ 
+ # Setări CORS (domenii permise sau * pentru dev)
+ CORS_ORIGINS=[REDACTED]
++# Cheie API OpenRouter (fallback vision opțional)
++OPENROUTER_API_KEY=
++
++# Modele vision Groq folosite în cascadă (listă separată prin virgulă).
++# Implicit: meta-llama/llama-4-scout-17b-16e-instruct,meta-llama/llama-4-maverick-17b-128e-instruct
++GROQ_VISION_MODELS=
++
++# Keep-alive (anti-sleep pe Render/Railway). URL-ul primește automat sufixul /health.
++KEEP_ALIVE_URL=
++KEEP_ALIVE_INTERVAL_MINUTES=10
++
++# Mediu de rulare (development activează loguri suplimentare)
++NODE_ENV=production
+diff --git a/backend-nutritie-ai/server.js b/backend-nutritie-ai/server.js
+--- a/backend-nutritie-ai/server.js
++++ b/backend-nutritie-ai/server.js
+@@ -1,4 +1,3 @@
+-
+ const express = require('express');
+ const cors = require('cors');
+ const helmet = require('helmet');
+@@ -10,6 +9,7 @@
+ const fs = require('fs');
+ const os = require('os');
+ const path = require('path');
++const crypto = require('crypto');
+ 
+ require('dotenv').config();
+ 
+@@ -52,21 +52,62 @@
+ app.use(express.json({ limit: '1mb' }));
+ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+ 
+-// Rate Limiting general pentru API (cu extragerea User ID daca e blocat in cache validare JWT locala sau token de req)
++// ==========================================
++// CHEIE DE RATE-LIMIT STABILA (Fix audit)
++// Inainte se folosea header-ul Authorization brut ca cheie: la fiecare refresh de
++// token utilizatorul primea o cheie noua si putea ocoli complet limita. Acum
++// folosim claim-ul "sub" din JWT, cu fallback pe IP normalizat (IPv6 grupat /64).
++// ==========================================
++const jwtSubject = (req) => {
++  const authHeader = req.headers?.authorization || '';
++  if (!authHeader.startsWith('Bearer ')) return null;
++  const payloadBase64 = authHeader.slice(7).split('.')[1];
++  if (!payloadBase64) return null;
++  try {
++    const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
++    return payload?.sub ? `user:${payload.sub}` : null;
++  } catch {
++    return null;
++  }
++};
++
++const ipFallbackKey = (req) => {
++  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
++  if (ip.includes(':')) return `ip6:${ip.split(':').slice(0, 4).join(':')}`;
++  return `ip4:${ip}`;
++};
++
++const rateLimitKey = (req) =>
++  (req.user?.id ? `user:${req.user.id}` : jwtSubject(req)) || ipFallbackKey(req);
++
++// Validare UUID (Postgres arunca eroare de sintaxa pentru ID-uri malformate)
++const isUuid = (value) =>
++  typeof value === 'string' &&
++  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
++
++// Rate Limiting general pentru API (cheie stabila per utilizator, altfel per IP)
+ const generalLimiter = rateLimit({
+   windowMs: 15 * 60 * 1000, // 15 minute
+   max: 100, // max 100 cereri per fereastră
+-  keyGenerator: (req) => {
+-    return req.user?.id || req.headers['authorization'] || req.ip;
+-  },
++  keyGenerator: rateLimitKey,
+   message: { eroare: "Prea multe cereri. Încearcă mai târziu." },
+   standardHeaders: true,
+   legacyHeaders: false,
+ });
+-// /api/ai-status este exclus din rate limiter (polling frecvent din camera.tsx)
+-// Toate celelalte rute /api/ trec prin generalLimiter
++// Fix audit: /api/ai-status era complet exclus din rate limiting (endpoint public,
++// fara autentificare) => vector de abuz. Il pastram permisiv (polling din camera.tsx),
++// dar cu o limita proprie generoasa.
++const statusLimiter = rateLimit({
++  windowMs: 60 * 1000,
++  max: 120,
++  keyGenerator: rateLimitKey,
++  message: { eroare: "Prea multe cereri de status. Incearca in cateva secunde." },
++  standardHeaders: true,
++  legacyHeaders: false,
++});
++
+ app.use('/api/', (req, res, next) => {
+-  if (req.path === '/ai-status') return next();
++  if (req.path === '/ai-status') return statusLimiter(req, res, next);
+   return generalLimiter(req, res, next);
+ });
+ 
+@@ -74,9 +115,7 @@
+ const aiRateLimiter = rateLimit({
+   windowMs: 1 * 60 * 1000, // 1 minut
+   max: 15, // max 15 cereri per minut
+-  keyGenerator: (req) => {
+-    return req.user?.id || req.headers['authorization'] || req.ip;
+-  },
++  keyGenerator: rateLimitKey,
+   message: { eroare: "Ai depășit limita de 15 cereri pe minut pentru AI. Te rugăm să aștepți un minut." },
+   standardHeaders: true,
+   legacyHeaders: false,
+@@ -120,13 +159,18 @@
+ }
+ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+ 
+-// Cache in-memory TTL (60 secunde) pentru token-uri JWT
++// Cache in-memory TTL (60 secunde) pentru token-uri JWT.
++// Fix audit: nu mai folosim token-ul brut drept cheie (ajungea in heap dumps si in
++// mesajele de eroare), ci hash-ul SHA-256. In plus plafonam numarul de intrari, ca sa
++// nu poata fi umplut cache-ul cu token-uri aleatorii (DoS de memorie).
+ const tokenCache = new Map();
+ const CACHE_TTL_MS = 60 * 1000;
++const MAX_TOKEN_CACHE_ENTRIES = 5000;
++const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+ setInterval(() => {
+   const now = Date.now();
+-  for (const [token, data] of tokenCache.entries()) {
+-    if (now > data.expiresAt) tokenCache.delete(token);
++  for (const [key, entry] of tokenCache.entries()) {
++    if (now > entry.expiresAt) tokenCache.delete(key);
+   }
+ }, 5 * 60 * 1000).unref();
+ 
+@@ -146,7 +190,8 @@
+     return res.status(401).json({ eroare: "Acces neautorizat. Token lipsă." });
+   }
+ 
+-  const token = authHeader.split(' ')[1];
++  const token = authHeader.slice(7);
++  const tokenKey = hashToken(token);
+ 
+   // Validare locala simplă a structurii JWT (exp) fara secret, inainte de network
+   try {
+@@ -155,7 +200,7 @@
+       const decodedJson = Buffer.from(payloadBase64, 'base64').toString('utf8');
+       const payload = JSON.parse(decodedJson);
+       if (payload.exp && Date.now() >= payload.exp * 1000) {
+-        tokenCache.delete(token); // Curata curat local
++        tokenCache.delete(tokenKey);
+         return res.status(401).json({ eroare: "Token expirat (JWT local exp)." });
+       }
+     }
+@@ -164,7 +209,7 @@
+   }
+ 
+   const now = Date.now();
+-  const cached = tokenCache.get(token);
++  const cached = tokenCache.get(tokenKey);
+   if (cached && now < cached.expiresAt) {
+     req.user = cached.user;
+     return next();
+@@ -173,10 +218,11 @@
+   try {
+     const { data: { user }, error } = await supabase.auth.getUser(token);
+     if (error || !user) {
+-      tokenCache.delete(token);
++      tokenCache.delete(tokenKey);
+       return res.status(401).json({ eroare: "Token invalid sau respins de serverul Auth." });
+     }
+-    tokenCache.set(token, { user, expiresAt: now + CACHE_TTL_MS });
++    if (tokenCache.size >= MAX_TOKEN_CACHE_ENTRIES) tokenCache.clear();
++    tokenCache.set(tokenKey, { user, expiresAt: now + CACHE_TTL_MS });
+     req.user = user;
+     next();
+   } catch (error) {
+@@ -186,12 +232,17 @@
+ 
+ // Inițializare AI Gemini și listă modele în cascadă (modele stabile prioritar)
+ const genAI = new GoogleGenerativeAI(geminiApiKey);
++const GEMINI_FALLBACK_MODELS = [
++  "gemini-2.5-flash",
++  "gemini-2.0-flash",
++  "gemini-2.0-flash-lite"
++];
++
++// Fix audit: GEMINI_MODEL era documentat in .env.example, dar complet ignorat de cod.
+ const getGeminiModelsList = () => {
+-  return [
+-    "gemini-2.5-flash",
+-    "gemini-2.0-flash",
+-    "gemini-2.0-flash-lite"
+-  ];
++  const preferat = (process.env.GEMINI_MODEL || '').trim();
++  if (!preferat) return [...GEMINI_FALLBACK_MODELS];
++  return [preferat, ...GEMINI_FALLBACK_MODELS.filter((m) => m !== preferat)];
+ };
+ 
+ // Helper pentru timeout cereri cu AbortController real.
+@@ -307,19 +358,25 @@
+ // Verifică primii bytes ai fișierului pentru a confirma tipul real,
+ // independent de extensie sau Content-Type declarat de client.
+ // ==========================================
+-function validateImageMagicBytes(buffer) {
+-  if (!buffer || buffer.length < 4) return false;
++// Fix audit: returnam si tipul MIME real, ca sa nu mai avem incredere in
++// Content-Type declarat de client (putea trimite JPEG etichetat image/png).
++function detectImageMime(buffer) {
++  if (!buffer || buffer.length < 4) return null;
+   // JPEG: FF D8 FF
+-  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return true;
++  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return 'image/jpeg';
+   // PNG: 89 50 4E 47 0D 0A 1A 0A
+-  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return true;
++  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return 'image/png';
+   // WEBP: RIFF....WEBP (bytes 0-3 = RIFF, bytes 8-11 = WEBP)
+   if (
+     buffer.length >= 12 &&
+     buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+     buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+-  ) return true;
+-  return false;
++  ) return 'image/webp';
++  return null;
++}
++
++function validateImageMagicBytes(buffer) {
++  return detectImageMime(buffer) !== null;
+ }
+ 
+ // ==========================================
+@@ -339,14 +396,20 @@
+     }
+ 
+     const fileBuffer = await fs.promises.readFile(req.file.path);
+-    if (!validateImageMagicBytes(fileBuffer)) {
++    const detectedMime = detectImageMime(fileBuffer);
++    if (!detectedMime) {
+       return res.status(400).json({ eroare: "Tip fișier nepermis. Doar imagini JPEG/PNG/WEBP sunt acceptate." });
+     }
++
++    // Fix audit: base64 se calcula de doua ori (dublare consum de memorie ~13MB
++    // pentru o imagine de 5MB) si se folosea mimetype-ul declarat de client.
++    const imageBase64 = fileBuffer.toString("base64");
++    const imageMime = detectedMime;
+ 
+     const imagePart = {
+       inlineData: {
+-        data: fileBuffer.toString("base64"),
+-        mimeType: req.file.mimetype
++        data: imageBase64,
++        mimeType: imageMime
+       },
+     };
+ 
+@@ -368,8 +431,6 @@
+ 
+     let text = null;
+     let lastError = null;
+-    const imageBase64 = fileBuffer.toString("base64");
+-    const imageMime = req.file.mimetype;
+     const requestedProvider = (req.body?.provider || req.query?.provider || 'auto').toLowerCase();
+ 
+     if (requestedProvider !== 'auto' && aiStatusRegistry[requestedProvider]) {
+@@ -437,7 +498,12 @@
+     if (runGroq) {
+       console.log("🔄 Încerc Groq Vision AI...");
+       const groqKeys = getApiKeysList('GROQ_API_KEY');
+-      const groqVisionModels = ["llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview"];
++      // Fix audit: modelele llama-3.2-*-vision-preview au fost retrase de Groq, deci
++      // acest pas al cascadei eșua garantat. Lista este acum configurabila prin env.
++      const groqVisionModels = (
++        process.env.GROQ_VISION_MODELS ||
++        "meta-llama/llama-4-scout-17b-16e-instruct,meta-llama/llama-4-maverick-17b-128e-instruct"
++      ).split(',').map((m) => m.trim()).filter(Boolean);
+       for (const key of groqKeys) {
+         for (const groqModel of groqVisionModels) {
+           try {
+@@ -701,7 +767,8 @@
+       istoric.forEach((m, idx) => {
+         let role = m.role === 'user' || m.sender === 'user' ? 'user' : 'assistant';
+         let content = m.text || m.content || '';
+-        if (idx === istoric.length - 1) content = ultimulMesaj;
++        // Fix audit: suprascriem doar daca ultimul element din istoric e al userului.
++        if (idx === istoric.length - 1 && role === 'user') content = ultimulMesaj;
+         if (content.trim()) {
+           messages.push({ role, content });
+         }
+@@ -1112,7 +1179,8 @@
+ app.get('/api/produs-barcode/:code', requireAuth, aiRateLimiter, async (req, res) => {
+   try {
+     const code = (req.params.code || '').trim();
+-    if (!code || code.length < 4) {
++    // Fix audit: validare stricta (doar cifre, 4-20) inainte de orice interogare.
++    if (!/^[0-9]{4,20}$/.test(code)) {
+       return res.status(400).json({ eroare: "Cod de bare invalid." });
+     }
+ 
+@@ -1144,6 +1212,8 @@
+     }
+ 
+     // STRAT 2: Căutare în OpenFoodFacts API
++    // BUG CRITIC (fix audit): URL-ul avea acolade duble literale in template string,
++    // deci fetch-ul catre OpenFoodFacts esua la FIECARE scanare de cod de bare.
+     const fetchPromise = fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`, {
+       headers: { 'User-Agent': 'NutriAI - React Native App - Contact: tudortone' }
+     });
+@@ -1289,7 +1359,7 @@
+ app.post('/api/salveaza-produs-barcode', requireAuth, async (req, res) => {
+   try {
+     const { code, name, brand, quantity, kcal_100g, protein_100g, carbs_100g, fat_100g } = req.body;
+-    if (!code || !name) {
++    if (!code || typeof name !== 'string' || !name.trim()) {
+       return res.status(400).json({ eroare: "Codul și numele produsului sunt obligatorii." });
+     }
+ 
+@@ -1298,12 +1368,17 @@
+     const c = Number(carbs_100g || 0);
+     const f = Number(fat_100g || 0);
+ 
++    // Fix audit: Number(undefined) => NaN trecea prin toate comparatiile de mai jos.
++    if (![kc, p, c, f].every((n) => Number.isFinite(n))) {
++      return res.status(400).json({ eroare: "Valori nutriționale invalide." });
++    }
++
+     // Hard validations for injection / sanity limits (pe suta de grame limitile chimice fizice normale sunt max 100g macros / ~900kcal - grasime pura)
+     if (kc > 1000 || kc < 0) return res.status(400).json({eroare: "Număr de calorii imposibil fizic pentru 100g."});
+     if (p > 100 || p < 0 || c > 100 || c < 0 || f > 100 || f < 0) return res.status(400).json({eroare: "Macro-nutrienții gresiti (peste 100g din 100g)."});
+     if ((p + c + f) > 100) return res.status(400).json({eroare: "Suma macro-nutrienților depășește 100g per total de 100g."});
+ 
+-    if (code.length < 4 || code.length > 20) {
++    if (!/^[0-9]{4,20}$/.test(String(code).trim())) {
+        return res.status(400).json({eroare: "Cod de bare malformat."});
+     }
+ 
+@@ -1416,12 +1491,25 @@
+ app.delete('/api/mese/:id', requireAuth, async (req, res) => {
+   try {
+     const { id } = req.params;
+-    const { error } = await supabaseAdmin.from('mese').delete().eq('id', id).eq('user_id', req.user.id);
++    // Fix audit: fara validare de UUID, Postgres raspundea cu eroare de sintaxa => 500 in loc de 400.
++    if (!isUuid(id)) {
++      return res.status(400).json({ eroare: 'ID de masă invalid.' });
++    }
++    const { data, error } = await supabaseAdmin
++      .from('mese')
++      .delete()
++      .eq('id', id)
++      .eq('user_id', req.user.id)
++      .select('id');
+     // Bug #12: Nu expune error.message intern (pot conține nume coloane, constrângeri Postgres)
+     if (error) {
+       console.error('Eroare DB ștergere masă:', error.message);
+       return res.status(500).json({ eroare: 'Eroare la ștergerea mesei. Încearcă din nou.' });
+     }
++    // Fix audit: inainte raspundea 200 "succes" si cand masa nu exista / nu era a userului.
++    if (!data || data.length === 0) {
++      return res.status(404).json({ eroare: 'Masa nu a fost găsită.' });
++    }
+     res.json({ succes: true });
+   } catch (error) {
+     res.status(500).json({ eroare: "Eroare la ștergerea mesei." });
+@@ -1437,6 +1525,9 @@
+ app.put('/api/mese/:id', requireAuth, async (req, res) => {
+   try {
+     const { id } = req.params;
++    if (!isUuid(id)) {
++      return res.status(400).json({ eroare: 'ID de masă invalid.' });
++    }
+     const { nume, calorii, proteine, grasimi, carbohidrati, tip_masa, alimente, fibre } = req.body;
+     if (!nume || typeof nume !== 'string' || !nume.trim()) {
+       return res.status(400).json({ eroare: "Numele mesei este obligatoriu." });
+@@ -1464,7 +1555,8 @@
+       updatePayload.tip_masa = tip_masa;
+     }
+     if (Array.isArray(alimente)) {
+-      updatePayload.alimente = alimente;
++      // Fix audit: plafonam numarul de alimente per masa (protectie payload JSONB).
++      updatePayload.alimente = alimente.slice(0, 100);
+     }
+     const { data, error } = await supabaseAdmin
+       .from('mese')
+@@ -1477,6 +1569,10 @@
+       console.error('Eroare DB actualizare masă:', error.message);
+       return res.status(500).json({ eroare: 'Eroare la actualizarea mesei. Încearcă din nou.' });
+     }
++    // Fix audit: inainte returna { succes: true, masa: undefined } cand randul nu exista.
++    if (!data || data.length === 0) {
++      return res.status(404).json({ eroare: 'Masa nu a fost găsită.' });
++    }
+     res.json({ succes: true, masa: data[0] });
+   } catch (error) {
+     res.status(500).json({ eroare: "Eroare la actualizarea mesei." });
+@@ -1520,21 +1616,32 @@
+       carbohidrati: isNaN(carb) ? 0 : Math.round(carb),
+       fibre: isNaN(fib) ? 0 : Math.round(fib),
+       tip_masa: tip_masa && ['mic_dejun', 'pranz', 'cina', 'gustare'].includes(tip_masa) ? tip_masa : 'gustare',
+-      alimente: Array.isArray(alimente) ? alimente : [],
+-      data: data || null,
+-      ora: ora || null,
++      alimente: Array.isArray(alimente) ? alimente.slice(0, 100) : [],
++      // Fix audit: `data` si `ora` ajungeau nevalidate in coloane DATE/TIME, deci orice
++      // text arunca o eroare Postgres (500). Acceptam doar formatele valide.
++      data: /^\d{4}-\d{2}-\d{2}$/.test(String(data || '')) ? data : null,
++      ora: /^\d{2}:\d{2}(:\d{2})?$/.test(String(ora || '')) ? ora : null,
+     };
+ 
+     // RLS reabilitat
++    // Fix audit: acces direct la .split(' ')[1] putea arunca TypeError.
++    const bearerToken = (req.headers.authorization || '').split(' ')[1];
++    if (!bearerToken) {
++      return res.status(401).json({ eroare: "Acces neautorizat. Token lipsă." });
++    }
+     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+-      global: { headers: { Authorization: `Bearer ${req.headers.authorization.split(' ')[1]}` } }
++      global: { headers: { Authorization: `Bearer ${bearerToken}` } }
+     });
+     const { data: result, error } = await userClient
+       .from('mese')
+       .insert([insertPayload])
+       .select();
+-    if (error) return res.status(500).json({ eroare: error.message });
+-    res.json({ succes: true, masa: result[0] });
++    // Fix audit: nu mai expunem error.message brut de la Postgres (scurgere de schema).
++    if (error) {
++      console.error('Eroare DB inserare masă:', error.message);
++      return res.status(500).json({ eroare: 'Eroare la adăugarea mesei. Încearcă din nou.' });
++    }
++    res.json({ succes: true, masa: result?.[0] || null });
+   } catch (error) {
+     res.status(500).json({ eroare: "Eroare la adăugarea mesei." });
+   }
+@@ -1553,14 +1660,16 @@
+ app.use((err, req, res, next) => {
+   const message = err?.message || '';
+   console.error("Eroare globală:", message);
++  // Fix audit: LIMIT_FILE_SIZE este tot o MulterError, deci ramura 413 era cod mort
++  // (fisierele prea mari primeau 400). Verificam codul INAINTE de instanceof.
++  if (err?.code === 'LIMIT_FILE_SIZE') {
++    return res.status(413).json({ eroare: "Fișierul este prea mare. Limita este 5MB." });
++  }
+   if (err instanceof multer.MulterError) {
+     return res.status(400).json({ eroare: message });
+   }
+   if (message.includes('Tip fișier nepermis')) {
+     return res.status(400).json({ eroare: message });
+-  }
+-  if (err?.code === 'LIMIT_FILE_SIZE') {
+-    return res.status(413).json({ eroare: "Fișierul este prea mare. Limita este 5MB." });
+   }
+   res.status(500).json({ eroare: "Eroare internă a serverului." });
+ });
+@@ -1575,7 +1684,11 @@
+ const startKeepAliveTicker = (serverPort) => {
+   const intervalMinutes = parseFloat(process.env.KEEP_ALIVE_INTERVAL_MINUTES) || 10;
+   const intervalMs = intervalMinutes * 60 * 1000;
+-  const targetUrl = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL || `http://127.0.0.1:${serverPort}/health`;
++  // Fix audit: RENDER_EXTERNAL_URL indica radacina serviciului, nu /health.
++  const baseUrl = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL;
++  const targetUrl = baseUrl
++    ? `${baseUrl.replace(/\/+$/, '')}${/\/health\/?$/.test(baseUrl) ? '' : '/health'}`
++    : `http://127.0.0.1:${serverPort}/health`;
+ 
+   console.log(`⏱️ Keep-Alive Ticker activat: Ping automat către ${targetUrl} la fiecare ${intervalMinutes} minute.`);
+ 
+@@ -1602,8 +1715,20 @@
+ 
+ // Pornire server doar dacă fișierul este rulat direct (nu importat în teste)
+ if (require.main === module) {
+-  app.listen(port, '0.0.0.0', () => {
++  const server = app.listen(port, '0.0.0.0', () => {
+     console.log(`🚀 Serverul securizat rulează pe http://0.0.0.0:${port}`);
+     startKeepAliveTicker(port);
+   });
++
++  // Fix audit: lipsea graceful shutdown — la fiecare redeploy cererile in curs erau taiate.
++  const shutdown = (signal) => {
++    console.log(`${signal} primit — inchid serverul elegant...`);
++    server.close(() => {
++      console.log('Server inchis.');
++      process.exit(0);
++    });
++    setTimeout(() => process.exit(1), 10000).unref();
++  };
++  process.on('SIGTERM', () => shutdown('SIGTERM'));
++  process.on('SIGINT', () => shutdown('SIGINT'));
+ }
+diff --git a/backend-nutritie-ai/tests/server.test.js b/backend-nutritie-ai/tests/server.test.js
+--- a/backend-nutritie-ai/tests/server.test.js
++++ b/backend-nutritie-ai/tests/server.test.js
+@@ -1,4 +1,3 @@
+-
+ const request = require('supertest');
+ const app = require('../server');
+ 
+@@ -117,6 +116,24 @@
+     });
+   });
+ 
++  describe('Validări ID / cod de bare (fix audit)', () => {
++    it('ar trebui să returneze 400 pentru un ID de masă care nu este UUID', async () => {
++      const res = await request(app)
++        .delete('/api/mese/nu-este-uuid')
++        .set('Authorization', 'Bearer token_valid');
++      expect(res.statusCode).toBe(400);
++      expect(res.body.eroare).toContain('ID de masă invalid');
++    });
++
++    it('ar trebui să returneze 400 pentru un cod de bare nenumeric', async () => {
++      const res = await request(app)
++        .get('/api/produs-barcode/abc!!')
++        .set('Authorization', 'Bearer token_valid');
++      expect(res.statusCode).toBe(400);
++      expect(res.body.eroare).toContain('Cod de bare invalid');
++    });
++  });
++
+   describe('Validări Faza 1 /api/analizeaza-mancare-structurat', () => {
+     it('ar trebui să returneze 400 dacă fișierul nu este o imagine (ex: .txt)', async () => {
+       const res = await request(app)
+diff --git a/frontend-nutritie/app/(tabs)/antrenamente.tsx b/frontend-nutritie/app/(tabs)/antrenamente.tsx
+--- a/frontend-nutritie/app/(tabs)/antrenamente.tsx
++++ b/frontend-nutritie/app/(tabs)/antrenamente.tsx
+@@ -2,13 +2,12 @@
+ import React, { useMemo, useState, useEffect } from 'react';
+ import AsyncStorage from '@react-native-async-storage/async-storage';
+ import {
+-  View,
++  useWindowDimensions, View,
+   Text,
+   StyleSheet,
+   ScrollView,
+   Pressable,
+   TextInput,
+-  Dimensions,
+   type TextStyle,
+   type ViewStyle,
+ } from 'react-native';
+@@ -38,7 +37,6 @@
+ 
+ // ---- Constants --------------------------------------------------------------
+ 
+-const SCREEN_WIDTH = Dimensions.get('window').width;
+ const MAP_HEIGHT = 380;
+ const CTA_COLOR = '#0EA5E9';
+ 
+@@ -75,6 +73,8 @@
+ // ---- Component --------------------------------------------------------------
+ 
+ export default function AntrenamenteScreen() {
++  // FIX UI: Dimensions.get la nivel de modul nu se actualizeaza la rotire/split-screen.
++  const { width: SCREEN_WIDTH } = useWindowDimensions();
+   const { colors } = useTheme();
+   const { adaugaAntrenament } = useAntrenamente();
+   const notify = useNotify();
+diff --git a/frontend-nutritie/app/(tabs)/chat.tsx b/frontend-nutritie/app/(tabs)/chat.tsx
+--- a/frontend-nutritie/app/(tabs)/chat.tsx
++++ b/frontend-nutritie/app/(tabs)/chat.tsx
+@@ -44,7 +44,13 @@
+   };
+ }
+ 
++// Generator de id stabil pentru mesajele de chat (folosit ca `key` in lista).
++const newMsgId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
++
+ interface ChatMessage {
++  // FIX UI: fara id stabil, key={index} facea Reanimated sa reutilizeze bula
++  // gresita la inserarea unui mesaj (animatii care sar, text amestecat).
++  id?: string;
+   role: 'ai' | 'user' | string;
+   text: string;
+ }
+@@ -119,7 +125,7 @@
+   const [mealProposalVisible, setMealProposalVisible] = useState(false);
+   const [savingProposal, setSavingProposal] = useState(false);
+   const [mesaje, setMesaje] = useState<ChatMessage[]>([
+-    { role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
++    { id: newMsgId(), role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
+   ]);
+   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+   const scrollViewRef = useRef<ScrollView>(null);
+@@ -213,11 +219,11 @@
+   const executaTrimitereMesaj = async (mesajText: string) => {
+     if (!mesajText.trim()) return;
+     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+-    setMesaje(prev => [...prev, { role: 'user', text: mesajText }]);
++    setMesaje(prev => [...prev, { id: newMsgId(), role: 'user', text: mesajText }]);
+     setLoadingChat(true);
+ 
+     if (!session) {
+-      setMesaje(prev => [...prev, { role: 'ai', text: "Nu ești autentificat. Te rog să te conectezi din nou." }]);
++      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: "Nu ești autentificat. Te rog să te conectezi din nou." }]);
+       setLoadingChat(false);
+       return;
+     }
+@@ -271,9 +277,9 @@
+         raspunsText = "Am identificat alimentele! Apasă pe butonul de confirmare care a apărut pe ecran.";
+       }
+ 
+-      setMesaje(prev => [...prev, { role: 'ai', text: raspunsText }]);
++      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: raspunsText }]);
+     } catch {
+-      setMesaje(prev => [...prev, { role: 'ai', text: "Eroare de conexiune cu serverul AI. Te rog încearcă din nou mai târziu." }]);
++      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: "Eroare de conexiune cu serverul AI. Te rog încearcă din nou mai târziu." }]);
+     } finally {
+       setLoadingChat(false);
+       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+@@ -311,15 +317,24 @@
+ 
+       // 3. Inserarea batch a tuturor alimentelor o singură dată
+       const tipMasa = mealProposal.meal_type || 'gustare';
++      // FIX: coloanele `data` si `ora` ramaneau mereu NULL (doar created_at era populat),
++      // iar valorile halucinate de AI puteau depasi CHECK-urile din Postgres (calorii <= 15000,
++      // macro <= 2000) => insert respins cu eroare bruta afisata utilizatorului.
++      const acumMasa = new Date();
++      const ziLocala = `${acumMasa.getFullYear()}-${String(acumMasa.getMonth() + 1).padStart(2, '0')}-${String(acumMasa.getDate()).padStart(2, '0')}`;
++      const oraLocala = acumMasa.toTimeString().slice(0, 8);
++      const clampVal = (v: number, max: number) => Math.max(0, Math.min(max, Number.isFinite(v) ? v : 0));
+       const rows = mealProposal.items.map((item: any) => ({
+         user_id: session.user.id,
+         nume: `${item.name} (${item.qty}${item.unit || 'g'})`,
+-        calorii: Math.round(parseStrictNumber(item.kcal)), // Caloriile rămân rotunjite
+-        proteine: parseStrictNumber(item.protein_g), // Păstrăm zecimalele
+-        carbohidrati: parseStrictNumber(item.carbs_g),
+-        grasimi: parseStrictNumber(item.fat_g),
++        calorii: clampVal(Math.round(parseStrictNumber(item.kcal)), 15000), // Caloriile rămân rotunjite
++        proteine: clampVal(parseStrictNumber(item.protein_g), 2000), // Păstrăm zecimalele
++        carbohidrati: clampVal(parseStrictNumber(item.carbs_g), 2000),
++        grasimi: clampVal(parseStrictNumber(item.fat_g), 2000),
+         // Bug #18: fiber_g era prezent în propunerea AI dar nu era salvat → câmpul rămânea 0
+-        fibre: Math.round(parseStrictNumber(item.fiber_g)),
++        fibre: clampVal(Math.round(parseStrictNumber(item.fiber_g)), 2000),
++        data: ziLocala,
++        ora: oraLocala,
+         tip_masa: tipMasa,
+       }));
+ 
+@@ -336,7 +351,7 @@
+       setMealProposalVisible(false);
+       setMealProposal(null);
+       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+-      setMesaje(prev => [...prev, { role: 'ai', text: '✅ Masa a fost confirmată și adăugată cu succes în Jurnal!' }]);
++      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: '✅ Masa a fost confirmată și adăugată cu succes în Jurnal!' }]);
+       
+     } catch (e: any) {
+       console.error('Eroare salvare propunere masă:', e);
+@@ -365,7 +380,7 @@
+       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+     } catch {}
+     const initialMsg: ChatMessage[] = [
+-      { role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
++      { id: newMsgId(), role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
+     ];
+     setMesaje(initialMsg);
+     await AsyncStorage.removeItem(getChatStorageKey());
+@@ -501,7 +516,7 @@
+             >
+               {mesaje.map((msg, index) => (
+                 <Animated.View
+-                  key={index}
++                  key={msg.id ?? `msg-${index}`}
+                   entering={FadeIn.duration(400)}
+                   layout={Layout.springify()}
+                   style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleAI]}
+diff --git a/frontend-nutritie/app/(tabs)/istoric.tsx b/frontend-nutritie/app/(tabs)/istoric.tsx
+--- a/frontend-nutritie/app/(tabs)/istoric.tsx
++++ b/frontend-nutritie/app/(tabs)/istoric.tsx
+@@ -86,9 +86,11 @@
+           style: "destructive",
+           onPress: async () => {
+             try {
+-              const { error } = await supabase.from('mese').delete().eq('id', masa.id);
++              const { error } = await supabase.from('mese').delete().eq('id', masa.id).eq('user_id', masa.user_id);
+               if (error) {
+-                Alert.alert("Eroare", `Nu s-a putut șterge masa: ${error.message}`);
++                console.error("[Istoric] Stergere masa esuata:", error.message);
++                // FIX UI: utilizatorul vedea mesajul brut de la Postgres.
++                Alert.alert("Nu am putut sterge masa", "Incearca din nou in cateva momente.");
+               } else {
+                 refresh();
+               }
+diff --git a/frontend-nutritie/app/(tabs)/profil.tsx b/frontend-nutritie/app/(tabs)/profil.tsx
+--- a/frontend-nutritie/app/(tabs)/profil.tsx
++++ b/frontend-nutritie/app/(tabs)/profil.tsx
+@@ -23,6 +23,8 @@
+ import { useNotificationBanner } from '../../context/NotificationBannerContext';
+ import { useNotify } from '../../hooks/useNotify';
+ import { useGamificare } from '../../hooks/useGamificare';
++// FIX UI: tastatura acoperea cele 7 input-uri din profil.
++import KeyboardAwareScreen from '../../components/ui/KeyboardAwareScreen';
+ import { INSIGNE_LIST } from '../../constants/insigne';
+ import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+ 
+@@ -229,11 +231,15 @@
+   const initials = session.user.email?.slice(0, 2).toUpperCase() || 'NU';
+ 
+   return (
+-    <View style={[styles.container, { backgroundColor: colors.background }]}>
++    <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
+       <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
+       <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
+ 
+-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}>
++      <ScrollView
++        showsVerticalScrollIndicator={false}
++        keyboardShouldPersistTaps="handled"
++        contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}
++      >
+ 
+         {/* Avatar header */}
+         <Animated.View entering={FadeInDown.duration(500)} style={styles.avatarSection}>
+@@ -241,7 +247,13 @@
+             <LinearGradient colors={colors.accentGradient} style={[styles.avatarRing, { shadowColor: colors.accent }]}>
+               <View style={[styles.avatarInner, { backgroundColor: '#0F1318', overflow: 'hidden' }]}>
+                 {avatarUrl ? (
+-                  <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 29 }} />
++                  <Image
++                    source={{ uri: avatarUrl }}
++                    style={{ width: '100%', height: '100%', borderRadius: 29 }}
++                    // FIX UI: fara resizeMode imaginea era intinsa/deformata.
++                    resizeMode="cover"
++                    accessibilityLabel="Poza de profil"
++                  />
+                 ) : (
+                   <Text style={[styles.avatarText, { color: colors.accent }]}>{initials}</Text>
+                 )}
+@@ -709,7 +721,7 @@
+           </BlurView>
+         </Animated.View>
+       )}
+-    </View>
++    </KeyboardAwareScreen>
+   );
+ }
+ 
+diff --git a/frontend-nutritie/app/adauga-manual.tsx b/frontend-nutritie/app/adauga-manual.tsx
+--- a/frontend-nutritie/app/adauga-manual.tsx
++++ b/frontend-nutritie/app/adauga-manual.tsx
+@@ -21,6 +21,7 @@
+ import { ArrowLeft, Check, Heart, Trash2 } from 'lucide-react-native';
+ import { useTheme } from '../context/ThemeContext';
+ import { useAuth } from '../context/AuthContext';
++import { useSafeAreaInsets } from 'react-native-safe-area-context';
+ import { supabase } from '../supabase';
+ import { useFavorite } from '../hooks/useFavorite';
+ import { TipMasa, AlimentDetaliat } from '../types';
+@@ -29,6 +30,14 @@
+ import * as Haptics from 'expo-haptics';
+ 
+ export default function AdaugaManualScreen() {
++  const insets = useSafeAreaInsets();
++  // FIX: parseInt trunchia zecimalele (12.5 g proteine se salvau ca 12) si nu avea radix.
++  // Acceptam si virgula ca separator zecimal (tastatura romaneasca).
++  const numar = (v: string) => {
++    const n = parseFloat(String(v ?? '').replace(',', '.'));
++    return Number.isFinite(n) && n > 0 ? Math.round(n * 10) / 10 : 0;
++  };
++
+   const router = useRouter();
+   const { colors } = useTheme();
+   const { user } = useAuth();
+@@ -96,7 +105,7 @@
+       return;
+     }
+ 
+-    const cal = parseInt(calorii) || 0;
++    const cal = Math.round(numar(calorii));
+     if (cal === 0 && !calorii) {
+       Alert.alert("Calorii lipsă", "Introduceți numărul estimat de calorii pentru această masă.");
+       return;
+@@ -120,10 +129,10 @@
+           nume: nume.trim(),
+           grame: grame || 0,
+           calorii: cal,
+-          proteine: parseInt(proteine) || 0,
+-          carbohidrati: parseInt(carbohidrati) || 0,
+-          grasimi: parseInt(grasimi) || 0,
+-          fibre: parseInt(fibre) || 0,
++          proteine: numar(proteine),
++          carbohidrati: numar(carbohidrati),
++          grasimi: numar(grasimi),
++          fibre: numar(fibre),
+         }
+       ];
+ 
+@@ -133,10 +142,13 @@
+           user_id: user.id,
+           nume: numeFinal,
+           calorii: cal,
+-          proteine: parseInt(proteine) || 0,
+-          carbohidrati: parseInt(carbohidrati) || 0,
+-          grasimi: parseInt(grasimi) || 0,
+-          fibre: parseInt(fibre) || 0,
++          proteine: numar(proteine),
++          carbohidrati: numar(carbohidrati),
++          grasimi: numar(grasimi),
++          fibre: numar(fibre),
++          // FIX: todayStr / oraStr erau calculate mai sus dar nu erau folosite niciodata.
++          data: todayStr,
++          ora: oraStr,
+           tip_masa: tipMasa,
+           alimente: alimentePayload,
+         });
+@@ -162,8 +174,8 @@
+       <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
+       <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
+ 
+-      <View style={styles.header}>
+-        <TouchableOpacity style={[styles.backBtn, { backgroundColor: colors.surfaceBg }]} onPress={() => router.back()}>
++      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
++        <TouchableOpacity style={[styles.backBtn, { backgroundColor: colors.surfaceBg }]} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12}>
+           <ArrowLeft size={22} color={colors.textPrimary} />
+         </TouchableOpacity>
+         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Adaugă Masă Manual</Text>
+@@ -171,7 +183,12 @@
+       </View>
+ 
+       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
++        <ScrollView
++          showsVerticalScrollIndicator={false}
++          contentContainerStyle={styles.scroll}
++          // FIX UI: fara asta, primul tap pe "Salveaza" doar inchidea tastatura.
++          keyboardShouldPersistTaps="handled"
++        >
+           
+           {/* Favorite Foods Section */}
+           {favorite.length > 0 && (
+@@ -278,7 +295,9 @@
+                       placeholderTextColor={colors.textTertiary}
+                       value={calorii}
+                       onChangeText={setCalorii}
+-                      keyboardType="numeric"
++                      keyboardType="decimal-pad"
++                      maxLength={5}
++                      returnKeyType="done"
+                       selectionColor={colors.accent}
+                     />
+                   </View>
+@@ -291,7 +310,9 @@
+                       placeholderTextColor={colors.textTertiary}
+                       value={proteine}
+                       onChangeText={setProteine}
+-                      keyboardType="numeric"
++                      keyboardType="decimal-pad"
++                      maxLength={4}
++                      returnKeyType="done"
+                       selectionColor={colors.accent}
+                     />
+                   </View>
+@@ -306,7 +327,9 @@
+                       placeholderTextColor={colors.textTertiary}
+                       value={carbohidrati}
+                       onChangeText={setCarbohidrati}
+-                      keyboardType="numeric"
++                      keyboardType="decimal-pad"
++                      maxLength={4}
++                      returnKeyType="done"
+                       selectionColor={colors.accent}
+                     />
+                   </View>
+@@ -319,7 +342,9 @@
+                       placeholderTextColor={colors.textTertiary}
+                       value={grasimi}
+                       onChangeText={setGrasimi}
+-                      keyboardType="numeric"
++                      keyboardType="decimal-pad"
++                      maxLength={4}
++                      returnKeyType="done"
+                       selectionColor={colors.accent}
+                     />
+                   </View>
+@@ -334,7 +359,9 @@
+                       placeholderTextColor={colors.textTertiary}
+                       value={fibre}
+                       onChangeText={setFibre}
+-                      keyboardType="numeric"
++                      keyboardType="decimal-pad"
++                      maxLength={4}
++                      returnKeyType="done"
+                       selectionColor={colors.accent}
+                     />
+                   </View>
+@@ -370,10 +397,10 @@
+                 }
+                 addFavorite({
+                   nume: nume.trim(),
+-                  calorii: parseInt(calorii) || 0,
+-                  proteine: parseInt(proteine) || 0,
+-                  carbohidrati: parseInt(carbohidrati) || 0,
+-                  grasimi: parseInt(grasimi) || 0,
++                  calorii: Math.round(numar(calorii)),
++                  proteine: numar(proteine),
++                  carbohidrati: numar(carbohidrati),
++                  grasimi: numar(grasimi),
+                 });
+               }}
+               activeOpacity={0.8}
+@@ -395,7 +422,7 @@
+   glowTop: { position: 'absolute', top: -150, right: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.05 },
+   glowBottom: { position: 'absolute', bottom: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.05 },
+ 
+-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 56 : 36, paddingHorizontal: 20, paddingBottom: 16 },
++  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16 },
+   backBtn: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+   headerTitle: { fontSize: 20, fontWeight: '800' },
+ 
+diff --git a/frontend-nutritie/app/auth.tsx b/frontend-nutritie/app/auth.tsx
+--- a/frontend-nutritie/app/auth.tsx
++++ b/frontend-nutritie/app/auth.tsx
+@@ -189,6 +189,11 @@
+                   }}
+                   autoCapitalize="none"
+                   keyboardType="email-address"
++                  // FIX UI: autocorectul transforma adresele de email, iar autofill-ul nu functiona.
++                  autoCorrect={false}
++                  autoComplete="email"
++                  textContentType="emailAddress"
++                  returnKeyType="next"
+                   selectionColor={colors.accent}
+                 />
+               </View>
+@@ -208,6 +213,11 @@
+                     if (authError) setAuthError(null);
+                   }}
+                   secureTextEntry={!showPassword}
++                  autoCapitalize="none"
++                  autoCorrect={false}
++                  autoComplete="password"
++                  textContentType="password"
++                  returnKeyType="done"
+                   selectionColor={colors.accent}
+                 />
+                 <TouchableOpacity
+diff --git a/frontend-nutritie/app/calculator-ai.tsx b/frontend-nutritie/app/calculator-ai.tsx
+--- a/frontend-nutritie/app/calculator-ai.tsx
++++ b/frontend-nutritie/app/calculator-ai.tsx
+@@ -12,6 +12,9 @@
+ import { useTheme } from '../context/ThemeContext';
+ import { useAuth } from '../context/AuthContext';
+ import { useNotificationBanner } from '../context/NotificationBannerContext';
++// FIX UI: tastatura acoperea input-urile de varsta/greutate/inaltime.
++import KeyboardAwareScreen from '../components/ui/KeyboardAwareScreen';
++import { useSafeAreaInsets } from 'react-native-safe-area-context';
+ 
+ interface SelectionRowProps {
+   label: string;
+@@ -46,6 +49,7 @@
+ };
+ 
+ export default function CalculatorAI() {
++  const insets = useSafeAreaInsets();
+   const router = useRouter();
+   const { colors } = useTheme();
+   const { session } = useAuth();
+@@ -140,12 +144,12 @@
+   };
+ 
+   return (
+-    <View style={[styles.container, { backgroundColor: colors.background }]}>
++    <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
+       <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
+       <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
+ 
+-      <Animated.View entering={FadeInUp.duration(500)} style={styles.header}>
+-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
++      <Animated.View entering={FadeInUp.duration(500)} style={[styles.header, { paddingTop: insets.top + 12 }]}>
++        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={styles.backBtn}>
+           <BlurView intensity={20} tint="dark" style={styles.backBtnBlur}>
+             <ArrowLeft color="#fff" size={24} />
+           </BlurView>
+@@ -153,7 +157,11 @@
+         <Text style={[styles.title, { color: colors.textPrimary }]}>Asistent Profil</Text>
+       </Animated.View>
+ 
+-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
++      <ScrollView
++        contentContainerStyle={styles.scroll}
++        showsVerticalScrollIndicator={false}
++        keyboardShouldPersistTaps="handled"
++      >
+         <Animated.View entering={ZoomIn.duration(600).delay(100)} style={[styles.aiBadge, { borderColor: colors.accent + '33' }]}>
+           <LinearGradient colors={[colors.accent + '26', 'rgba(0,0,0,0)']} style={styles.aiBadgeGrad}>
+             <Sparkles size={24} color={colors.accent} />
+@@ -246,7 +254,7 @@
+           </TouchableOpacity>
+         </Animated.View>
+       </ScrollView>
+-    </View>
++    </KeyboardAwareScreen>
+   );
+ }
+ 
+@@ -255,7 +263,7 @@
+   glowTop: { position: 'absolute', top: -150, right: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.05 },
+   glowBottom: { position: 'absolute', bottom: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.05 },
+ 
+-  header: { flexDirection: 'row', alignItems: 'center', paddingTop: 60, paddingHorizontal: 20, paddingBottom: 20 },
++  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20 },
+   backBtn: { borderRadius: 16, overflow: 'hidden', marginRight: 16 },
+   backBtnBlur: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+   title: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
+diff --git a/frontend-nutritie/app/camera.tsx b/frontend-nutritie/app/camera.tsx
+--- a/frontend-nutritie/app/camera.tsx
++++ b/frontend-nutritie/app/camera.tsx
+@@ -398,7 +398,7 @@
+             </TouchableOpacity>
+           </Animated.View>
+ 
+-          <TouchableOpacity style={styles.cancelLink} onPress={() => router.back()}>
++          <TouchableOpacity style={styles.cancelLink} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12}>
+             <Text style={[styles.cancelLinkText, { color: colors.textSecondary }]}>Înapoi</Text>
+           </TouchableOpacity>
+         </View>
+diff --git a/frontend-nutritie/app/exercitiu/[id].tsx b/frontend-nutritie/app/exercitiu/[id].tsx
+--- a/frontend-nutritie/app/exercitiu/[id].tsx
++++ b/frontend-nutritie/app/exercitiu/[id].tsx
+@@ -320,7 +320,7 @@
+   if (!exercitiu) {
+     return (
+       <View style={[styles.container, { paddingTop: insets.top + Spacing.lg, backgroundColor: colors.background }]}>
+-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
++        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={styles.backBtn}>
+           <ArrowLeft size={22} color={colors.textPrimary} />
+         </TouchableOpacity>
+         <View style={styles.notFoundWrap}>
+@@ -446,7 +446,7 @@
+     <View style={[styles.container, { paddingTop: Math.max(insets.top, Spacing.lg), backgroundColor: colors.background }]}>
+       {/* Header */}
+       <View style={[styles.header, { borderBottomColor: colors.border }]}>
+-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
++        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={styles.backBtn}>
+           <ArrowLeft size={22} color={colors.textPrimary} />
+         </TouchableOpacity>
+         <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+diff --git a/frontend-nutritie/app/jurnal-antrenamente.tsx b/frontend-nutritie/app/jurnal-antrenamente.tsx
+--- a/frontend-nutritie/app/jurnal-antrenamente.tsx
++++ b/frontend-nutritie/app/jurnal-antrenamente.tsx
+@@ -18,6 +18,7 @@
+ import { useNotify } from '../hooks/useNotify';
+ import { ConfirmSheet } from '../components/ui/ConfirmSheet';
+ import KeyboardAwareScreen, { CONTENT_BOTTOM_PADDING } from '@/components/ui/KeyboardAwareScreen';
++import { useSafeAreaInsets } from 'react-native-safe-area-context';
+ 
+ interface ZiGrupata {
+   titlu: string;
+@@ -26,6 +27,7 @@
+ }
+ 
+ export default function JurnalAntrenamenteScreen() {
++  const insets = useSafeAreaInsets();
+   const router = useRouter();
+   const { colors } = useTheme();
+   const notify = useNotify();
+@@ -105,8 +107,8 @@
+   return (
+     <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
+       {/* HEADER */}
+-      <View style={styles.header}>
+-        <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: colors.surfaceBg }]}>
++      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
++        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={[styles.backBtn, { backgroundColor: colors.surfaceBg }]}>
+           <ArrowLeft size={20} color={colors.textPrimary} />
+         </TouchableOpacity>
+         <View style={{ flex: 1, marginLeft: 12 }}>
+@@ -282,7 +284,7 @@
+ 
+ const styles = StyleSheet.create({
+   container: { flex: 1 },
+-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 50, paddingBottom: 16 },
++  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16 },
+   backBtn: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+   headerTitle: { fontSize: 20, fontWeight: '800' },
+   headerSub: { fontSize: 13, fontWeight: '500' },
+diff --git a/frontend-nutritie/app/notificari.tsx b/frontend-nutritie/app/notificari.tsx
+--- a/frontend-nutritie/app/notificari.tsx
++++ b/frontend-nutritie/app/notificari.tsx
+@@ -122,7 +122,7 @@
+         ]}
+       >
+         <TouchableOpacity
+-          onPress={() => router.back()}
++          onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12}
+           style={[styles.backButton, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}
+         >
+           <ArrowLeft size={20} color={colors.textPrimary} />
+diff --git a/frontend-nutritie/app/onboarding.tsx b/frontend-nutritie/app/onboarding.tsx
+--- a/frontend-nutritie/app/onboarding.tsx
++++ b/frontend-nutritie/app/onboarding.tsx
+@@ -1,8 +1,7 @@
+ 
+ import React, { useState, useRef } from 'react';
+ import {
+-  View, Text, StyleSheet, TouchableOpacity, Dimensions,
+-  ScrollView
++  useWindowDimensions, View, Text, StyleSheet, TouchableOpacity, ScrollView
+ } from 'react-native';
+ import { useRouter } from 'expo-router';
+ import { LinearGradient } from 'expo-linear-gradient';
+@@ -11,7 +10,6 @@
+ import { useTheme } from '../context/ThemeContext';
+ import { useAppStore } from '../hooks/useAppStore';
+ 
+-const { width } = Dimensions.get('window');
+ 
+ const SLIDES = [
+   {
+@@ -41,6 +39,8 @@
+ ];
+ 
+ export default function OnboardingScreen() {
++  // FIX UI: Dimensions.get la nivel de modul nu se actualizeaza la rotire/split-screen.
++  const { width } = useWindowDimensions();
+   const router = useRouter();
+   const { colors } = useTheme();
+   const { setOnboardingDone } = useAppStore();
+diff --git a/frontend-nutritie/app/scanner-barcode.tsx b/frontend-nutritie/app/scanner-barcode.tsx
+--- a/frontend-nutritie/app/scanner-barcode.tsx
++++ b/frontend-nutritie/app/scanner-barcode.tsx
+@@ -306,7 +306,7 @@
+       {/* Top Bar */}
+       <View style={styles.headerBar}>
+         <TouchableOpacity
+-          onPress={() => router.back()}
++          onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12}
+           style={[styles.navBtn, { backgroundColor: colors.surfaceBg }]}
+           accessibilityLabel="Înapoi"
+           accessibilityRole="button"
+diff --git a/frontend-nutritie/constants/config.ts b/frontend-nutritie/constants/config.ts
+--- a/frontend-nutritie/constants/config.ts
++++ b/frontend-nutritie/constants/config.ts
+@@ -1,9 +1,20 @@
+-
+ import { Platform } from 'react-native';
+ 
+ // Folosim variabila de mediu dacă e setată, altfel alegem adresa potrivită pentru emulator.
+ // Pe emulatorul Android standard, `localhost` din aplicație nu ajunge la serverul local,
+ // de aceea folosim `10.0.2.2`. Dacă rulezi pe telefon fizic, setează `EXPO_PUBLIC_API_URL`
+ // cu IP-ul mașinii tale, de exemplu `http://192.168.1.100:3000`.
+-const envApiUrl = process.env.EXPO_PUBLIC_API_URL;
+-export const API_URL = envApiUrl || 'https://nutritie-backend-ai.onrender.com';
++const envApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
++
++export const PRODUCTION_API_URL = 'https://nutritie-backend-ai.onrender.com';
++
++// Fix audit: `Platform` era importat dar niciodata folosit (eroare de lint) si adresa
++// de emulator descrisa in comentariul de mai sus nu era implementata nicaieri.
++// Pentru dezvoltare locala seteaza EXPO_PUBLIC_API_URL = LOCAL_API_URL.
++export const LOCAL_API_URL = Platform.select({
++  android: 'http://10.0.2.2:3000',
++  ios: 'http://localhost:3000',
++  default: 'http://localhost:3000',
++}) as string;
++
++export const API_URL = envApiUrl || PRODUCTION_API_URL;
+diff --git a/frontend-nutritie/constants/exercitii.ts b/frontend-nutritie/constants/exercitii.ts
+--- a/frontend-nutritie/constants/exercitii.ts
++++ b/frontend-nutritie/constants/exercitii.ts
+@@ -2,6 +2,7 @@
+ import { classifyMeasurement, type MeasurementSpec } from '../lib/measurement';
+ import { NEW_EXERCISES } from './new_exercises';
+ import { NEW_EXERCISES_V2 } from './new_exercises_v2';
++import { NEW_EXERCISES_V3 } from './new_exercises_v3';
+ export type GrupaMusculara = string;
+ export type Echipament = string;
+ 
+@@ -1218,6 +1219,9 @@
+     if (/cvadriceps|picioare/i.test(g)) return [{ id: 'cvadriceps', pct: 95 }];
+     if (/ischiogambieri|femurali/i.test(g)) return [{ id: 'ischiogambieri', pct: 85 }];
+     if (/gambe/i.test(g)) return [{ id: 'gambe', pct: 75 }];
++    // FIX HARTA: 'abductori' lipsea complet, iar regexul /adductori/ prindea si
++    // "abductori" => muschiul abductor nu se aprindea NICIODATA, se colora adductorul.
++    if (/abductori|fesier mijlociu/i.test(g)) return [{ id: 'abductori', pct: 80 }];
+     if (/adductori/i.test(g)) return [{ id: 'adductori', pct: 65 }];
+     if (/full-body|corp_intreg|cardio/i.test(g)) return [
+       { id: 'cvadriceps', pct: 60 },
+@@ -1240,7 +1244,18 @@
+   return out;
+ }
+ 
+-export const EXERCITII_DB: Exercitiu[] = [...EXERCITII, ...NEW_EXERCISES, ...NEW_EXERCISES_V2].map((e) => ({
++const TOATE_EXERCITIILE: Exercitiu[] = [
++  ...EXERCITII,
++  ...NEW_EXERCISES,
++  ...NEW_EXERCISES_V2,
++  ...NEW_EXERCISES_V3,
++];
++
++// FIX: catalogul e compus din 4 surse; fara deduplicare un id duplicat aparea de 2 ori
++// in liste si era numarat dublu in statistici.
++export const EXERCITII_DB: Exercitiu[] = TOATE_EXERCITIILE.filter(
++  (e, i, arr) => arr.findIndex((x) => x.id === e.id) === i,
++).map((e) => ({
+   ...e,
+   masurare: e.masurare ?? classifyMeasurement(e),
+   muschiTinta: e.muschiTinta ?? deriveMuschiTinta(e),
+diff --git a/frontend-nutritie/constants/new_exercises_v3.ts b/frontend-nutritie/constants/new_exercises_v3.ts
+new file mode 100644
+--- /dev/null
++++ b/frontend-nutritie/constants/new_exercises_v3.ts
+@@ -0,0 +1,1982 @@
++import type { Exercitiu } from './exercitii';
++
++/**
++ * NEW_EXERCISES_V3 — extindere catalog (audit 31.07.2026)
++ *
++ * Scop: acoperirea grupelor musculare care nu erau atinse de niciun exercitiu si
++ * care rămâneau permanent "reci" pe harta corporală: deltoid posterior, romboizi,
++ * antebrate, oblici, lombari, abductori, adductori, gambe.
++ *
++ * Denumirile din `grupe` folosesc exclusiv chei recunoscute de mapToCanonicalMuscleIds,
++ * deci fiecare exercitiu contribuie corect la heatmap si la muscle_load.
++ */
++export const NEW_EXERCISES_V3: Exercitiu[] = [
++  {
++    id: 'face-pull-la-cablu',
++    nume: 'Face pull la cablu',
++    categorie: 'umeri',
++    grupe: ['deltoid posterior', 'trapez', 'romboizi'],
++    dificultate: 'mediu',
++    echipament: 'cablu',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'face-pull-cu-banda-elastica',
++    nume: 'Face pull cu banda elastica',
++    categorie: 'umeri',
++    grupe: ['deltoid posterior', 'romboizi'],
++    dificultate: 'usor',
++    echipament: 'banda elastica',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 3,
++    repetariDefault: 18,
++  },
++  {
++    id: 'fluturari-inverse-cu-gantere-aplecat',
++    nume: 'Fluturari inverse cu gantere aplecat',
++    categorie: 'umeri',
++    grupe: ['deltoid posterior', 'romboizi', 'trapez'],
++    dificultate: 'mediu',
++    echipament: 'gantere',
++    met: 4.2,
++    caloriiPeMinut: 4.6,
++    seriiDefault: 4,
++    repetariDefault: 14,
++  },
++  {
++    id: 'fluturari-inverse-la-aparat-reverse-pec-deck',
++    nume: 'Fluturari inverse la aparat (reverse pec deck)',
++    categorie: 'umeri',
++    grupe: ['deltoid posterior', 'romboizi'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'fluturari-inverse-la-cablu-incrucisat',
++    nume: 'Fluturari inverse la cablu incrucisat',
++    categorie: 'umeri',
++    grupe: ['deltoid posterior', 'trapez'],
++    dificultate: 'mediu',
++    echipament: 'cablu',
++    met: 4.2,
++    caloriiPeMinut: 4.6,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ramat-cu-priza-larga-la-bara-rear-delt-row',
++    nume: 'Ramat cu priza larga la bara (rear delt row)',
++    categorie: 'spate',
++    grupe: ['deltoid posterior', 'romboizi', 'dorsali'],
++    dificultate: 'mediu',
++    echipament: 'bara',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'ridicari-in-y-la-banca-inclinata',
++    nume: 'Ridicari in Y la banca inclinata',
++    categorie: 'umeri',
++    grupe: ['deltoid posterior', 'romboizi', 'trapez'],
++    dificultate: 'usor',
++    echipament: 'gantere',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ridicari-in-t-la-banca-inclinata',
++    nume: 'Ridicari in T la banca inclinata',
++    categorie: 'spate',
++    grupe: ['romboizi', 'deltoid posterior', 'trapez'],
++    dificultate: 'usor',
++    echipament: 'gantere',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ridicari-in-w-la-banca-inclinata',
++    nume: 'Ridicari in W la banca inclinata',
++    categorie: 'spate',
++    grupe: ['romboizi', 'trapez', 'deltoid posterior'],
++    dificultate: 'usor',
++    echipament: 'gantere',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'retractii-scapulare-la-bara-fixa',
++    nume: 'Retractii scapulare la bara fixa',
++    categorie: 'spate',
++    grupe: ['romboizi', 'trapez', 'dorsali'],
++    dificultate: 'usor',
++    echipament: 'bara fixa',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'ramat-cu-banda-elastica-sezand',
++    nume: 'Ramat cu banda elastica sezand',
++    categorie: 'spate',
++    grupe: ['romboizi', 'dorsali', 'trapez'],
++    dificultate: 'usor',
++    echipament: 'banda elastica',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 3,
++    repetariDefault: 18,
++  },
++  {
++    id: 'prone-snow-angel',
++    nume: 'Prone snow angel',
++    categorie: 'spate',
++    grupe: ['romboizi', 'deltoid posterior', 'trapez'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'band-pull-apart',
++    nume: 'Band pull-apart',
++    categorie: 'umeri',
++    grupe: ['deltoid posterior', 'romboizi'],
++    dificultate: 'usor',
++    echipament: 'banda elastica',
++    met: 3.2,
++    caloriiPeMinut: 3.5,
++    seriiDefault: 3,
++    repetariDefault: 20,
++  },
++  {
++    id: 'flexii-de-incheietura-cu-bara',
++    nume: 'Flexii de incheietura cu bara',
++    categorie: 'brate',
++    grupe: ['antebrate'],
++    dificultate: 'usor',
++    echipament: 'bara',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'extensii-de-incheietura-cu-bara',
++    nume: 'Extensii de incheietura cu bara',
++    categorie: 'brate',
++    grupe: ['antebrate'],
++    dificultate: 'usor',
++    echipament: 'bara',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'flexii-de-incheietura-cu-gantera-pe-banca',
++    nume: 'Flexii de incheietura cu gantera pe banca',
++    categorie: 'brate',
++    grupe: ['antebrate'],
++    dificultate: 'usor',
++    echipament: 'gantere',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 3,
++    repetariDefault: 18,
++  },
++  {
++    id: 'flexii-inverse-cu-bara-reverse-curl',
++    nume: 'Flexii inverse cu bara (reverse curl)',
++    categorie: 'brate',
++    grupe: ['antebrate', 'biceps'],
++    dificultate: 'mediu',
++    echipament: 'bara',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'flexii-hammer-cu-gantere',
++    nume: 'Flexii Hammer cu gantere',
++    categorie: 'brate',
++    grupe: ['biceps', 'antebrate'],
++    dificultate: 'usor',
++    echipament: 'gantere',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'farmer-carry-mers-cu-greutati',
++    nume: 'Farmer carry (mers cu greutati)',
++    categorie: 'full-body',
++    grupe: ['antebrate', 'trapez', 'abdomen'],
++    dificultate: 'mediu',
++    echipament: 'gantere',
++    met: 5.5,
++    caloriiPeMinut: 6.1,
++    seriiDefault: 4,
++    repetariDefault: 1,
++  },
++  {
++    id: 'suspendare-pasiva-in-bara-dead-hang',
++    nume: 'Suspendare pasiva in bara (dead hang)',
++    categorie: 'spate',
++    grupe: ['antebrate', 'dorsali', 'trapez'],
++    dificultate: 'usor',
++    echipament: 'bara fixa',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 4,
++    repetariDefault: 1,
++  },
++  {
++    id: 'strangere-de-gripper',
++    nume: 'Strangere de gripper',
++    categorie: 'brate',
++    grupe: ['antebrate'],
++    dificultate: 'usor',
++    echipament: 'gripper',
++    met: 2.8,
++    caloriiPeMinut: 3.1,
++    seriiDefault: 4,
++    repetariDefault: 20,
++  },
++  {
++    id: 'rulare-de-prosop-cu-greutate',
++    nume: 'Rulare de prosop cu greutate',
++    categorie: 'brate',
++    grupe: ['antebrate'],
++    dificultate: 'mediu',
++    echipament: 'greutate',
++    met: 3.2,
++    caloriiPeMinut: 3.5,
++    seriiDefault: 3,
++    repetariDefault: 10,
++  },
++  {
++    id: 'plate-pinch-prindere-de-disc',
++    nume: 'Plate pinch (prindere de disc)',
++    categorie: 'brate',
++    grupe: ['antebrate'],
++    dificultate: 'mediu',
++    echipament: 'disc',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 4,
++    repetariDefault: 1,
++  },
++  {
++    id: 'plank-lateral-v3',
++    nume: 'Plank lateral',
++    categorie: 'abdomen',
++    grupe: ['oblici', 'abdomen'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 3,
++    repetariDefault: 1,
++  },
++  {
++    id: 'plank-lateral-cu-ridicare-de-bazin',
++    nume: 'Plank lateral cu ridicare de bazin',
++    categorie: 'abdomen',
++    grupe: ['oblici', 'abdomen'],
++    dificultate: 'mediu',
++    echipament: 'greutate corporala',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'rotiri-rusesti-cu-minge-medicinala',
++    nume: 'Rotiri rusesti cu minge medicinala',
++    categorie: 'abdomen',
++    grupe: ['oblici', 'abdomen'],
++    dificultate: 'mediu',
++    echipament: 'minge medicinala',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 3,
++    repetariDefault: 20,
++  },
++  {
++    id: 'pallof-press-la-cablu',
++    nume: 'Pallof press la cablu',
++    categorie: 'abdomen',
++    grupe: ['oblici', 'abdomen'],
++    dificultate: 'mediu',
++    echipament: 'cablu',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'woodchopper-de-sus-in-jos-la-cablu',
++    nume: 'Woodchopper de sus in jos la cablu',
++    categorie: 'abdomen',
++    grupe: ['oblici', 'abdomen'],
++    dificultate: 'mediu',
++    echipament: 'cablu',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 3,
++    repetariDefault: 14,
++  },
++  {
++    id: 'woodchopper-de-jos-in-sus-la-cablu',
++    nume: 'Woodchopper de jos in sus la cablu',
++    categorie: 'abdomen',
++    grupe: ['oblici', 'abdomen'],
++    dificultate: 'mediu',
++    echipament: 'cablu',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 3,
++    repetariDefault: 14,
++  },
++  {
++    id: 'inclinari-laterale-cu-gantera',
++    nume: 'Inclinari laterale cu gantera',
++    categorie: 'abdomen',
++    grupe: ['oblici'],
++    dificultate: 'usor',
++    echipament: 'gantere',
++    met: 3.2,
++    caloriiPeMinut: 3.5,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'suitcase-carry',
++    nume: 'Suitcase carry',
++    categorie: 'full-body',
++    grupe: ['oblici', 'antebrate', 'abdomen'],
++    dificultate: 'mediu',
++    echipament: 'gantera',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 3,
++    repetariDefault: 1,
++  },
++  {
++    id: 'bicycle-crunch-v3',
++    nume: 'Bicycle crunch',
++    categorie: 'abdomen',
++    grupe: ['oblici', 'abdomen'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 3,
++    repetariDefault: 20,
++  },
++  {
++    id: 'windshield-wipers',
++    nume: 'Windshield wipers',
++    categorie: 'abdomen',
++    grupe: ['oblici', 'abdomen'],
++    dificultate: 'greu',
++    echipament: 'greutate corporala',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'heel-taps-laterale',
++    nume: 'Heel taps laterale',
++    categorie: 'abdomen',
++    grupe: ['oblici'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 3,
++    repetariDefault: 20,
++  },
++  {
++    id: 'copenhagen-plank',
++    nume: 'Copenhagen plank',
++    categorie: 'picioare',
++    grupe: ['adductori', 'oblici'],
++    dificultate: 'greu',
++    echipament: 'greutate corporala',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 3,
++    repetariDefault: 1,
++  },
++  {
++    id: 'extensii-lombare-la-banca-romana',
++    nume: 'Extensii lombare la banca romana',
++    categorie: 'spate',
++    grupe: ['lombari', 'fesieri', 'ischiogambieri'],
++    dificultate: 'usor',
++    echipament: 'banca romana',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'reverse-hyperextension',
++    nume: 'Reverse hyperextension',
++    categorie: 'spate',
++    grupe: ['lombari', 'fesieri'],
++    dificultate: 'mediu',
++    echipament: 'aparat',
++    met: 4.2,
++    caloriiPeMinut: 4.6,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'good-morning-cu-bara',
++    nume: 'Good morning cu bara',
++    categorie: 'picioare',
++    grupe: ['lombari', 'ischiogambieri', 'fesieri'],
++    dificultate: 'greu',
++    echipament: 'bara',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'superman',
++    nume: 'Superman',
++    categorie: 'spate',
++    grupe: ['lombari', 'fesieri'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'bird-dog',
++    nume: 'Bird dog',
++    categorie: 'abdomen',
++    grupe: ['lombari', 'abdomen', 'fesieri'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'jefferson-curl',
++    nume: 'Jefferson curl',
++    categorie: 'mobilitate',
++    grupe: ['lombari', 'ischiogambieri'],
++    dificultate: 'greu',
++    echipament: 'gantera',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 3,
++    repetariDefault: 8,
++  },
++  {
++    id: 'indreptari-romanesti-cu-gantere',
++    nume: 'Indreptari romanesti cu gantere',
++    categorie: 'picioare',
++    grupe: ['ischiogambieri', 'fesieri', 'lombari'],
++    dificultate: 'mediu',
++    echipament: 'gantere',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'indreptari-cu-picioare-drepte-la-bara',
++    nume: 'Indreptari cu picioare drepte la bara',
++    categorie: 'picioare',
++    grupe: ['ischiogambieri', 'lombari', 'fesieri'],
++    dificultate: 'greu',
++    echipament: 'bara',
++    met: 5.5,
++    caloriiPeMinut: 6.1,
++    seriiDefault: 4,
++    repetariDefault: 8,
++  },
++  {
++    id: 'abductii-de-coapsa-la-aparat',
++    nume: 'Abductii de coapsa la aparat',
++    categorie: 'picioare',
++    grupe: ['abductori', 'fesieri'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'abductii-la-cablu-in-stand',
++    nume: 'Abductii la cablu in stand',
++    categorie: 'picioare',
++    grupe: ['abductori', 'fesieri'],
++    dificultate: 'usor',
++    echipament: 'cablu',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'mers-lateral-cu-banda-lateral-band-walk',
++    nume: 'Mers lateral cu banda (lateral band walk)',
++    categorie: 'picioare',
++    grupe: ['abductori', 'fesieri'],
++    dificultate: 'usor',
++    echipament: 'banda elastica',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 3,
++    repetariDefault: 20,
++  },
++  {
++    id: 'ridicari-laterale-de-picior-culcat',
++    nume: 'Ridicari laterale de picior culcat',
++    categorie: 'picioare',
++    grupe: ['abductori', 'fesieri'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 3.2,
++    caloriiPeMinut: 3.5,
++    seriiDefault: 3,
++    repetariDefault: 18,
++  },
++  {
++    id: 'clamshell-cu-banda',
++    nume: 'Clamshell cu banda',
++    categorie: 'picioare',
++    grupe: ['abductori', 'fesieri'],
++    dificultate: 'usor',
++    echipament: 'banda elastica',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 3,
++    repetariDefault: 20,
++  },
++  {
++    id: 'monster-walk-cu-banda',
++    nume: 'Monster walk cu banda',
++    categorie: 'picioare',
++    grupe: ['abductori', 'fesieri', 'cvadriceps'],
++    dificultate: 'mediu',
++    echipament: 'banda elastica',
++    met: 4.2,
++    caloriiPeMinut: 4.6,
++    seriiDefault: 3,
++    repetariDefault: 20,
++  },
++  {
++    id: 'adductii-de-coapsa-la-aparat',
++    nume: 'Adductii de coapsa la aparat',
++    categorie: 'picioare',
++    grupe: ['adductori'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'genuflexiuni-sumo-cu-gantera',
++    nume: 'Genuflexiuni sumo cu gantera',
++    categorie: 'picioare',
++    grupe: ['adductori', 'cvadriceps', 'fesieri'],
++    dificultate: 'mediu',
++    echipament: 'gantera',
++    met: 5.5,
++    caloriiPeMinut: 6.1,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'cossack-squat',
++    nume: 'Cossack squat',
++    categorie: 'picioare',
++    grupe: ['adductori', 'cvadriceps', 'fesieri'],
++    dificultate: 'greu',
++    echipament: 'greutate corporala',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 3,
++    repetariDefault: 10,
++  },
++  {
++    id: 'fandari-laterale',
++    nume: 'Fandari laterale',
++    categorie: 'picioare',
++    grupe: ['adductori', 'cvadriceps', 'fesieri'],
++    dificultate: 'mediu',
++    echipament: 'greutate corporala',
++    met: 4.8,
++    caloriiPeMinut: 5.3,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'adductii-la-cablu',
++    nume: 'Adductii la cablu',
++    categorie: 'picioare',
++    grupe: ['adductori'],
++    dificultate: 'usor',
++    echipament: 'cablu',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ridicari-pe-varfuri-in-stand-cu-bara',
++    nume: 'Ridicari pe varfuri in stand cu bara',
++    categorie: 'picioare',
++    grupe: ['gambe'],
++    dificultate: 'mediu',
++    echipament: 'bara',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ridicari-pe-varfuri-la-aparat-sezand',
++    nume: 'Ridicari pe varfuri la aparat sezand',
++    categorie: 'picioare',
++    grupe: ['gambe'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 4,
++    repetariDefault: 18,
++  },
++  {
++    id: 'ridicari-pe-varfuri-pe-un-picior',
++    nume: 'Ridicari pe varfuri pe un picior',
++    categorie: 'picioare',
++    grupe: ['gambe'],
++    dificultate: 'mediu',
++    echipament: 'greutate corporala',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 3,
++    repetariDefault: 20,
++  },
++  {
++    id: 'donkey-calf-raise',
++    nume: 'Donkey calf raise',
++    categorie: 'picioare',
++    grupe: ['gambe'],
++    dificultate: 'mediu',
++    echipament: 'aparat',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ridicari-pe-varfuri-la-presa-de-picioare',
++    nume: 'Ridicari pe varfuri la presa de picioare',
++    categorie: 'picioare',
++    grupe: ['gambe'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 4,
++    repetariDefault: 18,
++  },
++  {
++    id: 'ridicari-de-tibial-tibialis-raise',
++    nume: 'Ridicari de tibial (tibialis raise)',
++    categorie: 'picioare',
++    grupe: ['gambe'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 3,
++    repetariDefault: 20,
++  },
++  {
++    id: 'sarituri-pe-varfuri-pogo-hops',
++    nume: 'Sarituri pe varfuri (pogo hops)',
++    categorie: 'cardio',
++    grupe: ['gambe', 'cardio'],
++    dificultate: 'mediu',
++    echipament: 'greutate corporala',
++    met: 8.0,
++    caloriiPeMinut: 8.8,
++    seriiDefault: 3,
++    repetariDefault: 30,
++  },
++  {
++    id: 'impins-la-piept-cu-gantere-inclinat',
++    nume: 'Impins la piept cu gantere inclinat',
++    categorie: 'piept',
++    grupe: ['pectorali', 'deltoid anterior', 'triceps'],
++    dificultate: 'mediu',
++    echipament: 'gantere',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'impins-la-piept-cu-gantere-declinat',
++    nume: 'Impins la piept cu gantere declinat',
++    categorie: 'piept',
++    grupe: ['pectorali', 'triceps'],
++    dificultate: 'mediu',
++    echipament: 'gantere',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'impins-la-aparat-smith-inclinat',
++    nume: 'Impins la aparat Smith inclinat',
++    categorie: 'piept',
++    grupe: ['pectorali', 'deltoid anterior'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'fluturari-la-cablu-de-sus-high-to-low',
++    nume: 'Fluturari la cablu de sus (high to low)',
++    categorie: 'piept',
++    grupe: ['pectorali'],
++    dificultate: 'mediu',
++    echipament: 'cablu',
++    met: 4.2,
++    caloriiPeMinut: 4.6,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'fluturari-la-cablu-de-jos-low-to-high',
++    nume: 'Fluturari la cablu de jos (low to high)',
++    categorie: 'piept',
++    grupe: ['pectorali', 'deltoid anterior'],
++    dificultate: 'mediu',
++    echipament: 'cablu',
++    met: 4.2,
++    caloriiPeMinut: 4.6,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'fluturari-la-pec-deck',
++    nume: 'Fluturari la pec deck',
++    categorie: 'piept',
++    grupe: ['pectorali'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 4,
++    repetariDefault: 14,
++  },
++  {
++    id: 'flotari-cu-priza-larga',
++    nume: 'Flotari cu priza larga',
++    categorie: 'piept',
++    grupe: ['pectorali', 'triceps', 'deltoid anterior'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'flotari-cu-picioarele-ridicate',
++    nume: 'Flotari cu picioarele ridicate',
++    categorie: 'piept',
++    grupe: ['pectorali', 'deltoid anterior', 'triceps'],
++    dificultate: 'mediu',
++    echipament: 'greutate corporala',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'flotari-cu-banda-elastica',
++    nume: 'Flotari cu banda elastica',
++    categorie: 'piept',
++    grupe: ['pectorali', 'triceps'],
++    dificultate: 'mediu',
++    echipament: 'banda elastica',
++    met: 4.8,
++    caloriiPeMinut: 5.3,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'flotari-arceuate-archer-push-up',
++    nume: 'Flotari arceuate (archer push-up)',
++    categorie: 'piept',
++    grupe: ['pectorali', 'triceps'],
++    dificultate: 'greu',
++    echipament: 'greutate corporala',
++    met: 5.5,
++    caloriiPeMinut: 6.1,
++    seriiDefault: 3,
++    repetariDefault: 10,
++  },
++  {
++    id: 'pullover-cu-gantera',
++    nume: 'Pullover cu gantera',
++    categorie: 'piept',
++    grupe: ['pectorali', 'dorsali'],
++    dificultate: 'mediu',
++    echipament: 'gantera',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'svend-press',
++    nume: 'Svend press',
++    categorie: 'piept',
++    grupe: ['pectorali'],
++    dificultate: 'usor',
++    echipament: 'disc',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'paloane-la-paralele-aplecat-chest-dip',
++    nume: 'Paloane la paralele aplecat (chest dip)',
++    categorie: 'piept',
++    grupe: ['pectorali', 'triceps'],
++    dificultate: 'greu',
++    echipament: 'paralele',
++    met: 6.0,
++    caloriiPeMinut: 6.6,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'tractiuni-cu-priza-larga',
++    nume: 'Tractiuni cu priza larga',
++    categorie: 'spate',
++    grupe: ['dorsali', 'biceps', 'trapez'],
++    dificultate: 'greu',
++    echipament: 'bara fixa',
++    met: 6.0,
++    caloriiPeMinut: 6.6,
++    seriiDefault: 4,
++    repetariDefault: 8,
++  },
++  {
++    id: 'tractiuni-cu-priza-inversa',
++    nume: 'Tractiuni cu priza inversa',
++    categorie: 'spate',
++    grupe: ['dorsali', 'biceps'],
++    dificultate: 'greu',
++    echipament: 'bara fixa',
++    met: 6.0,
++    caloriiPeMinut: 6.6,
++    seriiDefault: 4,
++    repetariDefault: 8,
++  },
++  {
++    id: 'tractiuni-neutre-la-maner-paralel',
++    nume: 'Tractiuni neutre la maner paralel',
++    categorie: 'spate',
++    grupe: ['dorsali', 'biceps', 'romboizi'],
++    dificultate: 'mediu',
++    echipament: 'bara fixa',
++    met: 5.8,
++    caloriiPeMinut: 6.4,
++    seriiDefault: 4,
++    repetariDefault: 8,
++  },
++  {
++    id: 'ramat-cu-gantera-pe-banca',
++    nume: 'Ramat cu gantera pe banca',
++    categorie: 'spate',
++    grupe: ['dorsali', 'romboizi', 'biceps'],
++    dificultate: 'mediu',
++    echipament: 'gantera',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'ramat-t-bar-v3',
++    nume: 'Ramat T-bar',
++    categorie: 'spate',
++    grupe: ['dorsali', 'romboizi', 'trapez'],
++    dificultate: 'mediu',
++    echipament: 'bara',
++    met: 5.5,
++    caloriiPeMinut: 6.1,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'ramat-la-cablu-sezand-cu-priza-larga',
++    nume: 'Ramat la cablu sezand cu priza larga',
++    categorie: 'spate',
++    grupe: ['dorsali', 'romboizi'],
++    dificultate: 'usor',
++    echipament: 'cablu',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'ramat-pendlay',
++    nume: 'Ramat Pendlay',
++    categorie: 'spate',
++    grupe: ['dorsali', 'lombari', 'trapez'],
++    dificultate: 'greu',
++    echipament: 'bara',
++    met: 6.0,
++    caloriiPeMinut: 6.6,
++    seriiDefault: 4,
++    repetariDefault: 8,
++  },
++  {
++    id: 'ramat-meadows',
++    nume: 'Ramat Meadows',
++    categorie: 'spate',
++    grupe: ['dorsali', 'trapez', 'romboizi'],
++    dificultate: 'greu',
++    echipament: 'bara',
++    met: 5.5,
++    caloriiPeMinut: 6.1,
++    seriiDefault: 3,
++    repetariDefault: 10,
++  },
++  {
++    id: 'tras-la-helcometru-cu-priza-inversa',
++    nume: 'Tras la helcometru cu priza inversa',
++    categorie: 'spate',
++    grupe: ['dorsali', 'biceps'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'straight-arm-pulldown',
++    nume: 'Straight-arm pulldown',
++    categorie: 'spate',
++    grupe: ['dorsali'],
++    dificultate: 'usor',
++    echipament: 'cablu',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ramat-la-aparat-cu-suport-pentru-piept',
++    nume: 'Ramat la aparat cu suport pentru piept',
++    categorie: 'spate',
++    grupe: ['dorsali', 'romboizi', 'trapez'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'ridicari-de-umeri-cu-bara-shrug',
++    nume: 'Ridicari de umeri cu bara (shrug)',
++    categorie: 'spate',
++    grupe: ['trapez'],
++    dificultate: 'usor',
++    echipament: 'bara',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ridicari-de-umeri-cu-gantere',
++    nume: 'Ridicari de umeri cu gantere',
++    categorie: 'spate',
++    grupe: ['trapez'],
++    dificultate: 'usor',
++    echipament: 'gantere',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ramat-vertical-la-bara-upright-row',
++    nume: 'Ramat vertical la bara (upright row)',
++    categorie: 'umeri',
++    grupe: ['trapez', 'deltoid lateral'],
++    dificultate: 'mediu',
++    echipament: 'bara',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'impins-militar-cu-bara-in-stand',
++    nume: 'Impins militar cu bara in stand',
++    categorie: 'umeri',
++    grupe: ['deltoid anterior', 'deltoid lateral', 'triceps'],
++    dificultate: 'greu',
++    echipament: 'bara',
++    met: 5.5,
++    caloriiPeMinut: 6.1,
++    seriiDefault: 4,
++    repetariDefault: 8,
++  },
++  {
++    id: 'impins-cu-gantere-sezand',
++    nume: 'Impins cu gantere sezand',
++    categorie: 'umeri',
++    grupe: ['deltoid anterior', 'deltoid lateral', 'triceps'],
++    dificultate: 'mediu',
++    echipament: 'gantere',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'impins-arnold',
++    nume: 'Impins Arnold',
++    categorie: 'umeri',
++    grupe: ['deltoid anterior', 'deltoid lateral'],
++    dificultate: 'mediu',
++    echipament: 'gantere',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'ridicari-laterale-cu-gantere',
++    nume: 'Ridicari laterale cu gantere',
++    categorie: 'umeri',
++    grupe: ['deltoid lateral'],
++    dificultate: 'usor',
++    echipament: 'gantere',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ridicari-laterale-la-cablu',
++    nume: 'Ridicari laterale la cablu',
++    categorie: 'umeri',
++    grupe: ['deltoid lateral'],
++    dificultate: 'usor',
++    echipament: 'cablu',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ridicari-laterale-la-aparat',
++    nume: 'Ridicari laterale la aparat',
++    categorie: 'umeri',
++    grupe: ['deltoid lateral'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ridicari-frontale-cu-disc',
++    nume: 'Ridicari frontale cu disc',
++    categorie: 'umeri',
++    grupe: ['deltoid anterior'],
++    dificultate: 'usor',
++    echipament: 'disc',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'ridicari-frontale-cu-gantere-alternativ',
++    nume: 'Ridicari frontale cu gantere alternativ',
++    categorie: 'umeri',
++    grupe: ['deltoid anterior'],
++    dificultate: 'usor',
++    echipament: 'gantere',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 3,
++    repetariDefault: 14,
++  },
++  {
++    id: 'impins-landmine-cu-o-mana',
++    nume: 'Impins landmine cu o mana',
++    categorie: 'umeri',
++    grupe: ['deltoid anterior', 'abdomen', 'triceps'],
++    dificultate: 'mediu',
++    echipament: 'bara',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 3,
++    repetariDefault: 10,
++  },
++  {
++    id: 'handstand-push-up-la-perete',
++    nume: 'Handstand push-up la perete',
++    categorie: 'umeri',
++    grupe: ['deltoid anterior', 'triceps', 'trapez'],
++    dificultate: 'greu',
++    echipament: 'greutate corporala',
++    met: 6.5,
++    caloriiPeMinut: 7.2,
++    seriiDefault: 3,
++    repetariDefault: 6,
++  },
++  {
++    id: 'pike-push-up',
++    nume: 'Pike push-up',
++    categorie: 'umeri',
++    grupe: ['deltoid anterior', 'triceps'],
++    dificultate: 'mediu',
++    echipament: 'greutate corporala',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'flexii-cu-bara-ez',
++    nume: 'Flexii cu bara EZ',
++    categorie: 'brate',
++    grupe: ['biceps', 'antebrate'],
++    dificultate: 'usor',
++    echipament: 'bara EZ',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'flexii-concentrate-cu-gantera',
++    nume: 'Flexii concentrate cu gantera',
++    categorie: 'brate',
++    grupe: ['biceps'],
++    dificultate: 'usor',
++    echipament: 'gantera',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'flexii-la-banca-scott-preacher-curl',
++    nume: 'Flexii la banca Scott (preacher curl)',
++    categorie: 'brate',
++    grupe: ['biceps'],
++    dificultate: 'mediu',
++    echipament: 'banca Scott',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'flexii-incline-cu-gantere',
++    nume: 'Flexii incline cu gantere',
++    categorie: 'brate',
++    grupe: ['biceps'],
++    dificultate: 'mediu',
++    echipament: 'gantere',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'flexii-la-cablu-de-jos',
++    nume: 'Flexii la cablu de jos',
++    categorie: 'brate',
++    grupe: ['biceps'],
++    dificultate: 'usor',
++    echipament: 'cablu',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'flexii-spider-v3',
++    nume: 'Flexii Spider',
++    categorie: 'brate',
++    grupe: ['biceps'],
++    dificultate: 'mediu',
++    echipament: 'gantere',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'extensii-franceze-cu-bara-ez',
++    nume: 'Extensii franceze cu bara EZ',
++    categorie: 'brate',
++    grupe: ['triceps'],
++    dificultate: 'mediu',
++    echipament: 'bara EZ',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'extensii-deasupra-capului-la-cablu',
++    nume: 'Extensii deasupra capului la cablu',
++    categorie: 'brate',
++    grupe: ['triceps'],
++    dificultate: 'usor',
++    echipament: 'cablu',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 3,
++    repetariDefault: 14,
++  },
++  {
++    id: 'extensii-la-cablu-cu-frenghie',
++    nume: 'Extensii la cablu cu frenghie',
++    categorie: 'brate',
++    grupe: ['triceps'],
++    dificultate: 'usor',
++    echipament: 'cablu',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 4,
++    repetariDefault: 14,
++  },
++  {
++    id: 'kickback-cu-gantera',
++    nume: 'Kickback cu gantera',
++    categorie: 'brate',
++    grupe: ['triceps'],
++    dificultate: 'usor',
++    echipament: 'gantera',
++    met: 3.2,
++    caloriiPeMinut: 3.5,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'flotari-diamant-v3',
++    nume: 'Flotari diamant',
++    categorie: 'brate',
++    grupe: ['triceps', 'pectorali'],
++    dificultate: 'mediu',
++    echipament: 'greutate corporala',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'paloane-la-banca-bench-dip',
++    nume: 'Paloane la banca (bench dip)',
++    categorie: 'brate',
++    grupe: ['triceps', 'deltoid anterior'],
++    dificultate: 'usor',
++    echipament: 'banca',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'impins-in-priza-strimta-la-bara',
++    nume: 'Impins in priza strimta la bara',
++    categorie: 'brate',
++    grupe: ['triceps', 'pectorali'],
++    dificultate: 'mediu',
++    echipament: 'bara',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'extensii-jm-press',
++    nume: 'Extensii JM press',
++    categorie: 'brate',
++    grupe: ['triceps'],
++    dificultate: 'greu',
++    echipament: 'bara',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 3,
++    repetariDefault: 10,
++  },
++  {
++    id: 'genuflexiuni-frontale-cu-bara',
++    nume: 'Genuflexiuni frontale cu bara',
++    categorie: 'picioare',
++    grupe: ['cvadriceps', 'fesieri', 'abdomen'],
++    dificultate: 'greu',
++    echipament: 'bara',
++    met: 6.0,
++    caloriiPeMinut: 6.6,
++    seriiDefault: 4,
++    repetariDefault: 8,
++  },
++  {
++    id: 'genuflexiuni-bulgare-cu-gantere',
++    nume: 'Genuflexiuni bulgare cu gantere',
++    categorie: 'picioare',
++    grupe: ['cvadriceps', 'fesieri', 'ischiogambieri'],
++    dificultate: 'greu',
++    echipament: 'gantere',
++    met: 5.8,
++    caloriiPeMinut: 6.4,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'genuflexiuni-hack-squat',
++    nume: 'Genuflexiuni Hack squat',
++    categorie: 'picioare',
++    grupe: ['cvadriceps', 'fesieri'],
++    dificultate: 'mediu',
++    echipament: 'aparat',
++    met: 5.5,
++    caloriiPeMinut: 6.1,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'presa-de-picioare',
++    nume: 'Presa de picioare',
++    categorie: 'picioare',
++    grupe: ['cvadriceps', 'fesieri'],
++    dificultate: 'mediu',
++    echipament: 'aparat',
++    met: 5.5,
++    caloriiPeMinut: 6.1,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'extensii-de-coapsa-la-aparat',
++    nume: 'Extensii de coapsa la aparat',
++    categorie: 'picioare',
++    grupe: ['cvadriceps'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'flexii-de-coapsa-culcat-la-aparat',
++    nume: 'Flexii de coapsa culcat la aparat',
++    categorie: 'picioare',
++    grupe: ['ischiogambieri'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'flexii-de-coapsa-sezand-la-aparat',
++    nume: 'Flexii de coapsa sezand la aparat',
++    categorie: 'picioare',
++    grupe: ['ischiogambieri'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'nordic-hamstring-curl',
++    nume: 'Nordic hamstring curl',
++    categorie: 'picioare',
++    grupe: ['ischiogambieri', 'fesieri'],
++    dificultate: 'greu',
++    echipament: 'greutate corporala',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 3,
++    repetariDefault: 8,
++  },
++  {
++    id: 'hip-thrust-cu-bara',
++    nume: 'Hip thrust cu bara',
++    categorie: 'picioare',
++    grupe: ['fesieri', 'ischiogambieri'],
++    dificultate: 'mediu',
++    echipament: 'bara',
++    met: 5.5,
++    caloriiPeMinut: 6.1,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'glute-bridge-pe-un-picior',
++    nume: 'Glute bridge pe un picior',
++    categorie: 'picioare',
++    grupe: ['fesieri', 'ischiogambieri'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'kickback-de-fesier-la-cablu',
++    nume: 'Kickback de fesier la cablu',
++    categorie: 'picioare',
++    grupe: ['fesieri'],
++    dificultate: 'usor',
++    echipament: 'cablu',
++    met: 3.8,
++    caloriiPeMinut: 4.2,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'fandari-mergand-cu-gantere',
++    nume: 'Fandari mergand cu gantere',
++    categorie: 'picioare',
++    grupe: ['cvadriceps', 'fesieri', 'ischiogambieri'],
++    dificultate: 'mediu',
++    echipament: 'gantere',
++    met: 6.0,
++    caloriiPeMinut: 6.6,
++    seriiDefault: 3,
++    repetariDefault: 20,
++  },
++  {
++    id: 'fandari-inverse-cu-bara',
++    nume: 'Fandari inverse cu bara',
++    categorie: 'picioare',
++    grupe: ['cvadriceps', 'fesieri'],
++    dificultate: 'mediu',
++    echipament: 'bara',
++    met: 5.8,
++    caloriiPeMinut: 6.4,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'pasire-pe-cutie-step-up',
++    nume: 'Pasire pe cutie (step-up)',
++    categorie: 'picioare',
++    grupe: ['cvadriceps', 'fesieri'],
++    dificultate: 'mediu',
++    echipament: 'cutie',
++    met: 5.5,
++    caloriiPeMinut: 6.1,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'genuflexiuni-sissy',
++    nume: 'Genuflexiuni sissy',
++    categorie: 'picioare',
++    grupe: ['cvadriceps'],
++    dificultate: 'greu',
++    echipament: 'greutate corporala',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'genuflexiuni-cu-goblet',
++    nume: 'Genuflexiuni cu goblet',
++    categorie: 'picioare',
++    grupe: ['cvadriceps', 'fesieri', 'abdomen'],
++    dificultate: 'usor',
++    echipament: 'gantera',
++    met: 5.2,
++    caloriiPeMinut: 5.7,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'genuflexiuni-la-perete-wall-sit',
++    nume: 'Genuflexiuni la perete (wall sit)',
++    categorie: 'picioare',
++    grupe: ['cvadriceps'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 3,
++    repetariDefault: 1,
++  },
++  {
++    id: 'plank-frontal',
++    nume: 'Plank frontal',
++    categorie: 'abdomen',
++    grupe: ['abdomen', 'lombari'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 3.2,
++    caloriiPeMinut: 3.5,
++    seriiDefault: 3,
++    repetariDefault: 1,
++  },
++  {
++    id: 'hollow-body-hold',
++    nume: 'Hollow body hold',
++    categorie: 'abdomen',
++    grupe: ['abdomen'],
++    dificultate: 'mediu',
++    echipament: 'greutate corporala',
++    met: 3.5,
++    caloriiPeMinut: 3.9,
++    seriiDefault: 3,
++    repetariDefault: 1,
++  },
++  {
++    id: 'ridicari-de-picioare-la-bara-fixa',
++    nume: 'Ridicari de picioare la bara fixa',
++    categorie: 'abdomen',
++    grupe: ['abdomen', 'oblici', 'antebrate'],
++    dificultate: 'greu',
++    echipament: 'bara fixa',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'ab-wheel-rollout-v3',
++    nume: 'Ab wheel rollout',
++    categorie: 'abdomen',
++    grupe: ['abdomen', 'lombari'],
++    dificultate: 'greu',
++    echipament: 'roata abdominala',
++    met: 4.5,
++    caloriiPeMinut: 5.0,
++    seriiDefault: 3,
++    repetariDefault: 10,
++  },
++  {
++    id: 'crunch-la-cablu-in-genunchi',
++    nume: 'Crunch la cablu in genunchi',
++    categorie: 'abdomen',
++    grupe: ['abdomen'],
++    dificultate: 'mediu',
++    echipament: 'cablu',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 4,
++    repetariDefault: 15,
++  },
++  {
++    id: 'dead-bug-v3',
++    nume: 'Dead bug',
++    categorie: 'abdomen',
++    grupe: ['abdomen', 'lombari'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 3,
++    repetariDefault: 12,
++  },
++  {
++    id: 'mountain-climbers-v3',
++    nume: 'Mountain climbers',
++    categorie: 'abdomen',
++    grupe: ['abdomen', 'oblici', 'cardio'],
++    dificultate: 'mediu',
++    echipament: 'greutate corporala',
++    met: 7.0,
++    caloriiPeMinut: 7.7,
++    seriiDefault: 3,
++    repetariDefault: 30,
++  },
++  {
++    id: 'v-up',
++    nume: 'V-up',
++    categorie: 'abdomen',
++    grupe: ['abdomen'],
++    dificultate: 'mediu',
++    echipament: 'greutate corporala',
++    met: 4.0,
++    caloriiPeMinut: 4.4,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'toes-to-bar',
++    nume: 'Toes to bar',
++    categorie: 'abdomen',
++    grupe: ['abdomen', 'antebrate'],
++    dificultate: 'greu',
++    echipament: 'bara fixa',
++    met: 5.0,
++    caloriiPeMinut: 5.5,
++    seriiDefault: 3,
++    repetariDefault: 10,
++  },
++  {
++    id: 'sarituri-cu-coarda',
++    nume: 'Sarituri cu coarda',
++    categorie: 'cardio',
++    grupe: ['cardio', 'gambe'],
++    dificultate: 'mediu',
++    echipament: 'coarda',
++    met: 10.0,
++    caloriiPeMinut: 11.0,
++    seriiDefault: 3,
++    repetariDefault: 1,
++  },
++  {
++    id: 'burpees-v3',
++    nume: 'Burpees',
++    categorie: 'cardio',
++    grupe: ['corp_intreg', 'cardio'],
++    dificultate: 'greu',
++    echipament: 'greutate corporala',
++    met: 9.0,
++    caloriiPeMinut: 9.9,
++    seriiDefault: 3,
++    repetariDefault: 15,
++  },
++  {
++    id: 'sprint-pe-loc-cu-genunchii-sus',
++    nume: 'Sprint pe loc cu genunchii sus',
++    categorie: 'cardio',
++    grupe: ['cardio', 'cvadriceps'],
++    dificultate: 'mediu',
++    echipament: 'greutate corporala',
++    met: 8.0,
++    caloriiPeMinut: 8.8,
++    seriiDefault: 3,
++    repetariDefault: 30,
++  },
++  {
++    id: 'vaslit-la-ergometru',
++    nume: 'Vaslit la ergometru',
++    categorie: 'cardio',
++    grupe: ['cardio', 'dorsali', 'cvadriceps'],
++    dificultate: 'mediu',
++    echipament: 'aparat',
++    met: 8.5,
++    caloriiPeMinut: 9.4,
++    seriiDefault: 1,
++    repetariDefault: 1,
++  },
++  {
++    id: 'bicicleta-eliptica',
++    nume: 'Bicicleta eliptica',
++    categorie: 'cardio',
++    grupe: ['cardio', 'cvadriceps'],
++    dificultate: 'usor',
++    echipament: 'aparat',
++    met: 6.5,
++    caloriiPeMinut: 7.2,
++    seriiDefault: 1,
++    repetariDefault: 1,
++  },
++  {
++    id: 'battle-ropes-v3',
++    nume: 'Battle ropes',
++    categorie: 'cardio',
++    grupe: ['cardio', 'deltoid anterior', 'antebrate'],
++    dificultate: 'greu',
++    echipament: 'frenghii',
++    met: 9.5,
++    caloriiPeMinut: 10.5,
++    seriiDefault: 4,
++    repetariDefault: 1,
++  },
++  {
++    id: 'kettlebell-swing-v3',
++    nume: 'Kettlebell swing',
++    categorie: 'full-body',
++    grupe: ['fesieri', 'ischiogambieri', 'lombari'],
++    dificultate: 'mediu',
++    echipament: 'kettlebell',
++    met: 8.0,
++    caloriiPeMinut: 8.8,
++    seriiDefault: 4,
++    repetariDefault: 20,
++  },
++  {
++    id: 'box-jump',
++    nume: 'Box jump',
++    categorie: 'cardio',
++    grupe: ['cvadriceps', 'fesieri', 'gambe'],
++    dificultate: 'mediu',
++    echipament: 'cutie',
++    met: 8.0,
++    caloriiPeMinut: 8.8,
++    seriiDefault: 4,
++    repetariDefault: 10,
++  },
++  {
++    id: 'sled-push',
++    nume: 'Sled push',
++    categorie: 'full-body',
++    grupe: ['cvadriceps', 'fesieri', 'gambe'],
++    dificultate: 'greu',
++    echipament: 'sanie',
++    met: 9.0,
++    caloriiPeMinut: 9.9,
++    seriiDefault: 4,
++    repetariDefault: 1,
++  },
++  {
++    id: 'assault-bike',
++    nume: 'Assault bike',
++    categorie: 'cardio',
++    grupe: ['cardio', 'cvadriceps', 'deltoid anterior'],
++    dificultate: 'greu',
++    echipament: 'aparat',
++    met: 9.5,
++    caloriiPeMinut: 10.5,
++    seriiDefault: 1,
++    repetariDefault: 1,
++  },
++  {
++    id: 'stair-climber',
++    nume: 'Stair climber',
++    categorie: 'cardio',
++    grupe: ['cardio', 'fesieri', 'cvadriceps'],
++    dificultate: 'mediu',
++    echipament: 'aparat',
++    met: 7.5,
++    caloriiPeMinut: 8.2,
++    seriiDefault: 1,
++    repetariDefault: 1,
++  },
++  {
++    id: 'thruster-cu-gantere',
++    nume: 'Thruster cu gantere',
++    categorie: 'full-body',
++    grupe: ['cvadriceps', 'deltoid anterior', 'fesieri'],
++    dificultate: 'greu',
++    echipament: 'gantere',
++    met: 8.5,
++    caloriiPeMinut: 9.4,
++    seriiDefault: 4,
++    repetariDefault: 12,
++  },
++  {
++    id: 'clean-and-press-cu-bara',
++    nume: 'Clean and press cu bara',
++    categorie: 'full-body',
++    grupe: ['corp_intreg', 'trapez', 'deltoid anterior'],
++    dificultate: 'greu',
++    echipament: 'bara',
++    met: 8.0,
++    caloriiPeMinut: 8.8,
++    seriiDefault: 4,
++    repetariDefault: 6,
++  },
++  {
++    id: 'turkish-get-up-v3',
++    nume: 'Turkish get-up',
++    categorie: 'full-body',
++    grupe: ['abdomen', 'deltoid anterior', 'oblici'],
++    dificultate: 'greu',
++    echipament: 'kettlebell',
++    met: 6.0,
++    caloriiPeMinut: 6.6,
++    seriiDefault: 3,
++    repetariDefault: 5,
++  },
++  {
++    id: 'bear-crawl-v3',
++    nume: 'Bear crawl',
++    categorie: 'full-body',
++    grupe: ['abdomen', 'deltoid anterior', 'cvadriceps'],
++    dificultate: 'mediu',
++    echipament: 'greutate corporala',
++    met: 6.5,
++    caloriiPeMinut: 7.2,
++    seriiDefault: 3,
++    repetariDefault: 1,
++  },
++  {
++    id: 'cat-cow-v3',
++    nume: 'Cat-cow',
++    categorie: 'mobilitate',
++    grupe: ['mobilitate', 'lombari'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 2.5,
++    caloriiPeMinut: 2.8,
++    seriiDefault: 2,
++    repetariDefault: 12,
++  },
++  {
++    id: 'stretching-de-ischiogambieri-sezand',
++    nume: 'Stretching de ischiogambieri sezand',
++    categorie: 'mobilitate',
++    grupe: ['mobilitate', 'ischiogambieri'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 2.3,
++    caloriiPeMinut: 2.5,
++    seriiDefault: 2,
++    repetariDefault: 1,
++  },
++  {
++    id: 'deschidere-de-sold-in-fandare-hip-flexor-stretch',
++    nume: 'Deschidere de sold in fandare (hip flexor stretch)',
++    categorie: 'mobilitate',
++    grupe: ['mobilitate', 'fesieri'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 2.5,
++    caloriiPeMinut: 2.8,
++    seriiDefault: 2,
++    repetariDefault: 1,
++  },
++  {
++    id: 'rotatii-de-umeri-cu-bastonul',
++    nume: 'Rotatii de umeri cu bastonul',
++    categorie: 'mobilitate',
++    grupe: ['mobilitate', 'deltoid posterior'],
++    dificultate: 'usor',
++    echipament: 'baston',
++    met: 2.5,
++    caloriiPeMinut: 2.8,
++    seriiDefault: 2,
++    repetariDefault: 12,
++  },
++  {
++    id: 'thoracic-extension-pe-rola',
++    nume: 'Thoracic extension pe rola',
++    categorie: 'mobilitate',
++    grupe: ['mobilitate', 'trapez'],
++    dificultate: 'usor',
++    echipament: 'rola',
++    met: 2.5,
++    caloriiPeMinut: 2.8,
++    seriiDefault: 2,
++    repetariDefault: 10,
++  },
++  {
++    id: 'deep-squat-hold',
++    nume: 'Deep squat hold',
++    categorie: 'mobilitate',
++    grupe: ['mobilitate', 'adductori'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 2.8,
++    caloriiPeMinut: 3.1,
++    seriiDefault: 2,
++    repetariDefault: 1,
++  },
++  {
++    id: 'stretching-de-pectorali-la-usa',
++    nume: 'Stretching de pectorali la usa',
++    categorie: 'mobilitate',
++    grupe: ['mobilitate', 'pectorali'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 2.3,
++    caloriiPeMinut: 2.5,
++    seriiDefault: 2,
++    repetariDefault: 1,
++  },
++  {
++    id: '90-90-hip-rotation',
++    nume: '90/90 hip rotation',
++    categorie: 'mobilitate',
++    grupe: ['mobilitate', 'fesieri', 'abductori'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 2.5,
++    caloriiPeMinut: 2.8,
++    seriiDefault: 2,
++    repetariDefault: 10,
++  },
++  {
++    id: 'world-s-greatest-stretch',
++    nume: 'World\'s greatest stretch',
++    categorie: 'mobilitate',
++    grupe: ['mobilitate', 'adductori', 'lombari'],
++    dificultate: 'usor',
++    echipament: 'greutate corporala',
++    met: 3.0,
++    caloriiPeMinut: 3.3,
++    seriiDefault: 2,
++    repetariDefault: 8,
++  },
++  {
++    id: 'foam-rolling-cvadriceps',
++    nume: 'Foam rolling cvadriceps',
++    categorie: 'mobilitate',
++    grupe: ['mobilitate', 'cvadriceps'],
++    dificultate: 'usor',
++    echipament: 'rola',
++    met: 2.3,
++    caloriiPeMinut: 2.5,
++    seriiDefault: 2,
++    repetariDefault: 1,
++  },
++];
+diff --git a/frontend-nutritie/context/GamificareContext.tsx b/frontend-nutritie/context/GamificareContext.tsx
+--- a/frontend-nutritie/context/GamificareContext.tsx
++++ b/frontend-nutritie/context/GamificareContext.tsx
+@@ -179,7 +179,7 @@
+           questuri_azi: newState.questuriAzi,
+           insigne: newState.insigne,
+           updated_at: new Date().toISOString(),
+-        });
++        }, { onConflict: 'user_id' });
+       }
+     } catch (err) {
+       // Bug #24b: Loghează eroarea în loc de fail silent complet (XP se pierdea invizibil offline)
+diff --git a/frontend-nutritie/hooks/useAntrenamente.ts b/frontend-nutritie/hooks/useAntrenamente.ts
+--- a/frontend-nutritie/hooks/useAntrenamente.ts
++++ b/frontend-nutritie/hooks/useAntrenamente.ts
+@@ -248,7 +248,13 @@
+       const computed = computeWorkoutMetrics(payload.exercitii ?? []);
+ 
+       const row: Antrenament = {
+-        id: `local_workout_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
++        // FIX CRITIC: coloana antrenamente.id este UUID (gen_random_uuid). Un id de forma
++        // `local_workout_...` era respins de Postgres (22P02 invalid input syntax for type uuid)
++        // la FIECARE salvare, iar eroarea era inghitita => antrenamentele nu ajungeau NICIODATA in cloud.
++        id: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
++          const r = (Math.random() * 16) | 0;
++          return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
++        }),
+         user_id: currentUser?.id || 'local_user',
+         nume: payload.nume.trim(),
+         tip: payload.tip,
+@@ -296,12 +302,15 @@
+             .select()
+             .single();
+ 
++          if (error) {
++            console.warn('[Antrenamente] Insert Supabase esuat, randul NU e in cloud:', error.message ?? error);
++          }
+           if (!error && data) {
+             await fetchAntrenamente();
+             return data as Antrenament;
+           }
+-        } catch {
+-          // Fallback silențios către versiunea locală
++        } catch (e) {
++          console.warn('[Antrenamente] Sincronizare cloud esuata, se pastreaza doar local:', e);
+         }
+       }
+ 
+diff --git a/frontend-nutritie/hooks/useCamara.ts b/frontend-nutritie/hooks/useCamara.ts
+--- a/frontend-nutritie/hooks/useCamara.ts
++++ b/frontend-nutritie/hooks/useCamara.ts
+@@ -219,6 +219,12 @@
+           carbohidrati_100g: nouProdus.carbohidrati_100g,
+           imagine_url: nouProdus.imagine_url || null,
+           created_at: now,
++          // FIX: aceste coloane exista in schema dar nu erau trimise => se pierdeau la reinstalare.
++          cantitate: nouProdus.cantitate ?? 1,
++          data_expirare: nouProdus.data_expirare || null,
++          zile_valabilitate: nouProdus.zile_valabilitate ?? null,
++          is_congelat: nouProdus.is_congelat ?? false,
++          updated_at: now,
+         };
+ 
+         const { data, error } = await supabase
+@@ -227,6 +233,9 @@
+           .select()
+           .single();
+ 
++        if (error) {
++          console.warn('[Camara] Insert produs in Supabase esuat:', error.message ?? error);
++        }
+         if (!error && data) {
+           savedRemote = true;
+           nouProdus.id = data.id;
+diff --git a/frontend-nutritie/lib/fitnessEngine.ts b/frontend-nutritie/lib/fitnessEngine.ts
+--- a/frontend-nutritie/lib/fitnessEngine.ts
++++ b/frontend-nutritie/lib/fitnessEngine.ts
+@@ -193,6 +193,7 @@
+   };
+ }
+ 
++import { ALL_MUSCLE_IDS } from '../components/fitness/heatColor';
+ import type { MuscleId } from '../components/fitness/heatColor';
+ 
+ /**
+@@ -201,12 +202,9 @@
+ export function mapToCanonicalMuscleIds(key: string): { id: MuscleId; weight: number }[] {
+   const g = key.toLowerCase().trim();
+   // Verificare directă dacă este un MuscleId canonic:
+-  const validIds: MuscleId[] = [
+-    'pectorali', 'deltoid_anterior', 'deltoid_lateral', 'deltoid_posterior',
+-    'biceps', 'triceps', 'antebrate', 'abdomen', 'oblici', 'trapez',
+-    'dorsali', 'lombari', 'romboizi', 'fesieri', 'cvadriceps',
+-    'ischiogambieri', 'gambe', 'adductori', 'abductori'
+-  ];
++  // FIX: lista era duplicata manual si putea ramane in urma fata de heatColor.ts
++  // (o denumire nou adaugata acolo nu era recunoscuta aici => muschi mort pe harta).
++  const validIds: MuscleId[] = ALL_MUSCLE_IDS as unknown as MuscleId[];
+   if (validIds.includes(g as MuscleId)) {
+     return [{ id: g as MuscleId, weight: 1.0 }];
+   }
+@@ -259,6 +257,8 @@
+   // abductori INAINTE de adductori (altfel regex-ul /adductori/ prinde și "abductori")
+   if (/abductori|fesier mijlociu/i.test(g)) return [{ id: 'abductori', weight: 1.0 }];
+   if (/adductori/i.test(g)) return [{ id: 'adductori', weight: 0.7 }];
++  // Chei non-musculare: nu genereaza incarcare, dar nici avertisment in consola.
++  if (/mobilitate|stretching|incalzire|echilibru/i.test(g)) return [];
+   if (/full-body|corp_intreg|cardio/i.test(g)) return [
+     { id: 'cvadriceps', weight: 0.7 },
+     { id: 'pectorali', weight: 0.6 },
+diff --git a/supabase_rls_policies.sql b/supabase_rls_policies.sql
+--- a/supabase_rls_policies.sql
++++ b/supabase_rls_policies.sql
+@@ -1,4 +1,3 @@
+-
+ -- ==============================================================================
+ -- NUTRIAI - POLITICI DE ROW LEVEL SECURITY (RLS) PENTRU SUPABASE
+ -- Conform punctului 1.1.5 și 2.1.4 din Raportul de Audit
+@@ -145,11 +144,14 @@
+ ALTER TABLE IF EXISTS barcode_cache ADD COLUMN IF NOT EXISTS created_by_user UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+ 
+ -- Activează RLS și restricționează accesul (doar backend-ul cu service_role)
+-ALTER TABLE barcode_cache ENABLE ROW LEVEL SECURITY;
++ALTER TABLE IF EXISTS barcode_cache ENABLE ROW LEVEL SECURITY;
+ 
+ -- Policy: nicio operațiune directă din frontend (doar service_role)
+ -- Dacă pe viitor vrei să permiți citire publică, înlocuiește cu:
+ --   CREATE POLICY "Public read" ON barcode_cache FOR SELECT USING (true);
++-- Fix audit: lipsea DROP POLICY IF EXISTS, deci a doua rulare a scriptului eșua cu
++-- "policy already exists" și oprea toate migrările următoare.
++DROP POLICY IF EXISTS "Backend-only access" ON barcode_cache;
+ CREATE POLICY "Backend-only access" ON barcode_cache
+   FOR ALL
+   USING (FALSE)
+@@ -288,9 +290,11 @@
+ ALTER TABLE IF EXISTS exercitii ENABLE ROW LEVEL SECURITY;
+ 
+ DROP POLICY IF EXISTS "Authenticated users can read exercises" ON exercitii;
++-- Fix audit: auth.role() este deprecat/eliminat in Supabase; folosim clauza TO authenticated.
+ CREATE POLICY "Authenticated users can read exercises" ON exercitii
+   FOR SELECT
+-  USING (auth.role() = 'authenticated');
++  TO authenticated
++  USING (true);
+ 
+ -- Bug #4: Politica "Admins can manage exercises" referencie tabela admin_users care nu există,
+ -- provocând un errror la rularea scriptului. Soluție: creăm tabela admin_users și o populăm
+@@ -313,3 +317,26 @@
+ -- CREATE POLICY "Admins can manage exercises" ON exercitii
+ --   FOR ALL
+ --   USING (auth.uid() IN (SELECT user_id FROM admin_users));
++
++-- ==============================================================================
++-- 11. INDEXURI DE PERFORMANTA (Fix audit)
++-- Lipseau indexuri pe coloanele filtrate la fiecare ecran (user_id + data).
++-- Fara ele, fiecare deschidere de ecran facea Seq Scan pe tot tabelul.
++-- ==============================================================================
++CREATE INDEX IF NOT EXISTS mese_user_id_idx ON mese(user_id);
++CREATE INDEX IF NOT EXISTS mese_user_created_idx ON mese(user_id, created_at DESC);
++CREATE INDEX IF NOT EXISTS audit_log_user_created_idx ON audit_log(user_id, created_at DESC);
++CREATE INDEX IF NOT EXISTS antrenamente_user_created_idx ON antrenamente(user_id, created_at DESC);
++CREATE INDEX IF NOT EXISTS gamificare_user_updated_idx ON gamificare(user_id, updated_at DESC);
++
++-- ============================================================
++-- 12. FIX AUDIT: upsert-ul gamificare are nevoie de UNIQUE(user_id)
++-- Fara aceasta constrangere, `.upsert({...}, { onConflict: 'user_id' })`
++-- eueaza sau insereaza randuri duplicate pentru acelasi utilizator.
++-- ============================================================
++DELETE FROM gamificare g USING gamificare g2
++  WHERE g.user_id = g2.user_id AND g.ctid < g2.ctid;
++CREATE UNIQUE INDEX IF NOT EXISTS gamificare_user_id_key ON gamificare(user_id);
++
++-- Index pentru filtrarea meselor pe zi locala (coloana `data` este acum populata).
++CREATE INDEX IF NOT EXISTS mese_user_data_idx ON mese(user_id, data);

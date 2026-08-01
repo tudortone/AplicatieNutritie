@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -247,7 +248,13 @@ export function useAntrenamente(dataSelectata?: Date) {
       const computed = computeWorkoutMetrics(payload.exercitii ?? []);
 
       const row: Antrenament = {
-        id: `local_workout_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        // FIX CRITIC: coloana antrenamente.id este UUID (gen_random_uuid). Un id de forma
+        // `local_workout_...` era respins de Postgres (22P02 invalid input syntax for type uuid)
+        // la FIECARE salvare, iar eroarea era inghitita => antrenamentele nu ajungeau NICIODATA in cloud.
+        id: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+        }),
         user_id: currentUser?.id || 'local_user',
         nume: payload.nume.trim(),
         tip: payload.tip,
@@ -295,12 +302,15 @@ export function useAntrenamente(dataSelectata?: Date) {
             .select()
             .single();
 
+          if (error) {
+            console.warn('[Antrenamente] Insert Supabase esuat, randul NU e in cloud:', error.message ?? error);
+          }
           if (!error && data) {
             await fetchAntrenamente();
             return data as Antrenament;
           }
-        } catch {
-          // Fallback silențios către versiunea locală
+        } catch (e) {
+          console.warn('[Antrenamente] Sincronizare cloud esuata, se pastreaza doar local:', e);
         }
       }
 

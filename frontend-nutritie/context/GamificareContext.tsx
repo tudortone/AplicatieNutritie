@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
@@ -178,7 +179,7 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
           questuri_azi: newState.questuriAzi,
           insigne: newState.insigne,
           updated_at: new Date().toISOString(),
-        });
+        }, { onConflict: 'user_id' });
       }
     } catch (err) {
       // Bug #24b: Loghează eroarea în loc de fail silent complet (XP se pierdea invizibil offline)

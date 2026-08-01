@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
@@ -22,6 +23,8 @@ import { useHealthSync, HEALTH_PROVIDERS } from '../../hooks/useHealthSync';
 import { useNotificationBanner } from '../../context/NotificationBannerContext';
 import { useNotify } from '../../hooks/useNotify';
 import { useGamificare } from '../../hooks/useGamificare';
+// FIX UI: tastatura acoperea cele 7 input-uri din profil.
+import KeyboardAwareScreen from '../../components/ui/KeyboardAwareScreen';
 import { INSIGNE_LIST } from '../../constants/insigne';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
@@ -228,11 +231,15 @@ export default function ProfilScreen() {
   const initials = session.user.email?.slice(0, 2).toUpperCase() || 'NU';
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
       <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}
+      >
 
         {/* Avatar header */}
         <Animated.View entering={FadeInDown.duration(500)} style={styles.avatarSection}>
@@ -240,7 +247,13 @@ export default function ProfilScreen() {
             <LinearGradient colors={colors.accentGradient} style={[styles.avatarRing, { shadowColor: colors.accent }]}>
               <View style={[styles.avatarInner, { backgroundColor: '#0F1318', overflow: 'hidden' }]}>
                 {avatarUrl ? (
-                  <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 29 }} />
+                  <Image
+                    source={{ uri: avatarUrl }}
+                    style={{ width: '100%', height: '100%', borderRadius: 29 }}
+                    // FIX UI: fara resizeMode imaginea era intinsa/deformata.
+                    resizeMode="cover"
+                    accessibilityLabel="Poza de profil"
+                  />
                 ) : (
                   <Text style={[styles.avatarText, { color: colors.accent }]}>{initials}</Text>
                 )}
@@ -708,7 +721,7 @@ export default function ProfilScreen() {
           </BlurView>
         </Animated.View>
       )}
-    </View>
+    </KeyboardAwareScreen>
   );
 }
 

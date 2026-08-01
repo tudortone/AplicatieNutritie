@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
@@ -218,6 +219,12 @@ export function useCamara() {
           carbohidrati_100g: nouProdus.carbohidrati_100g,
           imagine_url: nouProdus.imagine_url || null,
           created_at: now,
+          // FIX: aceste coloane exista in schema dar nu erau trimise => se pierdeau la reinstalare.
+          cantitate: nouProdus.cantitate ?? 1,
+          data_expirare: nouProdus.data_expirare || null,
+          zile_valabilitate: nouProdus.zile_valabilitate ?? null,
+          is_congelat: nouProdus.is_congelat ?? false,
+          updated_at: now,
         };
 
         const { data, error } = await supabase
@@ -226,6 +233,9 @@ export function useCamara() {
           .select()
           .single();
 
+        if (error) {
+          console.warn('[Camara] Insert produs in Supabase esuat:', error.message ?? error);
+        }
         if (!error && data) {
           savedRemote = true;
           nouProdus.id = data.id;

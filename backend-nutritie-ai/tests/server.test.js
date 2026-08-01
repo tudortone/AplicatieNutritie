@@ -116,6 +116,24 @@ describe('Backend API Tests', () => {
     });
   });
 
+  describe('Validări ID / cod de bare (fix audit)', () => {
+    it('ar trebui să returneze 400 pentru un ID de masă care nu este UUID', async () => {
+      const res = await request(app)
+        .delete('/api/mese/nu-este-uuid')
+        .set('Authorization', 'Bearer token_valid');
+      expect(res.statusCode).toBe(400);
+      expect(res.body.eroare).toContain('ID de masă invalid');
+    });
+
+    it('ar trebui să returneze 400 pentru un cod de bare nenumeric', async () => {
+      const res = await request(app)
+        .get('/api/produs-barcode/abc!!')
+        .set('Authorization', 'Bearer token_valid');
+      expect(res.statusCode).toBe(400);
+      expect(res.body.eroare).toContain('Cod de bare invalid');
+    });
+  });
+
   describe('Validări Faza 1 /api/analizeaza-mancare-structurat', () => {
     it('ar trebui să returneze 400 dacă fișierul nu este o imagine (ex: .txt)', async () => {
       const res = await request(app)

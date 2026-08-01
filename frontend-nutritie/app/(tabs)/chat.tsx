@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
@@ -43,7 +44,13 @@ interface MealProposal {
   };
 }
 
+// Generator de id stabil pentru mesajele de chat (folosit ca `key` in lista).
+const newMsgId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
 interface ChatMessage {
+  // FIX UI: fara id stabil, key={index} facea Reanimated sa reutilizeze bula
+  // gresita la inserarea unui mesaj (animatii care sar, text amestecat).
+  id?: string;
   role: 'ai' | 'user' | string;
   text: string;
 }
@@ -118,7 +125,7 @@ export default function ChatScreen() {
   const [mealProposalVisible, setMealProposalVisible] = useState(false);
   const [savingProposal, setSavingProposal] = useState(false);
   const [mesaje, setMesaje] = useState<ChatMessage[]>([
-    { role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
+    { id: newMsgId(), role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
   ]);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -212,11 +219,11 @@ export default function ChatScreen() {
   const executaTrimitereMesaj = async (mesajText: string) => {
     if (!mesajText.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setMesaje(prev => [...prev, { role: 'user', text: mesajText }]);
+    setMesaje(prev => [...prev, { id: newMsgId(), role: 'user', text: mesajText }]);
     setLoadingChat(true);
 
     if (!session) {
-      setMesaje(prev => [...prev, { role: 'ai', text: "Nu ești autentificat. Te rog să te conectezi din nou." }]);
+      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: "Nu ești autentificat. Te rog să te conectezi din nou." }]);
       setLoadingChat(false);
       return;
     }
@@ -270,9 +277,9 @@ export default function ChatScreen() {
         raspunsText = "Am identificat alimentele! Apasă pe butonul de confirmare care a apărut pe ecran.";
       }
 
-      setMesaje(prev => [...prev, { role: 'ai', text: raspunsText }]);
+      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: raspunsText }]);
     } catch {
-      setMesaje(prev => [...prev, { role: 'ai', text: "Eroare de conexiune cu serverul AI. Te rog încearcă din nou mai târziu." }]);
+      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: "Eroare de conexiune cu serverul AI. Te rog încearcă din nou mai târziu." }]);
     } finally {
       setLoadingChat(false);
       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
@@ -310,15 +317,24 @@ export default function ChatScreen() {
 
       // 3. Inserarea batch a tuturor alimentelor o singură dată
       const tipMasa = mealProposal.meal_type || 'gustare';
+      // FIX: coloanele `data` si `ora` ramaneau mereu NULL (doar created_at era populat),
+      // iar valorile halucinate de AI puteau depasi CHECK-urile din Postgres (calorii <= 15000,
+      // macro <= 2000) => insert respins cu eroare bruta afisata utilizatorului.
+      const acumMasa = new Date();
+      const ziLocala = `${acumMasa.getFullYear()}-${String(acumMasa.getMonth() + 1).padStart(2, '0')}-${String(acumMasa.getDate()).padStart(2, '0')}`;
+      const oraLocala = acumMasa.toTimeString().slice(0, 8);
+      const clampVal = (v: number, max: number) => Math.max(0, Math.min(max, Number.isFinite(v) ? v : 0));
       const rows = mealProposal.items.map((item: any) => ({
         user_id: session.user.id,
         nume: `${item.name} (${item.qty}${item.unit || 'g'})`,
-        calorii: Math.round(parseStrictNumber(item.kcal)), // Caloriile rămân rotunjite
-        proteine: parseStrictNumber(item.protein_g), // Păstrăm zecimalele
-        carbohidrati: parseStrictNumber(item.carbs_g),
-        grasimi: parseStrictNumber(item.fat_g),
+        calorii: clampVal(Math.round(parseStrictNumber(item.kcal)), 15000), // Caloriile rămân rotunjite
+        proteine: clampVal(parseStrictNumber(item.protein_g), 2000), // Păstrăm zecimalele
+        carbohidrati: clampVal(parseStrictNumber(item.carbs_g), 2000),
+        grasimi: clampVal(parseStrictNumber(item.fat_g), 2000),
         // Bug #18: fiber_g era prezent în propunerea AI dar nu era salvat → câmpul rămânea 0
-        fibre: Math.round(parseStrictNumber(item.fiber_g)),
+        fibre: clampVal(Math.round(parseStrictNumber(item.fiber_g)), 2000),
+        data: ziLocala,
+        ora: oraLocala,
         tip_masa: tipMasa,
       }));
 
@@ -335,7 +351,7 @@ export default function ChatScreen() {
       setMealProposalVisible(false);
       setMealProposal(null);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setMesaje(prev => [...prev, { role: 'ai', text: '✅ Masa a fost confirmată și adăugată cu succes în Jurnal!' }]);
+      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: '✅ Masa a fost confirmată și adăugată cu succes în Jurnal!' }]);
       
     } catch (e: any) {
       console.error('Eroare salvare propunere masă:', e);
@@ -364,7 +380,7 @@ export default function ChatScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {}
     const initialMsg: ChatMessage[] = [
-      { role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
+      { id: newMsgId(), role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
     ];
     setMesaje(initialMsg);
     await AsyncStorage.removeItem(getChatStorageKey());
@@ -500,7 +516,7 @@ export default function ChatScreen() {
             >
               {mesaje.map((msg, index) => (
                 <Animated.View
-                  key={index}
+                  key={msg.id ?? `msg-${index}`}
                   entering={FadeIn.duration(400)}
                   layout={Layout.springify()}
                   style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleAI]}

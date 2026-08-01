@@ -1,3 +1,4 @@
+
 import React, { useCallback, useState, useRef } from 'react';
 import { 
   View, 
@@ -85,9 +86,11 @@ export default function HistoryScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const { error } = await supabase.from('mese').delete().eq('id', masa.id);
+              const { error } = await supabase.from('mese').delete().eq('id', masa.id).eq('user_id', masa.user_id);
               if (error) {
-                Alert.alert("Eroare", `Nu s-a putut șterge masa: ${error.message}`);
+                console.error("[Istoric] Stergere masa esuata:", error.message);
+                // FIX UI: utilizatorul vedea mesajul brut de la Postgres.
+                Alert.alert("Nu am putut sterge masa", "Incearca din nou in cateva momente.");
               } else {
                 refresh();
               }

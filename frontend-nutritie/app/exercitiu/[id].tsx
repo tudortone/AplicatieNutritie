@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -319,7 +320,7 @@ export default function ExercitiuDetailScreen() {
   if (!exercitiu) {
     return (
       <View style={[styles.container, { paddingTop: insets.top + Spacing.lg, backgroundColor: colors.background }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={styles.backBtn}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.notFoundWrap}>
@@ -445,7 +446,7 @@ export default function ExercitiuDetailScreen() {
     <View style={[styles.container, { paddingTop: Math.max(insets.top, Spacing.lg), backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={styles.backBtn}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>

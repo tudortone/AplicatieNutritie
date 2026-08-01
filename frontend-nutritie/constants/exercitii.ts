@@ -1,6 +1,8 @@
+
 import { classifyMeasurement, type MeasurementSpec } from '../lib/measurement';
 import { NEW_EXERCISES } from './new_exercises';
 import { NEW_EXERCISES_V2 } from './new_exercises_v2';
+import { NEW_EXERCISES_V3 } from './new_exercises_v3';
 export type GrupaMusculara = string;
 export type Echipament = string;
 
@@ -1217,6 +1219,9 @@ export function deriveMuschiTinta(ex: Exercitiu): Partial<Record<MuscleId, numbe
     if (/cvadriceps|picioare/i.test(g)) return [{ id: 'cvadriceps', pct: 95 }];
     if (/ischiogambieri|femurali/i.test(g)) return [{ id: 'ischiogambieri', pct: 85 }];
     if (/gambe/i.test(g)) return [{ id: 'gambe', pct: 75 }];
+    // FIX HARTA: 'abductori' lipsea complet, iar regexul /adductori/ prindea si
+    // "abductori" => muschiul abductor nu se aprindea NICIODATA, se colora adductorul.
+    if (/abductori|fesier mijlociu/i.test(g)) return [{ id: 'abductori', pct: 80 }];
     if (/adductori/i.test(g)) return [{ id: 'adductori', pct: 65 }];
     if (/full-body|corp_intreg|cardio/i.test(g)) return [
       { id: 'cvadriceps', pct: 60 },
@@ -1239,7 +1244,18 @@ export function deriveMuschiTinta(ex: Exercitiu): Partial<Record<MuscleId, numbe
   return out;
 }
 
-export const EXERCITII_DB: Exercitiu[] = [...EXERCITII, ...NEW_EXERCISES, ...NEW_EXERCISES_V2].map((e) => ({
+const TOATE_EXERCITIILE: Exercitiu[] = [
+  ...EXERCITII,
+  ...NEW_EXERCISES,
+  ...NEW_EXERCISES_V2,
+  ...NEW_EXERCISES_V3,
+];
+
+// FIX: catalogul e compus din 4 surse; fara deduplicare un id duplicat aparea de 2 ori
+// in liste si era numarat dublu in statistici.
+export const EXERCITII_DB: Exercitiu[] = TOATE_EXERCITIILE.filter(
+  (e, i, arr) => arr.findIndex((x) => x.id === e.id) === i,
+).map((e) => ({
   ...e,
   masurare: e.masurare ?? classifyMeasurement(e),
   muschiTinta: e.muschiTinta ?? deriveMuschiTinta(e),

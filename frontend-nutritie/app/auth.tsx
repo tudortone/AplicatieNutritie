@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
@@ -188,6 +189,11 @@ export default function AuthScreen() {
                   }}
                   autoCapitalize="none"
                   keyboardType="email-address"
+                  // FIX UI: autocorectul transforma adresele de email, iar autofill-ul nu functiona.
+                  autoCorrect={false}
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                  returnKeyType="next"
                   selectionColor={colors.accent}
                 />
               </View>
@@ -207,6 +213,11 @@ export default function AuthScreen() {
                     if (authError) setAuthError(null);
                   }}
                   secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="password"
+                  textContentType="password"
+                  returnKeyType="done"
                   selectionColor={colors.accent}
                 />
                 <TouchableOpacity

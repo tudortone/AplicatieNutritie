@@ -1,13 +1,13 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  View,
+  useWindowDimensions, View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
   TextInput,
-  Dimensions,
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
@@ -37,7 +37,6 @@ import { useExercitii } from '../../hooks/useExercitii';
 
 // ---- Constants --------------------------------------------------------------
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
 const MAP_HEIGHT = 380;
 const CTA_COLOR = '#0EA5E9';
 
@@ -74,6 +73,8 @@ interface LocalExercitiuInAntrenament {
 // ---- Component --------------------------------------------------------------
 
 export default function AntrenamenteScreen() {
+  // FIX UI: Dimensions.get la nivel de modul nu se actualizeaza la rotire/split-screen.
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const { colors } = useTheme();
   const { adaugaAntrenament } = useAntrenamente();
   const notify = useNotify();
