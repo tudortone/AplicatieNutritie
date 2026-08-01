@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, List, MessageCircle, User, BarChart3, Dumbbell } from 'lucide-react-native';
@@ -9,8 +9,20 @@ import { useTheme } from '../../context/ThemeContext';
 export default function TabLayout() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const compact = width <= 390;
+  const veryCompact = width <= 350;
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 14);
-  const tabHeight = 58 + bottomInset;
+  const tabHeight = (compact ? 54 : 58) + bottomInset;
+  const iconSize = compact ? 21 : 24;
+
+  const icon = (Icon: typeof Home) => ({ color }: { color: string; size: number }) => (
+    <Icon
+      size={iconSize}
+      color={color}
+      strokeWidth={color === colors.accent ? 2.5 : 1.5}
+    />
+  );
 
   return (
     <Tabs
@@ -19,71 +31,66 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarHideOnKeyboard: true,
+        tabBarShowLabel: !veryCompact,
+        tabBarItemStyle: styles.tabBarItem,
         tabBarStyle: [
           styles.tabBar,
           {
             height: tabHeight,
             paddingBottom: bottomInset,
-            paddingTop: 10,
+            paddingTop: compact ? 7 : 10,
           },
           Platform.OS === 'android' && {
-            backgroundColor: colors.surface + 'F8',
+            backgroundColor: `${colors.surface}F8`,
             borderTopWidth: 1,
             borderTopColor: colors.border,
             position: 'absolute' as const,
             elevation: 16,
-          }
+          },
         ],
-        tabBarBackground: Platform.OS === 'ios' ? () => (
-          <BlurView
-            intensity={60}
-            tint="dark"
-            style={[StyleSheet.absoluteFill, styles.tabBarBg]}
-          />
-        ) : undefined,
-        tabBarLabelStyle: styles.tabBarLabel,
-      }}>
+        tabBarBackground: Platform.OS === 'ios'
+          ? () => (
+              <BlurView
+                intensity={60}
+                tint="dark"
+                style={[StyleSheet.absoluteFill, styles.tabBarBg]}
+              />
+            )
+          : undefined,
+        tabBarLabelStyle: [styles.tabBarLabel, compact && styles.compactLabel],
+      }}
+    >
       <Tabs.Screen
         name="index"
-        options={{
-          title: 'Acasă',
-          tabBarIcon: ({ color, size }) => <Home size={size} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />,
-        }}
+        options={{ title: 'Acasă', tabBarAccessibilityLabel: 'Acasă', tabBarIcon: icon(Home) }}
       />
       <Tabs.Screen
         name="istoric"
-        options={{
-          title: 'Jurnal',
-          tabBarIcon: ({ color, size }) => <List size={size} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />,
-        }}
+        options={{ title: 'Jurnal', tabBarAccessibilityLabel: 'Jurnal alimentar', tabBarIcon: icon(List) }}
       />
       <Tabs.Screen
         name="antrenamente"
-        options={{
-          title: 'Sport',
-          tabBarIcon: ({ color, size }) => <Dumbbell size={size} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />,
-        }}
+        options={{ title: 'Sport', tabBarAccessibilityLabel: 'Antrenamente', tabBarIcon: icon(Dumbbell) }}
       />
       <Tabs.Screen
         name="statistici"
         options={{
-          title: 'Statistici',
-          tabBarIcon: ({ color, size }) => <BarChart3 size={size} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />,
+          title: compact ? 'Stats' : 'Statistici',
+          tabBarAccessibilityLabel: 'Statistici',
+          tabBarIcon: icon(BarChart3),
         }}
       />
       <Tabs.Screen
         name="chat"
         options={{
-          title: 'Asistent',
-          tabBarIcon: ({ color, size }) => <MessageCircle size={size} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />,
+          title: compact ? 'AI' : 'Asistent',
+          tabBarAccessibilityLabel: 'Asistent NutriAI',
+          tabBarIcon: icon(MessageCircle),
         }}
       />
       <Tabs.Screen
         name="profil"
-        options={{
-          title: 'Profil',
-          tabBarIcon: ({ color, size }) => <User size={size} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />,
-        }}
+        options={{ title: 'Profil', tabBarAccessibilityLabel: 'Profil', tabBarIcon: icon(User) }}
       />
     </Tabs>
   );
@@ -100,9 +107,17 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.06)',
   },
+  tabBarItem: {
+    minWidth: 0,
+    paddingHorizontal: 0,
+  },
   tabBarLabel: {
     fontSize: 11,
     fontWeight: '700',
     marginTop: 2,
-  }
+  },
+  compactLabel: {
+    fontSize: 9,
+    lineHeight: 11,
+  },
 });

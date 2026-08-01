@@ -1,71 +1,56 @@
 import React from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, StyleProp, ViewStyle } from 'react-native';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 
 interface Props {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  /**
+   * Distanța dintre partea de sus a ecranului și view-ul mutat de tastatură.
+   * Ecranele fără header nativ folosesc 0. Un ecran cu header poate furniza
+   * explicit înălțimea lui.
+   */
+  keyboardVerticalOffset?: number;
 }
 
-// Componentă internă care apelează hook-ul necondiționat (are context navigare)
-function KeyboardAwareWithTabBar({ children, style }: Props) {
-  const tabBarHeight = useBottomTabBarHeight();
+/**
+ * Wrapper stabil pentru tastatură.
+ *
+ * Implementarea veche apela `useBottomTabBarHeight()` și folosea un
+ * ErrorBoundary drept mecanism de detectare a contextului. La ecranele stack,
+ * prima randare arunca o eroare, componenta era remontată pe fallback și putea
+ * produce un flick. În plus, înălțimea tab-bar-ului de jos era folosită drept
+ * offset față de partea de SUS, deși acestea sunt coordonate diferite.
+ */
+export default function KeyboardAwareScreen({
+  children,
+  style,
+  keyboardVerticalOffset = 0,
+}: Props) {
   return (
     <KeyboardAvoidingView
       style={[styles.flex, style]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? tabBarHeight : 0}
+      keyboardVerticalOffset={keyboardVerticalOffset}
+      enabled
     >
       {children}
     </KeyboardAvoidingView>
   );
 }
 
-// Fallback fără tab bar (pentru ecrane modale, stack screens etc.)
-function KeyboardAwareFallback({ children, style }: Props) {
-  return (
-    <KeyboardAvoidingView
-      style={[styles.flex, style]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
-    >
-      {children}
-    </KeyboardAvoidingView>
-  );
-}
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+});
 
-// Wrapper cu ErrorBoundary ușor — dacă nu există context tab bar (ecran modal),
-// folosim fallback-ul. Altfel folosim componenta cu tab bar height real.
-class KeyboardAwareScreen extends React.Component<Props, { hasTabBarCtx: boolean }> {
-  constructor(props: Props) {
-    super(props);
-    this.state = { hasTabBarCtx: true };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasTabBarCtx: false };
-  }
-
-  render() {
-    if (this.state.hasTabBarCtx) {
-      return (
-        <KeyboardAwareWithTabBar style={this.props.style}>
-          {this.props.children}
-        </KeyboardAwareWithTabBar>
-      );
-    }
-    return (
-      <KeyboardAwareFallback style={this.props.style}>
-        {this.props.children}
-      </KeyboardAwareFallback>
-    );
-  }
-}
-
-export default KeyboardAwareScreen;
-
-const styles = StyleSheet.create({ flex: { flex: 1 } });
-
-// Constantă partajată pentru contentContainerStyle în liste/scrollview-uri
-export const CONTENT_BOTTOM_PADDING = 160;
-
+/**
+ * Fallback pentru ecranele vechi care nu folosesc încă useResponsiveLayout().
+ * Include bara de tab (~86 px) și spațiu de respirație, fără paddingul excesiv
+ * de 160 px folosit anterior.
+ */
+export const CONTENT_BOTTOM_PADDING = 120;

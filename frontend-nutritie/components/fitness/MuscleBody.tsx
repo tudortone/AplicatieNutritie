@@ -4,12 +4,16 @@ import { heatColor, heatOpacity, type MuscleId } from './heatColor';
 import { useTheme } from '../../context/ThemeContext';
 
 /**
- * PERF FIX: `anatomyPaths.generated.ts` are ~574 KB de path-uri SVG.
- * Importat static, modulul era parsat si evaluat la pornirea aplicatiei,
- * chiar daca utilizatorul nu deschidea niciodata harta musculara.
- * Acum se incarca lazy, prin require(), la prima randare a componentei.
+ * PERF: `anatomyPaths.generated.ts` are ~560 KB de path-uri SVG.
+ * Importat static, modulul era parsat la pornirea aplicatiei, chiar daca
+ * utilizatorul nu deschidea niciodata harta. Acum se incarca lazy.
  */
-type AnatomyPath = { d: string; role: 'fill' | 'outline'; muscleId?: MuscleId };
+type AnatomyPath = {
+  d: string;
+  role: 'fill' | 'outline';
+  muscleId?: MuscleId | null;
+  baseColor?: string;
+};
 type AnatomyModule = {
   FRONT_PATHS: AnatomyPath[];
   BACK_PATHS: AnatomyPath[];
@@ -52,47 +56,51 @@ export function MuscleBody({
     };
   }, [side]);
 
-  const fills = useMemo(() => paths.filter((p) => p.role === 'fill'), [paths]);
-  const outlines = useMemo(() => paths.filter((p) => p.role === 'outline'), [paths]);
-
   return (
     <Svg width={width} height={height} viewBox={`0 0 ${viewBox.width} ${viewBox.height}`}>
-      {/* Strat fill — mușchii colorați după intensitate */}
+      {/*
+        FIX: anterior componenta desena mai intai TOATE suprafetele de tip `fill`,
+        apoi TOATE contururile deasupra lor. In SVG-ul anatomic sunt peste 700 de
+        path-uri de tip `outline` (umbre si delimitari interne, aproape negre), iar
+        randate la final acopereau muschii colorati - harta parea stinsa chiar si
+        cand intensitatile erau corecte.
+        Pastram acum ordinea originala din fisier, exact cum a fost desenata.
+      */}
       <G>
-        {fills.map((p, i) => {
+        {paths.map((p, i) => {
           if (!/^[Mm]/.test(p.d)) return null;
-          // La 0 intensitate: muscleBase (închis, siluetă), NU roșu
-          const fill = p.muscleId
-            ? heatColor(intensity?.[p.muscleId])
-            : colors.muscleBase;
-          const opacity = p.muscleId
-            ? heatOpacity(intensity?.[p.muscleId])
-            : 0.9;
+
+          if (p.role === 'outline') {
+            return (
+              <Path
+                key={`p${i}`}
+                d={p.d}
+                fill={p.baseColor || colors.muscleOutline}
+                fillOpacity={0.85}
+                pointerEvents="none"
+              />
+            );
+          }
+
+          const value = p.muscleId ? intensity?.[p.muscleId] : undefined;
+          const isActive = typeof value === 'number' && value > 0.001;
+
           return (
             <Path
-              key={`f${i}`}
+              key={`p${i}`}
               d={p.d}
-              fill={fill}
-              fillOpacity={opacity}
+              // Fara date: silueta inchisa a temei, nu rosu si nu negru.
+              fill={p.muscleId ? heatColor(value) : colors.muscleBase}
+              fillOpacity={p.muscleId ? heatOpacity(value) : 0.9}
+              // Muschii activi primesc un contur subtire, ca sa se distinga clar
+              // de suprafetele vecine chiar si la intensitati mici.
+              stroke={isActive ? heatColor(value) : undefined}
+              strokeWidth={isActive ? 0.6 : 0}
               onPress={
                 p.muscleId && onMusclePress
-                  ? () => onMusclePress(p.muscleId!)
+                  ? () => onMusclePress(p.muscleId as MuscleId)
                   : undefined
               }
-            />
-          );
-        })}
-      </G>
-      {/* Strat outline — contururi și umbre, mereu vizibile */}
-      <G pointerEvents="none">
-        {outlines.map((p, i) => {
-          if (!/^[Mm]/.test(p.d)) return null;
-          return (
-            <Path
-              key={`o${i}`}
-              d={p.d}
-              fill={colors.muscleOutline}
-              fillOpacity={0.85}
             />
           );
         })}
