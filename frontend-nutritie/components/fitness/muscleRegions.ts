@@ -1,6 +1,15 @@
 /**
  * muscleRegions.ts — Regiuni SVG geometrice per mușchi pe față ('front') și spate ('back')
  * Conform specificației NutriAI v6/v7 (Secțiunea 3.3)
+ *
+ * Aceste regiuni au două roluri:
+ *  1. desenul simplificat din `anatomyPaths.ts` (fallback);
+ *  2. maparea geometrică din `scripts/buildAnatomy.mjs` — suprafețele din SVG-ul
+ *     anatomic detaliat care nu au id recunoscut sunt atribuite mușchiului în a
+ *     cărui regiune cade centrul lor.
+ *
+ * ⚠️ Un `id` poate apărea de două ori (o dată pe față, o dată pe spate).
+ * Căutarea trebuie făcută după `id` ȘI `side`.
  */
 
 import type { MuscleId } from './heatColor';
@@ -157,6 +166,34 @@ export const MUSCLE_REGIONS: MuscleRegion[] = [
     d: [
       'M106,338 L128,338 L124,396 L108,396 Z',
       'M174,338 L152,338 L156,396 L172,396 Z',
+    ],
+  },
+
+  /* ─── COMPLETĂRI FAȚĂ ───
+   * Adăugate LA FINAL intenționat: `anatomyPaths.ts` căuta inițial doar după `id`,
+   * iar mutarea lor mai sus ar schimba desenul simplificat de pe spate.
+   */
+  {
+    id: 'trapez',
+    side: 'front',
+    d: [
+      'M112,64 C124,58 156,58 168,64 L158,80 L122,80 Z',
+    ],
+  },
+  {
+    id: 'gambe',
+    side: 'front',
+    d: [
+      'M100,340 L128,340 L124,398 L104,398 Z',
+      'M180,340 L152,340 L156,398 L176,398 Z',
+    ],
+  },
+  {
+    id: 'abductori',
+    side: 'front',
+    d: [
+      'M98,214 L108,214 L104,246 L94,242 Z',
+      'M182,214 L172,214 L176,246 L186,242 Z',
     ],
   },
 ];

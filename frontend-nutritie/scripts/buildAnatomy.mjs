@@ -2,6 +2,12 @@
  * buildAnatomy.mjs — Node ESM script
  * Citește SVG-urile anatomice și generează anatomyPaths.generated.ts
  * Rulează cu: node scripts/buildAnatomy.mjs
+ *
+ * Maparea se face în două etape:
+ *   1. după id-ul din SVG (hărțile FRONT_MAP / BACK_MAP / PATTERN_MAP);
+ *   2. GEOMETRIC — suprafețele rămase fără mușchi sunt atribuite după poziția lor
+ *      pe corp, folosind regiunile din components/fitness/muscleRegions.ts.
+ *      Etapa 2 se auto-calibrează din suprafețele deja mapate la etapa 1.
  */
 
 import { readFileSync, writeFileSync } from 'fs';
@@ -11,37 +17,31 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
-// ─── HELPERS ────────────────────────────────────────────────────────────────
+// ─── HELPERS ─────────────────────────────────────────────────────
 
-/** 
+/**
  * Decode HTML entities where UTF-8 bytes are individually encoded as &#NNN;.
  * Example: &#200;&#152; → UTF-8 0xC8 0x98 → Ș (U+0218)
- * Standard entities like &#536; decode directly.
  */
 function decodeEntities(str) {
-  // First, collect consecutive &#NNN; sequences that may form UTF-8 sequences
   const bytes = [];
   let result = '';
-  let i = 0;
   const re = /&#(\d+);/g;
   let m;
   let lastIdx = 0;
-  
+
   while ((m = re.exec(str)) !== null) {
-    // Add text before this entity
     result += str.substring(lastIdx, m.index);
     const byte = parseInt(m[1], 10);
-    
+
     if (byte <= 0xFF) {
       bytes.push(byte);
     }
-    
-    // Check if next chars are also entities (whitespace between?)
+
     const nextIdx = m.index + m[0].length;
     const nextMatch = str.substring(nextIdx).match(/^\s*&#(\d+);/);
-    
+
     if (!nextMatch || parseInt(nextMatch[1], 10) > 0xFF) {
-      // Flush accumulated bytes
       if (bytes.length > 0) {
         const buf = Buffer.from(bytes);
         result += buf.toString('utf-8');
@@ -50,10 +50,10 @@ function decodeEntities(str) {
         result += String.fromCharCode(byte);
       }
     }
-    
+
     lastIdx = nextIdx;
   }
-  
+
   result += str.substring(lastIdx);
   return result;
 }
@@ -62,7 +62,7 @@ function decodeEntities(str) {
 function slugify(str) {
   return str
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // strip diacritics
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_|_$/g, '')
@@ -71,7 +71,7 @@ function slugify(str) {
 
 /** Calculate relative luminance from hex color (sRGB formula) */
 function relativeLuminance(hex) {
-  if (!hex || hex === 'none') return 1; // no fill = transparent = high luminance
+  if (!hex || hex === 'none') return 1;
   const h = hex.replace('#', '');
   if (h.length < 6) return 0.5;
   const r = parseInt(h.substring(0, 2), 16) / 255;
@@ -81,139 +81,374 @@ function relativeLuminance(hex) {
   return 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
 }
 
-// ─── MUSCLE MAPS ────────────────────────────────────────────────────────────
+// ─── GEOMETRIE ────────────────────────────────────────────────
 
-// IDs we skip when walking up the parent tree (placeholder / organizational groups)
+/**
+ * Extrage punctele unui path SVG (ancore + puncte de control).
+ * Nu desenează curbele exact, dar e suficient pentru bounding box și centru.
+ */
+function pathPoints(d) {
+  const tokens = d.match(/[MmZzLlHhVvCcSsQqTtAa]|-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) || [];
+  let i = 0;
+  let cmd = null;
+  let x = 0, y = 0, sx = 0, sy = 0;
+  const pts = [];
+  const num = () => {
+    const v = parseFloat(tokens[i++]);
+    return Number.isFinite(v) ? v : 0;
+  };
+
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (/^[A-Za-z]$/.test(t)) {
+      cmd = t;
+      i++;
+      if (cmd === 'Z' || cmd === 'z') { x = sx; y = sy; }
+      continue;
+    }
+    if (!cmd) { i++; continue; }
+
+    const rel = cmd === cmd.toLowerCase();
+    const c = cmd.toUpperCase();
+
+    if (c === 'M' || c === 'L' || c === 'T') {
+      const nx = num(), ny = num();
+      x = rel ? x + nx : nx;
+      y = rel ? y + ny : ny;
+      if (c === 'M') { sx = x; sy = y; cmd = rel ? 'l' : 'L'; }
+      pts.push([x, y]);
+    } else if (c === 'H') {
+      const nx = num();
+      x = rel ? x + nx : nx;
+      pts.push([x, y]);
+    } else if (c === 'V') {
+      const ny = num();
+      y = rel ? y + ny : ny;
+      pts.push([x, y]);
+    } else if (c === 'C') {
+      const x1 = num(), y1 = num(), x2 = num(), y2 = num(), ex = num(), ey = num();
+      pts.push([rel ? x + x1 : x1, rel ? y + y1 : y1]);
+      pts.push([rel ? x + x2 : x2, rel ? y + y2 : y2]);
+      x = rel ? x + ex : ex;
+      y = rel ? y + ey : ey;
+      pts.push([x, y]);
+    } else if (c === 'S' || c === 'Q') {
+      const x1 = num(), y1 = num(), ex = num(), ey = num();
+      pts.push([rel ? x + x1 : x1, rel ? y + y1 : y1]);
+      x = rel ? x + ex : ex;
+      y = rel ? y + ey : ey;
+      pts.push([x, y]);
+    } else if (c === 'A') {
+      num(); num(); num(); num(); num();
+      const ex = num(), ey = num();
+      x = rel ? x + ex : ex;
+      y = rel ? y + ey : ey;
+      pts.push([x, y]);
+    } else {
+      i++;
+    }
+  }
+
+  return pts;
+}
+
+function bboxOf(pts) {
+  if (!pts.length) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [px, py] of pts) {
+    if (px < minX) minX = px;
+    if (px > maxX) maxX = px;
+    if (py < minY) minY = py;
+    if (py > maxY) maxY = py;
+  }
+  if (!Number.isFinite(minX)) return null;
+  return {
+    minX, minY, maxX, maxY,
+    cx: (minX + maxX) / 2,
+    cy: (minY + maxY) / 2,
+    w: maxX - minX,
+    h: maxY - minY,
+  };
+}
+
+function pointInPolygon(px, py, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    const intersect = (yi > py) !== (yj > py) &&
+      px < ((xj - xi) * (py - yi)) / ((yj - yi) || 1e-9) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/** Regresie liniară simplă: y = a*x + b */
+function fit1d(xs, ys) {
+  const n = xs.length;
+  const mx = xs.reduce((s, v) => s + v, 0) / n;
+  const my = ys.reduce((s, v) => s + v, 0) / n;
+  let cov = 0, varx = 0;
+  for (let i = 0; i < n; i++) {
+    cov += (xs[i] - mx) * (ys[i] - my);
+    varx += (xs[i] - mx) ** 2;
+  }
+  const a = varx === 0 ? 1 : cov / varx;
+  return { a, b: my - a * mx };
+}
+
+/** Citește regiunile aproximative per mușchi din muscleRegions.ts */
+function loadRegions() {
+  const src = readFileSync(resolve(ROOT, 'components/fitness/muscleRegions.ts'), 'utf-8');
+  const out = { front: [], back: [] };
+  const blockRe = /id:\s*'([a-z_]+)',\s*side:\s*'(front|back)',\s*d:\s*\[([\s\S]*?)\],\s*\}/g;
+  let m;
+  while ((m = blockRe.exec(src)) !== null) {
+    const id = m[1];
+    const side = m[2];
+    const polys = [...m[3].matchAll(/'([^']+)'/g)]
+      .map((q) => pathPoints(q[1]))
+      .filter((p) => p.length >= 3);
+    if (polys.length) out[side].push({ id, polys });
+  }
+  return out;
+}
+
+/**
+ * Etapa 2 — atribuie un mușchi suprafețelor rămase neutre, după poziție.
+ *
+ * Calibrarea (regiuni → coordonatele SVG-ului real) se deduce din perechile de
+ * centre ale mușchilor deja mapați la etapa 1, deci nu depinde de dimensiunile
+ * exacte ale desenului.
+ */
+function applyGeometricFallback(paths, regions, label) {
+  if (!regions || regions.length === 0) {
+    console.log(`   ⚠️  ${label}: nicio regiune definită, etapa geometrică s-a sărit.`);
+    return 0;
+  }
+
+  const fills = [];
+  for (const p of paths) {
+    if (p.role !== 'fill') continue;
+    const box = bboxOf(pathPoints(p.d));
+    if (box) fills.push({ p, box });
+  }
+  if (fills.length === 0) return 0;
+
+  // Centre pe mușchi din etapa 1
+  const genCenters = new Map();
+  for (const f of fills) {
+    if (!f.p.muscleId) continue;
+    if (!genCenters.has(f.p.muscleId)) genCenters.set(f.p.muscleId, []);
+    genCenters.get(f.p.muscleId).push([f.box.cx, f.box.cy]);
+  }
+
+  // Centre pe mușchi din regiuni
+  const regCenters = new Map();
+  const regionPolys = [];
+  for (const r of regions) {
+    const all = r.polys.flat();
+    const box = bboxOf(all);
+    if (box) regCenters.set(r.id, [box.cx, box.cy]);
+    for (const poly of r.polys) regionPolys.push({ id: r.id, poly, box: bboxOf(poly) });
+  }
+
+  const pairs = [];
+  for (const [mid, list] of genCenters) {
+    const reg = regCenters.get(mid);
+    if (!reg) continue;
+    const gx = list.reduce((s, v) => s + v[0], 0) / list.length;
+    const gy = list.reduce((s, v) => s + v[1], 0) / list.length;
+    pairs.push({ rx: reg[0], ry: reg[1], gx, gy });
+  }
+
+  if (pairs.length < 4) {
+    console.log(`   ⚠️  ${label}: doar ${pairs.length} mușchi de referință, calibrarea nu e sigură — etapa geometrică s-a sărit.`);
+    return 0;
+  }
+
+  const fx = fit1d(pairs.map((p) => p.rx), pairs.map((p) => p.gx));
+  const fy = fit1d(pairs.map((p) => p.ry), pairs.map((p) => p.gy));
+
+  // Transformare inversă: coordonate SVG real → spațiul regiunilor
+  const toRegion = (gx, gy) => [
+    fx.a === 0 ? 0 : (gx - fx.b) / fx.a,
+    fy.a === 0 ? 0 : (gy - fy.b) / fy.a,
+  ];
+
+  const guess = (gx, gy, maxDist) => {
+    const [rx, ry] = toRegion(gx, gy);
+    for (const rp of regionPolys) {
+      if (pointInPolygon(rx, ry, rp.poly)) return rp.id;
+    }
+    let best = null;
+    let bestD = Infinity;
+    for (const rp of regionPolys) {
+      if (!rp.box) continue;
+      const dx = rx - rp.box.cx;
+      const dy = ry - rp.box.cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist < bestD) { bestD = dist; best = rp.id; }
+    }
+    return bestD <= maxDist ? best : null;
+  };
+
+  // Verificare: cât de bine reproduce geometria maparea explicită?
+  let checked = 0;
+  let agreed = 0;
+  for (const f of fills) {
+    if (!f.p.muscleId) continue;
+    checked++;
+    if (guess(f.box.cx, f.box.cy, 40) === f.p.muscleId) agreed++;
+  }
+  const agreement = checked ? agreed / checked : 0;
+  console.log(`   📐 ${label}: calibrare pe ${pairs.length} mușchi, concordanță cu maparea după id = ${(agreement * 100).toFixed(0)}%`);
+
+  if (agreement < 0.35) {
+    console.log(`   ⚠️  ${label}: concordanță prea mică, etapa geometrică NU se aplică (risc de colorare greșită).`);
+    return 0;
+  }
+
+  // Dimensiunea corpului, pentru a exclude siluetele mari (contur, umbră generală)
+  const bodyBox = bboxOf(fills.flatMap((f) => [[f.box.minX, f.box.minY], [f.box.maxX, f.box.maxY]]));
+  const maxW = bodyBox.w * 0.45;
+  const maxH = bodyBox.h * 0.30;
+
+  let assigned = 0;
+  let skippedBig = 0;
+  const perMuscle = {};
+  for (const f of fills) {
+    if (f.p.muscleId) continue;
+    if (f.box.w > maxW || f.box.h > maxH) { skippedBig++; continue; }
+    const mid = guess(f.box.cx, f.box.cy, 26);
+    if (!mid) continue;
+    f.p.muscleId = mid;
+    perMuscle[mid] = (perMuscle[mid] || 0) + 1;
+    assigned++;
+  }
+
+  console.log(`   ➕ ${label}: ${assigned} suprafețe atribuite geometric` +
+    (skippedBig ? `, ${skippedBig} siluete mari lăsate neutre` : ''));
+  const summary = Object.entries(perMuscle)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${k}:${v}`)
+    .join(', ');
+  if (summary) console.log(`      ${summary}`);
+
+  return assigned;
+}
+
+// ─── MUSCLE MAPS ───────────────────────────────────────────────
+
 const SKIP_GROUP_IDS = new Set([
   '1', '2', '4', 'a', '1_2', '1_3', '1_4',
   'group_1', 'group_2', 'group_3', 'group_4', 'group_5',
 ]);
 
-// NEUTRU (null) — IDs that should NOT be colored
+// NEUTRU (null) — IDs that should NOT be colored by name.
+// Atenție: grupurile "generale" conțin de fapt majoritatea desenului anatomic,
+// deci conținutul lor este recuperat de etapa geometrică.
 const NEUTRU_IDS = new Set([
   // FAȚĂ
   'head_front', 'neck_front_left', 'neck_front_right', 'neck_tendons_left',
   'neck_tendons_right', 'clavicula_fata_satnga_dreapta',
-  'muschii_generali_corp_front', 'muschii_generali_strat_spate',
-  'm_uschi_generali_fata', 'parte_abdomen_trb_rsmsd_spate',
   'corp_fata',
   // SPATE
-  'head_back', 'muschi_spate_generali', 'corp_spate', 'muschi_mana_spate',
+  'head_back', 'corp_spate',
 ]);
 
-// FAȚĂ mappings: slugified SVG id → MuscleId
+// Grupuri "container" — nu dau un mușchi, dar nici nu blochează etapa geometrică.
+const CONTAINER_IDS = new Set([
+  'muschii_generali_corp_front', 'muschii_generali_strat_spate',
+  'm_uschi_generali_fata', 'parte_abdomen_trb_rsmsd_spate',
+  'muschi_spate_generali',
+]);
+
 const FRONT_MAP = {
-  // Pectorali
   chest_upper_left: 'pectorali', chest_upper_right: 'pectorali',
   chest_middle_left: 'pectorali', chest_middle_right: 'pectorali',
   chest_lower_left: 'pectorali', chest_lower_right: 'pectorali',
   chest_right: 'pectorali',
-  // Deltoid anterior
   delts_front_left: 'deltoid_anterior', delts_front_right: 'deltoid_anterior',
-  // Deltoid lateral
   delts_side_left: 'deltoid_lateral', delts_side_right: 'deltoid_lateral',
-  // Deltoid posterior
   delts_rear_left: 'deltoid_posterior', delts_rear_right: 'deltoid_posterior',
-  // Biceps
   biceps_left: 'biceps', biceps_right: 'biceps',
-  // Triceps
   triceps_brachii_left: 'triceps', triceps_brachii_right: 'triceps',
-  // Antebrațe
   forearms_brachio_left: 'antebrate', forearms_brachio_right: 'antebrate',
-  // Abdomen
   abs_upper: 'abdomen', abs_middle: 'abdomen',
   abs_lower_left: 'abdomen', abs_lower_right: 'abdomen',
-  // Oblici
   obliques_left: 'oblici', obliques_right: 'oblici',
   obliques_left_2: 'oblici', obliques_right_2: 'oblici',
   serratus_left: 'oblici', serratus_right: 'oblici',
-  // Cvadriceps
   quads_vastus_lateralis_left: 'cvadriceps', quads_vastus_lateralis_right: 'cvadriceps',
   quads_vastus_medialis_left: 'cvadriceps', quads_vastus_medialis_right: 'cvadriceps',
-  // Adductori
   adductors_left: 'adductori', adductors_right: 'adductori',
-  // Gambe
   calves_gastrocnemius_left: 'gambe', calves_gastrocnemius_right: 'gambe',
   tibialis_anterior_left: 'gambe', tibialis_anterior_right: 'gambe',
   tibialis_anterior_left_2: 'gambe', tibialis_anterior_right_2: 'gambe',
-  // Abductori
   hip_flexors_left: 'abductori', hip_flexors_right: 'abductori',
 };
 
-// SPATE mappings
 const BACK_MAP = {
-  // Trapez
   traps_upper_left: 'trapez', traps_upper_right: 'trapez',
   traps_middle_left: 'trapez', traps_middle_right: 'trapez',
-  // Dorsali
   lats_left: 'dorsali', lats_right: 'dorsali',
-  // Romboizi
   infraspinatus_left: 'romboizi', infraspinatus_right: 'romboizi',
-  // Lombari
   lower_back_left: 'lombari', lower_back_right: 'lombari',
-  // Deltoid posterior
   delts_rear_left: 'deltoid_posterior', delts_rear_right: 'deltoid_posterior',
-  // Deltoid lateral
   delts_lateral_left: 'deltoid_lateral', delts_lateral_right: 'deltoid_lateral',
-  // Triceps (multiple Romanian variants)
   triceps_long_left: 'triceps', triceps_long_right: 'triceps',
-  // Biceps
   muschiul_brahial_left: 'biceps', muschiul_brahial_right: 'biceps',
-  // Antebrațe
-  // (handled via regex patterns below)
-  // Fesieri
   glutes_maximus_left: 'fesieri', glutes_maximus_right: 'fesieri',
-  // Abductori
   glutes_medius_left: 'abductori', glutes_medius_right: 'abductori',
-  // Ischiogambieri
   biceps_femoris_left: 'ischiogambieri', biceps_femoris_right: 'ischiogambieri',
   semitendinosus_left: 'ischiogambieri', semitendinosus_right: 'ischiogambieri',
   semimembranosus_left: 'ischiogambieri', semimembranosus_right: 'ischiogambieri',
-  // Adductori
   adductors_left: 'adductori', adductors_right: 'adductori',
-  // Cvadriceps
   quads_vastus_lateralis_left: 'cvadriceps', quads_vastus_lateralis_right: 'cvadriceps',
-  // Oblici
   obliques_left: 'oblici', obliques_right: 'oblici',
-  // Gambe
-  // (muschiul_soleus handled via pattern)
 };
 
-/** Additional back-side mappings using regex patterns for encoded Romanian names */
-const BACK_REGEX_MAP = [
-  // MUȘCHIUL TRICEPS BRAHIAL → triceps
-  [/muschiul_triceps_brahial/i, 'triceps'],
-  // MUȘCHII EXTENSORI AI ANTEBRAȚULUI → antebrate
-  [/muschii_extensori_ai_antebratului/i, 'antebrate'],
-  // MUȘCHIUL BRAHIAL → biceps
-  [/muschiul_brahial/i, 'biceps'],
-  // Capătul Medial → triceps
-  [/capatul_medial/i, 'triceps'],
-  // Lateral Head → triceps
-  [/lateral_head/i, 'triceps'],
-  // Mușchiul Soleus → gambe
-  [/muschiul_soleus/i, 'gambe'],
-  // mușchi mână spate → antebrate
-  [/muschi_mana_spate/i, 'antebrate'],
+/**
+ * Reguli pe tipare, aplicate pe AMBELE vederi.
+ * ORDINEA CONTEAZĂ: regulile mai specifice trebuie să fie primele.
+ */
+const PATTERN_MAP = [
+  [/antebrat|forearm|extensor|brachiorad|brahioradial|muschi_mana/i, 'antebrate'],
+  [/biceps_femoris|semitendinos|semimembranos|hamstring|ischiogambier/i, 'ischiogambieri'],
+  [/triceps|capatul_medial|lateral_head|long_head/i, 'triceps'],
+  [/biceps|brahial|brachii/i, 'biceps'],
+  [/soleus|gastrocnem|tibialis|calf|calves|gamba|gambe/i, 'gambe'],
+  [/glutes_medius|gluteus_medius|abductor/i, 'abductori'],
+  [/glute|fesier/i, 'fesieri'],
+  [/adductor/i, 'adductori'],
+  [/quad|vastus|rectus_femoris|sartorius|cvadriceps/i, 'cvadriceps'],
+  [/lats|latissimus|dorsal/i, 'dorsali'],
+  [/rhomboid|romboiz|infraspinatus|teres/i, 'romboizi'],
+  [/lower_back|erector|lombar/i, 'lombari'],
+  [/trapez|traps/i, 'trapez'],
+  [/oblique|oblic|serratus/i, 'oblici'],
+  [/abs_|abdomen|rectus_abdominis/i, 'abdomen'],
+  [/delts?_front|front_delt|deltoid_anterior/i, 'deltoid_anterior'],
+  [/delts?_side|delts?_lateral|deltoid_lateral/i, 'deltoid_lateral'],
+  [/delts?_rear|rear_delt|deltoid_posterior/i, 'deltoid_posterior'],
+  [/chest|pector/i, 'pectorali'],
 ];
 
-// ─── PARSE SVG ──────────────────────────────────────────────────────────────
+// ─── PARSE SVG ─────────────────────────────────────────────────
 
 function parseSVG(filePath, map, isFront) {
   let raw = readFileSync(filePath, 'utf-8');
   raw = decodeEntities(raw);
 
-  // Remove background rect
   raw = raw.replace(/<rect[^>]*fill="#1E1E1E"[^>]*\/>/gi, '');
-  // Remove defs and linearGradient elements
   raw = raw.replace(/<defs>[\s\S]*?<\/defs>/gi, '');
   raw = raw.replace(/<linearGradient[\s\S]*?<\/linearGradient>/gi, '');
 
-  // Parse group stack and paths
   const paths = [];
-  const groupStack = []; // [{id, level}]
-  
-  // Regex to match any tag: <g id="...">, </g>, <path ... />
+  const unmapped = new Set();
+  const groupStack = [];
+
   const tagRegex = /<(\/?)(g|path)\b([^>]*?)(\/?)>/gi;
   let match;
 
@@ -232,80 +467,82 @@ function parseSVG(filePath, map, isFront) {
         groupStack.push({ id: gid, level: groupStack.length });
       }
     } else if (tagName === 'path') {
-      // ⚠️ CRITICAL: \s înaintea atributului previne confuzia cu id="Vector_2" etc.
+      // ⚠️ \s înaintea atributului previne confuzia cu id="Vector_2" etc.
       const dMatch = attrs.match(/\sd\s*=\s*"([^"]*)"/i);
       if (!dMatch) continue;
 
       const fillMatch = attrs.match(/\sfill\s*=\s*"([^"]*)"/i);
       const rawFill = fillMatch ? fillMatch[1] : 'none';
-      
-      // Skip paths with url() fills (gradients) or 'none' fill → treat as outline with original color?
-      // Actually, url(#paint...) should become solid. We'll use a fallback.
+
       let fill = rawFill;
       if (fill.startsWith('url(#')) {
-        fill = '#555555'; // fallback for gradients - dark outline
+        fill = '#555555';
       }
 
       const d = dMatch[1];
 
-      // Check if path itself has a meaningful (non-Vector) id
       const pathIdMatch = attrs.match(/\sid\s*=\s*"([^"]*)"/i);
       const pathRawId = pathIdMatch ? pathIdMatch[1] : null;
       const pathSlug = pathRawId ? slugify(pathRawId) : null;
       const isVectorLike = pathSlug && /^vector(_\d+)?$/i.test(pathSlug);
 
-      // Determine parent group id:
-      // 1. If path has a non-Vector id → use it directly
-      // 2. Otherwise walk up group stack, skip placeholder IDs
       let groupId = null;
+      const ancestors = [];
       if (pathSlug && !isVectorLike && !SKIP_GROUP_IDS.has(pathSlug)) {
         groupId = pathSlug;
-      } else {
-        for (let i = groupStack.length - 1; i >= 0; i--) {
-          const gid = groupStack[i].id;
-          if (!gid) continue;
-          const slug = slugify(gid);
-          if (SKIP_GROUP_IDS.has(slug)) continue;
-          groupId = slug;
-          break;
-        }
+      }
+      for (let i = groupStack.length - 1; i >= 0; i--) {
+        const gid = groupStack[i].id;
+        if (!gid) continue;
+        const slug = slugify(gid);
+        if (SKIP_GROUP_IDS.has(slug)) continue;
+        ancestors.push(slug);
+        if (!groupId) groupId = slug;
       }
 
-      if (!groupId) continue; // no meaningful parent
+      if (!groupId) continue;
 
-      // Map to muscleId
-      let muscleId = null;
-      
-      // Check direct map
-      if (map[groupId] !== undefined) {
+      // ─── Mapare după id ───
+      // `undefined` = încă nedecis, `null` = neutru intenționat.
+      let muscleId;
+
+      if (Object.prototype.hasOwnProperty.call(map, groupId)) {
         muscleId = map[groupId];
       }
-      
-      // For back, check regex patterns
-      if (muscleId === undefined && !isFront && groupId) {
-        for (const [regex, mid] of BACK_REGEX_MAP) {
-          if (regex.test(groupId)) {
-            muscleId = mid;
+
+      if (muscleId === undefined) {
+        for (const anc of ancestors) {
+          if (Object.prototype.hasOwnProperty.call(map, anc)) {
+            muscleId = map[anc];
             break;
           }
         }
       }
 
-      // Check if it's NEUTRU
       if (muscleId === undefined && NEUTRU_IDS.has(groupId)) {
         muscleId = null;
       }
 
-      // If still undefined, it's unmapped
-      if (muscleId === undefined) {
-        muscleId = null; // treat as neutru
+      if (muscleId === undefined && !CONTAINER_IDS.has(groupId)) {
+        for (const candidate of [groupId, ...ancestors]) {
+          for (const [regex, mid] of PATTERN_MAP) {
+            if (regex.test(candidate)) {
+              muscleId = mid;
+              break;
+            }
+          }
+          if (muscleId !== undefined) break;
+        }
       }
 
-      // Determine role based on luminance
+      if (muscleId === undefined) {
+        if (!CONTAINER_IDS.has(groupId)) unmapped.add(groupId);
+        muscleId = null;
+      }
+
       const lum = relativeLuminance(fill);
       const role = lum < 0.18 ? 'outline' : 'fill';
 
-      // For gradient fills that we replaced, make them fill
       const actualFill = rawFill.startsWith('url(#') ? fill : rawFill;
 
       // ─── VALIDARE PATH DATA (previne crash-ul la runtime) ───
@@ -327,28 +564,28 @@ function parseSVG(filePath, map, isFront) {
     }
   }
 
-  return paths;
+  return { paths, unmapped: [...unmapped] };
 }
 
-// ─── MAIN ───────────────────────────────────────────────────────────────────
+// ─── MAIN ─────────────────────────────────────────────────────
 
 console.log('🔧 buildAnatomy.mjs — parsing SVG files...\n');
 
-const frontPaths = parseSVG(
-  resolve(ROOT, 'assets/body/front_body.svg'),
-  FRONT_MAP,
-  true
-);
-const backPaths = parseSVG(
-  resolve(ROOT, 'assets/body/back_body.svg'),
-  BACK_MAP,
-  false
-);
+const front = parseSVG(resolve(ROOT, 'assets/body/front_body.svg'), FRONT_MAP, true);
+const back = parseSVG(resolve(ROOT, 'assets/body/back_body.svg'), BACK_MAP, false);
+
+const frontPaths = front.paths;
+const backPaths = back.paths;
 
 console.log(`  📐 Față: ${frontPaths.length} path-uri`);
 console.log(`  📐 Spate: ${backPaths.length} path-uri`);
 
-// ─── REPORT ─────────────────────────────────────────────────────────────────
+console.log('\n🧩 Etapa 2 — mapare geometrică a suprafețelor fără id:\n');
+const regions = loadRegions();
+applyGeometricFallback(frontPaths, regions.front, 'FAȚĂ');
+applyGeometricFallback(backPaths, regions.back, 'SPATE');
+
+// ─── REPORT ────────────────────────────────────────────────────
 
 const ALL_MUSCLE_IDS = [
   'pectorali', 'deltoid_anterior', 'deltoid_lateral', 'deltoid_posterior',
@@ -360,6 +597,7 @@ const ALL_MUSCLE_IDS = [
 function countByMuscle(paths) {
   const counts = {};
   for (const p of paths) {
+    if (p.role !== 'fill') continue;
     const key = p.muscleId || '__neutru__';
     counts[key] = (counts[key] || 0) + 1;
   }
@@ -369,9 +607,9 @@ function countByMuscle(paths) {
 const frontCounts = countByMuscle(frontPaths);
 const backCounts = countByMuscle(backPaths);
 
-console.log('\n📊 RAPORT PATH-URI PER MUSCLE ID:\n');
+console.log('\n📊 RAPORT PATH-URI COLORABILE (role=fill) PER MUSCLE ID:\n');
 console.log('MuscleId          | Față | Spate | Total');
-console.log('──────────────────┼──────┼───────┼──────');
+console.log('──────────────────┬──────┬───────┬──────');
 
 const musclesWithZero = [];
 
@@ -389,76 +627,23 @@ for (const mid of ALL_MUSCLE_IDS) {
 console.log(`\n🧪 NEUTRU: Față=${frontCounts.__neutru__ || 0}, Spate=${backCounts.__neutru__ || 0}`);
 
 if (musclesWithZero.length > 0) {
-  console.log(`\n⚠️  ERORI: Următoarele MuscleId au 0 path-uri pe AMBELE vederi:`);
+  console.log(`\n⚠️  ERORI: Următoarele MuscleId au 0 path-uri colorabile pe AMBELE vederi:`);
   for (const m of musclesWithZero) {
     console.log(`   ❌ ${m}`);
   }
 }
 
-// ─── COLLECT UNMAPPED IDs ───────────────────────────────────────────────────
-
-// We need to collect groupIds that weren't mapped (for diagnostic purposes)
-// We already tracked them during parsing - but we need the original group IDs
-
-function collectGroupIds(filePath) {
-  let raw = readFileSync(filePath, 'utf-8');
-  raw = decodeEntities(raw);
-  const ids = new Set();
-  const tagRegex = /<g\b[^>]*id\s*=\s*"([^"]*)"[^>]*>/gi;
-  let match;
-  while ((match = tagRegex.exec(raw)) !== null) {
-    const slug = slugify(match[1]);
-    if (!SKIP_GROUP_IDS.has(slug)) {
-      ids.add(slug);
-    }
-  }
-  // Also check path-level ids
-  const pathRegex = /<path\b[^>]*id\s*=\s*"([^"]*)"[^>]*\/?>/gi;
-  while ((match = pathRegex.exec(raw)) !== null) {
-    const id = match[1];
-    if (/^vector/i.test(id)) continue;
-    const slug = slugify(id);
-    ids.add(slug);
-  }
-  return ids;
+if (front.unmapped.length > 0) {
+  console.log(`\n🔍 ID-uri FAȚĂ nemapate (${front.unmapped.length}):`);
+  for (const id of front.unmapped) console.log(`   → ${id}`);
 }
 
-const frontGroupIds = collectGroupIds(resolve(ROOT, 'assets/body/front_body.svg'));
-const backGroupIds = collectGroupIds(resolve(ROOT, 'assets/body/back_body.svg'));
-
-const allKnownIds = new Set([
-  ...Object.keys(FRONT_MAP),
-  ...Object.keys(BACK_MAP),
-  ...NEUTRU_IDS,
-]);
-
-// Also add regex-matched patterns for back
-const backRegexPatterns = BACK_REGEX_MAP.map(([r]) => r);
-
-const unmappedFront = [...frontGroupIds].filter(id => !allKnownIds.has(id));
-const unmappedBack = [...backGroupIds].filter(id => {
-  if (allKnownIds.has(id)) return false;
-  for (const [regex] of BACK_REGEX_MAP) {
-    if (regex.test(id)) return false;
-  }
-  return true;
-});
-
-if (unmappedFront.length > 0) {
-  console.log(`\n🔍 ID-uri FAȚĂ nemapate (${unmappedFront.length}):`);
-  for (const id of unmappedFront) {
-    console.log(`   → ${id}`);
-  }
+if (back.unmapped.length > 0) {
+  console.log(`\n🔍 ID-uri SPATE nemapate (${back.unmapped.length}):`);
+  for (const id of back.unmapped) console.log(`   → ${id}`);
 }
 
-if (unmappedBack.length > 0) {
-  console.log(`\n🔍 ID-uri SPATE nemapate (${unmappedBack.length}):`);
-  for (const id of unmappedBack) {
-    console.log(`   → ${id}`);
-  }
-}
-
-// ─── GENERATE TS FILE ──────────────────────────────────────────────────────
+// ─── GENERATE TS FILE ────────────────────────────────────────────
 
 function escapeString(str) {
   return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
