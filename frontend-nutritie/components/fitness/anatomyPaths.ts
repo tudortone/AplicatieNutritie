@@ -21,7 +21,7 @@ const getPathByRegionIndex = (regionId: string, side: BodySide, idx: number): st
 const front = (regionId: string, idx: number) => getPathByRegionIndex(regionId, 'front', idx);
 const back = (regionId: string, idx: number) => getPathByRegionIndex(regionId, 'back', idx);
 
-export const MUSCLE_PATHS: MusclePath[] = [
+export const MUSCLE_PATHS: MusclePath[] = ([
   // --- ANTERIOR (FAȚĂ) ---
   { id: 'chest_left', d: front('pectorali', 0), view: 'anterior' },
   { id: 'chest_right', d: front('pectorali', 1), view: 'anterior' },
@@ -62,4 +62,4 @@ export const MUSCLE_PATHS: MusclePath[] = [
   { id: 'hamstrings_right', d: back('ischiogambieri', 1), view: 'posterior' },
   { id: 'calves_left', d: back('gambe', 0), view: 'posterior' },
   { id: 'calves_right', d: back('gambe', 1), view: 'posterior' },
-].filter((p) => p.d.length > 0);
+] as MusclePath[]).filter((p) => p.d.length > 0);
