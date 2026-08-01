@@ -201,18 +201,18 @@ export function NotificationBannerProvider({ children }: { children: React.React
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  const value = React.useMemo(() => ({
+    showNotification,
+    showBanner: showNotification,
+    hideBanner,
+    notifications,
+    unreadCount,
+    markAllRead,
+    clearAll,
+  }), [showNotification, hideBanner, notifications, unreadCount, markAllRead, clearAll]);
+
   return (
-    <NotificationBannerContext.Provider
-      value={{
-        showNotification,
-        showBanner: showNotification,
-        hideBanner,
-        notifications,
-        unreadCount,
-        markAllRead,
-        clearAll,
-      }}
-    >
+    <NotificationBannerContext.Provider value={value}>
       {children}
       <InAppNotification
         visible={bannerState.visible}

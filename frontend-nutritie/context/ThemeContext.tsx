@@ -42,8 +42,12 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, name);
   }, []);
 
+  const value = React.useMemo(() => ({
+    themeName, colors, setTheme
+  }), [themeName, colors, setTheme]);
+
   return (
-    <ThemeContext.Provider value={{ themeName, colors, setTheme }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

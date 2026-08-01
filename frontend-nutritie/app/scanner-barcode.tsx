@@ -306,7 +306,8 @@ export default function ScannerBarcodeScreen() {
       {/* Top Bar */}
       <View style={styles.headerBar}>
         <TouchableOpacity
-          onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12}
+          onPress={() => router.back()}
+          hitSlop={12}
           style={[styles.navBtn, { backgroundColor: colors.surfaceBg }]}
           accessibilityLabel="Înapoi"
           accessibilityRole="button"

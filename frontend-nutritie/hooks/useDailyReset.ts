@@ -41,7 +41,7 @@ export function useDailyReset({
 
     setIsResetting(true);
     setQuesturiAzi((current) =>
-      current.map((quest) => ({ ...quest, progres: 0 })),
+      current.map((quest) => ({ ...quest, progres: 0, completat: false })),
     );
     await AsyncStorage.setItem(storageKey, today);
     setIsResetting(false);

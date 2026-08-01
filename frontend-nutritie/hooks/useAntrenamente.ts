@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculeazaCaloriiArse } from '../constants/exercitii';
@@ -74,7 +74,7 @@ export function useAntrenamente(dataSelectata?: Date) {
 
   const targetDate = dataSelectata || new Date();
   const dateKey = targetDate.toDateString();
-  const fetchReqId = React.useRef(0);
+  const fetchReqId = useRef(0);
 
   const getLocalWorkouts = async (): Promise<Antrenament[]> => {
     try {
@@ -372,7 +372,7 @@ export function useAntrenamente(dataSelectata?: Date) {
       const localList = await getLocalWorkouts();
       await saveLocalWorkouts(localList.filter((item) => item.id !== id));
 
-      if (user && !id.startsWith('local_')) {
+      if (user) {
         await supabase.from('antrenamente').delete().eq('id', id).eq('user_id', user.id);
       }
       await fetchAntrenamente();
