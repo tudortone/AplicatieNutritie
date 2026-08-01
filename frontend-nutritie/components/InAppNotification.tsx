@@ -1,12 +1,21 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CheckCircle2, AlertTriangle, Info, Bell, XCircle, Trophy } from 'lucide-react-native';
+import {
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  Bell,
+  XCircle,
+  Trophy,
+  X,
+} from 'lucide-react-native';
 import { router } from 'expo-router';
-import { Colors, Radius, Spacing } from '../constants/theme';
-import { NotificationType } from '../context/NotificationBannerContext';
+import { Radius, Spacing } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
+import type { NotificationType } from '../context/NotificationBannerContext';
 
 export interface InAppNotificationProps {
   visible: boolean;
@@ -28,95 +37,100 @@ export default function InAppNotification({
   onDismiss,
 }: InAppNotificationProps) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   if (!visible) return null;
 
-  const getIcon = () => {
+  const typeColor = (() => {
     switch (type) {
-      case 'success':
-        return <CheckCircle2 size={20} color={Colors.accent} />;
-      case 'warning':
-        return <AlertTriangle size={20} color={Colors.warning} />;
-      case 'error':
-        return <XCircle size={20} color={Colors.danger} />;
-      case 'reward':
-        return <Trophy size={20} color={Colors.accentSecondary} />;
-      case 'reminder':
-        return <Bell size={20} color={Colors.accentTertiary} />;
-      case 'info':
-      default:
-        return <Info size={20} color={Colors.accentTertiary} />;
-    }
-  };
-
-  const getTypeColor = () => {
-    switch (type) {
-      case 'success':
-        return Colors.accent;
-      case 'reward':
-        return Colors.accentSecondary;
-      case 'warning':
-        return Colors.warning;
-      case 'error':
-        return Colors.danger;
+      case 'success': return colors.success;
+      case 'reward': return colors.accentSecondary;
+      case 'warning': return colors.warning;
+      case 'error': return colors.danger;
       case 'reminder':
       case 'info':
-      default:
-        return Colors.accentTertiary;
+      default: return colors.accentTertiary;
     }
-  };
+  })();
 
-  const topPosition = Math.max(insets.top + Spacing.sm, Platform.OS === 'ios' ? 48 : 24);
+  const icon = (() => {
+    switch (type) {
+      case 'success': return <CheckCircle2 size={20} color={typeColor} />;
+      case 'warning': return <AlertTriangle size={20} color={typeColor} />;
+      case 'error': return <XCircle size={20} color={typeColor} />;
+      case 'reward': return <Trophy size={20} color={typeColor} />;
+      case 'reminder': return <Bell size={20} color={typeColor} />;
+      default: return <Info size={20} color={typeColor} />;
+    }
+  })();
 
-  const handlePress = () => {
+  const topPosition = Math.max(insets.top + Spacing.sm, Platform.OS === 'android' ? 24 : 8);
+
+  const runAction = () => {
+    if (!actionRoute) return;
     onDismiss();
-    if (actionRoute) {
-      router.push(actionRoute as any);
-    }
+    router.push(actionRoute as never);
   };
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(350).springify()}
-      exiting={FadeOutUp.duration(250)}
+      entering={FadeInDown.duration(280).springify().damping(18)}
+      exiting={FadeOutUp.duration(200)}
       style={[styles.container, { top: topPosition }]}
+      accessibilityLiveRegion="polite"
     >
-      <TouchableOpacity
-        activeOpacity={0.92}
-        onPress={handlePress}
-        style={styles.touchable}
-        accessibilityRole="button"
-        accessibilityLabel="Notificare NutriAI"
+      <BlurView
+        intensity={Platform.OS === 'ios' ? 45 : 30}
+        tint="dark"
+        style={[
+          styles.card,
+          {
+            backgroundColor: `${colors.surface}F2`,
+            borderColor: `${typeColor}40`,
+          },
+        ]}
       >
-        <BlurView
-          intensity={Platform.OS === 'ios' ? 45 : 35}
-          tint="dark"
-          style={[styles.blurCard, { borderColor: `${getTypeColor()}33` }]}
-        >
-          <View style={[styles.indicatorBar, { backgroundColor: getTypeColor() }]} />
+        <View style={[styles.indicatorBar, { backgroundColor: typeColor }]} />
+        <View style={[styles.iconCircle, { backgroundColor: `${typeColor}1F` }]}>
+          {icon}
+        </View>
 
-          <View style={[styles.iconCircle, { backgroundColor: `${getTypeColor()}1F` }]}>
-            {getIcon()}
-          </View>
-
-          <View style={styles.content}>
-            <Text style={styles.title} numberOfLines={1}>
-              {title}
+        <View style={styles.content}>
+          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
+            {title}
+          </Text>
+          {message ? (
+            <Text style={[styles.message, { color: colors.textSecondary }]} numberOfLines={3}>
+              {message}
             </Text>
-            {message ? (
-              <Text style={styles.message} numberOfLines={2}>
-                {message}
-              </Text>
-            ) : null}
-          </View>
-
-          {actionLabel ? (
-            <View style={styles.actionPill}>
-              <Text style={[styles.actionText, { color: getTypeColor() }]}>{actionLabel}</Text>
-            </View>
           ) : null}
-        </BlurView>
-      </TouchableOpacity>
+        </View>
+
+        {actionLabel && actionRoute ? (
+          <Pressable
+            onPress={runAction}
+            accessibilityRole="button"
+            accessibilityLabel={actionLabel}
+            hitSlop={6}
+            style={({ pressed }) => [
+              styles.actionPill,
+              { backgroundColor: `${typeColor}16`, opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <Text style={[styles.actionText, { color: typeColor }]}>{actionLabel}</Text>
+          </Pressable>
+        ) : null}
+
+        <Pressable
+          onPress={onDismiss}
+          accessibilityRole="button"
+          accessibilityLabel="Închide notificarea"
+          hitSlop={10}
+          style={({ pressed }) => [styles.closeButton, { opacity: pressed ? 0.55 : 1 }]}
+        >
+          <X size={17} color={colors.textTertiary} />
+        </Pressable>
+      </BlurView>
     </Animated.View>
   );
 }
@@ -127,24 +141,20 @@ const styles = StyleSheet.create({
     left: Spacing.lg,
     right: Spacing.lg,
     zIndex: 99999,
+    elevation: 30,
   },
-  touchable: {
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
-  blurCard: {
+  card: {
+    minHeight: 68,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(18, 22, 26, 0.88)',
     borderWidth: 1,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     paddingVertical: Spacing.md,
-    paddingRight: Spacing.md,
+    paddingRight: 42,
   },
   indicatorBar: {
     width: 4,
-    height: '100%',
     position: 'absolute',
     left: 0,
     top: 0,
@@ -165,23 +175,33 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    lineHeight: 19,
+    fontWeight: '800',
   },
   message: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    lineHeight: 18,
     marginTop: 2,
   },
   actionPill: {
+    minHeight: 34,
+    justifyContent: 'center',
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(255,255,255,0.06)',
     marginLeft: Spacing.sm,
   },
   actionText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '800',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
