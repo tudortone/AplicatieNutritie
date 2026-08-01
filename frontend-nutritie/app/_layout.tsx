@@ -3,7 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect, useMemo } from 'react';
-import { View, ActivityIndicator, Text, TouchableOpacity, LogBox, Platform } from 'react-native';
+import { View, ActivityIndicator, Text, TouchableOpacity, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -27,6 +27,13 @@ import '../i18n';
 export const unstable_settings = {
   anchor: '(tabs)',
 };
+
+// FIX UI: o singură animație de push pentru toate platformele.
+// Pe Android foloseam `fade_from_bottom`, care la revenirea în (tabs) arăta ca un
+// "flick"/reload de pagină. `slide_from_right` este continuu în ambele sensuri și
+// este exact animația pe care o inversează gestul de swipe-back.
+const PUSH_ANIMATION = 'slide_from_right' as const;
+const PUSH_DURATION = 260;
 
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
   return (
@@ -86,6 +93,12 @@ function RootNavigator() {
     );
   }
 
+  const pushScreenOptions = {
+    animation: PUSH_ANIMATION,
+    animationDuration: PUSH_DURATION,
+    gestureEnabled: true,
+  } as const;
+
   return (
     <ThemeProvider value={AppDarkTheme}>
       <Stack
@@ -93,24 +106,27 @@ function RootNavigator() {
           headerShown: false,
           // Activăm gestul de swipe-back pe iOS pentru toate ecranele
           gestureEnabled: true,
-          // Animație implicită: slide din dreapta (activează swipe-back iOS nativ)
-          animation: Platform.OS === 'ios' ? 'slide_from_right' : 'fade_from_bottom',
+          animation: PUSH_ANIMATION,
+          animationDuration: PUSH_DURATION,
           // Permite swipe de oriunde pe ecran (nu doar de la margine)
           fullScreenGestureEnabled: true,
-          // Culoarea de fundal la tranzitie să fie consistentă cu tema
+          // Culoarea de fundal la tranzitie să fie consistentă cu tema.
+          // Fără asta se vede un cadru alb/negru între ecrane care pare "reload".
           contentStyle: { backgroundColor: colors.background },
         }}
       >
-        {/* Tab-urile nu au animație vizibilă la comutare */}
+        {/* Tab-urile nu au animație proprie la comutare, dar la revenirea dintr-un
+            ecran push animația folosită este cea a ecranului care se închide. */}
         <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
-        <Stack.Screen name="auth" options={{ animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
         <Stack.Screen name="onboarding" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
-        {/* Ecrane push — swipe-back iOS activat */}
+        {/* Ecrane push — swipe-back activat, aceeași animație pe iOS și Android */}
         <Stack.Screen
           name="camera"
           options={{
             presentation: 'fullScreenModal',
             animation: 'slide_from_bottom',
+            animationDuration: PUSH_DURATION,
             gestureEnabled: true,
             gestureDirection: 'vertical',
           }}
@@ -120,38 +136,15 @@ function RootNavigator() {
           options={{
             presentation: 'fullScreenModal',
             animation: 'slide_from_bottom',
+            animationDuration: PUSH_DURATION,
             gestureEnabled: true,
             gestureDirection: 'vertical',
           }}
         />
-        <Stack.Screen
-          name="adauga-manual"
-          options={{
-            animation: Platform.OS === 'ios' ? 'slide_from_right' : 'fade_from_bottom',
-            gestureEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="calculator-ai"
-          options={{
-            animation: Platform.OS === 'ios' ? 'slide_from_right' : 'fade_from_bottom',
-            gestureEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="jurnal-antrenamente"
-          options={{
-            animation: Platform.OS === 'ios' ? 'slide_from_right' : 'fade_from_bottom',
-            gestureEnabled: true,
-          }}
-        />
-        <Stack.Screen
-          name="notificari"
-          options={{
-            animation: Platform.OS === 'ios' ? 'slide_from_right' : 'fade_from_bottom',
-            gestureEnabled: true,
-          }}
-        />
+        <Stack.Screen name="adauga-manual" options={pushScreenOptions} />
+        <Stack.Screen name="calculator-ai" options={pushScreenOptions} />
+        <Stack.Screen name="jurnal-antrenamente" options={pushScreenOptions} />
+        <Stack.Screen name="notificari" options={pushScreenOptions} />
       </Stack>
       {session && isLocked && (
         <LockScreen biometricType={biometricType} onUnlock={unlockApp} />
@@ -178,4 +171,3 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
-

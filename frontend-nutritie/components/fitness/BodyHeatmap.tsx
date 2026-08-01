@@ -1,6 +1,13 @@
 /**
  * BodyHeatmap — Hartă Anatomică Pro cu Rank F→SS, Animații & Rezumat Cumulativ
- * Imagini pe fundal negru + overlay culori EXACT pe mușchii lucrați
+ *
+ * FIX audit:
+ *  - paleta de culori era duplicată aici (HEAT_COLORS / HEAT_OPACITY locale) și putea
+ *    diverge de `heatColor.ts`, singura folosită efectiv la randare de `MuscleBody`.
+ *    Acum culorile vin dintr-o singură sursă (`heatColor.ts`).
+ *  - `getColor` / `getOpacity` erau calculate, dar nefolosite (cod mort) — eliminate.
+ *  - `handlePress` / modalul de detaliu erau imposibil de declanșat, pentru că
+ *    `onMusclePress` nu era transmis către `MuscleBody`. Acum este conectat.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -18,9 +25,16 @@ import { useTheme } from '../../context/ThemeContext';
 import { MuscleLoadMap, normalizeMuscleLoadToIntensity, RANKS, getRankByTonage } from '../../lib/fitnessEngine';
 import type { TonageRank } from '../../lib/fitnessEngine';
 import { MuscleBody } from './MuscleBody';
-import type { MuscleId } from './heatColor';
+import {
+  COLOR_INACTIVE,
+  COLOR_REST,
+  COLOR_STAB,
+  COLOR_SECONDARY,
+  COLOR_PRIMARY,
+  type MuscleId,
+} from './heatColor';
 
-/* ─────────────────────────────────────────────────────────── TYPES */
+/* ──────────────────────────────────────────── TYPES */
 interface BodyHeatmapProps {
   muscleLoad: MuscleLoadMap;
   totalVolumeKg?: number;
@@ -36,40 +50,40 @@ interface BodyHeatmapProps {
 export type { TonageRank };
 export { RANKS, getRankByTonage };
 
-/* ─────────────────────────────────────────────────────────── HEAT COLORS */
+/* ──────────────────────────────────────────── HEAT COLORS (derivate din heatColor.ts) */
 export const HEAT_COLORS: Record<0 | 1 | 2 | 3 | 4, string> = {
-  0: 'transparent',
-  1: '#38BDF8',   // albastru — ușor
-  2: '#FACC15',   // galben   — mediu
-  3: '#FF7B00',   // portocaliu — intens
-  4: '#FF003C',   // roșu neon — maxim
+  0: COLOR_INACTIVE,
+  1: COLOR_REST,       // albastru — ușor
+  2: COLOR_STAB,       // galben   — mediu
+  3: COLOR_SECONDARY,  // portocaliu — intens
+  4: COLOR_PRIMARY,    // roșu neon — maxim
 };
 
-const HEAT_OPACITY: Record<0 | 1 | 2 | 3 | 4, number> = {
-  0: 0,
-  1: 0.55,
-  2: 0.65,
-  3: 0.75,
-  4: 0.85,
-};
+const LEVEL_LABELS = ['Inactiv', 'Ușor', 'Mediu', 'Intens', 'Maxim'] as const;
 
 const MUSCLE_LABELS: Record<string, string> = {
   pectorali: 'Pectorali (Piept)',
-  deltoizi: 'Deltoizi (Umeri)',
-  'deltoid anterior': 'Deltoid Anterior',
+  deltoid_anterior: 'Deltoid Anterior',
+  deltoid_lateral: 'Deltoid Lateral',
+  deltoid_posterior: 'Deltoid Posterior',
   biceps: 'Biceps Brachii',
   triceps: 'Triceps Brachii',
-  abdomeni: 'Abdomen (6-Pack)',
-  core: 'Core / Oblici',
-  cvadriceps: 'Cvadricepși',
+  antebrate: 'Antebrațe',
+  abdomen: 'Abdomen (6-Pack)',
+  oblici: 'Oblici',
   trapez: 'Trapez',
   dorsali: 'Marele Dorsal',
+  lombari: 'Lombari',
+  romboizi: 'Romboizi',
   fesieri: 'Fesieri',
+  cvadriceps: 'Cvadricepși',
   ischiogambieri: 'Femurali (Hamstrings)',
   gambe: 'Gambe',
+  adductori: 'Adductori',
+  abductori: 'Abductori',
 };
 
-/* ─────────────────────────────────────────────────────────── RANK ANIMATION */
+/* ──────────────────────────────────────────── RANK ANIMATION */
 function useRankAnimation(rank: TonageRank) {
   const pulse = useRef(new Animated.Value(1)).current;
   const glow  = useRef(new Animated.Value(0)).current;
@@ -113,12 +127,12 @@ function useRankAnimation(rank: TonageRank) {
     glowLoop.start();
 
     return () => { loop.stop(); glowLoop.stop(); };
-  }, [rank.tier]);
+  }, [rank.animType, pulse, glow]);
 
   return { pulse, glow };
 }
 
-/* ─────────────────────────────────────────────────────────── COMPONENT */
+/* ──────────────────────────────────────────── COMPONENT */
 export const BodyHeatmap: React.FC<BodyHeatmapProps> = ({
   muscleLoad,
   totalVolumeKg = 0,
@@ -156,7 +170,7 @@ export const BodyHeatmap: React.FC<BodyHeatmapProps> = ({
   /* Tonaj total */
   const computedTonageKg = React.useMemo(() => {
     if (totalVolumeKg > 0) return totalVolumeKg;
-    const sum = Object.values(muscleLoad).reduce((a, v) => a + v, 0);
+    const sum = Object.values(muscleLoad || {}).reduce((a, v) => a + v, 0);
     return Math.max(Math.round(sum * 3.5), sum > 0 ? 1250 : 0);
   }, [muscleLoad, totalVolumeKg]);
 
@@ -168,31 +182,19 @@ export const BodyHeatmap: React.FC<BodyHeatmapProps> = ({
 
   const { pulse, glow } = useRankAnimation(rank);
 
-  /* Helpers */
+  /* Nivel 0..4 pentru un mușchi — folosit doar de modalul de detaliu */
   const getMuscleLevel = useCallback((muscle: string): 0|1|2|3|4 => {
     if (heatLevels?.[muscle] !== undefined) return heatLevels[muscle];
-    const load = muscleLoad[muscle] || 0;
-    if (load <= 0) return 0;
-    if (load > 800) return 4;
-    if (load > 400) return 3;
-    if (load > 150) return 2;
+    const intensity = computedIntensityMap[muscle as MuscleId] ?? 0;
+    if (intensity <= 0.001) return 0;
+    if (intensity > 0.75) return 4;
+    if (intensity > 0.5) return 3;
+    if (intensity > 0.25) return 2;
     return 1;
-  }, [muscleLoad, heatLevels]);
-
-  const getColor = useCallback((muscles: string[]): string => {
-    let max: 0|1|2|3|4 = 0;
-    muscles.forEach(m => { const l = getMuscleLevel(m); if (l > max) max = l; });
-    return HEAT_COLORS[max];
-  }, [getMuscleLevel]);
-
-  const getOpacity = useCallback((muscles: string[]): number => {
-    let max: 0|1|2|3|4 = 0;
-    muscles.forEach(m => { const l = getMuscleLevel(m); if (l > max) max = l; });
-    return HEAT_OPACITY[max];
-  }, [getMuscleLevel]);
+  }, [heatLevels, computedIntensityMap]);
 
   const handlePress = useCallback((key: string) => {
-    const load = muscleLoad[key] || 0;
+    const load = muscleLoad?.[key] || 0;
     const level = getMuscleLevel(key);
     setSelectedMuscle({ name: MUSCLE_LABELS[key] || key, load, level });
     onMusclePress?.(key, load);
@@ -207,7 +209,7 @@ export const BodyHeatmap: React.FC<BodyHeatmapProps> = ({
       {/* ─── REZUMAT CUMULATIV ANTRENAMENT ─── */}
       <View style={[styles.summaryStrip, { borderColor: rank.color + '55', backgroundColor: rank.bgColor }]}>
         <View style={styles.summaryItem}>
-          <Flame size={18} color="#FF7B00" />
+          <Flame size={18} color={COLOR_SECONDARY} />
           <Text style={styles.summaryVal}>{totalCaloriiArse.toLocaleString('ro-RO')}</Text>
           <Text style={styles.summaryLabel}>kcal arse</Text>
         </View>
@@ -243,6 +245,8 @@ export const BodyHeatmap: React.FC<BodyHeatmapProps> = ({
             onPress={() => setViewSide(v => v === 'front' ? 'back' : 'front')}
             style={[styles.sideToggle, { backgroundColor: rank.color + '22', borderColor: rank.color + '55' }]}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={viewSide === 'front' ? 'Arată spatele corpului' : 'Arată fața corpului'}
           >
             <RotateCcw size={13} color={rank.color} />
             <Text style={[styles.sideToggleText, { color: rank.color }]}>
@@ -262,6 +266,7 @@ export const BodyHeatmap: React.FC<BodyHeatmapProps> = ({
             intensity={computedIntensityMap}
             width={280}
             height={340}
+            onMusclePress={handlePress}
           />
         </View>
 
@@ -307,16 +312,10 @@ export const BodyHeatmap: React.FC<BodyHeatmapProps> = ({
 
         {/* ─── LEGENDĂ INTENSITATE ─── */}
         <View style={styles.legendRow}>
-          {[
-            { label: 'Inactiv', color: '#334155' },
-            { label: 'Ușor',   color: HEAT_COLORS[1] },
-            { label: 'Mediu',  color: HEAT_COLORS[2] },
-            { label: 'Intens', color: HEAT_COLORS[3] },
-            { label: 'Maxim',  color: HEAT_COLORS[4] },
-          ].map((it, i) => (
-            <View key={i} style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: it.color }]} />
-              <Text style={[styles.legendLabel, { color: colors.textSecondary }]}>{it.label}</Text>
+          {([0, 1, 2, 3, 4] as const).map((level) => (
+            <View key={level} style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: HEAT_COLORS[level] }]} />
+              <Text style={[styles.legendLabel, { color: colors.textSecondary }]}>{LEVEL_LABELS[level]}</Text>
             </View>
           ))}
         </View>
@@ -326,21 +325,26 @@ export const BodyHeatmap: React.FC<BodyHeatmapProps> = ({
       {selectedMuscle && (
         <Modal transparent animationType="fade" visible onRequestClose={() => setSelectedMuscle(null)}>
           <View style={styles.modalBg}>
-            <View style={[styles.modalCard, { backgroundColor: '#0F172A', borderColor: HEAT_COLORS[selectedMuscle.level] || '#334155' }]}>
+            <View style={[styles.modalCard, { backgroundColor: '#0F172A', borderColor: HEAT_COLORS[selectedMuscle.level] }]}>
               <View style={styles.modalTop}>
-                <View style={[styles.modalDot, { backgroundColor: HEAT_COLORS[selectedMuscle.level] || '#334155' }]} />
+                <View style={[styles.modalDot, { backgroundColor: HEAT_COLORS[selectedMuscle.level] }]} />
                 <Text style={styles.modalTitle}>{selectedMuscle.name}</Text>
-                <TouchableOpacity onPress={() => setSelectedMuscle(null)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+                <TouchableOpacity
+                  onPress={() => setSelectedMuscle(null)}
+                  hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Închide detaliile mușchiului"
+                >
                   <X size={20} color="#64748B" />
                 </TouchableOpacity>
               </View>
               <Text style={styles.modalDesc}>
-                Nivel activare: <Text style={{ color: HEAT_COLORS[selectedMuscle.level] || '#fff', fontWeight: '800' }}>
-                  {['Inactiv', 'Ușor', 'Mediu', 'Intens', 'Maxim'][selectedMuscle.level]}
+                Nivel activare: <Text style={{ color: HEAT_COLORS[selectedMuscle.level], fontWeight: '800' }}>
+                  {LEVEL_LABELS[selectedMuscle.level]}
                 </Text>
               </Text>
               <Text style={styles.modalDesc}>
-                Sarcină înregistrată: <Text style={{ color: '#38BDF8', fontWeight: '700' }}>{selectedMuscle.load} pts</Text>
+                Sarcină înregistrată: <Text style={{ color: COLOR_REST, fontWeight: '700' }}>{Math.round(selectedMuscle.load)} pts</Text>
               </Text>
             </View>
           </View>
@@ -350,7 +354,7 @@ export const BodyHeatmap: React.FC<BodyHeatmapProps> = ({
   );
 };
 
-/* ─────────────────────────────────────────────────────────── STYLES */
+/* ──────────────────────────────────────────── STYLES */
 const styles = StyleSheet.create({
   rootWrap: { gap: 10 },
 

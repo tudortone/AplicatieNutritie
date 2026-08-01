@@ -44,7 +44,14 @@ export function isOutline(fill?: string): boolean {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.18;
 }
 
-/** Culoare de repaus — când intensitatea e 0 sau lipsește */
+/**
+ * Culoare pentru mușchi NEANTRENAT (intensitate 0 / lipsă de date).
+ * Fix audit: anterior se returna COLOR_REST (albastru viu), deci un corp care nu a
+ * fost antrenat niciodată arăta identic cu unul "odihnit" — harta părea aprinsă din start.
+ */
+export const COLOR_INACTIVE = '#3F3F46';
+
+/** Culoare de repaus — activitate prezentă, dar foarte mică */
 export const COLOR_REST = '#38BDF8';
 export const COLOR_STAB = '#FACC15';
 export const COLOR_SECONDARY = '#FF7B00';
@@ -64,11 +71,12 @@ function lerp(a: number, b: number, t: number): number {
 
 /**
  * Returnează culoarea interpolată rgb(r,g,b) pentru intensitate 0..1.
- * REGULĂ CRITICĂ: intensity undefined / null / NaN / <= 0 => COLOR_REST.
+ * REGULĂ CRITICĂ: intensity undefined / null / NaN / <= 0 => COLOR_INACTIVE (gri neutru).
+ * Activitate reală, dar minimă (0 < x <= 0.01) => COLOR_REST.
  */
 export function heatColor(intensity?: number | null): string {
-  if (intensity == null || isNaN(intensity) || intensity <= 0) {
-    return COLOR_REST;
+  if (intensity == null || isNaN(intensity) || intensity <= 0.001) {
+    return COLOR_INACTIVE;
   }
   const x = Math.max(0, Math.min(1, intensity));
   if (x <= 0.01) return COLOR_REST;
@@ -88,11 +96,11 @@ export function heatColor(intensity?: number | null): string {
 }
 
 /**
- * Opacitate: 0.55 la repaus → 1.0 la 100%,
+ * Opacitate: 0.35 pentru mușchi neantrenați, 0.55 la repaus → 1.0 la 100%,
  * pentru ca mușchii inactivi să se estompeze.
  */
 export function heatOpacity(intensity?: number | null): number {
-  if (intensity == null || isNaN(intensity) || intensity <= 0) return 0.55;
+  if (intensity == null || isNaN(intensity) || intensity <= 0.001) return 0.35;
   const x = Math.max(0, Math.min(1, intensity));
   return 0.55 + 0.45 * x;
 }
@@ -100,7 +108,7 @@ export function heatOpacity(intensity?: number | null): number {
 // ─── Legacy exports (păstrate pentru compatibilitate) ─────────────────────
 
 export const HEAT_COLORS = {
-  inactive: '#505050',
+  inactive: COLOR_INACTIVE,
   light: COLOR_REST,
   medium: COLOR_STAB,
   intense: COLOR_SECONDARY,
