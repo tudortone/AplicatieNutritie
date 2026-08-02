@@ -6,8 +6,10 @@
  * Maparea se face în două etape:
  *   1. după id-ul din SVG (hărțile FRONT_MAP / BACK_MAP / PATTERN_MAP);
  *   2. GEOMETRIC — suprafețele rămase fără mușchi sunt atribuite după poziția lor
- *      pe corp, folosind regiunile din components/fitness/muscleRegions.ts.
+ *      pe corp, folosind zonele din components/fitness/muscleZones.ts (partiție
+ *      completă a siluetei) și regiunile din components/fitness/muscleRegions.ts.
  *      Etapa 2 se auto-calibrează din suprafețele deja mapate la etapa 1.
+ *      Zona `__neutral__` (cap, gât, palme, tălpi) rămâne necolorată.
  */
 
 import { readFileSync, writeFileSync } from 'fs';
@@ -17,7 +19,9 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
-// ─── HELPERS ─────────────────────────────────────────────────────
+const NEUTRAL_ID = '__neutral__';
+
+// ─── HELPERS ────────────────────────────────────────
 
 /**
  * Decode HTML entities where UTF-8 bytes are individually encoded as &#NNN;.
@@ -81,7 +85,7 @@ function relativeLuminance(hex) {
   return 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
 }
 
-// ─── GEOMETRIE ────────────────────────────────────────────────
+// ─── GEOMETRIE ───────────────────────────────────
 
 /**
  * Extrage punctele unui path SVG (ancore + puncte de control).
@@ -197,20 +201,49 @@ function fit1d(xs, ys) {
   return { a, b: my - a * mx };
 }
 
-/** Citește regiunile aproximative per mușchi din muscleRegions.ts */
+/**
+ * Citește regiunile și zonele aproximative per mușchi.
+ *
+ * Ordinea contează: întâi regiunile precise din `muscleRegions.ts`, apoi zonele
+ * de acoperire din `muscleZones.ts`. Căutarea se oprește la prima potrivire.
+ */
 function loadRegions() {
-  const src = readFileSync(resolve(ROOT, 'components/fitness/muscleRegions.ts'), 'utf-8');
   const out = { front: [], back: [] };
   const blockRe = /id:\s*'([a-z_]+)',\s*side:\s*'(front|back)',\s*d:\s*\[([\s\S]*?)\],\s*\}/g;
-  let m;
-  while ((m = blockRe.exec(src)) !== null) {
-    const id = m[1];
-    const side = m[2];
-    const polys = [...m[3].matchAll(/'([^']+)'/g)]
-      .map((q) => pathPoints(q[1]))
-      .filter((p) => p.length >= 3);
-    if (polys.length) out[side].push({ id, polys });
+
+  const readBlocks = (relPath, optional) => {
+    let src;
+    try {
+      src = readFileSync(resolve(ROOT, relPath), 'utf-8');
+    } catch (err) {
+      if (optional) return 0;
+      throw err;
+    }
+    let m;
+    let count = 0;
+    blockRe.lastIndex = 0;
+    while ((m = blockRe.exec(src)) !== null) {
+      const id = m[1];
+      const side = m[2];
+      const polys = [...m[3].matchAll(/'([^']+)'/g)]
+        .map((q) => pathPoints(q[1]))
+        .filter((p) => p.length >= 3);
+      if (polys.length) {
+        out[side].push({ id, polys });
+        count++;
+      }
+    }
+    return count;
+  };
+
+  readBlocks('components/fitness/muscleRegions.ts', false);
+  const zones = readBlocks('components/fitness/muscleZones.ts', true);
+  if (zones > 0) {
+    console.log(`   🗺️  ${zones} zone de acoperire încărcate din muscleZones.ts`);
+  } else {
+    console.log('   ⚠️  muscleZones.ts lipsește — se folosesc doar regiunile simplificate.');
   }
+
   return out;
 }
 
@@ -249,7 +282,7 @@ function applyGeometricFallback(paths, regions, label) {
   for (const r of regions) {
     const all = r.polys.flat();
     const box = bboxOf(all);
-    if (box) regCenters.set(r.id, [box.cx, box.cy]);
+    if (box && r.id !== NEUTRAL_ID) regCenters.set(r.id, [box.cx, box.cy]);
     for (const poly of r.polys) regionPolys.push({ id: r.id, poly, box: bboxOf(poly) });
   }
 
@@ -304,7 +337,7 @@ function applyGeometricFallback(paths, regions, label) {
   const agreement = checked ? agreed / checked : 0;
   console.log(`   📐 ${label}: calibrare pe ${pairs.length} mușchi, concordanță cu maparea după id = ${(agreement * 100).toFixed(0)}%`);
 
-  if (agreement < 0.35) {
+  if (agreement < 0.30) {
     console.log(`   ⚠️  ${label}: concordanță prea mică, etapa geometrică NU se aplică (risc de colorare greșită).`);
     return 0;
   }
@@ -316,19 +349,28 @@ function applyGeometricFallback(paths, regions, label) {
 
   let assigned = 0;
   let skippedBig = 0;
+  let skippedNeutral = 0;
+  let skippedLocked = 0;
   const perMuscle = {};
   for (const f of fills) {
     if (f.p.muscleId) continue;
+    // Cap, gât, claviculă — marcate explicit ca neutre la etapa 1.
+    if (f.p.locked) { skippedLocked++; continue; }
     if (f.box.w > maxW || f.box.h > maxH) { skippedBig++; continue; }
-    const mid = guess(f.box.cx, f.box.cy, 26);
+    const mid = guess(f.box.cx, f.box.cy, 45);
     if (!mid) continue;
+    if (mid === NEUTRAL_ID) { skippedNeutral++; continue; }
     f.p.muscleId = mid;
     perMuscle[mid] = (perMuscle[mid] || 0) + 1;
     assigned++;
   }
 
+  const notes = [];
+  if (skippedBig) notes.push(`${skippedBig} siluete mari`);
+  if (skippedNeutral) notes.push(`${skippedNeutral} în zona cap/gât/palme/tălpi`);
+  if (skippedLocked) notes.push(`${skippedLocked} marcate neutre după id`);
   console.log(`   ➕ ${label}: ${assigned} suprafețe atribuite geometric` +
-    (skippedBig ? `, ${skippedBig} siluete mari lăsate neutre` : ''));
+    (notes.length ? `, lăsate neutre: ${notes.join(', ')}` : ''));
   const summary = Object.entries(perMuscle)
     .sort((a, b) => b[1] - a[1])
     .map(([k, v]) => `${k}:${v}`)
@@ -338,7 +380,7 @@ function applyGeometricFallback(paths, regions, label) {
   return assigned;
 }
 
-// ─── MUSCLE MAPS ───────────────────────────────────────────────
+// ─── MUSCLE MAPS ────────────────────────────────────
 
 const SKIP_GROUP_IDS = new Set([
   '1', '2', '4', 'a', '1_2', '1_3', '1_4',
@@ -435,7 +477,7 @@ const PATTERN_MAP = [
   [/chest|pector/i, 'pectorali'],
 ];
 
-// ─── PARSE SVG ─────────────────────────────────────────────────
+// ─── PARSE SVG ──────────────────────────────────────
 
 function parseSVG(filePath, map, isFront) {
   let raw = readFileSync(filePath, 'utf-8');
@@ -505,6 +547,7 @@ function parseSVG(filePath, map, isFront) {
       // ─── Mapare după id ───
       // `undefined` = încă nedecis, `null` = neutru intenționat.
       let muscleId;
+      let locked = false;
 
       if (Object.prototype.hasOwnProperty.call(map, groupId)) {
         muscleId = map[groupId];
@@ -521,6 +564,7 @@ function parseSVG(filePath, map, isFront) {
 
       if (muscleId === undefined && NEUTRU_IDS.has(groupId)) {
         muscleId = null;
+        locked = true;
       }
 
       if (muscleId === undefined && !CONTAINER_IDS.has(groupId)) {
@@ -560,6 +604,7 @@ function parseSVG(filePath, map, isFront) {
         muscleId,
         baseColor: actualFill === 'none' ? '#000000' : actualFill,
         role,
+        locked,
       });
     }
   }
@@ -567,7 +612,7 @@ function parseSVG(filePath, map, isFront) {
   return { paths, unmapped: [...unmapped] };
 }
 
-// ─── MAIN ─────────────────────────────────────────────────────
+// ─── MAIN ───────────────────────────────────────────
 
 console.log('🔧 buildAnatomy.mjs — parsing SVG files...\n');
 
@@ -585,7 +630,7 @@ const regions = loadRegions();
 applyGeometricFallback(frontPaths, regions.front, 'FAȚĂ');
 applyGeometricFallback(backPaths, regions.back, 'SPATE');
 
-// ─── REPORT ────────────────────────────────────────────────────
+// ─── REPORT ─────────────────────────────────────────
 
 const ALL_MUSCLE_IDS = [
   'pectorali', 'deltoid_anterior', 'deltoid_lateral', 'deltoid_posterior',
@@ -624,7 +669,16 @@ for (const mid of ALL_MUSCLE_IDS) {
   }
 }
 
-console.log(`\n🧪 NEUTRU: Față=${frontCounts.__neutru__ || 0}, Spate=${backCounts.__neutru__ || 0}`);
+const frontFills = frontPaths.filter((p) => p.role === 'fill').length;
+const backFills = backPaths.filter((p) => p.role === 'fill').length;
+const frontNeutral = frontCounts.__neutru__ || 0;
+const backNeutral = backCounts.__neutru__ || 0;
+const totalFills = frontFills + backFills;
+const totalNeutral = frontNeutral + backNeutral;
+const coverage = totalFills ? ((totalFills - totalNeutral) / totalFills) * 100 : 0;
+
+console.log(`\n🧪 NEUTRU: Față=${frontNeutral}, Spate=${backNeutral}`);
+console.log(`🎯 ACOPERIRE: ${coverage.toFixed(0)}% din suprafețele colorabile au un mușchi atribuit`);
 
 if (musclesWithZero.length > 0) {
   console.log(`\n⚠️  ERORI: Următoarele MuscleId au 0 path-uri colorabile pe AMBELE vederi:`);
@@ -643,7 +697,7 @@ if (back.unmapped.length > 0) {
   for (const id of back.unmapped) console.log(`   → ${id}`);
 }
 
-// ─── GENERATE TS FILE ────────────────────────────────────────────
+// ─── GENERATE TS FILE ───────────────────────────────────
 
 function escapeString(str) {
   return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
