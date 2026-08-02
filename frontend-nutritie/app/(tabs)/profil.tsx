@@ -11,11 +11,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Trophy, Camera, CheckCircle2, User, Pencil } from 'lucide-react-native';
+import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Trophy, Camera, CheckCircle2, User, Pencil, Check } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
-import { themes, themeDisplayNames, ThemeName } from '../../constants/theme';
+import { themes, themeDecor, themeDisplayNames, ThemeName } from '../../constants/theme';
+import ThemeBackdrop, { ThemeShapePreview } from '../../components/ui/ThemeBackdrop';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useAuth } from '../../context/AuthContext';
 import { useBiometrics } from '../../hooks/useBiometrics';
@@ -31,7 +32,7 @@ import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 export default function ProfilScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { colors, themeName, setTheme } = useTheme();
+  const { colors, decor, themeName, setTheme } = useTheme();
   const { enabled: notificationsEnabled, toggleReminders, isExpoGo } = useNotifications();
   const { isSupported, biometricType, isEnabled, toggleBiometric } = useBiometrics();
   const { isEnabled: healthSyncEnabled, platformName, toggleSync: toggleHealthSync, selectedProvider, setProvider } = useHealthSync();
@@ -49,7 +50,7 @@ export default function ProfilScreen() {
   const [nume, setNume] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showSuccessAnim, setShowSuccessAnim] = useState(false);
-  
+
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
@@ -106,9 +107,29 @@ export default function ProfilScreen() {
     initProfile();
   }, [session, user, loadingAuth]);
 
-  const alegePozaProfil = async () => {
+  // Selectarea pozei de profil: din galerie sau direct din cameră.
+  const alegePozaProfil = async (sursa: 'galerie' | 'camera' = 'galerie') => {
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      if (sursa === 'camera') {
+        const permCamera = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permCamera.granted) {
+          Alert.alert("Permisiune necesară", "Avem nevoie de acces la cameră pentru a face o poză de profil.");
+          return;
+        }
+        const rezultatCamera = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.7,
+        });
+        if (!rezultatCamera.canceled && rezultatCamera.assets?.length) {
+          setAvatarUrl(rezultatCamera.assets[0].uri);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        return;
+      }
+
       const permisiune = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permisiune.granted) {
         Alert.alert("Permisiune necesară", "Avem nevoie de acces la galeria foto pentru a alege o poză de profil.");
@@ -130,6 +151,25 @@ export default function ProfilScreen() {
     }
   };
 
+  const stergePozaProfil = async () => {
+    setAvatarUrl(null);
+    await AsyncStorage.removeItem('avatar_url');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // Meniu unic pentru avatar (folosit și din header, și din cardul "Date personale").
+  const deschideOptiuniAvatar = () => {
+    const optiuni: any[] = [
+      { text: 'Fă o poză', onPress: () => alegePozaProfil('camera') },
+      { text: 'Alege din galerie', onPress: () => alegePozaProfil('galerie') },
+    ];
+    if (avatarUrl) {
+      optiuni.push({ text: 'Șterge poza', style: 'destructive', onPress: stergePozaProfil });
+    }
+    optiuni.push({ text: 'Anulează', style: 'cancel' });
+    Alert.alert('Poză de profil', 'Alege sursa imaginii', optiuni);
+  };
+
   const salveaza = async () => {
     if (!greutate || !greutateTinta || !caloriiTinta || !proteineTinta || !carbiTinta || !grasimiTinta) {
       showBanner({
@@ -139,7 +179,7 @@ export default function ProfilScreen() {
       });
       return;
     }
-    
+
     setLoading(true);
     try {
       // Salvăm întâi în Supabase
@@ -166,7 +206,11 @@ export default function ProfilScreen() {
       await AsyncStorage.setItem('carbiTinta', carbiTinta);
       await AsyncStorage.setItem('grasimiTinta', grasimiTinta);
       await AsyncStorage.setItem('nume_profil', nume);
-      if (avatarUrl) await AsyncStorage.setItem('avatar_url', avatarUrl);
+      if (avatarUrl) {
+        await AsyncStorage.setItem('avatar_url', avatarUrl);
+      } else {
+        await AsyncStorage.removeItem('avatar_url');
+      }
 
       notify.success('Profil actualizat', 'Modificările au fost salvate');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -186,9 +230,9 @@ export default function ProfilScreen() {
   const deconectare = async () => {
     Alert.alert("Deconectare", "Ești sigur că vrei să te deconectezi?", [
       { text: "Anulează", style: "cancel" },
-      { 
-        text: "Deconectează", 
-        style: "destructive", 
+      {
+        text: "Deconectează",
+        style: "destructive",
         onPress: async () => {
           // Ștergem toate datele utilizatorului din AsyncStorage
           const allKeys = await AsyncStorage.getAllKeys();
@@ -206,7 +250,7 @@ export default function ProfilScreen() {
             await AsyncStorage.multiRemove(userKeys);
           }
           await supabase.auth.signOut();
-        } 
+        }
       }
     ]);
   };
@@ -230,10 +274,27 @@ export default function ProfilScreen() {
 
   const initials = session.user.email?.slice(0, 2).toUpperCase() || 'NU';
 
+  // Obiective zilnice - definite o singură dată, randate din map.
+  const campuriTinte: {
+    key: string;
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    icon: React.ReactNode;
+    tint: string;
+  }[] = [
+    { key: 'greutate', label: 'Greutate (kg)', value: greutate, onChange: setGreutate, icon: <Scale size={18} color={colors.accent} />, tint: colors.accent },
+    { key: 'greutateTinta', label: 'Țintă Greutate (kg)', value: greutateTinta, onChange: setGreutateTinta, icon: <Target size={18} color={colors.accent} />, tint: colors.accent },
+    { key: 'caloriiTinta', label: 'Țintă Calorii (kcal/zi)', value: caloriiTinta, onChange: setCaloriiTinta, icon: <Target size={18} color={colors.accent} />, tint: colors.accent },
+    { key: 'proteineTinta', label: 'Țintă Proteine (g/zi)', value: proteineTinta, onChange: setProteineTinta, icon: <Zap size={18} color={colors.accentSecondary} />, tint: colors.accentSecondary },
+    { key: 'carbiTinta', label: 'Țintă Carbohidrați (g/zi)', value: carbiTinta, onChange: setCarbiTinta, icon: <Zap size={18} color={colors.accentTertiary} />, tint: colors.accentTertiary },
+    { key: 'grasimiTinta', label: 'Țintă Grăsimi (g/zi)', value: grasimiTinta, onChange: setGrasimiTinta, icon: <Zap size={18} color={colors.warning} />, tint: colors.warning },
+  ];
+
   return (
     <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
-      <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
+      {/* Fundal decorativ desenat custom, specific temei (subtil) */}
+      <ThemeBackdrop />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -243,9 +304,12 @@ export default function ProfilScreen() {
 
         {/* Avatar header */}
         <Animated.View entering={FadeInDown.duration(500)} style={styles.avatarSection}>
-          <TouchableOpacity activeOpacity={0.85} onPress={alegePozaProfil}>
-            <LinearGradient colors={colors.accentGradient} style={[styles.avatarRing, { shadowColor: colors.accent }]}>
-              <View style={[styles.avatarInner, { backgroundColor: '#0F1318', overflow: 'hidden' }]}>
+          <TouchableOpacity activeOpacity={0.85} onPress={deschideOptiuniAvatar} accessibilityLabel="Schimbă poza de profil">
+            <LinearGradient
+              colors={[colors.accent + '66', colors.accentSecondary + '33']}
+              style={[styles.avatarRing, { shadowColor: colors.shadow, shadowOpacity: decor.shadowOpacity, shadowRadius: decor.shadowRadius }]}
+            >
+              <View style={[styles.avatarInner, { backgroundColor: colors.surface, overflow: 'hidden' }]}>
                 {avatarUrl ? (
                   <Image
                     source={{ uri: avatarUrl }}
@@ -259,31 +323,52 @@ export default function ProfilScreen() {
                 )}
               </View>
             </LinearGradient>
-            <View style={[styles.cameraBadge, { backgroundColor: colors.accent, borderColor: colors.background }]}>
-              <Camera size={14} color="#000" />
+            <View style={[styles.cameraBadge, { backgroundColor: colors.surfaceElevated, borderColor: colors.background }]}>
+              <Camera size={14} color={colors.accent} />
             </View>
           </TouchableOpacity>
           <Text style={[styles.displayName, { color: colors.textPrimary }]}>{nume || session.user.email?.split('@')[0]}</Text>
           <Text style={[styles.emailText, { color: colors.textSecondary }]}>{session.user.email}</Text>
 
-          <View style={[styles.planBadge, { borderColor: colors.accent + '33' }]}>
-            <LinearGradient colors={[colors.accent + '25', 'rgba(0,0,0,0)']} style={styles.planBadgeGrad}>
+          <View style={[styles.planBadge, { borderColor: colors.accent + '22' }]}>
+            <LinearGradient colors={[colors.accent + decor.tintAlpha, 'rgba(0,0,0,0)']} style={styles.planBadgeGrad}>
               <Zap size={14} color={colors.accent} />
               <Text style={[styles.planBadgeText, { color: colors.accent }]}>AI Premium Plan</Text>
             </LinearGradient>
           </View>
         </Animated.View>
 
-        {/* Personal Details: Name / Display Name */}
+        {/* Personal Details: Avatar + Name / Display Name */}
         <Animated.View entering={FadeInDown.duration(550).delay(30)}>
           <View style={styles.sectionHeaderRow}>
             <User size={16} color={colors.accent} />
             <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>{t('profile.personal_details')}</Text>
           </View>
-          <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 24, marginTop: 12 }]}>
+          <BlurView intensity={decor.blurIntensity} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 24, marginTop: 12 }]}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
+
+              {/* Rând nou: poza de profil se schimbă direct de aici */}
+              <TouchableOpacity style={styles.inputRow} activeOpacity={0.8} onPress={deschideOptiuniAvatar}>
+                <View style={[styles.avatarThumb, { borderColor: colors.accent + '33', backgroundColor: colors.surfaceBg }]}>
+                  {avatarUrl ? (
+                    <Image source={{ uri: avatarUrl }} style={styles.avatarThumbImg} resizeMode="cover" />
+                  ) : (
+                    <Text style={[styles.avatarThumbText, { color: colors.accent }]}>{initials}</Text>
+                  )}
+                </View>
+                <View style={styles.inputContent}>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Poză de profil</Text>
+                  <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '700' }}>
+                    {avatarUrl ? 'Schimbă sau șterge poza' : 'Adaugă o poză'}
+                  </Text>
+                </View>
+                <Camera size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <View style={[styles.separator, { backgroundColor: colors.border }]} />
+
               <View style={styles.inputRow}>
-                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + decor.tintAlpha }]}>
                   <Pencil size={18} color={colors.accent} />
                 </View>
                 <View style={styles.inputContent}>
@@ -308,29 +393,46 @@ export default function ProfilScreen() {
             <Palette size={16} color={colors.accent} />
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>TEMĂ VIZUALĂ</Text>
           </View>
+          <Text style={{ color: colors.textTertiary, fontSize: 12, marginLeft: 4, marginBottom: 12 }}>
+            Tema schimbă culorile și figurile desenate din toată aplicația.
+          </Text>
           <View style={styles.themeGrid}>
             {(['midnight', 'ocean', 'sunset'] as ThemeName[]).map((tName) => {
               const tColors = themes[tName];
+              const tDecor = themeDecor[tName];
               const isSelected = themeName === tName;
               return (
                 <TouchableOpacity
                   key={tName}
                   style={[
                     styles.themeCard,
-                    { backgroundColor: tColors.surfaceBg, borderColor: isSelected ? tColors.accent : 'rgba(255,255,255,0.08)' },
-                    isSelected && { borderWidth: 2 }
+                    {
+                      backgroundColor: tColors.surfaceBg,
+                      borderColor: isSelected ? tColors.accent + '99' : tColors.border,
+                    },
                   ]}
                   onPress={() => setTheme(tName)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.85}
                 >
+                  {/* figura desenată custom a temei */}
+                  <View style={{ opacity: isSelected ? 1 : 0.55, marginBottom: 8 }}>
+                    <ThemeShapePreview theme={tName} size={40} />
+                  </View>
                   <View style={styles.themeSwatchRow}>
                     <View style={[styles.themeSwatch, { backgroundColor: tColors.background }]} />
                     <View style={[styles.themeSwatch, { backgroundColor: tColors.accent }]} />
                     <View style={[styles.themeSwatch, { backgroundColor: tColors.accentSecondary }]} />
                   </View>
-                  <Text style={[styles.themeNameText, { color: isSelected ? tColors.accent : colors.textPrimary }]}>
+                  <Text style={[styles.themeNameText, { color: isSelected ? tColors.accent : colors.textTertiary }]}>
                     {themeDisplayNames[tName]}
                   </Text>
+                  {isSelected && (
+                    <View style={[styles.themeCheck, { backgroundColor: tColors.accent + '22', borderColor: tColors.accent + '55' }]}>
+                      <Check size={12} color={tColors.accent} strokeWidth={3} />
+                    </View>
+                  )}
+                  {/* accent line, in loc de glow puternic */}
+                  <View style={{ height: 2, width: 22, borderRadius: 2, marginTop: 8, backgroundColor: isSelected ? tColors.accent : 'transparent', opacity: tDecor.backdropOpacity > 0 ? 1 : 1 }} />
                 </TouchableOpacity>
               );
             })}
@@ -340,10 +442,10 @@ export default function ProfilScreen() {
         {/* Notifications section */}
         <Animated.View entering={FadeInDown.duration(600).delay(80)}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>REMINDERE & NOTIFICĂRI</Text>
-          <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 20 }]}>
+          <BlurView intensity={decor.blurIntensity} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 20 }]}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
               <View style={[styles.inputRow, { alignItems: 'center' }]}>
-                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + decor.tintAlpha }]}>
                   <Bell size={18} color={colors.accent} />
                 </View>
                 <View style={[styles.inputContent, { flex: 1 }]}>
@@ -353,7 +455,7 @@ export default function ProfilScreen() {
                 <Switch
                   value={notificationsEnabled}
                   onValueChange={(val) => { toggleReminders(val); }}
-                  trackColor={{ false: '#3f3f3f', true: colors.accent + '80' }}
+                  trackColor={{ false: colors.surfaceElevated, true: colors.accent + '80' }}
                   thumbColor={notificationsEnabled ? colors.accent : '#f4f3f4'}
                 />
               </View>
@@ -375,10 +477,10 @@ export default function ProfilScreen() {
               <ShieldCheck size={16} color={colors.accent} />
               <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>SECURITATE AVANSATĂ</Text>
             </View>
-            <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 20, marginTop: 12 }]}>
+            <BlurView intensity={decor.blurIntensity} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 20, marginTop: 12 }]}>
               <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
                 <View style={[styles.inputRow, { alignItems: 'center' }]}>
-                  <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <View style={[styles.inputIcon, { backgroundColor: colors.accent + decor.tintAlpha }]}>
                     <Lock size={18} color={colors.accent} />
                   </View>
                   <View style={[styles.inputContent, { flex: 1 }]}>
@@ -403,10 +505,10 @@ export default function ProfilScreen() {
             <Activity size={16} color={colors.accent} />
             <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>CONECTIVITATE FITNESS & BRĂȚĂRI</Text>
           </View>
-          <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 20, marginTop: 12 }]}>
+          <BlurView intensity={decor.blurIntensity} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 20, marginTop: 12 }]}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
               <View style={[styles.inputRow, { alignItems: 'center' }]}>
-                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + decor.tintAlpha }]}>
                   <Footprints size={18} color={colors.accent} />
                 </View>
                 <View style={[styles.inputContent, { flex: 1 }]}>
@@ -415,8 +517,8 @@ export default function ProfilScreen() {
                 </View>
                 <Switch
                   value={healthSyncEnabled}
-                  onValueChange={(val) => { 
-                    toggleHealthSync(val); 
+                  onValueChange={(val) => {
+                    toggleHealthSync(val);
                     if (val) AsyncStorage.removeItem('ascundeCardHealth');
                   }}
                   trackColor={{ false: colors.surfaceElevated, true: colors.accent }}
@@ -424,7 +526,7 @@ export default function ProfilScreen() {
                 />
               </View>
 
-              <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 16 }}>
+              <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 16 }}>
                 <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '700', marginBottom: 10, textTransform: 'uppercase' }}>
                   Alege Aplicația sau Brățara de Fitness:
                 </Text>
@@ -440,8 +542,8 @@ export default function ProfilScreen() {
                           padding: 12,
                           borderRadius: 14,
                           borderWidth: 1,
-                          borderColor: active ? colors.accent : 'rgba(255,255,255,0.08)',
-                          backgroundColor: active ? colors.accent + '15' : 'rgba(255,255,255,0.02)',
+                          borderColor: active ? colors.accent + '66' : colors.border,
+                          backgroundColor: active ? colors.accent + decor.tintAlpha : colors.overlayLight,
                           gap: 12,
                         }}
                         onPress={() => setProvider(p.id)}
@@ -482,8 +584,8 @@ export default function ProfilScreen() {
                   key={insign.id}
                   style={{
                     width: '48%',
-                    backgroundColor: unlocked ? colors.accent + '14' : 'rgba(255,255,255,0.03)',
-                    borderColor: unlocked ? colors.accent + '44' : 'rgba(255,255,255,0.07)',
+                    backgroundColor: unlocked ? colors.accent + decor.tintAlpha : colors.overlayLight,
+                    borderColor: unlocked ? colors.accent + '33' : colors.border,
                     borderWidth: 1,
                     borderRadius: 14,
                     padding: 12,
@@ -497,7 +599,7 @@ export default function ProfilScreen() {
                       width: 38,
                       height: 38,
                       borderRadius: 19,
-                      backgroundColor: unlocked ? colors.accent + '25' : 'rgba(255,255,255,0.05)',
+                      backgroundColor: unlocked ? colors.accent + '1F' : colors.overlayStrong,
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
@@ -540,8 +642,8 @@ export default function ProfilScreen() {
         <Animated.View entering={FadeInDown.duration(600).delay(100)}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('profile.daily_targets')}</Text>
 
-          <TouchableOpacity style={[styles.aiSetupBtn, { borderColor: colors.accent + '33' }]} onPress={() => router.push('/calculator-ai')}>
-            <LinearGradient colors={[colors.accent + '25', 'rgba(0,0,0,0)']} style={styles.aiSetupGrad}>
+          <TouchableOpacity style={[styles.aiSetupBtn, { borderColor: colors.accent + '22' }]} onPress={() => router.push('/calculator-ai')}>
+            <LinearGradient colors={[colors.accent + decor.tintAlpha, 'rgba(0,0,0,0)']} style={styles.aiSetupGrad}>
               <Sparkles size={22} color={colors.accent} />
               <View style={styles.aiSetupTextWrap}>
                 <Text style={[styles.aiSetupTitle, { color: colors.textPrimary }]}>Asistent Configurare Profil</Text>
@@ -551,128 +653,40 @@ export default function ProfilScreen() {
             </LinearGradient>
           </TouchableOpacity>
 
-          <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder }]}>
+          <BlurView intensity={decor.blurIntensity} tint="dark" style={[styles.card, { borderColor: colors.cardBorder }]}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
-
-              <View style={styles.inputRow}>
-                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
-                  <Scale size={18} color={colors.accent} />
+              {campuriTinte.map((camp, idx) => (
+                <View key={camp.key}>
+                  {idx > 0 && <View style={[styles.separator, { backgroundColor: colors.border }]} />}
+                  <View style={styles.inputRow}>
+                    <View style={[styles.inputIcon, { backgroundColor: camp.tint + decor.tintAlpha }]}>
+                      {camp.icon}
+                    </View>
+                    <View style={styles.inputContent}>
+                      <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{camp.label}</Text>
+                      <TextInput
+                        style={[styles.inputField, { color: colors.textPrimary }]}
+                        value={camp.value}
+                        onChangeText={camp.onChange}
+                        keyboardType="numeric"
+                        placeholderTextColor={colors.textSecondary}
+                        selectionColor={colors.accent}
+                      />
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Greutate (kg)</Text>
-                  <TextInput
-                    style={[styles.inputField, { color: colors.textPrimary }]}
-                    value={greutate}
-                    onChangeText={setGreutate}
-                    keyboardType="numeric"
-                    placeholderTextColor={colors.textSecondary}
-                    selectionColor={colors.accent}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.separator} />
-
-              <View style={styles.inputRow}>
-                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
-                  <Target size={18} color={colors.accent} />
-                </View>
-                <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Greutate Țintă (kg)</Text>
-                  <TextInput
-                    style={[styles.inputField, { color: colors.textPrimary }]}
-                    value={greutateTinta}
-                    onChangeText={setGreutateTinta}
-                    keyboardType="numeric"
-                    placeholderTextColor={colors.textSecondary}
-                    selectionColor={colors.accent}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.separator} />
-
-              <View style={styles.inputRow}>
-                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
-                  <Target size={18} color={colors.accent} />
-                </View>
-                <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Țintă Calorii (kcal/zi)</Text>
-                  <TextInput
-                    style={[styles.inputField, { color: colors.textPrimary }]}
-                    value={caloriiTinta}
-                    onChangeText={setCaloriiTinta}
-                    keyboardType="numeric"
-                    placeholderTextColor={colors.textSecondary}
-                    selectionColor={colors.accent}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.separator} />
-
-              <View style={styles.inputRow}>
-                <View style={[styles.inputIcon, { backgroundColor: colors.accentSecondary + '1F' }]}>
-                  <Zap size={18} color={colors.accentSecondary} />
-                </View>
-                <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Țintă Proteine (g/zi)</Text>
-                  <TextInput
-                    style={[styles.inputField, { color: colors.textPrimary }]}
-                    value={proteineTinta}
-                    onChangeText={setProteineTinta}
-                    keyboardType="numeric"
-                    placeholderTextColor={colors.textSecondary}
-                    selectionColor={colors.accent}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.separator} />
-
-              <View style={styles.inputRow}>
-                <View style={[styles.inputIcon, { backgroundColor: colors.accentTertiary + '1F' }]}>
-                  <Zap size={18} color={colors.accentTertiary} />
-                </View>
-                <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Țintă Carbohidrați (g/zi)</Text>
-                  <TextInput
-                    style={[styles.inputField, { color: colors.textPrimary }]}
-                    value={carbiTinta}
-                    onChangeText={setCarbiTinta}
-                    keyboardType="numeric"
-                    placeholderTextColor={colors.textSecondary}
-                    selectionColor={colors.accent}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.separator} />
-
-              <View style={styles.inputRow}>
-                <View style={[styles.inputIcon, { backgroundColor: colors.warning + '1F' }]}>
-                  <Zap size={18} color={colors.warning} />
-                </View>
-                <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Țintă Grăsimi (g/zi)</Text>
-                  <TextInput
-                    style={[styles.inputField, { color: colors.textPrimary }]}
-                    value={grasimiTinta}
-                    onChangeText={setGrasimiTinta}
-                    keyboardType="numeric"
-                    placeholderTextColor={colors.textSecondary}
-                    selectionColor={colors.accent}
-                  />
-                </View>
-              </View>
-
+              ))}
             </LinearGradient>
           </BlurView>
         </Animated.View>
 
         {/* Save button */}
         <Animated.View entering={FadeInDown.duration(600).delay(200)}>
-          <TouchableOpacity style={[styles.saveBtn, { shadowColor: colors.accent }]} onPress={salveaza} disabled={loading}>
+          <TouchableOpacity
+            style={[styles.saveBtn, { shadowColor: colors.shadow, shadowOpacity: decor.shadowOpacity, shadowRadius: decor.shadowRadius }]}
+            onPress={salveaza}
+            disabled={loading}
+          >
             <LinearGradient colors={colors.accentGradient} style={styles.saveBtnGrad}>
               {loading ? (
                 <ActivityIndicator color={colors.background} />
@@ -687,10 +701,10 @@ export default function ProfilScreen() {
         </Animated.View>
 
         {/* Info card */}
-        <Animated.View entering={FadeInUp.duration(600).delay(300)} style={styles.infoCard}>
-          <BlurView intensity={15} tint="dark" style={styles.infoCardBlur}>
-            <LinearGradient colors={['rgba(255,255,255,0.03)', 'rgba(0,0,0,0)']} style={styles.infoCardGrad}>
-              <Text style={styles.infoCardTitle}>💡 Cum funcționează</Text>
+        <Animated.View entering={FadeInUp.duration(600).delay(300)} style={[styles.infoCard, { borderColor: colors.border }]}>
+          <BlurView intensity={Math.max(8, decor.blurIntensity - 4)} tint="dark" style={styles.infoCardBlur}>
+            <LinearGradient colors={[colors.overlayLight, 'rgba(0,0,0,0)']} style={styles.infoCardGrad}>
+              <Text style={[styles.infoCardTitle, { color: colors.textPrimary }]}>💡 Cum funcționează</Text>
               <Text style={[styles.infoCardText, { color: colors.textSecondary }]}>
                 Obiectivele pe care le setezi sunt folosite de asistentul AI pentru a-ți oferi recomandări personalizate și a-ți urmări progresul zilnic.
               </Text>
@@ -700,7 +714,7 @@ export default function ProfilScreen() {
 
         {/* Logout */}
         <Animated.View entering={FadeInUp.duration(600).delay(400)}>
-          <TouchableOpacity style={[styles.logoutBtn, { borderColor: colors.danger + '33', backgroundColor: colors.danger + '0A' }]} onPress={deconectare}>
+          <TouchableOpacity style={[styles.logoutBtn, { borderColor: colors.danger + '22', backgroundColor: colors.dangerBg }]} onPress={deconectare}>
             <LogOut size={18} color={colors.danger} />
             <Text style={[styles.logoutText, { color: colors.danger }]}>Deconectare</Text>
           </TouchableOpacity>
@@ -710,10 +724,10 @@ export default function ProfilScreen() {
       {/* Success Animation Modal Overlay */}
       {showSuccessAnim && (
         <Animated.View entering={FadeInDown.duration(350).springify()} style={styles.successOverlay}>
-          <BlurView intensity={85} tint="dark" style={[styles.successCard, { borderColor: colors.accent }]}>
-            <LinearGradient colors={[colors.accent + '25', 'rgba(0,0,0,0.85)']} style={styles.successGrad}>
+          <BlurView intensity={60} tint="dark" style={[styles.successCard, { borderColor: colors.accent + '55' }]}>
+            <LinearGradient colors={[colors.accent + '18', 'rgba(0,0,0,0.85)']} style={styles.successGrad}>
               <Animated.View entering={FadeInUp.duration(400).delay(100).springify()} style={[styles.successIconCircle, { backgroundColor: colors.accent }]}>
-                <CheckCircle2 size={44} color="#000" />
+                <CheckCircle2 size={44} color={colors.background} />
               </Animated.View>
               <Text style={[styles.successTitle, { color: colors.textPrimary }]}>Profil Actualizat!</Text>
               <Text style={[styles.successSub, { color: colors.textSecondary }]}>Modificările tale (poză, nume și obiective) au fost salvate cu succes.</Text>
@@ -727,8 +741,6 @@ export default function ProfilScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  glowTop: { position: 'absolute', top: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.04 },
-  glowBottom: { position: 'absolute', bottom: 50, right: -80, width: 280, height: 280, borderRadius: 140, opacity: 0.05 },
 
   scroll: { paddingHorizontal: 20 },
 
@@ -737,7 +749,7 @@ const styles = StyleSheet.create({
 
   // Avatar section
   avatarSection: { alignItems: 'center', marginBottom: 30 },
-  avatarRing: { width: 96, height: 96, borderRadius: 32, padding: 3, marginBottom: 16, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 15 },
+  avatarRing: { width: 96, height: 96, borderRadius: 32, padding: 2, marginBottom: 16, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   avatarInner: { flex: 1, borderRadius: 29, justifyContent: 'center', alignItems: 'center' },
   avatarText: { fontSize: 28, fontWeight: '900', letterSpacing: -1 },
   displayName: { fontSize: 24, fontWeight: '900', letterSpacing: -0.5, marginBottom: 4 },
@@ -746,14 +758,19 @@ const styles = StyleSheet.create({
   planBadgeGrad: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, gap: 6 },
   planBadgeText: { fontSize: 13, fontWeight: '700', marginLeft: 4 },
 
+  avatarThumb: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+  avatarThumbImg: { width: '100%', height: '100%' },
+  avatarThumbText: { fontSize: 15, fontWeight: '800' },
+
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, marginLeft: 4 },
   sectionLabel: { fontSize: 13, fontWeight: '800', letterSpacing: 1.5, marginBottom: 14, marginLeft: 4 },
 
   themeGrid: { flexDirection: 'row', gap: 10, marginBottom: 28 },
-  themeCard: { flex: 1, padding: 14, borderRadius: 20, borderWidth: 1, alignItems: 'center' },
+  themeCard: { flex: 1, paddingVertical: 16, paddingHorizontal: 10, borderRadius: 20, borderWidth: 1, alignItems: 'center' },
   themeSwatchRow: { flexDirection: 'row', gap: 6, marginBottom: 10 },
-  themeSwatch: { width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  themeSwatch: { width: 14, height: 14, borderRadius: 7, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
   themeNameText: { fontSize: 12, fontWeight: '800', textAlign: 'center' },
+  themeCheck: { position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 10, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
 
   aiSetupBtn: { borderRadius: 24, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
   aiSetupGrad: { padding: 20, flexDirection: 'row', alignItems: 'center', gap: 16 },
@@ -768,18 +785,18 @@ const styles = StyleSheet.create({
   inputContent: { flex: 1 },
   inputLabel: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   inputField: { fontSize: 22, fontWeight: '800', padding: 0 },
-  separator: { height: 1, backgroundColor: 'rgba(255,255,255,0.04)', marginHorizontal: 20 },
+  separator: { height: 1, marginHorizontal: 20 },
 
   // Save button
-  saveBtn: { borderRadius: 20, overflow: 'hidden', marginBottom: 20, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  saveBtn: { borderRadius: 20, overflow: 'hidden', marginBottom: 20, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   saveBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20, gap: 10 },
   saveBtnText: { fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
 
   // Info card
-  infoCard: { borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)', marginBottom: 24 },
+  infoCard: { borderRadius: 20, overflow: 'hidden', borderWidth: 1, marginBottom: 24 },
   infoCardBlur: { overflow: 'hidden' },
   infoCardGrad: { padding: 20 },
-  infoCardTitle: { fontSize: 15, fontWeight: '800', color: '#E5E7EB', marginBottom: 8 },
+  infoCardTitle: { fontSize: 15, fontWeight: '800', marginBottom: 8 },
   infoCardText: { fontSize: 14, lineHeight: 22 },
 
   // Logout
@@ -788,9 +805,9 @@ const styles = StyleSheet.create({
 
   cameraBadge: { position: 'absolute', bottom: 10, right: 0, width: 30, height: 30, borderRadius: 15, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
   successOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28, zIndex: 999, backgroundColor: 'rgba(0,0,0,0.5)' },
-  successCard: { width: '100%', maxWidth: 350, borderRadius: 28, overflow: 'hidden', borderWidth: 1.5 },
+  successCard: { width: '100%', maxWidth: 350, borderRadius: 28, overflow: 'hidden', borderWidth: 1 },
   successGrad: { paddingHorizontal: 28, paddingVertical: 36, alignItems: 'center' },
-  successIconCircle: { width: 84, height: 84, borderRadius: 42, justifyContent: 'center', alignItems: 'center', marginBottom: 20, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 12 },
+  successIconCircle: { width: 84, height: 84, borderRadius: 42, justifyContent: 'center', alignItems: 'center', marginBottom: 20, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 6 },
   successTitle: { fontSize: 24, fontWeight: '900', textAlign: 'center', marginBottom: 8, letterSpacing: -0.5 },
   successSub: { fontSize: 14, lineHeight: 21, textAlign: 'center' },
 });
