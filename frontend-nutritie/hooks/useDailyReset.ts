@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type DailyQuest = { id: string; progres: number; [key: string]: unknown };
+export type DailyQuest = {
+  id: string;
+  progres: number;
+  completat?: boolean;
+  [key: string]: unknown;
+};
 
 type Options = {
   questuriAzi: DailyQuest[];
@@ -12,7 +17,7 @@ type Options = {
 
 const DEFAULT_KEY = 'nutriai:last_reset_date';
 
-const localDateKey = (date = new Date()) => {
+export const localDateKey = (date = new Date()) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -33,42 +38,50 @@ export function useDailyReset({
 }: Options) {
   const [isResetting, setIsResetting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
 
   const resetIfNeeded = useCallback(async () => {
     const today = localDateKey();
     const lastReset = await AsyncStorage.getItem(storageKey);
     if (lastReset === today) return false;
 
-    setIsResetting(true);
-    setQuesturiAzi((current) =>
-      current.map((quest) => ({ ...quest, progres: 0 })),
-    );
+    if (mountedRef.current) setIsResetting(true);
+    setQuesturiAzi((current) => current.map((quest) => ({
+      ...quest,
+      progres: 0,
+      // Defect vechi: progresul revenea la 0, dar questul rămânea bifat.
+      completat: false,
+    })));
     await AsyncStorage.setItem(storageKey, today);
-    setIsResetting(false);
+    if (mountedRef.current) setIsResetting(false);
     return true;
   }, [setQuesturiAzi, storageKey]);
 
   const scheduleMidnightCheck = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
-      await resetIfNeeded();
-      scheduleMidnightCheck();
+      try {
+        await resetIfNeeded();
+      } finally {
+        if (mountedRef.current) scheduleMidnightCheck();
+      }
     }, nextMidnightDelay());
   }, [resetIfNeeded]);
 
   useEffect(() => {
-    resetIfNeeded();
+    mountedRef.current = true;
+    resetIfNeeded().catch((error) => console.warn('[DailyReset] Reset eșuat:', error));
     scheduleMidnightCheck();
 
-    const onAppStateChange = (state: AppStateStatus) => {
+    const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
       if (state === 'active') {
-        resetIfNeeded();
+        resetIfNeeded().catch((error) => console.warn('[DailyReset] Reset la revenire eșuat:', error));
         scheduleMidnightCheck();
       }
-    };
+    });
 
-    const subscription = AppState.addEventListener('change', onAppStateChange);
     return () => {
+      mountedRef.current = false;
       subscription.remove();
       if (timerRef.current) clearTimeout(timerRef.current);
     };
