@@ -6,14 +6,6 @@ import { useEffect, useMemo } from 'react';
 import { View, ActivityIndicator, Text, TouchableOpacity, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-
-// Ignorăm DOAR avertismentele legitime de mediu (Expo Go nu suportă push nativ).
-// NU mai ascundem erori reale de runtime/Supabase — acestea trebuie vizibile în dev.
-LogBox.ignoreLogs([
-  'expo-notifications: Android Push notifications',
-  '`expo-notifications` functionality is not fully supported in Expo Go',
-]);
-
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { useAppStore } from '../hooks/useAppStore';
@@ -22,29 +14,20 @@ import LockScreen from '../components/LockScreen';
 import { NotificationBannerProvider } from '../context/NotificationBannerContext';
 import { GamificareProvider } from '../context/GamificareContext';
 import { useDailySync } from '../hooks/useDailySync';
+import CosmeticAppEffect from '../components/gamification/CosmeticAppEffect';
 import '../i18n';
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
-
-// FIX UI: o singură animație de push pentru toate platformele.
-// Pe Android foloseam `fade_from_bottom`, care la revenirea în (tabs) arăta ca un
-// "flick"/reload de pagină. `slide_from_right` este continuu în ambele sensuri și
-// este exact animația pe care o inversează gestul de swipe-back.
+LogBox.ignoreLogs(['expo-notifications: Android Push notifications', '`expo-notifications` functionality is not fully supported in Expo Go']);
+export const unstable_settings = { anchor: '(tabs)' };
 const PUSH_ANIMATION = 'slide_from_right' as const;
 const PUSH_DURATION = 260;
 
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#090C0E', padding: 24 }}>
-      <Text style={{ color: '#F87171', fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>A apărut o eroare neașteptată!</Text>
-      <Text style={{ color: '#9CA3AF', fontSize: 14, textAlign: 'center', marginBottom: 24 }}>{error.message}</Text>
-      <TouchableOpacity onPress={retry} style={{ backgroundColor: '#CCFF00', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 16 }}>
-        <Text style={{ color: '#090C0E', fontWeight: 'bold' }}>Reîncearcă</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#090C0E', padding: 24 }}>
+    <Text style={{ color: '#F87171', fontSize: 20, fontWeight: 'bold', marginBottom: 12 }}>A apărut o eroare neașteptată!</Text>
+    <Text style={{ color: '#9CA3AF', fontSize: 14, textAlign: 'center', marginBottom: 24 }}>{error.message}</Text>
+    <TouchableOpacity onPress={retry} style={{ backgroundColor: '#CCFF00', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 16 }}><Text style={{ color: '#090C0E', fontWeight: 'bold' }}>Reîncearcă</Text></TouchableOpacity>
+  </View>;
 }
 
 function RootNavigator() {
@@ -56,118 +39,40 @@ function RootNavigator() {
   const router = useRouter();
   const segments = useSegments();
 
-  useEffect(() => {
-    syncFromAsyncStorage();
-  }, [syncFromAsyncStorage]);
-
-  const AppDarkTheme = useMemo(() => ({
-    ...DarkTheme,
-    colors: {
-      ...DarkTheme.colors,
-      background: colors.background,
-    },
-  }), [colors.background]);
-
+  useEffect(() => { syncFromAsyncStorage(); }, [syncFromAsyncStorage]);
+  const appDarkTheme = useMemo(() => ({ ...DarkTheme, colors: { ...DarkTheme.colors, background: colors.background } }), [colors.background]);
   useEffect(() => {
     if (loadingAuth) return;
-
-    const inAuthGroup = segments[0] === 'auth';
+    const inAuth = segments[0] === 'auth';
     const inOnboarding = segments[0] === 'onboarding';
-    
-    if (!session && !inAuthGroup) {
-      router.replace('/auth');
-    } else if (session) {
-      if (!isOnboardingDone && !inOnboarding) {
-        router.replace('/onboarding');
-      } else if (inAuthGroup || (isOnboardingDone && inOnboarding)) {
-        router.replace('/(tabs)');
-      }
-    }
+    if (!session && !inAuth) router.replace('/auth');
+    else if (session && !isOnboardingDone && !inOnboarding) router.replace('/onboarding');
+    else if (session && (inAuth || (isOnboardingDone && inOnboarding))) router.replace('/(tabs)');
   }, [session, loadingAuth, isOnboardingDone, segments, router]);
 
-  if (loadingAuth) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    );
-  }
+  if (loadingAuth) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}><ActivityIndicator size="large" color={colors.accent} /></View>;
+  const push = { animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, gestureEnabled: true } as const;
 
-  const pushScreenOptions = {
-    animation: PUSH_ANIMATION,
-    animationDuration: PUSH_DURATION,
-    gestureEnabled: true,
-  } as const;
-
-  return (
-    <ThemeProvider value={AppDarkTheme}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          // Activăm gestul de swipe-back pe iOS pentru toate ecranele
-          gestureEnabled: true,
-          animation: PUSH_ANIMATION,
-          animationDuration: PUSH_DURATION,
-          // Permite swipe de oriunde pe ecran (nu doar de la margine)
-          fullScreenGestureEnabled: true,
-          // Culoarea de fundal la tranzitie să fie consistentă cu tema.
-          // Fără asta se vede un cadru alb/negru între ecrane care pare "reload".
-          contentStyle: { backgroundColor: colors.background },
-        }}
-      >
-        {/* Tab-urile nu au animație proprie la comutare, dar la revenirea dintr-un
-            ecran push animația folosită este cea a ecranului care se închide. */}
-        <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
-        <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
-        <Stack.Screen name="onboarding" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
-        {/* Ecrane push — swipe-back activat, aceeași animație pe iOS și Android */}
-        <Stack.Screen
-          name="camera"
-          options={{
-            presentation: 'fullScreenModal',
-            animation: 'slide_from_bottom',
-            animationDuration: PUSH_DURATION,
-            gestureEnabled: true,
-            gestureDirection: 'vertical',
-          }}
-        />
-        <Stack.Screen
-          name="scanner-barcode"
-          options={{
-            presentation: 'fullScreenModal',
-            animation: 'slide_from_bottom',
-            animationDuration: PUSH_DURATION,
-            gestureEnabled: true,
-            gestureDirection: 'vertical',
-          }}
-        />
-        <Stack.Screen name="adauga-manual" options={pushScreenOptions} />
-        <Stack.Screen name="calculator-ai" options={pushScreenOptions} />
-        <Stack.Screen name="jurnal-antrenamente" options={pushScreenOptions} />
-        <Stack.Screen name="notificari" options={pushScreenOptions} />
-      </Stack>
-      {session && isLocked && (
-        <LockScreen biometricType={biometricType} onUnlock={unlockApp} />
-      )}
-      <StatusBar style="light" />
-    </ThemeProvider>
-  );
+  return <ThemeProvider value={appDarkTheme}>
+    <Stack screenOptions={{ headerShown: false, gestureEnabled: true, animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, fullScreenGestureEnabled: true, contentStyle: { backgroundColor: colors.background } }}>
+      <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
+      <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
+      <Stack.Screen name="onboarding" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
+      <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
+      <Stack.Screen name="scanner-barcode" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
+      <Stack.Screen name="adauga-manual" options={push} />
+      <Stack.Screen name="calculator-ai" options={push} />
+      <Stack.Screen name="jurnal-antrenamente" options={push} />
+      <Stack.Screen name="notificari" options={push} />
+      <Stack.Screen name="cosmetice" options={push} />
+      <Stack.Screen name="progres-antrenamente" options={push} />
+    </Stack>
+    {session ? <CosmeticAppEffect /> : null}
+    {session && isLocked ? <LockScreen biometricType={biometricType} onUnlock={unlockApp} /> : null}
+    <StatusBar style="light" />
+  </ThemeProvider>;
 }
 
 export default function RootLayout() {
-  return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider style={{ flex: 1 }}>
-        <AppThemeProvider>
-          <AuthProvider>
-            <NotificationBannerProvider>
-              <GamificareProvider>
-                <RootNavigator />
-              </GamificareProvider>
-            </NotificationBannerProvider>
-          </AuthProvider>
-        </AppThemeProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
-  );
+  return <GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider style={{ flex: 1 }}><AppThemeProvider><AuthProvider><NotificationBannerProvider><GamificareProvider><RootNavigator /></GamificareProvider></NotificationBannerProvider></AuthProvider></AppThemeProvider></SafeAreaProvider></GestureHandlerRootView>;
 }
