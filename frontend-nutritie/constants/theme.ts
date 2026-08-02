@@ -135,13 +135,71 @@ export const themes: Record<ThemeName, ThemeColors> = {
 };
 
 export const themeDisplayNames: Record<ThemeName, string> = {
-  midnight: '🌙 Midnight Neon',
-  ocean: '🌊 Ocean Breeze',
-  sunset: '🌅 Sunset Blaze',
+  midnight: 'Midnight Neon',
+  ocean: 'Ocean Breeze',
+  sunset: 'Sunset Blaze',
+};
+
+/**
+ * Fiecare temă are propria "semnătură" grafică: figuri desenate custom (SVG)
+ * și intensități de efecte. Valorile sunt intenționat mici -> efecte subtile,
+ * nu aruncate în față.
+ */
+export type ThemeShape = 'orbs' | 'waves' | 'rays';
+
+export interface ThemeDecor {
+  /** figura desenată custom, specifică temei */
+  shape: ThemeShape;
+  /** opacitatea maximă a fundalului decorativ (0 - 1) */
+  backdropOpacity: number;
+  /** intensitatea BlurView pentru carduri */
+  blurIntensity: number;
+  /** opacitatea umbrelor colorate */
+  shadowOpacity: number;
+  /** raza umbrelor */
+  shadowRadius: number;
+  /** grosimea liniilor din figurile desenate */
+  strokeWidth: number;
+  /** sufix hex pentru fundalurile tint (ex: accent + tintAlpha) */
+  tintAlpha: string;
+}
+
+export const themeDecor: Record<ThemeName, ThemeDecor> = {
+  midnight: {
+    shape: 'orbs',
+    backdropOpacity: 0.1,
+    blurIntensity: 12,
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    strokeWidth: 1,
+    tintAlpha: '14',
+  },
+  ocean: {
+    shape: 'waves',
+    backdropOpacity: 0.12,
+    blurIntensity: 12,
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    strokeWidth: 1.25,
+    tintAlpha: '14',
+  },
+  sunset: {
+    shape: 'rays',
+    backdropOpacity: 0.1,
+    blurIntensity: 12,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    strokeWidth: 1.25,
+    tintAlpha: '14',
+  },
 };
 
 export function getThemeColors(name: ThemeName): ThemeColors {
   return themes[name] || midnight;
+}
+
+export function getThemeDecor(name: ThemeName): ThemeDecor {
+  return themeDecor[name] || themeDecor.midnight;
 }
 
 export const Colors = {
@@ -192,6 +250,3 @@ export const getBubbleMaxWidth = (): string => {
   if (Device.isSmallPhone) return '88%';
   return '82%';
 };
-
-
-
