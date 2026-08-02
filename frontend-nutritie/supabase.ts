@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
+import log from './lib/logger';
 
 // Cheile trebuie furnizate prin .env (EXPO_PUBLIC_*). NU mai folosim fallback
 // hardcodat cu valori reale — un APK decompilat ar expune proiectul Supabase.
@@ -20,33 +21,59 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Pe dispozitive unde Android Keystore / iOS Keychain nu e disponibil
 // (ex. criptare dezactivată, device foarte vechi), folosim AsyncStorage
 // ca fallback și logăm un avertisment.
+//
+// MUST-FIX #6 (audit productie): verificarea disponibilitatii era async dar
+// NU era asteptata -> primele citiri de sesiune la cold start puteau rula
+// inainte de setarea flag-ului (race condition, sesiune "pierduta" aleator).
+// Acum toate operatiile asteapta `secureStoreReady`.
+//
+// MUST-FIX #9 (audit productie): cand cade pe AsyncStorage, sesiunea este
+// stocata in plain text. Expunem `isSecureStorageAvailable()` si
+// `onInsecureStorageFallback()` ca UI-ul sa poata avertiza utilizatorul.
 // ==========================================
 const CHUNK_SIZE = 1800;
 const CHUNK_MARKER = '__supabase_secure_chunks__';
 
 let secureStoreAvailable = true;
+let insecureFallbackListener: ((reason: string) => void) | null = null;
+
+function reportInsecureFallback(reason: string) {
+  secureStoreAvailable = false;
+  log.warn(
+    '[NutriAI] SecureStore indisponibil. Sesiunea va fi stocată în AsyncStorage (plain text). ' +
+    'Motiv: ' + reason,
+  );
+  insecureFallbackListener?.(reason);
+}
+
+/**
+ * Permite UI-ului sa afiseze o avertizare cand sesiunea nu poate fi criptata.
+ * Se apeleaza cel mult o data pe sesiune de aplicatie.
+ */
+export function onInsecureStorageFallback(listener: (reason: string) => void) {
+  insecureFallbackListener = listener;
+}
+
+/** `true` daca sesiunea este stocata criptat (Keychain / Keystore). */
+export async function isSecureStorageAvailable(): Promise<boolean> {
+  await secureStoreReady;
+  return secureStoreAvailable;
+}
 
 // Test inițial: dacă SecureStore nu merge deloc (ex. emulator fără hardware crypto),
-// folosim AsyncStorage direct.
-async function checkSecureStoreAvailability() {
+// folosim AsyncStorage direct. Promisiunea este asteptata de fiecare operatie.
+const secureStoreReady: Promise<void> = (async () => {
   try {
     await SecureStore.setItemAsync('__nutriai_availability_test__', '1');
     await SecureStore.deleteItemAsync('__nutriai_availability_test__');
     secureStoreAvailable = true;
-  } catch {
-    console.warn(
-      '[NutriAI] SecureStore indisponibil pe acest dispozitiv. ' +
-      'Sesiunea va fi stocată în AsyncStorage (plain text). ' +
-      'Asigură-te că dispozitivul are criptarea activată pentru securitate maximă.',
-    );
-    secureStoreAvailable = false;
+  } catch (err) {
+    reportInsecureFallback((err as Error)?.message ?? 'necunoscut');
   }
-}
-
-// Inițializăm verificarea — este async dar nu blocăm pornirea.
-checkSecureStoreAvailability();
+})();
 
 async function secureGetItem(key: string): Promise<string | null> {
+  await secureStoreReady;
   if (!secureStoreAvailable) return AsyncStorage.getItem(key);
 
   try {
@@ -68,6 +95,7 @@ async function secureGetItem(key: string): Promise<string | null> {
 }
 
 async function secureSetItem(key: string, value: string): Promise<void> {
+  await secureStoreReady;
   if (!secureStoreAvailable) {
     await AsyncStorage.setItem(key, value);
     return;
@@ -88,15 +116,16 @@ async function secureSetItem(key: string, value: string): Promise<void> {
       for (let i = 0; i < chunks.length; i++) {
         await SecureStore.setItemAsync(`${key}__chunk_${i}`, chunks[i]);
       }
-    } catch {
-      // Chunking-ul a eșuat și el — fallback la AsyncStorage.
-      console.warn('[NutriAI] SecureStore chunking eșuat — folosim AsyncStorage pentru cheia:', key);
+    } catch (err) {
+      // Chunking-ul a eșuat și el — fallback la AsyncStorage (plain text).
+      reportInsecureFallback('chunking esuat pentru cheia ' + key);
       await AsyncStorage.setItem(key, value);
     }
   }
 }
 
 async function secureRemoveItem(key: string): Promise<void> {
+  await secureStoreReady;
   if (!secureStoreAvailable) {
     await AsyncStorage.removeItem(key);
     return;
