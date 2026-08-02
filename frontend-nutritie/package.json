@@ -9,7 +9,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "build:anatomy": "node scripts/buildAnatomy.mjs"
+    "typecheck": "tsc --noEmit",
+    "build:anatomy": "node scripts/buildAnatomy.mjs",
+    "verify:anatomy": "node scripts/verifyAnatomy.mjs",
+    "check": "npm run typecheck && npm run lint && npm run build:anatomy && npm run verify:anatomy"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
