@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { AlertTriangle, RefreshCw } from 'lucide-react-native';
+import log from '../lib/logger';
 
 interface Props {
   children: React.ReactNode;
@@ -16,6 +17,10 @@ interface State {
 /**
  * Error Boundary global pentru toata aplicatia.
  * Prinde erorile de render si afiseaza un fallback UI in loc de crash (ecran alb).
+ *
+ * Erorile sunt trimise prin `log.error`, care in productie le trimite catre
+ * reporter-ul de crash-uri configurat (Sentry / Crashlytics) via `setCrashReporter`.
+ * Pentru izolare la nivel de ecran, foloseste `ScreenErrorBoundary`.
  */
 export class GlobalErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
@@ -29,8 +34,7 @@ export class GlobalErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     this.setState({ errorInfo: errorInfo.componentStack || null });
-    // In productie, aici s-ar trimite la un serviciu de monitoring (Sentry, Crashlytics)
-    console.error('[GlobalErrorBoundary] Eroare prinsa:', error.message);
+    log.error('[GlobalErrorBoundary] Eroare prinsa:', error, errorInfo.componentStack ?? '');
   }
 
   handleRetry = () => {
