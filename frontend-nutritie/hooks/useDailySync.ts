@@ -1,7 +1,8 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGamificare } from './useGamificare';
+import { localDayKey } from '../lib/dateUtils';
 
 const LAST_OPENED_DATE_KEY = 'nutriai_last_opened_date';
 const DAILY_TEMP_KEYS_TO_RESET = [
@@ -17,79 +18,69 @@ export interface DailySyncResult {
 }
 
 /**
- * Hook global useDailySync
- * Rulează la pornirea aplicației și la revenirea din background (când AppState devine 'active').
- * Compară data curentă cu `lastOpenedDate` din AsyncStorage și execută resetările zilnice necesare.
+ * Sincronizează resetările zilnice la pornire și la revenirea din background.
+ * Toate cheile de zi sunt calculate în fusul local, nu în UTC.
  */
 export function useDailySync(onNewDayDetected?: (result: DailySyncResult) => void) {
   const appState = useRef(AppState.currentState);
   const isChecking = useRef(false);
   const { refreshGamificare } = useGamificare();
 
-  const getTodayString = () => new Date().toISOString().split('T')[0];
-
-  const getYesterdayString = () => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().split('T')[0];
-  };
-
   const checkDailySync = useCallback(async () => {
     if (isChecking.current) return;
     isChecking.current = true;
 
     try {
-      const today = getTodayString();
+      const now = new Date();
+      const today = localDayKey(now);
+      const yesterdayDate = new Date(now);
+      // setDate păstrează ziua calendaristică locală și funcționează corect la DST.
+      yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+      const yesterday = localDayKey(yesterdayDate);
       const lastOpenedDate = await AsyncStorage.getItem(LAST_OPENED_DATE_KEY);
 
       if (lastOpenedDate !== today) {
-        if (__DEV__) console.log(`[useDailySync] Zi nouă detectată: ${today} (precedentă: ${lastOpenedDate || 'niciuna'})`);
+        if (__DEV__) {
+          console.log(`[useDailySync] Zi nouă locală: ${today} (precedentă: ${lastOpenedDate || 'niciuna'})`);
+        }
 
-        // 1. Dacă există o dată anterioară, curățăm contoarele locale temporare zilnice
         if (lastOpenedDate) {
           try {
             await AsyncStorage.multiRemove(DAILY_TEMP_KEYS_TO_RESET);
-          } catch (e) {
-            console.warn('[useDailySync] Eroare la ștergerea cheilor temporare zilnice:', e);
+          } catch (error) {
+            console.warn('[useDailySync] Curățarea contoarelor zilnice a eșuat:', error);
           }
         }
 
-        // 2. Verificăm continuitatea streak-ului local (dacă ultima deschidere e mai veche de ieri)
-        if (lastOpenedDate && lastOpenedDate !== getYesterdayString()) {
-          if (__DEV__) console.log('[useDailySync] O zi sau mai multe au fost sărite anterior. Verificare sincronizare streak cu serverul...');
+        if (lastOpenedDate && lastOpenedDate !== yesterday && __DEV__) {
+          console.log('[useDailySync] A fost sărită cel puțin o zi; gamificarea va fi resincronizată.');
         }
 
-        // 3. Actualizăm `lastOpenedDate` la ziua curentă
+        // Salvăm data numai după curățarea reușită a stării temporare.
         await AsyncStorage.setItem(LAST_OPENED_DATE_KEY, today);
 
-        // 4. Reîmprospătăm starea de gamificare / quest-uri / obiective din context
         try {
           await refreshGamificare();
-        } catch (e) {
-          console.warn('[useDailySync] Eroare la refresh gamificare:', e);
+        } catch (error) {
+          console.warn('[useDailySync] Refresh-ul gamificării a eșuat:', error);
         }
 
-        // 5. Apelăm callback-ul (dacă a fost transmis)
-        if (onNewDayDetected) {
-          onNewDayDetected({
-            isNewDay: true,
-            previousDate: lastOpenedDate,
-            currentDate: today,
-          });
-        }
+        onNewDayDetected?.({
+          isNewDay: true,
+          previousDate: lastOpenedDate,
+          currentDate: today,
+        });
       }
     } catch (error) {
-      console.error('[useDailySync] Eroare în timpul verificării zilnice:', error);
+      console.error('[useDailySync] Verificarea zilnică a eșuat:', error);
     } finally {
       isChecking.current = false;
     }
   }, [onNewDayDetected, refreshGamificare]);
 
   useEffect(() => {
-    // Verificare inițială la montarea root-ului
     checkDailySync();
 
-    // Ascultător pentru tranziția aplicației din background/inactive în active
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
         checkDailySync();
@@ -97,9 +88,7 @@ export function useDailySync(onNewDayDetected?: (result: DailySyncResult) => voi
       appState.current = nextAppState;
     });
 
-    return () => {
-      subscription.remove();
-    };
+    return () => subscription.remove();
   }, [checkDailySync]);
 
   return { checkDailySync };
