@@ -97,14 +97,46 @@ function sanitizeObject(obj, maxDepth = 10) {
 
 /**
  * Middleware Express care sanitizeaza req.body, req.query si req.params.
+ *
+ * FIX AUDIT #15: `req.params` era mentionat in comentariu, dar NU era sanitizat.
+ * Parametrii de ruta ajung direct in interogari si in prompturile AI, deci
+ * trebuie curatati la fel ca restul input-ului.
+ *
+ * Nota: in Express 5 `req.query` este un getter fara setter, deci il mutam
+ * printr-o proprietate proprie in loc de atribuire directa.
  */
 function sanitizeRequest(req, res, next) {
   if (req.body && typeof req.body === 'object') {
     req.body = sanitizeObject(req.body);
   }
+
   if (req.query && typeof req.query === 'object') {
-    req.query = sanitizeObject(req.query);
+    const cleanedQuery = sanitizeObject(req.query);
+    try {
+      req.query = cleanedQuery;
+    } catch {
+      // Express 5: `query` este read-only — il redefinim.
+      Object.defineProperty(req, 'query', {
+        value: cleanedQuery,
+        writable: true,
+        configurable: true,
+      });
+    }
   }
+
+  if (req.params && typeof req.params === 'object') {
+    const cleanedParams = sanitizeObject(req.params);
+    try {
+      req.params = cleanedParams;
+    } catch {
+      Object.defineProperty(req, 'params', {
+        value: cleanedParams,
+        writable: true,
+        configurable: true,
+      });
+    }
+  }
+
   next();
 }
 
