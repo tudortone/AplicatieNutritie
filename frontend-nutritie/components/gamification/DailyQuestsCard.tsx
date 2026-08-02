@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import LootBoxModal from './LootBoxModal';
 import {
   EMPTY_REWARD_STATE,
@@ -12,26 +12,32 @@ import {
 } from '../../lib/questsEngine';
 import { useTheme } from '../../context/ThemeContext';
 
-/**
- * Card cu questurile zilei + progresul spre loot box.
- *
- * Componenta e "pură" din punct de vedere al datelor: primește un `snapshot`
- * cu activitatea de azi (seturi, volum, minute…) și recalculează totul de acolo.
- * Așa, dacă utilizatorul șterge un set, progresul scade corect — spre deosebire
- * de un contor care doar crește.
- */
-
 export type DailyQuestsCardProps = {
   snapshot: DailySnapshot;
-  /** Ascunde progresul spre loot box (ex. când cardul e afișat în alt context). */
   compact?: boolean;
 };
 
 function formatValue(value: number, unit: string): string {
-  if (unit === 'kg' && value >= 1000) {
-    return `${(value / 1000).toFixed(1)}t`;
-  }
+  if (unit === 'kg' && value >= 1000) return `${(value / 1000).toFixed(1)}t`;
   return String(Math.round(value));
+}
+
+function localDayKey(date = new Date()): string {
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
+function msUntilMidnight(now = new Date()): number {
+  const next = new Date(now);
+  next.setHours(24, 0, 0, 0);
+  return Math.max(0, next.getTime() - now.getTime());
+}
+
+function formatCountdown(milliseconds: number): string {
+  const total = Math.max(0, Math.floor(milliseconds / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardProps) {
@@ -40,9 +46,11 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
   const [reward, setReward] = useState<RewardState>(EMPTY_REWARD_STATE);
   const [xpToday, setXpToday] = useState(0);
   const [boxOpen, setBoxOpen] = useState(false);
+  const [remainingMs, setRemainingMs] = useState(() => msUntilMidnight());
+  const [activeDay, setActiveDay] = useState(() => localDayKey());
 
   const refresh = useCallback(async () => {
-    const result = await syncProgress(snapshot);
+    const result = await syncProgress(snapshot, new Date());
     setQuests(result.quests);
     setReward(result.reward);
     setXpToday(result.xpToday);
@@ -50,42 +58,60 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
 
   useEffect(() => {
     let alive = true;
-    syncProgress(snapshot).then((result) => {
+    refresh().catch((error) => console.warn('[Questuri] Sincronizare eșuată:', error));
+
+    const tick = () => {
       if (!alive) return;
-      setQuests(result.quests);
-      setReward(result.reward);
-      setXpToday(result.xpToday);
+      const now = new Date();
+      const nextDay = localDayKey(now);
+      setRemainingMs(msUntilMidnight(now));
+      if (nextDay !== activeDay) {
+        setActiveDay(nextDay);
+        // syncProgress vede cheia zilei noi și generează automat alte questuri,
+        // cu claimed și xpToday resetate.
+        refresh().catch((error) => console.warn('[Questuri] Reset zilnic eșuat:', error));
+      }
+    };
+
+    const interval = setInterval(tick, 1000);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') tick();
     });
     return () => {
       alive = false;
+      clearInterval(interval);
+      subscription.remove();
     };
-  }, [snapshot]);
+  }, [activeDay, refresh]);
 
   const doneCount = quests.filter((q) => q.done).length;
-  const inCycle = reward.streak % STREAK_FOR_BOX;
+  const completedInCycle = reward.streak === 0
+    ? 0
+    : ((reward.streak - 1) % STREAK_FOR_BOX) + 1;
+  const cyclePercent = Math.min(100, (completedInCycle / STREAK_FOR_BOX) * 100);
+  const resetLabel = useMemo(() => formatCountdown(remainingMs), [remainingMs]);
 
   return (
     <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Questuri zilnice</Text>
+        <View style={styles.headerCopy}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Questuri zilnice</Text>
+          <Text style={[styles.resetText, { color: colors.textTertiary }]}>Reset în {resetLabel}</Text>
+        </View>
         <Text style={[styles.counter, { color: colors.accent }]}>
           {doneCount}/{quests.length} · {xpToday} XP
         </Text>
       </View>
 
-      {quests.map((q) => (
+      {quests.length === 0 ? (
+        <Text style={[styles.loading, { color: colors.textSecondary }]}>Se generează questurile zilei…</Text>
+      ) : quests.map((q) => (
         <View key={q.id} style={styles.quest}>
           <Text style={styles.questIcon}>{q.icon}</Text>
           <View style={styles.questBody}>
             <View style={styles.questTop}>
-              <Text
-                style={[
-                  styles.questTitle,
-                  { color: q.done ? colors.success : colors.textPrimary },
-                ]}
-              >
-                {q.done ? '✓ ' : ''}
-                {q.title}
+              <Text style={[styles.questTitle, { color: q.done ? colors.success : colors.textPrimary }]}>
+                {q.done ? '✓ ' : ''}{q.title}
               </Text>
               <Text style={[styles.questProgress, { color: colors.textTertiary }]}>
                 {formatValue(q.progress, q.unit)}/{formatValue(q.target, q.unit)} {q.unit}
@@ -95,10 +121,7 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
               <View
                 style={[
                   styles.fill,
-                  {
-                    width: `${Math.round(q.ratio * 100)}%`,
-                    backgroundColor: q.done ? colors.success : colors.accent,
-                  },
+                  { width: `${Math.round(q.ratio * 100)}%`, backgroundColor: q.done ? colors.success : colors.accent },
                 ]}
               />
             </View>
@@ -107,67 +130,64 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
         </View>
       ))}
 
-      {!compact && (
+      {!compact ? (
         <View style={[styles.streakBox, { borderColor: colors.cardBorder }]}>
           <View style={styles.streakRow}>
-            <Text style={[styles.streakLabel, { color: colors.textSecondary }]}>
-              🔥 Streak: {reward.streak} {reward.streak === 1 ? 'zi' : 'zile'}
-            </Text>
-            <Text style={[styles.streakLabel, { color: colors.textTertiary }]}>
-              Record: {reward.bestStreak}
-            </Text>
+            <Text style={[styles.streakLabel, { color: colors.textSecondary }]}>🔥 Serie: {reward.streak} zile</Text>
+            <Text style={[styles.streakLabel, { color: colors.textTertiary }]}>Record: {reward.bestStreak}</Text>
           </View>
 
-          {/* 7 pastile = 7 zile până la loot box */}
-          <View style={styles.pips}>
-            {Array.from({ length: STREAK_FOR_BOX }).map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.pip,
-                  {
-                    backgroundColor: i < inCycle ? colors.accent : colors.surfaceBg,
-                  },
-                ]}
-              />
-            ))}
+          <View style={styles.royaleRow}>
+            <View style={styles.royaleTrackWrap}>
+              <View style={[styles.royaleTrack, { backgroundColor: colors.surfaceBg }]}>
+                <View style={[styles.royaleFill, { width: `${cyclePercent}%`, backgroundColor: colors.accent }]} />
+              </View>
+              <View style={styles.stepsRow}>
+                {Array.from({ length: STREAK_FOR_BOX }).map((_, index) => {
+                  const reached = index < completedInCycle;
+                  return (
+                    <View
+                      key={index}
+                      style={[
+                        styles.step,
+                        {
+                          backgroundColor: reached ? colors.accent : colors.surfaceElevated,
+                          borderColor: reached ? colors.accent : colors.cardBorder,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.stepText, { color: reached ? colors.background : colors.textTertiary }]}>{index + 1}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+            <View style={[styles.chest, { backgroundColor: `${colors.warning}22`, borderColor: colors.warning }]}>
+              <Text style={styles.chestIcon}>🎁</Text>
+              {reward.pendingBoxes > 0 ? <View style={[styles.boxBadge, { backgroundColor: colors.danger }]}><Text style={styles.boxBadgeText}>{reward.pendingBoxes}</Text></View> : null}
+            </View>
           </View>
 
           {reward.pendingBoxes > 0 ? (
             <Pressable
-              style={[styles.boxBtn, { backgroundColor: colors.accent }]}
+              style={({ pressed }) => [styles.boxBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.75 : 1 }]}
               onPress={() => setBoxOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Deschide loot box. ${reward.pendingBoxes} disponibile`}
             >
-              <Text style={styles.boxBtnText}>
-                🎁 Deschide loot box
-                {reward.pendingBoxes > 1 ? ` (${reward.pendingBoxes})` : ''}
-              </Text>
+              <Text style={[styles.boxBtnText, { color: colors.background }]}>Deschide loot box</Text>
             </Pressable>
           ) : (
             <Text style={[styles.streakHint, { color: colors.textTertiary }]}>
-              Încă {daysToNextBox(reward.streak)}{' '}
-              {daysToNextBox(reward.streak) === 1 ? 'zi' : 'zile'} cu antrenament până la loot box
+              Încă {daysToNextBox(reward.streak)} {daysToNextBox(reward.streak) === 1 ? 'zi' : 'zile'} active până la cufăr
             </Text>
           )}
-
-          {reward.inventory.length > 0 && (
-            <View style={styles.inventory}>
-              {reward.inventory.slice(0, 8).map((it) => (
-                <View key={it.id} style={[styles.invItem, { backgroundColor: it.colors[0] }]}>
-                  <Text style={styles.invIcon}>{it.icon}</Text>
-                </View>
-              ))}
-            </View>
-          )}
         </View>
-      )}
+      ) : null}
 
       <LootBoxModal
         visible={boxOpen}
-        onClose={() => {
-          setBoxOpen(false);
-          refresh();
-        }}
+        onClose={() => { setBoxOpen(false); refresh(); }}
         onOpened={(_item, next) => setReward(next)}
       />
     </View>
@@ -175,33 +195,37 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 16,
-    gap: 12,
-  },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { fontSize: 16, fontWeight: '800' },
-  counter: { fontSize: 13, fontWeight: '700' },
+  card: { borderRadius: 20, borderWidth: 1, padding: 16, gap: 14 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
+  headerCopy: { flex: 1 },
+  title: { fontSize: 17, fontWeight: '900' },
+  resetText: { fontSize: 11, fontWeight: '700', marginTop: 3 },
+  counter: { fontSize: 13, fontWeight: '800' },
+  loading: { fontSize: 13, paddingVertical: 12, textAlign: 'center' },
   quest: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   questIcon: { fontSize: 20, width: 26, textAlign: 'center' },
   questBody: { flex: 1, gap: 6 },
-  questTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  questTitle: { fontSize: 14, fontWeight: '700', flexShrink: 1 },
-  questProgress: { fontSize: 12, marginLeft: 8 },
-  track: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  fill: { height: 6, borderRadius: 3 },
-  xp: { fontSize: 12, fontWeight: '700', width: 34, textAlign: 'right' },
-  streakBox: { borderTopWidth: 1, paddingTop: 12, gap: 10 },
+  questTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  questTitle: { fontSize: 14, fontWeight: '700', flex: 1 },
+  questProgress: { fontSize: 11 },
+  track: { height: 7, borderRadius: 4, overflow: 'hidden' },
+  fill: { height: 7, borderRadius: 4 },
+  xp: { fontSize: 12, fontWeight: '800', width: 34, textAlign: 'right' },
+  streakBox: { borderTopWidth: 1, paddingTop: 14, gap: 12 },
   streakRow: { flexDirection: 'row', justifyContent: 'space-between' },
   streakLabel: { fontSize: 13, fontWeight: '700' },
-  pips: { flexDirection: 'row', gap: 6 },
-  pip: { flex: 1, height: 8, borderRadius: 4 },
-  streakHint: { fontSize: 12 },
-  boxBtn: { paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
-  boxBtnText: { color: '#0B0F14', fontWeight: '800', fontSize: 14 },
-  inventory: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  invItem: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  invIcon: { fontSize: 15 },
+  royaleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  royaleTrackWrap: { flex: 1, height: 40, justifyContent: 'center' },
+  royaleTrack: { position: 'absolute', left: 12, right: 12, height: 8, borderRadius: 4, overflow: 'hidden' },
+  royaleFill: { height: 8, borderRadius: 4 },
+  stepsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  step: { width: 25, height: 25, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  stepText: { fontSize: 10, fontWeight: '900' },
+  chest: { width: 46, height: 46, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  chestIcon: { fontSize: 25 },
+  boxBadge: { position: 'absolute', top: -6, right: -6, minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  boxBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '900' },
+  streakHint: { fontSize: 12, textAlign: 'center' },
+  boxBtn: { minHeight: 46, paddingHorizontal: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  boxBtnText: { fontWeight: '900', fontSize: 14 },
 });

@@ -1,22 +1,19 @@
-
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '../supabase';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { User } from '@supabase/supabase-js';
+import { supabase } from '../supabase';
 import { calculeazaCaloriiArse } from '../constants/exercitii';
 import { computeWorkoutMetrics } from '../lib/fitnessEngine';
-import type { User } from '@supabase/supabase-js';
 
 export type SetType = 'warmup' | 'working' | 'dropset' | 'failure';
-
 export interface SetExercitiu {
   serie: number;
   repetari: number;
   greutate?: number;
   set_type?: SetType;
-  rpe?: number; // 1-10
+  rpe?: number;
   completed?: boolean;
 }
-
 export interface ExercitiuInAntrenament {
   exercitiuId: string;
   nume: string;
@@ -26,7 +23,6 @@ export interface ExercitiuInAntrenament {
   superset_id?: string;
   rest_time_seconds?: number;
 }
-
 export interface Antrenament {
   id: string;
   user_id: string;
@@ -43,30 +39,30 @@ export interface Antrenament {
   rank_key?: string;
   rank_label?: string;
   created_at: string;
-  /** true = randul exista DOAR local si asteapta sincronizare in cloud */
   is_local?: boolean;
 }
 
 const LOCAL_WORKOUTS_KEY = 'nutriai_antrenamente_local_v2';
 const LOCAL_USER_ID = 'local_user';
+const DAILY_RESET_KEY = 'nutriai_last_workout_reset_date';
+const ACTIVE_SESSION_KEYS = [
+  'current_workout_session',
+  'current_workout_session_meta',
+  'nutriai_active_workout_timer',
+];
 
-/**
- * UUID v4 valid. Coloana antrenamente.id este UUID (gen_random_uuid) in Postgres,
- * deci un id de forma `local_workout_...` era respins cu 22P02 la fiecare insert.
- * Nu folosim crypto.randomUUID pentru ca nu e garantat in Hermes/React Native.
- */
 function genUuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
   });
 }
-
-/** Randurile scrise inainte de acest fix au id-uri non-UUID si nu pot fi trimise in Postgres. */
 function isUuid(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
-
+function localDayKey(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 function toInsertPayload(row: Antrenament, userId: string) {
   return {
     id: row.id,
@@ -88,13 +84,12 @@ function toInsertPayload(row: Antrenament, userId: string) {
 }
 
 export function normalizeAntrenament(row: Antrenament): Antrenament {
-  if (row.external_volume_kg !== undefined && row.muscle_load && Object.keys(row.muscle_load).length > 0) {
-    return row;
-  }
   const computed = computeWorkoutMetrics(row.exercitii || []);
+  const hasStoredLoad = Boolean(row.muscle_load && Object.keys(row.muscle_load).length > 0);
   return {
     ...row,
-    muscle_load: row.muscle_load || computed.muscleLoad,
+    // IMPORTANT: {} nu este o hartă validă. Recalculăm din exercițiile salvate.
+    muscle_load: hasStoredLoad ? row.muscle_load : computed.muscleLoad,
     external_volume_kg: row.external_volume_kg ?? computed.externalVolumeKg,
     equivalent_volume_kg: row.equivalent_volume_kg ?? computed.equivalentVolumeKg,
     session_score: row.session_score ?? computed.sessionScore,
@@ -110,103 +105,75 @@ export function useAntrenamente(dataSelectata?: Date) {
   const [numarAntrenamente, setNumarAntrenamente] = useState(0);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
-
-  const targetDate = dataSelectata || new Date();
-  const dateKey = targetDate.toDateString();
+  const [dayRevision, setDayRevision] = useState(0);
   const fetchReqId = useRef(0);
   const syncing = useRef(false);
 
-  const getLocalWorkouts = async (): Promise<Antrenament[]> => {
+  const targetDate = dataSelectata || new Date();
+  const dateKey = `${localDayKey(targetDate)}:${dayRevision}`;
+
+  const getLocalWorkouts = useCallback(async (): Promise<Antrenament[]> => {
     try {
       const raw = await AsyncStorage.getItem(LOCAL_WORKOUTS_KEY);
-      return raw ? JSON.parse(raw) : [];
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
-  };
+  }, []);
 
-  const saveLocalWorkouts = async (list: Antrenament[]) => {
-    try {
-      await AsyncStorage.setItem(LOCAL_WORKOUTS_KEY, JSON.stringify(list));
-    } catch (e) {
-      console.warn('Eroare salvare antrenamente local:', e);
-    }
-  };
+  const saveLocalWorkouts = useCallback(async (list: Antrenament[]) => {
+    // Nu ascundem eroarea: UI-ul nu trebuie să afișeze succes dacă salvarea a eșuat.
+    await AsyncStorage.setItem(LOCAL_WORKOUTS_KEY, JSON.stringify(list));
+  }, []);
 
-  /**
-   * Fix audit: antrenamentele salvate offline sau inainte de login ramaneau pe veci
-   * doar in AsyncStorage (pierdere totala la reinstalare). Le retrimitem in cloud
-   * la prima incarcare cu utilizator conectat.
-   */
   const syncPendingWorkouts = useCallback(async (currentUserId: string) => {
     if (syncing.current) return;
     syncing.current = true;
     try {
       const all = await getLocalWorkouts();
       const pending = all.filter(
-        (w) => w.is_local && isUuid(w.id) && (w.user_id === currentUserId || w.user_id === LOCAL_USER_ID)
+        (w) => w.is_local && isUuid(w.id) && (w.user_id === currentUserId || w.user_id === LOCAL_USER_ID),
       );
-      if (pending.length === 0) return;
-
+      if (!pending.length) return;
       const { error } = await supabase
         .from('antrenamente')
-        .upsert(
-          pending.map((w) => toInsertPayload(w, currentUserId)),
-          { onConflict: 'id' }
-        );
-
+        .upsert(pending.map((w) => toInsertPayload(normalizeAntrenament(w), currentUserId)), { onConflict: 'id' });
       if (error) {
-        console.warn('[Antrenamente] Resincronizare esuata, se reincearca mai tarziu:', error.message ?? error);
+        console.warn('[Antrenamente] Resincronizare eșuată:', error.message ?? error);
         return;
       }
-
-      const syncedIds = new Set(pending.map((w) => w.id));
+      const ids = new Set(pending.map((w) => w.id));
       await saveLocalWorkouts(
-        all.map((w) => (syncedIds.has(w.id) ? { ...w, is_local: false, user_id: currentUserId } : w))
+        all.map((w) => (ids.has(w.id) ? { ...w, is_local: false, user_id: currentUserId } : w)),
       );
-    } catch (e) {
-      console.warn('[Antrenamente] Resincronizare esuata (exceptie):', e);
     } finally {
       syncing.current = false;
     }
-  }, []);
+  }, [getLocalWorkouts, saveLocalWorkouts]);
 
   const fetchAntrenamente = useCallback(async () => {
-    fetchReqId.current += 1;
-    const currentReq = fetchReqId.current;
-
+    const currentReq = ++fetchReqId.current;
     setLoading(true);
     try {
       const startOfDay = new Date(targetDate);
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(targetDate);
       endOfDay.setHours(23, 59, 59, 999);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const currentUser = sessionData.session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) await syncPendingWorkouts(currentUser.id);
 
-      const sessionData = await supabase.auth.getSession();
-      const currentUser = sessionData?.data?.session?.user;
-
-      setUser((prev) => {
-        if (prev?.id === currentUser?.id) return prev;
-        return currentUser ?? null;
-      });
-
-      if (currentUser) {
-        await syncPendingWorkouts(currentUser.id);
-      }
-
-      // Citim din stocarea locala
       const localAll = await getLocalWorkouts();
       if (currentReq !== fetchReqId.current) return;
-
       const localFiltered = localAll.filter((w) => {
-        // Izolare pe utilizator: randurile altui cont nu apar in lista curenta.
         if (currentUser && w.user_id !== currentUser.id && w.user_id !== LOCAL_USER_ID) return false;
-        const d = new Date(w.created_at);
-        return d >= startOfDay && d <= endOfDay;
+        const time = new Date(w.created_at).getTime();
+        return time >= startOfDay.getTime() && time <= endOfDay.getTime();
       });
 
       let cloudData: Antrenament[] = [];
-
       if (currentUser) {
         const { data, error } = await supabase
           .from('antrenamente')
@@ -215,104 +182,74 @@ export function useAntrenamente(dataSelectata?: Date) {
           .gte('created_at', startOfDay.toISOString())
           .lte('created_at', endOfDay.toISOString())
           .order('created_at', { ascending: false });
-
-        if (error) {
-          console.warn('[Antrenamente] Citire cloud esuata:', error.message ?? error);
-        }
-        if (!error && data) {
-          cloudData = data as Antrenament[];
-        }
+        if (error) console.warn('[Antrenamente] Citire cloud eșuată:', error.message ?? error);
+        else cloudData = (data || []) as Antrenament[];
       }
-
       if (currentReq !== fetchReqId.current) return;
 
-      // Combinam cloud si local fara duplicate
-      const combinedMap = new Map<string, Antrenament>();
-      cloudData.forEach((item) => combinedMap.set(item.id, item));
-      localFiltered.forEach((item) => {
-        if (!combinedMap.has(item.id)) {
-          combinedMap.set(item.id, item);
-        }
-      });
-
-      const merged = Array.from(combinedMap.values())
-        .map(normalizeAntrenament)
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-      setAntrenamente(merged);
-      const total = merged.reduce((sum, item) => sum + (item.calorii_arse || 0), 0);
-      setTotalCaloriiArse(total);
-      setNumarAntrenamente(merged.length);
-    } catch (e) {
-      console.warn('Eroare fetch antrenamente:', e);
-    } finally {
-      setLoading(false);
-    }
-  }, [dateKey, syncPendingWorkouts]);
-
-  const fetchIstoric = useCallback(async (zile: number = 30): Promise<Antrenament[]> => {
-    try {
-      const pastDate = new Date();
-      pastDate.setDate(pastDate.getDate() - zile);
-      pastDate.setHours(0, 0, 0, 0);
-
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
-
-      const localAll = await getLocalWorkouts();
-      const localFiltered = localAll.filter((w) => {
-        if (currentUser && w.user_id !== currentUser.id && w.user_id !== LOCAL_USER_ID) return false;
-        return new Date(w.created_at) >= pastDate;
-      });
-
-      let cloudData: Antrenament[] = [];
-      if (currentUser) {
-        const { data } = await supabase
-          .from('antrenamente')
-          .select('*')
-          .eq('user_id', currentUser.id)
-          .gte('created_at', pastDate.toISOString())
-          .order('created_at', { ascending: false });
-
-        if (data) cloudData = data as Antrenament[];
-      }
-
       const map = new Map<string, Antrenament>();
-      cloudData.forEach((x) => map.set(x.id, x));
-      localFiltered.forEach((x) => {
-        if (!map.has(x.id)) map.set(x.id, x);
-      });
-
-      return Array.from(map.values())
+      cloudData.forEach((item) => map.set(item.id, item));
+      localFiltered.forEach((item) => { if (!map.has(item.id)) map.set(item.id, item); });
+      const merged = [...map.values()]
         .map(normalizeAntrenament)
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } catch (e) {
-      console.warn('Eroare fetchIstoric:', e);
-      return [];
+      setAntrenamente(merged);
+      setTotalCaloriiArse(merged.reduce((sum, item) => sum + (item.calorii_arse || 0), 0));
+      setNumarAntrenamente(merged.length);
+    } catch (error) {
+      console.warn('Eroare fetch antrenamente:', error);
+    } finally {
+      if (currentReq === fetchReqId.current) setLoading(false);
     }
-  }, []);
+  }, [dateKey, getLocalWorkouts, syncPendingWorkouts]);
+
+  const fetchIstoric = useCallback(async (zile = 30): Promise<Antrenament[]> => {
+    const pastDate = new Date();
+    pastDate.setDate(pastDate.getDate() - zile);
+    pastDate.setHours(0, 0, 0, 0);
+    const { data: authData } = await supabase.auth.getUser();
+    const currentUser = authData.user;
+    const local = (await getLocalWorkouts()).filter((w) => {
+      if (currentUser && w.user_id !== currentUser.id && w.user_id !== LOCAL_USER_ID) return false;
+      return new Date(w.created_at) >= pastDate;
+    });
+    let cloud: Antrenament[] = [];
+    if (currentUser) {
+      const { data } = await supabase
+        .from('antrenamente')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .gte('created_at', pastDate.toISOString())
+        .order('created_at', { ascending: false });
+      cloud = (data || []) as Antrenament[];
+    }
+    const map = new Map<string, Antrenament>();
+    cloud.forEach((x) => map.set(x.id, x));
+    local.forEach((x) => { if (!map.has(x.id)) map.set(x.id, x); });
+    return [...map.values()]
+      .map(normalizeAntrenament)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [getLocalWorkouts]);
 
   useEffect(() => {
-    fetchAntrenamente();
-
-    const checkDailyReset = async () => {
-      try {
-        const todayStr = new Date().toDateString();
-        const lastReset = await AsyncStorage.getItem('nutriai_last_workout_reset_date');
-        if (lastReset && lastReset !== todayStr) {
-          await AsyncStorage.removeItem('nutriai_active_workout_timer');
-          await AsyncStorage.setItem('nutriai_last_workout_reset_date', todayStr);
-          fetchAntrenamente();
-        } else if (!lastReset) {
-          await AsyncStorage.setItem('nutriai_last_workout_reset_date', todayStr);
-        }
-      } catch (e) {
-        console.warn('Eroare verificare reset zilnic:', e);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const resetForCurrentDay = async () => {
+      const today = localDayKey();
+      const lastReset = await AsyncStorage.getItem(DAILY_RESET_KEY);
+      if (lastReset !== today) {
+        await AsyncStorage.multiRemove(ACTIVE_SESSION_KEYS);
+        await AsyncStorage.setItem(DAILY_RESET_KEY, today);
+        setDayRevision((v) => v + 1);
       }
+      const nextMidnight = new Date();
+      nextMidnight.setHours(24, 0, 1, 0);
+      timer = setTimeout(resetForCurrentDay, Math.max(1000, nextMidnight.getTime() - Date.now()));
     };
-    checkDailyReset();
-  }, [fetchAntrenamente]);
+    resetForCurrentDay().catch((e) => console.warn('Eroare reset zilnic:', e));
+    return () => { if (timer) clearTimeout(timer); };
+  }, []);
+
+  useEffect(() => { fetchAntrenamente(); }, [fetchAntrenamente]);
 
   const adaugaAntrenament = async (payload: {
     nume: string;
@@ -324,22 +261,15 @@ export function useAntrenamente(dataSelectata?: Date) {
     volum_total?: number;
   }): Promise<Antrenament | null> => {
     try {
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
-
+      const { data: authData } = await supabase.auth.getUser();
+      const currentUser = authData.user;
       let calorii = payload.calorii_arse || 0;
       if (!calorii && payload.met) {
-        let greutateKg = currentUser?.user_metadata?.greutate;
-        if (!greutateKg) {
-          const storedG = await AsyncStorage.getItem('greutate');
-          greutateKg = storedG ? parseFloat(storedG) : 75;
-        }
-        calorii = calculeazaCaloriiArse(payload.met, greutateKg || 75, payload.durata_min);
+        const stored = await AsyncStorage.getItem('greutate');
+        const weight = Number(currentUser?.user_metadata?.greutate || stored || 75);
+        calorii = calculeazaCaloriiArse(payload.met, weight, payload.durata_min);
       }
-
       const computed = computeWorkoutMetrics(payload.exercitii ?? []);
-
       const row: Antrenament = {
         id: genUuid(),
         user_id: currentUser?.id || LOCAL_USER_ID,
@@ -358,123 +288,70 @@ export function useAntrenamente(dataSelectata?: Date) {
         created_at: new Date().toISOString(),
         is_local: true,
       };
-
-      // Salvam obligatoriu local, pentru rezilienta (0 pierderi daca reteaua cade)
-      const localList = await getLocalWorkouts();
-      await saveLocalWorkouts([row, ...localList]);
-
-      // Incercam sincronizarea in cloud daca utilizatorul e conectat
+      await saveLocalWorkouts([row, ...(await getLocalWorkouts())]);
       if (currentUser) {
-        try {
-          const { data, error } = await supabase
-            .from('antrenamente')
-            .insert([toInsertPayload(row, currentUser.id)])
-            .select()
-            .single();
-
-          if (error) {
-            console.warn('[Antrenamente] Insert Supabase esuat, randul ramane local:', error.message ?? error);
-          }
-
-          if (!error && data) {
-            // Marcam randul ca sincronizat, ca sa nu fie retrimis la urmatorul fetch
-            const listNow = await getLocalWorkouts();
-            await saveLocalWorkouts(
-              listNow.map((w) => (w.id === row.id ? { ...w, is_local: false } : w))
-            );
-            await fetchAntrenamente();
-            return data as Antrenament;
-          }
-        } catch (e) {
-          console.warn('[Antrenamente] Sincronizare cloud esuata, se pastreaza doar local:', e);
+        const { data, error } = await supabase
+          .from('antrenamente')
+          .insert([toInsertPayload(row, currentUser.id)])
+          .select()
+          .single();
+        if (!error && data) {
+          const all = await getLocalWorkouts();
+          await saveLocalWorkouts(all.map((w) => w.id === row.id ? { ...w, is_local: false } : w));
+          await fetchAntrenamente();
+          return normalizeAntrenament(data as Antrenament);
         }
+        if (error) console.warn('[Antrenamente] Salvat local, sync cloud amânat:', error.message ?? error);
       }
-
       await fetchAntrenamente();
       return row;
     } catch (error) {
-      console.error('Eroare adaugare antrenament (rezolvata prin fallback):', error);
+      console.error('Eroare adăugare antrenament:', error);
       return null;
     }
   };
 
   const adaugaExercitiu = async (payload: {
-    exercitiuId?: string;
-    nume: string;
-    calorii: number;
-    durataMin: number;
-    seturi?: SetExercitiu[] | number;
-    repetari?: number;
-    greutateKg?: number;
-    icon?: string;
-    tip?: string;
-    volum?: number;
+    exercitiuId?: string; nume: string; calorii: number; durataMin: number;
+    seturi?: SetExercitiu[] | number; repetari?: number; greutateKg?: number;
+    icon?: string; tip?: string; volum?: number;
   }): Promise<Antrenament | null> => {
-    let seturiArray: SetExercitiu[] = [];
-    if (Array.isArray(payload.seturi)) {
-      seturiArray = payload.seturi;
-    } else if (typeof payload.seturi === 'number') {
-      const nr = payload.seturi || 1;
-      seturiArray = Array.from({ length: nr }, (_, i) => ({
-        serie: i + 1,
-        repetari: payload.repetari || 10,
-        greutate: payload.greutateKg || 0,
-      }));
-    }
-
-    const volumCalc =
-      payload.volum ?? seturiArray.reduce((s, x) => s + x.repetari * (x.greutate || 0), 0);
-
+    const seturi = Array.isArray(payload.seturi)
+      ? payload.seturi
+      : Array.from({ length: typeof payload.seturi === 'number' ? payload.seturi : 0 }, (_, i) => ({
+          serie: i + 1, repetari: payload.repetari || 10, greutate: payload.greutateKg || 0,
+        }));
+    const volum = payload.volum ?? seturi.reduce((s, x) => s + x.repetari * (x.greutate || 0), 0);
     return adaugaAntrenament({
       nume: payload.nume,
       tip: payload.tip || 'forta',
       durata_min: payload.durataMin || 15,
       calorii_arse: payload.calorii || 80,
-      exercitii: [
-        {
-          exercitiuId: payload.exercitiuId || 'custom',
-          nume: payload.nume,
-          seturi: seturiArray,
-          durataMin: payload.durataMin,
-          kcal: payload.calorii,
-        },
-      ],
-      volum_total: volumCalc,
+      exercitii: [{
+        exercitiuId: payload.exercitiuId || 'custom', nume: payload.nume,
+        seturi, durataMin: payload.durataMin, kcal: payload.calorii,
+      }],
+      volum_total: volum,
     });
   };
 
   const stergeAntrenament = async (id: string): Promise<void> => {
-    try {
-      const localList = await getLocalWorkouts();
-      await saveLocalWorkouts(localList.filter((item) => item.id !== id));
-
-      // Randurile vechi (id non-UUID) nu au ajuns niciodata in Postgres.
-      if (user && isUuid(id)) {
-        const { error } = await supabase
-          .from('antrenamente')
-          .delete()
-          .eq('id', id)
-          .eq('user_id', user.id);
-        if (error) {
-          console.warn('[Antrenamente] Stergere din cloud esuata:', error.message ?? error);
-        }
-      }
-      await fetchAntrenamente();
-    } catch (error) {
-      console.warn('Eroare stergere antrenament:', error);
+    await saveLocalWorkouts((await getLocalWorkouts()).filter((item) => item.id !== id));
+    const { data: authData } = await supabase.auth.getUser();
+    if (authData.user && isUuid(id)) {
+      const { error } = await supabase
+        .from('antrenamente')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', authData.user.id);
+      if (error) throw error;
     }
+    await fetchAntrenamente();
   };
 
   return {
-    user,
-    antrenamente,
-    totalCaloriiArse,
-    numarAntrenamente,
-    adaugaAntrenament,
-    adaugaExercitiu,
-    stergeAntrenament,
-    fetchIstoric,
-    loading,
-    refresh: fetchAntrenamente,
+    user, antrenamente, totalCaloriiArse, numarAntrenamente,
+    adaugaAntrenament, adaugaExercitiu, stergeAntrenament,
+    fetchIstoric, loading, refresh: fetchAntrenamente,
   };
 }
