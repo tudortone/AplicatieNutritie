@@ -8,6 +8,8 @@ export default function CosmeticAppEffect() {
   const [effect, setEffect] = useState<CosmeticItem | null>(null);
   const drift = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
+  // Fix audit F9: evitam reload-ul AsyncStorage la fiecare navigare rapida.
+  const lastRefresh = useRef(0);
   const particles = useMemo(() => Array.from({ length: 9 }, (_, index) => ({
     id: index,
     left: `${8 + ((index * 13) % 84)}%` as const,
@@ -15,10 +17,15 @@ export default function CosmeticAppEffect() {
   })), []);
 
   const refresh = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastRefresh.current < 2000) return; // max o data la 2 secunde
+    lastRefresh.current = now;
     const equipped = await loadEquippedCosmetics();
     setEffect(getCatalogCosmetic(equipped.effectId));
   }, []);
 
+  // Refresh la navigare (ex: utilizatorul revine de la garderoba dupa echipare)
+  // si la revenirea din background.
   useEffect(() => { refresh(); }, [pathname, refresh]);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') refresh(); });

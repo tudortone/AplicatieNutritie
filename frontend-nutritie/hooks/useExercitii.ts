@@ -44,7 +44,7 @@ export function useExercitii() {
         // Nu afișăm eroare deoarece acest lucru este așteptat înainte de a rula migrarea SQL.
         if (error.message?.includes('schema cache') || error.code === 'PGRST204' || error.code === '42P01') {
           // Tabelul nu a fost creat încă — fallback silențios la static
-          console.log('[useExercitii] Tabelul Supabase nu există încă, folosesc datele locale.');
+          if (__DEV__) console.debug('[useExercitii] Tabelul Supabase nu există încă, folosesc datele locale.');
         } else {
           console.warn('[useExercitii] Eroare la sync:', error.message);
         }
@@ -62,7 +62,7 @@ export function useExercitii() {
       // Dacă tabelul există dar e gol, păstrăm datele statice ca fallback
     } catch (e) {
       // Eroare de rețea sau altă excepție — folosim silențios fallback-ul
-      console.log('[useExercitii] Offline sau excepție, folosesc datele locale.');
+      if (__DEV__) console.debug('[useExercitii] Offline sau excepție, folosesc datele locale.');
       setIsOffline(true);
     } finally {
       setLoading(false);

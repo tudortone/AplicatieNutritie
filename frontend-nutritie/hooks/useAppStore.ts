@@ -56,6 +56,9 @@ export const useAppStore = create<AppState>((set) => ({
         const boolVal = val === 'true';
         set({ isOnboardingDone: boolVal });
       }
-    } catch {}
+    } catch {
+      // Fix audit F8: logam eroarea in loc de catch mut.
+      console.warn('[useAppStore] Nu s-a putut citi onboarding_done din AsyncStorage.');
+    }
   },
 }));

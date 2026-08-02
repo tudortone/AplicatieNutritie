@@ -74,7 +74,11 @@ export default function CameraScreen() {
             const data = await res.json();
             if (active) setAiStatus(data);
           }
-        } catch {}
+        } catch {
+          // Fix audit F6: logam eroarea in loc de catch mut; polling-ul non-critic
+          // nu trebuie sa blocheze UI-ul, dar e util in development.
+          if (__DEV__) console.debug('[Camera] Status AI indisponibil (posibil offline).');
+        }
       };
       fetchStatus();
       // Bug #7: Interval m\u0103rit de la 3s la 30s pentru a evita 429 pe /api/ (generalLimiter 100 req/15min).
@@ -210,7 +214,7 @@ export default function CameraScreen() {
 
   const trimiteCorectieText = async (textCorectie: string) => {
     try {
-      console.log("👉 Trimit corecție:", textCorectie);
+      if (__DEV__) console.log('[Camera] Trimit corecție:', textCorectie.substring(0, 50));
       
       const response = await fetch(`${API_URL}/api/corecteaza-mancare-vizual-text`, {
         method: 'POST',
@@ -227,7 +231,7 @@ export default function CameraScreen() {
 
       // 1. Citim răspunsul serverului INDIFERENT dacă a crăpat sau nu, ca să vedem mesajul real
       const data = await response.json(); 
-      console.log("✅ Răspuns corecție backend:", data);
+      if (__DEV__) console.log('[Camera] Răspuns corecție backend primit.');
 
       // 2. Dacă a crăpat (400, 401, 500 etc), afișăm motivul exact pe ecran
       if (!response.ok) {
@@ -244,7 +248,12 @@ export default function CameraScreen() {
         }
       }
     } catch (error) {
-      console.error("❌ Eroare fallback detaliată:", error);
+      // Fix audit F7: afisam eroarea si pentru utilizator, nu doar in consola.
+      console.error('❌ Eroare fallback detaliată:', error);
+      Alert.alert(
+        'Eroare de conexiune',
+        'Nu s-a putut contacta serverul pentru corecție. Verifică conexiunea la internet.',
+      );
     }
   };
   const sendCorrectionToAI = trimiteCorectieText;

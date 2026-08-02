@@ -70,7 +70,8 @@
         {
           "motionPermission": "NutriAI utilizează senzorul de mișcare pentru a număra pașii zilnici."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -42,13 +42,21 @@ export function generateClientUuid(): string {
 
 class OfflineSyncEngine {
   private isProcessing = false;
+  private appStateSubscription: { remove: () => void } | null = null;
 
   constructor() {
-    AppState.addEventListener('change', (state) => {
+    // Fix audit F5: pastram referinta la subscriptie pentru cleanup.
+    this.appStateSubscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         this.processOutbox();
       }
     });
+  }
+
+  /** Opreste ascultatorul de AppState. Folositor la teste sau reset. */
+  destroy() {
+    this.appStateSubscription?.remove();
+    this.appStateSubscription = null;
   }
 
   async getOutbox(): Promise<OutboxMutation[]> {

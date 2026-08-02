@@ -83,7 +83,7 @@ export function useHealthSync(): HealthSyncState {
             sensorSteps = result.steps;
           }
         } catch (err) {
-          console.log('Notă: Citirea istorică din Pedometer (getStepCountAsync):', err);
+          if (__DEV__) console.debug('[useHealthSync] Pedometer indisponibil:', err);
         }
       }
 
@@ -156,7 +156,7 @@ export function useHealthSync(): HealthSyncState {
         });
       });
     } catch (e) {
-      console.log('Notă: watchStepCount indisponibil pe acest mediu:', e);
+      if (__DEV__) console.debug('[useHealthSync] watchStepCount indisponibil pe acest mediu:', e);
     }
   };
 

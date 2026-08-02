@@ -13,6 +13,9 @@ const crypto = require('crypto');
 
 require('dotenv').config();
 
+// 1.1 Sanitizare input — previne XSS stocat si caractere de control
+const { sanitizeText, sanitizeName, sanitizeRequest, detectPromptInjection } = require('./utils/sanitize');
+
 // 1.2 Validare chei de mediu la startup (Crash-on-boot)
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
@@ -51,6 +54,9 @@ app.use(cors({
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// Sanitizare automata a input-ului pe toate rutele
+app.use(sanitizeRequest);
 
 // ==========================================
 // CHEIE DE RATE-LIMIT STABILA (Fix audit)
@@ -221,7 +227,11 @@ const requireAuth = async (req, res, next) => {
       tokenCache.delete(tokenKey);
       return res.status(401).json({ eroare: "Token invalid sau respins de serverul Auth." });
     }
-    if (tokenCache.size >= MAX_TOKEN_CACHE_ENTRIES) tokenCache.clear();
+    if (tokenCache.size >= MAX_TOKEN_CACHE_ENTRIES) {
+      // Fix audit B4: evictam cea mai veche intrare in loc sa golim tot cache-ul (spike de re-auth).
+      const oldest = tokenCache.keys().next().value;
+      if (oldest) tokenCache.delete(oldest);
+    }
     tokenCache.set(tokenKey, { user, expiresAt: now + CACHE_TTL_MS });
     req.user = user;
     next();
@@ -623,7 +633,10 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
                 break;
               }
             }
-          } catch (e) {}
+          } catch (e) {
+              // Fix audit B1: catch-ul mut ascundea cauza reală a eșecului OpenRouter.
+              console.warn('⚠️ OpenRouter Vision excepție:', e.message || e);
+            }
         }
       }
     }
@@ -731,6 +744,12 @@ app.post('/api/chat', requireAuth, aiRateLimiter, async (req, res) => {
     ultimulMesaj = ultimulMesaj.replace(/[\x00-\x1F\x7F]/g, "").trim();
     if (ultimulMesaj.length > 500) {
       ultimulMesaj = ultimulMesaj.substring(0, 500);
+    }
+
+    // Securitate: detectam si blocam tentativele de prompt injection
+    if (detectPromptInjection(ultimulMesaj)) {
+      console.warn('[Securitate] Prompt injection detectat in /api/chat:', ultimulMesaj.substring(0, 80));
+      return res.status(400).json({ raspuns: "Mesajul conține instrucțiuni interzise. Te rog reformulează." });
     }
 
     const systemPrompt = `Ești un asistent nutrițional prietenos, profesionist și empatic pentru aplicația NutriAI.
@@ -857,6 +876,12 @@ app.post('/api/log-food-from-chat', requireAuth, aiRateLimiter, async (req, res)
     }
     const textCurat = mesaj.replace(/[\x00-\x1F\x7F]/g, "").trim().substring(0, 500);
 
+    if (!textCurat) return res.status(400).json({ eroare: "Mesaj invalid pentru logare." });
+    if (detectPromptInjection(textCurat)) {
+      console.warn('[Securitate] Prompt injection detectat in /api/log-food-from-chat');
+      return res.status(400).json({ eroare: "Mesajul conține instrucțiuni interzise." });
+    }
+
     const istoricText = Array.isArray(mesaje) && mesaje.length > 0
       ? mesaje.slice(-6).map(m => `${(m.role || m.sender || 'user').toUpperCase()}: ${m.text || m.content || ''}`).join('\n')
       : '';
@@ -958,6 +983,10 @@ app.post('/api/estimeaza-mancare-text', requireAuth, aiRateLimiter, async (req, 
     if (curatat.length > 200) curatat = curatat.substring(0, 200);
     if (!curatat) return res.status(400).json({ eroare: "Text invalid." });
     
+    if (detectPromptInjection(curatat)) {
+      return res.status(400).json({ eroare: "Textul conține instrucțiuni interzise." });
+    }
+
     const prompt = `Estimează valorile nutriționale pentru 1 porție standard din: "${curatat}". RETURNEAZĂ STRICT UN OBIECT JSON în formatul: {"nume": "${curatat}", "calorii": 300, "proteine": 15, "carbohidrati": 30, "grasimi": 10, "gramajDefault": 150}. Fără text adițional.`;
     
     const fetchPromise = fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -1005,6 +1034,11 @@ const handleVisionFallbackOrCorrection = async (req, res) => {
 
     if (!userPrompt || typeof userPrompt !== 'string' || !userPrompt.trim()) {
       return res.status(400).json({ eroare: "Explicația text (user_prompt) este obligatorie." });
+    }
+
+    if (detectPromptInjection(userPrompt)) {
+      console.warn('[Securitate] Prompt injection detectat in /api/vision-fallback');
+      return res.status(400).json({ eroare: "Instrucțiunea conține comenzi interzise." });
     }
 
     const prompt = `Ești un asistent nutrițional expert și precis. 
@@ -1387,8 +1421,8 @@ app.post('/api/salveaza-produs-barcode', requireAuth, async (req, res) => {
     // Do not allow if it's a global cache element created by system, or if it wasn't you who created this user_manual entry
     // unless you are an admin. Implementing simple first-come-first-serve ownership protection logic:
     if (ext && ext.created_by_user && ext.created_by_user !== req.user.id) {
-       // Omiting throwing an explicit error to not leak information, just dropping modifications quietly
-       return res.json({ succes: true, message: "Aparent produsul exista deja." });
+       // Fix audit B3: returnam 409 Conflict in loc de 200 fals, ca sa fie clar ca actiunea nu a reusit.
+       return res.status(409).json({ eroare: "Produsul este deja înregistrat de alt utilizator și nu poate fi suprascris." });
     }
 
     await supabaseAdmin.from('barcode_cache').upsert({
@@ -1543,6 +1577,12 @@ app.put('/api/mese/:id', requireAuth, async (req, res) => {
     if (isNaN(prot) || prot < 0 || prot > 1000) {
       return res.status(400).json({ eroare: "Proteinele trebuie să fie un număr valid între 0 și 1000." });
     }
+    if (isNaN(gras) || gras < 0 || gras > 1000) {
+      return res.status(400).json({ eroare: "Grăsimile trebuie să fie un număr valid între 0 și 1000." });
+    }
+    if (isNaN(carb) || carb < 0 || carb > 2000) {
+      return res.status(400).json({ eroare: "Carbohidrații trebuie să fie un număr valid între 0 și 2000." });
+    }
     const updatePayload = {
       nume: nume.trim(),
       calorii: Math.round(cal),
@@ -1623,16 +1663,9 @@ app.post('/api/mese', requireAuth, async (req, res) => {
       ora: /^\d{2}:\d{2}(:\d{2})?$/.test(String(ora || '')) ? ora : null,
     };
 
-    // RLS reabilitat
-    // Fix audit: acces direct la .split(' ')[1] putea arunca TypeError.
-    const bearerToken = (req.headers.authorization || '').split(' ')[1];
-    if (!bearerToken) {
-      return res.status(401).json({ eroare: "Acces neautorizat. Token lipsă." });
-    }
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${bearerToken}` } }
-    });
-    const { data: result, error } = await userClient
+    // Fix audit B5: refolosim supabaseAdmin (user_id deja validat de requireAuth),
+    // evitand crearea unui nou client Supabase per request.
+    const { data: result, error } = await supabaseAdmin
       .from('mese')
       .insert([insertPayload])
       .select();

@@ -10,6 +10,10 @@ export function useApa() {
   const tinta = 8;
   const [loading, setLoading] = useState(true);
   const operationRef = useRef<Promise<number>>(Promise.resolve(0));
+  // Fix audit F3: ref pentru valoarea curenta, ca sa evitam closure-ul invechit
+  // in .catch(() => pahare) din lantul de operatii.
+  const pahareRef = useRef(pahare);
+  pahareRef.current = pahare;
 
   const loadApa = useCallback(async () => {
     setLoading(true);
@@ -37,9 +41,9 @@ export function useApa() {
       setPahareState(next);
       return next;
     });
-    operationRef.current = operation.catch(() => pahare);
+    operationRef.current = operation.catch(() => pahareRef.current);
     return operation;
-  }, [pahare]);
+  }, []); // Fix audit F3: dependenta [pahare] eliminata; folosim pahareRef.current.
 
   const adaugaPahar = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});

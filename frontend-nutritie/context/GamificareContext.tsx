@@ -277,8 +277,12 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
       saveStare(nextState);
       return nextState;
     });
-    refreshGamificare();
-  }, [saveStare, refreshGamificare]);
+    // Fix audit F2: nu mai apelam refreshGamificare() aici.
+    // saveStare persista deja in AsyncStorage + Supabase.
+    // Apelul imediat la refreshGamificare() crea o cursa:
+    // saveStare (async) inca rula cand refresh citea DB-ul,
+    // iar rezultatul vechi suprascria starea tocmai salvata.
+  }, [saveStare]);
 
   useDailyReset({
     questuriAzi: stare.questuriAzi,
