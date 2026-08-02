@@ -46,8 +46,8 @@ export function isOutline(fill?: string): boolean {
 
 /**
  * Culoare pentru mușchi NEANTRENAT (intensitate 0 / lipsă de date).
- * Fix audit: anterior se returna COLOR_REST (albastru viu), deci un corp care nu a
- * fost antrenat niciodată arăta identic cu unul "odihnit" — harta părea aprinsă din start.
+ * Un corp neantrenat primeste o culoare neutra, nu albastru "odihnit".
+//
  */
 export const COLOR_INACTIVE = '#3F3F46';
 

@@ -331,7 +331,7 @@ export default function ChatScreen() {
         proteine: clampVal(parseStrictNumber(item.protein_g), 2000), // Păstrăm zecimalele
         carbohidrati: clampVal(parseStrictNumber(item.carbs_g), 2000),
         grasimi: clampVal(parseStrictNumber(item.fat_g), 2000),
-        // Bug #18: fiber_g era prezent în propunerea AI dar nu era salvat → câmpul rămânea 0
+        // Salveaza si fibrele din propunerea AI în propunerea AI dar nu era salvat → câmpul rămânea 0
         fibre: clampVal(Math.round(parseStrictNumber(item.fiber_g)), 2000),
         data: ziLocala,
         ora: oraLocala,

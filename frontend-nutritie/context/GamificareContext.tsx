@@ -154,7 +154,7 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
     insigne: [],
   });
   const stareRef = useRef(stare);
-  // Bug #23: stareRef.current = stare era scris în corpul componentei — mutarea unui ref
+  // stareRef sincronizat in useEffect (nu in render) în corpul componentei — mutarea unui ref
   // în timpul render-ului este comportament nedefinit cu React 19 + reactCompiler: true.
   // Mutat într-un useEffect care rulează sincron după fiecare render.
   useEffect(() => {
@@ -182,7 +182,7 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
         }, { onConflict: 'user_id' });
       }
     } catch (err) {
-      // Bug #24b: Loghează eroarea în loc de fail silent complet (XP se pierdea invizibil offline)
+      // Logheaza eroarea de salvare în loc de fail silent complet (XP se pierdea invizibil offline)
       console.warn('[Gamificare] saveStare a eșuat (offline sau RLS):', err);
     }
   }, []);
@@ -236,7 +236,7 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
       } = await supabase.auth.getSession();
 
       if (session?.user) {
-        // Bug #24a: .single() aruncă PGRST116 pentru orice utilizator nou (0 rânduri).
+        // .maybeSingle() pentru utilizatori noi (fara inregistrare) pentru orice utilizator nou (0 rânduri).
         // .maybeSingle() returnează null în loc de eroare când nu există înregistrare.
         const { data, error } = await supabase
           .from('gamificare')
@@ -277,8 +277,8 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
       saveStare(nextState);
       return nextState;
     });
-    // Fix audit F2: nu mai apelam refreshGamificare() aici.
-    // saveStare persista deja in AsyncStorage + Supabase.
+    // saveStare persista deja in AsyncStorage + Supabase
+    // saveStare persista deja in AsyncStorage + Supabase
     // Apelul imediat la refreshGamificare() crea o cursa:
     // saveStare (async) inca rula cand refresh citea DB-ul,
     // iar rezultatul vechi suprascria starea tocmai salvata.

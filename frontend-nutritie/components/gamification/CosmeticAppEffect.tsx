@@ -8,7 +8,7 @@ export default function CosmeticAppEffect() {
   const [effect, setEffect] = useState<CosmeticItem | null>(null);
   const drift = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
-  // Fix audit F9: evitam reload-ul AsyncStorage la fiecare navigare rapida.
+  // Throttle 2s pentru reload-ul cosmeticelor
   const lastRefresh = useRef(0);
   const particles = useMemo(() => Array.from({ length: 9 }, (_, index) => ({
     id: index,

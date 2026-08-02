@@ -16,11 +16,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // ==========================================
-// FIX AUDIT P5: Adaptor securizat cu fallback
-// Pe dispozitive unde Android Keystore / iOS Keychain nu e disponibil
-// (ex. criptare dezactivată, device foarte vechi), folosim AsyncStorage
-// ca fallback și logăm un avertisment.
-// ==========================================
+// Adaptor securizat: SecureStore cu chunking + fallback AsyncStorage
+// pentru device-uri fara criptare hardware activa.
 const CHUNK_SIZE = 1800;
 const CHUNK_MARKER = '__supabase_secure_chunks__';
 

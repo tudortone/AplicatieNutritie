@@ -116,7 +116,7 @@ describe('Backend API Tests', () => {
     });
   });
 
-  describe('Validări ID / cod de bare (fix audit)', () => {
+  describe('Validari ID si cod de bare', () => {
     it('ar trebui să returneze 400 pentru un ID de masă care nu este UUID', async () => {
       const res = await request(app)
         .delete('/api/mese/nu-este-uuid')

@@ -177,7 +177,7 @@ export function useMeseAzi(dataSelectata?: Date) {
         setLoading(false);
       }
     }
-  // Bug #17: dataSelectata (obiect Date) scos din deps — are identitate nouă la fiecare render dacă
+  // dateKey (string) in loc de dataSelectata (Date) — identitate stabila — are identitate nouă la fiecare render dacă
   // părintele pasează `new Date()` inline, provocând loop infinit de re-fetch.
   // dateKey (string derivat din dataSelectata) acoperă deja semantica de dată și e stabil.
   // eslint-disable-next-line react-hooks/exhaustive-deps

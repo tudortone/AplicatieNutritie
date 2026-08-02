@@ -45,7 +45,7 @@ class OfflineSyncEngine {
   private appStateSubscription: { remove: () => void } | null = null;
 
   constructor() {
-    // Fix audit F5: pastram referinta la subscriptie pentru cleanup.
+    // Pastram referinta pentru cleanup (destroy)
     this.appStateSubscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         this.processOutbox();

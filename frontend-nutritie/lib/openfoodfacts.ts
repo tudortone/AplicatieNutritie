@@ -114,8 +114,8 @@ export async function getProdusByBarcode(barcode: string): Promise<ProdusScanat 
   }
 
   try {
-    // Fix audit F4: constructia anterioara ['https:', '', 'world...'].join('/')
-    // producea https:////world.openfoodfacts.org (slash dublu).
+    // URL direct catre OpenFoodFacts
+    //
     const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`;
     const response = await fetch(url, {
       headers: {

@@ -75,13 +75,13 @@ export default function CameraScreen() {
             if (active) setAiStatus(data);
           }
         } catch {
-          // Fix audit F6: logam eroarea in loc de catch mut; polling-ul non-critic
+          // Polling necritic - erorile sunt normale in dev
           // nu trebuie sa blocheze UI-ul, dar e util in development.
           if (__DEV__) console.debug('[Camera] Status AI indisponibil (posibil offline).');
         }
       };
       fetchStatus();
-      // Bug #7: Interval m\u0103rit de la 3s la 30s pentru a evita 429 pe /api/ (generalLimiter 100 req/15min).
+      // Polling la 30s (evita 429 rate-limit)
       // /api/ai-status este acum exclus din rate-limiter \u00een backend, dar men\u021binem intervalul mare
       // pentru a nu consuma inutil resurse de re\u021bea \u0219i baterie.
       const timer = setInterval(fetchStatus, 30000);
@@ -248,7 +248,7 @@ export default function CameraScreen() {
         }
       }
     } catch (error) {
-      // Fix audit F7: afisam eroarea si pentru utilizator, nu doar in consola.
+      // Afisam eroarea si pentru utilizator
       console.error('❌ Eroare fallback detaliată:', error);
       Alert.alert(
         'Eroare de conexiune',

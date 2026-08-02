@@ -1,7 +1,7 @@
 /**
  * muscleColorUtils.ts — Funcție UNIFICATĂ de colorare pentru harta musculară
  * Folosită atât de MuscleMapFront cât și de MuscleMapBack.
- * Rezolvă BUG #1, #3, #4: păstrează culorile originale, folosește heatColor() partajat,
+ * Păstrează culorile originale, folosește heatColor() partajat,
  * și păstrează umplerile de tip gradient (url(#...)).
  */
 
@@ -90,7 +90,7 @@ export function getMuscleFill(
     if (isActive) return activeColor;
   }
 
-  // Dacă nu e nici intensitate, nici activ, păstrează culoarea originală (BUG #1 FIX)
+  // Păstrează culoarea originală pentru mușchi neactivi
   return originalFill;
 }
 
