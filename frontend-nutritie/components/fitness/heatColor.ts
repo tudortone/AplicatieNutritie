@@ -46,7 +46,6 @@ export function isOutline(fill?: string): boolean {
 /**
  * Culoare pentru mușchi NEANTRENAT (intensitate 0 / lipsă de date).
  * Un corp neantrenat primeste o culoare neutra, nu albastru "odihnit".
-//
  */
 export const COLOR_INACTIVE = '#3F3F46';
 

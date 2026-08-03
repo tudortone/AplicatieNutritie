@@ -1,10 +1,10 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, RefreshControl } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { Easing, FadeInDown, useAnimatedProps, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell, Bell, RotateCcw, X } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useNotificationBanner } from '../../context/NotificationBannerContext';
@@ -22,38 +22,65 @@ import { computeDailyMuscleIntensity, normalizeMuscleLoadToIntensity } from '../
 import { useExercitii } from '../../hooks/useExercitii';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
+const AnimatedRingCircle = Animated.createAnimatedComponent(Circle);
+
 function RingProgress({ procent, color, bgColor }: { procent: number; color: string; bgColor: string }) {
   const radius = 55;
   const strokeWidth = 12;
   const circumference = 2 * Math.PI * radius;
   const fill = Math.min(Math.max(procent, 0), 100);
-  const strokeDashoffset = circumference - (circumference * fill) / 100;
+  const progress = useSharedValue(0);
+  const rotation = useSharedValue(0);
+  const prevFill = useRef(fill);
+
+  // Când se adaugă o masă, inelul se rotește până la noul nivel (spring) și dă un mic wiggle.
+  useEffect(() => {
+    progress.value = withSpring(fill / 100, { damping: 16, stiffness: 120, mass: 0.7 });
+    if (fill > prevFill.current) {
+      rotation.value = withSequence(
+        withTiming(2.5, { duration: 90, easing: Easing.out(Easing.quad) }),
+        withTiming(-2.5, { duration: 150 }),
+        withTiming(1.5, { duration: 130 }),
+        withTiming(0, { duration: 170 }),
+      );
+    }
+    prevFill.current = fill;
+  }, [fill, progress, rotation]);
+
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: circumference * (1 - progress.value),
+  }));
+  const ringStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
 
   return (
     <View style={{ width: (radius + strokeWidth) * 2, height: (radius + strokeWidth) * 2, justifyContent: 'center', alignItems: 'center' }}>
-      <Svg width={(radius + strokeWidth) * 2} height={(radius + strokeWidth) * 2}>
-        <Circle
-          cx={radius + strokeWidth}
-          cy={radius + strokeWidth}
-          r={radius}
-          stroke={bgColor}
-          strokeWidth={strokeWidth}
-          fill="none"
-        />
-        <Circle
-          cx={radius + strokeWidth}
-          cy={radius + strokeWidth}
-          r={radius}
-          stroke={color}
-          strokeWidth={strokeWidth}
-          fill="none"
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          rotation="-90"
-          origin={`${radius + strokeWidth}, ${radius + strokeWidth}`}
-        />
-      </Svg>
+      <Animated.View style={[StyleSheet.absoluteFill, ringStyle, { alignItems: 'center', justifyContent: 'center' }]}>
+        <Svg width={(radius + strokeWidth) * 2} height={(radius + strokeWidth) * 2}>
+          <Circle
+            cx={radius + strokeWidth}
+            cy={radius + strokeWidth}
+            r={radius}
+            stroke={bgColor}
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+          <AnimatedRingCircle
+            cx={radius + strokeWidth}
+            cy={radius + strokeWidth}
+            r={radius}
+            stroke={color}
+            strokeWidth={strokeWidth}
+            fill="none"
+            strokeDasharray={circumference}
+            animatedProps={animatedProps}
+            strokeLinecap="round"
+            rotation="-90"
+            origin={`${radius + strokeWidth}, ${radius + strokeWidth}`}
+          />
+        </Svg>
+      </Animated.View>
       <View style={{ position: 'absolute', alignItems: 'center' }}>
         <Text style={{ fontSize: 20, fontWeight: '900', color: color }}>{Math.round(fill)}%</Text>
       </View>
@@ -602,11 +629,11 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={[s.liveHeatmapBodyWrap, { height: 260, justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={[s.liveHeatmapBodyWrap, { height: 300, justifyContent: 'center', alignItems: 'center' }]}>
                 <BodyMap
                   view={viewSideHome}
                   intensity={dailyIntensityHome}
-                  width={200}
+                  width={158}
                 />
             </View>
 

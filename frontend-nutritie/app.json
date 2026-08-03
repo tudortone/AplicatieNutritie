@@ -71,7 +71,13 @@
           "motionPermission": "NutriAI utilizează senzorul de mișcare pentru a număra pașii zilnici."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "react-native-purchases",
+        {
+          "apiKey": "PLACEHOLDER_REVENUECAT_GOOGLE_KEY"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

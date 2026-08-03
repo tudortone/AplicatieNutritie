@@ -4,18 +4,26 @@ import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg'
 
 import type { BodyView, MuscleId } from '../../constants/muscles'
 import type { IntensityMap } from '../../lib/muscleIntensity'
+import { heatColor } from './heatColor'
 import { BACK_GRADIENTS, BACK_SHAPES, BACK_VIEWBOX } from './anatomyBack'
 import { FRONT_GRADIENTS, FRONT_SHAPES, FRONT_VIEWBOX } from './anatomyFront'
 import type { AnatomyGradient, AnatomyShape, AnatomyStop } from './types'
 
 /**
- * Rampa de caldura. Intentionat discreta: la intensitate mica desenul original
- * ramane aproape neatins, iar culoarea creste treptat doar pe muschii lucrati.
+ * Rampa de caldura vine din heatColor.ts (sursa unica), aceeasi folosita de
+ * legendele din ecrane. Intentionat discreta: la intensitate mica desenul
+ * original ramane aproape neatins, iar culoarea creste treptat doar pe
+ * muschii lucrati.
  */
-const HEAT_RAMP = ['#3B82F6', '#22C55E', '#FACC15', '#F97316', '#EF4444'] as const
 
 /** Opacitatea maxima a stratului de caldura. Sub 1 ca sa se vada in continuare umbrele. */
 const MAX_HEAT_OPACITY = 0.82
+
+/**
+ * Opacitatea formelor neincalzite (corp general + muschi neantrenati).
+ * Semi-transparente ca muschii antrenati (colorati) sa iasa in evidenta.
+ */
+const UNHEATED_OPACITY = 0.5
 
 /** Sub acest prag nu desenam deloc stratul de caldura. */
 const MIN_VISIBLE = 0.02
@@ -23,30 +31,6 @@ const MIN_VISIBLE = 0.02
 function clamp01(n: number): number {
 	if (!Number.isFinite(n)) return 0
 	return n < 0 ? 0 : n > 1 ? 1 : n
-}
-
-function hexToRgb(hex: string): [number, number, number] {
-	const h = hex.replace('#', '')
-	return [
-		parseInt(h.slice(0, 2), 16),
-		parseInt(h.slice(2, 4), 16),
-		parseInt(h.slice(4, 6), 16),
-	]
-}
-
-function rgbToHex(r: number, g: number, b: number): string {
-	const to = (n: number) => Math.round(clamp01(n / 255) * 255).toString(16).padStart(2, '0')
-	return `#${to(r)}${to(g)}${to(b)}`
-}
-
-/** Interpoleaza rampa de caldura pentru o intensitate 0..1. */
-export function heatColor(intensity: number): string {
-	const t = clamp01(intensity) * (HEAT_RAMP.length - 1)
-	const i = Math.min(Math.floor(t), HEAT_RAMP.length - 2)
-	const f = t - i
-	const [r1, g1, b1] = hexToRgb(HEAT_RAMP[i])
-	const [r2, g2, b2] = hexToRgb(HEAT_RAMP[i + 1])
-	return rgbToHex(r1 + (r2 - r1) * f, g1 + (g2 - g1) * f, b1 + (b2 - b1) * f)
 }
 
 function viewData(view: BodyView): {
@@ -109,8 +93,9 @@ function BodyMapBase({
 	for (let i = 0; i < shapes.length; i++) {
 		const s = shapes[i]
 
-		// 1. desenul original, mereu, in ordinea lui
-		nodes.push(<Path key={`b${i}`} d={s.d} fill={s.f} />)
+		// 1. desenul original, mereu, in ordinea lui — semi-transparent, ca
+		//    muschii incalziti sa iasa in evidenta
+		nodes.push(<Path key={`b${i}`} d={s.d} fill={s.f} fillOpacity={UNHEATED_OPACITY} />)
 
 		if (!s.m) continue
 

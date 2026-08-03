@@ -5,6 +5,7 @@ import {
   ScrollView, Platform, Alert, ActivityIndicator
 } from 'react-native';
 import KeyboardAwareScreen from '../components/ui/KeyboardAwareScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -72,7 +73,23 @@ export default function AuthScreen() {
     setLoading(true);
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email: email.trim(), password: parola });
+        // Datele din setup-ul de dinainte de cont (onboarding) ajung în metadata contului,
+        // ca profilul să fie deja completat la prima autentificare.
+        const setupKeys = ['greutate', 'caloriiTinta', 'sex', 'varsta', 'inaltime', 'nivel_activitate', 'obiectiv'];
+        const setupRaw = await AsyncStorage.multiGet(setupKeys);
+        const setupData: Record<string, unknown> = {};
+        for (const [key, value] of setupRaw) {
+          if (!value) continue;
+          if (key === 'greutate') setupData[key] = parseFloat(value) || undefined;
+          else if (key === 'caloriiTinta' || key === 'varsta' || key === 'inaltime') setupData[key] = parseInt(value, 10) || undefined;
+          else setupData[key] = value;
+          if (setupData[key] === undefined) delete setupData[key];
+        }
+        const { error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password: parola,
+          options: { data: setupData },
+        });
         if (error) {
           const msg = getFriendlyErrorMessage(error.message);
           setAuthError(msg);

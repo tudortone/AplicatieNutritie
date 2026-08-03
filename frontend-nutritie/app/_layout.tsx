@@ -13,8 +13,8 @@ import { useBiometrics } from '../hooks/useBiometrics';
 import LockScreen from '../components/LockScreen';
 import { NotificationBannerProvider } from '../context/NotificationBannerContext';
 import { GamificareProvider } from '../context/GamificareContext';
+import { PremiumProvider } from '../context/PremiumContext';
 import { useDailySync } from '../hooks/useDailySync';
-import CosmeticAppEffect from '../components/gamification/CosmeticAppEffect';
 import OfflineBanner from '../components/OfflineBanner';
 import { GlobalErrorBoundary } from '../components/GlobalErrorBoundary';
 import '../i18n';
@@ -41,9 +41,14 @@ function RootNavigator() {
     if (loadingAuth) return;
     const inAuth = segments[0] === 'auth';
     const inOnboarding = segments[0] === 'onboarding';
-    if (!session && !inAuth) router.replace('/auth');
-    else if (session && !isOnboardingDone && !inOnboarding) router.replace('/onboarding');
-    else if (session && (inAuth || (isOnboardingDone && inOnboarding))) router.replace('/(tabs)');
+    if (!session) {
+      // Primul deschidere: mai întâi setup-ul (onboarding + date + calorii), apoi contul.
+      if (!isOnboardingDone && !inOnboarding) router.replace('/onboarding');
+      else if (isOnboardingDone && !inAuth) router.replace('/auth');
+    } else {
+      if (!isOnboardingDone && !inOnboarding) router.replace('/onboarding');
+      else if (inAuth || (isOnboardingDone && inOnboarding)) router.replace('/(tabs)');
+    }
   }, [session, loadingAuth, isOnboardingDone, segments, router]);
 
   if (loadingAuth) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}><ActivityIndicator size="large" color={colors.accent} /></View>;
@@ -51,20 +56,21 @@ function RootNavigator() {
 
   return <ThemeProvider value={appDarkTheme}>
     <OfflineBanner />
-    <Stack screenOptions={{ headerShown: false, gestureEnabled: true, animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, fullScreenGestureEnabled: true, contentStyle: { backgroundColor: colors.background } }}>
-      <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
-      <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
-      <Stack.Screen name="onboarding" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
-      <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
-      <Stack.Screen name="scanner-barcode" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
-      <Stack.Screen name="adauga-manual" options={push} />
-      <Stack.Screen name="calculator-ai" options={push} />
-      <Stack.Screen name="jurnal-antrenamente" options={push} />
-      <Stack.Screen name="notificari" options={push} />
-      <Stack.Screen name="cosmetice" options={push} />
-      <Stack.Screen name="progres-antrenamente" options={push} />
-    </Stack>
-    {session ? <CosmeticAppEffect /> : null}
+    <PremiumProvider appUserId={session?.user.id ?? null}>
+      <Stack screenOptions={{ headerShown: false, gestureEnabled: true, animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, fullScreenGestureEnabled: true, contentStyle: { backgroundColor: colors.background } }}>
+        <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
+        <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
+        <Stack.Screen name="onboarding" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
+        <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
+        <Stack.Screen name="scanner-barcode" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
+        <Stack.Screen name="adauga-manual" options={push} />
+        <Stack.Screen name="calculator-ai" options={push} />
+        <Stack.Screen name="jurnal-antrenamente" options={push} />
+        <Stack.Screen name="notificari" options={push} />
+        <Stack.Screen name="paywall" options={push} />
+        <Stack.Screen name="progres-antrenamente" options={push} />
+      </Stack>
+    </PremiumProvider>
     {session && isLocked ? <LockScreen biometricType={biometricType} onUnlock={unlockApp} /> : null}
     <StatusBar style="light" />
   </ThemeProvider>;

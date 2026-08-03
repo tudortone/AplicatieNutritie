@@ -1,10 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
-import LootBoxModal from './LootBoxModal';
+import { AppState, StyleSheet, Text, View } from 'react-native';
 import {
   EMPTY_REWARD_STATE,
-  STREAK_FOR_BOX,
-  daysToNextBox,
   syncProgress,
   type DailySnapshot,
   type Quest,
@@ -45,7 +42,6 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
   const [quests, setQuests] = useState<Quest[]>([]);
   const [reward, setReward] = useState<RewardState>(EMPTY_REWARD_STATE);
   const [xpToday, setXpToday] = useState(0);
-  const [boxOpen, setBoxOpen] = useState(false);
   const [remainingMs, setRemainingMs] = useState(() => msUntilMidnight());
   const [activeDay, setActiveDay] = useState(() => localDayKey());
 
@@ -85,10 +81,6 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
   }, [activeDay, refresh]);
 
   const doneCount = quests.filter((q) => q.done).length;
-  const completedInCycle = reward.streak === 0
-    ? 0
-    : ((reward.streak - 1) % STREAK_FOR_BOX) + 1;
-  const cyclePercent = Math.min(100, (completedInCycle / STREAK_FOR_BOX) * 100);
   const resetLabel = useMemo(() => formatCountdown(remainingMs), [remainingMs]);
 
   return (
@@ -136,60 +128,8 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
             <Text style={[styles.streakLabel, { color: colors.textSecondary }]}>🔥 Serie: {reward.streak} zile</Text>
             <Text style={[styles.streakLabel, { color: colors.textTertiary }]}>Record: {reward.bestStreak}</Text>
           </View>
-
-          <View style={styles.royaleRow}>
-            <View style={styles.royaleTrackWrap}>
-              <View style={[styles.royaleTrack, { backgroundColor: colors.surfaceBg }]}>
-                <View style={[styles.royaleFill, { width: `${cyclePercent}%`, backgroundColor: colors.accent }]} />
-              </View>
-              <View style={styles.stepsRow}>
-                {Array.from({ length: STREAK_FOR_BOX }).map((_, index) => {
-                  const reached = index < completedInCycle;
-                  return (
-                    <View
-                      key={index}
-                      style={[
-                        styles.step,
-                        {
-                          backgroundColor: reached ? colors.accent : colors.surfaceElevated,
-                          borderColor: reached ? colors.accent : colors.cardBorder,
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.stepText, { color: reached ? colors.background : colors.textTertiary }]}>{index + 1}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-            <View style={[styles.chest, { backgroundColor: `${colors.warning}22`, borderColor: colors.warning }]}>
-              <Text style={styles.chestIcon}>🎁</Text>
-              {reward.pendingBoxes > 0 ? <View style={[styles.boxBadge, { backgroundColor: colors.danger }]}><Text style={styles.boxBadgeText}>{reward.pendingBoxes}</Text></View> : null}
-            </View>
-          </View>
-
-          {reward.pendingBoxes > 0 ? (
-            <Pressable
-              style={({ pressed }) => [styles.boxBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.75 : 1 }]}
-              onPress={() => setBoxOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel={`Deschide loot box. ${reward.pendingBoxes} disponibile`}
-            >
-              <Text style={[styles.boxBtnText, { color: colors.background }]}>Deschide loot box</Text>
-            </Pressable>
-          ) : (
-            <Text style={[styles.streakHint, { color: colors.textTertiary }]}>
-              Încă {daysToNextBox(reward.streak)} {daysToNextBox(reward.streak) === 1 ? 'zi' : 'zile'} active până la cufăr
-            </Text>
-          )}
         </View>
       ) : null}
-
-      <LootBoxModal
-        visible={boxOpen}
-        onClose={() => { setBoxOpen(false); refresh(); }}
-        onOpened={(_item, next) => setReward(next)}
-      />
     </View>
   );
 }
@@ -214,18 +154,4 @@ const styles = StyleSheet.create({
   streakBox: { borderTopWidth: 1, paddingTop: 14, gap: 12 },
   streakRow: { flexDirection: 'row', justifyContent: 'space-between' },
   streakLabel: { fontSize: 13, fontWeight: '700' },
-  royaleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  royaleTrackWrap: { flex: 1, height: 40, justifyContent: 'center' },
-  royaleTrack: { position: 'absolute', left: 12, right: 12, height: 8, borderRadius: 4, overflow: 'hidden' },
-  royaleFill: { height: 8, borderRadius: 4 },
-  stepsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  step: { width: 25, height: 25, borderRadius: 13, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  stepText: { fontSize: 10, fontWeight: '900' },
-  chest: { width: 46, height: 46, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  chestIcon: { fontSize: 25 },
-  boxBadge: { position: 'absolute', top: -6, right: -6, minWidth: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  boxBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '900' },
-  streakHint: { fontSize: 12, textAlign: 'center' },
-  boxBtn: { minHeight: 46, paddingHorizontal: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  boxBtnText: { fontWeight: '900', fontSize: 14 },
 });

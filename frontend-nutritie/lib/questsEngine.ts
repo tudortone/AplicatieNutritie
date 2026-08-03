@@ -1,13 +1,12 @@
 /**
- * questsEngine.ts — Questuri zilnice, streak și loot box-uri tematice.
+ * questsEngine.ts — Questuri zilnice și streak.
  *
  * Regulile de bază:
  *  - în fiecare zi se generează 3 questuri, alese determinist după dată
  *    (aceeași zi → aceleași questuri, indiferent de câte ori se deschide ecranul);
  *  - progresul se recalculează din antrenamentele zilei, nu se incrementează
  *    manual — astfel ștergerea unui set nu lasă progres fantomă;
- *  - o zi cu măcar un antrenament scurt crește streak-ul; la fiecare 7 zile
- *    consecutive pică un loot box.
+ *  - o zi cu măcar un antrenament scurt crește streak-ul.
  *
  * Fișierul nu depinde de UI și nu importă nimic din React, ca să poată fi testat
  * și refolosit și în alte ecrane.
@@ -21,9 +20,6 @@ export const REWARD_STATE_KEY = 'nutriai_rewards_v1';
 /** Un antrenament "mic" care contează pentru streak. */
 export const MINI_WORKOUT_MIN_SETS = 3;
 export const MINI_WORKOUT_MIN_MINUTES = 5;
-
-/** Câte zile consecutive sunt necesare pentru un loot box. */
-export const STREAK_FOR_BOX = 7;
 
 // ─── Tipuri ───────────────────────────────────────────────────
 
@@ -73,17 +69,6 @@ export const EMPTY_SNAPSHOT: DailySnapshot = {
   reps: 0,
 };
 
-export type Rarity = 'comun' | 'rar' | 'epic' | 'legendar';
-
-export type RewardItem = {
-  id: string;
-  name: string;
-  theme: string;
-  rarity: Rarity;
-  icon: string;
-  colors: [string, string];
-};
-
 export type QuestState = {
   /** cheia zilei, format YYYY-MM-DD */
   day: string;
@@ -98,10 +83,6 @@ export type RewardState = {
   lastActiveDay: string | null;
   streak: number;
   bestStreak: number;
-  /** loot box-uri câștigate și încă nedeschise */
-  pendingBoxes: number;
-  /** recompensele deja deschise */
-  inventory: RewardItem[];
   totalXp: number;
 };
 
@@ -109,8 +90,6 @@ export const EMPTY_REWARD_STATE: RewardState = {
   lastActiveDay: null,
   streak: 0,
   bestStreak: 0,
-  pendingBoxes: 0,
-  inventory: [],
   totalXp: 0,
 };
 
@@ -207,54 +186,6 @@ export function evaluateQuests(defs: QuestDef[], snapshot: DailySnapshot): Quest
   });
 }
 
-// ─── Loot box ─────────────────────────────────────────────────
-
-type RewardTemplate = Omit<RewardItem, 'id'>;
-
-export const REWARD_POOL: RewardTemplate[] = [
-  { name: 'Neon Pulse', theme: 'Neon', rarity: 'comun', icon: '💠', colors: ['#CCFF00', '#3BE8B0'] },
-  { name: 'Ocean Drift', theme: 'Ocean', rarity: 'comun', icon: '🌊', colors: ['#38BDF8', '#0EA5E9'] },
-  { name: 'Sunset Blaze', theme: 'Apus', rarity: 'comun', icon: '🌅', colors: ['#FB923C', '#F472B6'] },
-  { name: 'Iron Frost', theme: 'Gheață', rarity: 'rar', icon: '❄️', colors: ['#A5F3FC', '#6366F1'] },
-  { name: 'Jungle Rush', theme: 'Junglă', rarity: 'rar', icon: '🌿', colors: ['#4ADE80', '#15803D'] },
-  { name: 'Cyber Grid', theme: 'Cyber', rarity: 'rar', icon: '🧩', colors: ['#A855F7', '#22D3EE'] },
-  { name: 'Magma Core', theme: 'Magmă', rarity: 'epic', icon: '🌋', colors: ['#FF7B00', '#FF003C'] },
-  { name: 'Golden Era', theme: 'Aur', rarity: 'epic', icon: '🏅', colors: ['#FACC15', '#B45309'] },
-  { name: 'Void Titan', theme: 'Void', rarity: 'legendar', icon: '🌌', colors: ['#7C3AED', '#0F172A'] },
-];
-
-const RARITY_WEIGHTS: Record<Rarity, number> = {
-  comun: 60,
-  rar: 27,
-  epic: 11,
-  legendar: 2,
-};
-
-/** Extrage o recompensă respectând ponderile de raritate. */
-export function rollReward(random: () => number = Math.random): RewardItem {
-  const weighted = REWARD_POOL.map((r) => ({ r, w: RARITY_WEIGHTS[r.rarity] || 1 }));
-  const total = weighted.reduce((s, x) => s + x.w, 0);
-  let roll = random() * total;
-  let chosen = weighted[0].r;
-  for (const item of weighted) {
-    roll -= item.w;
-    if (roll <= 0) {
-      chosen = item.r;
-      break;
-    }
-  }
-  return { ...chosen, id: `${chosen.name}-${Date.now()}-${Math.floor(random() * 1e6)}` };
-}
-
-export function rarityColor(rarity: Rarity): string {
-  switch (rarity) {
-    case 'legendar': return '#FACC15';
-    case 'epic': return '#A855F7';
-    case 'rar': return '#38BDF8';
-    default: return '#94A3B8';
-  }
-}
-
 // ─── Persistență ──────────────────────────────────────────────
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
@@ -299,8 +230,6 @@ export type SyncResult = {
   justCompleted: Quest[];
   xpToday: number;
   reward: RewardState;
-  /** loot box câștigat chiar acum */
-  boxJustEarned: boolean;
 };
 
 /**
@@ -344,28 +273,21 @@ export async function syncProgress(
     xpToday,
   } satisfies QuestState);
 
-  // ─── Streak și loot box ───
+  // ─── Streak ───
   const isMiniWorkout =
     snapshot.sets >= MINI_WORKOUT_MIN_SETS ||
     snapshot.minutes >= MINI_WORKOUT_MIN_MINUTES;
 
   const next: RewardState = {
     ...rewardState,
-    inventory: [...rewardState.inventory],
     totalXp: rewardState.totalXp + justCompleted.reduce((s, q) => s + q.xp, 0),
   };
-  let boxJustEarned = false;
 
   if (isMiniWorkout && next.lastActiveDay !== day) {
     const continued = next.lastActiveDay === addDays(day, -1);
     next.streak = continued ? next.streak + 1 : 1;
     next.lastActiveDay = day;
     next.bestStreak = Math.max(next.bestStreak, next.streak);
-
-    if (next.streak > 0 && next.streak % STREAK_FOR_BOX === 0) {
-      next.pendingBoxes += 1;
-      boxJustEarned = true;
-    }
   } else if (
     !isMiniWorkout &&
     next.lastActiveDay &&
@@ -378,29 +300,5 @@ export async function syncProgress(
 
   await saveRewardState(next);
 
-  return { quests, justCompleted, xpToday, reward: next, boxJustEarned };
-}
-
-/** Deschide un loot box și salvează recompensa în inventar. */
-export async function openLootBox(
-  random: () => number = Math.random
-): Promise<{ item: RewardItem | null; reward: RewardState }> {
-  const state = await loadRewardState();
-  if (state.pendingBoxes <= 0) {
-    return { item: null, reward: state };
-  }
-  const item = rollReward(random);
-  const next: RewardState = {
-    ...state,
-    pendingBoxes: state.pendingBoxes - 1,
-    inventory: [item, ...state.inventory].slice(0, 60),
-  };
-  await saveRewardState(next);
-  return { item, reward: next };
-}
-
-/** Câte zile mai sunt până la următorul loot box. */
-export function daysToNextBox(streak: number): number {
-  const inCycle = streak % STREAK_FOR_BOX;
-  return STREAK_FOR_BOX - inCycle;
+  return { quests, justCompleted, xpToday, reward: next };
 }

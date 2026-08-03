@@ -157,7 +157,7 @@ export function Holographic3DAnatomyBody({
         <BodyMap
           view={viewSide === 'anterior' ? 'front' : 'back'}
           intensity={intensityMap}
-          width={240}
+          width={184}
         />
       </View>
 
