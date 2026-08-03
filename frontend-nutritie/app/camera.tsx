@@ -28,6 +28,7 @@ import FoodScanSuccessModal, {
   type AlimentScanat,
 } from '@/components/food/FoodScanSuccessModal';
 import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInput';
+import { uploadImageToImageKit } from '@/lib/imagekit';
 
 const { width, height } = Dimensions.get('window');
 const SCAN_BOX_SIZE = width * 0.78;
@@ -120,6 +121,11 @@ export default function CameraScreen() {
       setSeIncarca(true);
 
       try {
+        // Incarcam imaginea pe ImageKit CDN in fundal pentru stocare si optimizare
+        uploadImageToImageKit(imageUri).catch((ikErr) => {
+          if (__DEV__) console.log('ImageKit upload background notice:', ikErr.message);
+        });
+
         const formData = new FormData();
 
         formData.append('imagine', {

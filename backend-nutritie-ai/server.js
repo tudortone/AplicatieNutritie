@@ -243,19 +243,36 @@ const requireAuth = async (req, res, next) => {
   }
 
   try {
+    // 1. Incercam Supabase Auth
     const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (error || !user) {
-      tokenCache.delete(tokenKey);
-      return res.status(401).json({ eroare: "Token invalid sau respins de serverul Auth." });
+    if (!error && user) {
+      if (tokenCache.size >= MAX_TOKEN_CACHE_ENTRIES) {
+        const oldest = tokenCache.keys().next().value;
+        if (oldest) tokenCache.delete(oldest);
+      }
+      tokenCache.set(tokenKey, { user, expiresAt: now + CACHE_TTL_MS });
+      req.user = user;
+      return next();
     }
-    if (tokenCache.size >= MAX_TOKEN_CACHE_ENTRIES) {
-      // Evacuam cea mai veche intrare (LRU).
-      const oldest = tokenCache.keys().next().value;
-      if (oldest) tokenCache.delete(oldest);
+
+    // 2. Daca Supabase esueaza si avem CLERK_SECRET_KEY, incercam validarea Clerk
+    if (process.env.CLERK_SECRET_KEY) {
+      try {
+        const { verifyToken } = require('@clerk/express');
+        const clerkPayload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
+        if (clerkPayload && clerkPayload.sub) {
+          const clerkUser = { id: clerkPayload.sub, email: clerkPayload.email || 'clerk_user@nutriai.app' };
+          tokenCache.set(tokenKey, { user: clerkUser, expiresAt: now + CACHE_TTL_MS });
+          req.user = clerkUser;
+          return next();
+        }
+      } catch (cErr) {
+        // Token invalid si pentru Clerk
+      }
     }
-    tokenCache.set(tokenKey, { user, expiresAt: now + CACHE_TTL_MS });
-    req.user = user;
-    next();
+
+    tokenCache.delete(tokenKey);
+    return res.status(401).json({ eroare: "Token invalid sau respins de serverul Auth." });
   } catch (error) {
     return res.status(500).json({ eroare: "Eroare la transferul validării autentificării." });
   }
@@ -291,6 +308,12 @@ app.get('/api/imagekit-auth', requireAuth, (req, res) => {
 // TRIGGER.DEV ASYNC AI FOOD ANALYSIS ENDPOINT
 // ==========================================
 app.post('/api/trigger-analiza-mancare', requireAuth, aiRateLimiter, async (req, res) => {
+  if (!process.env.TRIGGER_SECRET_KEY) {
+    return res.status(503).json({
+      eroare: "Trigger.dev nu este activat (lipseste TRIGGER_SECRET_KEY in variabilele de mediu backend).",
+      status: "disabled"
+    });
+  }
   try {
     const { imageUrl, tipMasa } = req.body;
     if (!imageUrl) {

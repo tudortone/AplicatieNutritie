@@ -112,26 +112,37 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  const clerkKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const hasValidClerkKey = Boolean(clerkKey && clerkKey.startsWith('pk_') && clerkKey !== 'pk_test_mock_clerk_key');
+
+  const innerApp = (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider style={{ flex: 1 }}>
+        <AppThemeProvider>
+          <AuthProvider>
+            <OnboardingProvider>
+              <NotificationBannerProvider>
+                <GamificareProvider>
+                  <GlobalErrorBoundary>
+                    <RootNavigator />
+                  </GlobalErrorBoundary>
+                </GamificareProvider>
+              </NotificationBannerProvider>
+            </OnboardingProvider>
+          </AuthProvider>
+        </AppThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
+
+  if (!hasValidClerkKey) {
+    return innerApp;
+  }
+
   return (
-    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+    <ClerkProvider publishableKey={clerkKey!} tokenCache={tokenCache}>
       <ClerkLoaded>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <SafeAreaProvider style={{ flex: 1 }}>
-            <AppThemeProvider>
-              <AuthProvider>
-                <OnboardingProvider>
-                  <NotificationBannerProvider>
-                    <GamificareProvider>
-                      <GlobalErrorBoundary>
-                        <RootNavigator />
-                      </GlobalErrorBoundary>
-                    </GamificareProvider>
-                  </NotificationBannerProvider>
-                </OnboardingProvider>
-              </AuthProvider>
-            </AppThemeProvider>
-          </SafeAreaProvider>
-        </GestureHandlerRootView>
+        {innerApp}
       </ClerkLoaded>
     </ClerkProvider>
   );
