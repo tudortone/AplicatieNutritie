@@ -122,6 +122,7 @@ function RootNavigator() {
         <Stack.Screen name="notificari" options={push} />
         <Stack.Screen name="paywall" options={push} />
         <Stack.Screen name="progres-antrenamente" options={push} />
+        <Stack.Screen name="setari" options={push} />
       </Stack>
     </PremiumProvider>
     {session && isLocked ? <LockScreen biometricType={biometricType} onUnlock={unlockApp} /> : null}
