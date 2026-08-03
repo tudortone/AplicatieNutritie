@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { OnboardingProvider } from '../context/OnboardingContext';
 import { useAppStore } from '../hooks/useAppStore';
 import { useBiometrics } from '../hooks/useBiometrics';
 import LockScreen from '../components/LockScreen';
@@ -37,13 +38,24 @@ function RootNavigator() {
 
   useEffect(() => { syncFromAsyncStorage(); }, [syncFromAsyncStorage]);
   const appDarkTheme = useMemo(() => ({ ...DarkTheme, colors: { ...DarkTheme.colors, background: colors.background } }), [colors.background]);
+
   useEffect(() => {
     if (loadingAuth) return;
     const inAuth = segments[0] === 'auth';
     const inOnboarding = segments[0] === 'onboarding';
-    if (!session && !inAuth) router.replace('/auth');
-    else if (session && !isOnboardingDone && !inOnboarding) router.replace('/onboarding');
-    else if (session && (inAuth || (isOnboardingDone && inOnboarding))) router.replace('/(tabs)');
+
+    // Ordinea ceruta: intai chestionarul, apoi planul, apoi contul.
+    // Cine nu a terminat onboarding-ul nu ajunge la ecranul de autentificare,
+    // ca sa nu i se ceara cont inainte sa vada ce primeste.
+    if (!isOnboardingDone) {
+      if (!inOnboarding) router.replace('/onboarding');
+      return;
+    }
+    if (!session) {
+      if (!inAuth) router.replace('/auth');
+      return;
+    }
+    if (inAuth || inOnboarding) router.replace('/(tabs)');
   }, [session, loadingAuth, isOnboardingDone, segments, router]);
 
   if (loadingAuth) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}><ActivityIndicator size="large" color={colors.accent} /></View>;
@@ -54,7 +66,7 @@ function RootNavigator() {
     <Stack screenOptions={{ headerShown: false, gestureEnabled: true, animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, fullScreenGestureEnabled: true, contentStyle: { backgroundColor: colors.background } }}>
       <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
       <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
-      <Stack.Screen name="onboarding" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
+      <Stack.Screen name="onboarding" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
       <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
       <Stack.Screen name="scanner-barcode" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
       <Stack.Screen name="adauga-manual" options={push} />
@@ -71,5 +83,5 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
-  return <GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider style={{ flex: 1 }}><AppThemeProvider><AuthProvider><NotificationBannerProvider><GamificareProvider><GlobalErrorBoundary><RootNavigator /></GlobalErrorBoundary></GamificareProvider></NotificationBannerProvider></AuthProvider></AppThemeProvider></SafeAreaProvider></GestureHandlerRootView>;
+  return <GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider style={{ flex: 1 }}><AppThemeProvider><AuthProvider><OnboardingProvider><NotificationBannerProvider><GamificareProvider><GlobalErrorBoundary><RootNavigator /></GlobalErrorBoundary></GamificareProvider></NotificationBannerProvider></OnboardingProvider></AuthProvider></AppThemeProvider></SafeAreaProvider></GestureHandlerRootView>;
 }
