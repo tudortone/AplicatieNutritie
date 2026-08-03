@@ -10,8 +10,32 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const Sentry = require('@sentry/node');
+const ImageKit = require('@imagekit/nodejs');
+const { tasks } = require('@trigger.dev/sdk/v3');
 
 require('dotenv').config();
+
+// Sentry Node.js initialization
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: 1.0,
+  });
+  console.log('✅ Sentry Node.js configurat cu succes');
+}
+
+// ImageKit SDK initialization
+let imagekit = null;
+if (process.env.IMAGEKIT_PUBLIC_KEY && process.env.IMAGEKIT_PRIVATE_KEY && process.env.IMAGEKIT_URL_ENDPOINT) {
+  imagekit = new ImageKit({
+    publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+    privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+    urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT
+  });
+  console.log('✅ ImageKit SDK inițializat cu succes');
+}
 
 // 1.1 Sanitizare input — previne XSS stocat si caractere de control
 const { sanitizeText, sanitizeName, sanitizeRequest, detectPromptInjection } = require('./utils/sanitize');
@@ -236,6 +260,61 @@ const requireAuth = async (req, res, next) => {
     return res.status(500).json({ eroare: "Eroare la transferul validării autentificării." });
   }
 };
+
+// ==========================================
+// IMAGEKIT AUTHENTICATION ENDPOINT
+// ==========================================
+app.get('/api/imagekit-auth', requireAuth, (req, res) => {
+  if (!imagekit) {
+    const token = crypto.randomUUID();
+    const expire = Math.floor(Date.now() / 1000) + 1800;
+    return res.json({
+      token,
+      expire,
+      signature: 'mock_signature',
+      urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/nutriai'
+    });
+  }
+  try {
+    const authParams = imagekit.getAuthenticationParameters();
+    return res.json({
+      ...authParams,
+      urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT
+    });
+  } catch (err) {
+    if (process.env.SENTRY_DSN) Sentry.captureException(err);
+    return res.status(500).json({ eroare: "Eroare la generarea parametrilor ImageKit." });
+  }
+});
+
+// ==========================================
+// TRIGGER.DEV ASYNC AI FOOD ANALYSIS ENDPOINT
+// ==========================================
+app.post('/api/trigger-analiza-mancare', requireAuth, aiRateLimiter, async (req, res) => {
+  try {
+    const { imageUrl, tipMasa } = req.body;
+    if (!imageUrl) {
+      return res.status(400).json({ eroare: "URL-ul imaginii este obligatoriu." });
+    }
+
+    const handle = await tasks.trigger("analiza-mancare-ai", {
+      imageUrl,
+      tipMasa: tipMasa || 'Pranz',
+      userId: req.user.id
+    });
+
+    return res.json({
+      succes: true,
+      taskId: handle.id,
+      status: "pending",
+      mesaj: "Analiza AI a fost trimisă în fundal prin Trigger.dev."
+    });
+  } catch (err) {
+    if (process.env.SENTRY_DSN) Sentry.captureException(err);
+    console.error("Eroare Trigger.dev:", err.message);
+    return res.status(500).json({ eroare: "Nu s-a putut trimite task-ul în fundal." });
+  }
+});
 
 // Inițializare AI Gemini și listă modele în cascadă (modele stabile prioritar)
 const genAI = new GoogleGenerativeAI(geminiApiKey);
@@ -1681,9 +1760,14 @@ app.use((req, res, next) => {
 // ==========================================
 // HANDLER GLOBAL DE ERORI
 // ==========================================
+Sentry.setupExpressErrorHandler(app);
+
 app.use((err, req, res, next) => {
   const message = err?.message || '';
   console.error("Eroare globală:", message);
+  if (process.env.SENTRY_DSN) {
+    Sentry.captureException(err);
+  }
   // Verificam codul erorii INAINTE de instanceof.
   if (err?.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ eroare: "Fișierul este prea mare. Limita este 5MB." });

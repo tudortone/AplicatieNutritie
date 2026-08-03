@@ -15,6 +15,7 @@
     "check": "npm run typecheck && npm run lint && npm run build:anatomy && npm run verify:anatomy"
   },
   "dependencies": {
+    "@clerk/clerk-expo": "^2.19.31",
     "@expo/vector-icons": "^15.0.3",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -24,6 +25,7 @@
     "@react-navigation/native": "^7.1.8",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
+    "@sentry/react-native": "^8.21.0",
     "@shopify/flash-list": "2.0.2",
     "@supabase/supabase-js": "^2.108.2",
     "@types/three": "^0.185.1",
@@ -50,6 +52,7 @@
     "expo-updates": "~29.0.18",
     "expo-web-browser": "~15.0.11",
     "i18next": "^26.3.6",
+    "imagekit-javascript": "^4.0.1",
     "lucide-react-native": "^1.22.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",

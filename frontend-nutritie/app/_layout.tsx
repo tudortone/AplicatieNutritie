@@ -6,6 +6,9 @@ import { useEffect, useMemo } from 'react';
 import { View, ActivityIndicator, Text, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Sentry from '@sentry/react-native';
+import { ClerkProvider, ClerkLoaded } from '@clerk/clerk-expo';
+import * as SecureStore from 'expo-secure-store';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { OnboardingProvider } from '../context/OnboardingContext';
@@ -19,6 +22,32 @@ import { useDailySync } from '../hooks/useDailySync';
 import OfflineBanner from '../components/OfflineBanner';
 import { GlobalErrorBoundary } from '../components/GlobalErrorBoundary';
 import '../i18n';
+
+if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    debug: false,
+  });
+}
+
+const tokenCache = {
+  async getToken(key: string) {
+    try {
+      return SecureStore.getItemAsync(key);
+    } catch {
+      return null;
+    }
+  },
+  async saveToken(key: string, value: string) {
+    try {
+      return SecureStore.setItemAsync(key, value);
+    } catch {
+      return;
+    }
+  },
+};
+
+const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_mock_clerk_key';
 
 LogBox.ignoreLogs(['expo-notifications: Android Push notifications', '`expo-notifications` functionality is not fully supported in Expo Go']);
 export const unstable_settings = { anchor: '(tabs)' };
@@ -83,5 +112,27 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
-  return <GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider style={{ flex: 1 }}><AppThemeProvider><AuthProvider><OnboardingProvider><NotificationBannerProvider><GamificareProvider><GlobalErrorBoundary><RootNavigator /></GlobalErrorBoundary></GamificareProvider></NotificationBannerProvider></OnboardingProvider></AuthProvider></AppThemeProvider></SafeAreaProvider></GestureHandlerRootView>;
+  return (
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+      <ClerkLoaded>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <SafeAreaProvider style={{ flex: 1 }}>
+            <AppThemeProvider>
+              <AuthProvider>
+                <OnboardingProvider>
+                  <NotificationBannerProvider>
+                    <GamificareProvider>
+                      <GlobalErrorBoundary>
+                        <RootNavigator />
+                      </GlobalErrorBoundary>
+                    </GamificareProvider>
+                  </NotificationBannerProvider>
+                </OnboardingProvider>
+              </AuthProvider>
+            </AppThemeProvider>
+          </SafeAreaProvider>
+        </GestureHandlerRootView>
+      </ClerkLoaded>
+    </ClerkProvider>
+  );
 }

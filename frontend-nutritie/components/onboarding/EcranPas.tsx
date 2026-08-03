@@ -67,7 +67,7 @@ export default function EcranPas({
 		}
 
 		const urmator = pasulUrmator(pas, date.scop)
-		if (urmator) router.push(urmator)
+		if (urmator) router.push(urmator as any)
 	}
 
 	return (

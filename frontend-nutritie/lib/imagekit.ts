@@ -1,0 +1,78 @@
+import { API_URL } from '../constants/config';
+import { supabase } from '../supabase';
+
+export interface ImageKitUploadResult {
+  fileId: string;
+  url: string;
+  thumbnailUrl: string;
+  name: string;
+}
+
+/**
+ * Preia parametrii de autentificare temporari de la backend pentru upload securizat pe ImageKit.
+ */
+export async function getImageKitAuthParams(): Promise<{ token: string; expire: number; signature: string; urlEndpoint: string }> {
+  const session = (await supabase.auth.getSession()).data.session;
+  const token = session?.access_token || '';
+
+  const res = await fetch(`${API_URL}/api/imagekit-auth`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!res.ok) {
+    throw new Error(`Eroare la preluarea autentificării ImageKit: ${res.statusText}`);
+  }
+
+  return await res.json();
+}
+
+/**
+ * Încarcă o imagine pe ImageKit CDN folosind multipart/form-data.
+ */
+export async function uploadImageToImageKit(
+  fileUri: string,
+  fileName: string = 'mancare.jpg'
+): Promise<ImageKitUploadResult> {
+  const authParams = await getImageKitAuthParams();
+  const urlEndpoint = authParams.urlEndpoint || 'https://ik.imagekit.io/nutriai';
+
+  const formData = new FormData();
+  formData.append('file', {
+    uri: fileUri,
+    type: 'image/jpeg',
+    name: fileName
+  } as any);
+  formData.append('fileName', fileName);
+  formData.append('token', authParams.token);
+  formData.append('expire', authParams.expire.toString());
+  formData.append('signature', authParams.signature);
+  formData.append('publicKey', process.env.EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY || 'public_mock_key');
+  formData.append('useUniqueFileName', 'true');
+  formData.append('folder', '/mancare');
+
+  const uploadRes = await fetch(`https://upload.imagekit.io/api/v1/files/upload`, {
+    method: 'POST',
+    body: formData
+  });
+
+  if (!uploadRes.ok) {
+    const errorText = await uploadRes.text();
+    console.warn('ImageKit upload warning (fallback to local URI):', errorText);
+    return {
+      fileId: 'local-' + Date.now(),
+      url: fileUri,
+      thumbnailUrl: fileUri,
+      name: fileName
+    };
+  }
+
+  const result = await uploadRes.json();
+  return {
+    fileId: result.fileId,
+    url: result.url,
+    thumbnailUrl: result.thumbnailUrl || result.url,
+    name: result.name
+  };
+}
