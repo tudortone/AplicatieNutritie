@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Alert, ActivityIndicator, Platform, Switch, Image
+  ScrollView, Alert, ActivityIndicator, Platform, Switch, Image, Linking
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -11,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Trophy, Camera, CheckCircle2, User, Pencil, Crown } from 'lucide-react-native';
+import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Trophy, Camera, CheckCircle2, User, Pencil, Crown, Mail, FileText, Users } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
@@ -27,6 +27,10 @@ import { useGamificare } from '../../hooks/useGamificare';
 import KeyboardAwareScreen from '../../components/ui/KeyboardAwareScreen';
 import { INSIGNE_LIST } from '../../constants/insigne';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+
+// TODO: completează aici adresa reală de e-mail pentru suport înainte de lansare.
+// Cât rămâne gol, rândul „Contactează-ne" afișează o alertă în loc de un mailto.
+const EMAIL_SUPORT = '';
 
 export default function ProfilScreen() {
   const router = useRouter();
@@ -210,6 +214,18 @@ export default function ProfilScreen() {
         } 
       }
     ]);
+  };
+
+  const abreSuport = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!EMAIL_SUPORT) {
+      Alert.alert(
+        'Contactează-ne',
+        'Adresa de e-mail pentru suport nu este configurată încă. Încearcă din nou în curând.'
+      );
+      return;
+    }
+    await Linking.openURL(`mailto:${EMAIL_SUPORT}`);
   };
 
   if (checkingSession) {
@@ -510,6 +526,48 @@ export default function ProfilScreen() {
           </TouchableOpacity>
         </Animated.View>
 
+        {/* Upgrade Family Plan: nu există încă un produs de familie în RevenueCat,
+            deci duce la paywall-ul existent până apare planul real. */}
+        <Animated.View entering={FadeInDown.duration(600).delay(65)}>
+          <TouchableOpacity
+            onPress={() => router.push('/paywall' as never)}
+            activeOpacity={0.85}
+            style={{
+              backgroundColor: colors.accentSecondary + '12',
+              borderColor: colors.accentSecondary + '44',
+              borderWidth: 1,
+              borderRadius: 18,
+              padding: 16,
+              marginBottom: 24,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 14,
+            }}
+          >
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: colors.accentSecondary + '22',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Users size={22} color={colors.accentSecondary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '900', color: colors.textPrimary }}>
+                Upgrade la Plan Family
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
+                Conturi pentru întreaga familie, cu un singur abonament
+              </Text>
+            </View>
+            <ChevronRight size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </Animated.View>
+
         {/* Secțiune Insigne & Gamificare */}
         <Animated.View entering={FadeInDown.duration(600).delay(80)}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
@@ -736,6 +794,48 @@ export default function ProfilScreen() {
               <Text style={[styles.infoCardText, { color: colors.textSecondary }]}>
                 Obiectivele pe care le setezi sunt folosite de asistentul AI pentru a-ți oferi recomandări personalizate și a-ți urmări progresul zilnic.
               </Text>
+            </LinearGradient>
+          </BlurView>
+        </Animated.View>
+
+        {/* Suport & Legal */}
+        <Animated.View entering={FadeInUp.duration(600).delay(320)}>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>SUPORT & LEGAL</Text>
+          <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 24 }]}>
+            <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
+              <TouchableOpacity
+                style={[styles.inputRow, { alignItems: 'center' }]}
+                onPress={abreSuport}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <Mail size={18} color={colors.accent} />
+                </View>
+                <View style={[styles.inputContent, { flex: 1 }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Contactează-ne</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    {EMAIL_SUPORT ? `Ne poți scrie la ${EMAIL_SUPORT}` : 'Trimite un e-mail echipei de suport'}
+                  </Text>
+                </View>
+                <ChevronRight size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <View style={styles.separator} />
+
+              <TouchableOpacity
+                style={[styles.inputRow, { alignItems: 'center' }]}
+                onPress={() => router.push('/legal' as never)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <FileText size={18} color={colors.accent} />
+                </View>
+                <View style={[styles.inputContent, { flex: 1 }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Termeni & Confidențialitate</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Condiții de utilizare și politică de confidențialitate</Text>
+                </View>
+                <ChevronRight size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
             </LinearGradient>
           </BlurView>
         </Animated.View>

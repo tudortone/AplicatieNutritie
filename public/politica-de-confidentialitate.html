@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Politică de Confidențialitate — NutriAI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090C0E;
+      --card-bg: rgba(22, 28, 36, 0.7);
+      --accent: #10B981;
+      --text: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --border: rgba(255, 255, 255, 0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1.5rem;
+      padding: 3rem 2.5rem;
+      backdrop-filter: blur(12px);
+    }
+    .nav-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      margin-bottom: 2rem;
+    }
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2.2rem;
+      margin-bottom: 0.5rem;
+      color: #FFF;
+    }
+    .date { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
+    h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.35rem;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+      color: #10B981;
+    }
+    p, ul { color: #D1D5DB; margin-bottom: 1rem; font-size: 1rem; }
+    ul { padding-left: 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/index.html" class="nav-back">&larr; Înapoi la pagina principală</a>
+    
+    <h1>Politică de Confidențialitate</h1>
+    <div class="date">Ultima actualizare: 3 August 2026</div>
+
+    <p>Această Politică de Confidențialitate explică modul în care aplicația <strong>NutriAI</strong> colectează, utilizează și protejează datele dvs. cu caracter personal în conformitate cu Regulamentul General privind Protecția Datelor (GDPR) și legislația în vigoare.</p>
+
+    <h2>1. Datele pe care le colectăm</h2>
+    <p>Pentru a furniza serviciile de analiză nutrițională și antrenamente, colectăm următoarele categorii de date:</p>
+    <ul>
+      <li><strong>Informații de cont:</strong> Adresa de e-mail, numele și datele de autentificare securizată furnizate prin serviciul Clerk.</li>
+      <li><strong>Date biometrice și de profil:</strong> Vârstă, sex, înălțime, greutate curentă și țintă, nivel de activitate fizică și preferințe alimentare.</li>
+      <li><strong>Imagini și date multimedia:</strong> Fotografiile cu mâncarea încărcate din cameră sau galerie pentru analiza nutrițională AI. Încărcarea se face pe servere securizate (ImageKit CDN).</li>
+      <li><strong>Jurnal de antrenamente & activitate:</strong> Exercițiile înregistrate, tonajul, seriile și repetările pentru calculul hărții musculare.</li>
+    </ul>
+
+    <h2>2. Cum utilizăm datele dvs.</h2>
+    <p>Datele colectate sunt folosite exclusiv pentru:</p>
+    <ul>
+      <li>Calcularea necesarului caloric și a reprezentării nutriționale (macronuțrienți).</li>
+      <li>Analiza imaginilor cu mâncare prin modele de Inteligență Artificială.</li>
+      <li>Generarea vizualizării hărții musculare și a statisticilor de antrenament.</li>
+      <li>Asigurarea securității contului și personalizarea experienței in-app.</li>
+    </ul>
+
+    <h2>3. Stocarea și Securitatea Datelor</h2>
+    <p>Toate datele sunt transmise prin conexiuni criptate SSL/TLS (HTTPS). Datele de profil sunt stocate în baza de date Supabase protejată prin politici Row Level Security (RLS), iar imaginile sunt procesate prin CDN-ul securizat ImageKit.</p>
+
+    <h2>4. Partajarea Datelor cu Terți</h2>
+    <p>Nu vindem și nu închiriem datele dvs. personale. Datele pot fi procesate prin intermediul furnizorilor noștri de încredere:</p>
+    <ul>
+      <li><strong>Supabase:</strong> Stocarea securizată a datelor.</li>
+      <li><strong>Clerk:</strong> Servicii de autentificare.</li>
+      <li><strong>Google AI / Groq / OpenAI:</strong> Procesarea analizelor vizuale și conversaționale (fără identificatori personali stocați de furnizorii AI).</li>
+      <li><strong>Sentry:</strong> Monitorizarea erorilor tehnice și a performanței aplicației.</li>
+    </ul>
+
+    <h2>5. Drepturile Dvs. conform GDPR</h2>
+    <p>Aveți dreptul de a accesa, rectifica sau șterge datele dvs. cu caracter personal în orice moment direct din secțiunea <em>Setări / Profil</em> din aplicație sau prin solicitare directă la suport.</p>
+
+    <h2>6. Contact</h2>
+    <p>Pentru orice întrebări referitoare la această politică, ne puteți contacta la adresa de e-mail: <strong>support@nutriai.app</strong></p>
+
+    <footer>
+      &copy; 2026 NutriAI. Toate drepturile rezervate.
+    </footer>
+  </div>
+</body>
+</html>

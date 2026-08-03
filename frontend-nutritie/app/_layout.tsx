@@ -118,6 +118,7 @@ function RootNavigator() {
         <Stack.Screen name="scanner-barcode" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
         <Stack.Screen name="adauga-manual" options={push} />
         <Stack.Screen name="calculator-ai" options={push} />
+        <Stack.Screen name="legal" options={push} />
         <Stack.Screen name="jurnal-antrenamente" options={push} />
         <Stack.Screen name="notificari" options={push} />
         <Stack.Screen name="paywall" options={push} />
