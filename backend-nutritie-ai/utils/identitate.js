@@ -3,17 +3,13 @@
 /**
  * Rezolvarea identitatii utilizatorului dintr-un token.
  *
- * Rezolva C4. Varianta anterioara accepta token-uri Supabase SAU Clerk si punea
- * direct `clerkPayload.sub` in req.user.id. Acel `sub` are forma `user_2abc...`,
- * nu un UUID, dar ajungea in coloana `user_id` din tabela `mese`:
- *   - daca `user_id` este `uuid`, fiecare scriere venita pe calea Clerk esua cu
- *     eroare Postgres si clientul primea un 500 generic;
- *   - daca este `text`, acelasi om avea doua identitati si doua jurnale separate,
- *     in functie de metoda de autentificare.
- *
- * Aici, un token Clerk este acceptat doar daca exista o mapare explicita catre
- * un cont Supabase in tabela `clerk_user_map`. Fara mapare -> 409, fail-closed.
+ * Rezolva C4: un token Clerk este acceptat doar daca exista o mapare explicita
+ * catre un cont Supabase in `clerk_user_map`. Fara mapare -> 409, fail-closed.
  * Nu se scrie NICIODATA in baza de date un identificator care nu e UUID.
+ *
+ * Adaugat dupa auditul urmator: identitatea returnata include `expiraLaMs`,
+ * momentul real de expirare al tokenului. Fara el, cache-ul de sesiuni memora
+ * orbeste 60 de secunde, deci un token expirat ramanea acceptat.
  *
  * Migrarea SQL necesara este in backend-nutritie-ai/PATCH-CRITIC.md.
  */
@@ -34,9 +30,26 @@ class EroareIdentitate extends Error {
 }
 
 /**
- * Cauta contul Supabase legat de un cont Clerk.
- * @returns {Promise<string|null>} UUID-ul Supabase sau null daca nu exista mapare.
+ * Citeste `exp` dintr-un JWT, FARA sa verifice semnatura.
+ *
+ * De apelat exclusiv DUPA ce tokenul a fost validat criptografic de Supabase Auth
+ * sau de Clerk. Scopul nu este autentificarea, ci sa nu memoram in cache o sesiune
+ * mai mult decat este ea valabila. Daca `exp` lipseste sau e ilizibil, intoarcem
+ * null si ramane in vigoare TTL-ul scurt al cache-ului.
  */
+function citesteExpiraLaMs(token) {
+	try {
+		const parti = String(token).split('.');
+		if (parti.length !== 3) return null;
+		const payload = JSON.parse(Buffer.from(parti[1], 'base64url').toString('utf8'));
+		const exp = Number(payload?.exp);
+		if (!Number.isFinite(exp) || exp <= 0) return null;
+		return exp * 1000;
+	} catch {
+		return null;
+	}
+}
+
 async function gasesteMapareClerk(supabaseAdmin, clerkUserId) {
 	const { data, error } = await supabaseAdmin
 		.from('clerk_user_map')
@@ -80,8 +93,7 @@ async function leagaContClerk(supabaseAdmin, { clerkUserId, supabaseUserId }) {
 /**
  * Valideaza un token si intoarce o identitate normalizata.
  *
- * @returns {Promise<{id: string, email: string|null, provider: 'supabase'|'clerk'}>}
- *   `id` este garantat un UUID Supabase, indiferent de furnizorul de autentificare.
+ * @returns {Promise<{id: string, email: string|null, provider: 'supabase'|'clerk', expiraLaMs: number|null}>}
  * @throws {EroareIdentitate}
  */
 async function rezolvaIdentitate({
@@ -109,6 +121,7 @@ async function rezolvaIdentitate({
 			id: utilizator.id,
 			email: utilizator.email ?? null,
 			provider: 'supabase',
+			expiraLaMs: citesteExpiraLaMs(token),
 		};
 	}
 
@@ -123,8 +136,6 @@ async function rezolvaIdentitate({
 
 	let payloadClerk = null;
 	try {
-		// Import lazy: pachetul e optional, iar absenta lui nu trebuie sa doboare
-		// procesul. Spre deosebire de varianta anterioara, esecul NU e inghitit tacut.
 		const { verifyToken } = require('@clerk/express');
 		payloadClerk = await verifyToken(token, { secretKey: clerkSecretKey });
 	} catch (err) {
@@ -152,8 +163,6 @@ async function rezolvaIdentitate({
 
 	const idSupabase = await gasesteMapareClerk(supabaseAdmin, payloadClerk.sub);
 	if (!idSupabase) {
-		// Fail-closed. Mai bine o eroare explicita decat date scrise sub o
-		// identitate paralela care rupe jurnalul utilizatorului in doua.
 		throw new EroareIdentitate(
 			'Contul Clerk nu este asociat unui cont NutriAI. Autentifica-te o data cu emailul contului pentru a le lega.',
 			'CLERK_NEMAPAT',
@@ -165,6 +174,9 @@ async function rezolvaIdentitate({
 		id: idSupabase,
 		email: payloadClerk.email ?? null,
 		provider: 'clerk',
+		expiraLaMs: Number.isFinite(Number(payloadClerk.exp))
+			? Number(payloadClerk.exp) * 1000
+			: citesteExpiraLaMs(token),
 	};
 }
 
@@ -174,4 +186,5 @@ module.exports = {
 	rezolvaIdentitate,
 	leagaContClerk,
 	gasesteMapareClerk,
+	citesteExpiraLaMs,
 };
