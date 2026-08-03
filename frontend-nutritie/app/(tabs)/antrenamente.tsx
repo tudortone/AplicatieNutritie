@@ -12,7 +12,7 @@ import {
 import * as Haptics from 'expo-haptics';
 
 import KeyboardAwareScreen, { CONTENT_BOTTOM_PADDING } from '../../components/ui/KeyboardAwareScreen';
-import { MuscleBody } from '../../components/fitness/MuscleBody';
+import BodyMap from '../../components/fitness/BodyMap';
 import { mapToCanonicalMuscleIds } from '../../lib/fitnessEngine';
 import type { MuscleId } from '../../components/fitness/heatColor';
 import { CATEGORII, type Categorie, type Exercitiu } from '../../constants/exercitii';
@@ -35,11 +35,14 @@ const SESSION_META_KEY = 'current_workout_session_meta';
 const REST_DEFAULT_SEC = 90;
 const ACTIVE_THRESHOLD = 0.05;
 
+// Pictograme per categorie de muschi. Toate numele exista in glyphmap-ul MaterialCommunityIcons
+// instalat — alese dupa semnificatie: halterofil pt piept, om intins pt spate, alergator pt picioare,
+// inima pt cardio, silueta plina pt full-body etc. (inainte: greutate pt spate, om aplecat pt picioare).
 const CATEGORY_ICON: Record<Categorie, keyof typeof MaterialCommunityIcons.glyphMap> = {
-  piept: 'weight-lifter', spate: 'weight', picioare: 'human-handsdown', umeri: 'arm-flex',
-  brate: 'dumbbell', abdomen: 'fire', cardio: 'run-fast', 'full-body': 'star-four-points',
-  mobilitate: 'yoga', superior: 'weight-lifter', inferior: 'human-handsdown', core: 'fire',
-  corp_intreg: 'star-four-points',
+  piept: 'weight-lifter', spate: 'human-handsup', picioare: 'run', umeri: 'arm-flex',
+  brate: 'dumbbell', abdomen: 'fire', cardio: 'heart-pulse', 'full-body': 'human-male',
+  mobilitate: 'yoga', superior: 'weight-lifter', inferior: 'run', core: 'fire',
+  corp_intreg: 'human-male',
 };
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
@@ -541,8 +544,8 @@ export default function AntrenamenteScreen() {
 
         <View style={[styles.mapContainer, { backgroundColor: colors.surface }]}>
           <View style={styles.mapRow}>
-            <MuscleBody side='front' intensity={displayIntensity} width={bodyWidth} height={MAP_HEIGHT - 40} />
-            <MuscleBody side='back' intensity={displayIntensity} width={bodyWidth} height={MAP_HEIGHT - 40} />
+            <BodyMap view="front" intensity={displayIntensity} width={bodyWidth} />
+            <BodyMap view="back" intensity={displayIntensity} width={bodyWidth} />
           </View>
           <View style={styles.mapLegend}>
             <View style={[styles.legendDot, { backgroundColor: colors.accent }]} />

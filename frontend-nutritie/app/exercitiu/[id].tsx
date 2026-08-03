@@ -17,7 +17,7 @@ import { calculeazaCaloriiEx } from '../../lib/exercitiu';
 import { SetLogger } from '../../components/fitness/SetLogger';
 import { useAntrenamente, Antrenament, SetExercitiu } from '../../hooks/useAntrenamente';
 import { useNotify } from '../../hooks/useNotify';
-import { MuscleBody } from '../../components/fitness/MuscleBody';
+import BodyMap from '../../components/fitness/BodyMap';
 import type { MuscleId } from '../../components/fitness/heatColor';
 import { SeriesConfigurator, type SeriesValue } from '../../components/fitness/SeriesConfigurator';
 import { classifyMeasurement, computeSessionLoad, type MeasurementSpec } from '../../lib/measurement';
@@ -148,17 +148,16 @@ export function Holographic3DAnatomyBody({
         </View>
       </View>
 
-      {/* SISTEM HIBRID PRO: Ilustrație Anatomică Medicală + Colorare Directă pe Mușchi (MuscleBody) */}
+      {/* Desenul anatomic real (assets/anatomy) cu colorare directă pe mușchi (BodyMap) */}
       <View style={[bodyStyles.svgWrap, { position: 'relative', height: 350, justifyContent: 'center', alignItems: 'center' }]}>
         {/* Fundal aură scanare biomecanică */}
         <View style={{ position: 'absolute', width: 220, height: 220, borderRadius: 110, backgroundColor: mainActiveColor, opacity: 0.12 }} />
 
         {/* Strat SVG cu Heatmap Muscular Continuu */}
-        <MuscleBody
-          side={viewSide === 'anterior' ? 'front' : 'back'}
+        <BodyMap
+          view={viewSide === 'anterior' ? 'front' : 'back'}
           intensity={intensityMap}
-          width={240}
-          height={330}
+          width={184}
         />
       </View>
 

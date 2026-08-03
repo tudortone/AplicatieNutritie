@@ -1198,36 +1198,35 @@ export function deriveMuschiTinta(ex: Exercitiu): Partial<Record<MuscleId, numbe
   const out: Partial<Record<MuscleId, number>> = {};
   const mapGroupToMuscleIds = (group: string): { id: MuscleId; pct: number }[] => {
     const g = group.toLowerCase().trim();
-    if (/pectorali|piept|pectoral/i.test(g)) return [{ id: 'pectorali', pct: 100 }];
-    if (/deltoid anterior|umeri anteriori/i.test(g)) return [{ id: 'deltoid_anterior', pct: 85 }];
-    if (/deltoid lateral|umeri laterali/i.test(g)) return [{ id: 'deltoid_lateral', pct: 85 }];
-    if (/deltoid posterior|umeri posteriori/i.test(g)) return [{ id: 'deltoid_posterior', pct: 80 }];
-    if (/umeri|deltoizi/i.test(g)) return [
-      { id: 'deltoid_anterior', pct: 80 },
-      { id: 'deltoid_lateral', pct: 65 },
-    ];
+    if (/pectorali|piept|pectoral/i.test(g)) return [{ id: 'chest', pct: 100 }];
+    if (/deltoid anterior|umeri anteriori/i.test(g)) return [{ id: 'delts', pct: 85 }];
+    if (/deltoid lateral|umeri laterali/i.test(g)) return [{ id: 'delts', pct: 85 }];
+    if (/deltoid posterior|umeri posteriori/i.test(g)) return [{ id: 'delts', pct: 80 }];
+    if (/umeri|deltoizi/i.test(g)) return [{ id: 'delts', pct: 80 }];
     if (/biceps/i.test(g)) return [{ id: 'biceps', pct: 90 }];
     if (/triceps/i.test(g)) return [{ id: 'triceps', pct: 90 }];
-    if (/antebrate|brahial|brate|brațe/i.test(g)) return [{ id: 'antebrate', pct: 60 }];
-    if (/abdomen|abdomeni|core/i.test(g)) return [{ id: 'abdomen', pct: 90 }];
-    if (/oblici/i.test(g)) return [{ id: 'oblici', pct: 80 }];
-    if (/trapez/i.test(g)) return [{ id: 'trapez', pct: 80 }];
-    if (/dorsali|spate/i.test(g)) return [{ id: 'dorsali', pct: 95 }];
-    if (/lombari|coloană/i.test(g)) return [{ id: 'lombari', pct: 75 }];
-    if (/romboizi/i.test(g)) return [{ id: 'romboizi', pct: 70 }];
-    if (/fesieri|șolduri/i.test(g)) return [{ id: 'fesieri', pct: 85 }];
-    if (/cvadriceps|picioare/i.test(g)) return [{ id: 'cvadriceps', pct: 95 }];
-    if (/ischiogambieri|femurali/i.test(g)) return [{ id: 'ischiogambieri', pct: 85 }];
-    if (/gambe/i.test(g)) return [{ id: 'gambe', pct: 75 }];
+    if (/antebrate|brahial|brate|brațe/i.test(g)) return [{ id: 'forearms', pct: 60 }];
+    if (/abdomen|abdomeni|core/i.test(g)) return [{ id: 'abs', pct: 90 }];
+    if (/oblici/i.test(g)) return [{ id: 'obliques', pct: 80 }];
+    if (/trapez/i.test(g)) return [{ id: 'traps', pct: 80 }];
+    if (/dorsali|spate/i.test(g)) return [{ id: 'lats', pct: 95 }];
+    if (/lombari|coloană/i.test(g)) return [{ id: 'lower_back', pct: 75 }];
+    // Romboizii nu au slot separat in desenul anatomic — se distribuie pe trapez.
+    if (/romboizi/i.test(g)) return [{ id: 'traps', pct: 70 }];
+    if (/fesieri|șolduri/i.test(g)) return [{ id: 'glutes', pct: 85 }];
+    if (/cvadriceps|picioare/i.test(g)) return [{ id: 'quads', pct: 95 }];
+    if (/ischiogambieri|femurali/i.test(g)) return [{ id: 'hamstrings', pct: 85 }];
+    if (/gambe/i.test(g)) return [{ id: 'calves', pct: 75 }];
     // FIX HARTA: 'abductori' lipsea complet, iar regexul /adductori/ prindea si
     // "abductori" => muschiul abductor nu se aprindea NICIODATA, se colora adductorul.
-    if (/abductori|fesier mijlociu/i.test(g)) return [{ id: 'abductori', pct: 80 }];
-    if (/adductori/i.test(g)) return [{ id: 'adductori', pct: 65 }];
+    // Desenul nu are slot de abductori — se distribuie pe fesieri (zona soldului).
+    if (/abductori|fesier mijlociu/i.test(g)) return [{ id: 'glutes', pct: 80 }];
+    if (/adductori/i.test(g)) return [{ id: 'adductors', pct: 65 }];
     if (/full-body|corp_intreg|cardio/i.test(g)) return [
-      { id: 'cvadriceps', pct: 60 },
-      { id: 'pectorali', pct: 50 },
-      { id: 'dorsali', pct: 50 },
-      { id: 'abdomen', pct: 50 },
+      { id: 'quads', pct: 60 },
+      { id: 'chest', pct: 50 },
+      { id: 'lats', pct: 50 },
+      { id: 'abs', pct: 50 },
     ];
     return [];
   };

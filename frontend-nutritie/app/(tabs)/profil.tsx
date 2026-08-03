@@ -11,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Trophy, Camera, CheckCircle2, User, Pencil } from 'lucide-react-native';
+import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Trophy, Camera, CheckCircle2, User, Pencil, Crown } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
@@ -196,6 +196,7 @@ export default function ProfilScreen() {
             k.startsWith('chat_history_') ||
             ['greutate', 'greutateTinta', 'caloriiTinta', 'proteineTinta',
              'carbiTinta', 'grasimiTinta', 'nume_profil', 'greutate_istoric',
+             'sex', 'varsta', 'inaltime', 'nivel_activitate', 'obiectiv',
              'current_workout_session', 'nutriai_workouts', 'gamificare_v1',
              'notificari_v1', 'nutriai_theme', 'favorite_foods',
              'health_sync_enabled', 'health_step_goal', 'health_sync_provider',
@@ -466,6 +467,47 @@ export default function ProfilScreen() {
               </View>
             </LinearGradient>
           </BlurView>
+        </Animated.View>
+
+        {/* NutriAI Premium */}
+        <Animated.View entering={FadeInDown.duration(600).delay(60)}>
+          <TouchableOpacity
+            onPress={() => router.push('/paywall' as never)}
+            activeOpacity={0.85}
+            style={{
+              backgroundColor: colors.accent + '12',
+              borderColor: '#FFD45A44',
+              borderWidth: 1,
+              borderRadius: 18,
+              padding: 16,
+              marginBottom: 24,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 14,
+            }}
+          >
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: '#FFD45A22',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Crown size={22} color="#FFD45A" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '900', color: colors.textPrimary }}>
+                NutriAI Premium
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
+                Scanări AI nelimitate, chat fără restricții și macro-uri personalizate
+              </Text>
+            </View>
+            <ChevronRight size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
         </Animated.View>
 
         {/* Secțiune Insigne & Gamificare */}

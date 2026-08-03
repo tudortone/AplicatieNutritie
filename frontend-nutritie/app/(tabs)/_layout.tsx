@@ -1,18 +1,16 @@
-import { Tabs, usePathname, useRouter } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
 import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Home, List, MessageCircle, User, BarChart3, Dumbbell, Gift, History, Sparkles } from 'lucide-react-native';
+import { Home, List, MessageCircle, User, BarChart3, Dumbbell, Gift, History } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
-import HomeLootBoxDock from '../../components/gamification/HomeLootBoxDock';
 
-type SportAction = 'progress' | 'history' | 'cosmetics';
+type SportAction = 'progress' | 'history';
 
 export default function TabLayout() {
   const { colors } = useTheme();
   const router = useRouter();
-  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const compact = width <= 390;
@@ -20,7 +18,6 @@ export default function TabLayout() {
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 14);
   const tabHeight = (compact ? 54 : 58) + bottomInset;
   const iconSize = compact ? 21 : 24;
-  const isHome = pathname === '/' || pathname === '/index' || pathname === '/(tabs)';
 
   const icon = (Icon: typeof Home) => ({ color }: { color: string; size: number }) => (
     <Icon size={iconSize} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />
@@ -30,7 +27,6 @@ export default function TabLayout() {
     const config = {
       progress: { Icon: Gift, label: 'Questuri și progres sport', route: '/progres-antrenamente' as const, active: true },
       history: { Icon: History, label: 'Jurnal antrenamente', route: '/jurnal-antrenamente' as const, active: false },
-      cosmetics: { Icon: Sparkles, label: 'Garderobă cosmetică', route: '/cosmetice' as const, active: true },
     }[type];
     const ActionIcon = config.Icon;
     return (
@@ -96,7 +92,6 @@ export default function TabLayout() {
             headerRight: () => (
               <View style={styles.headerActions}>
                 {headerAction('progress')}
-                {headerAction('cosmetics')}
                 {headerAction('history')}
               </View>
             ),
@@ -106,13 +101,6 @@ export default function TabLayout() {
         <Tabs.Screen name="chat" options={{ title: compact ? 'AI' : 'Asistent', tabBarAccessibilityLabel: 'Asistent NutriAI', tabBarIcon: icon(MessageCircle) }} />
         <Tabs.Screen name="profil" options={{ title: 'Profil', tabBarAccessibilityLabel: 'Profil', tabBarIcon: icon(User) }} />
       </Tabs>
-
-      {isHome ? (
-        <HomeLootBoxDock
-          bottom={tabHeight + 10}
-          onOpenWardrobe={() => router.push('/cosmetice')}
-        />
-      ) : null}
     </View>
   );
 }

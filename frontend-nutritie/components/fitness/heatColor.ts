@@ -4,31 +4,30 @@
  */
 
 export type MuscleId =
-  | 'pectorali'
-  | 'deltoid_anterior'
-  | 'deltoid_lateral'
-  | 'deltoid_posterior'
+  | 'abs'
+  | 'adductors'
   | 'biceps'
-  | 'triceps'
-  | 'antebrate'
-  | 'abdomen'
-  | 'oblici'
-  | 'trapez'
-  | 'dorsali'
-  | 'lombari'
-  | 'romboizi'
-  | 'fesieri'
-  | 'cvadriceps'
-  | 'ischiogambieri'
-  | 'gambe'
-  | 'adductori'
-  | 'abductori';
+  | 'calves'
+  | 'chest'
+  | 'delts'
+  | 'forearms'
+  | 'glutes'
+  | 'hamstrings'
+  | 'hip_flexors'
+  | 'infraspinatus'
+  | 'lats'
+  | 'lower_back'
+  | 'neck'
+  | 'obliques'
+  | 'quads'
+  | 'serratus'
+  | 'traps'
+  | 'triceps';
 
 export const ALL_MUSCLE_IDS: MuscleId[] = [
-  'pectorali', 'deltoid_anterior', 'deltoid_lateral', 'deltoid_posterior',
-  'biceps', 'triceps', 'antebrate', 'abdomen', 'oblici',
-  'trapez', 'dorsali', 'lombari', 'romboizi',
-  'fesieri', 'cvadriceps', 'ischiogambieri', 'gambe', 'adductori', 'abductori',
+  'chest', 'delts', 'traps', 'lats', 'infraspinatus', 'lower_back', 'neck',
+  'biceps', 'triceps', 'forearms', 'abs', 'obliques', 'serratus',
+  'glutes', 'quads', 'hamstrings', 'calves', 'adductors', 'hip_flexors',
 ];
 
 /**
@@ -47,7 +46,6 @@ export function isOutline(fill?: string): boolean {
 /**
  * Culoare pentru mușchi NEANTRENAT (intensitate 0 / lipsă de date).
  * Un corp neantrenat primeste o culoare neutra, nu albastru "odihnit".
-//
  */
 export const COLOR_INACTIVE = '#3F3F46';
 
