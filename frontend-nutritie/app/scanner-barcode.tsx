@@ -394,6 +394,17 @@ export default function ScannerBarcodeScreen() {
                 </TouchableOpacity>
               </View>
 
+              {Boolean(produsGasit.estimat || produsGasit.sursa === 'estimare_ai') && (
+                <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#F59E0B' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#F59E0B', marginBottom: 2 }}>
+                    ⚠️ Valori Estimate de Inteligența Artificială
+                  </Text>
+                  <Text style={{ fontSize: 11, color: colors.textSecondary, lineHeight: 15 }}>
+                    Acest produs nu a fost găsit în baza oficială. Valorile nutriționale și gramajul au fost generate de modelul AI și trebuie verificate înainte de adăugarea în jurnal.
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.macroGrid}>
                 <View style={styles.macroBox}>
                   <Text style={[styles.macroVal, { color: colors.accent }]}>{produsGasit.calorii_100g}</Text>

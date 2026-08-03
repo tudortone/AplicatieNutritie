@@ -15,6 +15,7 @@ export interface ProdusScanat {
   micronutrienti_100g?: Micronutrienti;
   imagine_url?: string;
   sursa?: string;
+  estimat?: boolean;
 }
 
 const finitePositive = (value: unknown) => {
