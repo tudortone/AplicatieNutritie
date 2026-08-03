@@ -3,7 +3,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const multer = require('multer');
-const rateLimit = require('express-rate-limit');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
@@ -16,6 +15,20 @@ const Sentry = require('@sentry/node');
 // deci /api/imagekit-auth esua mereu cu 500 indiferent de chei.
 const ImageKit = require('imagekit');
 const { tasks } = require('@trigger.dev/sdk/v3');
+// Audit securitate: modulele reparate pentru C1 (rate limit), C2/C3 (barcode),
+// C4 (identitate), C6 (token cache). Detalii in backend-nutritie-ai/PATCH-CRITIC.md.
+const { creeazaLimitatoare } = require('./utils/rateLimit');
+const { TokenCache } = require('./utils/tokenCache');
+const { rezolvaIdentitate, EroareIdentitate, esteUuid } = require('./utils/identitate');
+const {
+  construiesteUrlOpenFoodFacts,
+  citesteDinCacheGlobal,
+  citesteEstimareUtilizator,
+  salveazaProdusOff,
+  salveazaEstimareUtilizator,
+  verificaDreptDeScriere,
+  salveazaProdusManual,
+} = require('./utils/barcode');
 
 require('dotenv').config();
 
@@ -24,7 +37,8 @@ if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || 'development',
-    tracesSampleRate: 1.0,
+    // M9: 1.0 in productie = 100% trasare, cost si volum de PII inutile.
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
   });
   console.log('✅ Sentry Node.js configurat cu succes');
 }
@@ -48,8 +62,14 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const groqApiKey = process.env.GROQ_API_KEY;
-const corsOriginsEnv = process.env.CORS_ORIGINS || '*';
-if (!process.env.CORS_ORIGINS) {
+// M14: CORS fail-closed in productie. Wildcard-ul e acceptabil doar in dezvoltare;
+// in productie lipsa CORS_ORIGINS opreste serverul, ca la SUPABASE_SERVICE_ROLE_KEY.
+const corsOriginsEnv = process.env.CORS_ORIGINS || (process.env.NODE_ENV === 'production' ? '' : '*');
+if (process.env.NODE_ENV === 'production' && !corsOriginsEnv) {
+  console.error('EROARE CRITICĂ: CORS_ORIGINS trebuie setată în producție (ex. https://nutriai.app).');
+  process.exit(1);
+}
+if (!process.env.CORS_ORIGINS && process.env.NODE_ENV !== 'production') {
   console.warn('⚠️  AVERTISMENT SECURITATE: Variabila CORS_ORIGINS nu este setată — backend-ul acceptă cereri de la orice origine. Setează CORS_ORIGINS în producție.');
 }
 
@@ -86,70 +106,18 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(sanitizeRequest);
 
 // ==========================================
-// RATE-LIMIT: cheie stabila per user (claim sub din JWT, fallback IP)
-// Anterior se folosea header-ul Authorization brut, permitand ocolirea limitei.
-// Acum folosim claim-ul sub din JWT + fallback IP.
+// RATE-LIMIT (C1): identitatea se stabileste DOAR prin requireAuth (verificare
+// criptografica). Fara req.user => cerere neautentificata => limitare pe IP, mai
+// stricta. Anterior, cheia venea din claim-ul `sub` al unui JWT decodat fara
+// verificarea semnaturii, intr-un middleware montat inaintea autentificarii —
+// oricine isi fabrica un token si primea o fereastra noua de 100 de cereri.
 // ==========================================
-const jwtSubject = (req) => {
-  const authHeader = req.headers?.authorization || '';
-  if (!authHeader.startsWith('Bearer ')) return null;
-  const payloadBase64 = authHeader.slice(7).split('.')[1];
-  if (!payloadBase64) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
-    return payload?.sub ? `user:${payload.sub}` : null;
-  } catch {
-    return null;
-  }
-};
-
-const ipFallbackKey = (req) => {
-  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
-  if (ip.includes(':')) return `ip6:${ip.split(':').slice(0, 4).join(':')}`;
-  return `ip4:${ip}`;
-};
-
-const rateLimitKey = (req) =>
-  (req.user?.id ? `user:${req.user.id}` : jwtSubject(req)) || ipFallbackKey(req);
-
-// Validare UUID (Postgres arunca eroare de sintaxa pentru ID-uri malformate)
-const isUuid = (value) =>
-  typeof value === 'string' &&
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-
-// Rate Limiting general pentru API (cheie stabila per utilizator, altfel per IP)
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minute
-  max: 100, // max 100 cereri per fereastră
-  keyGenerator: rateLimitKey,
-  message: { eroare: "Prea multe cereri. Încearcă mai târziu." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-// /api/ai-status are rate-limit propriu (generos, pentru polling).
-// Anterior era complet exclus — vector de abuz.
-const statusLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 120,
-  keyGenerator: rateLimitKey,
-  message: { eroare: "Prea multe cereri de status. Incearca in cateva secunde." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter } =
+  creeazaLimitatoare();
 
 app.use('/api/', (req, res, next) => {
   if (req.path === '/ai-status') return statusLimiter(req, res, next);
-  return generalLimiter(req, res, next);
-});
-
-// 1.4 Rate Limiting strict pentru endpoint-urile AI (15 cereri pe minut) diferentiat per cont de la JWT auth header.
-const aiRateLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minut
-  max: 15, // max 15 cereri per minut
-  keyGenerator: rateLimitKey,
-  message: { eroare: "Ai depășit limita de 15 cereri pe minut pentru AI. Te rugăm să aștepți un minut." },
-  standardHeaders: true,
-  legacyHeaders: false,
+  return preAuthLimiter(req, res, next);
 });
 
 // Upload pe disc temporar pentru prevenirea OOM (Out of Memory)
@@ -192,19 +160,16 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // Cache in-memory TTL (60 secunde) pentru token-uri JWT.
 // Token cache: hash SHA-256 in loc de token brut (evita heap dump leaks).
-// Plafon maxim de intrari pentru protectie DoS de memorie.
-const tokenCache = new Map();
-const CACHE_TTL_MS = 60 * 1000;
-const MAX_TOKEN_CACHE_ENTRIES = 5000;
+// Plafon maxim de intrari pentru protectie DoS de memorie (C6).
+// Evacuarea se face acum in interiorul clasei, pe AMBELE ramuri de autentificare.
+const tokenCache = new TokenCache({ maxEntries: 5000, ttlMs: 60 * 1000 });
+tokenCache.startSweeper();
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of tokenCache.entries()) {
-    if (now > entry.expiresAt) tokenCache.delete(key);
-  }
-}, 5 * 60 * 1000).unref();
 
-// Middleware Autentificare cu Cache TTL
+// Middleware Autentificare cu Cache TTL (C4: identitate normalizata, fail-closed).
+// req.user.id este garantat un UUID Supabase, indiferent de furnizor: un token
+// Clerk fara mapare in clerk_user_map primeste 409 CLERK_NEMAPAT, nu scrie o
+// identitate paralela in `mese`.
 const requireAuth = async (req, res, next) => {
   if (req.method === 'OPTIONS') {
     return next();
@@ -223,76 +188,42 @@ const requireAuth = async (req, res, next) => {
   const token = authHeader.slice(7);
   const tokenKey = hashToken(token);
 
-  // Validare locala simplă a structurii JWT (exp) fara secret, inainte de network
-  try {
-    const payloadBase64 = token.split('.')[1];
-    if (payloadBase64) {
-      const decodedJson = Buffer.from(payloadBase64, 'base64').toString('utf8');
-      const payload = JSON.parse(decodedJson);
-      if (payload.exp && Date.now() >= payload.exp * 1000) {
-        tokenCache.delete(tokenKey);
-        return res.status(401).json({ eroare: "Token expirat (JWT local exp)." });
-      }
-    }
-  } catch (e) {
-    return res.status(401).json({ eroare: "Structura JWT coruptă." });
-  }
-
-  const now = Date.now();
-  const cached = tokenCache.get(tokenKey);
-  if (cached && now < cached.expiresAt) {
-    req.user = cached.user;
+  // Expirarea si plafonul sunt tratate in interiorul cache-ului (C6).
+  const utilizatorCache = tokenCache.get(tokenKey);
+  if (utilizatorCache) {
+    req.user = utilizatorCache;
     return next();
   }
 
   try {
-    // 1. Incercam Supabase Auth
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    if (!error && user) {
-      if (tokenCache.size >= MAX_TOKEN_CACHE_ENTRIES) {
-        const oldest = tokenCache.keys().next().value;
-        if (oldest) tokenCache.delete(oldest);
-      }
-      tokenCache.set(tokenKey, { user, expiresAt: now + CACHE_TTL_MS });
-      req.user = user;
-      return next();
+    const utilizator = await rezolvaIdentitate({
+      token,
+      supabase,
+      supabaseAdmin,
+      clerkSecretKey: process.env.CLERK_SECRET_KEY,
+    });
+    tokenCache.set(tokenKey, utilizator);
+    req.user = utilizator;
+    return next();
+  } catch (err) {
+    if (err instanceof EroareIdentitate) {
+      return res.status(err.status).json({ eroare: err.message, cod: err.cod });
     }
-
-    // 2. Daca Supabase esueaza si avem CLERK_SECRET_KEY, incercam validarea Clerk
-    if (process.env.CLERK_SECRET_KEY) {
-      try {
-        const { verifyToken } = require('@clerk/express');
-        const clerkPayload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
-        if (clerkPayload && clerkPayload.sub) {
-          const clerkUser = { id: clerkPayload.sub, email: clerkPayload.email || 'clerk_user@nutriai.app' };
-          tokenCache.set(tokenKey, { user: clerkUser, expiresAt: now + CACHE_TTL_MS });
-          req.user = clerkUser;
-          return next();
-        }
-      } catch (cErr) {
-        // Token invalid si pentru Clerk
-      }
-    }
-
-    tokenCache.delete(tokenKey);
-    return res.status(401).json({ eroare: "Token invalid sau respins de serverul Auth." });
-  } catch (error) {
-    return res.status(500).json({ eroare: "Eroare la transferul validării autentificării." });
+    console.error('[Auth] Eroare neasteptata:', err);
+    return res.status(503).json({ eroare: 'Serviciul de autentificare este indisponibil.' });
   }
 };
 
 // ==========================================
 // IMAGEKIT AUTHENTICATION ENDPOINT
 // ==========================================
-app.get('/api/imagekit-auth', requireAuth, (req, res) => {
+app.get('/api/imagekit-auth', requireAuth, generalLimiter, (req, res) => {
+  // M10: fara chei ImageKit nu exista autentificare reala — un mock 200 ar face
+  // clientul sa incarce imagini care esueaza mai tarziu, in alt strat.
   if (!imagekit) {
-    const token = crypto.randomUUID();
-    const expire = Math.floor(Date.now() / 1000) + 1800;
-    return res.json({
-      token,
-      expire,
-      signature: 'mock_signature',
-      urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/nutriai'
+    return res.status(503).json({
+      eroare: "ImageKit nu este configurat (lipsesc IMAGEKIT_PUBLIC_KEY / IMAGEKIT_PRIVATE_KEY / IMAGEKIT_URL_ENDPOINT).",
+      status: "disabled"
     });
   }
   try {
@@ -310,7 +241,7 @@ app.get('/api/imagekit-auth', requireAuth, (req, res) => {
 // ==========================================
 // TRIGGER.DEV ASYNC AI FOOD ANALYSIS ENDPOINT
 // ==========================================
-app.post('/api/trigger-analiza-mancare', requireAuth, aiRateLimiter, async (req, res) => {
+app.post('/api/trigger-analiza-mancare', requireAuth, aiLimiter, async (req, res) => {
   if (!process.env.TRIGGER_SECRET_KEY) {
     return res.status(503).json({
       eroare: "Trigger.dev nu este activat (lipseste TRIGGER_SECRET_KEY in variabilele de mediu backend).",
@@ -697,7 +628,9 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
     }
 
     // 4) OpenRouter Vision fallback (dacă există OPENROUTER_API_KEY)
-    if (!text) {
+    // M2: fallback-ul rulează DOAR în modul 'auto' — cine a cerut explicit un
+    // furnizor nu ajunge pe altul fără să știe.
+    if (!text && requestedProvider === 'auto') {
       const orKeys = getApiKeysList('OPENROUTER_API_KEY');
       if (orKeys.length > 0) {
         console.warn("⚠️ Încerc OpenRouter AI...");
@@ -814,14 +747,14 @@ RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau d
   }
 };
 
-app.post("/api/analiza-foto", requireAuth, aiRateLimiter, upload.single("imagine"), handleAnalizaFoto);
-app.post("/api/analizeaza-mancare-structurat", requireAuth, aiRateLimiter, upload.single("imagine"), handleAnalizaFoto);
+app.post("/api/analiza-foto", requireAuth, aiLimiter, upload.single("imagine"), handleAnalizaFoto);
+app.post("/api/analizeaza-mancare-structurat", requireAuth, aiLimiter, upload.single("imagine"), handleAnalizaFoto);
 
 // ==========================================
 // RUTA 2: CHAT CONVERSAȚIONAL (GROQ / LLAMA 3.3)
 // Securizată cu requireAuth
 // ==========================================
-app.post('/api/chat', requireAuth, aiRateLimiter, async (req, res) => {
+app.post('/api/chat', requireAuth, aiLimiter, async (req, res) => {
   try {
     if (!req.body || typeof req.body !== 'object') {
       return res.status(400).json({ raspuns: "Format cerere invalid. Se așteaptă un obiect JSON." });
@@ -848,7 +781,8 @@ app.post('/api/chat', requireAuth, aiRateLimiter, async (req, res) => {
 
     // Securitate: detectam si blocam tentativele de prompt injection
     if (detectPromptInjection(ultimulMesaj)) {
-      console.warn('[Securitate] Prompt injection detectat in /api/chat:', ultimulMesaj.substring(0, 80));
+      // M15: nu logam continutul utilizatorului (potential personal) — doar faptul.
+      console.warn('[Securitate] Prompt injection detectat in /api/chat.');
       return res.status(400).json({ raspuns: "Mesajul conține instrucțiuni interzise. Te rog reformulează." });
     }
 
@@ -968,7 +902,7 @@ Te asiguri că folosești DOAR JSON VALID dacă utilizatorul a cerut înregistra
 // ==========================================
 // RUTA DEDICATĂ: LOGARE MASĂ DIN CHAT (JSON STRICT MEAL_PROPOSAL)
 // ==========================================
-app.post('/api/log-food-from-chat', requireAuth, aiRateLimiter, async (req, res) => {
+app.post('/api/log-food-from-chat', requireAuth, aiLimiter, async (req, res) => {
   try {
     const { mesaj, mesaje } = req.body;
     if (!mesaj || typeof mesaj !== 'string') {
@@ -1075,7 +1009,7 @@ RETURNEAZĂ STRICT UN OBIECT JSON valid în acest format:
 // ==========================================
 // RUTA: ESTIMARE RAPIDĂ TEXT ALIMENT (GROQ/LLM)
 // ==========================================
-app.post('/api/estimeaza-mancare-text', requireAuth, aiRateLimiter, async (req, res) => {
+app.post('/api/estimeaza-mancare-text', requireAuth, aiLimiter, async (req, res) => {
   try {
     const { text } = req.body;
     if (!text || typeof text !== 'string') return res.status(400).json({ eroare: "Text invalid." });
@@ -1304,13 +1238,13 @@ Nu adăuga markdown, explicații sau text adițional în afara obiectului JSON v
   }
 };
 
-app.post('/api/vision-fallback', requireAuth, aiRateLimiter, handleVisionFallbackOrCorrection);
-app.post('/api/corecteaza-mancare-vizual-text', requireAuth, aiRateLimiter, handleVisionFallbackOrCorrection);
+app.post('/api/vision-fallback', requireAuth, aiLimiter, handleVisionFallbackOrCorrection);
+app.post('/api/corecteaza-mancare-vizual-text', requireAuth, aiLimiter, handleVisionFallbackOrCorrection);
 
 // ==========================================
 // RUTA 2.1: PROXY PENTRU OPENFOODFACTS BARCODE + STRAT 1 CACHE LOCAL + STRAT 3 FALLBACK
 // ==========================================
-app.get('/api/produs-barcode/:code', requireAuth, aiRateLimiter, async (req, res) => {
+app.get('/api/produs-barcode/:code', requireAuth, generalLimiter, async (req, res) => {
   try {
     const code = (req.params.code || '').trim();
     // Validare stricta: doar coduri EAN/UPC (4-20 cifre).
@@ -1318,35 +1252,27 @@ app.get('/api/produs-barcode/:code', requireAuth, aiRateLimiter, async (req, res
       return res.status(400).json({ eroare: "Cod de bare invalid." });
     }
 
-    // STRAT 1: Verificare Cache Local Supabase
+    // STRAT 1: Cache global (surse verificate) + estimarile AI per utilizator (C2).
+    // Provenienta reala ajunge la client: sursa nu se mai pierde sub eticheta 'cache'.
     try {
-      const { data: cachedItem } = await supabaseAdmin
-        .from('barcode_cache')
-        .select('*')
-        .eq('code', code)
-        .maybeSingle();
+      const dinGlobal = await citesteDinCacheGlobal(supabaseAdmin, code);
+      if (dinGlobal) {
+        return res.json({ ...dinGlobal, estimat: false });
+      }
 
-      if (cachedItem) {
-        return res.json({
-          source: 'cache',
-          produs: {
-            codBare: code,
-            nume: cachedItem.name,
-            brand: cachedItem.brand || '',
-            cantitate: cachedItem.quantity || '',
-            calorii: Number(cachedItem.kcal_100g || 0),
-            proteine: Number(cachedItem.protein_100g || 0),
-            carbohidrati: Number(cachedItem.carbs_100g || 0),
-            grasimi: Number(cachedItem.fat_100g || 0),
-          }
-        });
+      const alUtilizatorului = await citesteEstimareUtilizator(supabaseAdmin, {
+        userId: req.user.id,
+        cod: code,
+      });
+      if (alUtilizatorului) {
+        return res.json({ ...alUtilizatorului, estimat: true });
       }
     } catch (cacheErr) {
       console.warn("Avertisment citire barcode_cache:", cacheErr.message);
     }
 
-    // STRAT 2: Căutare în OpenFoodFacts API
-    const fetchPromise = fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`, {
+    // STRAT 2: Căutare în OpenFoodFacts API (C7: URL construit prin helper validat)
+    const fetchPromise = fetch(construiesteUrlOpenFoodFacts(code), {
       headers: { 'User-Agent': 'NutriAI - React Native App - Contact: tudortone' }
     });
     const resp = await callWithTimeout(fetchPromise, 12000);
@@ -1370,19 +1296,7 @@ app.get('/api/produs-barcode/:code', requireAuth, aiRateLimiter, async (req, res
         };
 
         try {
-          await supabaseAdmin.from('barcode_cache').upsert({
-            code,
-            source: 'openfoodfacts',
-            brand: normalized.brand,
-            name: normalized.nume,
-            quantity: normalized.cantitate,
-            kcal_100g: normalized.calorii,
-            protein_100g: normalized.proteine,
-            carbs_100g: normalized.carbohidrati,
-            fat_100g: normalized.grasimi,
-            payload: product,
-            updated_at: new Date().toISOString(),
-          });
+          await salveazaProdusOff(supabaseAdmin, { cod: code, produs: normalized, payload: product });
         } catch (saveErr) {
           console.warn("Nu s-a putut salva în barcode_cache:", saveErr.message);
         }
@@ -1449,23 +1363,20 @@ RETURNEAZĂ STRICT EXCLUSIV UN OBIECT JSON valid în acest format:
               grasimi: Number(parsed.grasimi || 0)
             };
 
+            // C2: estimarile AI NU mai ajung in cache-ul global — se salveaza
+            // per utilizator (tabela barcode_estimari_utilizator), ca valorile
+            // fabricate de model sa nu fie servite altor utilizatori.
             try {
-              await supabaseAdmin.from('barcode_cache').upsert({
-                code,
-                source: 'estimare_ai',
-                brand: normalizedAi.brand,
-                name: normalizedAi.nume,
-                quantity: normalizedAi.cantitate,
-                kcal_100g: normalizedAi.calorii,
-                protein_100g: normalizedAi.proteine,
-                carbs_100g: normalizedAi.carbohidrati,
-                fat_100g: normalizedAi.grasimi,
-                payload: parsed,
-                updated_at: new Date().toISOString()
+              await salveazaEstimareUtilizator(supabaseAdmin, {
+                userId: req.user.id,
+                cod: code,
+                produs: normalizedAi,
               });
-            } catch (sErr) {}
+            } catch (sErr) {
+              console.warn("Nu s-a putut salva estimarea per utilizator:", sErr.message);
+            }
 
-            return res.json({ source: 'estimare_ai', produs: normalizedAi });
+            return res.json({ source: 'estimare_ai', estimat: true, produs: normalizedAi });
           }
         }
       }
@@ -1488,7 +1399,7 @@ RETURNEAZĂ STRICT EXCLUSIV UN OBIECT JSON valid în acest format:
 // ==========================================
 // RUTA 2.2: SALVARE PRODUS BARCODE COMPLETAT MANUAL ÎN CACHE LOCAL
 // ==========================================
-app.post('/api/salveaza-produs-barcode', requireAuth, async (req, res) => {
+app.post('/api/salveaza-produs-barcode', requireAuth, generalLimiter, async (req, res) => {
   try {
     const { code, name, brand, quantity, kcal_100g, protein_100g, carbs_100g, fat_100g } = req.body;
     if (!code || typeof name !== 'string' || !name.trim()) {
@@ -1514,28 +1425,21 @@ app.post('/api/salveaza-produs-barcode', requireAuth, async (req, res) => {
        return res.status(400).json({eroare: "Cod de bare malformat."});
     }
 
-    // Check ownership / if it's already created by someone else to prevent arbitrary overwrites
-    const { data: ext } = await supabaseAdmin.from('barcode_cache').select('created_by_user').eq('code', String(code).trim()).maybeSingle();
-    // Do not allow if it's a global cache element created by system, or if it wasn't you who created this user_manual entry
-    // unless you are an admin. Implementing simple first-come-first-serve ownership protection logic:
-    if (ext && ext.created_by_user && ext.created_by_user !== req.user.id) {
-       // Proprietar diferit => 409 Conflict.
-       return res.status(409).json({ eroare: "Produsul este deja înregistrat de alt utilizator și nu poate fi suprascris." });
+    // C3: dreptul de scriere — intrarile de sistem (OpenFoodFacts) si cele fara
+    // proprietar sunt intangibile; doar proprietarul unei intrari manuale o poate
+    // suprascrie. Garda veche se activa DOAR daca created_by_user era populat.
+    const drept = await verificaDreptDeScriere(supabaseAdmin, {
+      cod: String(code).trim(),
+      userId: req.user.id,
+    });
+    if (!drept.permis) {
+      return res.status(drept.status).json({ eroare: drept.motiv });
     }
 
-    await supabaseAdmin.from('barcode_cache').upsert({
-      code: String(code).trim(),
-      source: 'user_manual',
-      created_by_user: req.user.id,
-      brand: String(brand || '').trim().substring(0, 100),
-      name: String(name).trim().substring(0, 150),
-      quantity: String(quantity || '').trim().substring(0, 50),
-      kcal_100g: kc,
-      protein_100g: p,
-      carbs_100g: c,
-      fat_100g: f,
-      payload: { userInputs: true }, // Scapam logarea oarba a intregului req.body periculos
-      updated_at: new Date().toISOString(),
+    await salveazaProdusManual(supabaseAdmin, {
+      cod: String(code).trim(),
+      userId: req.user.id,
+      valori: { name, brand, quantity, kcal_100g: kc, protein_100g: p, carbs_100g: c, fat_100g: f },
     });
     return res.json({ succes: true, message: "Produs salvat în cache-ul local." });
   } catch (err) {
@@ -1548,7 +1452,7 @@ app.post('/api/salveaza-produs-barcode', requireAuth, async (req, res) => {
 // RUTA 3: CALCUL PROFIL NUTRIȚIONAL (DETERMINIST)
 // Securizată cu requireAuth
 // ==========================================
-app.post('/api/calculeaza-profil', requireAuth, async (req, res) => {
+app.post('/api/calculeaza-profil', requireAuth, generalLimiter, async (req, res) => {
   try {
     const { varsta, greutate, inaltime, sex, activitate, obiectiv } = req.body;
 
@@ -1620,11 +1524,11 @@ app.post('/api/calculeaza-profil', requireAuth, async (req, res) => {
 // ==========================================
 // RUTA 4: ȘTERGERE MASĂ
 // ==========================================
-app.delete('/api/mese/:id', requireAuth, async (req, res) => {
+app.delete('/api/mese/:id', requireAuth, generalLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     // Validare UUID inainte de interogare.
-    if (!isUuid(id)) {
+    if (!esteUuid(id)) {
       return res.status(400).json({ eroare: 'ID de masă invalid.' });
     }
     const { data, error } = await supabaseAdmin
@@ -1654,10 +1558,10 @@ app.delete('/api/mese/:id', requireAuth, async (req, res) => {
 // ==========================================
 // RUTA 5: EDITARE MASĂ (CU SUPPORT PENTRU JSONB & TIP_MASA)
 // ==========================================
-app.put('/api/mese/:id', requireAuth, async (req, res) => {
+app.put('/api/mese/:id', requireAuth, generalLimiter, async (req, res) => {
   try {
     const { id } = req.params;
-    if (!isUuid(id)) {
+    if (!esteUuid(id)) {
       return res.status(400).json({ eroare: 'ID de masă invalid.' });
     }
     const { nume, calorii, proteine, grasimi, carbohidrati, tip_masa, alimente, fibre } = req.body;
@@ -1680,6 +1584,10 @@ app.put('/api/mese/:id', requireAuth, async (req, res) => {
     }
     if (isNaN(carb) || carb < 0 || carb > 2000) {
       return res.status(400).json({ eroare: "Carbohidrații trebuie să fie un număr valid între 0 și 2000." });
+    }
+    // M13: fibrele aveau validare lipsa, spre deosebire de ceilalti macronutrienti.
+    if (isNaN(fib) || fib < 0 || fib > 1000) {
+      return res.status(400).json({ eroare: "Fibrele trebuie să fie un număr valid între 0 și 1000." });
     }
     const updatePayload = {
       nume: nume.trim(),
@@ -1720,7 +1628,7 @@ app.put('/api/mese/:id', requireAuth, async (req, res) => {
 // ==========================================
 // RUTA 5.1: SALVARE NOUĂ MASĂ (POST /api/mese PENTRU JSONB & TIP_MASA)
 // ==========================================
-app.post('/api/mese', requireAuth, async (req, res) => {
+app.post('/api/mese', requireAuth, generalLimiter, async (req, res) => {
   try {
     const { nume, calorii, proteine, grasimi, carbohidrati, tip_masa, alimente, fibre, data, ora } = req.body;
     if (!nume || typeof nume !== 'string' || !nume.trim()) {
@@ -1743,6 +1651,10 @@ app.post('/api/mese', requireAuth, async (req, res) => {
     }
     if (isNaN(carb) || carb < 0 || carb > 2000) {
       return res.status(400).json({ eroare: "Carbohidrații trebuie să fie un număr valid între 0 și 2000." });
+    }
+    // M13: fibrele aveau validare lipsa, spre deosebire de ceilalti macronutrienti.
+    if (isNaN(fib) || fib < 0 || fib > 1000) {
+      return res.status(400).json({ eroare: "Fibrele trebuie să fie un număr valid între 0 și 1000." });
     }
 
     const insertPayload = {
@@ -1786,14 +1698,13 @@ app.use((req, res, next) => {
 // ==========================================
 // HANDLER GLOBAL DE ERORI
 // ==========================================
+// M9: raportarea in Sentry o face exclusiv setupExpressErrorHandler — capturarea
+// manuala de mai jos duplica fiecare eroare in Sentry.
 Sentry.setupExpressErrorHandler(app);
 
 app.use((err, req, res, next) => {
   const message = err?.message || '';
   console.error("Eroare globală:", message);
-  if (process.env.SENTRY_DSN) {
-    Sentry.captureException(err);
-  }
   // Verificam codul erorii INAINTE de instanceof.
   if (err?.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ eroare: "Fișierul este prea mare. Limita este 5MB." });

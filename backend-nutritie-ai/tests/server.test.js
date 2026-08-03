@@ -8,7 +8,9 @@ jest.mock('@supabase/supabase-js', () => {
       auth: {
         getUser: jest.fn((token) => {
           if (token === 'token_valid') {
-            return Promise.resolve({ data: { user: { id: 'user_123', email: 'test@example.com' } }, error: null });
+            // ID-ul trebuie sa fie un UUID valid — rezolvaIdentitate (C4) respinge
+            // identitatile care nu sunt UUID ca sa nu scrie identitati paralele.
+            return Promise.resolve({ data: { user: { id: '11111111-1111-4111-8111-111111111111', email: 'test@example.com' } }, error: null });
           }
           return Promise.resolve({ data: { user: null }, error: new Error('Token invalid') });
         })
