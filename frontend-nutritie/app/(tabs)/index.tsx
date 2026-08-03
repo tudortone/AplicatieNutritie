@@ -17,7 +17,7 @@ import { useHealthSync } from '../../hooks/useHealthSync';
 import { useAntrenamente } from '../../hooks/useAntrenamente';
 import { getCalorieState } from '../../lib/calorieState';
 import { SkeletonLoader } from '../../components/SkeletonLoader';
-import { MuscleBody } from '../../components/fitness/MuscleBody';
+import BodyMap from '../../components/fitness/BodyMap';
 import { computeDailyMuscleIntensity, normalizeMuscleLoadToIntensity } from '../../lib/fitnessEngine';
 import { useExercitii } from '../../hooks/useExercitii';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
@@ -603,11 +603,10 @@ export default function HomeScreen() {
             </View>
 
             <View style={[s.liveHeatmapBodyWrap, { height: 260, justifyContent: 'center', alignItems: 'center' }]}>
-                <MuscleBody
-                  side={viewSideHome}
+                <BodyMap
+                  view={viewSideHome}
                   intensity={dailyIntensityHome}
                   width={200}
-                  height={260}
                 />
             </View>
 

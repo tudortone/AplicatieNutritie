@@ -12,7 +12,7 @@ import {
 import * as Haptics from 'expo-haptics';
 
 import KeyboardAwareScreen, { CONTENT_BOTTOM_PADDING } from '../../components/ui/KeyboardAwareScreen';
-import { MuscleBody } from '../../components/fitness/MuscleBody';
+import BodyMap from '../../components/fitness/BodyMap';
 import { mapToCanonicalMuscleIds } from '../../lib/fitnessEngine';
 import type { MuscleId } from '../../components/fitness/heatColor';
 import { CATEGORII, type Categorie, type Exercitiu } from '../../constants/exercitii';
@@ -541,8 +541,8 @@ export default function AntrenamenteScreen() {
 
         <View style={[styles.mapContainer, { backgroundColor: colors.surface }]}>
           <View style={styles.mapRow}>
-            <MuscleBody side='front' intensity={displayIntensity} width={bodyWidth} height={MAP_HEIGHT - 40} />
-            <MuscleBody side='back' intensity={displayIntensity} width={bodyWidth} height={MAP_HEIGHT - 40} />
+            <BodyMap view="front" intensity={displayIntensity} width={bodyWidth} />
+            <BodyMap view="back" intensity={displayIntensity} width={bodyWidth} />
           </View>
           <View style={styles.mapLegend}>
             <View style={[styles.legendDot, { backgroundColor: colors.accent }]} />

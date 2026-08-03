@@ -60,30 +60,36 @@ export interface MuscleMeta {
 }
 
 export const MUSCLES: Record<MuscleId, MuscleMeta> = {
-  pectorali: { id: 'pectorali', label: 'Pectorali', views: ['front'], paired: true, grup: 'piept' },
+  // piept
+  chest: { id: 'chest', label: 'Pectorali', views: ['front'], paired: true, grup: 'piept' },
 
-  deltoid_anterior: { id: 'deltoid_anterior', label: 'Deltoid anterior', views: ['front'], paired: true, grup: 'umeri' },
-  deltoid_lateral: { id: 'deltoid_lateral', label: 'Deltoid lateral', views: ['front', 'back'], paired: true, grup: 'umeri' },
-  deltoid_posterior: { id: 'deltoid_posterior', label: 'Deltoid posterior', views: ['back'], paired: true, grup: 'umeri' },
+  // umeri
+  delts: { id: 'delts', label: 'Deltoizi', views: ['front', 'back'], paired: true, grup: 'umeri' },
 
-  biceps: { id: 'biceps', label: 'Biceps', views: ['front'], paired: true, grup: 'brate' },
-  triceps: { id: 'triceps', label: 'Triceps', views: ['back'], paired: true, grup: 'brate' },
-  antebrate: { id: 'antebrate', label: 'Antebra\u021be', views: ['front', 'back'], paired: true, grup: 'brate' },
+  // spate
+  traps: { id: 'traps', label: 'Trapez', views: ['back'], paired: true, grup: 'spate' },
+  lats: { id: 'lats', label: 'Dorsali', views: ['back'], paired: true, grup: 'spate' },
+  infraspinatus: { id: 'infraspinatus', label: 'Infraspinos', views: ['back'], paired: true, grup: 'spate' },
+  lower_back: { id: 'lower_back', label: 'Lombari', views: ['back'], paired: true, grup: 'spate' },
+  neck: { id: 'neck', label: 'Gât', views: ['front'], paired: true, grup: 'spate' },
 
-  abdomen: { id: 'abdomen', label: 'Abdomen', views: ['front'], paired: false, grup: 'trunchi' },
-  oblici: { id: 'oblici', label: 'Oblici', views: ['front'], paired: true, grup: 'trunchi' },
+  // brate
+  biceps: { id: 'biceps', label: 'Biceps', views: ['front', 'back'], paired: true, grup: 'brate' },
+  triceps: { id: 'triceps', label: 'Triceps', views: ['front', 'back'], paired: true, grup: 'brate' },
+  forearms: { id: 'forearms', label: 'Antebrațe', views: ['front', 'back'], paired: true, grup: 'brate' },
 
-  trapez: { id: 'trapez', label: 'Trapez', views: ['front', 'back'], paired: false, grup: 'spate' },
-  dorsali: { id: 'dorsali', label: 'Dorsali', views: ['back'], paired: true, grup: 'spate' },
-  romboizi: { id: 'romboizi', label: 'Romboizi', views: ['back'], paired: false, grup: 'spate' },
-  lombari: { id: 'lombari', label: 'Lombari', views: ['back'], paired: false, grup: 'spate' },
+  // trunchi
+  abs: { id: 'abs', label: 'Abdomen', views: ['front'], paired: true, grup: 'trunchi' },
+  obliques: { id: 'obliques', label: 'Oblici', views: ['front', 'back'], paired: true, grup: 'trunchi' },
+  serratus: { id: 'serratus', label: 'Seratus anterior', views: ['front'], paired: true, grup: 'trunchi' },
 
-  fesieri: { id: 'fesieri', label: 'Fesieri', views: ['back'], paired: true, grup: 'picioare' },
-  cvadriceps: { id: 'cvadriceps', label: 'Cvadriceps', views: ['front'], paired: true, grup: 'picioare' },
-  ischiogambieri: { id: 'ischiogambieri', label: 'Ischiogambieri', views: ['back'], paired: true, grup: 'picioare' },
-  gambe: { id: 'gambe', label: 'Gambe', views: ['front', 'back'], paired: true, grup: 'picioare' },
-  adductori: { id: 'adductori', label: 'Adductori', views: ['front'], paired: true, grup: 'picioare' },
-  abductori: { id: 'abductori', label: 'Abductori', views: ['front', 'back'], paired: true, grup: 'picioare' },
+  // picioare
+  glutes: { id: 'glutes', label: 'Fesieri', views: ['back'], paired: true, grup: 'picioare' },
+  quads: { id: 'quads', label: 'Cvadriceps', views: ['front', 'back'], paired: true, grup: 'picioare' },
+  hamstrings: { id: 'hamstrings', label: 'Ischiogambieri', views: ['back'], paired: true, grup: 'picioare' },
+  calves: { id: 'calves', label: 'Gambe', views: ['front', 'back'], paired: true, grup: 'picioare' },
+  adductors: { id: 'adductors', label: 'Adductori', views: ['front', 'back'], paired: true, grup: 'picioare' },
+  hip_flexors: { id: 'hip_flexors', label: 'Flexori de șold', views: ['front'], paired: true, grup: 'picioare' },
 };
 
 /** Toate slot-urile desenabile, derivate automat din `MUSCLES`. */

@@ -1,0 +1,182 @@
+import React, { useMemo } from 'react'
+import { View, type StyleProp, type ViewStyle } from 'react-native'
+import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg'
+
+import type { BodyView, MuscleId } from '../../constants/muscles'
+import type { IntensityMap } from '../../lib/muscleIntensity'
+import { BACK_GRADIENTS, BACK_SHAPES, BACK_VIEWBOX } from './anatomyBack'
+import { FRONT_GRADIENTS, FRONT_SHAPES, FRONT_VIEWBOX } from './anatomyFront'
+import type { AnatomyGradient, AnatomyShape, AnatomyStop } from './types'
+
+/**
+ * Rampa de caldura. Intentionat discreta: la intensitate mica desenul original
+ * ramane aproape neatins, iar culoarea creste treptat doar pe muschii lucrati.
+ */
+const HEAT_RAMP = ['#3B82F6', '#22C55E', '#FACC15', '#F97316', '#EF4444'] as const
+
+/** Opacitatea maxima a stratului de caldura. Sub 1 ca sa se vada in continuare umbrele. */
+const MAX_HEAT_OPACITY = 0.82
+
+/** Sub acest prag nu desenam deloc stratul de caldura. */
+const MIN_VISIBLE = 0.02
+
+function clamp01(n: number): number {
+	if (!Number.isFinite(n)) return 0
+	return n < 0 ? 0 : n > 1 ? 1 : n
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+	const h = hex.replace('#', '')
+	return [
+		parseInt(h.slice(0, 2), 16),
+		parseInt(h.slice(2, 4), 16),
+		parseInt(h.slice(4, 6), 16),
+	]
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+	const to = (n: number) => Math.round(clamp01(n / 255) * 255).toString(16).padStart(2, '0')
+	return `#${to(r)}${to(g)}${to(b)}`
+}
+
+/** Interpoleaza rampa de caldura pentru o intensitate 0..1. */
+export function heatColor(intensity: number): string {
+	const t = clamp01(intensity) * (HEAT_RAMP.length - 1)
+	const i = Math.min(Math.floor(t), HEAT_RAMP.length - 2)
+	const f = t - i
+	const [r1, g1, b1] = hexToRgb(HEAT_RAMP[i])
+	const [r2, g2, b2] = hexToRgb(HEAT_RAMP[i + 1])
+	return rgbToHex(r1 + (r2 - r1) * f, g1 + (g2 - g1) * f, b1 + (b2 - b1) * f)
+}
+
+function viewData(view: BodyView): {
+	shapes: AnatomyShape[]
+	gradients: AnatomyGradient[]
+	box: { width: number; height: number }
+} {
+	return view === 'back'
+		? { shapes: BACK_SHAPES, gradients: BACK_GRADIENTS, box: BACK_VIEWBOX }
+		: { shapes: FRONT_SHAPES, gradients: FRONT_GRADIENTS, box: FRONT_VIEWBOX }
+}
+
+export type BodyMapProps = {
+	/** Vederea desenata: fata sau spate. */
+	view: BodyView
+	/** Intensitatea 0..1 per muschi. Muschii lipsa sunt tratati ca 0. */
+	intensity?: IntensityMap
+	/** Latimea in puncte. Inaltimea se calculeaza pastrand proportia. */
+	width?: number
+	/** Apelat cand utilizatorul atinge un muschi. */
+	onMusclePress?: (muscle: MuscleId) => void
+	/** Muschi evidentiat cu contur, ex. cel selectat in lista. */
+	selected?: MuscleId | null
+	style?: StyleProp<ViewStyle>
+	testID?: string
+}
+
+/**
+ * Harta musculara. Deseneaza formele in ordinea exacta din fisierul sursa,
+ * ca umbrele si detaliile corpului sa ramana deasupra muschilor coloriti.
+ *
+ * Formele de corp general nu se coloreaza si nu sunt atingibile, deci raman
+ * discret in fundal, exact ca in desenul original.
+ */
+function BodyMapBase({
+	view,
+	intensity,
+	width = 280,
+	onMusclePress,
+	selected = null,
+	style,
+	testID,
+}: BodyMapProps) {
+	const { shapes, gradients, box } = viewData(view)
+	const height = (width * box.height) / box.width
+
+	// Recalculam doar cand se schimba intensitatile, nu la fiecare randare.
+	const heat = useMemo(() => {
+		const out = new Map<MuscleId, { color: string; opacity: number }>()
+		if (!intensity) return out
+		for (const [muscle, raw] of Object.entries(intensity) as [MuscleId, number][]) {
+			const v = clamp01(raw)
+			if (v < MIN_VISIBLE) continue
+			out.set(muscle, { color: heatColor(v), opacity: v * MAX_HEAT_OPACITY })
+		}
+		return out
+	}, [intensity])
+
+	const nodes: React.ReactNode[] = []
+	for (let i = 0; i < shapes.length; i++) {
+		const s = shapes[i]
+
+		// 1. desenul original, mereu, in ordinea lui
+		nodes.push(<Path key={`b${i}`} d={s.d} fill={s.f} />)
+
+		if (!s.m) continue
+
+		// 2. stratul de caldura, exact peste forma, ca sa ramana sub umbre
+		const h = heat.get(s.m)
+		if (h) {
+			nodes.push(
+				<Path key={`h${i}`} d={s.d} fill={h.color} fillOpacity={h.opacity} />,
+			)
+		}
+
+		// 3. conturul muschiului selectat
+		if (selected && s.m === selected) {
+			nodes.push(
+				<Path
+					key={`s${i}`}
+					d={s.d}
+					fill="none"
+					stroke="#FFFFFF"
+					strokeOpacity={0.9}
+					strokeWidth={1.5}
+				/>,
+			)
+		}
+
+		// 4. zona de atingere, invizibila, peste forma
+		if (onMusclePress) {
+			const muscle = s.m
+			nodes.push(
+				<Path
+					key={`t${i}`}
+					d={s.d}
+					fill="transparent"
+					onPress={() => onMusclePress(muscle)}
+				/>,
+			)
+		}
+	}
+
+	return (
+		<View style={style} testID={testID}>
+			<Svg width={width} height={height} viewBox={`0 0 ${box.width} ${box.height}`}>
+				<Defs>
+					{gradients.map((g) => (
+						<LinearGradient
+							key={g.id}
+							id={g.id}
+							x1={g.x1}
+							y1={g.y1}
+							x2={g.x2}
+							y2={g.y2}
+							gradientUnits="userSpaceOnUse"
+						>
+							{g.stops
+								.filter((st): st is AnatomyStop & { c: string } => st.c != null)
+								.map((st, k) => (
+									<Stop key={k} offset={st.o} stopColor={st.c} />
+								))}
+						</LinearGradient>
+					))}
+				</Defs>
+				{nodes}
+			</Svg>
+		</View>
+	)
+}
+
+export const BodyMap = React.memo(BodyMapBase)
+export default BodyMap
