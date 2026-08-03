@@ -56,6 +56,8 @@ export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
+  // URL-ul pozei incarcate pe ImageKit CDN dupa un scan reusit (salvat in alimente JSONB).
+  const imageKitUrlRef = useRef<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -121,11 +123,6 @@ export default function CameraScreen() {
       setSeIncarca(true);
 
       try {
-        // Incarcam imaginea pe ImageKit CDN in fundal pentru stocare si optimizare
-        uploadImageToImageKit(imageUri).catch((ikErr) => {
-          if (__DEV__) console.log('ImageKit upload background notice:', ikErr.message);
-        });
-
         const formData = new FormData();
 
         formData.append('imagine', {
@@ -187,6 +184,16 @@ export default function CameraScreen() {
 
         setRezultat(normalized);
         setSuccessVisible(true);
+        // Dupa un scan REUSIT, incarcam poza pe ImageKit CDN (nu aruncam gunoi pe CDN
+        // pentru poze esuate). URL-ul ajunge in masa salvata (campul alimente, JSONB).
+        imageKitUrlRef.current = null;
+        uploadImageToImageKit(imageUri)
+          .then((r) => {
+            imageKitUrlRef.current = r.url;
+          })
+          .catch((ikErr) => {
+            if (__DEV__) console.log('ImageKit upload notice:', ikErr.message);
+          });
         await Haptics.notificationAsync(
           Haptics.NotificationFeedbackType.Success,
         );
@@ -353,6 +360,8 @@ export default function CameraScreen() {
           carbohidrati: Math.round((r.carbohidrati_per_100g ?? 0) * f),
           grasimi: Math.round((r.grasimi_per_100g ?? 0) * f),
           fibre: 0,
+          // Poza scanului, incarcata pe ImageKit CDN (camp JSONB flexibil, fara migrare).
+          ...(imageKitUrlRef.current ? { imageUrl: imageKitUrlRef.current } : {}),
         };
       });
 

@@ -28,6 +28,24 @@ if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
     dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
     debug: false,
   });
+
+  // Prinde crash-urile JS neprinse (ErrorUtils) si promisiunile respinse neprinse,
+  // ca erorile sa ajunga in Sentry, nu doar in consola.
+  const ErrorUtils = (global as any).ErrorUtils;
+  if (ErrorUtils?.getGlobalHandler) {
+    const originalHandler = ErrorUtils.getGlobalHandler();
+    ErrorUtils.setGlobalHandler((error: unknown, isFatal?: boolean) => {
+      Sentry.captureException(error, { extra: { isFatal: !!isFatal } });
+      originalHandler?.(error, isFatal);
+    });
+  }
+  try {
+    global.addEventListener?.('unhandledrejection', (event: any) => {
+      Sentry.captureException(event?.reason ?? event);
+    });
+  } catch {
+    // 'unhandledrejection' nu e suportat pe toate runtime-urile RN — il ignoram.
+  }
 }
 
 const tokenCache = {

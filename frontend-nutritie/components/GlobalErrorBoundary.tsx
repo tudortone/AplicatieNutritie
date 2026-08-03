@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { AlertTriangle, RefreshCw } from 'lucide-react-native';
+import * as Sentry from '@sentry/react-native';
 
 interface Props {
   children: React.ReactNode;
@@ -29,7 +30,12 @@ export class GlobalErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     this.setState({ errorInfo: errorInfo.componentStack || null });
-    // In productie, aici s-ar trimite la un serviciu de monitoring (Sentry, Crashlytics)
+    // Erorile de render ajung in Sentry (daca DSN-ul e configurat), cu stack-ul componentei.
+    if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
+      Sentry.captureException(error, {
+        extra: { componentStack: errorInfo.componentStack || null },
+      });
+    }
     console.error('[GlobalErrorBoundary] Eroare prinsa:', error.message);
   }
 
