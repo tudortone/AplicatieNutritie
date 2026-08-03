@@ -35,11 +35,14 @@ const SESSION_META_KEY = 'current_workout_session_meta';
 const REST_DEFAULT_SEC = 90;
 const ACTIVE_THRESHOLD = 0.05;
 
+// Pictograme per categorie de muschi. Toate numele exista in glyphmap-ul MaterialCommunityIcons
+// instalat — alese dupa semnificatie: halterofil pt piept, om intins pt spate, alergator pt picioare,
+// inima pt cardio, silueta plina pt full-body etc. (inainte: greutate pt spate, om aplecat pt picioare).
 const CATEGORY_ICON: Record<Categorie, keyof typeof MaterialCommunityIcons.glyphMap> = {
-  piept: 'weight-lifter', spate: 'weight', picioare: 'human-handsdown', umeri: 'arm-flex',
-  brate: 'dumbbell', abdomen: 'fire', cardio: 'run-fast', 'full-body': 'star-four-points',
-  mobilitate: 'yoga', superior: 'weight-lifter', inferior: 'human-handsdown', core: 'fire',
-  corp_intreg: 'star-four-points',
+  piept: 'weight-lifter', spate: 'human-handsup', picioare: 'run', umeri: 'arm-flex',
+  brate: 'dumbbell', abdomen: 'fire', cardio: 'heart-pulse', 'full-body': 'human-male',
+  mobilitate: 'yoga', superior: 'weight-lifter', inferior: 'run', core: 'fire',
+  corp_intreg: 'human-male',
 };
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
