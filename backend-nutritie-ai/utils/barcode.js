@@ -3,12 +3,7 @@
 /**
  * Cache de coduri de bare.
  *
- * Rezolva C7, C2 si C3.
- *
- * C7 — URL-ul OpenFoodFacts era scris malformat in server.js:
- *        fetch(`{{https://world.openfoodfacts.org/api/v2/product/${code}}}.json`)
- *      Acoladele si pozitia lui `.json` faceau ca STRAT 2 sa esueze la fiecare
- *      cerere, deci fiecare scanare cadea direct pe estimarea AI.
+ * Rezolva C2 si C3.
  *
  * C2 — Estimarile inventate de LLM erau scrise in `barcode_cache`, o tabela
  *      globala, si returnate ulterior tuturor utilizatorilor cu `source: 'cache'`.
@@ -28,18 +23,26 @@
 
 const REGEX_COD_BARE = /^[0-9]{4,20}$/;
 
+// Compus din bucati, nu ca literal intreg: literalul lung a fost deja corupt
+// o data la copiere si a scos din functiune intreg stratul OpenFoodFacts.
+const GAZDA_OFF = 'world.openfoodfacts.org';
+const CALE_PRODUS_OFF = '/api/v2/product/';
+
 const esteCodBareValid = (cod) => REGEX_COD_BARE.test(String(cod ?? '').trim());
 
-/** Construieste URL-ul OpenFoodFacts. Codul e validat inainte de interpolare. */
+/**
+ * Construieste URL-ul OpenFoodFacts pentru un cod de bare.
+ * Codul este validat inainte de interpolare, deci nu poate injecta cale sau query.
+ */
 function construiesteUrlOpenFoodFacts(cod) {
 	const curat = String(cod ?? '').trim();
 	if (!esteCodBareValid(curat)) {
 		throw new TypeError('Cod de bare invalid.');
 	}
-	return `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(curat)}.json`;
+	return 'https://' + GAZDA_OFF + CALE_PRODUS_OFF + curat + '.json';
 }
 
-/** Transforma un rand din cache in forma trimisa clientului. */
+/** Transforma un rand din baza de date in forma trimisa clientului. */
 function randLaProdus(rand, cod) {
 	return {
 		codBare: cod,
@@ -72,8 +75,8 @@ function normalizeazaProdusOff(product, cod) {
 }
 
 /**
- * Citeste din cache-ul global (doar date verificabile: OpenFoodFacts sau
- * contributii manuale ale utilizatorilor). Provenienta reala e pastrata.
+ * Citeste din cache-ul global. Contine doar date verificabile: OpenFoodFacts sau
+ * contributii manuale ale utilizatorilor. Provenienta reala este pastrata.
  */
 async function citesteDinCacheGlobal(supabaseAdmin, cod) {
 	const { data, error } = await supabaseAdmin
@@ -87,7 +90,7 @@ async function citesteDinCacheGlobal(supabaseAdmin, cod) {
 	return {
 		produs: randLaProdus(data, cod),
 		// Sursa originala, nu 'cache'. Clientul trebuie sa poata distinge o valoare
-		// masurata de una introdusa manual de un strain.
+		// dintr-o baza verificata de una introdusa manual de un strain.
 		sursa: data.source || 'necunoscut',
 		estimat: false,
 		dinCache: true,
@@ -135,7 +138,7 @@ async function salveazaProdusOff(supabaseAdmin, { cod, produs, payload }) {
 
 /**
  * Salveaza o estimare AI. Intentionat NU in cache-ul global: valorile sunt
- * inventate de model si nu au ce cauta in datele altor utilizatori.
+ * generate de model si nu au ce cauta in datele altor utilizatori.
  */
 async function salveazaEstimareUtilizator(supabaseAdmin, { userId, cod, produs }) {
 	const { error } = await supabaseAdmin
@@ -176,13 +179,12 @@ async function verificaDreptDeScriere(supabaseAdmin, { cod, userId }) {
 
 	if (!data) return { permis: true, status: 200, motiv: null };
 
-	// Intrarile create de sistem (OpenFoodFacts) sunt referinta comuna.
 	if (data.is_system) {
 		return {
 			permis: false,
 			status: 409,
 			motiv:
-				'Produsul exista deja intr-o baza de date verificata si nu poate fi suprascris. Trimite o corectie in loc sa il rescrii.',
+				'Produsul exista deja intr-o baza de date verificata si nu poate fi suprascris.',
 		};
 	}
 
@@ -231,12 +233,11 @@ async function salveazaProdusManual(supabaseAdmin, { cod, userId, valori }) {
 
 module.exports = {
 	REGEX_COD_BARE,
+	GAZDA_OFF,
 	esteCodBareValid,
 	construiesteUrlOpenFoodFacts,
 	normalizeazaProdusOff,
-	cientesteDinCacheGlobal: citesteDinCacheGlobal, // alias tolerant la typo
 	citesteDinCacheGlobal,
-	citeste6EstimareUtilizator: citesteEstimareUtilizator, // alias tolerant la typo
 	citesteEstimareUtilizator,
 	salveazaProdusOff,
 	salveazaEstimareUtilizator,

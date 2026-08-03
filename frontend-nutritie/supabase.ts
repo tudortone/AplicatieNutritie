@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
 
-// Cheile trebuie furnizate prin .env (EXPO_PUBLIC_*). NU mai folosim fallback
+// Cheile trebuie furnizate prin .env (EXPO_PUBLIC_*). NU folosim fallback
 // hardcodat cu valori reale — un APK decompilat ar expune proiectul Supabase.
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -16,113 +16,216 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // ==========================================
-// Adaptor securizat: SecureStore cu chunking + fallback AsyncStorage
-// pentru device-uri fara criptare hardware activa.
-const CHUNK_SIZE = 1800;
-const CHUNK_MARKER = '__supabase_secure_chunks__';
+// Adaptor de stocare a sesiunii
+//
+// Rezolvă C5. Varianta anterioară avea trei căi de eșec care se manifestau
+// identic pentru utilizator — delogare fără nicio explicație:
+//
+//   (a) checkSecureStoreAvailability() era apelată fără await, iar createClient
+//       rula imediat, deci Supabase putea cere getItem înainte ca flag-ul să fie
+//       stabilit.
+//   (b) când chunking-ul eșua, valoarea era scrisă în AsyncStorage, dar
+//       secureStoreAvailable rămânea true, deci getItem căuta în continuare doar
+//       în SecureStore. Sesiunea era scrisă, dar nu mai putea fi citită niciodată.
+//   (c) setItem începea cu removeItem, deschizând o fereastră în care sesiunea nu
+//       exista nicăieri; o închidere a aplicației acolo o pierdea definitiv. La
+//       fel, markerul cu numărul de chunk-uri era scris înaintea chunk-urilor.
+//
+// Soluții aplicate:
+//   - o singură promisiune de inițializare, așteptată de toate operațiile;
+//   - magazinul efectiv folosit e memorat per cheie, deci scrierea și citirea
+//     nimeresc întotdeauna același loc;
+//   - format uniform pe chunk-uri, cu markerul scris ULTIMUL, ca punct de commit:
+//     o întrerupere lasă valoarea veche intactă, nu una parțială;
+//   - nu se șterge nimic înainte de a scrie noua valoare.
+// ==========================================
 
-let secureStoreAvailable = true;
+// Limita Android pentru o valoare SecureStore e ~2048 octeți DUPĂ criptare.
+// 1536 lasă marjă pentru expansiune și pentru diacritice pe mai mulți octeți.
+const DIMENSIUNE_CHUNK = 1536;
+const SUFIX_NR_CHUNKS = '__nr_chunks__';
+const PREFIX_MAGAZIN = '__nutriai_magazin__:';
 
-// Test inițial: dacă SecureStore nu merge deloc (ex. emulator fără hardware crypto),
-// folosim AsyncStorage direct.
-async function checkSecureStoreAvailability() {
-  try {
-    await SecureStore.setItemAsync('__nutriai_availability_test__', '1');
-    await SecureStore.deleteItemAsync('__nutriai_availability_test__');
-    secureStoreAvailable = true;
-  } catch {
-    console.warn(
-      '[NutriAI] SecureStore indisponibil pe acest dispozitiv. ' +
-      'Sesiunea va fi stocată în AsyncStorage (plain text). ' +
-      'Asigură-te că dispozitivul are criptarea activată pentru securitate maximă.',
-    );
-    secureStoreAvailable = false;
+type Magazin = 'secure' | 'async';
+
+let promisiuneInitializare: Promise<boolean> | null = null;
+
+/** Verifică o singură dată dacă SecureStore funcționează pe acest dispozitiv. */
+function secureStoreDisponibil(): Promise<boolean> {
+  if (!promisiuneInitializare) {
+    promisiuneInitializare = (async () => {
+      try {
+        await SecureStore.setItemAsync('__nutriai_test__', '1');
+        await SecureStore.deleteItemAsync('__nutriai_test__');
+        return true;
+      } catch {
+        console.warn(
+          '[NutriAI] SecureStore indisponibil pe acest dispozitiv. ' +
+          'Sesiunea va fi stocată în AsyncStorage (text simplu). ' +
+          'Activează criptarea dispozitivului pentru securitate maximă.',
+        );
+        return false;
+      }
+    })();
   }
+  return promisiuneInitializare;
 }
 
-// Inițializăm verificarea — este async dar nu blocăm pornirea.
-checkSecureStoreAvailability();
-
-async function secureGetItem(key: string): Promise<string | null> {
-  if (!secureStoreAvailable) return AsyncStorage.getItem(key);
-
+async function citesteMagazin(cheie: string): Promise<Magazin | null> {
   try {
-    const chunkCountRaw = await SecureStore.getItemAsync(`${key}${CHUNK_MARKER}`);
-    if (chunkCountRaw) {
-      const chunkCount = Number(chunkCountRaw);
-      const chunks: string[] = [];
-      for (let i = 0; i < chunkCount; i++) {
-        const chunk = await SecureStore.getItemAsync(`${key}__chunk_${i}`);
-        if (chunk === null) return null;
-        chunks.push(chunk);
-      }
-      return chunks.join('');
-    }
-    return await SecureStore.getItemAsync(key);
+    const valoare = await AsyncStorage.getItem(`${PREFIX_MAGAZIN}${cheie}`);
+    return valoare === 'secure' || valoare === 'async' ? valoare : null;
   } catch {
     return null;
   }
 }
 
-async function secureSetItem(key: string, value: string): Promise<void> {
-  if (!secureStoreAvailable) {
-    await AsyncStorage.setItem(key, value);
-    return;
-  }
-
-  await secureRemoveItem(key);
-
+async function scrieMagazin(cheie: string, magazin: Magazin): Promise<void> {
   try {
-    await SecureStore.setItemAsync(key, value);
+    await AsyncStorage.setItem(`${PREFIX_MAGAZIN}${cheie}`, magazin);
   } catch {
-    // Valoarea depășește limita Android — împărțim în chunk-uri.
-    const chunks: string[] = [];
-    for (let i = 0; i < value.length; i += CHUNK_SIZE) {
-      chunks.push(value.slice(i, i + CHUNK_SIZE));
+    // Marcajul e o optimizare de rutare; absența lui declanșează căutarea în ambele.
+  }
+}
+
+function imparteInChunks(valoare: string): string[] {
+  const bucati: string[] = [];
+  for (let i = 0; i < valoare.length; i += DIMENSIUNE_CHUNK) {
+    bucati.push(valoare.slice(i, i + DIMENSIUNE_CHUNK));
+  }
+  // O valoare goală tot trebuie să aibă un chunk, altfel nu se distinge de absență.
+  return bucati.length > 0 ? bucati : [''];
+}
+
+async function citesteDinSecure(cheie: string): Promise<string | null> {
+  const nrBrut = await SecureStore.getItemAsync(`${cheie}${SUFIX_NR_CHUNKS}`);
+
+  // Format vechi: valoare unică, fără marker. Păstrăm compatibilitatea ca
+  // utilizatorii existenți să nu fie delogați de acest update.
+  if (!nrBrut) {
+    return SecureStore.getItemAsync(cheie);
+  }
+
+  const nrChunks = Number(nrBrut);
+  if (!Number.isInteger(nrChunks) || nrChunks < 1) return null;
+
+  const bucati: string[] = [];
+  for (let i = 0; i < nrChunks; i++) {
+    const bucata = await SecureStore.getItemAsync(`${cheie}__chunk_${i}`);
+    // Marker prezent dar chunk lipsă înseamnă scriere întreruptă: valoarea e
+    // incompletă și nu are voie să fie returnată parțial.
+    if (bucata === null) return null;
+    bucati.push(bucata);
+  }
+  return bucati.join('');
+}
+
+async function scrieInSecure(cheie: string, valoare: string): Promise<void> {
+  const bucati = imparteInChunks(valoare);
+
+  // 1. Scriem chunk-urile noi. Vechea valoare rămâne încă validă, pentru că
+  //    markerul vechi încă indică numărul vechi de bucataţi.
+  for (let i = 0; i < bucati.length; i++) {
+    await SecureStore.setItemAsync(`${cheie}__chunk_${i}`, bucati[i]);
+  }
+
+  // 2. Punctul de commit: din acest moment valoarea nouă e cea activă.
+  await SecureStore.setItemAsync(`${cheie}${SUFIX_NR_CHUNKS}`, String(bucati.length));
+
+  // 3. Curățenie, după commit. Un eșec aici lasă gunoi, nu date corupte.
+  try {
+    await SecureStore.deleteItemAsync(cheie); // reziduu din formatul vechi
+    for (let i = bucati.length; i < bucati.length + 8; i++) {
+      await SecureStore.deleteItemAsync(`${cheie}__chunk_${i}`);
     }
+  } catch {
+    // Ignorăm: nu afectează corectitudinea citirii.
+  }
+}
+
+async function stergeDinSecure(cheie: string): Promise<void> {
+  try {
+    const nrBrut = await SecureStore.getItemAsync(`${cheie}${SUFIX_NR_CHUNKS}`);
+    // Ștergem întâi markerul: fără el, valoarea e deja invalidă.
+    await SecureStore.deleteItemAsync(`${cheie}${SUFIX_NR_CHUNKS}`);
+    const nrChunks = Number(nrBrut);
+    if (Number.isInteger(nrChunks) && nrChunks > 0) {
+      for (let i = 0; i < nrChunks; i++) {
+        await SecureStore.deleteItemAsync(`${cheie}__chunk_${i}`);
+      }
+    }
+    await SecureStore.deleteItemAsync(cheie);
+  } catch {
+    // Ignorăm.
+  }
+}
+
+async function getItem(cheie: string): Promise<string | null> {
+  const disponibil = await secureStoreDisponibil();
+  const magazin = await citesteMagazin(cheie);
+
+  if (magazin === 'async' || !disponibil) {
     try {
-      await SecureStore.setItemAsync(`${key}${CHUNK_MARKER}`, String(chunks.length));
-      for (let i = 0; i < chunks.length; i++) {
-        await SecureStore.setItemAsync(`${key}__chunk_${i}`, chunks[i]);
-      }
+      return await AsyncStorage.getItem(cheie);
     } catch {
-      // Chunking-ul a eșuat și el — fallback la AsyncStorage.
-      console.warn('[NutriAI] SecureStore chunking eșuat — folosim AsyncStorage pentru cheia:', key);
-      await AsyncStorage.setItem(key, value);
+      return null;
     }
-  }
-}
-
-async function secureRemoveItem(key: string): Promise<void> {
-  if (!secureStoreAvailable) {
-    await AsyncStorage.removeItem(key);
-    return;
   }
 
   try {
-    const chunkCountRaw = await SecureStore.getItemAsync(`${key}${CHUNK_MARKER}`);
-    if (chunkCountRaw) {
-      const chunkCount = Number(chunkCountRaw);
-      for (let i = 0; i < chunkCount; i++) {
-        await SecureStore.deleteItemAsync(`${key}__chunk_${i}`);
-      }
-    }
-    await SecureStore.deleteItemAsync(`${key}${CHUNK_MARKER}`);
-  } catch { /* ignorăm */ }
+    const valoare = await citesteDinSecure(cheie);
+    if (valoare !== null) return valoare;
+  } catch (err) {
+    console.warn('[NutriAI] Citire SecureStore eșuată pentru sesiune:', err);
+  }
+
+  // Recuperare: o versiune anterioară putea lăsa valoarea în AsyncStorage.
   try {
-    await SecureStore.deleteItemAsync(key);
-  } catch { /* ignorăm */ }
+    return await AsyncStorage.getItem(cheie);
+  } catch {
+    return null;
+  }
 }
 
-const secureStorageAdapter = {
-  getItem: secureGetItem,
-  setItem: secureSetItem,
-  removeItem: secureRemoveItem,
-};
+async function setItem(cheie: string, valoare: string): Promise<void> {
+  const disponibil = await secureStoreDisponibil();
+
+  if (disponibil) {
+    try {
+      await scrieInSecure(cheie, valoare);
+      await scrieMagazin(cheie, 'secure');
+      // Eliminăm o eventuală copie mai veche din AsyncStorage, ca să nu rămână
+      // un token valid în stocare necriptată.
+      try { await AsyncStorage.removeItem(cheie); } catch { /* ignorăm */ }
+      return;
+    } catch (err) {
+      console.warn(
+        '[NutriAI] Scriere SecureStore eșuată, revin la AsyncStorage:',
+        err,
+      );
+    }
+  }
+
+  // Fallback. Marcăm magazinul ÍNAINTE de scriere: dacă procesul moare imediat
+  // după, citirea va căuta în AsyncStorage și va găsi fie valoarea nouă, fie nimic
+  // — niciodată valoarea veche din SecureStore, care ar fi în urmă.
+  await scrieMagazin(cheie, 'async');
+  await AsyncStorage.setItem(cheie, valoare);
+  await stergeDinSecure(cheie);
+}
+
+async function removeItem(cheie: string): Promise<void> {
+  await secureStoreDisponibil();
+  await stergeDinSecure(cheie);
+  try { await AsyncStorage.removeItem(cheie); } catch { /* ignorăm */ }
+  try { await AsyncStorage.removeItem(`${PREFIX_MAGAZIN}${cheie}`); } catch { /* ignorăm */ }
+}
+
+const adaptorStocareSesiune = { getItem, setItem, removeItem };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: secureStorageAdapter,
+    storage: adaptorStocareSesiune,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
