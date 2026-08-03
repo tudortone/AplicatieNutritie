@@ -97,6 +97,8 @@ function parseMealProposal(text: any): MealProposal | null {
         protein_g: Number(it.protein_g || it.proteine || 0),
         carbs_g: Number(it.carbs_g || it.carbohidrati || 0),
         fat_g: Number(it.fat_g || it.grasimi || 0),
+        // FIX: fiber_g era pierdut aici, deci la salvare câmpul rămânea mereu 0.
+        fiber_g: Number(it.fiber_g || it.fibre || 0),
         kcal: Number(it.kcal || it.calorii || 0)
       })),
       totals
@@ -107,9 +109,10 @@ function parseMealProposal(text: any): MealProposal | null {
 
 const isMealLogIntent = (text: string) => {
   const lower = text.toLowerCase().trim();
-  // Doar acțiuni clare de logare/salvare, NU întrebări despre calorii/grame
-  return /^(?:am m[aâ]ncat|am consumat|am servit|am b[aă]ut|logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa)/i.test(lower) ||
-    /(?:logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa)\b/i.test(lower);
+  // Aliniat cu regex-ul din backend (/api/chat): "am mâncat"/"am consumat" se caută
+  // oriunde în frază (ex. "azi am mâncat 2 ouă"), nu doar la început. Altfel fallback-ul
+  // /api/log-food-from-chat nu se declanșa și utilizatorul vedea doar eroarea AI.
+  return /(?:am m[aâ]ncat|am consumat|am servit|am b[aă]ut|logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa)\b/i.test(lower);
 };
 
 export default function ChatScreen() {
