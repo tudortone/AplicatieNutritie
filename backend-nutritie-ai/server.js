@@ -11,7 +11,10 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const Sentry = require('@sentry/node');
-const ImageKit = require('@imagekit/nodejs');
+// FIX: pachetul `imagekit` v6 are getAuthenticationParameters(); `@imagekit/nodejs` v7
+// e doar un client REST si arunca "getAuthenticationParameters is not a function",
+// deci /api/imagekit-auth esua mereu cu 500 indiferent de chei.
+const ImageKit = require('imagekit');
 const { tasks } = require('@trigger.dev/sdk/v3');
 
 require('dotenv').config();
