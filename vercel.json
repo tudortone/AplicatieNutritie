@@ -2,8 +2,8 @@
   "version": 2,
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/", "destination": "/public/index.html" },
-    { "source": "/index", "destination": "/public/index.html" },
+    { "source": "/", "destination": "/public/politica-de-confidentialitate.html" },
+    { "source": "/index", "destination": "/public/politica-de-confidentialitate.html" },
     { "source": "/politica-de-confidentialitate", "destination": "/public/politica-de-confidentialitate.html" },
     { "source": "/privacy", "destination": "/public/politica-de-confidentialitate.html" },
     { "source": "/termeni-si-conditii", "destination": "/public/termeni-si-conditii.html" },
