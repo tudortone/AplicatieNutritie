@@ -422,7 +422,7 @@ export default function CameraScreen() {
           <Text style={[styles.permissionSub, { color: colors.textSecondary }]}>NutriAI are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.</Text>
           
           <Animated.View entering={FadeInUp.duration(600).delay(200)} style={[styles.permissionBtn, { shadowColor: colors.accent }]}>
-            <TouchableOpacity onPress={requestPermission}>
+            <TouchableOpacity onPress={requestPermission} accessibilityRole="button" accessibilityLabel="Acordă permisiunea camerei">
               <LinearGradient colors={colors.accentGradient} style={styles.permissionBtnGrad}>
                 <Text style={[styles.permissionBtnText, { color: colors.background }]}>Permite accesul</Text>
               </LinearGradient>
@@ -448,6 +448,8 @@ export default function CameraScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setAiMenuVisible(prev => !prev);
             }}
+            accessibilityRole="button"
+            accessibilityLabel="Alege furnizorul AI pentru analiza imaginii"
           >
             <View style={[styles.topBadgeBlur, { paddingVertical: 8 }]}>
               <Zap size={14} color={colors.accent} fill={colors.accent} />
@@ -460,7 +462,7 @@ export default function CameraScreen() {
         </View>
 
         {/* Buton X în Dreapta (Fără să se suprapună) */}
-        <TouchableOpacity style={styles.closeButton} onPress={() => { anuleazaScanarea(); router.back(); }}>
+        <TouchableOpacity style={styles.closeButton} onPress={() => { anuleazaScanarea(); router.back(); }} accessibilityRole="button" accessibilityLabel="Închide camera">
           <Text style={styles.closeButtonText}>X</Text>
         </TouchableOpacity>
       </View>
@@ -494,6 +496,8 @@ export default function CameraScreen() {
                       setSelectedAI(aiKey);
                       setAiMenuVisible(false);
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Selectează AI ${aiKey}`}
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.aiDropdownTitle, isSelected && { color: colors.accent }]}>
@@ -565,6 +569,8 @@ export default function CameraScreen() {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setCautareProdusVisible(true);
                       }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Adaugă alt produs la masă"
                     >
                       <Plus size={16} color={colors.accent} />
                       <Text style={[styles.addExtraText, { color: colors.accent, fontWeight: '700' }]}>
@@ -604,13 +610,13 @@ export default function CameraScreen() {
                   </View>
                 </View>
 
-                <TouchableOpacity style={[styles.addBtn, { shadowColor: colors.accent }]} onPress={adaugaInJurnal}>
+                <TouchableOpacity style={[styles.addBtn, { shadowColor: colors.accent }]} onPress={adaugaInJurnal} accessibilityRole="button" accessibilityLabel="Adaugă masa în jurnal">
                   <LinearGradient colors={colors.accentGradient} style={styles.addBtnGrad}>
                     <Text style={[styles.addBtnText, { color: colors.background }]}>+ Adaugă {Math.round(totalCalculat.calorii)} kcal în Jurnal</Text>
                   </LinearGradient>
                 </TouchableOpacity>
                 
-                <TouchableOpacity style={styles.retryBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); anuleazaScanarea(); }}>
+                <TouchableOpacity style={styles.retryBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); anuleazaScanarea(); }} accessibilityRole="button" accessibilityLabel="Anulează și scanează din nou">
                   <Text style={styles.retryBtnText}>🔄 Anulează & Scanează din nou</Text>
                 </TouchableOpacity>
               </LinearGradient>
@@ -622,7 +628,7 @@ export default function CameraScreen() {
       {scanError && (
         <View style={styles.errorCard}>
           <Text style={styles.errorText}>{scanError}</Text>
-          <Pressable onPress={() => setScanError(null)}>
+          <Pressable onPress={() => setScanError(null)} accessibilityRole="button" accessibilityLabel="Închide mesajul de eroare">
             <Text style={styles.retryText}>Închide</Text>
           </Pressable>
         </View>
@@ -677,6 +683,7 @@ export default function CameraScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 28 }}>
             <TouchableOpacity
               testID="gallery-button"
+              accessibilityRole="button"
               accessibilityLabel="Alege o poză din galerie"
               style={[styles.galleryBtn, { borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.5)' }]}
               onPress={alegeDinGalerie}
@@ -688,6 +695,7 @@ export default function CameraScreen() {
 
             <TouchableOpacity
               testID="shutter-button"
+              accessibilityRole="button"
               accessibilityLabel="Scanează mâncarea cu aparatul foto"
               style={[styles.shutterBtn, { shadowColor: colors.accent, borderColor: colors.accent + '4D' }]}
               onPress={analizeazaFoto}
