@@ -278,6 +278,8 @@ export default function HomeScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TouchableOpacity
               onPress={() => router.push('/notificari' as any)}
+              accessibilityRole="button"
+              accessibilityLabel={`Notificări${unreadCount > 0 ? `, ${unreadCount} necitite` : ''}`}
               style={{
                 width: 38,
                 height: 38,
@@ -475,6 +477,8 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.duration(700).delay(310)}>
           <TouchableOpacity
             onPress={() => router.push('/profil')}
+            accessibilityRole="button"
+            accessibilityLabel="Greutate și progres. Modifică"
             style={[s.weightCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
           >
             <View style={s.weightIconWrap}>
@@ -548,11 +552,13 @@ export default function HomeScreen() {
 
         {/* Apple HealthKit / Google Fit & Pași Card */}
         <Animated.View entering={FadeInDown.duration(700).delay(335)} style={[s.healthCard, { borderColor: isEnabled ? colors.accent + '40' : 'rgba(255,255,255,0.08)' }]}>
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => {
                 router.push('/(tabs)/profil');
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Setări sănătate și pași"
             >
               <BlurView intensity={20} tint="dark" style={s.healthBlur}>
                 <LinearGradient colors={[isEnabled ? colors.accent + '15' : 'rgba(255,255,255,0.03)', 'rgba(0,0,0,0)']} style={s.healthGrad}>
@@ -610,6 +616,8 @@ export default function HomeScreen() {
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => router.push('/(tabs)/antrenamente' as any)}
+            accessibilityRole="button"
+            accessibilityLabel="Hartă musculară live. Deschide antrenamentele"
             style={[s.liveHeatmapCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
           >
             <View style={s.liveHeatmapHeader}>
@@ -621,6 +629,8 @@ export default function HomeScreen() {
                 onPress={() => setViewSideHome(v => v === 'front' ? 'back' : 'front')}
                 style={[s.liveHeatmapToggle, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={viewSideHome === 'front' ? 'Arată partea din spate a hărții musculare' : 'Arată partea din față a hărții musculare'}
               >
                 <RotateCcw size={12} color={colors.accent} />
                 <Text style={[s.liveHeatmapToggleText, { color: colors.accent }]}>
@@ -659,6 +669,8 @@ export default function HomeScreen() {
                     onPress={handleCloseTip}
                     style={{ padding: 4 }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Închide sfatul zilei"
                   >
                     <X size={18} color={colors.textSecondary} />
                   </TouchableOpacity>
