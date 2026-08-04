@@ -32,6 +32,7 @@ const { Semafor } = require('./utils/semafor');
 const { parseJsonFromLlm } = require('./utils/llmJson');
 const { construiesteIstoricSigur, valideazaIngrediente } = require('./utils/promptSafety');
 const { valideazaMasa } = require('./utils/validareMese');
+const { creeazaContextDate } = require('./utils/clientUtilizator');
 const {
   sanitizeRequest,
   detectPromptInjection,
@@ -46,6 +47,7 @@ const {
   salveazaEstimareUtilizator,
   verificaDreptDeScriere,
   salveazaProdusManual,
+  EroareProprietateProdus,
 } = require('./utils/barcode');
 
 // Configurarea este citita si validata o singura data, la boot. Un deploy cu
@@ -151,11 +153,16 @@ const upload = multer({
 
 const supabase = createClient(config.supabase.url, config.supabase.anonKey);
 
-// Supabase Admin (service_role) - ocoleste RLS pentru operatiuni server-side.
-// DATORIE ARHITECTURALA CUNOSCUTA: toate scrierile trec pe aici, deci singura
-// bariera intre utilizatori este prezenta manuala a lui .eq('user_id', req.user.id)
-// in fiecare interogare. Planul de trecere la un client per-cerere cu JWT-ul
-// utilizatorului (RLS activ) este in RAPORT-AUDIT-2026-08.md.
+// Supabase Admin (service_role) - ocoleste RLS prin definitie.
+//
+// REGULA (S-1, audit 2026-08): acest client se foloseste EXCLUSIV pentru tabele
+// fara politici de utilizator, adica cele care sunt intentionat backend-only:
+//   - `barcode_cache`   (politica `using (false)`)
+//   - `clerk_user_map`  (RLS activ, fara nicio politica: deny-all)
+//
+// Pentru datele utilizatorului (mese, profil, estimari, antrenamente) se foloseste
+// `ctx.db` din contextDate(req), care este legat de JWT-ul utilizatorului si lasa
+// baza de date sa aplice izolarea. Nu adauga aici interogari pe datele oamenilor.
 const supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey);
 
 // Cache pentru token-uri deja validate. Cheia e hash SHA-256 al token-ului
@@ -186,6 +193,10 @@ const requireAuth = async (req, res, next) => {
   const token = authHeader.slice(7);
   const tokenKey = hashToken(token);
 
+  // Tokenul brut este necesar pentru a construi clientul care respecta RLS.
+  // Nu este logat, nu este stocat si nu supravietuieste cererii.
+  req.tokenBrut = token;
+
   const utilizatorCache = tokenCache.get(tokenKey);
   if (utilizatorCache) {
     req.user = utilizatorCache;
@@ -212,6 +223,37 @@ const requireAuth = async (req, res, next) => {
     return res.status(503).json({ eroare: 'Serviciul de autentificare este indisponibil.' });
   }
 };
+
+/**
+ * Contextul de date al cererii curente (S-1).
+ *
+ * `ctx.db`    - clientul pentru datele utilizatorului. Cand tokenul este un JWT
+ *               Supabase, RLS este ACTIV: o interogare fara filtru intoarce zero
+ *               randuri in loc de datele altcuiva.
+ * `ctx.admin` - clientul privilegiat, exclusiv pentru tabelele backend-only.
+ *
+ * Construit lenes si memorat pe cerere: rutele care nu ating baza de date nu
+ * plateasc nimic, iar doua interogari din aceeasi cerere refolosesc acelasi client.
+ *
+ * Pentru utilizatorii Clerk nu exista JWT Supabase, deci `modAdmin` devine true si
+ * singura bariera rmane filtrul explicit din cod. Semnalam asta in raspuns ca sa
+ * fie observabil in trafic, nu doar in comentarii.
+ */
+function contextDate(req, res) {
+  if (!req._ctxDate) {
+    req._ctxDate = creeazaContextDate({
+      config,
+      supabaseAdmin,
+      token: req.tokenBrut,
+      userId: req.user.id,
+      sursaToken: req.user.provider,
+    });
+    if (res && !res.headersSent) {
+      res.setHeader('X-Protectie-RLS', req._ctxDate.modAdmin ? 'inactiv' : 'activ');
+    }
+  }
+  return req._ctxDate;
+}
 
 // ==========================================
 // IMAGEKIT AUTHENTICATION ENDPOINT
@@ -400,7 +442,7 @@ app.get('/', (req, res) => {
   res.json({
     status: 'OK',
     service: 'NutriAI Secure Backend',
-    version: '2.3.0-audit-hardening',
+    version: '2.4.0-rls-per-cerere',
     timestamp: new Date().toISOString(),
   });
 });
@@ -780,7 +822,7 @@ Sarcina ta: Raspunde prietenos, tinand cont de istoricul discutiei si de calorii
     }
 
     try {
-      const isMealLog = /am m[a\u00e2]ncat|am consumat|logheaz[a\u0103]|[i\u00ee]nregistreaz[a\u0103]|pune [i\u00ee]n jurnal|adaug[a\u0103] [i\u00ee]n jurnal|adaug[a\u0103] masa|salveaz[a\u0103] masa/i.test(ultimulMesaj);
+      const isMealLog = /am m[aâ]ncat|am consumat|logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa/i.test(ultimulMesaj);
       const groqBody = {
         model: 'llama-3.3-70b-versatile',
         messages,
@@ -1193,9 +1235,13 @@ app.get('/api/produs-barcode/:code', requireAuth, generalLimiter, async (req, re
       return res.status(400).json({ eroare: 'Cod de bare invalid.' });
     }
 
+    const ctx = contextDate(req, res);
+
     // STRAT 1: cache global (surse verificate) + estimarile AI per utilizator (C2).
     try {
-      const dinGlobal = await citesteDinCacheGlobal(supabaseAdmin, code);
+      // `barcode_cache` este backend-only prin proiectare (politica `using (false)`),
+      // deci aici clientul admin este singura cale corecta.
+      const dinGlobal = await citesteDinCacheGlobal(ctx.admin, code);
       if (dinGlobal) {
         return raspunsBarcode(res, {
           produs: dinGlobal.produs,
@@ -1205,8 +1251,9 @@ app.get('/api/produs-barcode/:code', requireAuth, generalLimiter, async (req, re
         });
       }
 
-      const alUtilizatorului = await citesteEstimareUtilizator(supabaseAdmin, {
-        userId: req.user.id,
+      // Estimarile sunt date ale utilizatorului: merg prin clientul cu RLS.
+      const alUtilizatorului = await citesteEstimareUtilizator(ctx.db, {
+        userId: ctx.userId,
         cod: code,
       });
       if (alUtilizatorului) {
@@ -1250,7 +1297,7 @@ app.get('/api/produs-barcode/:code', requireAuth, generalLimiter, async (req, re
         };
 
         try {
-          await salveazaProdusOff(supabaseAdmin, { cod: code, produs: normalized, payload: product });
+          await salveazaProdusOff(ctx.admin, { cod: code, produs: normalized, payload: product });
         } catch (saveErr) {
           console.warn('Nu s-a putut salva in barcode_cache:', saveErr.message);
         }
@@ -1319,8 +1366,8 @@ RETURNEAZA STRICT EXCLUSIV UN OBIECT JSON valid in acest format:
           };
 
           try {
-            await salveazaEstimareUtilizator(supabaseAdmin, {
-              userId: req.user.id,
+            await salveazaEstimareUtilizator(ctx.db, {
+              userId: ctx.userId,
               cod: code,
               produs: normalizedAi,
             });
@@ -1382,25 +1429,32 @@ app.post('/api/salveaza-produs-barcode', requireAuth, generalLimiter, async (req
       return res.status(400).json({ eroare: 'Cod de bare malformat.' });
     }
 
-    // C3: intrarile de sistem si cele fara proprietar sunt intangibile.
-    // ATENTIE: verificarea si scrierea nu sunt atomice (TOCTOU): doua cereri
-    // simultane pot trece amandoua. Solutia corecta este o constrangere la nivel
-    // de DB - vezi RAPORT-AUDIT-2026-08.md.
-    const drept = await verificaDreptDeScriere(supabaseAdmin, {
+    const ctx = contextDate(req, res);
+
+    // Pre-verificare pentru un mesaj de eroare clar, INAINTE de a incerca scrierea.
+    // Nu este bariera de securitate - bariera este predicatul din RPC, evaluat sub
+    // blocarea randului. Un refuz aparut intre cele doua momente vine ca
+    // EroareProprietateProdus si este tratat mai jos.
+    const drept = await verificaDreptDeScriere(ctx.admin, {
       cod: String(code).trim(),
-      userId: req.user.id,
+      userId: ctx.userId,
     });
     if (!drept.permis) {
       return res.status(drept.status).json({ eroare: drept.motiv });
     }
 
-    await salveazaProdusManual(supabaseAdmin, {
+    await salveazaProdusManual(ctx.admin, {
       cod: String(code).trim(),
-      userId: req.user.id,
+      userId: ctx.userId,
       valori: { name, brand, quantity, kcal_100g: kc, protein_100g: p, carbs_100g: c, fat_100g: f },
     });
     return res.json({ succes: true, message: 'Produs salvat in cache-ul local.' });
   } catch (err) {
+    // Conflict de proprietate pierdut la limita: 409, nu 500. Utilizatorul trebuie
+    // sa afle ca produsul are alt proprietar, nu ca serverul s-a defectat.
+    if (err instanceof EroareProprietateProdus) {
+      return res.status(err.status).json({ eroare: err.motiv });
+    }
     console.error('Eroare la salvare produs barcode:', err.message);
     return res.status(500).json({ eroare: 'Eroare la salvarea produsului.' });
   }
@@ -1414,7 +1468,7 @@ app.post('/api/calculeaza-profil', requireAuth, generalLimiter, async (req, res)
     const { varsta, greutate, inaltime, sex, activitate, obiectiv } = req.body;
 
     if (!varsta || !greutate || !inaltime || !sex || !activitate || !obiectiv) {
-      return res.status(400).json({ eroare: 'Date incomplete. Te rog s\u0103 completezi tot formularul.' });
+      return res.status(400).json({ eroare: 'Date incomplete. Te rog să completezi tot formularul.' });
     }
 
     const v = parseInt(varsta, 10);
@@ -1422,13 +1476,13 @@ app.post('/api/calculeaza-profil', requireAuth, generalLimiter, async (req, res)
     const i = parseFloat(inaltime);
 
     if (isNaN(v) || v < 10 || v > 100) {
-      return res.status(400).json({ eroare: 'V\u00e2rsta trebuie s\u0103 fie un num\u0103r valid \u00eentre 10 \u0219i 100 ani.' });
+      return res.status(400).json({ eroare: 'Vârsta trebuie să fie un număr valid între 10 și 100 ani.' });
     }
     if (isNaN(g) || g < 30 || g > 300) {
-      return res.status(400).json({ eroare: 'Greutatea trebuie s\u0103 fie un num\u0103r valid \u00eentre 30 \u0219i 300 kg.' });
+      return res.status(400).json({ eroare: 'Greutatea trebuie să fie un număr valid între 30 și 300 kg.' });
     }
     if (isNaN(i) || i < 100 || i > 250) {
-      return res.status(400).json({ eroare: '\u00cen\u0103l\u021bimea trebuie s\u0103 fie un num\u0103r valid \u00eentre 100 \u0219i 250 cm.' });
+      return res.status(400).json({ eroare: 'Înălțimea trebuie să fie un număr valid între 100 și 250 cm.' });
     }
     if (sex !== 'Masculin' && sex !== 'Feminin') {
       return res.status(400).json({ eroare: 'Sexul selectat este invalid.' });
@@ -1437,7 +1491,7 @@ app.post('/api/calculeaza-profil', requireAuth, generalLimiter, async (req, res)
     if (!activitatiPermise.includes(activitate)) {
       return res.status(400).json({ eroare: 'Nivelul de activitate selectat este invalid.' });
     }
-    const obiectivePermise = ['Sl\u0103bire', 'Men\u021binere', 'Mas\u0103 Muscular\u0103'];
+    const obiectivePermise = ['Slăbire', 'Menținere', 'Masă Musculară'];
     if (!obiectivePermise.includes(obiectiv)) {
       return res.status(400).json({ eroare: 'Obiectivul selectat este invalid.' });
     }
@@ -1451,15 +1505,15 @@ app.post('/api/calculeaza-profil', requireAuth, generalLimiter, async (req, res)
     const tdee = bmr * (multiplicatori[activitate] || 1.2);
 
     let caloriiTinta;
-    if (obiectiv === 'Sl\u0103bire') {
+    if (obiectiv === 'Slăbire') {
       caloriiTinta = Math.max(tdee - 500, sex === 'Masculin' ? 1500 : 1200);
-    } else if (obiectiv === 'Mas\u0103 Muscular\u0103') {
+    } else if (obiectiv === 'Masă Musculară') {
       caloriiTinta = tdee + 350;
     } else {
       caloriiTinta = tdee;
     }
 
-    const protPerKg = obiectiv === 'Men\u021binere' ? 1.6 : 2.0;
+    const protPerKg = obiectiv === 'Menținere' ? 1.6 : 2.0;
     const proteineTinta = Math.round(g * protPerKg);
 
     const calT = Math.round(caloriiTinta);
@@ -1469,37 +1523,40 @@ app.post('/api/calculeaza-profil', requireAuth, generalLimiter, async (req, res)
     res.json({ caloriiTinta: calT, proteineTinta, grasimiTinta, carbiTinta });
   } catch (error) {
     console.error('Eroare la calculul profilului:', error.message);
-    res.status(500).json({ eroare: '\u00cemi pare r\u0103u, am \u00eent\u00e2mpinat o problem\u0103 la calcul. Mai \u00eencearc\u0103!' });
+    res.status(500).json({ eroare: 'Îmi pare rău, am întâmpinat o problemă la calcul. Mai încearcă!' });
   }
 });
 
 // ==========================================
 // RUTA 4: STERGERE MASA
+// Interogarea trece prin ctx.db: cu RLS activ, un id care nu apartine
+// utilizatorului nu poate fi sters nici daca filtrul din cod ar lipsi.
 // ==========================================
 app.delete('/api/mese/:id', requireAuth, generalLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     if (!esteUuid(id)) {
-      return res.status(400).json({ eroare: 'ID de mas\u0103 invalid.' });
+      return res.status(400).json({ eroare: 'ID de masă invalid.' });
     }
-    const { data, error } = await supabaseAdmin
+    const ctx = contextDate(req, res);
+    const { data, error } = await ctx.db
       .from('mese')
       .delete()
       .eq('id', id)
-      .eq('user_id', req.user.id)
+      .eq('user_id', ctx.userId)
       .select('id');
 
     if (error) {
       console.error('Eroare DB stergere masa:', error.message);
-      return res.status(500).json({ eroare: 'Eroare la \u0219tergerea mesei. \u00cencearc\u0103 din nou.' });
+      return res.status(500).json({ eroare: 'Eroare la ștergerea mesei. Încearcă din nou.' });
     }
     if (!data || data.length === 0) {
-      return res.status(404).json({ eroare: 'Masa nu a fost g\u0103sit\u0103.' });
+      return res.status(404).json({ eroare: 'Masa nu a fost găsită.' });
     }
     res.json({ succes: true });
   } catch (error) {
     console.error('Eroare stergere masa:', error.message);
-    res.status(500).json({ eroare: 'Eroare la \u0219tergerea mesei.' });
+    res.status(500).json({ eroare: 'Eroare la ștergerea mesei.' });
   }
 });
 
@@ -1511,7 +1568,7 @@ app.put('/api/mese/:id', requireAuth, generalLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     if (!esteUuid(id)) {
-      return res.status(400).json({ eroare: 'ID de mas\u0103 invalid.' });
+      return res.status(400).json({ eroare: 'ID de masă invalid.' });
     }
 
     const validare = valideazaMasa(req.body, { pentruActualizare: true });
@@ -1519,19 +1576,20 @@ app.put('/api/mese/:id', requireAuth, generalLimiter, async (req, res) => {
       return res.status(400).json({ eroare: validare.eroare });
     }
 
-    const { data, error } = await supabaseAdmin
+    const ctx = contextDate(req, res);
+    const { data, error } = await ctx.db
       .from('mese')
       .update(validare.payload)
       .eq('id', id)
-      .eq('user_id', req.user.id)
+      .eq('user_id', ctx.userId)
       .select();
 
     if (error) {
       console.error('Eroare DB actualizare masa:', error.message);
-      return res.status(500).json({ eroare: 'Eroare la actualizarea mesei. \u00cencearc\u0103 din nou.' });
+      return res.status(500).json({ eroare: 'Eroare la actualizarea mesei. Încearcă din nou.' });
     }
     if (!data || data.length === 0) {
-      return res.status(404).json({ eroare: 'Masa nu a fost g\u0103sit\u0103.' });
+      return res.status(404).json({ eroare: 'Masa nu a fost găsită.' });
     }
     res.json({ succes: true, masa: data[0] });
   } catch (error) {
@@ -1542,6 +1600,9 @@ app.put('/api/mese/:id', requireAuth, generalLimiter, async (req, res) => {
 
 // ==========================================
 // RUTA 5.1: SALVARE NOUA MASA
+// `user_id` vine EXCLUSIV din identitatea rezolvata, niciodata din corpul cererii.
+// Cu RLS activ, `with check (auth.uid() = user_id)` respinge oricum o inserare
+// pe numele altcuiva.
 // ==========================================
 app.post('/api/mese', requireAuth, generalLimiter, async (req, res) => {
   try {
@@ -1551,28 +1612,29 @@ app.post('/api/mese', requireAuth, generalLimiter, async (req, res) => {
     }
 
     const { data: dataMasa, ora } = req.body;
+    const ctx = contextDate(req, res);
 
     const insertPayload = {
       ...validare.payload,
-      user_id: req.user.id,
+      user_id: ctx.userId,
       // Validare format data (YYYY-MM-DD) si ora (HH:MM)
       data: /^\d{4}-\d{2}-\d{2}$/.test(String(dataMasa || '')) ? dataMasa : null,
       ora: /^\d{2}:\d{2}(:\d{2})?$/.test(String(ora || '')) ? ora : null,
     };
 
-    const { data: result, error } = await supabaseAdmin
+    const { data: result, error } = await ctx.db
       .from('mese')
       .insert([insertPayload])
       .select();
 
     if (error) {
       console.error('Eroare DB inserare masa:', error.message);
-      return res.status(500).json({ eroare: 'Eroare la ad\u0103ugarea mesei. \u00cencearc\u0103 din nou.' });
+      return res.status(500).json({ eroare: 'Eroare la adăugarea mesei. Încearcă din nou.' });
     }
     res.json({ succes: true, masa: result?.[0] || null });
   } catch (error) {
     console.error('Eroare adaugare masa:', error.message);
-    res.status(500).json({ eroare: 'Eroare la ad\u0103ugarea mesei.' });
+    res.status(500).json({ eroare: 'Eroare la adăugarea mesei.' });
   }
 });
 
@@ -1580,7 +1642,7 @@ app.post('/api/mese', requireAuth, generalLimiter, async (req, res) => {
 // HANDLER 404 PENTRU RUTE INEXISTENTE
 // ==========================================
 app.use((req, res) => {
-  res.status(404).json({ eroare: 'Ruta solicitat\u0103 nu exist\u0103 (404).' });
+  res.status(404).json({ eroare: 'Ruta solicitată nu există (404).' });
 });
 
 // ==========================================
@@ -1594,7 +1656,7 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   console.error('Eroare globala:', message);
 
   if (err?.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ eroare: 'Fi\u0219ierul este prea mare. Limita este 5MB.' });
+    return res.status(413).json({ eroare: 'Fișierul este prea mare. Limita este 5MB.' });
   }
   if (err instanceof multer.MulterError) {
     return res.status(400).json({ eroare: message });
@@ -1602,7 +1664,7 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   if (message.includes('Tip fisier nepermis')) {
     return res.status(400).json({ eroare: message });
   }
-  res.status(500).json({ eroare: 'Eroare intern\u0103 a serverului.' });
+  res.status(500).json({ eroare: 'Eroare internă a serverului.' });
 });
 
 // Export pentru teste
