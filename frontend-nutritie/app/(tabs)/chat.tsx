@@ -424,6 +424,8 @@ export default function ChatScreen() {
               onPress={handleResetChat}
               style={[styles.newChatPill, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Începe o conversație nouă de chat"
             >
               <Text style={[styles.newChatPillText, { color: colors.textPrimary }]}>Chat nou</Text>
             </TouchableOpacity>
@@ -472,6 +474,8 @@ export default function ChatScreen() {
               <TouchableOpacity
                 style={[styles.quickActionCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                 onPress={() => trimitePromptDirect('Analizează mesele mele de azi și spune-mi ce să mai mănânc până diseară.')}
+                accessibilityRole="button"
+                accessibilityLabel="Analiza zilei: vezi unde ești cu kcal și proteine"
               >
                 <Text style={styles.quickActionEmoji}>📊</Text>
                 <View style={styles.quickActionBody}>
@@ -483,6 +487,8 @@ export default function ChatScreen() {
               <TouchableOpacity
                 style={[styles.quickActionCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                 onPress={() => trimitePromptDirect('Sugerează-mi o masă bogată în proteine, sub 600 kcal.')}
+                accessibilityRole="button"
+                accessibilityLabel="Sugerează o masă bogată în proteine, sub 600 kcal"
               >
                 <Text style={styles.quickActionEmoji}>💪</Text>
                 <View style={styles.quickActionBody}>
@@ -494,6 +500,8 @@ export default function ChatScreen() {
               <TouchableOpacity
                 style={[styles.quickActionCard, { backgroundColor: colors.accent, borderColor: colors.accent }]}
                 onPress={() => setRecipeModalVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Deschide generatorul de rețete"
               >
                 <Text style={styles.quickActionEmoji}>🥗</Text>
                 <View style={styles.quickActionBody}>
@@ -560,33 +568,41 @@ export default function ChatScreen() {
             {/* Quick AI Action Chips in Active Chat */}
             <Animated.View entering={FadeInDown.duration(500).delay(150)} style={styles.chipsRow}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.actionChip, { backgroundColor: colors.accent, borderColor: colors.accent }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setRecipeModalVisible(true); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Generator de rețete"
                 >
                   <Text style={{ fontSize: 14 }}>🥗</Text>
                   <Text style={[styles.actionChipText, { color: colors.background, fontWeight: '800' }]}>Generator Rețete</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                   onPress={() => trimitePromptDirect("Ce pot găti rapid și sănătos în mai puțin de 15 minute?")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Sugerează o cină rapidă, sub 15 minute"
                 >
                   <Text style={{ fontSize: 14 }}>⚡</Text>
                   <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Cină rapidă (&lt;15 min)</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                   onPress={() => trimitePromptDirect(`Care este cea mai eficientă rețetă bogată în proteine pentru a-mi atinge ținta de ${proteineTinta}g?`)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cere o rețetă bogată în proteine"
                 >
                   <Text style={{ fontSize: 14 }}>💪</Text>
                   <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Bomba de proteine</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                   onPress={() => trimitePromptDirect("Analizează mesele mele de azi și dă-mi o evaluare generală și un sfat pentru seară.")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Analizează ziua curentă în chat"
                 >
                   <Text style={{ fontSize: 14 }}>📊</Text>
                   <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Analiză zi curentă</Text>
@@ -619,6 +635,7 @@ export default function ChatScreen() {
               />
               <TouchableOpacity
                 testID="send-button"
+                accessibilityRole="button"
                 accessibilityLabel="Trimite mesajul"
                 style={[styles.sendBtn, !chatInput.trim() && { opacity: 0.4 }]}
                 onPress={trimiteMesaj}
@@ -656,6 +673,8 @@ export default function ChatScreen() {
               <TouchableOpacity
                 style={[styles.modalCancelBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
                 onPress={() => setNewChatModalVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Anulează conversația nouă"
               >
                 <Text style={[styles.modalCancelText, { color: colors.textPrimary }]}>Anulează</Text>
               </TouchableOpacity>
@@ -663,6 +682,8 @@ export default function ChatScreen() {
               <TouchableOpacity
                 style={[styles.modalConfirmBtn, { backgroundColor: colors.accentSecondary }]}
                 onPress={confirmResetChat}
+                accessibilityRole="button"
+                accessibilityLabel="Confirmă începerea unei conversații noi"
               >
                 <Sparkles size={16} color="#FFF" />
                 <Text style={styles.modalConfirmText}>Chat Nou</Text>
