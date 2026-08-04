@@ -294,6 +294,9 @@ export default function StatisticiScreen() {
             <TouchableOpacity
               style={[styles.tabBtn, activeTab === 'calorii' && { backgroundColor: colors.accent }]}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab('calorii'); }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: activeTab === 'calorii' }}
+              accessibilityLabel="Fila aport caloric"
             >
               <Text style={[styles.tabText, { color: activeTab === 'calorii' ? colors.background : colors.textSecondary, fontWeight: activeTab === 'calorii' ? '800' : '600' }]}>
                 📊 Aport Caloric
@@ -303,6 +306,9 @@ export default function StatisticiScreen() {
             <TouchableOpacity
               style={[styles.tabBtn, activeTab === 'greutate' && { backgroundColor: colors.accentSecondary }]}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab('greutate'); }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: activeTab === 'greutate' }}
+              accessibilityLabel="Fila evoluție greutate"
             >
               <Text style={[styles.tabText, { color: activeTab === 'greutate' ? colors.background : colors.textSecondary, fontWeight: activeTab === 'greutate' ? '800' : '600' }]}>
                 ⚖️ Evoluție Greutate
@@ -315,10 +321,12 @@ export default function StatisticiScreen() {
           <>
             {/* Weight Summary Row */}
             <Animated.View entering={FadeInDown.duration(600).delay(100)} style={styles.summaryRow}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.summaryBox, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setModalInitialTab('curenta'); setModalGreutateVisible(true); }}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={`Greutatea curentă, ${greutateCurenta} kg. Modifică`}
               >
                 <LinearGradient colors={[colors.accentSecondary + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
                   <Scale size={20} color={colors.accentSecondary} />
@@ -327,10 +335,12 @@ export default function StatisticiScreen() {
                 </LinearGradient>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.summaryBox, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setModalInitialTab('tinta'); setModalGreutateVisible(true); }}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={`Greutatea țintă, ${greutateTinta} kg. Modifică`}
               >
                 <LinearGradient colors={[colors.accent + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
                   <Target size={20} color={colors.accent} />
@@ -358,6 +368,8 @@ export default function StatisticiScreen() {
                 style={[styles.recordBtn, { borderColor: colors.accentSecondary + '50' }]}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setModalInitialTab('curenta'); setModalGreutateVisible(true); }}
                 activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Modifică greutatea curentă sau țintă"
               >
                 <LinearGradient colors={[colors.accentSecondary + '20', 'rgba(0,0,0,0)']} style={styles.recordGrad}>
                   <View style={[styles.recordIcon, { backgroundColor: colors.accentSecondary }]}>
@@ -384,12 +396,18 @@ export default function StatisticiScreen() {
                       <TouchableOpacity
                         style={[styles.chartSwitchBtn, zileChart === '7' && { backgroundColor: colors.accentSecondary }]}
                         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setZileChart('7'); }}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: zileChart === '7' }}
+                        accessibilityLabel="Afișează ultimele 7 zile de greutate"
                       >
                         <Text style={[styles.chartSwitchText, { color: zileChart === '7' ? colors.background : colors.textSecondary }]}>7Z</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.chartSwitchBtn, zileChart === '30' && { backgroundColor: colors.accentSecondary }]}
                         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setZileChart('30'); }}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: zileChart === '30' }}
+                        accessibilityLabel="Afișează ultimele 30 de zile de greutate"
                       >
                         <Text style={[styles.chartSwitchText, { color: zileChart === '30' ? colors.background : colors.textSecondary }]}>30Z</Text>
                       </TouchableOpacity>
