@@ -83,8 +83,11 @@ function BodyMapBase({
 		if (!intensity) return out
 		for (const [muscle, raw] of Object.entries(intensity) as [MuscleId, number][]) {
 			const v = clamp01(raw)
-			if (v < MIN_VISIBLE) continue
-			out.set(muscle, { color: heatColor(v), opacity: v * MAX_HEAT_OPACITY })
+			if (v <= 0.001) {
+				out.set(muscle, { color: heatColor(0), opacity: 0.35 })
+			} else {
+				out.set(muscle, { color: heatColor(v), opacity: Math.max(0.45, v * MAX_HEAT_OPACITY) })
+			}
 		}
 		return out
 	}, [intensity])

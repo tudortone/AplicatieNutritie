@@ -344,6 +344,8 @@ export default function ScannerBarcodeScreen() {
       {activeTab === 'scan' ? (
         <View style={styles.cameraWrap}>
           <CameraView
+            testID="barcode-scanner-camera"
+            accessibilityLabel="Scanner cod de bare"
             style={StyleSheet.absoluteFill}
             barcodeScannerSettings={{
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],

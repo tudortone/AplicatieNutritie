@@ -669,6 +669,8 @@ export default function CameraScreen() {
         <Animated.View entering={FadeInUp.duration(600).delay(200)} style={styles.shutterArea}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 28 }}>
             <TouchableOpacity
+              testID="gallery-button"
+              accessibilityLabel="Alege o poză din galerie"
               style={[styles.galleryBtn, { borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.5)' }]}
               onPress={alegeDinGalerie}
               disabled={seIncarca}
@@ -678,6 +680,8 @@ export default function CameraScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
+              testID="shutter-button"
+              accessibilityLabel="Scanează mâncarea cu aparatul foto"
               style={[styles.shutterBtn, { shadowColor: colors.accent, borderColor: colors.accent + '4D' }]}
               onPress={analizeazaFoto}
               disabled={seIncarca}

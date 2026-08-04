@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Alert, ActivityIndicator, Platform, Switch, Image, Linking
+  ScrollView, RefreshControl, Alert, ActivityIndicator, Platform, Switch, Image, Linking
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -57,58 +57,51 @@ export default function ProfilScreen() {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
-  useEffect(() => {
-    const initProfile = async () => {
-      if (loadingAuth) return;
-      setCheckingSession(true);
-      try {
-        if (session) {
-          const metadata = user?.user_metadata || session.user.user_metadata || {};
-          let g = metadata.greutate;
-          let gt = metadata.greutateTinta;
-          let c = metadata.caloriiTinta;
-          let p = metadata.proteineTinta;
-          let cb = metadata.carbiTinta;
-          let gr = metadata.grasimiTinta;
+  const initProfile = useCallback(async () => {
+    if (loadingAuth) return;
+    setCheckingSession(true);
+    try {
+      if (session) {
+        const metadata = user?.user_metadata || session.user.user_metadata || {};
+        let g = metadata.greutate;
+        let gt = metadata.greutateTinta;
+        let c = metadata.caloriiTinta;
+        let p = metadata.proteineTinta;
+        let cb = metadata.carbiTinta;
+        let gr = metadata.grasimiTinta;
 
-          if (!g) g = await AsyncStorage.getItem('greutate');
-          if (!gt) gt = await AsyncStorage.getItem('greutateTinta');
-          if (!c) c = await AsyncStorage.getItem('caloriiTinta');
-          if (!p) p = await AsyncStorage.getItem('proteineTinta');
-          if (!cb) cb = await AsyncStorage.getItem('carbiTinta');
-          if (!gr) gr = await AsyncStorage.getItem('grasimiTinta');
+        if (!g) g = await AsyncStorage.getItem('greutate');
+        if (!gt) gt = await AsyncStorage.getItem('greutateTinta');
+        if (!c) c = await AsyncStorage.getItem('caloriiTinta');
+        if (!p) p = await AsyncStorage.getItem('proteineTinta');
+        if (!cb) cb = await AsyncStorage.getItem('carbiTinta');
+        if (!gr) gr = await AsyncStorage.getItem('grasimiTinta');
 
-          let nm = metadata.nume || metadata.display_name;
-          let av = metadata.avatar_url;
-          if (!nm) nm = await AsyncStorage.getItem('nume_profil');
-          if (!av) av = await AsyncStorage.getItem('avatar_url');
+        let nm = metadata.nume || metadata.display_name;
+        let av = metadata.avatar_url;
+        if (!nm) nm = await AsyncStorage.getItem('nume_profil');
+        if (!av) av = await AsyncStorage.getItem('avatar_url');
 
-          setNume(nm ? String(nm) : (session.user.email?.split('@')[0] || 'Utilizator'));
-          setAvatarUrl(av ? String(av) : null);
+        setNume(nm ? String(nm) : (session.user.email?.split('@')[0] || 'Utilizator'));
+        setAvatarUrl(av ? String(av) : null);
 
-          setGreutate(g ? String(g) : '75');
-          setGreutateTinta(gt ? String(gt) : '70');
-          setCaloriiTinta(c ? String(c) : '2000');
-          setProteineTinta(p ? String(p) : '150');
-          setCarbiTinta(cb ? String(cb) : '250');
-          setGrasimiTinta(gr ? String(gr) : '70');
-
-          if (g) await AsyncStorage.setItem('greutate', String(g));
-          if (gt) await AsyncStorage.setItem('greutateTinta', String(gt));
-          if (c) await AsyncStorage.setItem('caloriiTinta', String(c));
-          if (p) await AsyncStorage.setItem('proteineTinta', String(p));
-          if (cb) await AsyncStorage.setItem('carbiTinta', String(cb));
-          if (gr) await AsyncStorage.setItem('grasimiTinta', String(gr));
-        }
-      } catch (e) {
-        console.error("Eroare la inițializarea profilului:", e);
-      } finally {
-        setCheckingSession(false);
+        setGreutate(g ? String(g) : '75');
+        setGreutateTinta(gt ? String(gt) : '70');
+        setCaloriiTinta(c ? String(c) : '2000');
+        setProteineTinta(p ? String(p) : '150');
+        setCarbiTinta(cb ? String(cb) : '250');
+        setGrasimiTinta(gr ? String(gr) : '70');
       }
-    };
+    } catch (e) {
+      console.warn('Eroare încărcare profil:', e);
+    } finally {
+      setCheckingSession(false);
+    }
+  }, [loadingAuth, session, user]);
 
+  useEffect(() => {
     initProfile();
-  }, [session, user, loadingAuth]);
+  }, [initProfile]);
 
   const alegePozaProfil = async () => {
     try {
@@ -256,6 +249,9 @@ export default function ProfilScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={initProfile} tintColor={colors.accent} colors={[colors.accent]} />
+        }
       >
 
         {/* Avatar header */}

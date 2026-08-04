@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   useWindowDimensions, View, Text, StyleSheet, ScrollView, Pressable, TextInput,
-  ActivityIndicator, type TextStyle, type ViewStyle,
+  ActivityIndicator, RefreshControl, type TextStyle, type ViewStyle,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
@@ -92,7 +92,7 @@ export default function AntrenamenteScreen() {
   const { colors } = useTheme();
   const { adaugaAntrenament } = useAntrenamente();
   const notify = useNotify();
-  const { exercitii } = useExercitii();
+  const { exercitii, loading, refresh } = useExercitii();
 
   const [selectedCategory, setSelectedCategory] = useState<Categorie>('piept');
   const [searchQuery, setSearchQuery] = useState('');
@@ -532,6 +532,9 @@ export default function AntrenamenteScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: CONTENT_BOTTOM_PADDING }]}
         keyboardShouldPersistTaps='handled'
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} />
+        }
       >
         <View style={styles.header}>
           <View style={{ flex: 1 }}>

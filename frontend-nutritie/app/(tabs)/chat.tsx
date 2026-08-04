@@ -604,6 +604,8 @@ export default function ChatScreen() {
           <BlurView intensity={40} tint="dark" style={[styles.inputContainer, { borderColor: colors.accentSecondary + '33' }]}>
             <LinearGradient colors={[colors.accentSecondary + '14', 'rgba(0,0,0,0)']} style={styles.inputGrad}>
               <TextInput
+                testID="chat-input"
+                accessibilityLabel="Scrie un mesaj către NutriAI"
                 style={[styles.input, { color: colors.textPrimary }]}
                 placeholder="Scrie un mesaj..."
                 placeholderTextColor={colors.textSecondary}
@@ -616,6 +618,8 @@ export default function ChatScreen() {
                 blurOnSubmit={false}
               />
               <TouchableOpacity
+                testID="send-button"
+                accessibilityLabel="Trimite mesajul"
                 style={[styles.sendBtn, !chatInput.trim() && { opacity: 0.4 }]}
                 onPress={trimiteMesaj}
                 disabled={loadingChat || !chatInput.trim()}
