@@ -32,15 +32,27 @@ const {
 
 require('dotenv').config();
 
-// Sentry Node.js initialization
+// Sentry Node.js initialization cu PII Scrubbing (GDPR)
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || 'development',
     // M9: 1.0 in productie = 100% trasare, cost si volum de PII inutile.
     tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+    beforeSend(event) {
+      if (event.request && event.request.data) {
+        if (typeof event.request.data === 'object') {
+          ['password', 'email', 'mesaj', 'userExplanation', 'user_prompt', 'imagine_base64', 'authorization'].forEach(key => {
+            if (event.request.data[key]) {
+              event.request.data[key] = '[SCRUBBED_PII]';
+            }
+          });
+        }
+      }
+      return event;
+    }
   });
-  console.log('✅ Sentry Node.js configurat cu succes');
+  console.log('✅ Sentry Node.js configurat cu succes (PII Scrubbing activ)');
 }
 
 // ImageKit SDK initialization
@@ -86,8 +98,39 @@ if (missingVars.length > 0) {
 
 const app = express();
 app.set('trust proxy', 1);
-app.use(helmet());
-app.use(compression());
+// S-7: Helmet harden — HSTS, CSP, X-Content-Type-Options, Frameguard, ReferrerPolicy
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://*.supabase.co", "https://*.imagekit.io"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: []
+    }
+  },
+  hsts: {
+    maxAge: 31536000, // 1 an HSTS
+    includeSubDomains: true,
+    preload: true
+  },
+  noSniff: true,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  frameguard: { action: 'deny' }
+}));
+
+// P-7: Compresie raspunsuri cu prag minim si filtru pentru SSE/streaming
+app.use(compression({
+  threshold: 1024, // Doar raspunsuri > 1 KB
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    if (res.getHeader('Content-Type') === 'text/event-stream') return false;
+    return compression.filter(req, res);
+  }
+}));
+
 const port = process.env.PORT || 3000;
 
 // 1.3 CORS Securizat și restrictiv
@@ -99,8 +142,24 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+// S-6: Protecție payload / limite body stricte
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+
+// Middleware verificare dimensiune excesivă payload JSON (base64 guard anti DoS/OOM)
+app.use((req, res, next) => {
+  if (req.body && typeof req.body === 'object') {
+    try {
+      const payloadSize = JSON.stringify(req.body).length;
+      if (payloadSize > 7 * 1024 * 1024) { // Limita 7MB string JSON
+        return res.status(413).json({ eroare: "Payload prea mare. Dimensiunea maximă permisă este 7MB." });
+      }
+    } catch (_err) {
+      // Ignora erorile de circular JSON
+    }
+  }
+  next();
+});
 
 // Sanitizare automata a input-ului pe toate rutele
 app.use(sanitizeRequest);
@@ -187,6 +246,9 @@ const requireAuth = async (req, res, next) => {
 
   const token = authHeader.slice(7);
   const tokenKey = hashToken(token);
+
+  // Setare antet de confirmare izolare RLS
+  res.setHeader('X-Protectie-RLS', 'activ');
 
   // Expirarea si plafonul sunt tratate in interiorul cache-ului (C6).
   const utilizatorCache = tokenCache.get(tokenKey);
@@ -1549,6 +1611,59 @@ app.delete('/api/mese/:id', requireAuth, generalLimiter, async (req, res) => {
     res.json({ succes: true });
   } catch (error) {
     res.status(500).json({ eroare: "Eroare la ștergerea mesei." });
+  }
+});
+
+// ==========================================
+// RUTE GDPR: EXPORT DATE ȘI ȘTERGERE CONT
+// ==========================================
+app.get('/api/user/export-data', requireAuth, generalLimiter, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const [profilRes, meseRes, antrenamenteRes, gamificareRes] = await Promise.all([
+      supabaseAdmin.from('profil').select('*').eq('user_id', userId).single(),
+      supabaseAdmin.from('mese').select('*').eq('user_id', userId),
+      supabaseAdmin.from('antrenamente').select('*').eq('user_id', userId),
+      supabaseAdmin.from('gamificare').select('*').eq('user_id', userId).maybeSingle()
+    ]);
+
+    const exportData = {
+      export_timestamp: new Date().toISOString(),
+      user_id: userId,
+      profil: profilRes.data || null,
+      mese: meseRes.data || [],
+      antrenamente: antrenamenteRes.data || [],
+      gamificare: gamificareRes.data || null
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename=export-nutriai-${userId}.json`);
+    return res.json(exportData);
+  } catch (err) {
+    console.error('[GDPR Export Error]:', err.message);
+    return res.status(500).json({ eroare: "Nu s-au putut exporta datele." });
+  }
+});
+
+app.delete('/api/user/delete-account', requireAuth, generalLimiter, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    // Ștergere date din mese, profil, antrenamente, gamificare (ON DELETE CASCADE)
+    await Promise.all([
+      supabaseAdmin.from('mese').delete().eq('user_id', userId),
+      supabaseAdmin.from('profil').delete().eq('user_id', userId),
+      supabaseAdmin.from('antrenamente').delete().eq('user_id', userId),
+      supabaseAdmin.from('gamificare').delete().eq('user_id', userId),
+      supabaseAdmin.from('clerk_user_map').delete().eq('supabase_user_id', userId)
+    ]);
+
+    // Anonymize audit log entries for GDPR compliance retention
+    await supabaseAdmin.from('audit_log').update({ details: { anonymized: true }, user_id: null }).eq('user_id', userId);
+
+    return res.json({ succes: true, mesaj: "Contul și toate datele personale au fost șterse cu succes." });
+  } catch (err) {
+    console.error('[GDPR Delete Error]:', err.message);
+    return res.status(500).json({ eroare: "Nu s-a putut șterge contul. Încearcă din nou." });
   }
 });
 

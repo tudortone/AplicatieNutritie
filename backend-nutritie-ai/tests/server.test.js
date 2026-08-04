@@ -8,13 +8,17 @@ jest.mock('@supabase/supabase-js', () => {
       auth: {
         getUser: jest.fn((token) => {
           if (token === 'token_valid') {
-            // ID-ul trebuie sa fie un UUID valid — rezolvaIdentitate (C4) respinge
-            // identitatile care nu sunt UUID ca sa nu scrie identitati paralele.
             return Promise.resolve({ data: { user: { id: '11111111-1111-4111-8111-111111111111', email: 'test@example.com' } }, error: null });
           }
           return Promise.resolve({ data: { user: null }, error: new Error('Token invalid') });
         })
-      }
+      },
+      from: jest.fn(() => ({
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: { id: '11111111-1111-4111-8111-111111111111' }, error: null }),
+        maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null })
+      }))
     }))
   };
 });
@@ -144,6 +148,24 @@ describe('Backend API Tests', () => {
         .attach('imagine', Buffer.from('text periculos de test'), { filename: 'test.txt', contentType: 'text/plain' });
       expect(res.statusCode).toBe(400);
       expect(res.body.eroare).toContain('Tip fișier nepermis');
+    });
+  });
+
+  describe('Cerințe GDPR și Antet RLS (VALUL 1)', () => {
+    it('ar trebui să returneze antetul X-Protectie-RLS pe cereri autentificate', async () => {
+      const res = await request(app)
+        .get('/api/user/export-data')
+        .set('Authorization', 'Bearer token_valid');
+      expect(res.headers['x-protectie-rls']).toBe('activ');
+    });
+
+    it('ar trebui să exporte datele utilizatorului la GET /api/user/export-data', async () => {
+      const res = await request(app)
+        .get('/api/user/export-data')
+        .set('Authorization', 'Bearer token_valid');
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toHaveProperty('user_id');
+      expect(res.body).toHaveProperty('mese');
     });
   });
 });
