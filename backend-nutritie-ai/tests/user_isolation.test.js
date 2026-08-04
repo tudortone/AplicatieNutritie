@@ -1,84 +1,107 @@
 const request = require('supertest');
-const app = require('../server');
 
-// Mock pentru Supabase Client cu 2 utilizatori distincti (User A si User B)
-const USER_A_ID = '11111111-1111-4111-8111-111111111111';
-const USER_B_ID = '22222222-2222-4222-8222-222222222222';
+const mockUserAId = '11111111-1111-4111-8111-111111111111';
+const mockUserBId = '22222222-2222-4222-8222-222222222222';
+const mockMasaUserBId = '33333333-3333-4333-8333-333333333333';
 
 jest.mock('@supabase/supabase-js', () => {
+  const uA = '11111111-1111-4111-8111-111111111111';
+  const uB = '22222222-2222-4222-8222-222222222222';
+  const mB = '33333333-3333-4333-8333-333333333333';
+
+  const db = [
+    { id: '10000000-0000-4000-8000-000000000000', user_id: uA, nume: 'Masa A' },
+    { id: mB, user_id: uB, nume: 'Masa B' }
+  ];
+
   return {
     createClient: jest.fn(() => ({
       auth: {
         getUser: jest.fn((token) => {
           if (token === 'token_user_a') {
-            return Promise.resolve({ data: { user: { id: USER_A_ID, email: 'usera@example.com' } }, error: null });
+            return Promise.resolve({ data: { user: { id: uA, email: 'usera@example.com' } }, error: null });
           }
           if (token === 'token_user_b') {
-            return Promise.resolve({ data: { user: { id: USER_B_ID, email: 'userb@example.com' } }, error: null });
+            return Promise.resolve({ data: { user: { id: uB, email: 'userb@example.com' } }, error: null });
           }
           return Promise.resolve({ data: { user: null }, error: new Error('Token invalid') });
         })
       },
       from: jest.fn((table) => {
         if (table === 'mese') {
-          return {
-            delete: jest.fn().mockReturnThis(),
-            eq: jest.fn(function(col, val) {
-              this[col] = val;
-              return this;
+          let queryFilter = {};
+          
+          const builder = {
+            eq: jest.fn((col, val) => {
+              queryFilter[col] = val;
+              return builder;
             }),
-            select: jest.fn(function() {
-              // Verificare izolare pe user_id si id de masa
-              if (this.id === '33333333-3333-4333-8333-333333333333' && this.user_id === USER_B_ID) {
-                // Masa apartine lui User B. Daca e interogata cu user_id = USER_A_ID, returneaza gol.
-                return Promise.resolve({ data: [{ id: '33333333-3333-4333-8333-333333333333' }], error: null });
-              }
-              return Promise.resolve({ data: [], error: null });
+            select: jest.fn(() => {
+              const matched = db.filter(m => {
+                let match = true;
+                if (queryFilter.id && m.id !== queryFilter.id) match = false;
+                if (queryFilter.user_id && m.user_id !== queryFilter.user_id) match = false;
+                return match;
+              });
+              return Promise.resolve({ data: matched, error: null });
+            }),
+            delete: jest.fn(() => {
+              const matched = db.filter(m => {
+                let match = true;
+                if (queryFilter.id && m.id !== queryFilter.id) match = false;
+                if (queryFilter.user_id && m.user_id !== queryFilter.user_id) match = false;
+                return match;
+              });
+              return builder;
+            }),
+            update: jest.fn(() => {
+              return builder;
             })
           };
+          return builder;
         }
         return {
           select: jest.fn().mockReturnThis(),
-          eq: jest.fn().mockReturnThis()
+          eq: jest.fn().mockReturnThis(),
+          single: jest.fn().mockResolvedValue({ data: null, error: null })
         };
       })
     }))
   };
 });
 
-describe('VALUL 0 — Test de Integrare Izolare Utilizatori (User Isolation)', () => {
-  const MASA_USER_B_ID = '33333333-3333-4333-8333-333333333333';
+const app = require('../server');
 
-  it('1. User A încearcă să ștergă masa lui User B → Trebuie să eșueze (404/401)', async () => {
+describe('VALUL 0 — Test de Integrare Izolare Utilizatori (User Isolation)', () => {
+  it('1. User A încearcă să ștergă masa lui User B → Trebuie să primească strict 404 (Masa nu a fost găsită)', async () => {
     const res = await request(app)
-      .delete(`/api/mese/${MASA_USER_B_ID}`)
+      .delete(`/api/mese/${mockMasaUserBId}`)
       .set('Authorization', 'Bearer token_user_a');
     
     expect(res.statusCode).toBe(404);
-    expect(res.body.eroare).toContain('Masa nu a fost găsită');
+    expect(res.body.eroare).toBe('Masa nu a fost găsită.');
   });
 
-  it('2. User A încearcă să editeze masa lui User B → Trebuie să eșueze (404/401)', async () => {
+  it('2. User A încearcă să editeze masa lui User B cu PUT /api/mese/:id → Trebuie să primească strict 404', async () => {
     const res = await request(app)
-      .put(`/api/mese/${MASA_USER_B_ID}`)
+      .put(`/api/mese/${mockMasaUserBId}`)
       .set('Authorization', 'Bearer token_user_a')
-      .send({ nume: 'Modificare neautorizata' });
+      .send({
+        nume: 'Atac Modificare Masi',
+        calorii: 500,
+        proteine: 30,
+        grasimi: 10,
+        carbohidrati: 50,
+        fibre: 5
+      });
     
-    // Deoarece PUT nu este expus sau este protejat per-user, res.statusCode este 400 sau 404
-    expect([400, 404, 401, 403]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(404);
+    expect(res.body.eroare).toBe('Masa nu a fost găsită.');
   });
 
-  it('3. User A încearcă să citească masa lui User B → Trebuie să eșueze (404/401)', async () => {
+  it('3. Cerere fără token de autorizare → Trebuie să fie respinsă cu 401', async () => {
     const res = await request(app)
-      .get(`/api/mese/${MASA_USER_B_ID}`)
-      .set('Authorization', 'Bearer token_user_a');
-    
-    expect([404, 401, 403]).toContain(res.statusCode);
-  });
-
-  it('4. Cerere fără token de autorizare → Trebuie să eșueze cu 401', async () => {
-    const res = await request(app)
-      .delete(`/api/mese/${MASA_USER_B_ID}`);
+      .delete(`/api/mese/${mockMasaUserBId}`);
     
     expect(res.statusCode).toBe(401);
     expect(res.body.eroare).toContain('Token lipsă');

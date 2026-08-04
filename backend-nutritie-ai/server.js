@@ -265,6 +265,9 @@ const requireAuth = async (req, res, next) => {
   const utilizatorCache = tokenCache.get(tokenKey);
   if (utilizatorCache) {
     req.user = utilizatorCache;
+    req.supabaseUserClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
     return next();
   }
 
@@ -277,6 +280,10 @@ const requireAuth = async (req, res, next) => {
     });
     tokenCache.set(tokenKey, utilizator);
     req.user = utilizator;
+    req.supabaseUserClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    res.setHeader('X-Protectie-RLS', 'activ');
     return next();
   } catch (err) {
     if (err instanceof EroareIdentitate) {
