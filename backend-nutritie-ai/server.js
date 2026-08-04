@@ -31,6 +31,7 @@ const {
 } = require('./utils/barcode');
 const { getEstimeazaMancareTextPrompt, getVisionFallbackPrompt, getBarcodeFallbackPrompt } = require('./prompts/aiPrompts');
 const { checkAiUsageQuota } = require('./utils/aiUsageQuota');
+const createGdprRouter = require('./routes/gdpr');
 
 require('dotenv').config();
 
@@ -168,8 +169,11 @@ app.use((req, res, next) => {
   next();
 });
 
+const { idempotencyMiddleware } = require('./utils/idempotency');
+
 // Sanitizare automata a input-ului pe toate rutele
 app.use(sanitizeRequest);
+app.use(idempotencyMiddleware);
 
 // ==========================================
 // RATE-LIMIT (C1): identitatea se stabileste DOAR prin requireAuth (verificare
@@ -1587,55 +1591,7 @@ app.delete('/api/mese/:id', requireAuth, generalLimiter, async (req, res) => {
 // ==========================================
 // RUTE GDPR: EXPORT DATE ȘI ȘTERGERE CONT
 // ==========================================
-app.get('/api/user/export-data', requireAuth, generalLimiter, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const [profilRes, meseRes, antrenamenteRes, gamificareRes] = await Promise.all([
-      supabaseAdmin.from('profil').select('*').eq('user_id', userId).single(),
-      supabaseAdmin.from('mese').select('*').eq('user_id', userId),
-      supabaseAdmin.from('antrenamente').select('*').eq('user_id', userId),
-      supabaseAdmin.from('gamificare').select('*').eq('user_id', userId).maybeSingle()
-    ]);
-
-    const exportData = {
-      export_timestamp: new Date().toISOString(),
-      user_id: userId,
-      profil: profilRes.data || null,
-      mese: meseRes.data || [],
-      antrenamente: antrenamenteRes.data || [],
-      gamificare: gamificareRes.data || null
-    };
-
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename=export-nutriai-${userId}.json`);
-    return res.json(exportData);
-  } catch (err) {
-    console.error('[GDPR Export Error]:', err.message);
-    return res.status(500).json({ eroare: "Nu s-au putut exporta datele." });
-  }
-});
-
-app.delete('/api/user/delete-account', requireAuth, generalLimiter, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    // Ștergere date din mese, profil, antrenamente, gamificare (ON DELETE CASCADE)
-    await Promise.all([
-      supabaseAdmin.from('mese').delete().eq('user_id', userId),
-      supabaseAdmin.from('profil').delete().eq('user_id', userId),
-      supabaseAdmin.from('antrenamente').delete().eq('user_id', userId),
-      supabaseAdmin.from('gamificare').delete().eq('user_id', userId),
-      supabaseAdmin.from('clerk_user_map').delete().eq('supabase_user_id', userId)
-    ]);
-
-    // Anonymize audit log entries for GDPR compliance retention
-    await supabaseAdmin.from('audit_log').update({ details: { anonymized: true }, user_id: null }).eq('user_id', userId);
-
-    return res.json({ succes: true, mesaj: "Contul și toate datele personale au fost șterse cu succes." });
-  } catch (err) {
-    console.error('[GDPR Delete Error]:', err.message);
-    return res.status(500).json({ eroare: "Nu s-a putut șterge contul. Încearcă din nou." });
-  }
-});
+app.use('/api/user', createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin }));
 
 // ==========================================
 // RUTA 5: EDITARE MASĂ
