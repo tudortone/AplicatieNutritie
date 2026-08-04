@@ -210,6 +210,8 @@ export default function AdaugaManualScreen() {
                       }}
                       activeOpacity={0.8}
                       style={{ flex: 1 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Folosește alimentul favorit ${fav.nume}`}
                     >
                       <Text style={[styles.favChipTitle, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{fav.nume}</Text>
                       <Text style={[styles.favChipSub, { color: colors.accent }]}>
@@ -220,6 +222,8 @@ export default function AdaugaManualScreen() {
                       onPress={() => removeFavorite(fav.id)}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       style={styles.favChipDelete}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Șterge ${fav.nume} din favorite`}
                     >
                       <Trash2 size={13} color={colors.textTertiary} />
                     </TouchableOpacity>
@@ -250,6 +254,9 @@ export default function AdaugaManualScreen() {
                       setTipMasa(cat.id);
                     }}
                     activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`Categoria mesei ${cat.label}`}
                   >
                     <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
                     <Text style={[styles.catChipText, { color: isSelected ? colors.accent : colors.textPrimary, fontWeight: isSelected ? '800' : '600' }]}>
@@ -378,7 +385,7 @@ export default function AdaugaManualScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInUp.duration(600).delay(200)} style={{ marginTop: 28 }}>
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Salvează masa în jurnal">
               <LinearGradient colors={colors.accentGradient} style={styles.saveBtnGrad}>
                 {loading ? (
                   <ActivityIndicator color="#000" />
@@ -394,7 +401,7 @@ export default function AdaugaManualScreen() {
 
           {/* Save to Favorites Button */}
           <Animated.View entering={FadeInUp.duration(600).delay(250)} style={{ marginTop: 12 }}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.favSaveBtn, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
               onPress={() => {
                 if (!nume.trim()) {
@@ -410,6 +417,8 @@ export default function AdaugaManualScreen() {
                 });
               }}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={isFavorite(nume) ? "Deja salvat la favorite" : "Salvează în lista de favorite"}
             >
               <Heart size={18} color="#f43f5e" fill={isFavorite(nume) ? "#f43f5e" : "transparent"} />
               <Text style={[styles.favSaveBtnText, { color: colors.textPrimary }]}>
