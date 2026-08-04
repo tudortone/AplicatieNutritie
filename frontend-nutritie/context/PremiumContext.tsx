@@ -11,6 +11,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
 import { PRODUCT_CATEGORY } from 'react-native-purchases';
+import { supabase } from '../supabase';
 import type {
   CustomerInfo,
   PurchasesPackage,
@@ -91,22 +92,51 @@ export function PremiumProvider({ children, appUserId }: { children: React.React
     }
   }, []);
 
+  // B-09: entitlement-ul este verificat si pe server (revenuecat-secret), nu doar
+  // local. Fail-open la eroare de retea/indisponibilitate; downgrade DOAR la un
+  // verdict explicit `premium:false` din partea serverului. Astfel un eventual
+  // flag local fals nu poate acorda singur privilegii de premium.
+  const verificaServerPremium = useCallback(async (forAppUserId: string | null) => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data?.session?.access_token;
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+      if (!token || !apiUrl || !forAppUserId) return null;
+      const resp = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/user/premium-status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) return null;
+      return await resp.json() as { premium?: boolean };
+    } catch {
+      return null;
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     if (!PurchasesApi) return;
     try {
       setLoading(true);
       const customer = await PurchasesApi.getCustomerInfo();
-      setIsPremium(hasPremium(customer));
+      const premiumLocal = hasPremium(customer);
+      setIsPremium(premiumLocal);
 
       const offerings = await PurchasesApi.getOfferings();
       setSubscriptionPackages(offerings.current?.availablePackages ?? []);
       setCreditProducts(await PurchasesApi.getProducts([...CREDIT_PRODUCT_IDS], PRODUCT_CATEGORY.NON_SUBSCRIPTION));
+
+      if (premiumLocal) {
+        const server = await verificaServerPremium(appUserId);
+        if (server && server.premium !== true) {
+          setIsPremium(false);
+          console.warn('[Premium] SDK local raporteaza premium, dar serverul revendica premium=false — downgrade server-side.');
+        }
+      }
     } catch {
       // offline / configure eșuat — starea rămâne cea anterioară
     } finally {
       setLoading(false);
     }
-  }, [hasPremium]);
+  }, [hasPremium, verificaServerPremium, appUserId]);
 
   // Configurare + sincronizare cu userul Supabase
   useEffect(() => {

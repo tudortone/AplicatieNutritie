@@ -108,6 +108,12 @@ function incarcaConfig() {
 		clerkSecretKey: process.env.CLERK_SECRET_KEY || null,
 		sentryDsn: process.env.SENTRY_DSN || null,
 		triggerSecretKey: process.env.TRIGGER_SECRET_KEY || null,
+		// Store partajat Redis (B-10). Lipsește => MemoryStore per-proces.
+		redisUrl: process.env.REDIS_URL || null,
+		// Validare premium server-side (B-09). Lipsește => 503 pe /premium-status.
+		revenuecat: Object.freeze({
+			secretApiKey: process.env.REVENUECAT_SECRET_API_KEY || null,
+		}),
 		imagekit: Object.freeze({
 			publicKey: process.env.IMAGEKIT_PUBLIC_KEY || null,
 			privateKey: process.env.IMAGEKIT_PRIVATE_KEY || null,

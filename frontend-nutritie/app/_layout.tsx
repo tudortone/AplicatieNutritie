@@ -36,6 +36,16 @@ if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
           }
         });
       }
+      // B-11: datele de alimentatie sunt date de sanatate. Scrubeaza si
+      // breadcrumbs-urile (mesajul de utilizator poate duce in contextul unui
+      // crash) si pune un loc unde sa nu apara corpuri de cerere.
+      if (Array.isArray(event.breadcrumbs)) {
+        event.breadcrumbs = event.breadcrumbs.map((crumb: any) => {
+          const c = { ...crumb };
+          if (c.data && typeof c.data === 'object') c.data = '[SCRUBBED_PII]';
+          return c;
+        });
+      }
       return event;
     }
   });

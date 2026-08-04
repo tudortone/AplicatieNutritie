@@ -36,6 +36,7 @@ const { creeazaContextDate } = require('./utils/clientUtilizator');
 const { idempotencyMiddleware } = require('./utils/idempotency');
 const { checkAiUsageQuota } = require('./utils/aiUsageQuota');
 const createGdprRouter = require('./routes/gdpr');
+const { creazaStoreRateLimit, creazaRegistruCheiValori } = require('./utils/storePartajat');
 const {
   sanitizeRequest,
   detectPromptInjection,
@@ -77,11 +78,38 @@ process.on('uncaughtException', (eroare) => {
 
 // Sentry Node.js initialization
 if (config.sentryDsn) {
+  // B-11: adaugam un httpClient identic celui implicit pentru a ATA aproape de
+  // datele de transport. Handler-ul Sentry.setupExpressErrorHandler (mai jos)
+  // ataseaza automat `request` cu corpul cererii la evenimentele de eroare.
+  // Fara o lista alba, un corp care contine mesaj/utilizator/imagine base64
+  // (date de sanatate) ar ajunge pe serverele Sentry.
   Sentry.init({
     dsn: config.sentryDsn,
     environment: config.NODE_ENV,
     // M9: 1.0 in productie = 100% trasare, cost si volum de PII inutile.
     tracesSampleRate: config.esteProductie ? 0.1 : 1.0,
+    // Scrub PII la nivel de eveniment: pastram doar URL-ul/metoda, nu corpul.
+    beforeSend(event) {
+      if (event.request) {
+        if (event.request.data !== undefined) event.request.data = '[SCRUBBED_PII]';
+        if (event.request.headers) {
+          event.request.headers = Object.fromEntries(
+            Object.entries(event.request.headers).filter(([k]) => !/authorization|cookie|token/i.test(k)),
+          );
+        }
+      }
+      if (Array.isArray(event.breadcrumbs)) {
+        event.breadcrumbs = event.breadcrumbs.map((crumb) => {
+          if (crumb?.message && crumb.message.length > 200) {
+            const c = { ...crumb, message: crumb.message.slice(0, 200) + '...[truncat]' };
+            if (c.data && typeof c.data === 'object') c.data = '[SCRUBBED_PII]';
+            return c;
+          }
+          return crumb;
+        });
+      }
+      return event;
+    },
   });
   console.log('Sentry Node.js configurat cu succes');
 }
@@ -126,8 +154,14 @@ app.use(idempotencyMiddleware);
 // ==========================================
 // RATE-LIMIT (C1)
 // ==========================================
+// B-10: daca REDIS_URL e configurat, store-ul este partajat intre instante.
+// Fara el, creeazaLimitatoare foloseste MemoryStore (per-proces).
+const storePartajat = creazaStoreRateLimit({ url: config.redisUrl });
 const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter } =
-  creeazaLimitatoare({ avertizeazaFaraStore: config.esteProductie });
+  creeazaLimitatoare({
+    store: storePartajat?.store,
+    avertizeazaFaraStore: config.esteProductie,
+  });
 
 app.use('/api/', (req, res, next) => {
   if (req.path === '/ai-status') return statusLimiter(req, res, next);
@@ -413,41 +447,43 @@ const numarModel = (valoare, { min = 0, max = 100000, implicit = 0 } = {}) => {
 // Nota: registrul este per-proces. Pe mai multe instante, cooldown-urile nu sunt
 // partajate - de mutat intr-un store comun odata cu rate limiting-ul.
 // ==========================================
-const aiStatusRegistry = {
-  gemini: { nume: 'Google Gemini 2.5', status: 'active', blockedUntil: 0, ultimulMesaj: 'Disponibil' },
-  openai: { nume: 'OpenAI GPT-4o-mini', status: 'active', blockedUntil: 0, ultimulMesaj: 'Disponibil' },
-  groq: { nume: 'Groq Vision', status: 'active', blockedUntil: 0, ultimulMesaj: 'Disponibil' },
-  openrouter: { nume: 'OpenRouter Vision', status: 'active', blockedUntil: 0, ultimulMesaj: 'Disponibil' },
+const NUME_FURNIZORI_AI = {
+  gemini: 'Google Gemini 2.5',
+  openai: 'OpenAI GPT-4o-mini',
+  groq: 'Groq Vision',
+  openrouter: 'OpenRouter Vision',
 };
 
-const blockProvider = (providerKey, cooldownSeconds, motiv) => {
-  if (aiStatusRegistry[providerKey]) {
-    aiStatusRegistry[providerKey].status = 'cooldown';
-    aiStatusRegistry[providerKey].blockedUntil = Date.now() + cooldownSeconds * 1000;
-    aiStatusRegistry[providerKey].ultimulMesaj = motiv;
-  }
+// B-10: cooldown-ul e partajat intre instante prin acelasi store ca rate-limiting.
+const registruAi = creazaRegistruCheiValori({ url: config.redisUrl, prefix: 'nutri:ai' });
+
+const blockProvider = async (providerKey, cooldownSeconds, motiv) => {
+  if (!NUME_FURNIZORI_AI[providerKey]) return;
+  await registruAi.set(
+    providerKey,
+    { blockedUntil: Date.now() + cooldownSeconds * 1000, ultimulMesaj: motiv },
+    cooldownSeconds * 1000,
+  );
 };
 
-const getProviderStatus = (providerKey) => {
-  const p = aiStatusRegistry[providerKey];
-  if (!p) return { id: providerKey, nume: providerKey, status: 'active', secundeRamase: 0, mesaj: 'Disponibil' };
+const getProviderStatus = async (providerKey) => {
+  const nume = NUME_FURNIZORI_AI[providerKey] || providerKey;
+  const p = await registruAi.get(providerKey);
   const acum = Date.now();
-  if (p.blockedUntil > acum) {
-    const sec = Math.ceil((p.blockedUntil - acum) / 1000);
-    return { id: providerKey, nume: p.nume, status: 'cooldown', secundeRamase: sec, mesaj: `Blocat (${sec}s): ${p.ultimulMesaj}` };
+  if (!p || !p.blockedUntil || p.blockedUntil <= acum) {
+    if (p) await registruAi.del(providerKey);
+    return { id: providerKey, nume, status: 'active', secundeRamase: 0, mesaj: 'Disponibil' };
   }
-  p.status = 'active';
-  p.blockedUntil = 0;
-  p.ultimulMesaj = 'Disponibil';
-  return { id: providerKey, nume: p.nume, status: 'active', secundeRamase: 0, mesaj: 'Disponibil' };
+  const sec = Math.ceil((p.blockedUntil - acum) / 1000);
+  return { id: providerKey, nume, status: 'cooldown', secundeRamase: sec, mesaj: `Blocat (${sec}s): ${p.ultimulMesaj}` };
 };
 
-app.get('/api/ai-status', (req, res) => {
+app.get('/api/ai-status', async (req, res) => {
   res.json({
-    gemini: getProviderStatus('gemini'),
-    openai: getProviderStatus('openai'),
-    groq: getProviderStatus('groq'),
-    openrouter: getProviderStatus('openrouter'),
+    gemini: await getProviderStatus('gemini'),
+    openai: await getProviderStatus('openai'),
+    groq: await getProviderStatus('groq'),
+    openrouter: await getProviderStatus('openrouter'),
   });
 });
 
@@ -549,7 +585,7 @@ async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider 
           text = oaiData.choices?.[0]?.message?.content;
           if (text) return { text, furnizor: 'openai' };
         } else {
-          if (oaiRes.status === 429) blockProvider('openai', 60, 'Limita de cereri (429)');
+          if (oaiRes.status === 429) await blockProvider('openai', 60, 'Limita de cereri (429)');
           console.warn(`OpenAI Vision esuat (${oaiRes.status}).`);
         }
       } catch (e) {
@@ -586,7 +622,7 @@ async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider 
             text = groqData.choices?.[0]?.message?.content;
             if (text) return { text, furnizor: `groq:${groqModel}` };
           } else {
-            if (groqRes.status === 429) blockProvider('groq', 60, 'Limita de cereri Groq (429)');
+            if (groqRes.status === 429) await blockProvider('groq', 60, 'Limita de cereri Groq (429)');
             console.warn(`Groq [${groqModel}] (${groqRes.status}).`);
           }
         } catch (groqErr) {
@@ -619,7 +655,7 @@ async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider 
           }
         } catch (err) {
           const errMsg = err.message || String(err);
-          if (errMsg.includes('429')) blockProvider('gemini', 60, 'Limita de cereri Gemini (429)');
+          if (errMsg.includes('429')) await blockProvider('gemini', 60, 'Limita de cereri Gemini (429)');
           console.warn(`Gemini [${modelName}] esuat:`, errMsg.substring(0, 100));
         }
       }
@@ -643,7 +679,7 @@ async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider 
           text = orData.choices?.[0]?.message?.content;
           if (text) return { text, furnizor: 'openrouter' };
         } else if (orRes.status === 429) {
-          blockProvider('openrouter', 60, 'Limita de cereri (429)');
+          await blockProvider('openrouter', 60, 'Limita de cereri (429)');
         }
       } catch (e) {
         console.warn('OpenRouter Vision exceptie:', e.message || e);
@@ -677,8 +713,8 @@ const handleAnalizaFoto = async (req, res) => {
       req.body?.provider || citesteQuery(req, 'provider') || 'auto',
     ).toLowerCase();
 
-    if (requestedProvider !== 'auto' && aiStatusRegistry[requestedProvider]) {
-      const st = getProviderStatus(requestedProvider);
+    if (requestedProvider !== 'auto' && NUME_FURNIZORI_AI[requestedProvider]) {
+      const st = await getProviderStatus(requestedProvider);
       if (st.status === 'cooldown') {
         return res.status(429).json({
           eroare: `Modelul selectat (${st.nume}) este blocat temporar pentru inca ${st.secundeRamase}s (${st.mesaj}). Alege alt model sau modul Auto.`,
@@ -709,9 +745,9 @@ const handleAnalizaFoto = async (req, res) => {
       return res.status(503).json({
         eroare: 'Toate sistemele AI au esuat sau sunt temporar in limita de cereri (cooldown). Incearca din nou peste un minut sau schimba modelul AI.',
         stareAI: {
-          gemini: getProviderStatus('gemini'),
-          openai: getProviderStatus('openai'),
-          groq: getProviderStatus('groq'),
+          gemini: await getProviderStatus('gemini'),
+          openai: await getProviderStatus('openai'),
+          groq: await getProviderStatus('groq'),
         },
       });
     }
@@ -1657,7 +1693,46 @@ app.post('/api/mese', requireAuth, generalLimiter, async (req, res) => {
 // Rute GDPR (export date & stergere cont). Se bazeaza pe supabaseAdmin pentru
 // export, dar acoperite de requireAuth; izolarea pe export este doar cosmetica
 // fata de RLS-ul real aplicat pe scrieri.
-app.use('/api/user', createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin }));
+app.use('/api/user', createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate }));
+
+// ==========================================
+// VALIDARE PREMIUM SERVER-SIDE (B-09)
+// RevenueCat decide entitlement-ul; serverul doar il verifica cu cheia SECRETA.
+// Fail-closed: fara cheie configurata sau la eroare de retea, NU se raporteaza
+// "premium" — un raspuns de eroare nu poate fi folosit ca sa se acorde privilegii.
+// ==========================================
+app.get('/api/user/premium-status', requireAuth, generalLimiter, async (req, res) => {
+  if (!config.revenuecat.secretApiKey) {
+    return res.status(503).json({
+      eroare: 'Validarea premium nu este configurata (lipseste REVENUECAT_SECRET_API_KEY).',
+      status: 'disabled',
+    });
+  }
+  try {
+    const rcResp = await callWithTimeout((signal) => fetch(
+      `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(req.user.id)}`,
+      { headers: { Authorization: `Bearer ${config.revenuecat.secretApiKey}` }, signal },
+    ), 8000);
+
+    if (!rcResp.ok) {
+      return res.status(502).json({ eroare: `RevenueCat a raspuns cu ${rcResp.status}.` });
+    }
+
+    const data = await rcResp.json();
+    const entitlement = data?.subscriber?.entitlements?.premium;
+    const premium = entitlement?.active === true;
+    return res.json({
+      premium,
+      entitlement: premium ? entitlement : null,
+      expiresDate: entitlement?.expires_date || null,
+      validatServer: true,
+    });
+  } catch (err) {
+    if (config.sentryDsn) Sentry.captureException(err);
+    console.error('Eroare validare premium RevenueCat:', err.message);
+    return res.status(503).json({ eroare: 'Nu s-a putut valida abonamentul.' });
+  }
+});
 
 // ==========================================
 // HANDLER 404 PENTRU RUTE INEXISTENTE

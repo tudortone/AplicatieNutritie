@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "test": "jest --forceExit",
+    "test:integration": "jest --forceExit tests/rls_integration.test.js",
     "lint": "eslint .",
     "start": "node server.js"
   },
@@ -27,12 +28,15 @@
     "helmet": "^8.2.0",
     "imagekit": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
-    "multer": "^2.2.0"
+    "multer": "^2.2.0",
+    "rate-limit-redis": "^6.0.1",
+    "redis": "^6.2.0"
   },
   "devDependencies": {
     "eslint": "^10.8.0",
     "globals": "^17.9.0",
     "jest": "^30.4.2",
+    "pg": "^8.22.0",
     "supertest": "^7.2.2"
   }
 }
