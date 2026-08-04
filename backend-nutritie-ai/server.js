@@ -99,10 +99,12 @@ if (missingVars.length > 0) {
 }
 
 const { requestIdMiddleware, Logger } = require('./utils/logger');
+const { metricsMiddleware, getP95Latency } = require('./utils/metrics');
 
 const app = express();
 app.set('trust proxy', 1);
 app.use(requestIdMiddleware);
+app.use(metricsMiddleware);
 // S-7: Helmet harden — HSTS, CSP, X-Content-Type-Options, Frameguard, ReferrerPolicy
 app.use(helmet({
   contentSecurityPolicy: {
@@ -280,6 +282,14 @@ const requireAuth = async (req, res, next) => {
     return res.status(503).json({ eroare: 'Serviciul de autentificare este indisponibil.' });
   }
 };
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    p95LatencyMs: getP95Latency()
+  });
+});
 
 // ==========================================
 // IMAGEKIT AUTHENTICATION ENDPOINT

@@ -27,6 +27,17 @@ if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
     debug: false,
+    beforeSend(event) {
+      const req = event.request;
+      if (req && req.data && typeof req.data === 'object') {
+        ['password', 'email', 'mesaj', 'userExplanation', 'user_prompt', 'imagine_base64', 'authorization'].forEach(key => {
+          if ((req.data as any)[key]) {
+            (req.data as any)[key] = '[SCRUBBED_PII]';
+          }
+        });
+      }
+      return event;
+    }
   });
 
   // Prinde crash-urile JS neprinse (ErrorUtils) si promisiunile respinse neprinse,
