@@ -30,6 +30,7 @@ const {
   salveazaProdusManual,
 } = require('./utils/barcode');
 const { getEstimeazaMancareTextPrompt, getVisionFallbackPrompt, getBarcodeFallbackPrompt } = require('./prompts/aiPrompts');
+const { checkAiUsageQuota } = require('./utils/aiUsageQuota');
 
 require('dotenv').config();
 
@@ -1075,7 +1076,7 @@ RETURNEAZĂ STRICT UN OBIECT JSON valid în acest format:
 // ==========================================
 // RUTA: ESTIMARE RAPIDĂ TEXT ALIMENT (GROQ/LLM)
 // ==========================================
-app.post('/api/estimeaza-mancare-text', requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/estimeaza-mancare-text', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res) => {
   try {
     const { text } = req.body;
     if (!text || typeof text !== 'string') return res.status(400).json({ eroare: "Text invalid." });
@@ -1273,8 +1274,8 @@ const handleVisionFallbackOrCorrection = async (req, res) => {
   }
 };
 
-app.post('/api/vision-fallback', requireAuth, aiLimiter, handleVisionFallbackOrCorrection);
-app.post('/api/corecteaza-mancare-vizual-text', requireAuth, aiLimiter, handleVisionFallbackOrCorrection);
+app.post('/api/vision-fallback', requireAuth, aiLimiter, checkAiUsageQuota, handleVisionFallbackOrCorrection);
+app.post('/api/corecteaza-mancare-vizual-text', requireAuth, aiLimiter, checkAiUsageQuota, handleVisionFallbackOrCorrection);
 
 // ==========================================
 // RUTA 2.1: PROXY PENTRU OPENFOODFACTS BARCODE + STRAT 1 CACHE LOCAL + STRAT 3 FALLBACK
