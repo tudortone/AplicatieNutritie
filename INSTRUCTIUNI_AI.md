@@ -1,331 +1,197 @@
-# INSTRUCȚIUNI PENTRU AI — ÎMBUNĂTĂȚIRE & REPARARE Aplicație NutriAI
+# INSTRUCȚIUNI PENTRU AI — NutriAI
 
-Proiectul conține:
-- `backend-nutritie-ai/` — server Express (Node.js) cu Gemini AI + Supabase
-- `frontend-nutritie/` — aplicație Expo (React Native) cu TypeScript
+**Acesta este documentul canonic unic de instrucțiuni pentru asistenții AI care lucrează în acest repo.**
+Versiunile anterioare (`INSTRUCTIUNI_AI_v5.md`, `INSTRUCTIUNI_GEMINI_v6.md`) au fost contopite aici și șterse — nu există altă sursă de instrucțiuni. Dacă o informație din trecut contrazice acest document, acest document are prioritate.
 
-Înainte de a scrie cod, citește docs-ul oficial Expo la https://docs.expo.dev/versions/v54.0.0/ deoarece proiectul folosește Expo SDK 54. Respectă versiunile exacte din `package.json`.
+Proiectul are două aplicații:
+- `frontend-nutritie/` — aplicație **Expo (React Native + TypeScript, SDK 54)** cu Expo Router (file-based routing).
+- `backend-nutritie-ai/` — server **Node.js Express 5** cu Gemini / Groq / OpenAI + Supabase.
 
----
-
-## 1. SECURITATE — CRITIC (rezolvă primul)
-
-### 1.1 Token-uri JWT sunt logate în consolă
-În `backend-nutritie-ai/server.js` (linia ~49-51), middleware-ul `requireAuth` face:
-```js
-console.log("Headers:", req.headers);
-```
-Asta scrie **Bearer token-ul** utilizatorului în loguri. Șterge complet logarea header-urilor. Păstrează doar `console.log("Method:", req.method)` sau nimic.
-
-### 1.2 Chei hardcodate ca fallback în cod
-În `backend-nutritie-ai/server.js` (linia ~38-40):
-```js
-const supabaseUrl = process.env.SUPABASE_URL || 'https://tfqcihbjgmscsseyzifs.supabase.co';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'sb_publishable_rGNnHj5u-...';
-```
-Șterge fallback-urile hardcodate. Dacă variabilele de mediu lipsesc, serverul trebuie să **crape la pornire** cu un mesaj clar:
-```js
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("Lipsesc variabilele de mediu SUPABASE_URL / SUPABASE_ANON_KEY");
-  process.exit(1);
-}
-```
-La fel pentru `GEMINI_API_KEY` (linia ~70) — adaugă validare: dacă lipsește, crash la start.
-
-### 1.3 CORS complet deschis
-`server.js` linia ~14: `origin: '*'`. Deși există `CORS_ORIGINS=*` în `.env`, variabila e ignorată. Citește din env și aplică:
-```js
-const corsOrigins = (process.env.CORS_ORIGINS || '*').split(',');
-app.use(cors({
-  origin: corsOrigins.includes('*') ? true : corsOrigins,
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-```
-Pe producție, setează `CORS_ORIGINS` la URL-urile exacte ale frontend-ului.
-
-### 1.4 Fără rate limiting pe endpoint-urile AI
-Adaugă `express-rate-limit` (instalează cu `npm install express-rate-limit`) pe rutele `/api/*` pentru a preveni abuzul și costuri Gemini exagerate:
-```js
-const rateLimit = require('express-rate-limit');
-const aiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
-  max: 30, // max 30 request-uri per fereastră per IP
-  message: { eroare: "Prea multe cereri. Încearcă mai târziu." }
-});
-app.use('/api/', aiLimiter);
-```
-
-### 1.5 Verifică RLS pe Supabase
-Aplicația presupune că tabela `mese` are Row Level Security activat cu politici care filtrează după `auth.uid() = user_id`. Dacă RLS nu e configurat, orice user autentificat poate citi/modifica mesele altor useri. **Nu poți rezolva asta din cod** — dar include în instrucțiuni: "Verifică în Supabase Dashboard → Authentication → Policies că tabela `mese` are RLS activat cu politici `SELECT/INSERT/UPDATE/DELETE USING (auth.uid() = user_id)`."
+> **Expo SDK 54 a schimbat mai multe API-uri.** Înainte de a scrie cod React Native, citește documentația versionată la https://docs.expo.dev/versions/v54.0.0/. Respectă versiunile exacte din `package.json`; nu le schimba fără motiv explicit (poate sparge compatibilitatea cu SDK 54).
 
 ---
 
-## 2. BUG-URI FUNCȚIONALE
+## 1. REGULI ABSOLUTE — NU FACEA ASTA
 
-### 2.1 Nume model Gemini posibil invalid
-`server.js` linia ~71: `model: "gemini-flash-latest"`. Acest alias s-ar putea să nu rezolve corect. Verifică în docs Google AI cele mai recente nume valide (ex: `gemini-2.0-flash` sau `gemini-1.5-flash`). Dacă nu ești sigur, folosește un nume explicit și documentat. Testează că endpoint-urile AI funcționează după schimbare.
-
-### 2.2 Componentă definită în interiorul render-ului (anti-pattern)
-În `frontend-nutritie/app/calculator-ai.tsx`, componenta `SelectionRow` este definită **în interiorul** componentei `CalculatorAI` (linia ~70). Asta creează o componentă nouă la fiecare render → React remontează elementele → pierdere de performanță și posibil flicker. **Mută `SelectionRow` în afara componentei** (la nivel de modul) și dă-i tipuri TypeScript explicite în loc de `props: any`.
-
-### 2.3 Mutare directă a obiectelor din state (camera.tsx)
-În `frontend-nutritie/app/camera.tsx` (linia ~220-224), la editarea numelui:
-```js
-const nou = [...rezultat];
-nou[index].nume = t;        // MUTĂ obiectul original
-setRezultat(nou);
-```
-Shallow copy-ul array-ului nu copiază obiectele. Creează obiecte noi:
-```js
-const nou = rezultat.map((item, i) => i === index ? { ...item, nume: t } : item);
-setRezultat(nou);
-```
-
-### 2.4 `profil.tsx` returnează `null` în timp ce session se încarcă
-`profil.tsx` linia ~53: `if (!session) return null;` → ecran negru fără feedback. Afișează un `ActivityIndicator` sau un skeleton până când session e verificat.
-
-### 2.5 `istoric.tsx` nu afișează loading inițial
-`loading` pornește `true` dar nu există UI pentru asta — ecranul e gol până vine datele. Adaugă un indicator de loading (spinner centrat sau skeleton cards) când `loading === true`.
-
-### 2.6 Erori Supabase ignorate
-În `index.tsx` (linia ~33) și `chat.tsx` (linia ~84), răspunsul Supabase destructurat ignoră `error`:
-```js
-const { data } = await supabase.from('mese').select(...);
-```
-Capturează și tratează `error`:
-```js
-const { data, error } = await supabase.from('mese').select(...);
-if (error) { console.error(error); return; }
-```
-
-### 2.7 `useFocusEffect` cu closure-uri stale
-În `index.tsx:48`, `chat.tsx:98`, `istoric.tsx:50`:
-```js
-useFocusEffect(useCallback(() => { fetchData(); }, []));
-```
-`fetchData` e redefinit la fiecare render dar callback-ul captează prima instanță. Deși funcționează acum (pentru că `fetchData` nu depinde de state care se schimbă), e fragil. Mută definiția `fetchData` **în interiorul** `useCallback` sau adaugă-l ca dependență:
-```js
-useFocusEffect(useCallback(() => { /* tot codul fetchData aici */ }, [/* deps */]));
-```
-
-### 2.8 `keyboardDidHideListener` / `keyboardDidShowListener` — API depreciat
-În `chat.tsx` (linia ~47-63), `Keyboard.addListener` returnează direct subscription. Pentru RN 0.81 e ok, dar păstrează consistență. Verifică că remove se face corect (da).
+1. **NU hardcoda chei API sau date sensibile în cod.** Backendul citește din `process.env`; frontendul din `process.env.EXPO_PUBLIC_*`. Secretul real NU apare niciodată în cod sau în loguri.
+2. **NU elimina** `requireAuth`, `generalLimiter`/`aiLimiter` sau `checkAiUsageQuota` de pe rutele protejate din `server.js`.
+3. **NU folosi clientul admin Supabase** (`supabaseAdmin`) pentru a citi/scrie datele unui utilizator obișnuit. Folosește `ctx.db` (clientul per-cerere legat de JWT, cu RLS pe `auth.uid() = user_id`). Vezi [Secțiunea 5](#5-securitate).
+4. **NU schimba mesajele de eroare, codurile HTTP sau formulele de calcul existente.** `tests/server.test.js` le tratează ca un contract.
+5. **NU crea componente React în interiorul altor componente** (anti-pattern de performanță — remontare la fiecare render).
+6. **NU folosi `any` în TypeScript.** Folosește tipurile din `frontend-nutritie/types.ts` sau definește tipuri noi.
+7. **NU loga** token-uri JWT, header-e de autorizare sau date personale. `console.log` doar în development, fără date sensibile.
+8. **NU instala dependențe noi** fără să verifici că nu există deja o soluție în proiect.
+9. **NU rescrie integral un fișier mare** și NU șterge comentariile care explică de ce ceva e făcut aparent greșit (sunt garduri intenționate). Modifică punctual.
+10. **Orice text vizibil utilizatorului** (alerte, butoane, etichete) trece prin i18n (`useTranslation` + `i18n/locales/ro.json` + `en.json`), nu e hardcodat.
 
 ---
 
-## 3. COD MORT & BOILERPLATE DE ȘTERS
+## 2. ARHITECTURA PROIECTULUI (verificată)
 
-### 3.1 `backend-nutritie-ai/utils/calculator.js` — NEFOLOSIT
-Acest fișier NU e importat nicăieri în `server.js` (calculul profilului se face prin Gemini). Conține și valori default hardcodate personale (`greutate = 103, inaltime = 186.5, varsta = 21`). **Șterge fișierul** sau, dacă vrei calcul determinist fallback, integrează-l în `server.js` ca fallback când Gemini e indisponibil (mai bine decât așteptat).
-
-### 3.2 `frontend-nutritie/app/modal.tsx` — boilerplate Expo nefolosit
-E modal-ul default din template-ul Expo, în engleză ("This is a modal"), neconectat logic la app. **Șterge fișierul** și elimină `<Stack.Screen name="modal" ...>` din `app/_layout.tsx`.
-
-### 3.3 Componente boilerplate neutilizate
-În `frontend-nutritie/components/`: `external-link.tsx`, `haptic-tab.tsx`, `hello-wave.tsx`, `parallax-scroll-view.tsx`, `ui/` — toate din template-ul Expo. Verifică cu search dacă sunt importate; dacă nu, **șterge-le**. Păstrează doar `themed-text.tsx`/`themed-view.tsx` dacă ștergi `modal.tsx` (atunci pot fi șterse și ele).
-
-### 3.4 `cod_complet_proiect.txt` (în root)
-Un dump text al proiectului — clutter. **Șterge-l** din repo.
-
-### 3.5 Dependențe neutilizate
-- `expo-local-authentication` — în `package.json` dar neimportat. Elimin-o sau folosește-o (ex: biometric lock la app).
-- Verifică și `react-native-worklets`, `expo-symbols`, `expo-haptics` dacă sunt folosite.
-
-### 3.6 Variabile de mediu neutilizate
-- `EXPO_PUBLIC_IS_EMULATOR=false` în frontend `.env` — nu e citit nicăieri în cod. Șterge-l.
-- `HOST=0.0.0.0` în backend `.env` — `app.listen` hardcodează `'0.0.0.0'`, variabila e ignorată. Folosește `process.env.HOST || '0.0.0.0'`.
-
----
-
-## 4. TYPESCRIPT — type safety
-
-Proiectul are `"strict": true` în `tsconfig.json` dar folosește masiv `any`:
-- `session` → `useState<any>(null)` peste tot
-- `istoric` → `useState<any[]>([])`
-- `rezultat` → `useState<any[] | null>(null)`
-- `SelectionRow` → `props: any`
-
-### Instrucțiuni:
-1. Definește tipuri pentru sesiunea Supabase: folosește `Session` din `@supabase/supabase-js`:
-   ```ts
-   import type { Session } from '@supabase/supabase-js';
-   const [session, setSession] = useState<Session | null>(null);
-   ```
-2. Definește un tip pentru `Masa` (meal):
-   ```ts
-   interface Masa {
-     id: string;
-     user_id: string;
-     nume: string;
-     calorii: number;
-     proteine: number;
-     grasimi: number;
-     carbohidrati: number;
-     created_at: string;
-   }
-   ```
-3. Definește tip pentru rezultatul AI:
-   ```ts
-   interface AlimentAI {
-     nume: string;
-     estimare_grame: number;
-     calorii_per_100g: number;
-     proteine_per_100g: number;
-     grasimi_per_100g: number;
-     carbohidrati_per_100g: number;
-   }
-   ```
-4. Dă tipuri explicite pentru props la `SelectionRow` și `BouncingDot`.
-
----
-
-## 5. IMPORTURI NEUTILIZATE & LINT
-
-Rulează `npx expo lint` și repară toate warning-urile. Probleme cunoscute:
-
-- `index.tsx:11` — `const { width, height } = Dimensions.get('window')` — ambele neutilizate. Șterge linia și importul `Dimensions` dacă nu mai e folosit.
-- `chat.tsx:35` — `width, height` neutilizate.
-- `istoric.tsx:10` — `width, height` neutilizate.
-- `auth.tsx:12` — `width, height` neutilizate.
-- `profil.tsx:14` — `width` neutilizat.
-- `camera.tsx:4` — `Animated as RNAnimated` importat dar neutilizat. Șterge-l.
-- `calculator-ai.tsx:7` — `FadeIn` importat dar neutilizat.
-- `calculator-ai.tsx:8` — `User, Ruler, Weight` importați dar neutilizate.
-
-După reparare, rulează `npx expo lint` și `npx tsc --noEmit` ca să confirmi zero erori.
-
----
-
-## 6. ARHITECTURĂ & CONSISTENȚĂ
-
-### 6.1 Stiluri/ culori hardcodate peste tot
-App-ul folosește o paletă consistentă (#090C0E fundal, #CCFF00 accent lime, #A855F7 mov, #00F0FF cyan, #6B7280 gri text) dar culorile sunt repetate ca string-uri în StyleSheet în fiecare fișier. `constants/theme.ts` conține o paletă **diferită** (light/dark default Expo) care nu e folosită.
-
-**Recomandare:** Înlocuiește `constants/theme.ts` cu paleta reală a app-ului:
-```ts
-export const Colors = {
-  background: '#090C0E',
-  accent: '#CCFF00',
-  accentSecondary: '#A855F7',
-  accentTertiary: '#00F0FF',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#6B7280',
-  textTertiary: '#9CA3AF',
-  danger: '#F87171',
-  warning: '#FB923C',
-};
+### Backend — `backend-nutritie-ai/`
 ```
-Apoi înlocuiește string-urile hardcodate cu referințe la `Colors.*`.
-
-### 6.2 `app.json` — `userInterfaceStyle: "automatic"`
-App-ul e hardcodat dark theme, dar `userInterfaceStyle: "automatic"` permite light mode la nivel de sistem. Asta poate cauza mismatch-uri (ex: fundal alb la system bars pe dispozitive cu light mode). Schimbă în `"dark"`.
-
-### 6.3 `_layout.tsx` folosește `DarkTheme` (react-navigation) cu fundal #151718
-Dar app-ul folosește #090C0E. Suprascrie tema:
-```ts
-import { DarkTheme } from '@react-navigation/native';
-const AppDarkTheme = {
-  ...DarkTheme,
-  colors: { ...DarkTheme.colors, background: '#090C0E' },
-};
+backend-nutritie-ai/
+├── server.js               # Punct de intrare; server Express monolitic + toate rutele API
+├── config/env.js           # Configurare centralizată, validată fail-fast la pornire
+├── routes/gdpr.js          # Router modular: export date & ștergere cont (B-12)
+├── prompts/aiPrompts.js    # System prompt-urile pentru modelele AI
+├── src/trigger/analiza-mancare-ai.js  # Task Trigger.dev (analiză AI în fundal)
+├── utils/                  # Module helper (vezi mai jos)
+├── tests/                  # Jest + supertest
+└── .env                    # Chei API (gitignored); .env.example = șablon
 ```
 
-### 6.4 Stocarea țintelor doar în AsyncStorage (fragil)
-`profil.tsx` și `calculator-ai.tsx` salvează `caloriiTinta`/`proteineTinta`/`greutate` DOAR în AsyncStorage. La reinstalare sau schimbare dispozitiv, datele se pierd. **Creează un tabel `profil` în Supabase** (sau folosește `user_metadata`) și sincronizează țintele acolo. La login, citește din Supabase și cache-uiește în AsyncStorage.
+Module `utils/` (toate CommonJS):
+- `barcode.js` — cache OpenFoodFacts pe 3 straturi (Supabase → OpenFoodFacts → fallback)
+- `metrics.js` — contorizare tokeni/cost AI (p95)
+- `clientUtilizator.js` — client Supabase per-cerere, legat de JWT (RLS)
+- `identitate.js` — mapare identități (Supabase / Clerk)
+- `idempotency.js` — idempotență pe scrieri (A-9)
+- `tokenCache.js` + `storePartajat.js` — cache tokeni și store partajat Redis (B-10)
+- `rateLimit.js` — configurare limiter-e (`generalLimiter`, `aiLimiter`)
+- `aiUsageQuota.js` — plafonare zilnică AI (S-10)
+- `imageHashCache.js` — cache pe hash imagine (P-3)
+- `semafor.js` — limită concurență AI pe heap (P-15/B-20)
+- `llmJson.js`, `promptSafety.js`, `sanitize.js`, `validareMese.js`, `httpTimeout.js`, `logger.js`
 
-### 6.5 Logică duplicată de fetch date ziua-curentă
-`index.tsx`, `chat.tsx`, `istoric.tsx` au fiecare câte o funcție `fetchData`/`incarcaIstoric` aproape identică care interoghează Supabase pentru mesele de azi. **Extrage un hook custom** `useMeseAzi()` în `hooks/` care returnează `{ mese, totalCalorii, totalProteine, loading, refresh }` și reutilizează-l în toate cele 3 ecrane.
-
-### 6.6 Fără health check endpoint
-Adaugă `app.get('/health', (req, res) => res.json({ status: 'ok' }))` în backend — util pentru monitorizare (mai ales pe Render.com unde e deployed).
-
----
-
-## 7. ROBUSTEȘTE BACKEND
-
-### 7.1 Validare input pe `/api/calculeaza-profil`
-`server.js` verifică doar existența câmpurilor, nu și tipul/valabilitatea. Adaugă validare:
-- `varsta`: număr întreg între 10 și 100
-- `greutate`: număr între 30 și 300
-- `inaltime`: număr între 100 și 250
-- `sex`: doar 'Masculin' | 'Feminin'
-- `activitate`: doar valorile din setul acceptat
-- `obiectiv`: doar valorile din setul acceptat
-
-Respinge cu 400 + mesaj clar dacă validarea pică.
-
-### 7.2 Validare input pe `/api/chat`
-Se trunchează la 500 char (bun), dar adaugă și sanitizare de bază (ex: strip caractere de control). Verifică că `mesaj` nu e gol după trim.
-
-### 7.3 Error handling JSON parsing Gemini
-Când Gemini returnează text invalid, codul face fallback regex (`text.match(...)`) dar al doilea `JSON.parse` poate arunca și el — nu e prins. Înfășoară într-un try/catch:
-```js
-try {
-  parsed = JSON.parse(jsonMatch[0]);
-} catch (e2) {
-  return res.status(500).json({ eroare: "AI nu a returnat JSON valid." });
-}
+### Frontend — `frontend-nutritie/`
 ```
-
-### 7.4 Timeout pentru cererile Gemini
-Adaugă un timeout (ex: 30s) pe cererile Gemini ca să nu se blocheze request-ul indefinit. Folosește `AbortController` sau `Promise.race`.
-
----
-
-## 8. UX & ACCESIBILITATE
-
-### 8.1 Fără feedback haptic la acțiuni importante
-App-ul are `expo-haptics` instalat. Adaugă feedback haptic (light impact) la: scanare mâncare, salvare masă, salvare profil, trimitere mesaj chat.
-
-### 8.2 Fără loading skeleton pe ecranul principal
-`index.tsx` afișează 0-uri până se încarcă datele. Arată un skeleton sau shimmer în loc de 0.
-
-### 8.3 Chat-ul nu persistă istoricul
-Mesajele din `chat.tsx` se pierd la schimbarea tab-ului (doar mesajul de welcome rămâne). Dacă se dorește persistență, salvează conversația în AsyncStorage sau Supabase. Dacă nu, documentează comportamentul.
-
-### 8.4 Butonul "Anulează & Scanează din nou" nu oprește o cerere în curs
-În `camera.tsx`, dacă AI procesează și userul apasă anularea, request-ul continuă. Nu e grav, dar ar putea afișa rezultatul după anulare.
-
----
-
-## 9. TESTE
-
-Nu există niciun test. Adaugă minim:
-- **Backend**: teste unitare pentru `requireAuth` (token lipsă, invalid, valid) și validarea input-urilor. Folosește `jest` + `supertest`.
-- **Frontend**: teste pentru hook-ul `useMeseAzi` (mock Supabase) și pentru calculele de macros din `camera.tsx`.
-
-Schimbă în `backend-nutritie-ai/package.json`:
-```json
-"scripts": { "test": "jest" }
+frontend-nutritie/
+├── app/                    # Ecrane (Expo Router)
+│   ├── (tabs)/             # index (jurnal), chat, statistici, antrenamente, istoric, profil
+│   ├── auth.tsx, camera.tsx, calculator-ai.tsx, scanner-barcode.tsx, adauga-manual.tsx
+│   ├── onboarding/         # flux onboarding pe pași
+│   └── legal.tsx, paywall.tsx, notificari.tsx, jurnal-antrenamente.tsx, exercitiu/[id].tsx
+├── components/             # Componente reutilizabile (AddMealBottomSheet, MasaCard, food/*, fitness/*, ui/*)
+├── context/                # AuthContext, ThemeContext, GamificareContext, PremiumContext, OnboardingContext, NotificationBannerContext
+├── hooks/                  # useMeseAzi, useZileCuMese, useFocusRefresh, useAntrenamente, useCamara, useApa, useHealthSync, useBiometrics, useResponsiveLayout, etc.
+├── constants/              # config.ts (API_URL), theme.ts, foodPresets.ts, exercitii.ts, insigne.ts, muscles.ts
+├── lib/                    # fitnessEngine.ts, offlineSync.ts, calorieState.ts, imageOptimizer.ts, imagekit.ts, openfoodfacts.ts, etc.
+├── i18n/                   # index.ts (i18next) + locales/ro.json + locales/en.json
+├── supabase.ts             # client Supabase (singleton) cu fail-fast pe EXPO_PUBLIC_*
+├── types.ts                # tipuri globale (Masa, AlimentDetaliat, TipMasa, Antrenament…)
+└── app.json / eas.json     # configurare Expo / EAS Update
 ```
 
 ---
 
-## 10. LISTĂ DE VERIFICARE FINALĂ
+## 3. CONVENȚII FRONTEND
 
-După toate modificările, AI-ul trebuie să confirme că:
-
-- [ ] `npx tsc --noEmit` trece fără erori (frontend)
-- [ ] `npx expo lint` trece fără warning-uri (frontend)
-- [ ] `node server.js` pornește fără erori (backend)
-- [ ] Niciun secret/cheie nu e hardcodat în cod (doar în `.env` gitignored)
-- [ ] Nu se loghează header-ul Authorization nicăieri
-- [ ] Toate `any`-urile au fost înlocuite cu tipuri explicite
-- [ ] Importurile neutilizate au fost șterse
-- [ ] Codul mort (calculator.js, modal.tsx, boilerplate components) a fost șters
-- [ ] Rate limiting activ pe endpoint-urile AI
-- [ ] Validare input pe toate rutele backend
-- [ ] RLS confirmat activ pe tabela `mese` în Supabase
+- **Culori:** folosește `colors.*` din `useTheme()` (vezi `context/ThemeContext.tsx`), NU string-uri hex hardcodate în fiecare ecran.
+- **Stiluri:** `StyleSheet.create()` la finalul fișierului. Evită stilurile inline.
+- **Animații:** `react-native-reanimated` (FadeInDown, FadeInUp, ZoomIn). **Iconițe:** `lucide-react-native`.
+- **Accesibilitate:** pe fiecare element interactiv pune `accessibilityRole`, `accessibilityLabel`, `accessibilityState`; pe elementele testabile, `testID` stabil.
+- **Text utilizator:** toate etichetele, alertele și butoanele trec prin `t()` din `useTranslation()`; cheile în `i18n/locales/ro.json` (implicit) și `en.json` (fallback). Interpolări i18next: `{{variabila}}`.
+- **Acces la date:** `useAuth()` → `{ session, user }`; `useMeseAzi()` → `{ mese, totalCalorii, totalProteine, loading, refresh }`; `useZileCuMese()`, `useAntrenamente()`, `useCamara()`.
+- **Apeluri backend:** `import { API_URL } from '@/constants/config';` — trimite `Authorization: Bearer ${session.access_token}` pe fiecare cerere.
+- **Tipuri:** PascalCase, definite în `types.ts` sau la început de fișier. `tsconfig.json` e pe `"strict": true`.
 
 ---
 
-## CONVENȚII DE COD
+## 4. CONVENȚII BACKEND
 
-- Limbaj: comentariile și textele UI în **română** (consistenț cu restul app-ului).
-- NU adăuga comentarii explicative în cod decât dacă sunt absolut necesare.
-- Păstrează stilul existent: StyleSheet.create, BlurView + LinearGradient pentru cards, animații `react-native-reanimated`.
-- Nu schimba versiunile de dependențe decât dacă e necesar pentru un fix.
-- La fiecare modificare, explică ce ai schimbat și de ce.
+- Server Express 5 monolitic în `server.js`; pentru funcționalități noi autoconținute se poate folosi un `express.Router()` modular (ca `routes/gdpr.js`).
+- Configurarea se citește O SINGURĂ dată în `config/env.js` și se validează fail-fast: un deploy cu variabile obligatorii lipsă **moare la pornire**, nu în producție.
+- Middleware standard pe rutele API: `requireAuth` (JWT), `generalLimiter` (rată generală), `aiLimiter` (rată AI), `checkAiUsageQuota` (plafon zilnic AI).
+- **Izolare date:** în fiecare handler, `ctx.db` (clientul per-cerere, RLS) filtrează pe `user_id`. Nu folosi `supabaseAdmin` pentru datele de utilizator.
+- **Răspunsuri:** obiecte JSON cu `eroare` la eșec, coduri HTTP corecte. NU schimba textele/codurile existente — sunt contract de test.
+
+### Rutele API (18, plus `/` și `/health`)
+| Metodă | Rută | Auth | Scop |
+|--------|------|------|------|
+| GET | `/health` | — | health check |
+| GET | `/api/ai-status` | — | status modele AI |
+| GET | `/api/imagekit-auth` | JWT | token upload ImageKit |
+| POST | `/api/trigger-analiza-mancare` | JWT | analiză AI în fundal (Trigger.dev) |
+| POST | `/api/analiza-foto` | JWT | analiză fotografie AI |
+| POST | `/api/analizeaza-mancare-structurat` | JWT | analiză structurată alimente |
+| POST | `/api/chat` | JWT | chat nutrițional AI |
+| POST | `/api/log-food-from-chat` | JWT | salvare masă din chat |
+| POST | `/api/estimeaza-mancare-text` | JWT | estimare valori din text |
+| POST | `/api/vision-fallback` | JWT | fallback/corecție vision |
+| POST | `/api/corecteaza-mancare-vizual-text` | JWT | corecție vizual→text |
+| GET | `/api/produs-barcode/:code` | JWT | produs după cod de bare |
+| POST | `/api/salveaza-produs-barcode` | JWT | salvare produs manual în cache |
+| POST | `/api/calculeaza-profil` | JWT | calcul profil nutrițional |
+| POST | `/api/mese` | JWT | adăugare masă |
+| PUT | `/api/mese/:id` | JWT | editare masă |
+| DELETE | `/api/mese/:id` | JWT | ștergere masă |
+| GET | `/api/user/premium-status` | JWT | validare premium server-side |
+| GET | `/api/user/export-data` | JWT | export GDPR |
+| DELETE | `/api/user/delete-account` | JWT | ștergere cont GDPR |
+
+Referința completă OpenAPI: `contracts/openapi.yaml`.
+
+---
+
+## 5. SECURITATE
+
+- **Config fail-fast:** `config/env.js` cere obligatoriu `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`; în producție `CORS_ORIGINS` trebuie să fie o listă explicită (wildcard-ul e respins la pornire).
+- **Rate limiting:** `generalLimiter` pe toate rutele; `aiLimiter` + `checkAiUsageQuota` pe rutele AI (protecție cost și abuz). Store partajat Redis dacă `REDIS_URL` e setat (B-10).
+- **RLS Supabase:** tabelele cu date de utilizator au Row Level Security pe `auth.uid() = user_id`. Clientul per-cerere (`ctx.db`) aplică izolarea în baza de date, nu doar în cod. Never use the admin client for user data.
+- **Plafon AI:** `AI_MAX_CONCURENTA` + `AI_MAX_COADA` + semafor protejează heap-ul la cereri AI paralele (imagini base64 mari nu se acumulează).
+- **Secrete:** rotește periodic toate cheile (ghid: vezi auditul S-8). Zero hardcodare.
+
+---
+
+## 6. BAZA DE DATE (SUPABASE)
+
+| Tabelă | Scop | Coloane cheie |
+|--------|------|---------------|
+| `mese` | Jurnal alimente | `user_id`, `nume`, `calorii`, `proteine`, `grasimi`, `carbohidrati`, `fibre`, `data`, `ora`, `tip_masa`, `alimente` (JSONB) |
+| `antrenamente` | Jurnal sport | `user_id`, `nume`, `tip`, `durata_min`, `calorii_arse`, `exercitii` (JSONB), `muscle_load` (JSONB) |
+| `profil` | Date profil | `user_id`, `greutate`, `greutateTinta`, `caloriiTinta`, macro-uri țintă |
+| `gamificare` | XP și streak | `user_id`, `xp_total`, `nivel`, `streak`, `questuri_azi` (JSONB), `insigne` (JSONB) |
+| `produse_camara` | Cămară personală | `user_id`, `barcode`, `nume`, `calorii_100g`, etc. |
+| `barcode_cache` | Cache produse global | `code` (PK), `name`, `kcal_100g`, etc. — cache global |
+| `barcode_estimari_utilizator` | Estimări per utilizator | `user_id`, `barcode`, valori |
+| `audit_log` | Log acțiuni | `user_id`, `action`, `details` (JSONB) |
+
+Toate tabelele cu date personale au RLS pe `auth.uid() = user_id` și FK `ON DELETE CASCADE` spre `auth.users(id)` (migrările SQL sunt idempotente — `IF NOT EXISTS`).
+
+---
+
+## 7. VARIABILE DE MEDIU
+
+Șablonul complet și comentat: `backend-nutritie-ai/.env.example`. Obligatorii: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Opționale importante: `GEMINI_API_KEY` (+ `_2/_3/_4` rotație), `GEMINI_MODEL`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_VISION_MODELS`, `CORS_ORIGINS`, `CLERK_SECRET_KEY`, `SENTRY_DSN`, `TRIGGER_SECRET_KEY`, `IMAGEKIT_*`, `REDIS_URL`, `REVENUECAT_SECRET_API_KEY`, `AI_MAX_CONCURENTA`, `AI_MAX_COADA`, `KEEP_ALIVE_URL`, `KEEP_ALIVE_INTERVAL_MINUTES`.
+
+Frontend: `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` (verificate fail-fast în `supabase.ts`).
+
+---
+
+## 8. TESTE & VERIFICARE
+
+```bash
+# Backend (din backend-nutritie-ai/)
+npm test                 # Jest — suita de 6+ fișiere; tests/server.test.js = CONTRACT
+npm run test:integration # RLS pe Postgres real
+
+# Frontend (din frontend-nutritie/)
+npx tsc --noEmit         # 0 erori TypeScript
+npx expo lint            # 0 warning-uri
+```
+
+Reguli de testare:
+- Dacă NU poți rula testele, spune-o explicit — nu declara „reparat” ce n-ai executat.
+- Migrarea/scripturile SQL se rulează ÎNAINTEA codului care le folosește.
+- La final, raportezi explicit: ce ai modificat, ce NU ai reușit, și ce ar trebui testat manual.
+
+---
+
+## 9. LANSARE & DEPLOY
+
+- **EAS Update (frontend):** după modificări majore, încarcă noua versiune cu `eas update` pe TOATE branch-urile active (`preview`, `main`, `production`) și șterge grupurile de update vechi cu `eas update:delete <groupId>` — pentru a menține un mediu curat în Expo Go.
+- **Backend:** keep-alive anti-sleep pe `KEEP_ALIVE_URL` (primește automat sufixul `/health`); monitorizare Sentry dacă `SENTRY_DSN` e setat; validare premium prin RevenueCat dacă `REVENUECAT_SECRET_API_KEY` e setat.
+- **Git:** modificări făcute doar pe fișierele indicate de cerință; commit-uri mici, descriptive, în română; nu force-push pe `main`.
+
+---
+
+## 10. REFERINȚE
+
+- Expo SDK 54: https://docs.expo.dev/versions/v54.0.0/
+- Supabase JS: https://supabase.com/docs/reference/javascript/
+- React Native Reanimated: https://docs.swmansion.com/react-native-reanimated/
+- Lucide icons: https://lucide.dev/icons/
+- Gemini API: https://ai.google.dev/api/generate-content
+- Documentația API backend (OpenAPI): `contracts/openapi.yaml`
+- README rulare locală backend: `backend-nutritie-ai/README.md`

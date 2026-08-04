@@ -1,6 +1,8 @@
 # Jurnal de Modificări AI (CHANGELOG_AI.md)
 
-Acest fișier înregistrează toate modificările efectuate în proiectul NutriAI conform instrucțiunilor din NutriAI v4, grupate pe agenți specializați.
+> **Jurnal istoric, păstrat pentru arhivă.** Instrucțiunile canonice pentru asistenții AI din acest proiect sunt acum în **`INSTRUCTIUNI_AI.md`** (documentul unic). Versiunile vechi de instrucțiuni (`INSTRUCTIUNI_AI_v5.md`, `INSTRUCTIUNI_GEMINI_v6.md`) au fost contopite în documentul canonic și șterse. Acest jurnal nu mai este sursă de instrucțiuni active.
+
+Acest fișier înregistrează modificările efectuate istoric în proiectul NutriAI, grupate pe agenți specializați.
 
 [2026-07-24] —
 Agent: Antigravity AI Senior Architect
