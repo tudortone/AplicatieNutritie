@@ -249,8 +249,8 @@ export default function ScannerBarcodeScreen() {
           )}
         </View>
 
-        <Text style={[styles.pantryTitle, { color: colors.textPrimary }]}>{item.nume}</Text>
-        {!!item.brand && <Text style={[styles.pantryBrand, { color: colors.textSecondary }]}>{item.brand}</Text>}
+        <Text style={[styles.pantryTitle, { color: colors.textPrimary }]} numberOfLines={2} ellipsizeMode="tail">{item.nume}</Text>
+        {!!item.brand && <Text style={[styles.pantryBrand, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">{item.brand}</Text>}
         <Text style={[styles.pantryMacro, { color: colors.accent }]}>
           {item.calorii_100g} kcal/100g • P: {item.proteine_100g}g • C: {item.carbohidrati_100g}g • G: {item.grasimi_100g}g
         </Text>
@@ -377,9 +377,9 @@ export default function ScannerBarcodeScreen() {
             <BlurView intensity={70} tint="dark" style={[styles.resultCard, { borderColor: colors.accent }]}>
               <View style={styles.resHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.resTitle, { color: colors.textPrimary }]}>{produsGasit.nume}</Text>
+                  <Text style={[styles.resTitle, { color: colors.textPrimary }]} numberOfLines={2} ellipsizeMode="tail">{produsGasit.nume}</Text>
                   {!!produsGasit.brand && (
-                    <Text style={[styles.resBrand, { color: colors.textSecondary }]}>{produsGasit.brand}</Text>
+                    <Text style={[styles.resBrand, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">{produsGasit.brand}</Text>
                   )}
                 </View>
                 <TouchableOpacity

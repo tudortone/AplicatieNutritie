@@ -211,7 +211,7 @@ export default function AdaugaManualScreen() {
                       activeOpacity={0.8}
                       style={{ flex: 1 }}
                     >
-                      <Text style={[styles.favChipTitle, { color: colors.textPrimary }]}>{fav.nume}</Text>
+                      <Text style={[styles.favChipTitle, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{fav.nume}</Text>
                       <Text style={[styles.favChipSub, { color: colors.accent }]}>
                         {fav.calorii} kcal • {fav.proteine}g P
                       </Text>

@@ -267,12 +267,12 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.duration(500)} style={s.header}>
           <View style={s.headerLeft}>
             <View style={s.greetingRow}>
-              <Text style={[s.greeting, { color: colors.textPrimary }]}>{getSalut()}, {capitalizedName}!</Text>
+              <Text style={[s.greeting, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{getSalut()}, {capitalizedName}!</Text>
               <Text style={s.greetingEmoji}>{getEmoji()}</Text>
             </View>
             <View style={s.greetingSubRow}>
-              <Text style={[s.greetingSub, { color: colors.textSecondary }]}>Urmărește-ți nutriția de astăzi</Text>
-              <Text style={[s.caloriiInline, { color: calState.ringColor }]}>  {calState.emoji} {calState.mesaj}</Text>
+              <Text style={[s.greetingSub, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">Urmărește-ți nutriția de astăzi</Text>
+              <Text style={[s.caloriiInline, { color: calState.ringColor }]} numberOfLines={1} ellipsizeMode="tail">  {calState.emoji} {calState.mesaj}</Text>
             </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

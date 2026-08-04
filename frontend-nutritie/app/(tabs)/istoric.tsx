@@ -128,7 +128,7 @@ export default function HistoryScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
                   <Text style={{ fontSize: 26 }}>{cat.icon}</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.sectionTitleText, { color: colors.textPrimary }]}>{cat.label}</Text>
+                    <Text style={[styles.sectionTitleText, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{cat.label}</Text>
                     <Text style={[styles.sectionSubtitleText, { color: colors.textSecondary }]}>
                       {hasMeals ? `${cat.mese.length} ${cat.mese.length === 1 ? 'masă înregistrată' : 'mese înregistrate'}` : 'Nicio masă adăugată'}
                     </Text>
