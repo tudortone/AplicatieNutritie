@@ -37,6 +37,22 @@ const REGEX_COD_BARE = /^[0-9]{4,20}$/;
 const GAZDA_OFF = 'world.openfoodfacts.org';
 const CALE_PRODUS_OFF = '/api/v2/product/';
 
+/**
+ * Durata de viata a intrarilor din cache-ul global (zile).
+ *
+ * barcode_cache are `updated_at` cu index, dar nimic nu expira (B-21): o intrare
+ * gresita sau pur si simplu veche ramanea valida la nesfarsit. Dupa TTL, intrarea
+ * este tratata ca absenta, deci ruta reimprospateaza din OpenFoodFacts (upsert-ul
+ * `salveazaProdusOff` reactualizeaza `updated_at`).
+ *
+ * Configurabil prin BARCODE_CACHE_TTL_ZILE; implicit 30 de zile.
+ */
+const TTL_CACHE_ZILE = (() => {
+	const valoare = Number(process.env.BARCODE_CACHE_TTL_ZILE);
+	return Number.isFinite(valoare) && valoare > 0 ? valoare : 30;
+})();
+const TTL_CACHE_MS = TTL_CACHE_ZILE * 24 * 60 * 60 * 1000;
+
 const esteCodBareValid = (cod) => REGEX_COD_BARE.test(String(cod ?? '').trim());
 
 /** Mesajele returnate de RPC-ul de scriere, mapate pe status HTTP si motiv. */
@@ -140,6 +156,14 @@ async function citesteDinCacheGlobal(supabaseAdmin, cod) {
 		.maybeSingle();
 
 	if (error || !data) return null;
+
+	// B-21: intrarea mai veche de TTL este tratata ca absenta, ca ruta sa o
+	// reimprospateze din OpenFoodFacts. Un rand fara updated_at (randuri vechi,
+	// inainte de coloana) e tratat la fel: `new Date(null)` da NaN, nu un TTL valid.
+	const vechime = Date.now() - new Date(data.updated_at).getTime();
+	if (!Number.isFinite(vechime) || vechime > TTL_CACHE_MS) {
+		return null;
+	}
 
 	return {
 		produs: randLaProdus(data, cod),
@@ -325,6 +349,8 @@ async function salveazaProdusManual(supabaseAdmin, { cod, userId, valori }) {
 module.exports = {
 	REGEX_COD_BARE,
 	GAZDA_OFF,
+	TTL_CACHE_ZILE,
+	TTL_CACHE_MS,
 	REZULTATE_SCRIERE,
 	EroareProprietateProdus,
 	esteCodBareValid,

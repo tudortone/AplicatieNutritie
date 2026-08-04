@@ -29,6 +29,7 @@ import FoodScanSuccessModal, {
 } from '@/components/food/FoodScanSuccessModal';
 import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInput';
 import { uploadImageToImageKit } from '@/lib/imagekit';
+import { optimizeImageBeforeUpload } from '@/lib/imageOptimizer';
 
 const { width, height } = Dimensions.get('window');
 const SCAN_BOX_SIZE = width * 0.78;
@@ -123,10 +124,16 @@ export default function CameraScreen() {
       setSeIncarca(true);
 
       try {
+        // B-20: redimensionam pe client inainte de upload. Serverul pastreaza
+        // base64-ul necesar pe toata cascada AI, dar un Buffer brut in plus in
+        // heap dubleaza varful de memorie fara castig. Reducerea reala de payload
+        // (si de cost AI) vine de aici: de la ~15MB la <200KB.
+        const imagineOptimizata = await optimizeImageBeforeUpload(imageUri);
+
         const formData = new FormData();
 
         formData.append('imagine', {
-          uri: imageUri,
+          uri: imagineOptimizata.uri,
           name: `nutriai-${Date.now()}.jpg`,
           type: 'image/jpeg',
         } as unknown as Blob);

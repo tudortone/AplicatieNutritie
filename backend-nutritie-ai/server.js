@@ -37,6 +37,7 @@ const { idempotencyMiddleware } = require('./utils/idempotency');
 const { checkAiUsageQuota } = require('./utils/aiUsageQuota');
 const createGdprRouter = require('./routes/gdpr');
 const { creazaStoreRateLimit, creazaRegistruCheiValori } = require('./utils/storePartajat');
+const { inregistreazaAi, getAiStatistici } = require('./utils/metrics');
 const {
   sanitizeRequest,
   detectPromptInjection,
@@ -484,6 +485,8 @@ app.get('/api/ai-status', async (req, res) => {
     openai: await getProviderStatus('openai'),
     groq: await getProviderStatus('groq'),
     openrouter: await getProviderStatus('openrouter'),
+    // B-23: tokeni, cost estimat si rata de esec, per furnizor si ruta.
+    metriciAi: getAiStatistici(),
   });
 });
 
@@ -583,12 +586,18 @@ async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider 
         if (oaiRes.ok) {
           const oaiData = await oaiRes.json();
           text = oaiData.choices?.[0]?.message?.content;
-          if (text) return { text, furnizor: 'openai' };
+          if (text) {
+            inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'analiza-foto', usage: oaiData.usage, ok: true });
+            return { text, furnizor: 'openai' };
+          }
+          inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'analiza-foto', ok: false });
         } else {
+          inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'analiza-foto', ok: false });
           if (oaiRes.status === 429) await blockProvider('openai', 60, 'Limita de cereri (429)');
           console.warn(`OpenAI Vision esuat (${oaiRes.status}).`);
         }
       } catch (e) {
+        inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'analiza-foto', ok: false });
         console.warn('OpenAI Vision exceptie:', e.message);
       }
     }
@@ -620,12 +629,18 @@ async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider 
           if (groqRes.ok) {
             const groqData = await groqRes.json();
             text = groqData.choices?.[0]?.message?.content;
-            if (text) return { text, furnizor: `groq:${groqModel}` };
+            if (text) {
+              inregistreazaAi({ provider: 'groq', model: groqModel, ruta: 'analiza-foto', usage: groqData.usage, ok: true });
+              return { text, furnizor: `groq:${groqModel}` };
+            }
+            inregistreazaAi({ provider: 'groq', model: groqModel, ruta: 'analiza-foto', ok: false });
           } else {
+            inregistreazaAi({ provider: 'groq', model: groqModel, ruta: 'analiza-foto', ok: false });
             if (groqRes.status === 429) await blockProvider('groq', 60, 'Limita de cereri Groq (429)');
             console.warn(`Groq [${groqModel}] (${groqRes.status}).`);
           }
         } catch (groqErr) {
+          inregistreazaAi({ provider: 'groq', model: groqModel, ruta: 'analiza-foto', ok: false });
           console.warn(`Groq Vision [${groqModel}] exceptie:`, groqErr.message);
         }
       }
@@ -651,9 +666,14 @@ async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider 
 
           if (result?.response) {
             text = result.response.text();
-            if (text) return { text, furnizor: `gemini:${modelName}` };
+            if (text) {
+              inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'analiza-foto', usage: result.response.usageMetadata, ok: true });
+              return { text, furnizor: `gemini:${modelName}` };
+            }
+            inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'analiza-foto', ok: false });
           }
         } catch (err) {
+          inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'analiza-foto', ok: false });
           const errMsg = err.message || String(err);
           if (errMsg.includes('429')) await blockProvider('gemini', 60, 'Limita de cereri Gemini (429)');
           console.warn(`Gemini [${modelName}] esuat:`, errMsg.substring(0, 100));
@@ -677,11 +697,17 @@ async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider 
         if (orRes.ok) {
           const orData = await orRes.json();
           text = orData.choices?.[0]?.message?.content;
-          if (text) return { text, furnizor: 'openrouter' };
-        } else if (orRes.status === 429) {
-          await blockProvider('openrouter', 60, 'Limita de cereri (429)');
+          if (text) {
+            inregistreazaAi({ provider: 'openrouter', model: 'google/gemini-flash-1.5', ruta: 'analiza-foto', usage: orData.usage, ok: true });
+            return { text, furnizor: 'openrouter' };
+          }
+          inregistreazaAi({ provider: 'openrouter', model: 'google/gemini-flash-1.5', ruta: 'analiza-foto', ok: false });
+        } else {
+          inregistreazaAi({ provider: 'openrouter', model: 'google/gemini-flash-1.5', ruta: 'analiza-foto', ok: false });
+          if (orRes.status === 429) await blockProvider('openrouter', 60, 'Limita de cereri (429)');
         }
       } catch (e) {
+        inregistreazaAi({ provider: 'openrouter', model: 'google/gemini-flash-1.5', ruta: 'analiza-foto', ok: false });
         console.warn('OpenRouter Vision exceptie:', e.message || e);
       }
     }
@@ -701,13 +727,18 @@ const handleAnalizaFoto = async (req, res) => {
       return res.status(400).json({ eroare: 'Tip fișier nepermis. Doar fisierele de tip imagine sunt acceptate.' });
     }
 
-    const fileBuffer = await fs.promises.readFile(req.file.path);
+    let fileBuffer = await fs.promises.readFile(req.file.path);
     const imageMime = detectImageMime(fileBuffer);
     if (!imageMime) {
       return res.status(400).json({ eroare: 'Tip fișier nepermis. Doar imagini JPEG/PNG/WEBP sunt acceptate.' });
     }
 
     const imageBase64 = fileBuffer.toString('base64');
+    // B-20: eliberam Buffer-ul brut dupa encodare. Base64-ul ramane necesar pe
+    // toata cascada (fiecare furnizor are nevoie de imagine), dar tinand ambele
+    // copii in heap dublam varful de memorie fara castig. Reducerea reala de
+    // payload vine din redimensionarea pe client (camera.tsx), inainte de upload.
+    fileBuffer = null;
 
     const requestedProvider = String(
       req.body?.provider || citesteQuery(req, 'provider') || 'auto',
@@ -901,8 +932,10 @@ Sarcina ta: Raspunde prietenos, tinand cont de istoricul discutiei si de calorii
 
       const data = await response.json();
       const raspunsText = data.choices?.[0]?.message?.content || 'Nu am putut genera un raspuns.';
+      inregistreazaAi({ provider: 'groq', model: 'llama-3.3-70b-versatile', ruta: 'chat', usage: data.usage, ok: true });
       return res.json({ raspuns: raspunsText });
     } catch (groqError) {
+      inregistreazaAi({ provider: 'groq', model: 'llama-3.3-70b-versatile', ruta: 'chat', ok: false });
       console.warn('Eroare Groq API in /api/chat, activam fallback Gemini text:', groqError.message || groqError);
 
       const geminiPrompt = `${systemPrompt}\n\nIstoricul conversatiei si intrebarea curenta:\n${messages.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n')}\n\nASSISTANT:`;
@@ -915,6 +948,7 @@ Sarcina ta: Raspunde prietenos, tinand cont de istoricul discutiei si de calorii
           }), 30000);
           const raspunsText = result?.response?.text();
           if (raspunsText) {
+            inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'chat', usage: result.response.usageMetadata, ok: true });
             return res.json({ raspuns: raspunsText });
           }
         } catch (gemErr) {
@@ -1160,12 +1194,18 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
         if (response.ok) {
           const data = await response.json();
           content = data.choices?.[0]?.message?.content;
-          if (content) break;
+          if (content) {
+            inregistreazaAi({ provider: 'groq', model: 'llama-3.3-70b-versatile', ruta: 'vision-fallback', usage: data.usage, ok: true });
+            break;
+          }
+          inregistreazaAi({ provider: 'groq', model: 'llama-3.3-70b-versatile', ruta: 'vision-fallback', ok: false });
         } else {
+          inregistreazaAi({ provider: 'groq', model: 'llama-3.3-70b-versatile', ruta: 'vision-fallback', ok: false });
           lastErr = new Error(`Groq API (${response.status})`);
           console.warn(`Groq vision-fallback esuat (${response.status})`);
         }
       } catch (e) {
+        inregistreazaAi({ provider: 'groq', model: 'llama-3.3-70b-versatile', ruta: 'vision-fallback', ok: false });
         lastErr = e;
         console.warn('Eroare Groq vision-fallback:', e.message);
       }
@@ -1184,12 +1224,18 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
           if (response.ok) {
             const data = await response.json();
             content = data.choices?.[0]?.message?.content;
-            if (content) break;
+            if (content) {
+              inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'vision-fallback', usage: data.usage, ok: true });
+              break;
+            }
+            inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'vision-fallback', ok: false });
           } else {
+            inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'vision-fallback', ok: false });
             lastErr = new Error(`OpenAI API (${response.status})`);
           }
         } catch (e) {
           // Inainte acest catch era gol: erorile OpenAI dispareau fara urma.
+          inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'vision-fallback', ok: false });
           lastErr = e;
           console.warn('Eroare OpenAI vision-fallback:', e.message);
         }
@@ -1211,9 +1257,14 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
             );
             if (result?.response) {
               content = result.response.text();
-              if (content) break;
+              if (content) {
+                inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'vision-fallback', usage: result.response.usageMetadata, ok: true });
+                break;
+              }
+              inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'vision-fallback', ok: false });
             }
           } catch (e) {
+            inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'vision-fallback', ok: false });
             lastErr = e;
             console.warn(`Gemini vision-fallback [${modelName}]:`, e.message);
           }

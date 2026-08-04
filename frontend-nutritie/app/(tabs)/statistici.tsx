@@ -96,6 +96,11 @@ export default function StatisticiScreen() {
       acum7Zile.setDate(acum7Zile.getDate() - 6);
       acum7Zile.setHours(0, 0, 0, 0);
 
+      // B-22: inchidem intervalul si cu limita superioara (azi, sfarsit de zi),
+      // ca interogarea sa fie un interval real, nu doar o margine inferioara.
+      const sfarsitAzi = new Date();
+      sfarsitAzi.setHours(23, 59, 59, 999);
+
       const { data, error } = await supabase
         .from('mese')
         .select('*')
@@ -103,6 +108,7 @@ export default function StatisticiScreen() {
         // Aduce datele din ultimele 7 zile. Supabase va face query bazat pe UTC,
         // dar filtrarea funcționează deoarece toISOString() ține cont de timpul local.
         .gte('created_at', acum7Zile.toISOString())
+        .lte('created_at', sfarsitAzi.toISOString())
         .order('created_at', { ascending: true });
 
       if (error) {
