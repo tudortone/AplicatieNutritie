@@ -607,10 +607,10 @@ export default function AntrenamenteScreen() {
           <View style={[styles.restBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
             <Timer size={18} color={colors.accent} />
             <Text style={[styles.restText, { color: colors.textPrimary }]}>Pauză {formatClock(restLeft)}</Text>
-            <Pressable onPress={() => setRestLeft((s) => s + 15)} style={[styles.restBtn, { borderColor: colors.cardBorder }]}>
+            <Pressable onPress={() => setRestLeft((s) => s + 15)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Prelungește pauza cu 15 secunde'>
               <Text style={[styles.restBtnText, { color: colors.textSecondary }]}>+15s</Text>
             </Pressable>
-            <Pressable onPress={() => setRestLeft(0)} style={[styles.restBtn, { borderColor: colors.cardBorder }]}>
+            <Pressable onPress={() => setRestLeft(0)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Sari peste pauză'>
               <Text style={[styles.restBtnText, { color: colors.textSecondary }]}>Skip</Text>
             </Pressable>
           </View>
