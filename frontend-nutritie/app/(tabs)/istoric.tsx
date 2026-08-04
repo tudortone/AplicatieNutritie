@@ -150,6 +150,8 @@ export default function HistoryScreen() {
                       mealSheetRef.current?.open(null, cat.id);
                     }}
                     activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Adaugă ${cat.label}`}
                   >
                     <PlusCircle size={15} color={colors.accent} />
                     <Text style={[styles.discreteAddBtnText, { color: colors.accent }]}>Adaugă {cat.label}</Text>
@@ -177,6 +179,8 @@ export default function HistoryScreen() {
                       mealSheetRef.current?.open(null, cat.id);
                     }}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Adaugă încă o masă la ${cat.label}`}
                   >
                     <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>
                       + Adaugă încă o masă la {cat.label}
@@ -196,9 +200,11 @@ export default function HistoryScreen() {
       <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Jurnalul tău</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.addBtnHeader, { backgroundColor: colors.accent + '20', borderColor: colors.accent + '40' }]}
             onPress={() => mealSheetRef.current?.open()}
+            accessibilityRole="button"
+            accessibilityLabel="Adaugă o masă"
           >
             <PlusCircle size={18} color={colors.accent} />
             <Text style={[styles.addBtnHeaderText, { color: colors.accent }]}>Adaugă</Text>
@@ -218,7 +224,7 @@ export default function HistoryScreen() {
             📅 {formatDataTitlu()}
           </Text>
           {!esteAzi && (
-            <TouchableOpacity onPress={() => setDataSelectata(new Date())} style={{ backgroundColor: colors.accent, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}>
+            <TouchableOpacity onPress={() => setDataSelectata(new Date())} style={{ backgroundColor: colors.accent, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }} accessibilityRole="button" accessibilityLabel="Revino la ziua de azi">
               <Text style={{ color: '#000', fontWeight: '800', fontSize: 12 }}>Revino la azi</Text>
             </TouchableOpacity>
           )}
@@ -255,13 +261,15 @@ export default function HistoryScreen() {
               </View>
             </View>
 
-            <TouchableOpacity 
-              style={[styles.addMealBtn, { backgroundColor: colors.accent }]} 
+            <TouchableOpacity
+              style={[styles.addMealBtn, { backgroundColor: colors.accent }]}
               activeOpacity={0.85}
               onPress={() => {
                 try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
                 mealSheetRef.current?.open();
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Adaugă masă"
             >
               <Text style={[styles.addMealBtnText, { color: colors.background }]}>Adaugă masă</Text>
             </TouchableOpacity>
