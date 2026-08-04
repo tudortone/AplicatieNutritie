@@ -18,6 +18,15 @@
  *      suprascrie datele nutritionale ale oricarui produs real, pentru toata lumea.
  *      Aici: intrarile de sistem sunt marcate `is_system` si nu pot fi suprascrise.
  *
+ * S-3 (audit 2026-08) — verificarea proprietarului si scrierea erau doua apeluri
+ *      separate. Intre ele exista o fereastra reala de timp: doua cereri concurente
+ *      pe acelasi cod treceau ambele verificarea, apoi ambele scriau. Nicio
+ *      verificare facuta in aplicatie nu poate inchide fereastra — doar baza de
+ *      date poate, pentru ca doar ea blocheaza randul.
+ *      Aici: scrierea trece prin RPC-ul `salveaza_produs_barcode_sigur`, care face
+ *      un singur INSERT ... ON CONFLICT DO UPDATE ... WHERE.
+ *      Migrarea: supabase/migrations/20260804_audit_critic.sql
+ *
  * Migrarile SQL necesare sunt in backend-nutritie-ai/PATCH-CRITIC.md.
  */
 
@@ -29,6 +38,48 @@ const GAZDA_OFF = 'world.openfoodfacts.org';
 const CALE_PRODUS_OFF = '/api/v2/product/';
 
 const esteCodBareValid = (cod) => REGEX_COD_BARE.test(String(cod ?? '').trim());
+
+/** Mesajele returnate de RPC-ul de scriere, mapate pe status HTTP si motiv. */
+const REZULTATE_SCRIERE = {
+	salvat: null,
+	cod_invalid: {
+		status: 400,
+		motiv: 'Cod de bare invalid.',
+	},
+	produs_de_sistem: {
+		status: 409,
+		motiv:
+			'Produsul exista deja intr-o baza de date verificata si nu poate fi suprascris.',
+	},
+	fara_proprietar: {
+		status: 409,
+		motiv:
+			'Produsul este inregistrat fara proprietar si nu poate fi suprascris.',
+	},
+	alt_proprietar: {
+		status: 409,
+		motiv:
+			'Produsul este deja inregistrat de alt utilizator si nu poate fi suprascris.',
+	},
+	refuzat: {
+		status: 403,
+		motiv: 'Nu ai dreptul sa scrii acest produs.',
+	},
+};
+
+/**
+ * Aruncata cand baza de date refuza scrierea. Poarta `status` si `motiv`, deci
+ * ruta o poate transforma direct in raspuns HTTP corect in loc de 500 generic.
+ */
+class EroareProprietateProdus extends Error {
+	constructor({ status, motiv, cod }) {
+		super(motiv);
+		this.name = 'EroareProprietateProdus';
+		this.status = status;
+		this.motiv = motiv;
+		this.cod = cod;
+	}
+}
 
 /**
  * Construieste URL-ul OpenFoodFacts pentru un cod de bare.
@@ -77,6 +128,9 @@ function normalizeazaProdusOff(product, cod) {
 /**
  * Citeste din cache-ul global. Contine doar date verificabile: OpenFoodFacts sau
  * contributii manuale ale utilizatorilor. Provenienta reala este pastrata.
+ *
+ * Nota RLS: `barcode_cache` are politica `USING (FALSE)`, deci este intentionat
+ * accesibila DOAR prin service_role. Aici clientul admin este corect, nu o scurtatura.
  */
 async function citesteDinCacheGlobal(supabaseAdmin, cod) {
 	const { data, error } = await supabaseAdmin
@@ -97,8 +151,17 @@ async function citesteDinCacheGlobal(supabaseAdmin, cod) {
 	};
 }
 
-/** Citeste estimarea AI salvata pentru un anumit utilizator. */
+/**
+ * Citeste estimarea AI salvata pentru un anumit utilizator.
+ *
+ * Nota RLS: `barcode_estimari_utilizator` ARE politica `auth.uid() = user_id`.
+ * Cand primeste un client legat de JWT-ul utilizatorului, filtrul `.eq('user_id')`
+ * devine redundant — dar este pastrat deliberat: apararea in adancime nu se
+ * bazeaza pe presupunerea ca apelantul a transmis clientul corect.
+ */
 async function citesteEstimareUtilizator(supabaseAdmin, { userId, cod }) {
+	if (!userId) return null;
+
 	const { data, error } = await supabaseAdmin
 		.from('barcode_estimari_utilizator')
 		.select('*')
@@ -141,6 +204,8 @@ async function salveazaProdusOff(supabaseAdmin, { cod, produs, payload }) {
  * generate de model si nu au ce cauta in datele altor utilizatori.
  */
 async function salveazaEstimareUtilizator(supabaseAdmin, { userId, cod, produs }) {
+	if (!userId) throw new Error('Lipseste userId pentru estimarea per utilizator.');
+
 	const { error } = await supabaseAdmin
 		.from('barcode_estimari_utilizator')
 		.upsert({
@@ -160,7 +225,12 @@ async function salveazaEstimareUtilizator(supabaseAdmin, { userId, cod, produs }
 
 /**
  * Decide daca un utilizator poate scrie peste o intrare din cache-ul global.
- * Intrarile de sistem sunt intangibile; cele manuale apartin primului creator.
+ *
+ * ATENTIE — aceasta functie este DOAR consultativa, pentru un mesaj de eroare
+ * rapid si prietenos. NU este o bariera de securitate: intre citirea de aici si
+ * scrierea de mai jos exista o fereastra de timp. Bariera reala este predicatul
+ * din `salveaza_produs_barcode_sigur`, evaluat sub blocarea randului.
+ * Nu adauga logica de autorizare aici. Adauga-o in RPC.
  */
 async function verificaDreptDeScriere(supabaseAdmin, { cod, userId }) {
 	const { data, error } = await supabaseAdmin
@@ -183,8 +253,7 @@ async function verificaDreptDeScriere(supabaseAdmin, { cod, userId }) {
 		return {
 			permis: false,
 			status: 409,
-			motiv:
-				'Produsul exista deja intr-o baza de date verificata si nu poate fi suprascris.',
+			motiv: REZULTATE_SCRIERE.produs_de_sistem.motiv,
 		};
 	}
 
@@ -194,8 +263,7 @@ async function verificaDreptDeScriere(supabaseAdmin, { cod, userId }) {
 		return {
 			permis: false,
 			status: 409,
-			motiv:
-				'Produsul este inregistrat fara proprietar si nu poate fi suprascris.',
+			motiv: REZULTATE_SCRIERE.fara_proprietar.motiv,
 		};
 	}
 
@@ -203,37 +271,62 @@ async function verificaDreptDeScriere(supabaseAdmin, { cod, userId }) {
 		return {
 			permis: false,
 			status: 409,
-			motiv:
-				'Produsul este deja inregistrat de alt utilizator si nu poate fi suprascris.',
+			motiv: REZULTATE_SCRIERE.alt_proprietar.motiv,
 		};
 	}
 
 	return { permis: true, status: 200, motiv: null };
 }
 
-/** Salveaza o contributie manuala, dupa verificarea dreptului de scriere. */
+/**
+ * Salveaza o contributie manuala.
+ *
+ * Scrierea si verificarea proprietatii se intampla acum in ACEEASI instructiune
+ * SQL, deci doua cereri concurente pe acelasi cod nu se mai pot suprascrie.
+ * Semnatura este neschimbata fata de varianta anterioara, deci apelantii nu
+ * necesita modificari; in schimb, la refuz arunca `EroareProprietateProdus`,
+ * care poarta `status` si `motiv` pentru un raspuns HTTP corect.
+ */
 async function salveazaProdusManual(supabaseAdmin, { cod, userId, valori }) {
-	const { error } = await supabaseAdmin.from('barcode_cache').upsert({
-		code: cod,
-		source: 'user_manual',
-		is_system: false,
-		created_by_user: userId,
-		brand: String(valori.brand || '').trim().substring(0, 100),
-		name: String(valori.name || '').trim().substring(0, 150),
-		quantity: String(valori.quantity || '').trim().substring(0, 50),
-		kcal_100g: valori.kcal_100g,
-		protein_100g: valori.protein_100g,
-		carbs_100g: valori.carbs_100g,
-		fat_100g: valori.fat_100g,
-		payload: { userInputs: true },
-		updated_at: new Date().toISOString(),
-	});
+	const codCurat = String(cod ?? '').trim();
+	if (!esteCodBareValid(codCurat)) {
+		throw new EroareProprietateProdus({
+			...REZULTATE_SCRIERE.cod_invalid,
+			cod: codCurat,
+		});
+	}
+
+	const { data, error } = await supabaseAdmin.rpc(
+		'salveaza_produs_barcode_sigur',
+		{
+			p_code: codCurat,
+			p_user_id: userId,
+			p_name: String(valori.name || '').trim().substring(0, 150),
+			p_brand: String(valori.brand || '').trim().substring(0, 100),
+			p_quantity: String(valori.quantity || '').trim().substring(0, 50),
+			p_kcal: valori.kcal_100g,
+			p_protein: valori.protein_100g,
+			p_carbs: valori.carbs_100g,
+			p_fat: valori.fat_100g,
+		},
+	);
+
 	if (error) throw new Error(error.message);
+
+	// RPC-ul returneaza text; supabase-js poate livra si un array cu un element.
+	const rezultat = Array.isArray(data) ? data[0] : data;
+
+	if (rezultat === 'salvat') return { rezultat };
+
+	const detalii = REZULTATE_SCRIERE[rezultat] || REZULTATE_SCRIERE.refuzat;
+	throw new EroareProprietateProdus({ ...detalii, cod: codCurat });
 }
 
 module.exports = {
 	REGEX_COD_BARE,
 	GAZDA_OFF,
+	REZULTATE_SCRIERE,
+	EroareProprietateProdus,
 	esteCodBareValid,
 	construiesteUrlOpenFoodFacts,
 	normalizeazaProdusOff,

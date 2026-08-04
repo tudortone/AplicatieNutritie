@@ -3,15 +3,17 @@
 /**
  * Cache LRU marginit pentru sesiuni deja validate criptografic.
  *
- * Rezolva C6. Implementarea anterioara din server.js avea doua defecte:
- *   1. Plafonul MAX_TOKEN_CACHE_ENTRIES era verificat DOAR pe ramura Supabase.
- *      Ramura Clerk apela tokenCache.set() fara nicio verificare, deci cache-ul
- *      putea creste nelimitat -> epuizare de memorie.
- *   2. Evacuarea prin `keys().next().value` era FIFO dupa inserare, nu LRU:
- *      elimina sesiunea cea mai veche, chiar daca era cea mai activa.
+ * Rezolva C6 (plafon aplicat pe orice cale de apel, evacuare LRU reala) si, in
+ * plus, fereastra de revocare semnalata la auditul urmator:
  *
- * Aici plafonul este aplicat in `set()`, deci pe orice cale de apel, iar
- * accesul prin `get()` reimprospateaza pozitia intrarii (LRU real).
+ *   Varianta anterioara memora identitatea 60 de secunde fara sa se uite vreodata
+ *   la `exp`-ul tokenului. Un logout, o schimbare de parola sau o suspendare de
+ *   cont ramaneau fara efect pana la 60s, iar un token expirat continua sa fie
+ *   acceptat cat timp era in cache.
+ *
+ * Acum `set()` accepta `expiraLaMs` (momentul real de expirare al tokenului) si
+ * foloseste minimul dintre acesta si TTL-ul cache-ului. Un token nu poate fi
+ * niciodata valabil in cache mai mult decat este valabil in realitate.
  *
  * Cheile trebuie sa fie hash-uri de token (SHA-256), niciodata token-uri brute.
  */
@@ -26,54 +28,68 @@ class TokenCache {
 		this.maxEntries = maxEntries;
 		this.ttlMs = ttlMs;
 		this._intrari = new Map();
+		this._statistici = { hits: 0, misses: 0, evacuari: 0, expirate: 0 };
 	}
 
 	get size() {
 		return this._intrari.size;
 	}
 
-	/**
-	 * Intoarce utilizatorul memorat sau null daca lipseste ori a expirat.
-	 * Reimprospateaza pozitia LRU la fiecare acces reusit.
-	 */
+	/** Metrici de dimensionare. Un cache fara observabilitate nu poate fi reglat. */
+	get statistici() {
+		return { ...this._statistici, dimensiune: this._intrari.size };
+	}
+
 	get(cheie) {
 		const intrare = this._intrari.get(cheie);
-		if (!intrare) return null;
+		if (!intrare) {
+			this._statistici.misses += 1;
+			return null;
+		}
 
 		if (Date.now() >= intrare.expiraLa) {
 			this._intrari.delete(cheie);
+			this._statistici.expirate += 1;
+			this._statistici.misses += 1;
 			return null;
 		}
 
 		// Reinserarea muta cheia la coada ordinii de iterare = cel mai recent folosit.
 		this._intrari.delete(cheie);
 		this._intrari.set(cheie, intrare);
+		this._statistici.hits += 1;
 		return intrare.utilizator;
 	}
 
 	/**
-	 * Memoreaza un utilizator validat. Plafonul se aplica aici, deci nicio cale
-	 * de apel nu il poate ocoli (spre deosebire de varianta din server.js).
+	 * @param {string} cheie Hash-ul tokenului.
+	 * @param {object} utilizator Identitatea validata.
+	 * @param {{ expiraLaMs?: number|null }} [optiuni] Expirarea reala a tokenului.
 	 */
-	set(cheie, utilizator) {
+	set(cheie, utilizator, { expiraLaMs = null } = {}) {
 		if (typeof cheie !== 'string' || !cheie) {
 			throw new TypeError('Cheia de cache trebuie sa fie un string nevid.');
 		}
 
-		if (this._intrari.has(cheie)) {
-			this._intrari.delete(cheie);
+		const acum = Date.now();
+		let expiraLa = acum + this.ttlMs;
+
+		if (Number.isFinite(expiraLaMs)) {
+			// Un token deja expirat nu se memoreaza deloc.
+			if (expiraLaMs <= acum) return;
+			expiraLa = Math.min(expiraLa, expiraLaMs);
 		}
+
+		if (this._intrari.has(cheie)) this._intrari.delete(cheie);
 
 		while (this._intrari.size >= this.maxEntries) {
 			const ceaMaiVeche = this._intrari.keys().next().value;
 			if (ceaMaiVeche === undefined) break;
 			this._intrari.delete(ceaMaiVeche);
+			this._statistici.evacuari += 1;
 		}
 
-		this._intrari.set(cheie, {
-			utilizator,
-			expiraLa: Date.now() + this.ttlMs,
-		});
+		this._intrari.set(cheie, { utilizator, expiraLa });
 	}
 
 	delete(cheie) {
@@ -84,7 +100,6 @@ class TokenCache {
 		this._intrari.clear();
 	}
 
-	/** Elimina intrarile expirate. Intoarce cate au fost sterse. */
 	pruneExpired() {
 		const acum = Date.now();
 		let sterse = 0;
@@ -94,10 +109,11 @@ class TokenCache {
 				sterse += 1;
 			}
 		}
+		this._statistici.expirate += sterse;
 		return sterse;
 	}
 
-	/** Porneste curatarea periodica. Timer-ul e unref-uit, nu tine procesul viu. */
+	/** Curatare periodica. Timer-ul e unref-uit, nu tine procesul viu. */
 	startSweeper(intervalMs = 5 * 60 * 1000) {
 		const ticker = setInterval(() => this.pruneExpired(), intervalMs);
 		if (typeof ticker.unref === 'function') ticker.unref();
