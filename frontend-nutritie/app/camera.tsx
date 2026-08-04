@@ -15,6 +15,7 @@ import { API_URL } from '@/constants/config';
 import Animated, { FadeIn, FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { X, Scan, Zap, ChevronDown, Plus, Heart, Image as ImageIcon, Send, Sparkles } from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useNotify } from '../hooks/useNotify';
@@ -36,6 +37,7 @@ const SCAN_BOX_SIZE = width * 0.78;
 
 export default function CameraScreen() {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { session } = useAuth();
   const { addFavorite, isFavorite } = useFavorite();
   const [permission, requestPermission] = useCameraPermissions();
@@ -255,7 +257,7 @@ export default function CameraScreen() {
 
       // 2. Dacă a crăpat (400, 401, 500 etc), afișăm motivul exact pe ecran
       if (!response.ok) {
-         Alert.alert("Eroare Server AI", data.eroare || "A apărut o problemă necunoscută la conectare.");
+         Alert.alert(t('alerts.titluri.eroareServerAI'), data.eroare || t('alerts.mesaje.problemaNecunoscutaConectare'));
          throw new Error(data.eroare || "Eroare de la server");
       }
 
@@ -271,8 +273,8 @@ export default function CameraScreen() {
       // Afisam eroarea si pentru utilizator
       console.error('❌ Eroare fallback detaliată:', error);
       Alert.alert(
-        'Eroare de conexiune',
-        'Nu s-a putut contacta serverul pentru corecție. Verifică conexiunea la internet.',
+        t('alerts.titluri.eroareConexiune'),
+        t('alerts.mesaje.serverCorectieInaccesibil'),
       );
     }
   };
@@ -320,7 +322,7 @@ export default function CameraScreen() {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert("Permisiune necesară", "Vă rugăm să acordați acces la galeria de poze pentru a putea selecta imagini.");
+        Alert.alert(t('alerts.titluri.permisiuneNecesara'), t('alerts.mesaje.permisiuneGaleriePoze'));
         return;
       }
 
@@ -335,7 +337,7 @@ export default function CameraScreen() {
       }
     } catch (e) {
       console.error("Eroare galerie:", e);
-      Alert.alert("Eroare", "Nu s-a putut deschide galeria.");
+      Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.galerieInaccesibila'));
     }
   };
 
@@ -346,8 +348,8 @@ export default function CameraScreen() {
     const invalide = rezultat.filter((r) => !r.estimare_grame || r.estimare_grame < 1);
     if (invalide.length > 0) {
       Alert.alert(
-        'Gramaj lipsă',
-        `Completează gramajul pentru: ${invalide.map((i) => i.nume).join(', ')}`
+        t('alerts.titluri.gramajLipsa'),
+        t('alerts.mesaje.completeazaGramajul', { lista: invalide.map((i) => i.nume).join(', ') })
       );
       return;
     }
@@ -394,12 +396,12 @@ export default function CameraScreen() {
       if (error) throw error;
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('✅ Succes', 'Masa a fost adăugată în jurnalul tău.', [
-        { text: 'Super!', onPress: () => router.replace('/(tabs)') },
+      Alert.alert(t('alerts.titluri.succes'), t('alerts.mesaje.masaAdaugataJurnal'), [
+        { text: t('alerts.butoane.superPunct'), onPress: () => router.replace('/(tabs)') },
       ]);
     } catch (e: any) {
       console.error('[adaugaInJurnal]', e);
-      Alert.alert('Eroare salvare', e?.message ?? 'Eroare necunoscută la salvarea mesei.');
+      Alert.alert(t('alerts.titluri.eroareSalvare'), e?.message ?? t('alerts.mesaje.eroareNecunoscutaSalvareMasa'));
     } finally {
       setIsSavingDiary(false);
     }

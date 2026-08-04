@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Play, Pause, Square } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 
 const TIMER_STORAGE_KEY = 'nutriai_active_workout_timer';
@@ -23,6 +24,7 @@ interface Props {
 
 export const WorkoutTimerBar: React.FC<Props> = ({ onLogWorkout }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [isRunning, setIsRunning] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [targetMinutes, setTargetMinutes] = useState(DEFAULT_TARGET_MINUTES);
@@ -127,15 +129,15 @@ export const WorkoutTimerBar: React.FC<Props> = ({ onLogWorkout }) => {
   const handleStopAndReset = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert(
-      "Oprește antrenamentul",
-      `Timp scurs: ${formatTime(seconds)}. Ce dorești să faci?`,
+      t('alerts.titluri.opresteAntrenamentul'),
+      t('alerts.mesaje.timpScurs', { timp: formatTime(seconds) }),
       [
         {
-          text: "Anulează",
+          text: t('alerts.butoane.anuleaza'),
           style: "cancel"
         },
         {
-          text: "doar Reset",
+          text: t('alerts.butoane.doarReset'),
           style: "destructive",
           onPress: async () => {
             setIsRunning(false);
@@ -144,7 +146,7 @@ export const WorkoutTimerBar: React.FC<Props> = ({ onLogWorkout }) => {
           }
         },
         {
-          text: "Salvează și Oprește",
+          text: t('alerts.butoane.salveazaSiOpreste'),
           onPress: async () => {
             setIsRunning(false);
             const minFinal = Math.max(1, Math.round(seconds / 60));

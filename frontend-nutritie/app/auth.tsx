@@ -12,6 +12,7 @@ import { BlurView } from 'expo-blur';
 import Animated, { FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -37,6 +38,7 @@ const getFriendlyErrorMessage = (rawMsg: string): string => {
 
 export default function AuthScreen() {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { contentMaxWidth, horizontalPadding, fontScale, isTablet } = useResponsiveLayout();
   const [email, setEmail] = useState('');
   const [parola, setParola] = useState('');
@@ -96,7 +98,7 @@ export default function AuthScreen() {
           try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
         } else {
           try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-          Alert.alert("Cont creat!", "Verifică-ți emailul pentru confirmare.");
+          Alert.alert(t('alerts.titluri.contCreat'), t('alerts.mesaje.verificaEmailConfirmare'));
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: parola });
@@ -118,11 +120,11 @@ export default function AuthScreen() {
 
   const resetParola = async () => {
     if (!email) {
-      Alert.alert("Email necesar", "Introduceți adresa de email pentru a vă reseta parola.");
+      Alert.alert(t('alerts.titluri.emailNecesar'), t('alerts.mesaje.emailNecesarResetare'));
       return;
     }
     if (!isValidEmail(email)) {
-      Alert.alert("Email invalid", "Te rugăm să introduci o adresă de email validă.");
+      Alert.alert(t('alerts.titluri.emailInvalid'), t('alerts.mesaje.emailInvalidDetalii'));
       return;
     }
     setLoading(true);
@@ -131,13 +133,13 @@ export default function AuthScreen() {
         redirectTo: 'nutriai://auth/callback',
       });
       if (error) {
-        Alert.alert("Eroare", error.message);
+        Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.eroareDinamica', { eroare: error.message }));
       } else {
-        Alert.alert("Email trimis", "Verificați căsuța de email pentru instrucțiunile de resetare a parolei.");
+        Alert.alert(t('alerts.titluri.emailTrimis'), t('alerts.mesaje.emailTrimisResetare'));
       }
     } catch (e: any) {
       console.error("Reset password error:", e);
-      Alert.alert("Eroare neașteptată", e?.message || "Nu s-a putut realiza conexiunea la server.");
+      Alert.alert(t('alerts.titluri.eroareNeasteptata'), e?.message || t('alerts.mesaje.conexiuneServerEsueaza'));
     } finally {
       setLoading(false);
     }
@@ -152,10 +154,10 @@ export default function AuthScreen() {
           redirectTo: 'nutriai://auth/callback',
         },
       });
-      if (error) Alert.alert("Eroare OAuth", error.message);
+      if (error) Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.eroareDinamica', { eroare: error.message }));
     } catch (e: any) {
       console.error("OAuth error:", e);
-      Alert.alert("Eroare OAuth", e?.message || "A apărut o problemă de conexiune.");
+      Alert.alert(t('alerts.titluri.eroareOAuth'), e?.message || t('alerts.mesaje.problemaConexiuneOAuth'));
     } finally {
       setLoading(false);
     }

@@ -108,7 +108,7 @@ export default function ProfilScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const permisiune = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permisiune.granted) {
-        Alert.alert("Permisiune necesară", "Avem nevoie de acces la galeria foto pentru a alege o poză de profil.");
+        Alert.alert(t('alerts.titluri.permisiuneNecesara'), t('alerts.mesaje.permisiuneGaleriaProfil'));
         return;
       }
       const rezultat = await ImagePicker.launchImageLibraryAsync({
@@ -181,11 +181,11 @@ export default function ProfilScreen() {
   };
 
   const deconectare = async () => {
-    Alert.alert("Deconectare", "Ești sigur că vrei să te deconectezi?", [
-      { text: "Anulează", style: "cancel" },
-      { 
-        text: "Deconectează", 
-        style: "destructive", 
+    Alert.alert(t('alerts.titluri.deconectare'), t('alerts.mesaje.confirmareDeconectare'), [
+      { text: t('alerts.butoane.anuleaza'), style: "cancel" },
+      {
+        text: t('alerts.butoane.deconecteaza'),
+        style: "destructive",
         onPress: async () => {
           // Ștergem toate datele utilizatorului din AsyncStorage
           const allKeys = await AsyncStorage.getAllKeys();
@@ -213,8 +213,8 @@ export default function ProfilScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!EMAIL_SUPORT) {
       Alert.alert(
-        'Contactează-ne',
-        'Adresa de e-mail pentru suport nu este configurată încă. Încearcă din nou în curând.'
+        t('alerts.titluri.contacteazaNe'),
+        t('alerts.mesaje.suportNeconfigurat')
       );
       return;
     }

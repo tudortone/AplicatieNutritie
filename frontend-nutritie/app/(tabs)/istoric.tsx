@@ -18,6 +18,7 @@ import { Flame, Activity, Clock, Trash2, Pencil, PlusCircle } from 'lucide-react
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useZileCuMese } from '../../hooks/useZileCuMese';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../supabase';
 import { Masa, TipMasa, AlimentDetaliat } from '../../types';
@@ -32,6 +33,7 @@ import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 export default function HistoryScreen() {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [dataSelectata, setDataSelectata] = useState(new Date());
   const [selectedMasaDetail, setSelectedMasaDetail] = useState<Masa | null>(null);
   const mealSheetRef = useRef<AddMealBottomSheetRef>(null);
@@ -77,12 +79,12 @@ export default function HistoryScreen() {
   // 1. Ștergere masă cu confirmare
   const handleDelete = (masa: Masa) => {
     Alert.alert(
-      "Ștergere masă",
-      `Ești sigur că vrei să ștergi "${masa.nume}" din jurnal?`,
+      t('alerts.titluri.stergereMasa'),
+      t('alerts.mesaje.confirmareStergere', { nume: masa.nume }),
       [
-        { text: "Anulează", style: "cancel" },
+        { text: t('alerts.butoane.anuleaza'), style: "cancel" },
         {
-          text: "Șterge",
+          text: t('alerts.butoane.sterge'),
           style: "destructive",
           onPress: async () => {
             try {
@@ -90,12 +92,12 @@ export default function HistoryScreen() {
               if (error) {
                 console.error("[Istoric] Stergere masa esuata:", error.message);
                 // FIX UI: utilizatorul vedea mesajul brut de la Postgres.
-                Alert.alert("Nu am putut sterge masa", "Incearca din nou in cateva momente.");
+                Alert.alert(t('alerts.titluri.nuAmPututStergeMasa'), t('alerts.mesaje.incearcaDinNou'));
               } else {
                 refresh();
               }
             } catch {
-              Alert.alert("Eroare", "A apărut o problemă la conexiune.");
+              Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.problemaConexiune'));
             }
           }
         }

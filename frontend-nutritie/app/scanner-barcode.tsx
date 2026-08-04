@@ -18,6 +18,7 @@ import { BlurView } from 'expo-blur';
 import { ScanLine, X, Plus, Package, Trash2, ArrowLeft, CheckCircle2, Sparkles, ShoppingBag, Snowflake, ChefHat, Clock, Layers, Check, Wand2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useNotificationBanner } from '../context/NotificationBannerContext';
 import { getProdusByBarcode, ProdusScanat } from '../lib/openfoodfacts';
@@ -28,6 +29,7 @@ import { ManualProductForm } from '../components/food/ManualProductForm';
 export default function ScannerBarcodeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { showBanner } = useNotificationBanner();
   const { produse, adaugaProdus, modificaCantitate, toggleCongelator, stergeProdus } = useCamara();
 
@@ -136,7 +138,7 @@ export default function ScannerBarcodeScreen() {
       setCamaraSuccessModal({ visible: true, produs: p });
     } catch (e) {
       console.error(e);
-      Alert.alert("Eroare", "Nu am putut salva în Cămară. Verifică conexiunea.");
+      Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.salvareCamaraEsueaza'));
     }
   };
 

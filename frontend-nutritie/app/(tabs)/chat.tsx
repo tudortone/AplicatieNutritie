@@ -14,6 +14,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut, Layout } from 'react-n
 import { Send, Sparkles, RotateCcw, MessageSquarePlus, CheckCircle2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import BouncingDot from '../../components/BouncingDot';
@@ -117,6 +118,7 @@ const isMealLogIntent = (text: string) => {
 
 export default function ChatScreen() {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { session } = useAuth();
   const insets = useSafeAreaInsets();
   const [chatInput, setChatInput] = useState('');
@@ -299,11 +301,11 @@ export default function ChatScreen() {
   const confirmMealProposal = async () => {
     // 1. Verificări stricte cu mesaje de eroare vizibile
     if (!mealProposal) {
-      Alert.alert("Eroare", "Datele mesei lipsesc sau sunt corupte.");
+      Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.dateMasaLipsesc'));
       return;
     }
     if (!session?.user?.id) {
-      Alert.alert("Eroare Autentificare", "Sesiunea a expirat. Te rog să te reconectezi din Profil.");
+      Alert.alert(t('alerts.titluri.eroareAutentificare'), t('alerts.mesaje.sesiuneExpirata'));
       return;
     }
 
@@ -345,7 +347,7 @@ export default function ChatScreen() {
 
       if (error) {
         console.error("Eroare Supabase:", error);
-        Alert.alert("Eroare la Salvare", `Baza de date a refuzat produsul: ${error.message}`);
+        Alert.alert(t('alerts.titluri.eroareLaSalvare'), t('alerts.mesaje.bazaDateRefuza', { eroare: error.message }));
         throw error;
       }
 
@@ -360,7 +362,7 @@ export default function ChatScreen() {
       console.error('Eroare salvare propunere masă:', e);
       // Dacă eroarea nu e de la Supabase, o prindem aici
       if (!e.message?.includes('Baza de date')) {
-          Alert.alert('Eroare Sistem', 'Nu s-a putut procesa salvarea. Verifică conexiunea la internet.');
+          Alert.alert(t('alerts.titluri.eroareSistem'), t('alerts.mesaje.salvareNeprocesata'));
       }
     } finally {
       setSavingProposal(false);

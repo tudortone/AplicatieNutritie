@@ -19,6 +19,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { ArrowLeft, Check, Heart, Trash2 } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,6 +41,7 @@ export default function AdaugaManualScreen() {
 
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { favorite, addFavorite, removeFavorite, isFavorite } = useFavorite();
 
@@ -101,20 +103,20 @@ export default function AdaugaManualScreen() {
 
   const handleSave = async () => {
     if (!nume.trim()) {
-      Alert.alert("Date incomplete", "Vă rugăm să introduceți numele alimentului sau al mesei.");
+      Alert.alert(t('alerts.titluri.dateIncomplete'), t('alerts.mesaje.dateIncompleteDetalii'));
       return;
     }
 
     const cal = Math.round(numar(calorii));
     if (cal === 0 && !calorii) {
-      Alert.alert("Calorii lipsă", "Introduceți numărul estimat de calorii pentru această masă.");
+      Alert.alert(t('alerts.titluri.caloriiLipsa'), t('alerts.mesaje.caloriiLipsaDetalii'));
       return;
     }
 
     setLoading(true);
     try {
       if (!user) {
-        Alert.alert("Eroare", "Trebuie să te autentifici pentru a adăuga mese.");
+        Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.autentificareNecesaraAdaugare'));
         return;
       }
 
@@ -154,16 +156,16 @@ export default function AdaugaManualScreen() {
         });
 
       if (insertError) {
-        Alert.alert("Eroare salvare", insertError.message);
+        Alert.alert(t('alerts.titluri.eroareSalvare'), t('alerts.mesaje.eroareSalvareDinamica', { eroare: insertError.message }));
       } else {
         Alert.alert(
-          "✅ Masă adăugată!", 
-          `"${numeFinal}" a fost înregistrată cu succes în jurnalul tău.`,
-          [{ text: "Super", onPress: () => router.back() }]
+          t('alerts.titluri.masaAdaugata'),
+          t('alerts.mesaje.masaAdaugataDetaliu', { nume: numeFinal }),
+          [{ text: t('alerts.butoane.super'), onPress: () => router.back() }]
         );
       }
     } catch {
-      Alert.alert("Eroare", "A apărut o problemă neașteptată la salvare.");
+      Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.problemaNeasteptataSalvare'));
     } finally {
       setLoading(false);
     }
@@ -405,7 +407,7 @@ export default function AdaugaManualScreen() {
               style={[styles.favSaveBtn, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
               onPress={() => {
                 if (!nume.trim()) {
-                  Alert.alert("Eroare", "Introduceți numele alimentului înainte de a-l salva ca favorit.");
+                  Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.numeNecesarFavorit'));
                   return;
                 }
                 addFavorite({

@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 
 import { API_URL } from '../constants/config';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useFavorite } from '../hooks/useFavorite';
@@ -62,6 +63,7 @@ interface BaseNutrition {
 export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBottomSheetProps>(
   ({ onSuccess, onPantryUsed }, ref) => {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const { user } = useAuth();
     const { favorite, addFavorite, removeFavorite, isFavorite } = useFavorite();
     const { adaugaProgres } = useGamificareContext();
@@ -169,7 +171,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) {
-          Alert.alert('Eroare', 'Nu ești autentificat. Reconectează-te.');
+          Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.nuEstiAutentificat'));
           return;
         }
         const res = await fetch(`${API_URL}/api/estimeaza-mancare-text`, {
@@ -210,10 +212,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           setSelectedCategory(null);
           scrollToGramajSection();
         } else {
-          Alert.alert("Eroare AI", "Nu am putut estima valorile. Încearcă să le introduci manual.");
+          Alert.alert(t('alerts.titluri.eroareAI'), t('alerts.mesaje.aiEstimareEsueaza'));
         }
       } catch {
-        Alert.alert("Eroare conexiune", "Verifică conexiunea la internet.");
+        Alert.alert(t('alerts.titluri.eroareConexiune'), t('alerts.mesaje.verificaConexiunea'));
       } finally {
         setAiEstimating(false);
       }
@@ -304,12 +306,12 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
     const handleSave = async () => {
       if (!isFormValid) {
-        Alert.alert("Formular invalid", "Verificați ca numele alimentului să aibă cel puțin 2 caractere și caloriile să fie un număr valid mai mare ca 0.");
+        Alert.alert(t('alerts.titluri.formularInvalid'), t('alerts.mesaje.formularInvalidDetalii'));
         return;
       }
 
       if (!user) {
-        Alert.alert("Eroare", "Trebuie să te autentifici pentru a înregistra mese.");
+        Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.autentificareNecesaraInregistrare'));
         return;
       }
 
@@ -353,7 +355,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         }
 
         if (err) {
-          Alert.alert("Eroare salvare", err.message);
+          Alert.alert(t('alerts.titluri.eroareSalvare'), t('alerts.mesaje.eroareSalvareDinamica', { eroare: err.message }));
         } else {
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -369,7 +371,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           }
         }
       } catch {
-        Alert.alert("Eroare", "A apărut o problemă neașteptată la salvare.");
+        Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.problemaNeasteptataSalvare'));
       } finally {
         setLoading(false);
       }
