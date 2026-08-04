@@ -212,6 +212,9 @@ export default function ScannerBarcodeScreen() {
       <Pressable
         onPress={() => toggleCamaraSelect(item.id)}
         style={[styles.pantryCard, { backgroundColor: colors.cardBg, borderColor: isSelected ? colors.accent : item.is_congelat ? '#00F0FF66' : colors.cardBorder }]}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: isSelected }}
+        accessibilityLabel={`${item.nume}${isSelected ? ', selectat' : ''}. Selectează pentru rețete AI`}
       >
         <TouchableOpacity
           onPress={() => toggleCamaraSelect(item.id)}
@@ -227,6 +230,9 @@ export default function ScannerBarcodeScreen() {
             marginRight: 12,
           }}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: isSelected }}
+          accessibilityLabel={isSelected ? `Deselectează ${item.nume}` : `Selectează ${item.nume}`}
         >
           {isSelected && <Check size={14} color={colors.background} strokeWidth={3} />}
         </TouchableOpacity>
@@ -264,6 +270,8 @@ export default function ScannerBarcodeScreen() {
             modificaCantitate(item.id, 1);
           }}
           style={[styles.stackBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Crește cantitatea pentru ${item.nume}`}
         >
           <Plus size={14} color={colors.textPrimary} />
         </TouchableOpacity>
@@ -275,6 +283,9 @@ export default function ScannerBarcodeScreen() {
             toggleCongelator(item.id);
           }}
           style={[styles.stackBtn, { backgroundColor: item.is_congelat ? '#00F0FF26' : 'rgba(255,255,255,0.06)' }]}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: item.is_congelat }}
+          accessibilityLabel={`${item.is_congelat ? 'Scoate din congelator' : 'Pune la congelator'} ${item.nume}`}
         >
           <Snowflake size={16} color={item.is_congelat ? '#00F0FF' : colors.textSecondary} />
         </TouchableOpacity>
@@ -322,6 +333,9 @@ export default function ScannerBarcodeScreen() {
               styles.tabBtn,
               activeTab === 'scan' && { backgroundColor: colors.accent },
             ]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeTab === 'scan' }}
+            accessibilityLabel="Fila scanare cod de bare"
           >
             <Text style={[styles.tabText, { color: activeTab === 'scan' ? '#000' : colors.textPrimary }]}>
               Scanare Barcode
@@ -333,6 +347,9 @@ export default function ScannerBarcodeScreen() {
               styles.tabBtn,
               activeTab === 'camara' && { backgroundColor: colors.accent },
             ]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeTab === 'camara' }}
+            accessibilityLabel={`Fila inventar cămară, ${produse.length} produse`}
           >
             <Text style={[styles.tabText, { color: activeTab === 'camara' ? '#000' : colors.textPrimary }]}>
               Inventar ({produse.length})
@@ -445,6 +462,8 @@ export default function ScannerBarcodeScreen() {
                 <TouchableOpacity
                   onPress={handleSalveazaInCamara}
                   style={[styles.actionBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Salvează ${produsGasit.nume} în cămară`}
                 >
                   <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>+ În Cămară</Text>
                 </TouchableOpacity>
@@ -452,6 +471,8 @@ export default function ScannerBarcodeScreen() {
                 <TouchableOpacity
                   onPress={() => handleAdaugaLaMasa(produsGasit)}
                   style={[styles.actionBtnPrimary, { backgroundColor: colors.accent }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Adaugă ${produsGasit.nume} la masă în grame`}
                 >
                   <Text style={styles.actionPrimaryText}>Adaugă la Masă (g)</Text>
                 </TouchableOpacity>
@@ -492,6 +513,8 @@ export default function ScannerBarcodeScreen() {
                     addMealSheetRef.current?.open();
                   }}
                   style={[styles.actionBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Completează produsul manual"
                 >
                   <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>Completează manual</Text>
                 </TouchableOpacity>
@@ -511,6 +534,8 @@ export default function ScannerBarcodeScreen() {
                     });
                   }}
                   style={[styles.actionBtnPrimary, { backgroundColor: colors.accent }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Estimează valorile produsului după nume"
                 >
                   <Text style={styles.actionPrimaryText}>Estimează după nume</Text>
                 </TouchableOpacity>
@@ -535,6 +560,8 @@ export default function ScannerBarcodeScreen() {
                 borderWidth: 1.5,
                 borderColor: '#00F0FF'
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Cere rețete AI cu ingredientele din cămară"
             >
               <ChefHat size={18} color="#00F0FF" />
               <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#00F0FF' }}>
@@ -556,6 +583,8 @@ export default function ScannerBarcodeScreen() {
                 borderWidth: 1,
                 borderColor: colors.cardBorder
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Adaugă produs manual în cămară"
             >
               <Plus size={16} color={colors.accent} />
               <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textPrimary }}>
@@ -581,6 +610,8 @@ export default function ScannerBarcodeScreen() {
                 <TouchableOpacity
                   onPress={() => setActiveTab('scan')}
                   style={[styles.emptyPBtn, { backgroundColor: colors.accent }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Scanează primul produs"
                 >
                   <Text style={styles.emptyPBtnText}>Scanează Primul Produs</Text>
                 </TouchableOpacity>
@@ -621,6 +652,8 @@ export default function ScannerBarcodeScreen() {
                   }}
                   onPress={handleGateateCuAICamara}
                   activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Gătește cu AI folosind ${selectedCamaraItems.length} ingrediente selectate`}
                 >
                   <Wand2 size={18} color="#000" strokeWidth={2.5} />
                   <Text style={{ fontSize: 15, fontWeight: '800', color: '#000' }}>
@@ -672,6 +705,8 @@ export default function ScannerBarcodeScreen() {
                   setCamaraSuccessModal({ visible: false, produs: null });
                   lockRef.current = false;
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="Continuă scanarea codurilor de bare"
               >
                 <Text style={[styles.successBtnSecondaryText, { color: colors.textPrimary }]}>Continuă Scanarea</Text>
               </TouchableOpacity>
@@ -683,6 +718,8 @@ export default function ScannerBarcodeScreen() {
                   lockRef.current = false;
                   setActiveTab('camara');
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="Vezi cămara"
               >
                 <ShoppingBag size={18} color="#000" />
                 <Text style={styles.successBtnPrimaryText}>Vezi Cămara</Text>
@@ -704,7 +741,7 @@ export default function ScannerBarcodeScreen() {
           <View style={[styles.successModalCard, { backgroundColor: colors.surfaceBg, borderColor: colors.accent, width: '92%' }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 14 }}>
               <Text style={{ fontSize: 18, fontWeight: '900', color: colors.textPrimary }}>+ Adaugă Produs Manual</Text>
-              <TouchableOpacity onPress={() => setManualModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+              <TouchableOpacity onPress={() => setManualModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} accessibilityRole="button" accessibilityLabel="Închide adăugarea manuală">
                 <X size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -739,6 +776,8 @@ export default function ScannerBarcodeScreen() {
                     setManualModalVisible(false);
                     showBanner({ title: 'Produs Adăugat', message: `✅ ${preset.nume} a fost adăugat în Cămară!`, type: 'success' });
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Adaugă ${preset.nume} în cămară`}
                   style={{
                     flexDirection: 'row',
                     justifyContent: 'space-between',
@@ -777,6 +816,8 @@ export default function ScannerBarcodeScreen() {
                   marginTop: 6,
                   gap: 8,
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="Introdu alt produs complet manual"
               >
                 <Plus size={18} color={colors.accent} />
                 <Text style={{ fontSize: 14, fontWeight: '800', color: colors.accent }}>
