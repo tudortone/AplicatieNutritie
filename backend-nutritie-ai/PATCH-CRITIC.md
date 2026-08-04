@@ -1,11 +1,15 @@
-# Remediere probleme critice — ghid de integrare
+# Remediere probleme critice — jurnal al remedierilor aplicate
 
-Modulele din `utils/` conțin logica reparată și sunt gata de folosit.
-**`server.js` nu a fost modificat** — are 76 KB într-un singur fișier și o rescriere
-integrală prin API ar fi riscat coruperea lui tăcută. Mai jos sunt editările exacte,
-fiecare mică și verificabilă la review.
+> **STATUS: INTEGRAT (2026-08).** Toate remedierile C1–C8 descrise mai jos sunt aplicate
+> în `server.js` și în modulele din `utils/`, acum pe `main`. Acest fișier a fost inițial
+> un ghid de integrare scris „înainte de aplicare"; îl păstrăm ca documentație a CE și
+> DE CE a fost schimbat. Codul curent este sursa de adevăr, iar pașii de mai jos
+> documentează modificările deja integrate.
 
-Ordinea contează: **migrările SQL se rulează înaintea deploy-ului de cod.**
+Modulele din `utils/` conțin logica remediată, integrată în `server.js`. Fiecare
+corectură este izolată într-un modul dedicat, verificabil la review.
+
+La integrare, ordinea a contat: **migrările SQL s-au rulat înaintea deploy-ului de cod.**
 
 ---
 
@@ -199,9 +203,10 @@ async function requireAuth(req, res, next) {
 Un token Clerk fără mapare primește 409 cu codul `CLERK_NEMAPAT` — fail-closed,
 în loc să scrie o identitate paralelă în `mese`.
 
-> **De făcut separat:** fluxul care populează `clerk_user_map`. Până atunci,
-> autentificarea prin Clerk răspunde 409. Dacă Clerk nu e folosit în producție,
-> lasă `CLERK_SECRET_KEY` nesetată și calea nici nu se activează.
+> **Actualizat:** fluxul care populează `clerk_user_map` este acum implementat în
+> `utils/identitate.js` (upsert pe mapare la logon Clerk). Un token Clerk nemapat
+> răspunde în continuare 409 (fail-closed), iar fără `CLERK_SECRET_KEY` setată
+> calea Clerk nici nu se activează.
 
 ---
 
@@ -248,9 +253,9 @@ const alUtilizatorului = await citesteEstimareUtilizator(supabaseAdmin, { userId
 if (alUtilizatorului) return res.json({ ...alUtilizatorului.produs, sursa: 'estimare_ai', estimat: true });
 ```
 
-> **De făcut în frontend:** `scanner-barcode.tsx` trebuie să afișeze un avertisment
-> vizibil când `estimat === true`. Altfel valorile generate de model ajung în jurnal
-> ca și cum ar fi măsurate.
+> **Actualizat:** `scanner-barcode.tsx` afișează acum un avertisment vizibil când
+> `estimat === true` (sau `sursa === 'estimare_ai'`), marcând valorile generate de
+> model ca estimări, nu ca date măsurate.
 
 ### C3 — dreptul de scriere
 

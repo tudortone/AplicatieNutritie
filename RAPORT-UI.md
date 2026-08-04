@@ -89,25 +89,31 @@ scroll între slide-uri, deci carusel dezaliniat.
 
 ---
 
-## B. Rămas de făcut (nu sunt defecte punctuale, ci lucrări extinse)
+## B. Lista inițială „rămas de făcut" — status curent (după ETAPELE 4–6)
 
 1. **Etichete de accesibilitate pe restul butoanelor** — ~225 elemente interactive fără
-   etichetă (`chat.tsx` 23, `camera.tsx` 22, `statistici.tsx` 15). Majoritatea sunt
-   butoane-iconiță, deci VoiceOver/TalkBack anunță doar „buton". Necesită o decizie de
-   text pentru fiecare, nu se poate automatiza corect.
-2. **`testID`: 0 apariții** în tot proiectul → niciun test de interfață nu poate ținti nimic.
-3. **32 `Alert.alert` cu text hardcodat în română**, deși `i18n/` există și e importat în
-   `_layout.tsx`. Schimbarea limbii nu afectează nicio alertă.
-4. **149 obiecte de stil inline** (`scanner-barcode` 38, `(tabs)/index` 23, `profil` 21) —
-   recreate la fiecare render, anulează memoizarea.
+   etichetă la audit.
+   → **REZOLVAT (B-25, 2026-08-04):** `accessibilityRole` + `accessibilityLabel`/
+   `accessibilityState` aplicate pe butoanele principale din toate ecranele.
+2. **`testID`: 0 apariții** la audit → niciun test de interfață nu putea ținti nimic.
+   → **ÎN CURS (B-29):** 8 `testID` pe 4 fișiere (butoanele principale); extinderea
+   pe restul elementelor testabile e în lucru.
+3. **32 `Alert.alert` cu text hardcodat în română** — schimbarea limbii nu afecta alertele.
+   → **REZOLVAT (B-26, 2026-08-04):** toate cele 41 de `Alert.alert` trec prin `t()`
+   (`i18n/locales/ro.json` + `en.json`); 0 alerte hardcodate rămase.
+4. **149 obiecte de stil inline** — recreate la fiecare render, anulează memoizarea.
+   → **ÎN CURS (B-27):** ~235 de `style={{ }}` rămân în 35 de fișiere
+   (`scanner-barcode` 41, `(tabs)/index` 23, `(tabs)/profil` 33, `AddMealBottomSheet` 32).
+   Încă nerezolvat.
 5. **`numberOfLines` lipsește** pe majoritatea textelor lungi → numele lungi de alimente
-   ies din card.
+   ieșeau din card.
+   → **REZOLVAT (B-24):** `numberOfLines` aplicat pe textele lungi (33 de utilizări în 20 de fișiere).
 6. **Pull-to-refresh** doar pe 3 din 18 ecrane.
-7. **`heatColor.ts`**: intensitatea 0 returnează `COLOR_REST` (albastru), deci un mușchi
-   niciodată antrenat arată identic cu unul odihnit. Recomandare (2 linii):
-   `export const COLOR_INACTIVE = '#3F3F46';` + `if (x <= 0.001) return COLOR_INACTIVE;`
-   la începutul lui `heatColor()`. Nu am inclus-o în patch pentru că fișierul nu există în
-   exportul local și un context greșit ar face `git apply` să eșueze pe tot patch-ul.
+   → **ÎN CURS (B-28):** `RefreshControl` prezent pe cele 5 ecrane din tab navigation
+   (index, statistici, antrenamente, istoric, profil); restul ecranelor în lucru.
+7. **`heatColor.ts`**: intensitatea 0 arăta un mușchi niciodată antrenat identic cu unul odihnit.
+   → **REZOLVAT (2026-08-04):** `COLOR_INACTIVE = '#3F3F46'` în
+   `components/fitness/heatColor.ts`, returnat la `intensity <= 0`.
 
 ---
 
