@@ -256,7 +256,7 @@ export default function ProfilScreen() {
 
         {/* Avatar header */}
         <Animated.View entering={FadeInDown.duration(500)} style={styles.avatarSection}>
-          <TouchableOpacity activeOpacity={0.85} onPress={alegePozaProfil}>
+          <TouchableOpacity activeOpacity={0.85} onPress={alegePozaProfil} accessibilityRole="button" accessibilityLabel="Alege o poză de profil">
             <LinearGradient colors={colors.accentGradient} style={[styles.avatarRing, { shadowColor: colors.accent }]}>
               <View style={[styles.avatarInner, { backgroundColor: '#0F1318', overflow: 'hidden' }]}>
                 {avatarUrl ? (
@@ -335,6 +335,9 @@ export default function ProfilScreen() {
                   ]}
                   onPress={() => setTheme(tName)}
                   activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  accessibilityLabel={`Tema ${themeDisplayNames[tName]}`}
                 >
                   <View style={styles.themeSwatchRow}>
                     <View style={[styles.themeSwatch, { backgroundColor: tColors.background }]} />
@@ -459,6 +462,9 @@ export default function ProfilScreen() {
                         }}
                         onPress={() => setProvider(p.id)}
                         activeOpacity={0.75}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: active }}
+                        accessibilityLabel={`Sincronizare cu ${p.name}`}
                       >
                         <Text style={{ fontSize: 22 }}>{p.icon}</Text>
                         <View style={{ flex: 1 }}>
@@ -497,6 +503,8 @@ export default function ProfilScreen() {
               alignItems: 'center',
               gap: 14,
             }}
+            accessibilityRole="button"
+            accessibilityLabel="Detalii abonament NutriAI Premium"
           >
             <View
               style={{
@@ -539,6 +547,8 @@ export default function ProfilScreen() {
               alignItems: 'center',
               gap: 14,
             }}
+            accessibilityRole="button"
+            accessibilityLabel="Upgrade la planul Family"
           >
             <View
               style={{
@@ -636,7 +646,7 @@ export default function ProfilScreen() {
         <Animated.View entering={FadeInDown.duration(600).delay(100)}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('profile.daily_targets')}</Text>
 
-          <TouchableOpacity style={[styles.aiSetupBtn, { borderColor: colors.accent + '33' }]} onPress={() => router.push('/calculator-ai')}>
+          <TouchableOpacity style={[styles.aiSetupBtn, { borderColor: colors.accent + '33' }]} onPress={() => router.push('/calculator-ai')} accessibilityRole="button" accessibilityLabel="Asistent configurare profil cu AI">
             <LinearGradient colors={[colors.accent + '25', 'rgba(0,0,0,0)']} style={styles.aiSetupGrad}>
               <Sparkles size={22} color={colors.accent} />
               <View style={styles.aiSetupTextWrap}>
@@ -768,7 +778,7 @@ export default function ProfilScreen() {
 
         {/* Save button */}
         <Animated.View entering={FadeInDown.duration(600).delay(200)}>
-          <TouchableOpacity style={[styles.saveBtn, { shadowColor: colors.accent }]} onPress={salveaza} disabled={loading}>
+          <TouchableOpacity style={[styles.saveBtn, { shadowColor: colors.accent }]} onPress={salveaza} disabled={loading} accessibilityRole="button" accessibilityLabel="Salvează profilul">
             <LinearGradient colors={colors.accentGradient} style={styles.saveBtnGrad}>
               {loading ? (
                 <ActivityIndicator color={colors.background} />
@@ -803,6 +813,8 @@ export default function ProfilScreen() {
                 style={[styles.inputRow, { alignItems: 'center' }]}
                 onPress={abreSuport}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Contactează echipa de suport"
               >
                 <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
                   <Mail size={18} color={colors.accent} />
@@ -822,6 +834,8 @@ export default function ProfilScreen() {
                 style={[styles.inputRow, { alignItems: 'center' }]}
                 onPress={() => router.push('/legal' as never)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Termeni și confidențialitate"
               >
                 <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
                   <FileText size={18} color={colors.accent} />
@@ -838,7 +852,7 @@ export default function ProfilScreen() {
 
         {/* Logout */}
         <Animated.View entering={FadeInUp.duration(600).delay(400)}>
-          <TouchableOpacity style={[styles.logoutBtn, { borderColor: colors.danger + '33', backgroundColor: colors.danger + '0A' }]} onPress={deconectare}>
+          <TouchableOpacity style={[styles.logoutBtn, { borderColor: colors.danger + '33', backgroundColor: colors.danger + '0A' }]} onPress={deconectare} accessibilityRole="button" accessibilityLabel="Deconectează-te din aplicație">
             <LogOut size={18} color={colors.danger} />
             <Text style={[styles.logoutText, { color: colors.danger }]}>Deconectare</Text>
           </TouchableOpacity>
