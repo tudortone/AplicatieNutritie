@@ -1,0 +1,752 @@
+openapi: 3.1.0
+info:
+  title: NutriAI Backend API
+  description: |
+    API-ul serverului NutriAI — analiză AI de mâncare (foto/text), chat nutrițional,
+    coduri de bare, jurnal de mese, validare premium și rute GDPR.
+
+    Toate rutele protejate așteaptă header-ul `Authorization: Bearer <token>` cu un
+    JWT valid (Supabase sau Clerk). Erorile răspund cu obiectul `{ "eroare": string }`
+    și codul HTTP potrivit.
+  version: 2.4.0
+servers:
+  - url: https://nutritie-backend-ai.onrender.com
+    description: Producție (Render)
+  - url: http://localhost:3000
+    description: Dezvoltare locală
+security:
+  - bearerAuth: []
+paths:
+  /:
+    get:
+      summary: Stare serviciu (root)
+      security: []
+      responses:
+        '200':
+          description: Serviciu funcțional
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: OK }
+                  service: { type: string }
+                  version: { type: string }
+                  timestamp: { type: string, format: date-time }
+  /health:
+    get:
+      summary: Health check (keep-alive)
+      security: []
+      responses:
+        '200':
+          description: Sănătos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  healthy: { type: boolean, example: true }
+                  uptime: { type: number }
+                  timestamp: { type: string, format: date-time }
+  /api/ai-status:
+    get:
+      summary: Stare furnizori AI + metrici
+      description: Status (active/cooldown) pentru Gemini, OpenAI, Groq, OpenRouter și metrici de tokeni/cost.
+      security: []
+      responses:
+        '200':
+          description: Status curent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  gemini: { $ref: '#/components/schemas/ProviderStatus' }
+                  openai: { $ref: '#/components/schemas/ProviderStatus' }
+                  groq: { $ref: '#/components/schemas/ProviderStatus' }
+                  openrouter: { $ref: '#/components/schemas/ProviderStatus' }
+                  metriciAi: { type: object }
+  /api/imagekit-auth:
+    get:
+      summary: Parametri de autentificare ImageKit
+      description: Token + parametri pentru upload direct pe ImageKit. 503 dacă ImageKit nu e configurat.
+      responses:
+        '200':
+          description: Parametri de upload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  expire: { type: integer }
+                  signature: { type: string }
+                  urlEndpoint: { type: string }
+        '503':
+          $ref: '#/components/responses/Disabled'
+  /api/trigger-analiza-mancare:
+    post:
+      summary: Trimite analiza AI în fundal (Trigger.dev)
+      description: Programează un task asincron de analiză a imaginii. 503 dacă TRIGGER_SECRET_KEY lipsește.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageUrl]
+              properties:
+                imageUrl:
+                  type: string
+                  format: uri
+                  description: URL HTTPS pe stocarea aplicației (ImageKit/Supabase) — altfel SSRF.
+                tipMasa:
+                  type: string
+                  default: Pranz
+      responses:
+        '200':
+          description: Task programat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  succes: { type: boolean, example: true }
+                  taskId: { type: string }
+                  status: { type: string, example: pending }
+                  mesaj: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '503': { $ref: '#/components/responses/Disabled' }
+  /api/analiza-foto:
+    post:
+      summary: Analiză AI a unei fotografii cu mâncare
+      description: Upload multipart (`imagine`). Returnează lista alimentelor identificate cu valori per 100g.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [imagine]
+              properties:
+                imagine:
+                  type: string
+                  format: binary
+                  description: Imagine JPEG/PNG/WEBP, max 5MB.
+                provider:
+                  type: string
+                  enum: [auto, gemini, openai, groq, openrouter]
+                  default: auto
+      responses:
+        '200':
+          description: Alimente identificate
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AlimentAnalizat' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '413': { $ref: '#/components/responses/FileTooLarge' }
+        '429': { $ref: '#/components/responses/Cooldown' }
+        '503': { $ref: '#/components/responses/AIFail' }
+  /api/analizeaza-mancare-structurat:
+    post:
+      summary: Analiză AI structurată a unei fotografii (alias)
+      description: Identic cu `/api/analiza-foto` (același handler).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [imagine]
+              properties:
+                imagine:
+                  type: string
+                  format: binary
+                  description: Imagine JPEG/PNG/WEBP, max 5MB.
+                provider:
+                  type: string
+                  enum: [auto, gemini, openai, groq, openrouter]
+                  default: auto
+      responses:
+        '200':
+          description: Alimente identificate
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AlimentAnalizat' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '413': { $ref: '#/components/responses/FileTooLarge' }
+        '503': { $ref: '#/components/responses/AIFail' }
+  /api/chat:
+    post:
+      summary: Chat nutrițional AI
+      description: Groq (Llama 3.3) cu fallback Gemini. Poate răspunde cu MEAL_PROPOSAL JSON când utilizatorul loghează o masă.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mesaj]
+              properties:
+                mesaj: { type: string }
+                mesaje:
+                  type: array
+                  description: Istoric conversație ({ role, content }).
+                caloriiConsumate: { type: number }
+                caloriiTinta: { type: number }
+                proteineConsumate: { type: number }
+                proteineTinta: { type: number }
+      responses:
+        '200':
+          description: Răspuns AI
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  raspuns: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/log-food-from-chat:
+    post:
+      summary: Generează propunere de masă (MEAL_PROPOSAL) din chat
+      description: AI extrage alimentele menționate (inclusiv din istoric) într-un obiect JSON pentru jurnal.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mesaj]
+              properties:
+                mesaj: { type: string }
+                mesaje:
+                  type: array
+                  description: Istoric conversație (max 6 mesaje).
+      responses:
+        '200':
+          description: Propunere de masă
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MealProposal' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/estimeaza-mancare-text:
+    post:
+      summary: Estimează valorile nutriționale dintr-o descriere text
+      description: O porție standard din alimentul descris. Supusă plafonului zilnic AI.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 200 }
+      responses:
+        '200':
+          description: Valori estimate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nume: { type: string }
+                  calorii: { type: number }
+                  proteine: { type: number }
+                  carbohidrati: { type: number }
+                  grasimi: { type: number }
+                  gramajDefault: { type: number }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/QuotaExceeded' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/vision-fallback:
+    post:
+      summary: Corectare / combinare ingrediente din imagine + text
+      description: "Smart merge or replace: corectează lista de ingrediente după explicația utilizatorului. Supusă plafonului zilnic AI."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_prompt]
+              properties:
+                user_prompt: { type: string, maxLength: 500 }
+                current_ingredients:
+                  type: array
+                  description: Lista curentă de ingrediente ({ nume, calorii_per_100g, ... }).
+      responses:
+        '200':
+          description: Ingrediente corectate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  action_taken: { type: string, enum: [replaced, appended] }
+                  ingredients:
+                    type: array
+                    items: { $ref: '#/components/schemas/IngredientCorectat' }
+                  new_totals:
+                    type: object
+                    properties:
+                      kcal: { type: number }
+                      proteine: { type: number }
+                      grasimi: { type: number }
+                      carbohidrati: { type: number }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/QuotaExceeded' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/corecteaza-mancare-vizual-text:
+    post:
+      summary: Corectare vizual→text (alias vision-fallback)
+      description: Identic cu `/api/vision-fallback` (același handler).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_prompt]
+              properties:
+                user_prompt: { type: string, maxLength: 500 }
+                current_ingredients:
+                  type: array
+      responses:
+        '200':
+          description: Ingrediente corectate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  action_taken: { type: string, enum: [replaced, appended] }
+                  ingredients:
+                    type: array
+                    items: { $ref: '#/components/schemas/IngredientCorectat' }
+                  new_totals:
+                    type: object
+                    properties:
+                      kcal: { type: number }
+                      proteine: { type: number }
+                      grasimi: { type: number }
+                      carbohidrati: { type: number }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/QuotaExceeded' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/produs-barcode/{code}:
+    get:
+      summary: Caută produs după cod de bare
+      description: |
+        Cascadă: cache global → estimare per utilizator → OpenFoodFacts → estimare AI.
+        Răspunsul are contract unic `{ produs, sursa, source, estimat, dinCache }`.
+        404 cu `allowManualEntry` când produsul nu există.
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9]{4,20}$'
+          description: Cod EAN/UPC (4–20 cifre)
+      responses:
+        '200':
+          description: Produs găsit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  produs: { $ref: '#/components/schemas/ProdusBarcode' }
+                  sursa: { type: string, enum: [openfoodfacts, estimare_ai] }
+                  source: { type: string }
+                  estimat: { type: boolean }
+                  dinCache: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404':
+          description: Produs negăsit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eroare: { type: string, example: 'Produsul nu a fost gasit.' }
+                  allowManualEntry: { type: boolean, example: true }
+                  suggestedAction: { type: string, example: manual_or_ai_text }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/salveaza-produs-barcode:
+    post:
+      summary: Salvează un produs completat manual (cache per utilizator)
+      description: Validare strictă a valorilor nutriționale; conflict de proprietate → 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name]
+              properties:
+                code: { type: string, pattern: '^[0-9]{4,20}$' }
+                name: { type: string }
+                brand: { type: string }
+                quantity: { type: string }
+                kcal_100g: { type: number, minimum: 0, maximum: 1000 }
+                protein_100g: { type: number, minimum: 0, maximum: 100 }
+                carbs_100g: { type: number, minimum: 0, maximum: 100 }
+                fat_100g: { type: number, minimum: 0, maximum: 100 }
+      responses:
+        '200':
+          description: Salvat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  succes: { type: boolean, example: true }
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: Produs deținut de alt utilizator
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/calculeaza-profil:
+    post:
+      summary: Calculează țintele nutriționale (Mifflin-St Jeor)
+      description: "Deterministic, fără AI. Valori: calorii, proteine, grasimi, carbohidrati țintă."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [varsta, greutate, inaltime, sex, activitate, obiectiv]
+              properties:
+                varsta: { type: integer, minimum: 10, maximum: 100 }
+                greutate: { type: number, minimum: 30, maximum: 300 }
+                inaltime: { type: number, minimum: 100, maximum: 250 }
+                sex: { type: string, enum: [Masculin, Feminin] }
+                activitate: { type: string, enum: [Sedentar, Moderat, 'Foarte Activ'] }
+                obiectiv: { type: string, enum: [Slăbire, Menținere, 'Masă Musculară'] }
+      responses:
+        '200':
+          description: Ținte calculate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  caloriiTinta: { type: integer }
+                  proteineTinta: { type: integer }
+                  grasimiTinta: { type: integer }
+                  carbiTinta: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/mese:
+    post:
+      summary: Adaugă o masă în jurnal
+      description: |
+        `user_id` vine exclusiv din identitatea JWT, niciodată din corpul cererii.
+        Validare partajată (`utils/validareMese.js`). Caloriile sunt obligatorii.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MasaInput' }
+      responses:
+        '200':
+          description: Masă creată
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  succes: { type: boolean, example: true }
+                  masa: { $ref: '#/components/schemas/Masa' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/mese/{id}:
+    put:
+      summary: Actualizează o masă
+      description: Câmpurile absente rămân neatinse. `id` trebuie să fie un UUID care aparține utilizatorului.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MasaInput' }
+      responses:
+        '200':
+          description: Masă actualizată
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  succes: { type: boolean, example: true }
+                  masa: { $ref: '#/components/schemas/Masa' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    delete:
+      summary: Șterge o masă
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Masă ștearsă
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  succes: { type: boolean, example: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/user/premium-status:
+    get:
+      summary: Validează premium server-side (RevenueCat)
+      description: Fail-closed — fără cheie configurată sau la eroare de rețea NU raportează premium. 503 dacă REVENUECAT_SECRET_API_KEY lipsește.
+      responses:
+        '200':
+          description: Status validat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  premium: { type: boolean }
+                  entitlement: { type: object, nullable: true }
+                  expiresDate: { type: string, format: date-time, nullable: true }
+                  validatServer: { type: boolean, example: true }
+        '502':
+          description: RevenueCat a răspuns cu eroare
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503': { $ref: '#/components/responses/Disabled' }
+  /api/user/export-data:
+    get:
+      summary: Export GDPR — toate datele utilizatorului
+      description: Citește prin clientul RLS, per tabelă, tolerând erori.
+      responses:
+        '200':
+          description: Export complet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exportDate: { type: string, format: date-time }
+                  user_id: { type: string }
+                  user: { type: object }
+                  profil: { type: object, nullable: true }
+                  mese: { type: array, items: { $ref: '#/components/schemas/Masa' } }
+                  antrenamente: { type: array }
+                  estimari_barcode: { type: array }
+                  audit_log: { type: array }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/user/delete-account:
+    delete:
+      summary: Șterge contul și toate datele (GDPR)
+      description: Șterge tabelele cu date de utilizator + contul Supabase (cascadă FK). Ireversibil.
+      responses:
+        '200':
+          description: Cont șters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  succes: { type: boolean, example: true }
+                  mesaj: { type: string }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: 'JWT Supabase sau Clerk (header `Authorization: Bearer <token>`)'
+  schemas:
+    Error:
+      type: object
+      required: [eroare]
+      properties:
+        eroare: { type: string }
+    DisabledResponse:
+      type: object
+      properties:
+        eroare: { type: string }
+        status: { type: string, example: disabled }
+    ProviderStatus:
+      type: object
+      properties:
+        id: { type: string }
+        nume: { type: string }
+        status: { type: string, enum: [active, cooldown] }
+        secundeRamase: { type: integer }
+        mesaj: { type: string }
+    AlimentAnalizat:
+      type: object
+      properties:
+        nume: { type: string }
+        estimare_grame: { type: integer }
+        calorii_per_100g: { type: number }
+        proteine_per_100g: { type: number }
+        grasimi_per_100g: { type: number }
+        carbohidrati_per_100g: { type: number }
+        incredere: { type: string, enum: [ridicat, mediu, scazut] }
+    IngredientCorectat:
+      type: object
+      properties:
+        nume: { type: string }
+        calorii_per_100g: { type: number }
+        proteine_per_100g: { type: number }
+        carbohidrati_per_100g: { type: number }
+        grasimi_per_100g: { type: number }
+        estimare_grame: { type: integer }
+    MealProposal:
+      type: object
+      properties:
+        type: { type: string, enum: [MEAL_PROPOSAL] }
+        meal_type: { type: string, enum: [mic_dejun, pranz, cina, gustare] }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MealItem' }
+        totals:
+          type: object
+          properties:
+            protein_g: { type: number }
+            carbs_g: { type: number }
+            fat_g: { type: number }
+            kcal: { type: number }
+            fiber_g: { type: number }
+    MealItem:
+      type: object
+      properties:
+        name: { type: string }
+        qty: { type: number }
+        unit: { type: string, example: g }
+        protein_g: { type: number }
+        carbs_g: { type: number }
+        fat_g: { type: number }
+        kcal: { type: number }
+        fiber_g: { type: number }
+    ProdusBarcode:
+      type: object
+      properties:
+        codBare: { type: string }
+        nume: { type: string }
+        brand: { type: string }
+        cantitate: { type: string }
+        calorii: { type: number }
+        proteine: { type: number }
+        carbohidrati: { type: number }
+        grasimi: { type: number }
+        aminoacizi_100g: { type: object, nullable: true }
+        micronutrienti_100g: { type: object, nullable: true }
+        imagine_url: { type: string, format: uri, nullable: true }
+    MasaInput:
+      type: object
+      properties:
+        nume: { type: string, maxLength: 150 }
+        calorii: { type: number, minimum: 0, maximum: 10000 }
+        proteine: { type: number, minimum: 0, maximum: 1000 }
+        grasimi: { type: number, minimum: 0, maximum: 1000 }
+        carbohidrati: { type: number, minimum: 0, maximum: 2000 }
+        fibre: { type: number, minimum: 0, maximum: 1000 }
+        tip_masa: { type: string, enum: [mic_dejun, pranz, cina, gustare] }
+        alimente:
+          type: array
+          maxItems: 100
+          items: { type: object }
+        data: { type: string, description: 'YYYY-MM-DD' }
+        ora: { type: string, description: 'HH:MM sau HH:MM:SS' }
+    Masa:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string }
+        nume: { type: string }
+        calorii: { type: number }
+        proteine: { type: number }
+        grasimi: { type: number }
+        carbohidrati: { type: number }
+        fibre: { type: number }
+        tip_masa: { type: string }
+        alimente: { type: array, items: { type: object } }
+        data: { type: string }
+        ora: { type: string }
+  responses:
+    BadRequest:
+      description: Cerere invalidă
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Token lipsă sau invalid
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resursă negăsită
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    FileTooLarge:
+      description: Fișier peste limita de 5MB
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Cooldown:
+      description: Furnizor AI blocat temporar (cooldown)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              eroare: { type: string }
+              providerStatus: { type: string, example: cooldown }
+              secundeRamase: { type: integer }
+    QuotaExceeded:
+      description: Plafonul zilnic AI atins
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    AIFail:
+      description: Toate sistemele AI au eșuat sau sunt în cooldown
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              eroare: { type: string }
+              stareAI: { type: object }
+    Disabled:
+      description: Serviciu neconfigurat (503)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/DisabledResponse' }
+    ServerError:
+      description: Eroare internă de server
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
