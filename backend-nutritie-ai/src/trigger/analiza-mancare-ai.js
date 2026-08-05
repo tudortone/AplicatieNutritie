@@ -1,5 +1,10 @@
 const { task } = require('@trigger.dev/sdk/v3');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+// Sursa UNICA a promptului (D1): importat din services/ai/vision.js — acelasi
+// prompt folosit de cascada din server.js, ca rezultatul task-ului sa ramana
+// compatibil cu ecranul de scanare. Inainte existau doua copii (una cu
+// diacritice, una fara) care puteau deriva independent.
+const { PROMPT_ANALIZA_FOTO } = require('../../services/ai/vision');
 
 // Cascade de modele Gemini vision, identica cu cea din server.js.
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
@@ -9,24 +14,6 @@ function modelsDeIncercat() {
   if (!preferat) return [...GEMINI_MODELS];
   return [preferat, ...GEMINI_MODELS.filter((m) => m !== preferat)];
 }
-
-// Acelasi prompt ca /api/analizeaza-mancare-structurat din server.js,
-// ca rezultatul task-ului sa fie compatibil cu ecranul de scanare.
-const PROMPT_ANALIZA = `Analizează această imagine cu mâncare.
-Consideră o farfurie standard de ~25cm diametru ca referință de scară (E1). Folosește baze de date nutriționale recunoscute (cum ar fi USDA) pentru o precizie cât mai mare.
-Identifică TOATE alimentele de pe farfurie separat. Pentru fiecare aliment, estimează cantitatea vizuală în grame, oferă valorile nutriționale PENTRU SUTA DE GRAME (100g) și adaugă nivelul tău de încredere în estimare (E4).
-RETURNEAZĂ DOAR UN ARRAY JSON în următorul format (fără text înainte sau după):
-[
-  {
-    "nume": "numele alimentului 1",
-    "estimare_grame": număr grame estimat de tine vizual,
-    "calorii_per_100g": număr calorii per 100g,
-    "proteine_per_100g": grame proteină per 100g,
-    "grasimi_per_100g": grame grăsime per 100g,
-    "carbohidrati_per_100g": grame carbohidrați per 100g,
-    "incredere": "ridicat"
-  }
-]`;
 
 exports.analizaMancareTask = task({
   id: "analiza-mancare-ai",
@@ -71,7 +58,7 @@ exports.analizaMancareTask = task({
           try {
             const model = client.getGenerativeModel({ model: modelName });
             const result = await model.generateContent({
-              contents: [{ role: 'user', parts: [{ text: PROMPT_ANALIZA }, imagePart] }],
+              contents: [{ role: 'user', parts: [{ text: PROMPT_ANALIZA_FOTO }, imagePart] }],
             });
             text = result.response.text();
             if (text) break;

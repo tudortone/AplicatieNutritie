@@ -123,24 +123,6 @@ function randLaProdus(rand, cod) {
 	};
 }
 
-/** Normalizeaza raspunsul OpenFoodFacts. */
-function normalizeazaProdusOff(product, cod) {
-	const nutrimente = product?.nutriments || {};
-	return {
-		codBare: cod,
-		nume: product?.product_name || product?.product_name_ro || 'Produs necunoscut',
-		brand: product?.brands || '',
-		cantitate: product?.quantity || '',
-		calorii: Number(
-			nutrimente['energy-kcal_100g'] || nutrimente['energy-kcal'] || 0,
-		),
-		proteine: Number(nutrimente.proteins_100g || 0),
-		carbohidrati: Number(nutrimente.carbohydrates_100g || 0),
-		grasimi: Number(nutrimente.fat_100g || 0),
-		imagine_url: product?.image_front_small_url || product?.image_url || null,
-	};
-}
-
 /**
  * Citeste din cache-ul global. Contine doar date verificabile: OpenFoodFacts sau
  * contributii manuale ale utilizatorilor. Provenienta reala este pastrata.
@@ -355,7 +337,6 @@ module.exports = {
 	EroareProprietateProdus,
 	esteCodBareValid,
 	construiesteUrlOpenFoodFacts,
-	normalizeazaProdusOff,
 	citesteDinCacheGlobal,
 	citesteEstimareUtilizator,
 	salveazaProdusOff,

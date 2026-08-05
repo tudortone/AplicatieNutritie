@@ -61,13 +61,6 @@ function construiesteIstoricSigur(istoric, { maxMesaje = MAX_MESAJE } = {}) {
 	return { mesaje, respinse };
 }
 
-/** Transforma istoricul in text, pentru modelele fara API de conversatie. */
-function istoricCaText(mesaje) {
-	return mesaje
-		.map((m) => `${m.role === 'assistant' ? 'Asistent' : 'Utilizator'}: ${m.content}`)
-		.join('\n');
-}
-
 const MAX_INGREDIENTE = 50;
 
 function numarSigur(valoare, { min = 0, max = 100000, implicit = null }) {
@@ -126,7 +119,6 @@ function valideazaIngrediente(lista, { maxElemente = MAX_INGREDIENTE } = {}) {
 
 module.exports = {
 	construiesteIstoricSigur,
-	istoricCaText,
 	valideazaIngrediente,
 	MAX_MESAJE,
 };

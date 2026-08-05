@@ -43,16 +43,16 @@ backend-nutritie-ai/
 
 Module `utils/` (toate CommonJS):
 - `barcode.js` — cache OpenFoodFacts pe 3 straturi (Supabase → OpenFoodFacts → fallback)
-- `metrics.js` — contorizare tokeni/cost AI (p95)
+- `metrics.js` — contorizare tokeni/cost AI (B-23)
 - `clientUtilizator.js` — client Supabase per-cerere, legat de JWT (RLS)
 - `identitate.js` — mapare identități (Supabase / Clerk)
 - `idempotency.js` — idempotență pe scrieri (A-9)
 - `tokenCache.js` + `storePartajat.js` — cache tokeni și store partajat Redis (B-10)
 - `rateLimit.js` — configurare limiter-e (`generalLimiter`, `aiLimiter`)
 - `aiUsageQuota.js` — plafonare zilnică AI (S-10)
-- `imageHashCache.js` — cache pe hash imagine (P-3)
+- ~~`imageHashCache.js`~~ — cache pe hash imagine (P-3), ȘTERS (D4): nu avea niciun require
 - `semafor.js` — limită concurență AI pe heap (P-15/B-20)
-- `llmJson.js`, `promptSafety.js`, `sanitize.js`, `validareMese.js`, `httpTimeout.js`, `logger.js`
+- `llmJson.js`, `promptSafety.js`, `sanitize.js`, `validareMese.js`, `httpTimeout.js` (~~`logger.js`~~ ȘTERS D4)
 
 ### Frontend — `frontend-nutritie/`
 ```
