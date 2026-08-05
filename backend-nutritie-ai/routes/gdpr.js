@@ -38,12 +38,15 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         }
       };
 
-      const [mese, profil, antrenamente, estimariBarcode, audit] = await Promise.all([
+      // C3 (decizie): audit_log (action + details JSONB) e telemetrie interna de
+      // actiuni, nu date cu care subiectul isi exercita portabilitatea. Il excludem
+      // din export (confidentialitate minima, Art. 25), dar il STERGEM totusi la
+      // delete-account (Art. 17 — dreptul la stergere acopera si logurile).
+      const [mese, profil, antrenamente, estimariBarcode] = await Promise.all([
         citeste('mese'),
         ctx.db.from('profil').select('*').eq('user_id', userId).maybeSingle().then(({ data }) => data ?? null).catch(() => null),
         citeste('antrenamente'),
         citeste('barcode_estimari_utilizator'),
-        citeste('audit_log'),
       ]);
 
       return res.json({
@@ -54,7 +57,6 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         mese: mese || [],
         antrenamente: antrenamente || [],
         estimari_barcode: estimariBarcode || [],
-        audit_log: audit || [],
       });
     } catch (err) {
       console.error('Eroare export date GDPR:', err);
@@ -87,13 +89,31 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         sterge('audit_log'),
       ]);
 
+      // C1: curatam explicit maparea Clerk -> Supabase. La identitati mapate Clerk,
+      // randul din auth.users poate lipsi (comentariul de mai sus), caz in care
+      // cascada FK peste clerk_user_map nu se declanseaza si ramane o mapare orfana.
+      // clerk_user_map e admin-only (RLS deny-all), deci stergerea se face prin
+      // service_role, nu prin ctx.db. Eroarea aici nu blocheaza restul: datele cu
+      // continut real sunt deja sterse, iar maparea e doar o legatura de identitate.
+      try {
+        await supabaseAdmin.from('clerk_user_map').delete().eq('supabase_user_id', userId);
+      } catch (err) {
+        console.warn('[GDPR] Stergere clerk_user_map esuata:', err.message);
+      }
+
       // Sursele reale de adevăr: șterge contul Supabase. FK ON DELETE CASCADE pe
       // toate tabelele care referențiază auth.users idempotent curăță restul.
-      if (supabaseAdmin.auth?.admin?.deleteUser) {
-        const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-        if (error) {
-          console.error('[GDPR] Eroare auth.admin.deleteUser:', error.message);
-        }
+      if (!supabaseAdmin.auth?.admin?.deleteUser) {
+        // Garda anti-mintire (C2): fara capacitatea de a sterge identitatea auth,
+        // nu putem garanta Art. 17 (GDPR). Nu raportam succes fals.
+        return res.status(500).json({ eroare: 'Nu s-a putut șterge contul.' });
+      }
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (error) {
+        // C2: daca stergerea identitatii auth esueaza, stergerea e incompleta.
+        // Datele curatate + randul auth ramas = contul inca exista. 500, nu succes.
+        console.error('[GDPR] Eroare auth.admin.deleteUser:', error.message);
+        return res.status(500).json({ eroare: 'Nu s-a putut șterge contul.' });
       }
 
       return res.json({
