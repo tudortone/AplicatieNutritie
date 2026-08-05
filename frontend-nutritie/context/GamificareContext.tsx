@@ -1,5 +1,4 @@
-
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import { useNotificationBanner } from './NotificationBannerContext';
@@ -32,105 +31,72 @@ export function xpNecesarPanaLaNivel(n: number): number {
   return Math.floor((100 * n * (n + 1)) / 2);
 }
 
-export function calculeazaNivel(xpTotal: number): {
-  nivel: number;
-  xpCurentInNivel: number;
-  xpNecesarUrmatorulNivel: number;
-  procentNivel: number;
-  titlu: string;
-} {
+export function calculeazaNivel(xpTotal: number) {
   let n = 1;
-  while (xpTotal >= xpNecesarPanaLaNivel(n)) {
-    n++;
-  }
-
+  while (xpTotal >= xpNecesarPanaLaNivel(n)) n++;
   const prevXP = n > 1 ? xpNecesarPanaLaNivel(n - 1) : 0;
   const nextXP = xpNecesarPanaLaNivel(n);
   const xpCurentInNivel = Math.max(0, xpTotal - prevXP);
   const xpNecesarUrmatorulNivel = Math.max(1, nextXP - prevXP);
   const procentNivel = Math.min(100, Math.max(0, (xpCurentInNivel / xpNecesarUrmatorulNivel) * 100));
-
   let titlu = 'Începător';
   if (n >= 20) titlu = 'Legendă';
   else if (n >= 15) titlu = 'Elită';
   else if (n >= 10) titlu = 'Războinic';
   else if (n >= 5) titlu = 'Atlet';
-
-  return {
-    nivel: n,
-    xpCurentInNivel,
-    xpNecesarUrmatorulNivel,
-    procentNivel,
-    titlu,
-  };
+  return { nivel: n, xpCurentInNivel, xpNecesarUrmatorulNivel, procentNivel, titlu };
 }
 
-const GAMIFICARE_STORAGE_KEY = 'gamificare_v1';
+const GAMIFICARE_STORAGE_KEY = 'gamificare_v2_server_authoritative';
 
-function getTodayString(): string {
+function today(): string {
   return new Date().toISOString().split('T')[0];
 }
 
-function getYesterdayString(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().split('T')[0];
-}
-
-function getQuesturiDefault(): QuestZilnic[] {
+function questuriDefault(): QuestZilnic[] {
   return [
-    {
-      id: 'q_miscare',
-      tip: 'minute_miscare',
-      tinta: 15,
-      progres: 0,
-      completat: false,
-      xp: 50,
-      descriere: 'Fă minim 15 min de mișcare',
-    },
-    {
-      id: 'q_antrenament',
-      tip: 'antrenamente',
-      tinta: 1,
-      progres: 0,
-      completat: false,
-      xp: 60,
-      descriere: 'Completează 1 antrenament',
-    },
-    {
-      id: 'q_proteine',
-      tip: 'proteine',
-      tinta: 120,
-      progres: 0,
-      completat: false,
-      xp: 40,
-      descriere: 'Atinge ținta de proteine',
-    },
+    { id: 'q_miscare', tip: 'minute_miscare', tinta: 15, progres: 0, completat: false, xp: 50, descriere: 'Fă minim 15 min de mișcare' },
+    { id: 'q_antrenament', tip: 'antrenamente', tinta: 1, progres: 0, completat: false, xp: 60, descriere: 'Completează 1 antrenament' },
+    { id: 'q_proteine', tip: 'proteine', tinta: 120, progres: 0, completat: false, xp: 40, descriere: 'Atinge ținta de proteine' },
   ];
 }
 
+const STARE_INITIALA: StareGamificare = {
+  xpTotal: 0,
+  nivel: 1,
+  streak: 0,
+  ultimaZiActiva: today(),
+  questuriAzi: questuriDefault(),
+  insigne: [],
+};
+
+function normalizaStare(valoare: any): StareGamificare | null {
+  if (!valoare || typeof valoare !== 'object') return null;
+  const questuri = Array.isArray(valoare.questuriAzi) ? valoare.questuriAzi : questuriDefault();
+  return {
+    xpTotal: Math.max(0, Number(valoare.xpTotal) || 0),
+    nivel: Math.max(1, Number(valoare.nivel) || 1),
+    streak: Math.max(0, Number(valoare.streak) || 0),
+    ultimaZiActiva: typeof valoare.ultimaZiActiva === 'string' ? valoare.ultimaZiActiva : today(),
+    questuriAzi: questuri,
+    insigne: Array.isArray(valoare.insigne) ? valoare.insigne.map(String) : [],
+    totalAntrenamente: Math.max(0, Number(valoare.totalAntrenamente) || 0),
+    totalMinuteCardio: Math.max(0, Number(valoare.totalMinuteCardio) || 0),
+    zileProteineAtinse: Math.max(0, Number(valoare.zileProteineAtinse) || 0),
+  };
+}
+
 interface GamificareContextType extends StareGamificare {
-  setQuesturiAzi: (updater: any) => void;
+  setQuesturiAzi: (updater: React.SetStateAction<QuestZilnic[]>) => void;
   adaugaProgres: (tip: QuestZilnic['tip'], valoare: number) => void;
   revendicaRecompensaZilnica: () => void;
   refreshGamificare: () => Promise<void>;
   toateQuesturileCompletate: boolean;
-  detaliiNivel: {
-    nivel: number;
-    xpCurentInNivel: number;
-    xpNecesarUrmatorulNivel: number;
-    procentNivel: number;
-    titlu: string;
-  };
+  detaliiNivel: ReturnType<typeof calculeazaNivel>;
 }
 
 const GamificareContext = createContext<GamificareContextType>({
-  xpTotal: 0,
-  nivel: 1,
-  streak: 0,
-  ultimaZiActiva: getTodayString(),
-  questuriAzi: getQuesturiDefault(),
-  insigne: [],
+  ...STARE_INITIALA,
   setQuesturiAzi: () => {},
   adaugaProgres: () => {},
   revendicaRecompensaZilnica: () => {},
@@ -145,288 +111,119 @@ export function useGamificareContext() {
 
 export function GamificareProvider({ children }: { children: React.ReactNode }) {
   const { showNotification } = useNotificationBanner();
-  const [stare, setStare] = useState<StareGamificare>({
-    xpTotal: 0,
-    nivel: 1,
-    streak: 0,
-    ultimaZiActiva: getTodayString(),
-    questuriAzi: getQuesturiDefault(),
-    insigne: [],
-  });
+  const [stare, setStare] = useState<StareGamificare>(STARE_INITIALA);
   const stareRef = useRef(stare);
-  // stareRef sincronizat in useEffect (nu in render) în corpul componentei — mutarea unui ref
-  // în timpul render-ului este comportament nedefinit cu React 19 + reactCompiler: true.
-  // Mutat într-un useEffect care rulează sincron după fiecare render.
+
   useEffect(() => {
     stareRef.current = stare;
-  });
+  }, [stare]);
 
-  const saveStare = useCallback(async (newState: StareGamificare) => {
-    setStare(newState);
+  const aplicaStare = useCallback(async (noua: StareGamificare) => {
+    stareRef.current = noua;
+    setStare(noua);
     try {
-      await AsyncStorage.setItem(GAMIFICARE_STORAGE_KEY, JSON.stringify(newState));
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.user) {
-        await supabase.from('gamificare').upsert({
-          user_id: session.user.id,
-          xp_total: newState.xpTotal,
-          nivel: newState.nivel,
-          streak: newState.streak,
-          ultima_zi_activa: newState.ultimaZiActiva,
-          questuri_azi: newState.questuriAzi,
-          insigne: newState.insigne,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
-      }
-    } catch (err) {
-      // Logheaza eroarea de salvare în loc de fail silent complet (XP se pierdea invizibil offline)
-      console.warn('[Gamificare] saveStare a eșuat (offline sau RLS):', err);
+      await AsyncStorage.setItem(GAMIFICARE_STORAGE_KEY, JSON.stringify(noua));
+    } catch {
+      // Cache-ul local este doar rezerva offline; serverul ramane sursa de adevar.
     }
   }, []);
-
-  const initSauCheckZiNoua = useCallback(
-    async (loaded: StareGamificare) => {
-      const today = getTodayString();
-      const yesterday = getYesterdayString();
-
-      let updateNeeded = false;
-      let nextState = { ...loaded };
-
-      if (loaded.ultimaZiActiva !== today) {
-        updateNeeded = true;
-        // Verifică dacă ieri a avut toate quest-urile completate
-        const toateIeri =
-          loaded.questuriAzi.length > 0 && loaded.questuriAzi.every((q) => q.completat);
-
-        if (loaded.ultimaZiActiva === yesterday && toateIeri) {
-          nextState.streak = Math.max(1, (loaded.streak || 0) + 1);
-        } else {
-          nextState.streak = 0;
-        }
-
-        nextState.ultimaZiActiva = today;
-        nextState.questuriAzi = getQuesturiDefault();
-      }
-
-      const calc = calculeazaNivel(nextState.xpTotal);
-      if (nextState.nivel !== calc.nivel) {
-        nextState.nivel = calc.nivel;
-        updateNeeded = true;
-      }
-
-      if (updateNeeded) {
-        await saveStare(nextState);
-      } else {
-        setStare(nextState);
-      }
-    },
-    [saveStare]
-  );
 
   const refreshGamificare = useCallback(async () => {
+    let locala: StareGamificare | null = null;
     try {
-      const stored = await AsyncStorage.getItem(GAMIFICARE_STORAGE_KEY);
-      let localState: StareGamificare | null = stored ? JSON.parse(stored) : null;
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        // .maybeSingle() pentru utilizatori noi (fara inregistrare) pentru orice utilizator nou (0 rânduri).
-        // .maybeSingle() returnează null în loc de eroare când nu există înregistrare.
-        const { data, error } = await supabase
-          .from('gamificare')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
-
-        if (!error && data) {
-          localState = {
-            xpTotal: data.xp_total || 0,
-            nivel: data.nivel || 1,
-            streak: data.streak || 0,
-            ultimaZiActiva: data.ultima_zi_activa || getTodayString(),
-            questuriAzi: Array.isArray(data.questuri_azi) ? data.questuri_azi : getQuesturiDefault(),
-            insigne: Array.isArray(data.insigne) ? data.insigne : [],
-          };
+      const salvata = await AsyncStorage.getItem(GAMIFICARE_STORAGE_KEY);
+      locala = salvata ? normalizaStare(JSON.parse(salvata)) : null;
+      if (locala) {
+        if (locala.ultimaZiActiva !== today()) {
+          locala = { ...locala, ultimaZiActiva: today(), questuriAzi: questuriDefault() };
         }
-      }
-
-      if (localState) {
-        await initSauCheckZiNoua(localState);
-      } else {
-        await initSauCheckZiNoua(stareRef.current);
+        setStare(locala);
+        stareRef.current = locala;
       }
     } catch {
-      await initSauCheckZiNoua(stareRef.current);
+      locala = null;
     }
-  }, [initSauCheckZiNoua]); // Înlăturăm 'stare' din deps pentru a evita recalcularea; folosim stareRef.current
+
+    try {
+      const { data: authData } = await supabase.auth.getSession();
+      if (!authData.session?.user) return;
+
+      // RPC-ul nu accepta XP/progres de la client. Baza de date calculeaza totul
+      // din mesele, antrenamentele si profilul utilizatorului autentificat.
+      const { data, error } = await supabase.rpc('sincronizeaza_gamificare_sigur');
+      if (error) throw error;
+      const serverState = normalizaStare(data);
+      if (!serverState) throw new Error('Raspuns gamificare invalid.');
+
+      const anterior = stareRef.current;
+      await aplicaStare(serverState);
+
+      if (serverState.nivel > anterior.nivel) {
+        showNotification({
+          type: 'reward',
+          title: 'Nivel nou deblocat! 🎉',
+          message: `Ai ajuns la Nivelul ${serverState.nivel}.`,
+          icon: 'Award',
+        });
+      } else if (serverState.xpTotal > anterior.xpTotal) {
+        showNotification({
+          type: 'reward',
+          title: 'Progres validat! ⭐',
+          message: `+${serverState.xpTotal - anterior.xpTotal} XP calculați din activitatea ta.`,
+          icon: 'Trophy',
+        });
+      }
+    } catch (err) {
+      if (__DEV__) console.debug('[Gamificare] Sincronizarea server nu este disponibila.', err);
+      if (!locala) await aplicaStare(stareRef.current);
+    }
+  }, [aplicaStare, showNotification]);
 
   useEffect(() => {
-    refreshGamificare();
+    void refreshGamificare();
+  }, [refreshGamificare]);
+
+  const setQuesturiAzi = useCallback((updater: React.SetStateAction<QuestZilnic[]>) => {
+    setStare((prev) => {
+      const questuri = typeof updater === 'function' ? updater(prev.questuriAzi) : updater;
+      const next = { ...prev, questuriAzi: questuri };
+      stareRef.current = next;
+      AsyncStorage.setItem(GAMIFICARE_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
   }, []);
 
-  const setQuesturiAzi = useCallback((updater: React.SetStateAction<any[]>) => {
-    setStare((prev) => {
-      const nextQuesturi = typeof updater === 'function' ? updater(prev.questuriAzi) : updater;
-      const nextState = { ...prev, questuriAzi: nextQuesturi };
-      saveStare(nextState);
-      return nextState;
-    });
-    // saveStare persista deja in AsyncStorage + Supabase
-    // saveStare persista deja in AsyncStorage + Supabase
-    // Apelul imediat la refreshGamificare() crea o cursa:
-    // saveStare (async) inca rula cand refresh citea DB-ul,
-    // iar rezultatul vechi suprascria starea tocmai salvata.
-  }, [saveStare]);
+  useDailyReset({ questuriAzi: stare.questuriAzi, setQuesturiAzi });
 
-  useDailyReset({
-    questuriAzi: stare.questuriAzi,
-    setQuesturiAzi,
-  });
-
-  const adaugaProgres = useCallback(
-    (tip: QuestZilnic['tip'], valoare: number) => {
-      setStare((prev) => {
-        let nouXp = prev.xpTotal;
-        const noiInsigne = [...prev.insigne];
-        let questCompletatAcum = false;
-
-        const questuriNoi = prev.questuriAzi.map((quest) => {
-          if (quest.tip !== tip) return quest;
-
-          const noulProgres = Math.min(quest.tinta, quest.progres + valoare);
-          const devineCompletat = !quest.completat && noulProgres >= quest.tinta;
-
-          if (devineCompletat) {
-            nouXp += quest.xp;
-            questCompletatAcum = true;
-          }
-
-          return {
-            ...quest,
-            progres: noulProgres,
-            completat: quest.completat || devineCompletat,
-          };
-        });
-
-        const totalAntr = (prev.totalAntrenamente || 0) + (tip === 'antrenamente' ? valoare : 0);
-        const totalCardio = (prev.totalMinuteCardio || 0) + (tip === 'minute_miscare' ? valoare : 0);
-        const zileProt = (prev.zileProteineAtinse || 0) + (tip === 'proteine' && questCompletatAcum ? 1 : 0);
-
-        const verificaInsigna = (id: string, titlu: string, msg: string) => {
-          if (!noiInsigne.includes(id)) {
-            noiInsigne.push(id);
-            showNotification({
-              type: 'reward',
-              title: titlu,
-              message: msg,
-              icon: 'Trophy',
-            });
-          }
-        };
-
-        if (tip === 'antrenamente' && valoare > 0) {
-          verificaInsigna('prima_transpiratie', 'Insignă deblocată! 🔥', 'Prima Transpirație — Ai finalizat primul antrenament');
-        }
-        if (totalAntr >= 10) {
-          verificaInsigna('forta_bruta', 'Insignă deblocată! 🏋️', 'Forță Brută — Ai finalizat 10 antrenamente');
-        }
-        if (totalCardio >= 100) {
-          verificaInsigna('maratonist', 'Insignă deblocată! 🏃', 'Maratonist Cardio — Ai acumulat 100 minute cardio');
-        }
-        if (zileProt >= 5) {
-          verificaInsigna('maestru_proteine', 'Insignă deblocată! 🥩', 'Maestru al Proteinei — Ai atins ținta de proteine 5 zile');
-        }
-
-        const toateCompletate = questuriNoi.every((q) => q.completat);
-        let noulStreak = prev.streak;
-        if (toateCompletate && prev.questuriAzi.some((q) => !q.completat)) {
-          noulStreak += 1;
-          showNotification({
-            type: 'reward',
-            title: 'Misiunea zilei completată! 🏆',
-            message: `Seria ta a crescut la ${noulStreak} zile consecutiv!`,
-            icon: 'Flame',
-            duration: 5000,
-          });
-
-          if (noulStreak >= 3) verificaInsigna('streak_3', 'Insignă deblocată! ⚡', 'Consecvență 3 Zile');
-          if (noulStreak >= 7) verificaInsigna('streak_7', 'Insignă deblocată! 🏆', 'Războinic Săptămânal — 7 zile consecutiv');
-          if (noulStreak >= 30) verificaInsigna('streak_30', 'Insignă deblocată! 👑', 'De neoprit — 30 de zile consecutiv');
-        }
-
-        const calc = calculeazaNivel(nouXp);
-        if (calc.nivel > prev.nivel) {
-          showNotification({
-            type: 'reward',
-            title: 'Nivel Nou Deblocat! 🎉',
-            message: `Ai ajuns la Nivelul ${calc.nivel} — ${calc.titlu}!`,
-            icon: 'Award',
-            duration: 5000,
-          });
-          if (calc.nivel >= 5) verificaInsigna('nivel_5', 'Insignă deblocată! 🏅', 'Atlet NutriAI — Ai atins Nivelul 5');
-          if (calc.nivel >= 10) verificaInsigna('nivel_10', 'Insignă deblocată! ⭐', 'Războinic de Elită — Ai atins Nivelul 10');
-        } else if (questCompletatAcum) {
-          showNotification({
-            type: 'reward',
-            title: 'Quest completat! ⭐',
-            message: `Ai câștigat +XP pentru obiectivul zilei!`,
-            icon: 'Trophy',
-          });
-        }
-
-        const nextState: StareGamificare = {
-          ...prev,
-          xpTotal: nouXp,
-          nivel: calc.nivel,
-          streak: noulStreak,
-          questuriAzi: questuriNoi,
-          insigne: noiInsigne,
-          totalAntrenamente: totalAntr,
-          totalMinuteCardio: totalCardio,
-          zileProteineAtinse: zileProt,
-        };
-
-        saveStare(nextState);
-        return nextState;
-      });
-    },
-    [saveStare, showNotification]
-  );
+  const adaugaProgres = useCallback((tip: QuestZilnic['tip'], valoare: number) => {
+    // Actualizare optimista doar pentru bara de progres. XP-ul si completarile
+    // autoritative sunt suprascrise imediat de RPC-ul securizat.
+    if (Number.isFinite(valoare) && valoare > 0) {
+      setStare((prev) => ({
+        ...prev,
+        questuriAzi: prev.questuriAzi.map((quest) =>
+          quest.tip === tip
+            ? { ...quest, progres: Math.min(quest.tinta, quest.progres + valoare) }
+            : quest,
+        ),
+      }));
+    }
+    setTimeout(() => { void refreshGamificare(); }, 350);
+  }, [refreshGamificare]);
 
   const revendicaRecompensaZilnica = useCallback(() => {
-    setStare((prev) => {
-      if (!prev.questuriAzi.every((q) => q.completat)) return prev;
-      const bonusXP = 100;
-      const calc = calculeazaNivel(prev.xpTotal + bonusXP);
+    // Bonusul este acordat o singura data de functia SQL daca toate cele trei
+    // conditii sunt verificate in baza de date.
+    void refreshGamificare();
+  }, [refreshGamificare]);
 
-      showNotification({
-        type: 'reward',
-        title: 'Bonus Zilnic Revendicat! 🎁',
-        message: `+${bonusXP} XP suplimentari pentru completarea tuturor quest-urilor!`,
-        icon: 'Trophy',
-      });
+  const detaliiNivel = useMemo(() => calculeazaNivel(stare.xpTotal), [stare.xpTotal]);
+  const toateQuesturileCompletate = useMemo(
+    () => stare.questuriAzi.length > 0 && stare.questuriAzi.every((q) => q.completat),
+    [stare.questuriAzi],
+  );
 
-      const nextState: StareGamificare = {
-        ...prev,
-        xpTotal: prev.xpTotal + bonusXP,
-        nivel: calc.nivel,
-      };
-
-      saveStare(nextState);
-      return nextState;
-    });
-  }, [saveStare, showNotification]);
-
-  const detaliiNivel = calculeazaNivel(stare.xpTotal);
-  const toateQuesturileCompletate = stare.questuriAzi.every((q) => q.completat);
-
-  const value = React.useMemo(() => ({
+  const value = useMemo(() => ({
     ...stare,
     setQuesturiAzi,
     adaugaProgres,
@@ -441,12 +238,8 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
     revendicaRecompensaZilnica,
     refreshGamificare,
     toateQuesturileCompletate,
-    detaliiNivel
+    detaliiNivel,
   ]);
 
-  return (
-    <GamificareContext.Provider value={value}>
-      {children}
-    </GamificareContext.Provider>
-  );
+  return <GamificareContext.Provider value={value}>{children}</GamificareContext.Provider>;
 }
