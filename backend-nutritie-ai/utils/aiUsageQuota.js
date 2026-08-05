@@ -1,53 +1,59 @@
 'use strict';
 
 /**
- * Middleware pentru plafonarea costurilor AI per utilizator (S-10).
- * Previne facturi neașteptate prin limitarea numărului de cereri AI scumpe pe o fereastră de 24 ore.
+ * Plafon zilnic pentru cererile AI costisitoare.
+ *
+ * Contorul este partajat intre instante prin Redis, daca REDIS_URL este
+ * configurat. Daca Redis cade, se continua cu o rezerva locala marginita, in
+ * acord cu politica de disponibilitate din storePartajat.js.
  */
 
-const usageStore = new Map();
+const { creeazaContorPartajat } = require('./contorPartajat');
 
-// Curățare periodică a intrărilor expirate o dată pe oră
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, record] of usageStore.entries()) {
-    if (now > record.resetTime) {
-      usageStore.delete(key);
-    }
-  }
-}, 60 * 60 * 1000).unref();
-
-const DAILY_LIMIT = 50; // Maxim 50 cereri AI per utilizator în 24h
+const DAILY_LIMIT = 50;
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
-const checkAiUsageQuota = (req, res, next) => {
-  const userId = req.user?.id;
-  if (!userId) {
-    return res.status(401).json({ eroare: "Acces neautorizat. Token lipsă sau nevalidat." });
-  }
+function creeazaCheckAiUsageQuota({ contor, limitaZi = DAILY_LIMIT, fereastraMs = WINDOW_MS } = {}) {
+  const sursa = contor || creeazaContorPartajat({
+    url: process.env.REDIS_URL,
+    prefix: 'nutri:quota-ai',
+  });
 
-  const now = Date.now();
-  let record = usageStore.get(userId);
+  return async function checkAiUsageQuota(req, res, next) {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({
+        eroare: 'Acces neautorizat. Token lipsă sau nevalidat.',
+      });
+    }
 
-  if (!record || now > record.resetTime) {
-    record = { count: 0, resetTime: now + WINDOW_MS };
-    usageStore.set(userId, record);
-  }
+    const count = await sursa.increment(userId, fereastraMs);
+    if (!Number.isFinite(count)) {
+      return res.status(503).json({
+        eroare: 'Contorul de analize AI este temporar indisponibil.',
+        cod: 'AI_QUOTA_STORE_UNAVAILABLE',
+      });
+    }
 
-  if (record.count >= DAILY_LIMIT) {
-    const hoursLeft = Math.ceil((record.resetTime - now) / (60 * 60 * 1000));
-    return res.status(429).json({
-      eroare: `Ai atins plafonul zilnic de 50 de analize AI. Limita se resetează în aproximativ ${hoursLeft} ore.`,
-      cod: 'AI_QUOTA_EXCEEDED'
-    });
-  }
+    if (count > limitaZi) {
+      const secundeRamase = await sursa.ttl(userId);
+      const oreRamase = secundeRamase > 0 ? Math.ceil(secundeRamase / 3600) : 24;
+      return res.status(429).json({
+        eroare: `Ai atins plafonul zilnic de ${limitaZi} de analize AI. Limita se resetează în aproximativ ${oreRamase} ore.`,
+        cod: 'AI_QUOTA_EXCEEDED',
+      });
+    }
 
-  record.count += 1;
-  res.setHeader('X-AI-Quota-Remaining', DAILY_LIMIT - record.count);
-  next();
-};
+    res.setHeader('X-AI-Quota-Remaining', Math.max(0, limitaZi - count));
+    return next();
+  };
+}
+
+const checkAiUsageQuota = creeazaCheckAiUsageQuota();
 
 module.exports = {
   checkAiUsageQuota,
-  DAILY_LIMIT
+  creeazaCheckAiUsageQuota,
+  DAILY_LIMIT,
+  WINDOW_MS,
 };
