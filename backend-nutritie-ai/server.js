@@ -37,6 +37,7 @@ const createAiRouter = require('./routes/ai');
 const createBarcodeRouter = require('./routes/barcode');
 const createProfilRouter = require('./routes/profil');
 const createMeseRouter = require('./routes/mese');
+const createUserRouter = require('./routes/user');
 const createMeseRepo = require('./repositories/meseRepo');
 const createBarcodeRepo = require('./repositories/barcodeRepo');
 const createProfilRepo = require('./repositories/profilRepo');
@@ -380,6 +381,7 @@ const aiR = createAiRouter({
 const barcodeR = createBarcodeRouter({ requireAuth, generalLimiter, contextDate, barcodeRepo: createBarcodeRepo() });
 const profilR = createProfilRouter({ requireAuth, generalLimiter, config });
 const meseR = createMeseRouter({ requireAuth, generalLimiter, contextDate, meseRepo: createMeseRepo() });
+const userR = createUserRouter({ requireAuth, generalLimiter, config });
 const statusR = createStatusRouter({
   getProviderStatus: serviciuCascada.getProviderStatus,
   getAiStatistici,
@@ -398,6 +400,9 @@ app.use('/api/v1', meseR);
 // export, dar acoperite de requireAuth; izolarea pe export este doar cosmetica
 // fata de RLS-ul real aplicat pe scrieri.
 app.use('/api/v1/user', gdprR);
+// C-2: rutele de utilizator (premium-status) stau impreuna cu cele GDPR, sub
+// acelasi prefix, ca „unde e ruta X" sa aiba un singur raspuns.
+app.use('/api/v1/user', userR);
 
 // LEGACY ALIASES — TEMPORARE. EXPIRE 2026-09-30 — migrare client la /api/v1.
 // Aceleasi obiecte router, sub prefixul vechi; server.test.js exerseaza aceste
@@ -408,6 +413,7 @@ app.use('/api', barcodeR);
 app.use('/api', profilR);
 app.use('/api', meseR);
 app.use('/api/user', gdprR);
+app.use('/api/user', userR);
 
 // ==========================================
 // HANDLER 404 PENTRU RUTE INEXISTENTE
