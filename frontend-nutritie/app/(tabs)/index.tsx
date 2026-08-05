@@ -335,44 +335,6 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        {/* 14-Day Interactive Horizontal Date Strip */}
-        <Animated.View entering={FadeInDown.duration(500).delay(80)} style={{ marginBottom: 16 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-            {Array.from({ length: 14 }).map((_, idx) => {
-              const d = new Date();
-              d.setDate(d.getDate() - (13 - idx));
-              const esteSelectata = d.toDateString() === dataSelectata.toDateString();
-              const esteAzi = d.toDateString() === new Date().toDateString();
-              const numeZi = d.toLocaleDateString('ro-RO', { weekday: 'narrow' }).toUpperCase();
-              const numarZi = d.getDate();
-
-              return (
-                <TouchableOpacity
-                  key={d.toISOString()}
-                  onPress={() => setDataSelectata(d)}
-                  style={{
-                    width: 44,
-                    height: 60,
-                    borderRadius: 16,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: esteSelectata ? colors.accent : esteAzi ? colors.cardBg : colors.overlayLight,
-                    borderWidth: 1,
-                    borderColor: esteSelectata ? colors.accent : colors.cardBorder,
-                  }}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: esteSelectata ? colors.background : colors.textSecondary }}>
-                    {numeZi}
-                  </Text>
-                  <Text style={{ fontSize: 16, fontWeight: '900', marginTop: 2, color: esteSelectata ? colors.background : colors.textPrimary }}>
-                    {numarZi}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </Animated.View>
-
         {/* Main calorie ring card */}
         <Animated.View entering={FadeInDown.duration(700).delay(100)} style={[s.ringCard, { borderColor: colors.cardBorder }]}>
           <BlurView intensity={20} tint="dark" style={s.ringCardBlur}>

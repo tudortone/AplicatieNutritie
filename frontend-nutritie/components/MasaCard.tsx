@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import Animated, { Layout } from 'react-native-reanimated';
 import { Clock, Pencil, Trash2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -53,6 +53,16 @@ export const MasaCard = React.memo(function MasaCard({
             { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder },
           ]}
         >
+          {masa.imagine_url ? (
+            <View style={styles.imageBannerContainer}>
+              <Image
+                source={{ uri: masa.imagine_url }}
+                style={styles.imageBanner}
+                resizeMode="cover"
+              />
+            </View>
+          ) : null}
+
           <View style={styles.cardGrad}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleRow}>
@@ -217,6 +227,7 @@ export const MasaCard = React.memo(function MasaCard({
     prev.masa.carbohidrati === next.masa.carbohidrati &&
     prev.masa.grasimi === next.masa.grasimi &&
     prev.masa.alimente === next.masa.alimente &&
+    prev.masa.imagine_url === next.masa.imagine_url &&
     prev.masa.nume === next.masa.nume
   );
 });
@@ -229,6 +240,16 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     overflow: 'hidden',
+  },
+  imageBannerContainer: {
+    height: 140,
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    overflow: 'hidden',
+  },
+  imageBanner: {
+    width: '100%',
+    height: '100%',
   },
   cardGrad: {
     padding: 16,

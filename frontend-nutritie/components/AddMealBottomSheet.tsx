@@ -33,7 +33,7 @@ import { foodPresets, categories, FoodPreset } from '../constants/foodPresets';
 import { ProductSearch } from './food/ProductSearch';
 
 export interface AddMealBottomSheetRef {
-  open: (masaToEdit?: Masa | null, defaultCategory?: TipMasa) => void;
+  open: (masaToEdit?: Masa | null, defaultCategory?: TipMasa, imagineUrl?: string) => void;
   openWithItem: (item: {
     nume: string;
     calorii: number;
@@ -41,6 +41,7 @@ export interface AddMealBottomSheetRef {
     carbohidrati: number;
     grasimi: number;
     gramajDefault?: number;
+    imagineUrl?: string;
     /** Dacă provine din cămară, numele produsului pentru deducere automată */
     pantryProductName?: string;
   }) => void;
@@ -86,6 +87,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const [carbohidrati, setCarbohidrati] = useState('');
     const [grasimi, setGrasimi] = useState('');
     const [fibre, setFibre] = useState('');
+    const [imagineUrl, setImagineUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -223,7 +225,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     };
 
     useImperativeHandle(ref, () => ({
-      open: (masaToEdit?: Masa | null, defaultCategory?: TipMasa) => {
+      open: (masaToEdit?: Masa | null, defaultCategory?: TipMasa, fotoUrl?: string) => {
         if (masaToEdit) {
           setEditingMasaId(masaToEdit.id);
           setTipMasa(masaToEdit.tip_masa || defaultCategory || getTipMasaDupaOra());
@@ -233,6 +235,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           setCarbohidrati(String(masaToEdit.carbohidrati || 0));
           setGrasimi(String(masaToEdit.grasimi || 0));
           setFibre(masaToEdit.fibre != null ? String(masaToEdit.fibre) : '');
+          setImagineUrl(masaToEdit.imagine_url || fotoUrl || null);
           setGrame('');
           setBaseNutrition(null);
         } else {
@@ -245,6 +248,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           setCarbohidrati('');
           setGrasimi('');
           setFibre('');
+          setImagineUrl(fotoUrl || null);
           setBaseNutrition(null);
         }
         try {
@@ -261,6 +265,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         setProteine(String(item.proteine));
         setCarbohidrati(String(item.carbohidrati));
         setGrasimi(String(item.grasimi));
+        setImagineUrl(item.imagineUrl || null);
         pantryProductNameRef.current = item.pantryProductName;
 
         setBaseNutrition({
@@ -343,6 +348,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           grasimi: parseMacro(grasimi),
           fibre: parseMacro(fibre),
           tip_masa: tipMasa,
+          imagine_url: imagineUrl || null,
           alimente: alimentePayload,
         };
 

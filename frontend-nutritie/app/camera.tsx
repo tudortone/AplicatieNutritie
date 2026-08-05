@@ -396,6 +396,7 @@ export default function CameraScreen() {
         carbohidrati: totalCarbohidrati,
         fibre: 0,
         tip_masa: getTipMasaDupaOra(now), // FIX: nu mai hardcoda 'gustare'
+        imagine_url: imageKitUrlRef.current || null,
         alimente,
         data: localDayKey(now),
       });

@@ -35,4 +35,5 @@ export interface Masa {
   tip_masa?: TipMasa;
   fibre?: number;
   alimente?: AlimentDetaliat[];
+  imagine_url?: string;
 }
