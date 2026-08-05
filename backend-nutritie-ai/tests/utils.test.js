@@ -13,6 +13,8 @@ const { TokenCache } = require('../utils/tokenCache');
 const { construiesteIstoricSigur, valideazaIngrediente } = require('../utils/promptSafety');
 const { Semafor } = require('../utils/semafor');
 const { callWithTimeout, callWithSoftTimeout, TimeoutAiError } = require('../utils/httpTimeout');
+const { StoreCuRezerva } = require('../utils/storePartajat');
+const { creeazaContextDate, EroareContextDate } = require('../utils/clientUtilizator');
 
 describe('parseJsonFromLlm', () => {
   it('parseaza JSON simplu', () => {
@@ -134,6 +136,44 @@ describe('TokenCache', () => {
     cache.set('c', 3);
     expect(cache.get('a')).toBeNull();
     expect(cache.get('c')).toBe(3);
+  });
+
+  it('A-4: un JWT pasat drept cheie de cache este respins', () => {
+    const cache = new TokenCache({ maxEntries: 10, ttlMs: 60000 });
+    const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIn0.semnatura';
+    expect(cache.get(jwt)).toBeNull();
+    expect(() => cache.set(jwt, { id: '1' })).toThrow(TypeError);
+  });
+});
+
+describe('storePartajat (A-1)', () => {
+  it('cu Redis indisponibil, store-ul de rate-limit cade pe rezerva locala (nu arunca)', async () => {
+    const store = new StoreCuRezerva({ client: { isReady: false }, storeRedis: {} });
+    // totalHits se captureaza ca primitiv, ca MemoryStore sa intoarca acelasi
+    // obiect mutabil la fiecare apel.
+    const h1 = (await store.increment('abc')).totalHits;
+    const h2 = (await store.increment('abc')).totalHits;
+    expect(h1).toBe(1);
+    expect(h2).toBe(2);
+  });
+});
+
+describe('clientUtilizator (A-3)', () => {
+  it('esecul construirii clientului RLS arunca eroarea de context, nu cade pe clientul admin', () => {
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(() =>
+        creeazaContextDate({
+          config: { supabase: { url: null, anonKey: null } },
+          supabaseAdmin: { din: () => ({}) },
+          token: 'jwt-cu-rls',
+          userId: 'u1',
+          sursaToken: 'supabase',
+        }),
+      ).toThrow(EroareContextDate);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
