@@ -111,13 +111,36 @@ ALTER TABLE public.mese DROP CONSTRAINT IF EXISTS mese_tip_masa_check;
 ALTER TABLE public.mese ADD  CONSTRAINT mese_tip_masa_check
   CHECK (tip_masa IS NULL OR tip_masa IN ('mic_dejun','pranz','cina','gustare'));
 
+-- PostgreSQL nu permite subinterogari intr-un CHECK (0A000) — de asta si
+-- supabase_migration_fix.sql esua pe bazele vechi. Validarea shape-ului se muta
+-- intr-o functie IMMUTABLE apelata de CHECK (acelasi comportament dorit: array
+-- si fiecare element are nume + calorii; NULL e acceptat, ca si in versiunea veche).
+CREATE OR REPLACE FUNCTION public.alimente_valid_shape(alimente JSONB)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  elem JSONB;
+BEGIN
+  IF alimente IS NULL THEN
+    RETURN true;
+  END IF;
+  IF jsonb_typeof(alimente) <> 'array' THEN
+    RETURN false;
+  END IF;
+  FOR elem IN SELECT value FROM jsonb_array_elements(alimente)
+  LOOP
+    IF NOT (elem ? 'nume' AND elem ? 'calorii') THEN
+      RETURN false;
+    END IF;
+  END LOOP;
+  RETURN true;
+END $$;
+
 ALTER TABLE public.mese DROP CONSTRAINT IF EXISTS mese_alimente_shape_check;
-ALTER TABLE public.mese ADD  CONSTRAINT mese_alimente_shape_check CHECK (
-  jsonb_typeof(alimente) = 'array' AND NOT EXISTS (
-    SELECT 1 FROM jsonb_array_elements(alimente) e
-     WHERE NOT (e ? 'nume' AND e ? 'calorii')
-  )
-);
+ALTER TABLE public.mese ADD  CONSTRAINT mese_alimente_shape_check
+  CHECK (public.alimente_valid_shape(alimente));
 
 -- ==============================================================================
 -- 6. [MIGRATION_FIX / RLS_POLICIES] Index pe audit_log (user_id, created_at DESC)
