@@ -262,15 +262,19 @@ function createAiRouter({
   // ==========================================
   // RUTA DEDICATA: LOGARE MASA DIN CHAT (JSON STRICT MEAL_PROPOSAL)
   // ==========================================
-  router.post('/log-food-from-chat', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res) => {
+  const handleLogFoodChat = async (req, res) => {
     try {
       return res.json(await serviciuChat.logFoodDinChat(req.body));
     } catch (err) {
       if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
-      console.error('Eroare in /api/log-food-from-chat:', err.message);
+      console.error('Eroare in log food from chat:', err.message);
       return res.status(500).json({ eroare: 'Nu s-a putut genera propunerea de masa.' });
     }
-  });
+  };
+
+  router.post('/log-food-from-chat', requireAuth, aiLimiter, checkAiUsageQuota, handleLogFoodChat);
+  router.post('/log-food', requireAuth, aiLimiter, checkAiUsageQuota, handleLogFoodChat);
+  router.post('/log-food-chat', requireAuth, aiLimiter, checkAiUsageQuota, handleLogFoodChat);
 
   // ==========================================
   // RUTA: ESTIMARE RAPIDA TEXT ALIMENT (GROQ/LLM)

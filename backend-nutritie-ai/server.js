@@ -166,6 +166,20 @@ app.use(sanitizeRequest);
 // Idempotency-Key, nu mai creaza o intrare dubla la deconectari de retea.
 app.use(idempotencyMiddleware);
 
+// Normalizare URL: elimina slashes duble, prefixe /api/api sau /v1/v1 duplicat
+app.use((req, res, next) => {
+  if (req.url) {
+    let cleanUrl = req.url.replace(/\/{2,}/g, '/');
+    cleanUrl = cleanUrl.replace(/^\/api\/api\//i, '/api/');
+    cleanUrl = cleanUrl.replace(/^\/api\/v1\/api\/v1\//i, '/api/v1/');
+    cleanUrl = cleanUrl.replace(/^\/api\/v1\/api\//i, '/api/v1/');
+    if (cleanUrl !== req.url) {
+      req.url = cleanUrl;
+    }
+  }
+  next();
+});
+
 // ==========================================
 // RATE-LIMIT (C1)
 // ==========================================
