@@ -6,16 +6,7 @@ const router = express.Router();
 const { callWithTimeout } = require('../utils/httpTimeout');
 const { parseJsonFromLlm } = require('../utils/llmJson');
 const { numarModel } = require('../services/ai/vision');
-const {
-  construiesteUrlOpenFoodFacts,
-  citesteDinCacheGlobal,
-  citesteEstimareUtilizator,
-  salveazaProdusOff,
-  salveazaEstimareUtilizator,
-  verificaDreptDeScriere,
-  salveazaProdusManual,
-  EroareProprietateProdus,
-} = require('../utils/barcode');
+const { construiesteUrlOpenFoodFacts, EroareProprietateProdus } = require('../utils/barcode');
 
 /**
  * Rute de cod de bare (GET /api/produs-barcode/:code, POST /api/salveaza-produs-barcode).
@@ -25,7 +16,7 @@ const {
  * Inainte, aceeasi ruta intorcea trei forme diferite, cu cheia sursei alternand
  * intre `sursa` si `source` - clientul trebuia sa ghiceasca.
  */
-function createBarcodeRouter({ requireAuth, generalLimiter, contextDate }) {
+function createBarcodeRouter({ requireAuth, generalLimiter, contextDate, barcodeRepo }) {
   const raspunsBarcode = (res, { produs, sursa, estimat, dinCache }) =>
     res.json({
       produs,
@@ -49,9 +40,9 @@ function createBarcodeRouter({ requireAuth, generalLimiter, contextDate }) {
 
       // STRAT 1: cache global (surse verificate) + estimarile AI per utilizator (C2).
       try {
-        // `barcode_cache` este backend-only prin proiectare (politica `using (false)`),
-        // deci aici clientul admin este singura cale corecta.
-        const dinGlobal = await citesteDinCacheGlobal(ctx.admin, code);
+        // `barcode_cache` este backend-only prin proiectare (politica `using (false)`);
+        // repo-ul il citeste prin clientul admin — singura cale corecta.
+        const dinGlobal = await barcodeRepo.getProdusBarcode(ctx, code);
         if (dinGlobal) {
           return raspunsBarcode(res, {
             produs: dinGlobal.produs,
@@ -61,11 +52,8 @@ function createBarcodeRouter({ requireAuth, generalLimiter, contextDate }) {
           });
         }
 
-        // Estimarile sunt date ale utilizatorului: merg prin clientul cu RLS.
-        const alUtilizatorului = await citesteEstimareUtilizator(ctx.db, {
-          userId: ctx.userId,
-          cod: code,
-        });
+        // Estimarile sunt date ale utilizatorului: repo-ul le citeste prin clientul cu RLS.
+        const alUtilizatorului = await barcodeRepo.citesteEstimareUtilizator(ctx, code);
         if (alUtilizatorului) {
           return raspunsBarcode(res, {
             produs: alUtilizatorului.produs,
@@ -107,7 +95,7 @@ function createBarcodeRouter({ requireAuth, generalLimiter, contextDate }) {
           };
 
           try {
-            await salveazaProdusOff(ctx.admin, { cod: code, produs: normalized, payload: product });
+            await barcodeRepo.salveazaProdusOff(ctx, { cod: code, produs: normalized, payload: product });
           } catch (saveErr) {
             console.warn('Nu s-a putut salva in barcode_cache:', saveErr.message);
           }
@@ -176,8 +164,7 @@ RETURNEAZA STRICT EXCLUSIV UN OBIECT JSON valid in acest format:
             };
 
             try {
-              await salveazaEstimareUtilizator(ctx.db, {
-                userId: ctx.userId,
+              await barcodeRepo.salveazaEstimareUtilizator(ctx, {
                 cod: code,
                 produs: normalizedAi,
               });
@@ -245,19 +232,13 @@ RETURNEAZA STRICT EXCLUSIV UN OBIECT JSON valid in acest format:
       // Nu este bariera de securitate - bariera este predicatul din RPC, evaluat sub
       // blocarea randului. Un refuz aparut intre cele doua momente vine ca
       // EroareProprietateProdus si este tratat mai jos.
-      const drept = await verificaDreptDeScriere(ctx.admin, {
-        cod: String(code).trim(),
-        userId: ctx.userId,
-      });
-      if (!drept.permis) {
-        return res.status(drept.status).json({ eroare: drept.motiv });
-      }
-
-      await salveazaProdusManual(ctx.admin, {
-        cod: String(code).trim(),
-        userId: ctx.userId,
+      const salvare = await barcodeRepo.salveazaProdusBarcode(ctx, {
+        code: String(code).trim(),
         valori: { name, brand, quantity, kcal_100g: kc, protein_100g: p, carbs_100g: c, fat_100g: f },
       });
+      if (!salvare.permis) {
+        return res.status(salvare.status).json({ eroare: salvare.motiv });
+      }
       return res.json({ succes: true, message: 'Produs salvat in cache-ul local.' });
     } catch (err) {
       // Conflict de proprietate pierdut la limita: 409, nu 500. Utilizatorul trebuie

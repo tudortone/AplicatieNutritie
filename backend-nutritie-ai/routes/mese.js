@@ -9,12 +9,12 @@ const { valideazaMasa } = require('../utils/validareMese');
 /**
  * Rute de gestionare a meselor (DELETE/PUT/POST /api/mese).
  *
- * Interogarile trec prin `ctx.db` (clientul legat de JWT-ul utilizatorului, RLS
- * activ): un id care nu apartine utilizatorului nu poate fi sters/actualizat
- * chiar daca filtrul din cod ar lipsi. Validarea este partajata cu
- * utils/validareMese.js.
+ * Interogarile trec prin `meseRepo`, care foloseste `tabelUtilizator(ctx, 'mese')`
+ * pe `ctx.db` (clientul legat de JWT-ul utilizatorului, RLS activ): un id care nu
+ * apartine utilizatorului nu poate fi sters/actualizat chiar daca filtrul din cod
+ * ar lipsi. Validarea este partajata cu utils/validareMese.js.
  */
-function createMeseRouter({ requireAuth, generalLimiter, contextDate }) {
+function createMeseRouter({ requireAuth, generalLimiter, contextDate, meseRepo }) {
   // ==========================================
   // RUTA 4: STERGERE MASA
   // ==========================================
@@ -25,12 +25,7 @@ function createMeseRouter({ requireAuth, generalLimiter, contextDate }) {
         return res.status(400).json({ eroare: 'ID de masă invalid.' });
       }
       const ctx = contextDate(req, res);
-      const { data, error } = await ctx.db
-        .from('mese')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', ctx.userId)
-        .select('id');
+      const { data, error } = await meseRepo.deleteMasa(ctx, id);
 
       if (error) {
         console.error('Eroare DB stergere masa:', error.message);
@@ -62,12 +57,7 @@ function createMeseRouter({ requireAuth, generalLimiter, contextDate }) {
       }
 
       const ctx = contextDate(req, res);
-      const { data, error } = await ctx.db
-        .from('mese')
-        .update(validare.payload)
-        .eq('id', id)
-        .eq('user_id', ctx.userId)
-        .select();
+      const { data, error } = await meseRepo.updateMasa(ctx, id, validare.payload);
 
       if (error) {
         console.error('Eroare DB actualizare masa:', error.message);
@@ -107,10 +97,7 @@ function createMeseRouter({ requireAuth, generalLimiter, contextDate }) {
         ora: /^\d{2}:\d{2}(:\d{2})?$/.test(String(ora || '')) ? ora : null,
       };
 
-      const { data: result, error } = await ctx.db
-        .from('mese')
-        .insert([insertPayload])
-        .select();
+      const { data: result, error } = await meseRepo.createMasa(ctx, insertPayload);
 
       if (error) {
         console.error('Eroare DB inserare masa:', error.message);

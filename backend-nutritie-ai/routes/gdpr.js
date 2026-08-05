@@ -3,6 +3,8 @@
 const express = require('express');
 const router = express.Router();
 
+const { tabelUtilizator } = require('../utils/clientUtilizator');
+
 /**
  * Rute GDPR (Export date & Ștergere cont).
  *
@@ -15,7 +17,7 @@ const router = express.Router();
  * către `auth.users(id)` (migrările 001/002 + 20260805000001_gdpr_complete), deci
  * o singură ștergere curăță totul în cascadă, fără rânduri orfane.
  */
-function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate }) {
+function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate, profilRepo }) {
   // GET /api/user/export-data
   router.get('/export-data', requireAuth, generalLimiter, async (req, res) => {
     try {
@@ -26,7 +28,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       // sau indisponibil nu trebuie să doboare tot exportul.
       const citeste = async (tabela) => {
         try {
-          const { data, error } = await ctx.db.from(tabela).select('*').eq('user_id', userId);
+          const { data, error } = await tabelUtilizator(ctx, tabela).select('*').eq('user_id', userId);
           if (error) {
             console.warn(`[GDPR] Export ${tabela} esuat:`, error.message);
             return null;
@@ -44,7 +46,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       // delete-account (Art. 17 — dreptul la stergere acopera si logurile).
       const [mese, profil, antrenamente, estimariBarcode] = await Promise.all([
         citeste('mese'),
-        ctx.db.from('profil').select('*').eq('user_id', userId).maybeSingle().then(({ data }) => data ?? null).catch(() => null),
+        profilRepo.getProfil(ctx).catch(() => null),
         citeste('antrenamente'),
         citeste('barcode_estimari_utilizator'),
       ]);
@@ -75,7 +77,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       // identități (mapate Clerk) rândul din auth.users poate lipsi.
       const sterge = async (tabela) => {
         try {
-          await ctx.db.from(tabela).delete().eq('user_id', userId);
+          await tabelUtilizator(ctx, tabela).delete().eq('user_id', userId);
         } catch (err) {
           console.warn(`[GDPR] Stergere ${tabela} esuata:`, err.message);
         }

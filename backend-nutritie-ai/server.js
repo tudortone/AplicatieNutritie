@@ -37,6 +37,9 @@ const createAiRouter = require('./routes/ai');
 const createBarcodeRouter = require('./routes/barcode');
 const createProfilRouter = require('./routes/profil');
 const createMeseRouter = require('./routes/mese');
+const createMeseRepo = require('./repositories/meseRepo');
+const createBarcodeRepo = require('./repositories/barcodeRepo');
+const createProfilRepo = require('./repositories/profilRepo');
 const { creazaStoreRateLimit, creazaRegistruCheiValori } = require('./utils/storePartajat');
 const { getAiStatistici } = require('./utils/metrics');
 const { sanitizeRequest } = require('./utils/sanitize');
@@ -355,9 +358,9 @@ const aiR = createAiRouter({
   serviciuChat,
   semaforAi,
 });
-const barcodeR = createBarcodeRouter({ requireAuth, generalLimiter, contextDate });
+const barcodeR = createBarcodeRouter({ requireAuth, generalLimiter, contextDate, barcodeRepo: createBarcodeRepo() });
 const profilR = createProfilRouter({ requireAuth, generalLimiter, config });
-const meseR = createMeseRouter({ requireAuth, generalLimiter, contextDate });
+const meseR = createMeseRouter({ requireAuth, generalLimiter, contextDate, meseRepo: createMeseRepo() });
 const statusR = createStatusRouter({
   getProviderStatus: serviciuCascada.getProviderStatus,
   getAiStatistici,
@@ -370,7 +373,7 @@ app.use('/api', meseR);
 // Rute GDPR (export date & stergere cont). Se bazeaza pe supabaseAdmin pentru
 // export, dar acoperite de requireAuth; izolarea pe export este doar cosmetica
 // fata de RLS-ul real aplicat pe scrieri.
-app.use('/api/user', createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate }));
+app.use('/api/user', createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate, profilRepo: createProfilRepo() }));
 
 // ==========================================
 // HANDLER 404 PENTRU RUTE INEXISTENTE

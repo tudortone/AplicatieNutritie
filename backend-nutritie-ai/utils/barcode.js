@@ -164,11 +164,14 @@ async function citesteDinCacheGlobal(supabaseAdmin, cod) {
  * Cand primeste un client legat de JWT-ul utilizatorului, filtrul `.eq('user_id')`
  * devine redundant — dar este pastrat deliberat: apararea in adancime nu se
  * bazeaza pe presupunerea ca apelantul a transmis clientul corect.
+ *
+ * Parametrul se numeste `client`, nu `supabaseAdmin`: apelantul corect aici este
+ * `ctx.db` (clientul utilizatorului, cu RLS), NU clientul service_role.
  */
-async function citesteEstimareUtilizator(supabaseAdmin, { userId, cod }) {
+async function citesteEstimareUtilizator(client, { userId, cod }) {
 	if (!userId) return null;
 
-	const { data, error } = await supabaseAdmin
+	const { data, error } = await client
 		.from('barcode_estimari_utilizator')
 		.select('*')
 		.eq('user_id', userId)
@@ -208,11 +211,13 @@ async function salveazaProdusOff(supabaseAdmin, { cod, produs, payload }) {
 /**
  * Salveaza o estimare AI. Intentionat NU in cache-ul global: valorile sunt
  * generate de model si nu au ce cauta in datele altor utilizatori.
+ *
+ * Idem `client`: estimarile sunt date ale utilizatorului (RLS), nu ale sistemului.
  */
-async function salveazaEstimareUtilizator(supabaseAdmin, { userId, cod, produs }) {
+async function salveazaEstimareUtilizator(client, { userId, cod, produs }) {
 	if (!userId) throw new Error('Lipseste userId pentru estimarea per utilizator.');
 
-	const { error } = await supabaseAdmin
+	const { error } = await client
 		.from('barcode_estimari_utilizator')
 		.upsert({
 			user_id: userId,
