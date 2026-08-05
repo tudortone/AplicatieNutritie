@@ -7,8 +7,6 @@ import { View, ActivityIndicator, Text, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Sentry from '@sentry/react-native';
-import { ClerkProvider, ClerkLoaded } from '@clerk/clerk-expo';
-import * as SecureStore from 'expo-secure-store';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { OnboardingProvider } from '../context/OnboardingContext';
@@ -23,9 +21,14 @@ import OfflineBanner from '../components/OfflineBanner';
 import { GlobalErrorBoundary } from '../components/GlobalErrorBoundary';
 import '../i18n';
 
-if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
+// DSN-ul Sentry are forma https://<cheiePublica>@o<org>.ingest.<regiune>.sentry.io/<proiect>.
+// Fara segmentul `@` (cheia publica), SDK-ul arunca "Invalid Sentry Dsn" la fiecare boot.
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+const isSentryDsnValid = !!SENTRY_DSN && /^https:\/\/[^@\s]+@.+/.test(SENTRY_DSN);
+
+if (isSentryDsnValid) {
   Sentry.init({
-    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    dsn: SENTRY_DSN,
     debug: false,
     beforeSend(event) {
       const req = event.request;
@@ -67,26 +70,9 @@ if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
   } catch {
     // 'unhandledrejection' nu e suportat pe toate runtime-urile RN — il ignoram.
   }
+} else if (SENTRY_DSN) {
+  console.warn('[Sentry] DSN invalid in .env — lipseste cheia publica (`@`). Copiaza DSN-ul complet din Sentry → Settings → Projects → Client Keys (DSN).');
 }
-
-const tokenCache = {
-  async getToken(key: string) {
-    try {
-      return SecureStore.getItemAsync(key);
-    } catch {
-      return null;
-    }
-  },
-  async saveToken(key: string, value: string) {
-    try {
-      return SecureStore.setItemAsync(key, value);
-    } catch {
-      return;
-    }
-  },
-};
-
-const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_mock_clerk_key';
 
 LogBox.ignoreLogs(['expo-notifications: Android Push notifications', '`expo-notifications` functionality is not fully supported in Expo Go']);
 export const unstable_settings = { anchor: '(tabs)' };
@@ -152,10 +138,7 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
-  const clerkKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  const hasValidClerkKey = Boolean(clerkKey && clerkKey.startsWith('pk_') && clerkKey !== 'pk_test_mock_clerk_key');
-
-  const innerApp = (
+  return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider style={{ flex: 1 }}>
         <AppThemeProvider>
@@ -173,17 +156,5 @@ export default function RootLayout() {
         </AppThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
-  );
-
-  if (!hasValidClerkKey) {
-    return innerApp;
-  }
-
-  return (
-    <ClerkProvider publishableKey={clerkKey!} tokenCache={tokenCache}>
-      <ClerkLoaded>
-        {innerApp}
-      </ClerkLoaded>
-    </ClerkProvider>
   );
 }

@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Pressable, Text, View, StyleSheet, TouchableOpacity,
   TextInput, ScrollView, Dimensions, Alert, KeyboardAvoidingView, Platform, Modal
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -39,6 +40,7 @@ export default function CameraScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { session } = useAuth();
+  const insets = useSafeAreaInsets();
   const { addFavorite, isFavorite } = useFavorite();
   const [permission, requestPermission] = useCameraPermissions();
   
@@ -441,7 +443,7 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, { top: insets.top + 10 }]}>
         {/* Selector AI în Stânga */}
         <View style={styles.aiSelectorContainer}>
           <TouchableOpacity
@@ -477,7 +479,7 @@ export default function CameraScreen() {
 
         {/* Meniu alegere AI */}
         {aiMenuVisible && (
-          <Animated.View entering={FadeIn.duration(200)} style={[styles.aiDropdownMenu, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
+          <Animated.View entering={FadeIn.duration(200)} style={[styles.aiDropdownMenu, { top: insets.top + 74, backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
             <BlurView intensity={80} tint="dark" style={styles.aiDropdownBlur}>
               <Text style={styles.aiDropdownHeader}>SELECTEAZĂ CREIERUL AI</Text>
               
@@ -544,7 +546,7 @@ export default function CameraScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <Animated.View entering={FadeInUp.duration(500).springify()} style={[styles.resultSheet, { borderColor: colors.accent + '26' }]}>
             <BlurView intensity={50} tint="dark" style={styles.resultBlur}>
-              <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={styles.resultGrad}>
+              <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={[styles.resultGrad, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
                 <View style={styles.resultHandle} />
                 
                 <View style={styles.resultSection}>
@@ -628,7 +630,7 @@ export default function CameraScreen() {
       )}
 
       {scanError && (
-        <View style={styles.errorCard}>
+        <View style={[styles.errorCard, { top: insets.top + 78 }]}>
           <Text style={styles.errorText}>{scanError}</Text>
           <Pressable onPress={() => setScanError(null)} accessibilityRole="button" accessibilityLabel="Închide mesajul de eroare">
             <Text style={styles.retryText}>Închide</Text>
@@ -648,8 +650,8 @@ export default function CameraScreen() {
 
       {isSavingDiary && (
         <View style={styles.savingOverlay}>
-          <ActivityIndicator size="large" color="#CCFF00" />
-          <Text style={styles.savingText}>Salvez în jurnal...</Text>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={[styles.savingText, { color: colors.accent }]}>Salvez în jurnal...</Text>
         </View>
       )}
 
@@ -681,7 +683,7 @@ export default function CameraScreen() {
 
       {/* Shutter & Gallery button */}
       {rezultat.length === 0 && (
-        <Animated.View entering={FadeInUp.duration(600).delay(200)} style={styles.shutterArea}>
+        <Animated.View entering={FadeInUp.duration(600).delay(200)} style={[styles.shutterArea, { bottom: Math.max(insets.bottom, 16) + 20 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 28 }}>
             <TouchableOpacity
               testID="gallery-button"
@@ -739,7 +741,7 @@ const styles = StyleSheet.create({
 
   topHeader: {
     position: 'absolute',
-    top: 50, // sub notch
+    // top: suprascris inline cu insets.top + 10
     left: 20,
     right: 20,
     flexDirection: 'row',
@@ -799,7 +801,6 @@ const styles = StyleSheet.create({
   itemsList: { maxHeight: 220, marginBottom: 20 },
   ingredientRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   ingredientName: { fontSize: 16, fontWeight: '600', flex: 1, marginRight: 12, paddingVertical: 4 },
-  ingredientAmount: { fontSize: 15, fontWeight: '700', color: '#CCFF00' },
   gramContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 12, paddingHorizontal: 12, borderWidth: 1 },
   gramInput: { fontSize: 16, fontWeight: '800', paddingVertical: 8, minWidth: 40, textAlign: 'center' },
   gramUnit: { fontSize: 14, fontWeight: '600', marginLeft: 4 },
@@ -822,7 +823,7 @@ const styles = StyleSheet.create({
   retryText: { color: '#FFFFFF', fontWeight: '900', fontSize: 14, textDecorationLine: 'underline' },
 
   savingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(5,8,13,0.85)', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
-  savingText: { color: '#CCFF00', fontSize: 18, fontWeight: '800', marginTop: 16 },
+  savingText: { fontSize: 18, fontWeight: '800', marginTop: 16 },
 
   shutterArea: { position: 'absolute', bottom: 60, left: 0, right: 0, alignItems: 'center' },
   shutterBtn: { width: 80, height: 80, borderRadius: 40, overflow: 'hidden', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.6, shadowRadius: 24, elevation: 20, borderWidth: 3 },
@@ -837,7 +838,5 @@ const styles = StyleSheet.create({
   aiDropdownItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'transparent' },
   aiDropdownTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '700', marginBottom: 2 },
   aiDropdownDesc: { color: 'rgba(255,255,255,0.55)', fontSize: 12 },
-  cooldownBadge: { backgroundColor: 'rgba(239, 68, 68, 0.25)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: '#ef4444' },
-  cooldownBadgeText: { color: '#ef4444', fontSize: 12, fontWeight: '800' },
   statusIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.25)' },
 });

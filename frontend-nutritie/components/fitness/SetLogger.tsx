@@ -51,7 +51,7 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
     notifyChange(newSets);
   };
 
-  const updateSet = (index: number, field: keyof SetExercitiu, val: any) => {
+  const updateSet = (index: number, field: keyof SetExercitiu, val: number | SetType) => {
     const newSets = [...sets];
     newSets[index] = { ...newSets[index], [field]: val };
     notifyChange(newSets);
@@ -77,9 +77,9 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
 
   const getTypeColor = (type?: SetType) => {
     switch (type) {
-      case 'warmup': return '#F59E0B';
-      case 'dropset': return '#8B5CF6';
-      case 'failure': return '#EF4444';
+      case 'warmup': return colors.warning;
+      case 'dropset': return colors.accentSecondary;
+      case 'failure': return colors.danger;
       case 'working':
       default: return colors.accent;
     }
@@ -103,9 +103,11 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
 
       {sets.map((set, idx) => (
         <View key={idx} style={[styles.setRow, set.completed && { opacity: 0.6 }]}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.colSet, styles.setBtn, { backgroundColor: withAlpha(getTypeColor(set.set_type), 0.13), borderColor: getTypeColor(set.set_type) }]}
             onPress={() => cycleSetType(idx)}
+            accessibilityRole="button"
+            accessibilityLabel={`Tipul setului: ${set.set_type === 'warmup' ? 'încălzire' : set.set_type === 'dropset' ? 'drop set' : set.set_type === 'failure' ? 'la eșec' : 'lucrat'}. Apasă pentru a schimba`}
           >
             <Text style={[styles.setBtnText, { color: getTypeColor(set.set_type) }]}>
               {set.set_type === 'warmup' ? 'W' : set.set_type === 'dropset' ? 'D' : set.set_type === 'failure' ? 'F' : set.serie}
@@ -113,55 +115,55 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
           </TouchableOpacity>
 
           <View style={[styles.colMain, styles.stepperWrap, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
-            <TouchableOpacity onPress={() => updateSet(idx, 'greutate', Math.round(Math.max(0, (set.greutate || 0) - 2.5) * 10) / 10)} style={styles.stepBtn} hitSlop={8}>
+            <TouchableOpacity onPress={() => updateSet(idx, 'greutate', Math.round(Math.max(0, (set.greutate || 0) - 2.5) * 10) / 10)} style={styles.stepBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Scade greutatea">
               <Text style={[styles.stepBtnText, { color: colors.textSecondary }]}>-</Text>
             </TouchableOpacity>
             <Text style={[styles.stepVal, { color: colors.textPrimary }]}>{set.greutate}</Text>
-            <TouchableOpacity onPress={() => updateSet(idx, 'greutate', Math.round(((set.greutate || 0) + 2.5) * 10) / 10)} style={styles.stepBtn} hitSlop={8}>
+            <TouchableOpacity onPress={() => updateSet(idx, 'greutate', Math.round(((set.greutate || 0) + 2.5) * 10) / 10)} style={styles.stepBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Crește greutatea">
               <Text style={[styles.stepBtnText, { color: colors.textSecondary }]}>+</Text>
             </TouchableOpacity>
           </View>
 
           <View style={[styles.colMain, styles.stepperWrap, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
-            <TouchableOpacity onPress={() => updateSet(idx, 'repetari', Math.max(0, set.repetari - 1))} style={styles.stepBtn} hitSlop={8}>
+            <TouchableOpacity onPress={() => updateSet(idx, 'repetari', Math.max(0, set.repetari - 1))} style={styles.stepBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Scade repetările">
               <Text style={[styles.stepBtnText, { color: colors.textSecondary }]}>-</Text>
             </TouchableOpacity>
             <Text style={[styles.stepVal, { color: colors.textPrimary }]}>{set.repetari}</Text>
-            <TouchableOpacity onPress={() => updateSet(idx, 'repetari', Math.min(999, set.repetari + 1))} style={styles.stepBtn} hitSlop={8}>
+            <TouchableOpacity onPress={() => updateSet(idx, 'repetari', Math.min(999, set.repetari + 1))} style={styles.stepBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Crește repetările">
               <Text style={[styles.stepBtnText, { color: colors.textSecondary }]}>+</Text>
             </TouchableOpacity>
           </View>
 
           <View style={[styles.colExtra, styles.rpeWrap, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
-            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.min(10, (set.rpe || 8) + 1))}>
+            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.min(10, (set.rpe || 8) + 1))} hitSlop={8} accessibilityRole="button" accessibilityLabel="Crește RPE">
               <Text style={[styles.rpeArrow, { color: colors.textTertiary }]}>▲</Text>
             </TouchableOpacity>
             <Text style={[styles.stepVal, { color: colors.warning }]}>{set.rpe || 8}</Text>
-            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.max(1, (set.rpe || 8) - 1))}>
+            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.max(1, (set.rpe || 8) - 1))} hitSlop={8} accessibilityRole="button" accessibilityLabel="Scade RPE">
               <Text style={[styles.rpeArrow, { color: colors.textTertiary }]}>▼</Text>
             </TouchableOpacity>
           </View>
 
           <View style={[styles.colAction, styles.actionsWrap]}>
             {!set.completed ? (
-              <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: withAlpha(colors.accent, 0.13) }]}>
+              <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: withAlpha(colors.accent, 0.13) }]} hitSlop={6} accessibilityRole="button" accessibilityLabel="Marchează setul complet">
                 <Check size={18} color={colors.accent} />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: colors.success }]}>
+              <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: colors.success }]} hitSlop={6} accessibilityRole="button" accessibilityLabel="Marchează setul incomplet">
                 <Check size={18} color={colors.background} />
               </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={() => removeSet(idx)} style={{ padding: 4 }}>
+            <TouchableOpacity onPress={() => removeSet(idx)} style={styles.trashBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Șterge setul">
               <Trash2 size={16} color={colors.danger} opacity={0.7} />
             </TouchableOpacity>
           </View>
         </View>
       ))}
 
-      <TouchableOpacity style={[styles.addSetBtn, { borderColor: colors.border }]} onPress={addSet}>
+      <TouchableOpacity style={[styles.addSetBtn, { borderColor: colors.border }]} onPress={addSet} accessibilityRole="button" accessibilityLabel="Adaugă set">
         <Plus size={18} color={colors.textSecondary} />
-        <Text style={[styles.addSetText, { color: colors.textSecondary }]}>Adauga Set</Text>
+        <Text style={[styles.addSetText, { color: colors.textSecondary }]}>Adaugă Set</Text>
       </TouchableOpacity>
     </View>
   );
@@ -190,6 +192,7 @@ const styles = StyleSheet.create({
 
   actionsWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'flex-end' },
   actionBtn: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  trashBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
   
   addSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderWidth: 1, borderRadius: 18, borderStyle: 'dashed', marginTop: 10, gap: 6 },
   addSetText: { fontSize: 14, fontWeight: '700' },

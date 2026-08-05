@@ -23,6 +23,7 @@ import Animated, {
 import { Lock, ShieldCheck } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface LockScreenProps {
   biometricType: string;
@@ -35,10 +36,12 @@ export default function LockScreen({ biometricType, onUnlock }: LockScreenProps)
   const pulseScale = useSharedValue(1);
   const btnScale = useSharedValue(1);
   const [unlocking, setUnlocking] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   React.useEffect(() => {
+    if (reduceMotion) return;
     pulseScale.value = withRepeat(withTiming(1.07, { duration: 1300 }), -1, true);
-  }, [pulseScale]);
+  }, [pulseScale, reduceMotion]);
 
   const shieldAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],

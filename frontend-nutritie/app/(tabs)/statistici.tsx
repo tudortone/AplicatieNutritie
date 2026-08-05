@@ -8,6 +8,7 @@ import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withR
 import { Flame, Activity, TrendingUp, Award, Scale, TrendingDown, Sparkles, Plus, Target } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { supabase } from '../../supabase';
 import { localDayKey } from '../../lib/dateUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -25,10 +26,19 @@ interface ZiStatistica {
   esteAzi: boolean;
 }
 
+interface ZiIstoricGreutate {
+  data: string;
+  ziNume: string;
+  greutate: number;
+  isPadding?: boolean;
+}
+
 const AnimatedTrendArrow = ({ isLoss, color }: { isLoss: boolean; color: string }) => {
   const translateY = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reduceMotion) return;
     translateY.value = withRepeat(
       withSequence(
         withTiming(isLoss ? 3 : -3, { duration: 600 }),
@@ -37,7 +47,7 @@ const AnimatedTrendArrow = ({ isLoss, color }: { isLoss: boolean; color: string 
       -1,
       true
     );
-  }, [isLoss, translateY]);
+  }, [isLoss, translateY, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -87,9 +97,10 @@ export default function StatisticiScreen() {
       let cTinta = userMeta.caloriiTinta;
       if (!cTinta) {
         const st = await AsyncStorage.getItem('caloriiTinta');
-        cTinta = st ? parseInt(st) : 2000;
+        cTinta = st ? parseInt(st, 10) : 2000;
       }
-      setCaloriiTinta(Number(cTinta));
+      const valTinta = Number(cTinta);
+      setCaloriiTinta(Number.isFinite(valTinta) && valTinta > 0 ? valTinta : 2000);
 
       // 2. Extrage mesele din ultimele 7 zile
       const acum7Zile = new Date();
@@ -170,11 +181,13 @@ export default function StatisticiScreen() {
 
       // 4. Încarcă greutatea curentă și istoricul din AsyncStorage
       const storedGreutate = await AsyncStorage.getItem('greutate');
-      const Wc = storedGreutate ? parseFloat(storedGreutate) : 75.0;
+      const wParsed = storedGreutate ? parseFloat(storedGreutate) : NaN;
+      const Wc = Number.isFinite(wParsed) && wParsed > 0 ? wParsed : 75.0;
       setGreutateCurenta(Wc);
-      
+
       const storedTinta = await AsyncStorage.getItem('greutateTinta');
-      setGreutateTinta(storedTinta ? parseFloat(storedTinta) : 70.0);
+      const tintaParsed = storedTinta ? parseFloat(storedTinta) : NaN;
+      setGreutateTinta(Number.isFinite(tintaParsed) && tintaParsed > 0 ? tintaParsed : 70.0);
 
       const storedIstoric = userMeta.greutate_istoric || await AsyncStorage.getItem('greutate_istoric');
       if (storedIstoric) {
@@ -418,31 +431,44 @@ export default function StatisticiScreen() {
                     {(() => {
                       const displayData = zileChart === '7' ? istoricGreutate.slice(-7) : istoricGreutate.slice(-30);
                       const required = zileChart === '7' ? 7 : 30;
-                      const paddedData: any[] = [...displayData];
+                      const compact = zileChart === '30';
+                      const paddedData: ZiIstoricGreutate[] = [...displayData];
                       while (paddedData.length < required) {
                         paddedData.unshift({ data: `pad-${paddedData.length}`, ziNume: '', greutate: 0, isPadding: true });
                       }
-                      
+
                       const validData = paddedData.filter(p => !p.isPadding);
-                      const minW = validData.length > 0 ? Math.min(...validData.map(a => a.greutate)) - 1 : 0;
-                      const maxW = validData.length > 0 ? Math.max(...validData.map(a => a.greutate)) + 1 : 100;
-                      const range = maxW - minW || 5;
+                      const valoriValide = validData
+                        .map(a => Number(a.greutate))
+                        .filter((v): v is number => Number.isFinite(v) && v > 0);
+                      const minW = valoriValide.length > 0 ? Math.min(...valoriValide) - 1 : 0;
+                      const maxW = valoriValide.length > 0 ? Math.max(...valoriValide) + 1 : 100;
+                      const range = (maxW - minW) || 5;
 
                       return paddedData.map((zi, index, arr) => {
                         if (zi.isPadding) {
                           return <View key={zi.data + index} style={{ flex: 1 }} />;
                         }
-                        
-                        const inaltimeBara = Math.max(((zi.greutate - minW) / range) * 150, 15);
+
+                        const g = Number(zi.greutate);
+                        if (!Number.isFinite(g) || g <= 0) {
+                          return <View key={zi.data + index} style={{ flex: 1 }} />;
+                        }
+
+                        const inaltimeBara = Math.max(((g - minW) / range) * 150, 15);
                         const esteCurenta = index === arr.length - 1;
+                        const arataValoare = !compact || esteCurenta;
+                        const arataLabel = !compact || esteCurenta || index % 5 === 0;
 
                         return (
-                          <Animated.View key={zi.data + index} entering={FadeInUp.duration(500).delay(index * (zileChart === '30' ? 10 : 40))} style={styles.barContainer}>
-                            <Text style={[styles.barValue, { color: esteCurenta ? colors.accentSecondary : colors.textPrimary, fontSize: zileChart === '30' ? 8 : 10 }]}>
-                              {zi.greutate}
-                            </Text>
-                            
-                            <View style={styles.barTrack}>
+                          <Animated.View key={zi.data + index} entering={FadeInUp.duration(500).delay(index * (compact ? 10 : 40))} style={styles.barContainer}>
+                            {arataValoare && (
+                              <Text style={[styles.barValue, { color: esteCurenta ? colors.accentSecondary : colors.textPrimary, fontSize: compact ? 8 : 10 }]}>
+                                {zi.greutate}
+                              </Text>
+                            )}
+
+                            <View style={[styles.barTrack, compact && styles.barTrackCompact]}>
                               <LinearGradient
                                 colors={esteCurenta ? colors.accentSecondaryGradient : [colors.accentSecondary + '80', colors.accentSecondary + '30']}
                                 start={{ x: 0, y: 1 }}
@@ -454,9 +480,11 @@ export default function StatisticiScreen() {
                               />
                             </View>
 
-                            <Text style={[styles.barLabel, { color: esteCurenta ? colors.accentSecondary : colors.textSecondary, fontWeight: esteCurenta ? '900' : '600', fontSize: zileChart === '30' ? 9 : 11 }]}>
-                              {zi.ziNume}
-                            </Text>
+                            {arataLabel && (
+                              <Text style={[styles.barLabel, { color: esteCurenta ? colors.accentSecondary : colors.textSecondary, fontWeight: esteCurenta ? '900' : '600', fontSize: compact ? 9 : 11 }]}>
+                                {zi.ziNume}
+                              </Text>
+                            )}
                           </Animated.View>
                         );
                       });
@@ -630,6 +658,7 @@ const styles = StyleSheet.create({
   barContainer: { flex: 1, alignItems: 'center', gap: 6 },
   barValue: { fontSize: 10, fontWeight: '700' },
   barTrack: { width: 22, height: 160, justifyContent: 'flex-end', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 11, overflow: 'hidden' },
+  barTrackCompact: { width: 6, borderRadius: 3 },
   barFill: { width: '100%', borderRadius: 11 },
   barLabel: { fontSize: 12, marginTop: 4 },
 

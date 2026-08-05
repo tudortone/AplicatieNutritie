@@ -56,6 +56,22 @@ export function useHealthSync(): HealthSyncState {
   const subscriptionRef = useRef<Pedometer.Subscription | null>(null);
   const appState = useRef(AppState.currentState);
   const weightRef = useRef(weight);
+  // Bufferul de pași acumulează evenimentele brute ale senzorului și se golește
+  // o dată pe secundă, ca watchStepCount (foarte frecvent pe Android) să nu
+  // re-randeze toți consumatorii pentru fiecare pas.
+  const stepBufferRef = useRef(0);
+  const lastStepFlushRef = useRef(0);
+
+  const flushSteps = useCallback(() => {
+    const buffered = stepBufferRef.current;
+    stepBufferRef.current = 0;
+    if (buffered <= 0) return;
+    setSteps((prev) => {
+      const nextSteps = prev + buffered;
+      setActiveCalories(Math.round(nextSteps * 0.04 * (weightRef.current / 70)));
+      return nextSteps;
+    });
+  }, []);
 
   useEffect(() => {
     weightRef.current = weight;
@@ -149,11 +165,12 @@ export function useHealthSync(): HealthSyncState {
     }
     try {
       subscriptionRef.current = Pedometer.watchStepCount((result) => {
-        setSteps((prev) => {
-          const nextSteps = prev + result.steps;
-          setActiveCalories(Math.round(nextSteps * 0.04 * (weightRef.current / 70)));
-          return nextSteps;
-        });
+        stepBufferRef.current += result.steps;
+        const now = Date.now();
+        if (now - lastStepFlushRef.current >= 1000) {
+          lastStepFlushRef.current = now;
+          flushSteps();
+        }
       });
     } catch (e) {
       if (__DEV__) console.debug('[useHealthSync] watchStepCount indisponibil pe acest mediu:', e);
@@ -165,6 +182,7 @@ export function useHealthSync(): HealthSyncState {
       subscriptionRef.current.remove();
       subscriptionRef.current = null;
     }
+    flushSteps();
   };
 
   useEffect(() => {

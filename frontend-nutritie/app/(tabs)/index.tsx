@@ -48,7 +48,9 @@ function RingProgress({ procent, color, bgColor }: { procent: number; color: str
   }, [fill, progress, rotation]);
 
   const animatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: circumference * (1 - progress.value),
+    // Reanimated 4 + Fabric arunca "Loss of precision" pe valori fractionare
+    // transmise prin useAnimatedProps; rotunjim la intreg — imperceptibil pe inel.
+    strokeDashoffset: Math.round(circumference * (1 - progress.value)),
   }));
   const ringStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],

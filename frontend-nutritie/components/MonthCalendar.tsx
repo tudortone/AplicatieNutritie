@@ -89,10 +89,14 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
           ]}
           onPress={() => onSelectDate(date)}
           activeOpacity={0.7}
+          hitSlop={2}
+          accessibilityRole="button"
+          accessibilityState={{ selected: isSelected }}
+          accessibilityLabel={`${day} ${monthNames[currentMonth.getMonth()].toLowerCase()}${hasMeals ? ', cu mese înregistrate' : ''}`}
         >
           <Text style={[
             styles.dayText,
-            { color: isSelected ? '#000000' : colors.textPrimary },
+            { color: isSelected ? colors.background : colors.textPrimary },
             isToday && !isSelected && { color: colors.accent, fontWeight: '900' }
           ]}>
             {day}
@@ -100,7 +104,7 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
           {hasMeals && (
             <View style={[
               styles.dot,
-              { backgroundColor: isSelected ? '#000000' : colors.accent }
+              { backgroundColor: isSelected ? colors.background : colors.accent }
             ]} />
           )}
         </TouchableOpacity>
@@ -122,7 +126,7 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
   return (
     <View style={[styles.container, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={prevMonth} style={styles.arrowBtn}>
+        <TouchableOpacity onPress={prevMonth} style={[styles.arrowBtn, { backgroundColor: colors.overlayLight }]} accessibilityRole="button" accessibilityLabel="Luna anterioară">
           <ChevronLeft size={20} color={colors.accent} />
         </TouchableOpacity>
 
@@ -134,6 +138,9 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
             }}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Alege luna și anul"
+            accessibilityState={{ expanded: showPicker }}
           >
             <Text style={[styles.monthTitle, { color: colors.textPrimary }]}>
               {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
@@ -142,12 +149,12 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
               {showPicker ? '▲' : '▼'}
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={goToToday}>
+          <TouchableOpacity onPress={goToToday} hitSlop={6} accessibilityRole="button" accessibilityLabel="Salt la ziua de azi">
             <Text style={[styles.todayBtn, { color: colors.accent }]}>Azi</Text>
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={nextMonth} style={styles.arrowBtn}>
+        <TouchableOpacity onPress={nextMonth} style={[styles.arrowBtn, { backgroundColor: colors.overlayLight }]} accessibilityRole="button" accessibilityLabel="Luna următoare">
           <ChevronRight size={20} color={colors.accent} />
         </TouchableOpacity>
       </View>
@@ -163,11 +170,14 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
                 key={yr}
                 style={[
                   styles.yearChip,
-                  { backgroundColor: yr === selectedYear ? colors.accent : 'rgba(255,255,255,0.05)', borderColor: yr === selectedYear ? colors.accent : colors.cardBorder }
+                  { backgroundColor: yr === selectedYear ? colors.accent : colors.overlayLight, borderColor: yr === selectedYear ? colors.accent : colors.cardBorder }
                 ]}
                 onPress={() => setSelectedYear(yr)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: yr === selectedYear }}
+                accessibilityLabel={`Anul ${yr}`}
               >
-                <Text style={{ color: yr === selectedYear ? '#000000' : colors.textPrimary, fontWeight: '800', fontSize: 15 }}>
+                <Text style={{ color: yr === selectedYear ? colors.background : colors.textPrimary, fontWeight: '800', fontSize: 15 }}>
                   {yr}
                 </Text>
               </TouchableOpacity>
@@ -185,14 +195,17 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
                   key={mName}
                   style={[
                     styles.monthChip,
-                    { backgroundColor: isCurrent ? colors.accent : 'rgba(255,255,255,0.05)', borderColor: isCurrent ? colors.accent : colors.cardBorder }
+                    { backgroundColor: isCurrent ? colors.accent : colors.overlayLight, borderColor: isCurrent ? colors.accent : colors.cardBorder }
                   ]}
                   onPress={() => {
                     setCurrentMonth(new Date(selectedYear, idx, 1));
                     setShowPicker(false);
                   }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isCurrent }}
+                  accessibilityLabel={`Luna ${mName} ${selectedYear}`}
                 >
-                  <Text style={{ color: isCurrent ? '#000000' : colors.textPrimary, fontWeight: '700', fontSize: 13 }}>
+                  <Text style={{ color: isCurrent ? colors.background : colors.textPrimary, fontWeight: '700', fontSize: 13 }}>
                     {mName.substring(0, 3)}
                   </Text>
                 </TouchableOpacity>
@@ -224,7 +237,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
   },
