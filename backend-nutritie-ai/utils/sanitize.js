@@ -37,23 +37,30 @@ const MAX_NODURI = 5000;
  * Varianta anterioara continea exclusiv sabloane in engleza, intr-o aplicatie
  * romaneasca. Lista de mai jos acopera si romana, dar ramane o plasa cu ochiuri.
  */
+// B-7: potrivirile cer cuvinte intregi (`\b`) si secvente imperative adresate
+// modelului, nu simple subsiruri. Fara aceasta garda, descrieri legitime de
+// mancare ("fara a uita instructiunile de pe ambalaj", "you are now ready to
+// serve") erau marcate drept atac si blocau utilizatori reali.
 const PROMPT_INJECTION_PATTERNS = [
-	/ignore (all )?(previous|prior|above)/i,
-	/disregard (all )?previous/i,
-	/forget (all )?previous/i,
-	/you are now/i,
-	/pretend (you are|to be)/i,
-	/act as (if|though|a)/i,
-	/new instructions?:/i,
-	/system prompt/i,
-	/reveal (your|the) (prompt|instructions)/i,
-	/ignor[aăâ] (toate )?(instruc[tț]iunile|mesajele) (anterioare|de mai sus|precedente)/i,
-	/uit[aă] (tot|toate|instruc[tț]iunile)/i,
-	/de acum (e[sș]ti|vei fi)/i,
-	/comport[aă]-te ca/i,
-	/prefă-te c[aă]/i,
-	/instruc[tț]iuni noi:/i,
-	/arat[aă]-mi (prompt-?ul|instruc[tț]iunile)/i,
+	/\bignore (all )?(previous|prior|above)\b/i,
+	/\bdisregard (all )?previous\b/i,
+	/\bforget (all )?(previous|prior)\b/i,
+	/\bfrom now on,? you (are|will)\b/i,
+	/\byou are now (a |an |the |my |our |chatgpt|assistant|nutritionist|expert|bot)\b/i,
+	/\bpretend (you are|to be)\b/i,
+	/\bact as (if|though)\b/i,
+	/\bact as (a |an |the |my |our |your )(nutritionist|dietician|chef|expert|assistant|chatgpt|gpt|ai|model|bot)\b/i,
+	/\bnew instructions?:/i,
+	/\bsystem prompt\b/i,
+	/\breveal (your|the) (prompt|instructions)\b/i,
+	/\bignor[aăâ] (toate )?(instruc[tț]iunile|mesajele) (anterioare|de mai sus|precedente)/i,
+	/\buit[aă] (tot|toate|instruc[tț]iunile) (anterioare|de mai sus|precedente)/i,
+	/\bde acum e[sș]ti\b/i,
+	/\bde acum vei fi\b/i,
+	/\bcomport[aă]-te ca\b/i,
+	/\bprefă-te c[aă]\b/i,
+	/\binstruc[tț]iuni noi:/i,
+	/\barat[aă]-mi (prompt-?ul|instruc[tț]iunile)\b/i,
 	/\[system\]/i,
 	/<\|system\|>/i,
 	/<\|user\|>/i,
