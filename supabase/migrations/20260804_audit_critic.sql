@@ -1,0 +1,20 @@
+-- ==============================================================================
+-- NUTRIAI — MIGRARE GOL (TOMBSTONE), 2026-08
+--
+-- NU EXECUTĂ NIMIC. Există doar pentru istoricul de versiuni (`schema_migrations`).
+--
+-- Context: migrarea `20260804_audit_critic.sql` a fost RENUMITĂ în
+-- `20260804000004_audit_critic.sql` (D-2, commit a7eb047) pentru un prefix
+-- conformant (14 cifre, sortat după fold-ul `...03000`). Baza de date remote
+-- (branch-ul de preview al integrării Supabase) păstrase versiunea veche
+-- `20260804` în `supabase_migrations.schema_migrations`. `supabase db push`
+-- refuză când remote are versiuni inexistente local:
+--
+--     Remote migration versions not found in local migrations directory.
+--
+-- Acest fișier gol face ca versiunea `20260804` să existe și local, astfel încât
+-- guard-ul să treacă. Conținutul real al migrării trăiește în
+-- `20260804000004_audit_critic.sql` (idempotent — reaplicarea pe preview este
+-- sigură). Pe o bază nouă (fresh), acest tombstone se aplică primul ca no-op,
+-- fiind sortat înaintea migrării 001.
+-- ==============================================================================
