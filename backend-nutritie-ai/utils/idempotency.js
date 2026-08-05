@@ -1,70 +1,86 @@
 'use strict';
 
+const crypto = require('crypto');
+const { creeazaRegistruCheiValori } = require('./storePartajat');
+
+const TTL_MS = 15 * 60 * 1000;
+const registruImplicit = creeazaRegistruCheiValori({
+  url: process.env.REDIS_URL,
+  prefix: 'nutri:idem',
+});
+
+const hash = (valoare) => crypto
+  .createHash('sha256')
+  .update(String(valoare))
+  .digest('hex');
+
 /**
- * Middleware pentru idempotența scrierilor (A-9).
- * Previne duplicarea meselor/înregistrărilor la deconectări temporare ale rețelei mobile.
+ * Middleware-ul ruleaza inainte de autentificare, deci nu foloseste un `sub`
+ * JWT nevalidat. Namespace-ul este hash-ul tokenului complet: un atacator nu
+ * poate fabrica namespace-ul altei sesiuni doar cunoscand ID-ul utilizatorului,
+ * iar tokenul brut nu este stocat niciodata.
  */
+function namespaceCerere(req) {
+  const autorizare = req.headers.authorization;
+  if (typeof autorizare === 'string' && autorizare.startsWith('Bearer ')) {
+    return `token:${hash(autorizare.slice(7))}`;
+  }
+  const ip = req.ip || req.socket?.remoteAddress || 'necunoscut';
+  return `anon:${hash(`${ip}:${req.headers['user-agent'] || ''}`)}`;
+}
 
-const idempotencyCache = new Map();
-const TTL_MS = 15 * 60 * 1000; // 15 minute fereastră de idempotență
-// Plafon anti-DoS (audit): fără el, Idempotency-Key-uri unice umpleau memoria
-// nelimitat (Map fără max size). Evacuare LRU la fel ca TokenCache.
-const MAX_INTRARI = 5000;
+function construiesteCheie(req, idempotencyKey) {
+  const cale = String(req.originalUrl || req.path || '').split('?')[0];
+  return `${namespaceCerere(req)}:${req.method}:${hash(cale)}:${hash(idempotencyKey)}`;
+}
 
-// Curățare periodică o dată la 5 minute
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of idempotencyCache.entries()) {
-    if (now > entry.expiresAt) {
-      idempotencyCache.delete(key);
+function creeazaMiddlewareIdempotenta({ registru = registruImplicit, ttlMs = TTL_MS } = {}) {
+  return async function idempotencyMiddleware(req, res, next) {
+    if (req.method !== 'POST') return next();
+
+    const idempotencyKey = req.headers['idempotency-key'];
+    if (typeof idempotencyKey !== 'string' || !idempotencyKey.trim()) return next();
+    if (idempotencyKey.length > 200) {
+      return res.status(400).json({ eroare: 'Idempotency-Key este prea lung.' });
     }
-  }
-}, 5 * 60 * 1000).unref();
 
-const eliminaDacaPlafon = () => {
-  while (idempotencyCache.size >= MAX_INTRARI) {
-    const ceaMaiVeche = idempotencyCache.keys().next().value;
-    if (ceaMaiVeche === undefined) break;
-    idempotencyCache.delete(ceaMaiVeche);
-  }
-};
+    const cacheKey = construiesteCheie(req, idempotencyKey.trim());
+    let existent = null;
+    try {
+      existent = await registru.get(cacheKey);
+    } catch {
+      // Idempotenta este protectie contra duplicatelor, nu motiv sa oprim API-ul.
+    }
 
-const idempotencyMiddleware = (req, res, next) => {
-  if (req.method !== 'POST') return next();
+    if (
+      existent &&
+      Number.isInteger(existent.status) &&
+      existent.status >= 200 &&
+      existent.status < 300
+    ) {
+      return res.status(existent.status).json(existent.body);
+    }
 
-  const idempotencyKey = req.headers['idempotency-key'];
-  if (!idempotencyKey || typeof idempotencyKey !== 'string') {
+    const originalJson = res.json.bind(res);
+    res.json = (body) => {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        Promise.resolve(
+          registru.set(cacheKey, { status: res.statusCode, body }, ttlMs),
+        ).catch(() => {});
+      }
+      return originalJson(body);
+    };
+
     return next();
-  }
-
-  const cacheKey = `${req.user?.id || 'anon'}:${req.path}:${idempotencyKey}`;
-  const existing = idempotencyCache.get(cacheKey);
-
-  if (existing) {
-    if (Date.now() <= existing.expiresAt) {
-      return res.status(existing.status).json(existing.body);
-    } else {
-      idempotencyCache.delete(cacheKey);
-    }
-  }
-
-  const originalJson = res.json.bind(res);
-  res.json = (body) => {
-    if (res.statusCode >= 200 && res.statusCode < 300) {
-      eliminaDacaPlafon();
-      idempotencyCache.set(cacheKey, {
-        status: res.statusCode,
-        body,
-        expiresAt: Date.now() + TTL_MS
-      });
-    }
-    return originalJson(body);
   };
+}
 
-  next();
-};
+const idempotencyMiddleware = creeazaMiddlewareIdempotenta();
 
 module.exports = {
   idempotencyMiddleware,
-  idempotencyCache
+  creeazaMiddlewareIdempotenta,
+  namespaceCerere,
+  construiesteCheie,
+  TTL_MS,
 };
