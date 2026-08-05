@@ -143,13 +143,25 @@ Sarcina ta: Raspunde prietenos, tinand cont de istoricul discutiei si de calorii
       inregistreazaAi({ provider: 'groq', model: 'llama-3.3-70b-versatile', ruta: 'chat', ok: false });
       console.warn('Eroare Groq API in /api/chat, activam fallback Gemini text:', groqError.message || groqError);
 
-      const geminiPrompt = `${systemPrompt}\n\nIstoricul conversatiei si intrebarea curenta:\n${messages.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n')}\n\nASSISTANT:`;
+      // P2.6 (audit 2026-08): instructiunile de sistem NU se concateneaza in rolul
+      // 'user'. Gemini primeste systemPrompt separat (canalul de instructiuni) si
+      // istoricul ca `contents` cu roluri distincte user/model — exact cum Groq
+      // primeste messages. Altfel mesajele utilizatorului se amestecau cu regulile
+      // sistemului intr-un singur blob de text, slabind apararea anti-injectie.
+      const sistem = messages.find((m) => m.role === 'system');
+      const istoricGemini = messages
+        .filter((m) => m.role !== 'system')
+        .map((m) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }],
+        }));
 
       for (const modelName of getGeminiModelsList().filter(Boolean)) {
         try {
           const model = genAI.getGenerativeModel({ model: modelName });
           const result = await callWithSoftTimeout(model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: geminiPrompt }] }],
+            systemInstruction: { parts: [{ text: sistem?.content || systemPrompt }] },
+            contents: istoricGemini,
           }), 30000);
           const raspunsText = result?.response?.text();
           if (raspunsText) {

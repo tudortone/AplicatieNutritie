@@ -75,7 +75,12 @@ export default function CameraScreen() {
       let active = true;
       const fetchStatus = async () => {
         try {
-          const res = await fetch(`${API_URL}/api/ai-status`);
+          // Statusul AI e acum protejat cu autentificare (P2.5), deci trimitem token-ul.
+          const res = await fetch(`${API_URL}/api/ai-status`, {
+            headers: session?.access_token
+              ? { Authorization: `Bearer ${session.access_token}` }
+              : undefined,
+          });
           if (res.ok) {
             const data = await res.json();
             if (active) setAiStatus(data);
@@ -196,7 +201,7 @@ export default function CameraScreen() {
         // Dupa un scan REUSIT, incarcam poza pe ImageKit CDN (nu aruncam gunoi pe CDN
         // pentru poze esuate). URL-ul ajunge in masa salvata (campul alimente, JSONB).
         imageKitUrlRef.current = null;
-        uploadImageToImageKit(imageUri)
+        uploadImageToImageKit(imageUri, undefined, session?.user?.id)
           .then((r) => {
             imageKitUrlRef.current = r.url;
           })

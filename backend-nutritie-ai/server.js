@@ -33,10 +33,15 @@ const { parseJsonFromLlm } = require('./utils/llmJson');
 const { construiesteIstoricSigur, valideazaIngrediente } = require('./utils/promptSafety');
 const { valideazaMasa } = require('./utils/validareMese');
 const { creeazaContextDate } = require('./utils/clientUtilizator');
-const { idempotencyMiddleware } = require('./utils/idempotency');
-const { checkAiUsageQuota } = require('./utils/aiUsageQuota');
+const { creeazaMiddlewareIdempotenta } = require('./utils/idempotency');
+const { creeazaCheckAiUsageQuota } = require('./utils/aiUsageQuota');
 const createGdprRouter = require('./routes/gdpr');
 const { creazaStoreRateLimit, creazaRegistruCheiValori } = require('./utils/storePartajat');
+const { calculeazaNivel } = require('./utils/gamificare');
+const {
+  construiesteGazdePermise,
+  creeazaValideazaUrlImagine,
+} = require('./utils/valideazaUrlImagine');
 const { inregistreazaAi, getAiStatistici } = require('./utils/metrics');
 const {
   sanitizeRequest,
@@ -137,10 +142,12 @@ if (config.imagekit.publicKey && config.imagekit.privateKey && config.imagekit.u
 }
 
 const app = express();
-// Decizie (audit): 1 = un singur hop de proxy in fata (Render) — req.ip provine
-// din X-Forwarded-For setat de proxy, nu din header-ul clientului. Gruparea IPv6
-// si legarea cheilor de rate-limit pe IP se fac in utils/rateLimit.js (ipKeyGenerator).
-app.set('trust proxy', 1);
+// Decizie (audit): numarul de hopuri de proxy in fata instantei este configurabil
+// prin TRUST_PROXY_HOPS (Render = 1). `req.ip` provine din X-Forwarded-For setat
+// de proxy, nu din header-ul clientului; o valoare gresita ar permite IP-spoofing
+// la rate-limiting, deci config/env.js o valideaza la boot. Gruparea IPv6 si
+// legarea cheilor de rate-limit pe IP se fac in utils/rateLimit.js (ipKeyGenerator).
+app.set('trust proxy', config.trustProxyHops);
 app.use(helmet());
 app.use(compression());
 const port = config.port;
@@ -163,6 +170,10 @@ app.use(sanitizeRequest);
 
 // Idempotenta pe scrieri (A-9): replierea unui POST din acelasi client, cu acelasi
 // Idempotency-Key, nu mai creaza o intrare dubla la deconectari de retea.
+// P2.7: cache-ul e partajat intre instante prin acelasi store ca rate-limiting,
+// ca un retry care aterizeaza pe alta instanta sa fie tot deduplicat.
+const registruIdempotenta = creazaRegistruCheiValori({ url: config.redisUrl, prefix: 'nutri:idem' });
+const idempotencyMiddleware = creeazaMiddlewareIdempotenta({ registru: registruIdempotenta });
 app.use(idempotencyMiddleware);
 
 // ==========================================
@@ -171,7 +182,7 @@ app.use(idempotencyMiddleware);
 // B-10: daca REDIS_URL e configurat, store-ul este partajat intre instante.
 // Fara el, creeazaLimitatoare foloseste MemoryStore (per-proces).
 const storePartajat = creazaStoreRateLimit({ url: config.redisUrl });
-const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter } =
+const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, imagekitAuthLimiter } =
   creeazaLimitatoare({
     store: storePartajat?.store,
     avertizeazaFaraStore: config.esteProductie,
@@ -322,7 +333,7 @@ function contextDate(req, res) {
 // ==========================================
 // IMAGEKIT AUTHENTICATION ENDPOINT
 // ==========================================
-app.get('/api/imagekit-auth', requireAuth, generalLimiter, (req, res) => {
+app.get('/api/imagekit-auth', requireAuth, imagekitAuthLimiter, (req, res) => {
   if (!imagekit) {
     return res.status(503).json({
       eroare: 'ImageKit nu este configurat (lipsesc IMAGEKIT_PUBLIC_KEY / IMAGEKIT_PRIVATE_KEY / IMAGEKIT_URL_ENDPOINT).',
@@ -345,43 +356,28 @@ app.get('/api/imagekit-auth', requireAuth, generalLimiter, (req, res) => {
 // TRIGGER.DEV ASYNC AI FOOD ANALYSIS ENDPOINT
 // ==========================================
 
-// Gazde permise pentru imaginile trimise catre task-ul din fundal.
-// Fara aceasta lista, `imageUrl` era acceptat ca text liber, deci un utilizator
-// autentificat putea pune serverul sa descarce orice adresa (SSRF).
-const GAZDE_IMAGINI_PERMISE = (() => {
-  const gazde = new Set();
-  if (config.imagekit.urlEndpoint) {
-    try {
-      gazde.add(new URL(config.imagekit.urlEndpoint).hostname.toLowerCase());
-    } catch { /* endpoint malformat: ramane fail-closed */ }
-  }
-  try {
-    gazde.add(new URL(config.supabase.url).hostname.toLowerCase());
-  } catch { /* idem */ }
-  return gazde;
-})();
+// Gazde permise pentru imaginile trimise catre task-ul din fundal (SSRF).
+// Regula e partajata cu task-ul Trigger.dev (utils/valideazaUrlImagine.js), ca
+// descarcarea din fundal sa verifice acelasi lucru ca serverul la acceptare.
+const gazdeImaginiPermise = construiesteGazdePermise({
+  imagekitUrlEndpoint: config.imagekit.urlEndpoint,
+  supabaseUrl: config.supabase.url,
+});
+// La acceptarea unui upload, imaginea trebuie sa stea sub /mancare/<userId>/,
+// ca proprietatea sa fie evidenta din cale, nu doar din cine a trimis cererea.
+const valideazaUrlImagineUtilizator = (userId) =>
+  creeazaValideazaUrlImagine({
+    gazdePermise: gazdeImaginiPermise,
+    folderPrefix: userId ? `/mancare/${userId}/` : null,
+  });
 
-function valideazaUrlImagine(valoare) {
-  if (typeof valoare !== 'string' || !valoare.trim()) {
-    return { ok: false, eroare: 'URL-ul imaginii este obligatoriu.' };
-  }
-  let adresa;
-  try {
-    adresa = new URL(valoare.trim());
-  } catch {
-    return { ok: false, eroare: 'URL-ul imaginii este invalid.' };
-  }
-  if (adresa.protocol !== 'https:') {
-    return { ok: false, eroare: 'URL-ul imaginii trebuie sa foloseasca https.' };
-  }
-  if (!GAZDE_IMAGINI_PERMISE.has(adresa.hostname.toLowerCase())) {
-    return {
-      ok: false,
-      eroare: 'Imaginea trebuie incarcata pe stocarea aplicatiei inainte de analiza.',
-    };
-  }
-  return { ok: true, url: adresa.toString() };
-}
+// Cota zilnica AI per utilizator (S-10): contorul e partajat intre instante prin
+// acelasi store ca rate-limiting, ca plafonul sa nu se inmultasca cu instantele.
+// Prefix diferit fata de `registruAi` (cooldown) ca sa nu colizioneze cheile.
+// Declarata INAINTE de ruta care o foloseste (un `const` referit mai jos ar fi
+// ReferenceError la boot — TDZ).
+const registruQuotaAi = creazaRegistruCheiValori({ url: config.redisUrl, prefix: 'nutri:quota' });
+const checkAiUsageQuota = creeazaCheckAiUsageQuota({ registru: registruQuotaAi });
 
 app.post('/api/trigger-analiza-mancare', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res) => {
   if (!config.triggerSecretKey) {
@@ -392,7 +388,7 @@ app.post('/api/trigger-analiza-mancare', requireAuth, aiLimiter, checkAiUsageQuo
   }
   try {
     const { imageUrl, tipMasa } = req.body;
-    const verificare = valideazaUrlImagine(imageUrl);
+    const verificare = valideazaUrlImagineUtilizator(req.user.id)(imageUrl);
     if (!verificare.ok) {
       return res.status(400).json({ eroare: verificare.eroare });
     }
@@ -433,7 +429,10 @@ const serviciuVision = creeazaServiciuVision({ config });
 const serviciuCascada = creeazaServiciuCascada({ config, registruAi });
 const serviciuChat = creeazaServiciuChat({ config, genAI });
 
-app.get('/api/ai-status', async (req, res) => {
+// P2.5 (audit 2026-08): statusul si metricile AI sunt informatii interne —
+// detalii despre furnizori, cooldown-uri si costuri. Inainte era public pentru
+// oricine stia URL-ul; acum e vizibil doar pentru utilizatori autentificati.
+app.get('/api/ai-status', requireAuth, generalLimiter, async (req, res) => {
   res.json({
     gemini: await serviciuCascada.getProviderStatus('gemini'),
     openai: await serviciuCascada.getProviderStatus('openai'),
@@ -1235,10 +1234,62 @@ app.post('/api/mese', requireAuth, generalLimiter, async (req, res) => {
   }
 });
 
+// ==========================================
+// SALVARE GAMIFICARE (P2.8, audit 2026-08)
+// ==========================================
+// Singura cale de SCRIERE pe `gamificare`. RLS-ul permite utilizatorului doar
+// SELECT pe randul propriu; scrierea trece prin service_role, cu valori
+// validate si `nivel` recalculat server-side din XP (nivelul NU se accepta de la
+// client). `user_id` vine EXCLUSIV din identitatea rezolvata, niciodata din corp.
+// Limita: XP-ul e tot trimis de client (provenit din actiuni client-side); acest
+// endpoint inchide gaura "scriu orice pe randul meu", nu rederiveaza XP-ul din
+// date verificate — aceea ar fi o re-proiectare a gamificarii, nu un fix de securitate.
+app.post('/api/gamificare', requireAuth, generalLimiter, async (req, res) => {
+  try {
+    const ctx = contextDate(req, res);
+    const userId = ctx.userId;
+
+    const corp = req.body && typeof req.body === 'object' ? req.body : {};
+    const xpTotal = Math.max(0, Math.min(Math.trunc(Number(corp.xpTotal)) || 0, 1000000));
+    const streak = Math.max(0, Math.min(Math.trunc(Number(corp.streak)) || 0, 3650));
+    const zi =
+      typeof corp.ultimaZiActiva === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(corp.ultimaZiActiva)
+        ? corp.ultimaZiActiva
+        : null;
+    const questuri = Array.isArray(corp.questuriAzi) ? corp.questuriAzi.slice(0, 20) : [];
+    const insigne = Array.isArray(corp.insigne) ? corp.insigne.map(String).slice(0, 50) : [];
+
+    const nivel = calculeazaNivel(xpTotal);
+
+    const { error } = await ctx.admin
+      .from('gamificare')
+      .upsert({
+        user_id: userId,
+        xp_total: xpTotal,
+        nivel,
+        streak,
+        ultima_zi_activa: zi,
+        questuri_azi: questuri,
+        insigne,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+
+    if (error) {
+      console.error('Eroare DB salvare gamificare:', error.message);
+      return res.status(500).json({ eroare: 'Nu s-a putut salva progresul de gamificare.' });
+    }
+
+    return res.json({ succes: true, nivel, xpTotal });
+  } catch (err) {
+    console.error('Eroare gamificare:', err.message);
+    return res.status(500).json({ eroare: 'Eroare la salvarea progresului de gamificare.' });
+  }
+});
+
 // Rute GDPR (export date & stergere cont). Se bazeaza pe supabaseAdmin pentru
 // export, dar acoperite de requireAuth; izolarea pe export este doar cosmetica
 // fata de RLS-ul real aplicat pe scrieri.
-app.use('/api/user', createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate }));
+app.use('/api/user', createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate, imagekit }));
 
 // ==========================================
 // VALIDARE PREMIUM SERVER-SIDE (B-09)

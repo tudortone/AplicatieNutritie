@@ -1,5 +1,9 @@
 const { task } = require('@trigger.dev/sdk/v3');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const {
+  construiesteGazdePermise,
+  creeazaValideazaUrlImagine,
+} = require('../../utils/valideazaUrlImagine');
 
 // Cascade de modele Gemini vision, identica cu cea din server.js.
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
@@ -45,9 +49,26 @@ exports.analizaMancareTask = task({
       };
     }
 
+    // SSRF fail-closed: aceeasi validare ca server.js, aplicata SI in task-ul din
+    // fundal. Serverul valideaza la acceptare, dar task-ul este executat separat
+    // de Trigger.dev; fara re-validare aici, un payload craftat ar descarca orice
+    // adresa din reteaua de executie. Fail-closed: env lipsa => nicio gazda permisa.
+    const valideazaImagine = creeazaValideazaUrlImagine({
+      gazdePermise: construiesteGazdePermise({
+        imagekitUrlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+        supabaseUrl: process.env.SUPABASE_URL,
+      }),
+      folderPrefix: userId ? `/mancare/${userId}/` : null,
+    });
+    const verificare = valideazaImagine(imageUrl);
+    if (!verificare.ok) {
+      return { success: false, eroare: verificare.eroare, imageUrl };
+    }
+    const urlSigura = verificare.url;
+
     try {
       // 1. Descarcam imaginea de pe CDN (ImageKit) — nu mai depindem de upload-ul multipart.
-      const resp = await fetch(imageUrl, { signal: AbortSignal.timeout(20000) });
+      const resp = await fetch(urlSigura, { signal: AbortSignal.timeout(20000) });
       if (!resp.ok) {
         throw new Error(`Descărcarea imaginii a eșuat (${resp.status}) pentru ${imageUrl}`);
       }

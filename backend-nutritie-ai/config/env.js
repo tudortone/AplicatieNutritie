@@ -84,12 +84,76 @@ function incarcaConfig() {
 		);
 	}
 
+	// Chei AI validate la boot (P3). O cheie setata dar malformata va esua la
+	// fiecare cerere (401) si cascada de furnizori va arde bugetul de apeluri inutil.
+	// Depistata la boot, nu la primul utilizator. Cheile lipsa sunt OK — cascada
+	// sare peste furnizorul respectiv. Formatul trebuie sa ramana permissiv (doar
+	// prefixul + o lungime minima), ca o variatie legitima de cheie sa nu opreasca
+	// boot-ul productiei.
+	const CHEI_AI = [
+		{ prefix: 'GEMINI_API_KEY', eticheta: 'Gemini', regex: /^AIza[A-Za-z0-9_-]{20,}$/ },
+		{ prefix: 'GROQ_API_KEY', eticheta: 'Groq', regex: /^gsk_[A-Za-z0-9]{20,}$/ },
+		{ prefix: 'OPENAI_API_KEY', eticheta: 'OpenAI', regex: /^sk-[A-Za-z0-9_-]{20,}$/ },
+		{ prefix: 'OPENROUTER_API_KEY', eticheta: 'OpenRouter', regex: /^sk-or-[A-Za-z0-9_-]{10,}$/ },
+	];
+
+	// Aceeasi logica ca getApiKeysList() din services/ai/vision.js: cheia de baza,
+	// varianta concatenata `S` (separata prin virgula) si variantele _2.._5.
+	function cheiDinPrefix(prefix) {
+		const chei = [];
+		if (process.env[prefix]) chei.push(process.env[prefix]);
+		if (process.env[`${prefix}S`]) {
+			process.env[`${prefix}S`]
+				.split(',')
+				.map((k) => k.trim())
+				.filter(Boolean)
+				.forEach((k) => chei.push(k));
+		}
+		for (let i = 2; i <= 5; i++) {
+			if (process.env[`${prefix}_${i}`]) chei.push(process.env[`${prefix}_${i}`]);
+		}
+		return [...new Set(chei)];
+	}
+
+	// Analog CORS-ului: esec dur doar in productie (un deploy gresit moare la
+	// boot), avertisment in dezvoltare, ignorat in teste (IMPLICITE_TEST).
+	function valideazaCheiAi() {
+		if (esteTest) return;
+		for (const { prefix, eticheta, regex } of CHEI_AI) {
+			const malformate = cheiDinPrefix(prefix).filter((cheie) => !regex.test(cheie.trim()));
+			if (malformate.length === 0) continue;
+			const detalii = malformate.map((c) => `${c.slice(0, 12)}...`).join(', ');
+			const text = `${eticheta} (${prefix}): ${detalii} nu au formatul asteptat.`;
+			if (esteProductie) opreste(`Chei AI malformate la boot. ${text}`);
+			else console.warn(`AVERTISMENT config: ${text}`);
+		}
+	}
+
+	valideazaCheiAi();
+
+	// Câte hopuri de proxy sunt în fața instanței (Render = 1). `trust proxy`
+	// decide dacă `req.ip` vine din X-Forwarded-For. O valoare greșită deschide
+	// IP-spoofing la rate-limiting; de aceea e validată la boot, nu doar citită.
+	const trustProxyHops = (() => {
+		const brut = process.env.TRUST_PROXY_HOPS;
+		if (brut === undefined || brut === '') return 1;
+		const numar = Number(brut);
+		if (!Number.isInteger(numar) || numar < 0 || numar > 10) {
+			console.warn(
+				`TRUST_PROXY_HOPS nevalid (${brut}): se asteapta un intreg 0-10. Se foloseste implicit 1.`,
+			);
+			return 1;
+		}
+		return numar;
+	})();
+
 	const config = Object.freeze({
 		NODE_ENV,
 		esteProductie,
 		esteTest,
 		port: numarDinEnv(process.env.PORT, 3000),
 		host: process.env.HOST || '0.0.0.0',
+		trustProxyHops,
 		cors: Object.freeze({ origini, permiteOrice }),
 		supabase: Object.freeze({
 			url: process.env.SUPABASE_URL,

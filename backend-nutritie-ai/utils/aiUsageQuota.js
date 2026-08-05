@@ -3,51 +3,64 @@
 /**
  * Middleware pentru plafonarea costurilor AI per utilizator (S-10).
  * Previne facturi neașteptate prin limitarea numărului de cereri AI scumpe pe o fereastră de 24 ore.
+ *
+ * Refactor audit 2026-08 (P1.1): contorul a fost mutat din Map per-proces intr-un
+ * registru cheie-valoare partajat (Redis, daca e configurat) prin increment atomic.
+ * Pe mai multe instante, inainte fiecare proces avea propriul Map cu 50/zi, deci
+ * plafonul real era 50 * numarul_de_instante. Acum limita e globala si fereastra
+ * de reset este definita de TTL-ul cheii, nu de un `resetTime` per proces.
  */
 
-const usageStore = new Map();
-
-// Curățare periodică a intrărilor expirate o dată pe oră
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, record] of usageStore.entries()) {
-    if (now > record.resetTime) {
-      usageStore.delete(key);
-    }
-  }
-}, 60 * 60 * 1000).unref();
+const { creazaRegistruCheiValori } = require('./storePartajat');
 
 const DAILY_LIMIT = 50; // Maxim 50 cereri AI per utilizator în 24h
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
-const checkAiUsageQuota = (req, res, next) => {
-  const userId = req.user?.id;
-  if (!userId) {
-    return res.status(401).json({ eroare: "Acces neautorizat. Token lipsă sau nevalidat." });
-  }
+/**
+ * Fabrica de middleware. `registru` trebuie sa fie un store din
+ * creazaRegistruCheiValori() (suporta increment + ttl). Fara registru explicit,
+ * se foloseste un Map in-memory — cazul testelor si al unei instante unice fara Redis.
+ */
+function creeazaCheckAiUsageQuota({ registru, limitaZi = DAILY_LIMIT } = {}) {
+  const sursa = registru || creazaRegistruCheiValori({});
 
-  const now = Date.now();
-  let record = usageStore.get(userId);
+  return async function checkAiUsageQuota(req, res, next) {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ eroare: 'Acces neautorizat. Token lipsă sau nevalidat.' });
+    }
 
-  if (!record || now > record.resetTime) {
-    record = { count: 0, resetTime: now + WINDOW_MS };
-    usageStore.set(userId, record);
-  }
+    const count = await sursa.increment(userId, WINDOW_MS);
+    if (count === null || count === undefined) {
+      // Contor indisponibil (Redis cazut / capacitate interna): fail-closed. O
+      // cerere necontorizata ar lasa costul AI fara plafon sub incarcare.
+      return res.status(503).json({
+        eroare: 'Contorul de analize AI este temporar indisponibil. Incearca din nou peste un minut.',
+        cod: 'AI_QUOTA_STORE_UNAVAILABLE',
+      });
+    }
 
-  if (record.count >= DAILY_LIMIT) {
-    const hoursLeft = Math.ceil((record.resetTime - now) / (60 * 60 * 1000));
-    return res.status(429).json({
-      eroare: `Ai atins plafonul zilnic de 50 de analize AI. Limita se resetează în aproximativ ${hoursLeft} ore.`,
-      cod: 'AI_QUOTA_EXCEEDED'
-    });
-  }
+    if (count > limitaZi) {
+      const secundeRamase = await sursa.ttl(userId);
+      const oreRamase = secundeRamase > 0 ? Math.ceil(secundeRamase / 3600) : 24;
+      return res.status(429).json({
+        eroare: `Ai atins plafonul zilnic de ${limitaZi} de analize AI. Limita se resetează în aproximativ ${oreRamase} ore.`,
+        cod: 'AI_QUOTA_EXCEEDED',
+      });
+    }
 
-  record.count += 1;
-  res.setHeader('X-AI-Quota-Remaining', DAILY_LIMIT - record.count);
-  next();
-};
+    res.setHeader('X-AI-Quota-Remaining', limitaZi - count);
+    next();
+  };
+}
+
+// Instanta implicita, compatibila cu importul vechi din server.js si cu testele
+// care exercita middleware-ul fara sa construiasca un registru partajat.
+const checkAiUsageQuota = creeazaCheckAiUsageQuota({});
 
 module.exports = {
   checkAiUsageQuota,
-  DAILY_LIMIT
+  creeazaCheckAiUsageQuota,
+  DAILY_LIMIT,
+  WINDOW_MS,
 };

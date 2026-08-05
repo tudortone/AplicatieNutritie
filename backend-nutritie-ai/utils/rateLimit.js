@@ -91,7 +91,18 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 		),
 	});
 
-	return { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter };
+	// Limita dedicata pentru /api/imagekit-auth (P3). Endpoint ieftin (HMAC pe
+	// parametrii de autentificare) apelat la fiecare upload; isi are bugetul propriu,
+	// ca focurile de upload din camera nu sa consume cota generala de 100/15min.
+	const imagekitAuthLimiter = rateLimit({
+		...comun,
+		windowMs: 15 * 60 * 1000,
+		max: 120,
+		keyGenerator: cheieIdentitateVerificata,
+		message: mesaj('Prea multe cereri de autentificare ImageKit. Incearca mai tarziu.'),
+	});
+
+	return { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, imagekitAuthLimiter };
 }
 
 module.exports = {

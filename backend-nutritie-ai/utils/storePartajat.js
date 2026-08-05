@@ -16,6 +16,10 @@
 let storeRateLimitCache = null;
 let registerEntryKeyCache = null;
 
+// Plafon anti-DoS pentru contoarele in-memory (cota AI): fara TTL expirat se
+// adauga din nou la acces, dar capacitatea trebuie marginita totusi.
+const MAX_INTRARI_MAP = 50000;
+
 function creeazaClientRedis({ url }) {
   if (registerEntryKeyCache) return registerEntryKeyCache;
   const redis = require('redis');
@@ -50,9 +54,10 @@ function creazaStoreRateLimit({ url }) {
 
 /**
  * Registru cheie-valoare cu TTL, sincron API async. Folosit pentru cooldown-ul
- * furnizorilor AI si (optional) pentru orice contor partajat.
+ * furnizorilor AI si pentru contorul de cota AI per utilizator (S-10).
  *
- * API: { get(key) -> valoare|null, set(key, valoare, ttlMs), del(key) }
+ * API: { get(key) -> valoare|null, set(key, valoare, ttlMs), del(key),
+ *        increment(key, ttlMs) -> numar, ttl(key) -> secunde }
  * Toate intorc Promise. Suporta Redis sau memorie locala.
  */
 function creazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
@@ -90,6 +95,31 @@ function creazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
           console.warn('[Redis] del esuat:', err.message);
         }
       },
+      // Contor atomic (INCR + PEXPIRE la prima incrementare). Atomicitatea din
+      // Redis inchide cursa dintre citire si scriere a cotei AI (S-10): doua
+      // procese care incrementeaza simultan nu pot depasi ambele plafonul.
+      async increment(key, ttlMs) {
+        try {
+          const cheie = cheieFinala(key);
+          const valoare = await client.incr(cheie);
+          if (valoare === 1 && ttlMs && ttlMs > 0) {
+            await client.pExpire(cheie, ttlMs);
+          }
+          return valoare;
+        } catch (err) {
+          console.warn('[Redis] increment esuat:', err.message);
+          return null;
+        }
+      },
+      // Secunde ramase pana la expirare. -1 = cheie fara TTL, -2 = cheie inexistenta.
+      async ttl(key) {
+        try {
+          return await client.ttl(cheieFinala(key));
+        } catch (err) {
+          console.warn('[Redis] ttl esuat:', err.message);
+          return -1;
+        }
+      },
     };
   }
 
@@ -106,17 +136,60 @@ function creazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
       return entry.valoare;
     },
     async set(key, value, ttlMs) {
-      map.set(cheieFinala(key), {
+      const cheie = cheieFinala(key);
+      if (!map.has(cheie) && map.size >= MAX_INTRARI_MAP) {
+        // Plafon anti-DoS: eliberam intrarile expirate, apoi pe cea mai veche
+        // (Map pastreaza ordinea de insertie) — aproximativ LRU, ca TokenCache.
+        const acum = Date.now();
+        const expirate = [];
+        for (const [k, e] of map) {
+          if (e?.expira && e.expira <= acum) expirate.push(k);
+        }
+        expirate.forEach((k) => map.delete(k));
+        if (map.size >= MAX_INTRARI_MAP) {
+          const ceaMaiVeche = map.keys().next().value;
+          if (ceaMaiVeche !== undefined) map.delete(ceaMaiVeche);
+        }
+      }
+      map.set(cheie, {
         valoare: value,
         expira: ttlMs && ttlMs > 0 ? Date.now() + ttlMs : 0,
       });
-      if ((!ttlMs || ttlMs <= 0) && map.size > 5000) {
-        // Plafon de igiena in-memory: intrare fara TTL tinuta la nesfarsit nu are sens.
-        map.delete(cheieFinala(key));
-      }
     },
     async del(key) {
       map.delete(cheieFinala(key));
+    },
+    // Contor sincron pe Map, cu aceleasi garantii ca versiunea Redis: expirare
+    // din prima incrementare si capacitate marginita.
+    async increment(key, ttlMs) {
+      const cheie = cheieFinala(key);
+      const acum = Date.now();
+      let intrare = map.get(cheie);
+      if (!intrare || (intrare.expira && intrare.expira <= acum)) {
+        if (map.size >= MAX_INTRARI_MAP) {
+          // Mai intai eliberam intrarile expirate; daca ramane la capacitate,
+          // refuzam noua intrare in loc sa crestem nelimitat.
+          const expirate = [];
+          for (const [k, e] of map) {
+            if (e?.expira && e.expira <= acum) expirate.push(k);
+          }
+          expirate.forEach((k) => map.delete(k));
+          if (map.size >= MAX_INTRARI_MAP) return null;
+        }
+        intrare = { valoare: 0, expira: ttlMs && ttlMs > 0 ? acum + ttlMs : 0 };
+        map.set(cheie, intrare);
+      }
+      intrare.valoare += 1;
+      return intrare.valoare;
+    },
+    async ttl(key) {
+      const cheie = cheieFinala(key);
+      const intrare = map.get(cheie);
+      if (!intrare) return -2;
+      if (intrare.expira && intrare.expira > Date.now()) {
+        return Math.ceil((intrare.expira - Date.now()) / 1000);
+      }
+      return -1;
     },
   };
 }

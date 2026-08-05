@@ -15,7 +15,35 @@ const router = express.Router();
  * către `auth.users(id)` (migrările 001/002 + 20260805000001_gdpr_complete), deci
  * o singură ștergere curăță totul în cascadă, fără rânduri orfane.
  */
-function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate }) {
+/**
+ * Sterge best-effort fisierele de pe ImageKit aflate sub folderul unui utilizator.
+ * Imaginile de analiza sunt incarcate in /mancare/<userId>/ (vezi lib/imagekit.ts
+ * pe frontend), deci folderul identifica fara ambiguitate datele lui.
+ */
+async function stergeFisiereImageKit(imagekit, folderPath) {
+  if (!imagekit || !folderPath) return;
+  try {
+    const raspuns = await imagekit.listFiles({ path: folderPath, limit: 1000 });
+    const lista = Array.isArray(raspuns) ? raspuns : Array.isArray(raspuns?.files) ? raspuns.files : [];
+    const fileIds = lista.map((f) => f.fileId).filter(Boolean);
+    if (fileIds.length === 0) return;
+    // API-ul de bulk s-a numit `bulkDeleteFiles` la v3, `deleteFiles` in v4+;
+    // folosim oricare exista si, la limita, stergem unul cate unul.
+    if (typeof imagekit.deleteFiles === 'function') {
+      await imagekit.deleteFiles(fileIds);
+    } else if (typeof imagekit.bulkDeleteFiles === 'function') {
+      await imagekit.bulkDeleteFiles(fileIds);
+    } else {
+      for (const fileId of fileIds) {
+        await imagekit.deleteFile(fileId);
+      }
+    }
+  } catch (err) {
+    console.warn('[GDPR] Stergere fisiere ImageKit esuata:', err.message);
+  }
+}
+
+function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate, imagekit }) {
   // GET /api/user/export-data
   router.get('/export-data', requireAuth, generalLimiter, async (req, res) => {
     try {
@@ -85,6 +113,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         sterge('antrenamente'),
         sterge('barcode_estimari_utilizator'),
         sterge('audit_log'),
+        stergeFisiereImageKit(imagekit, `/mancare/${userId}`),
       ]);
 
       // Sursele reale de adevăr: șterge contul Supabase. FK ON DELETE CASCADE pe

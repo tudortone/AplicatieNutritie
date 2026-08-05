@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
+import { API_URL } from '../constants/config';
 import { useNotificationBanner } from './NotificationBannerContext';
 import { useDailyReset } from '../hooks/useDailyReset';
 
@@ -170,16 +171,22 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
         data: { session },
       } = await supabase.auth.getSession();
       if (session?.user) {
-        await supabase.from('gamificare').upsert({
-          user_id: session.user.id,
-          xp_total: newState.xpTotal,
-          nivel: newState.nivel,
-          streak: newState.streak,
-          ultima_zi_activa: newState.ultimaZiActiva,
-          questuri_azi: newState.questuriAzi,
-          insigne: newState.insigne,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' });
+        // Scrierea trece prin backend (service_role + validare server-side, nivel
+        // recalculat din XP); tabelul are RLS SELECT-only (P2.8).
+        await fetch(`${API_URL}/api/gamificare`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            xpTotal: newState.xpTotal,
+            streak: newState.streak,
+            ultimaZiActiva: newState.ultimaZiActiva,
+            questuriAzi: newState.questuriAzi,
+            insigne: newState.insigne,
+          }),
+        });
       }
     } catch (err) {
       // Logheaza eroarea de salvare în loc de fail silent complet (XP se pierdea invizibil offline)

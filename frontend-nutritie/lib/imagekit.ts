@@ -30,13 +30,26 @@ export async function getImageKitAuthParams(): Promise<{ token: string; expire: 
 
 /**
  * Încarcă o imagine pe ImageKit CDN folosind multipart/form-data.
+ *
+ * `userId` este obligatoriu: imaginea se stochează sub /mancare/<userId>/, ca
+ * proprietatea să fie evidentă din cale și ștergerea la delete-account să fie
+ * posibilă (backend-ul validează folderul la analiza din fundal).
  */
 export async function uploadImageToImageKit(
   fileUri: string,
-  fileName: string = 'mancare.jpg'
+  fileName: string = 'mancare.jpg',
+  userId?: string
 ): Promise<ImageKitUploadResult> {
   const authParams = await getImageKitAuthParams();
   const urlEndpoint = authParams.urlEndpoint || 'https://ik.imagekit.io/nutriai';
+
+  // Folderul devine cale URL: păstrăm doar caractere sigure, ca un userId
+  // neașteptat să nu iasă din /mancare/ prin segment de cale.
+  const folderSigur = String(userId || 'anon')
+    .replace(/[^A-Za-z0-9_-]/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 64);
+  const folder = `/mancare/${folderSigur}`;
 
   const formData = new FormData();
   formData.append('file', {
@@ -50,7 +63,7 @@ export async function uploadImageToImageKit(
   formData.append('signature', authParams.signature);
   formData.append('publicKey', process.env.EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY || 'public_mock_key');
   formData.append('useUniqueFileName', 'true');
-  formData.append('folder', '/mancare');
+  formData.append('folder', folder);
 
   const uploadRes = await fetch(`https://upload.imagekit.io/api/v1/files/upload`, {
     method: 'POST',
