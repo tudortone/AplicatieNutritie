@@ -94,9 +94,16 @@ CREATE TRIGGER trg_mese_local_day BEFORE INSERT ON public.mese
   FOR EACH ROW EXECUTE FUNCTION mese_set_local_day();
 
 -- ==============================================================================
--- 5. [MIGRATION_FIX] CHECK-uri pe mese care nu erau în nicio migrare numerotată.
+-- 5. [MIGRATION_FIX] mese — coloanele pentru CHECK-uri + CHECK-urile care nu
+--    erau în nicio migrare numerotată. Pe bazele vechi coloanele pot lipsi (la
+--    fel ca data/ora din secțiunea 3), deci ADD COLUMN IF NOT EXISTS le adaugă
+--    cu tipurile canonice din 001; pe replay curat e no-op.
 --    (Calorii/proteine/grasimi/carbohidrati sunt deja în 003 — nu se repetă.)
 -- ==============================================================================
+ALTER TABLE public.mese ADD COLUMN IF NOT EXISTS fibre    NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE public.mese ADD COLUMN IF NOT EXISTS tip_masa TEXT;
+ALTER TABLE public.mese ADD COLUMN IF NOT EXISTS alimente JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 ALTER TABLE public.mese DROP CONSTRAINT IF EXISTS mese_fibre_check;
 ALTER TABLE public.mese ADD  CONSTRAINT mese_fibre_check CHECK (fibre BETWEEN 0 AND 500);
 
