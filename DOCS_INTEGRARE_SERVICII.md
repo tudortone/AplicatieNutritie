@@ -1,5 +1,10 @@
 # Ghid de Configurare și Integrare Servicii Externe (NutriAI)
 
+> **STATUS: ISTORIC.** Scris înainte de de-monolitizarea backend-ului (B-14…B-18).
+> Configurația din `server.js` și variabilele de mediu rămân valide, dar rutele
+> `/api/imagekit-auth` și `/api/trigger-analiza-mancare` trăiesc acum în `routes/ai.js`
+> și sunt montate sub `/api/v1/` (alias legacy `/api/` până la 2026-09-30).
+
 Acest ghid descrie integrarea celor 4 servicii externe în stack-ul aplicației **NutriAI** (Clerk, Sentry, ImageKit, Trigger.dev) și pașii de activare în medii de Dezvoltare și Producție.
 
 ---

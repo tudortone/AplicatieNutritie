@@ -1,10 +1,11 @@
 # Remediere probleme critice — jurnal al remedierilor aplicate
 
-> **STATUS: INTEGRAT (2026-08).** Toate remedierile C1–C8 descrise mai jos sunt aplicate
-> în `server.js` și în modulele din `utils/`, acum pe `main`. Acest fișier a fost inițial
-> un ghid de integrare scris „înainte de aplicare"; îl păstrăm ca documentație a CE și
-> DE CE a fost schimbat. Codul curent este sursa de adevăr, iar pașii de mai jos
-> documentează modificările deja integrate.
+> **STATUS: ISTORIC (2026-08).** Toate remedierile C1–C8 descrise mai jos sunt aplicate
+> și trăiesc acum pe `main` în `routes/`, `repositories/`, `services/` și în modulele din
+> `utils/` (după de-monolitizarea B-14…B-18, `server.js` este doar bootstrap + wiring).
+> Acest fișier a fost inițial un ghid de integrare scris „înainte de aplicare"; îl păstrăm
+> ca documentație a CE și DE CE a fost schimbat. Codul curent este sursa de adevăr, iar
+> pașii de mai jos documentează modificările deja integrate.
 
 Modulele din `utils/` conțin logica remediată, integrată în `server.js`. Fiecare
 corectură este izolată într-un modul dedicat, verificabil la review.

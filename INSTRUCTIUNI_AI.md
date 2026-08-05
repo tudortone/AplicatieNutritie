@@ -14,7 +14,7 @@ Proiectul are două aplicații:
 ## 1. REGULI ABSOLUTE — NU FACEA ASTA
 
 1. **NU hardcoda chei API sau date sensibile în cod.** Backendul citește din `process.env`; frontendul din `process.env.EXPO_PUBLIC_*`. Secretul real NU apare niciodată în cod sau în loguri.
-2. **NU elimina** `requireAuth`, `generalLimiter`/`aiLimiter` sau `checkAiUsageQuota` de pe rutele protejate din `server.js`.
+2. **NU elimina** `requireAuth`, `generalLimiter`/`aiLimiter` sau `checkAiUsageQuota` de pe rutele protejate din router-ele din `routes/` (montate în `server.js`).
 3. **NU folosi clientul admin Supabase** (`supabaseAdmin`) pentru a citi/scrie datele unui utilizator obișnuit. Folosește `ctx.db` (clientul per-cerere legat de JWT, cu RLS pe `auth.uid() = user_id`). Vezi [Secțiunea 5](#5-securitate).
 4. **NU schimba mesajele de eroare, codurile HTTP sau formulele de calcul existente.** `tests/server.test.js` le tratează ca un contract.
 5. **NU crea componente React în interiorul altor componente** (anti-pattern de performanță — remontare la fiecare render).
@@ -31,10 +31,15 @@ Proiectul are două aplicații:
 ### Backend — `backend-nutritie-ai/`
 ```
 backend-nutritie-ai/
-├── server.js               # Punct de intrare; server Express monolitic + toate rutele API
+├── server.js               # Bootstrap + wiring: middleware global + montare router-e (fără logica de rute)
 ├── config/env.js           # Configurare centralizată, validată fail-fast la pornire
-├── routes/gdpr.js          # Router modular: export date & ștergere cont (B-12)
-├── prompts/aiPrompts.js    # System prompt-urile pentru modelele AI
+├── routes/                 # Router-e Express, fiecare = fabrică createXxxRouter({deps})
+│   └── ai.js, barcode.js, gdpr.js, mese.js, profil.js, status.js, user.js
+├── repositories/           # Acces la date (funcții cu ctx primul parametru; întorc { data, error })
+│   └── meseRepo.js, barcodeRepo.js, profilRepo.js
+├── services/ai/            # Compute AI (vision, cascadă furnizori, chat) + prompt-urile de sistem (A-2)
+│   └── vision.js, cascada.js, chat.js
+├── contracts/nutritie/     # Tipuri TS partajate (backend + frontend) — types.ts
 ├── src/trigger/analiza-mancare-ai.js  # Task Trigger.dev (analiză AI în fundal)
 ├── utils/                  # Module helper (vezi mai jos)
 ├── tests/                  # Jest + supertest
@@ -90,35 +95,35 @@ frontend-nutritie/
 
 ## 4. CONVENȚII BACKEND
 
-- Server Express 5 monolitic în `server.js`; pentru funcționalități noi autoconținute se poate folosi un `express.Router()` modular (ca `routes/gdpr.js`).
+- `server.js` este bootstrap + wiring: montează middleware-ul global și toate router-ele; nu conține logica de rute. Fiecare router din `routes/` e o fabrică `createXxxRouter({deps})` (ex. `createMeseRouter({ requireAuth, generalLimiter, contextDate, meseRepo })`), montată O SINGURĂ dată sub `/api/v1` (și, temporar, sub `/api` — alias legacy, EXPIRE 2026-09-30). Accesul la date stă în `repositories/`, compute-ul AI în `services/ai/`.
 - Configurarea se citește O SINGURĂ dată în `config/env.js` și se validează fail-fast: un deploy cu variabile obligatorii lipsă **moare la pornire**, nu în producție.
 - Middleware standard pe rutele API: `requireAuth` (JWT), `generalLimiter` (rată generală), `aiLimiter` (rată AI), `checkAiUsageQuota` (plafon zilnic AI).
 - **Izolare date:** în fiecare handler, `ctx.db` (clientul per-cerere, RLS) filtrează pe `user_id`. Nu folosi `supabaseAdmin` pentru datele de utilizator.
 - **Răspunsuri:** obiecte JSON cu `eroare` la eșec, coduri HTTP corecte. NU schimba textele/codurile existente — sunt contract de test.
 
-### Rutele API (18, plus `/` și `/health`)
+### Rutele API (20, plus `/` și `/health`) — prefix canonic `/api/v1/`; alias-urile legacy `/api/...` rămân active până la 2026-09-30
 | Metodă | Rută | Auth | Scop |
 |--------|------|------|------|
 | GET | `/health` | — | health check |
-| GET | `/api/ai-status` | — | status modele AI |
-| GET | `/api/imagekit-auth` | JWT | token upload ImageKit |
-| POST | `/api/trigger-analiza-mancare` | JWT | analiză AI în fundal (Trigger.dev) |
-| POST | `/api/analiza-foto` | JWT | analiză fotografie AI |
-| POST | `/api/analizeaza-mancare-structurat` | JWT | analiză structurată alimente |
-| POST | `/api/chat` | JWT | chat nutrițional AI |
-| POST | `/api/log-food-from-chat` | JWT | salvare masă din chat |
-| POST | `/api/estimeaza-mancare-text` | JWT | estimare valori din text |
-| POST | `/api/vision-fallback` | JWT | fallback/corecție vision |
-| POST | `/api/corecteaza-mancare-vizual-text` | JWT | corecție vizual→text |
-| GET | `/api/produs-barcode/:code` | JWT | produs după cod de bare |
-| POST | `/api/salveaza-produs-barcode` | JWT | salvare produs manual în cache |
-| POST | `/api/calculeaza-profil` | JWT | calcul profil nutrițional |
-| POST | `/api/mese` | JWT | adăugare masă |
-| PUT | `/api/mese/:id` | JWT | editare masă |
-| DELETE | `/api/mese/:id` | JWT | ștergere masă |
-| GET | `/api/user/premium-status` | JWT | validare premium server-side |
-| GET | `/api/user/export-data` | JWT | export GDPR |
-| DELETE | `/api/user/delete-account` | JWT | ștergere cont GDPR |
+| GET | `/api/v1/ai-status` | — | status modele AI |
+| GET | `/api/v1/imagekit-auth` | JWT | token upload ImageKit |
+| POST | `/api/v1/trigger-analiza-mancare` | JWT | analiză AI în fundal (Trigger.dev) |
+| POST | `/api/v1/analiza-foto` | JWT | analiză fotografie AI |
+| POST | `/api/v1/analizeaza-mancare-structurat` | JWT | analiză structurată alimente |
+| POST | `/api/v1/chat` | JWT | chat nutrițional AI |
+| POST | `/api/v1/log-food-from-chat` | JWT | salvare masă din chat |
+| POST | `/api/v1/estimeaza-mancare-text` | JWT | estimare valori din text |
+| POST | `/api/v1/vision-fallback` | JWT | fallback/corecție vision |
+| POST | `/api/v1/corecteaza-mancare-vizual-text` | JWT | corecție vizual→text |
+| GET | `/api/v1/produs-barcode/:code` | JWT | produs după cod de bare |
+| POST | `/api/v1/salveaza-produs-barcode` | JWT | salvare produs manual în cache |
+| POST | `/api/v1/calculeaza-profil` | JWT | calcul profil nutrițional |
+| POST | `/api/v1/mese` | JWT | adăugare masă |
+| PUT | `/api/v1/mese/:id` | JWT | editare masă |
+| DELETE | `/api/v1/mese/:id` | JWT | ștergere masă |
+| GET | `/api/v1/user/premium-status` | JWT | validare premium server-side |
+| GET | `/api/v1/user/export-data` | JWT | export GDPR |
+| DELETE | `/api/v1/user/delete-account` | JWT | ștergere cont GDPR |
 
 Referința completă OpenAPI: `contracts/openapi.yaml`.
 

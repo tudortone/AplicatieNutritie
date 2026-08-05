@@ -1,5 +1,9 @@
 # Raport UI — erori găsite și reparate
 
+> **STATUS: ISTORIC.** Acest raport documentează un audit UI încheiat; fixurile descrise
+> sunt deja aplicate pe `main`. Fișierul se păstrează ca arhivă a CE și DE CE s-a schimbat,
+> nu ca listă de acțiuni în așteptare. Codul curent este sursa de adevăr.
+
 Audit pe 18 ecrane (`frontend-nutritie/app/**/*.tsx`) + 4 contexte.
 
 ---
