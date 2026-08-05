@@ -10,6 +10,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
+import { API_PREFIX } from '../lib/api';
 import { PRODUCT_CATEGORY } from 'react-native-purchases';
 import { supabase } from '../supabase';
 import type {
@@ -102,7 +103,7 @@ export function PremiumProvider({ children, appUserId }: { children: React.React
       const token = data?.session?.access_token;
       const apiUrl = process.env.EXPO_PUBLIC_API_URL;
       if (!token || !apiUrl || !forAppUserId) return null;
-      const resp = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/user/premium-status`, {
+      const resp = await fetch(`${apiUrl.replace(/\/+$/, '')}${API_PREFIX}/user/premium-status`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!resp.ok) return null;

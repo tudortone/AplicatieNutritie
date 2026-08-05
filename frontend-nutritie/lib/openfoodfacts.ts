@@ -1,5 +1,6 @@
 import { cautaProdusRomanescLocal } from '../constants/produseRomanesti';
 import { API_URL } from '../constants/config';
+import { API_PREFIX } from './api';
 import { supabase } from '../supabase';
 import type { AminoaciziEsentiali, Micronutrienti } from '../../backend-nutritie-ai/contracts/nutritie/types';
 
@@ -102,7 +103,7 @@ export async function getProdusByBarcode(barcode: string): Promise<ProdusScanat 
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (token && API_URL) {
-      const response = await fetch(`${API_URL}/api/produs-barcode/${encodeURIComponent(code)}`, {
+      const response = await fetch(`${API_URL}${API_PREFIX}/produs-barcode/${encodeURIComponent(code)}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
       });
       if (response.ok) {

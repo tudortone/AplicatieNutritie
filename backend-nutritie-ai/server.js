@@ -163,7 +163,9 @@ const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter } =
   });
 
 app.use('/api/', (req, res, next) => {
-  if (req.path === '/ai-status') return statusLimiter(req, res, next);
+  // B-18: /api/v1 e noul prefix. Sub montajul /api/, calea /api/v1/ai-status are
+  // req.path === '/v1/ai-status'; ambele variante primesc statusLimiter.
+  if (req.path === '/ai-status' || req.path === '/v1/ai-status') return statusLimiter(req, res, next);
   return preAuthLimiter(req, res, next);
 });
 
@@ -365,15 +367,30 @@ const statusR = createStatusRouter({
   getProviderStatus: serviciuCascada.getProviderStatus,
   getAiStatistici,
 });
+const gdprR = createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate, profilRepo: createProfilRepo() });
+
+// /api/v1 — versiunea curenta a API-ului. Router-ele sunt montate O SINGURA
+// data; aliasele de mai jos refolosesc exact aceleasi obiecte, deci nu exista
+// doua implementari de intretinut („o singura implementare per functionalitate").
+app.use('/api/v1', statusR);
+app.use('/api/v1', aiR);
+app.use('/api/v1', barcodeR);
+app.use('/api/v1', profilR);
+app.use('/api/v1', meseR);
+// Rute GDPR (export date & stergere cont). Se bazeaza pe supabaseAdmin pentru
+// export, dar acoperite de requireAuth; izolarea pe export este doar cosmetica
+// fata de RLS-ul real aplicat pe scrieri.
+app.use('/api/v1/user', gdprR);
+
+// LEGACY ALIASES — TEMPORARE. EXPIRE 2026-09-30 — migrare client la /api/v1.
+// Aceleasi obiecte router, sub prefixul vechi; server.test.js exerseaza aceste
+// cai, deci raman byte-identice pana la expirare.
 app.use('/api', statusR);
 app.use('/api', aiR);
 app.use('/api', barcodeR);
 app.use('/api', profilR);
 app.use('/api', meseR);
-// Rute GDPR (export date & stergere cont). Se bazeaza pe supabaseAdmin pentru
-// export, dar acoperite de requireAuth; izolarea pe export este doar cosmetica
-// fata de RLS-ul real aplicat pe scrieri.
-app.use('/api/user', createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate, profilRepo: createProfilRepo() }));
+app.use('/api/user', gdprR);
 
 // ==========================================
 // HANDLER 404 PENTRU RUTE INEXISTENTE

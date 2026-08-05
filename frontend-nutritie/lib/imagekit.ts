@@ -1,4 +1,5 @@
 import { API_URL } from '../constants/config';
+import { API_PREFIX } from './api';
 import { supabase } from '../supabase';
 
 export interface ImageKitUploadResult {
@@ -15,7 +16,7 @@ export async function getImageKitAuthParams(): Promise<{ token: string; expire: 
   const session = (await supabase.auth.getSession()).data.session;
   const token = session?.access_token || '';
 
-  const res = await fetch(`${API_URL}/api/imagekit-auth`, {
+  const res = await fetch(`${API_URL}${API_PREFIX}/imagekit-auth`, {
     headers: {
       'Authorization': `Bearer ${token}`
     }

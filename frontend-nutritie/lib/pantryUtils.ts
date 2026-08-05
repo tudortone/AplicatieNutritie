@@ -5,6 +5,7 @@
  * care să scadă mecanic `-1 zi` din baza de date.
  */
 import { API_URL } from '@/constants/config';
+import { API_PREFIX } from './api';
 
 export interface AlimentCamara {
   id: string;
@@ -112,7 +113,7 @@ export async function genereazaRetetaDinCamara(
 
   const prompt = `Am în casă următoarele ingrediente: ${ingredienteSelectate.join(', ')}. Te rog să îmi generezi o rețetă delicioasă și sănătoasă potrivită pentru ${tipMasa === 'Orice' ? 'orice masă a zilei' : tipMasa.toLowerCase()}, cu timp de preparare ${timp.toLowerCase()}. Țintele mele nutriționale rămase pentru astăzi sunt de aproximativ ${Math.max(caloriiRamase, 300)} kcal și ${Math.max(proteineRamase, 15)}g proteine. Include: 1) Numele rețetei, 2) Ingredientele exacte și cantități, 3) Modul de preparare pas cu pas pe scurt, 4) Valorile nutriționale estimate (Calorii, Proteine, Carbohidrați, Grăsimi).`;
 
-  const response = await fetch(`${API_URL}/api/chat`, {
+  const response = await fetch(`${API_URL}${API_PREFIX}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
