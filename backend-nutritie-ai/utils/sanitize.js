@@ -20,7 +20,10 @@
  */
 
 const CONTROL_CHARS = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
-const HTML_TAGS = /<[^>]*>/g;
+// B-5: se elimina doar tag-uri plauzibile, cu nume de element valid. Regexul vechi
+// (/<[^>]*>/) trata orice "<" ca inceput de tag: "branza <30% grasime si >5g sare"
+// devenea "branza 5g sare" — pierdere de date introduse de utilizator.
+const HTML_TAGS = /<\/?[a-zA-Z][a-zA-Z0-9-]*(\s[^>]*)?>/g;
 const CHEI_INTERZISE = new Set(['__proto__', 'constructor', 'prototype']);
 
 const MAX_NODURI = 5000;

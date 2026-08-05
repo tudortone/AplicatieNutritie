@@ -8,7 +8,7 @@
 
 const { parseJsonFromLlm } = require('../utils/llmJson');
 const { valideazaMasa } = require('../utils/validareMese');
-const { curataMinim, detectPromptInjection } = require('../utils/sanitize');
+const { curataMinim, detectPromptInjection, sanitizeName } = require('../utils/sanitize');
 const { TokenCache } = require('../utils/tokenCache');
 const { construiesteIstoricSigur, valideazaIngrediente } = require('../utils/promptSafety');
 const { Semafor } = require('../utils/semafor');
@@ -92,6 +92,12 @@ describe('sanitize', () => {
 
   it('nu distruge textul legitim', () => {
     expect(curataMinim('branza 30% grasime')).toBe('branza 30% grasime');
+  });
+
+  it('B-5: nu sterge procentele cu < din numele de aliment', () => {
+    expect(sanitizeName('branza <30% grasime')).toBe('branza <30% grasime');
+    // Tag-urile HTML reale raman eliminate.
+    expect(sanitizeName('vezi <script>x</script> acum')).toBe('vezi x acum');
   });
 
   it('trunchiaza la lungimea maxima', () => {
