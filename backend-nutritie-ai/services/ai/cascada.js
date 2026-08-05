@@ -18,21 +18,38 @@ const {
 function creeazaServiciuCascada({ config, registruAi }) {
   const serviciuVision = creeazaServiciuVision({ config });
 
+  // Oglinda locala de cooldown (fail-closed): scriem in ea la fiecare blockProvider.
+  // Cand Redis e indisponibil, registrul partajat citeste null (get -> null), ceea
+  // ce facea providerii blocati sa para activi si erau rechemati (429 loop). Cu
+  // oglinda, un provider blocat de acest proces ramane blocat local pentru fereastra
+  // de cooldown, chiar daca citirea partajata a esuat.
+  const cooldownLocal = new Map(); // providerKey -> blockedUntil (ms)
+
   const blockProvider = async (providerKey, cooldownSeconds, motiv) => {
     if (!NUME_FURNIZORI_AI[providerKey]) return;
+    const blockedUntil = Date.now() + cooldownSeconds * 1000;
+    cooldownLocal.set(providerKey, blockedUntil);
     await registruAi.set(
       providerKey,
-      { blockedUntil: Date.now() + cooldownSeconds * 1000, ultimulMesaj: motiv },
+      { blockedUntil, ultimulMesaj: motiv },
       cooldownSeconds * 1000,
     );
   };
 
   const getProviderStatus = async (providerKey) => {
     const nume = NUME_FURNIZORI_AI[providerKey] || providerKey;
-    const p = await registruAi.get(providerKey);
     const acum = Date.now();
+    const p = await registruAi.get(providerKey);
+    // Oglinda locala are prioritate: daca acest proces a blocat providerul in
+    // fereastra de cooldown, il tinem blocat chiar si cand Redis a picat.
+    const localUntil = cooldownLocal.get(providerKey);
+    if (localUntil && localUntil > acum) {
+      const sec = Math.ceil((localUntil - acum) / 1000);
+      return { id: providerKey, nume, status: 'cooldown', secundeRamase: sec, mesaj: `Blocat (${sec}s): ${p?.ultimulMesaj || 'cooldown local (Redis indisponibil)'}` };
+    }
     if (!p || !p.blockedUntil || p.blockedUntil <= acum) {
       if (p) await registruAi.del(providerKey);
+      cooldownLocal.delete(providerKey);
       return { id: providerKey, nume, status: 'active', secundeRamase: 0, mesaj: 'Disponibil' };
     }
     const sec = Math.ceil((p.blockedUntil - acum) / 1000);
@@ -48,10 +65,24 @@ function creeazaServiciuCascada({ config, registruAi }) {
   async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider }) {
     let text = null;
 
+    // Anti-cost (B2): plafon de apeluri de furnizori per cerere. Inainte, un
+    // singur upload putea declansa zeci de call-uri platite (N chei x M modele
+    // pe toata cascada) daca toate esuau pe rand. 0 = nelimitat.
+    const maxApeluri = Number.isInteger(config.ai.maxApeluriPerRequest)
+      ? config.ai.maxApeluriPerRequest
+      : 0;
+    let apeluri = 0;
+    const cotaUnInceput = () => {
+      if (maxApeluri > 0 && apeluri >= maxApeluri) return false;
+      apeluri += 1;
+      return true;
+    };
+
     // 1) OpenAI GPT-4o-mini Vision
     const openaiKeys = serviciuVision.getApiKeysList('OPENAI_API_KEY');
     if ((requestedProvider === 'auto' || requestedProvider === 'openai') && openaiKeys.length > 0) {
       for (const key of openaiKeys) {
+        if (!cotaUnInceput()) break;
         try {
           const oaiRes = await callWithTimeout((signal) => fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -95,6 +126,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
 
       for (const key of groqKeys) {
         for (const groqModel of groqVisionModels) {
+          if (!cotaUnInceput()) break;
           try {
             const groqRes = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
               method: 'POST',
@@ -136,6 +168,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
       for (const key of geminiKeys) {
         const client = new GoogleGenerativeAI(key);
         for (const modelName of modelsToTry) {
+          if (!cotaUnInceput()) break;
           try {
             const model = client.getGenerativeModel({ model: modelName });
             // SDK-ul Gemini nu accepta AbortSignal: deadline "soft", marcat explicit.
@@ -166,6 +199,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
     if (!text && requestedProvider === 'auto') {
       const orKeys = serviciuVision.getApiKeysList('OPENROUTER_API_KEY');
       for (const key of orKeys) {
+        if (!cotaUnInceput()) break;
         try {
           const orRes = await callWithTimeout((signal) => fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',

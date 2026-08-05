@@ -7,6 +7,9 @@
 
 const idempotencyCache = new Map();
 const TTL_MS = 15 * 60 * 1000; // 15 minute fereastră de idempotență
+// Plafon anti-DoS (audit): fără el, Idempotency-Key-uri unice umpleau memoria
+// nelimitat (Map fără max size). Evacuare LRU la fel ca TokenCache.
+const MAX_INTRARI = 5000;
 
 // Curățare periodică o dată la 5 minute
 setInterval(() => {
@@ -17,6 +20,14 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000).unref();
+
+const eliminaDacaPlafon = () => {
+  while (idempotencyCache.size >= MAX_INTRARI) {
+    const ceaMaiVeche = idempotencyCache.keys().next().value;
+    if (ceaMaiVeche === undefined) break;
+    idempotencyCache.delete(ceaMaiVeche);
+  }
+};
 
 const idempotencyMiddleware = (req, res, next) => {
   if (req.method !== 'POST') return next();
@@ -40,6 +51,7 @@ const idempotencyMiddleware = (req, res, next) => {
   const originalJson = res.json.bind(res);
   res.json = (body) => {
     if (res.statusCode >= 200 && res.statusCode < 300) {
+      eliminaDacaPlafon();
       idempotencyCache.set(cacheKey, {
         status: res.statusCode,
         body,

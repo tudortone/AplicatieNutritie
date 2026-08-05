@@ -104,6 +104,14 @@ function incarcaConfig() {
 			// pe toata durata cascadei de furnizori.
 			maxConcurenta: numarDinEnv(process.env.AI_MAX_CONCURENTA, 4),
 			maxCoada: numarDinEnv(process.env.AI_MAX_COADA, 12),
+			// Plafon de apeluri de furnizori per cerere AI (anti-cost). Peste el,
+			// cascada inceteaza sa mai incerce alti provideri la acelasi upload.
+			// 8 = intregul lant de fallback cu cate o cheie (1 OpenAI + 2 Groq + 3
+			// Gemini + 1 OpenRouter). 0 (sau absenta) = nelimitat.
+			maxApeluriPerRequest: (() => {
+				const valoare = Number(process.env.AI_MAX_APELURI_PER_REQUEST);
+				return Number.isFinite(valoare) && valoare >= 0 ? valoare : 8;
+			})(),
 		}),
 		clerkSecretKey: process.env.CLERK_SECRET_KEY || null,
 		sentryDsn: process.env.SENTRY_DSN || null,
