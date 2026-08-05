@@ -1,6 +1,7 @@
 'use strict';
 
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = rateLimit;
 
 /**
  * Limitatoare de trafic.
@@ -22,11 +23,10 @@ const rateLimit = require('express-rate-limit');
 const ipFallbackKey = (req) => {
 	const ip = req.ip || req.socket?.remoteAddress || 'unknown';
 	// IPv4-mapped (::ffff:1.2.3.4) se trateaza ca IPv4, altfel gruparea /64 ar
-	// colapsa adrese distincte in aceeasi galeata.
-	const potrivireMapata = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
-	if (potrivireMapata) return `ip4:${potrivireMapata[1]}`;
-	if (ip.includes(':')) return `ip6:${ip.split(':').slice(0, 4).join(':')}`;
-	return `ip4:${ip}`;
+	// colapsa adrese distincte in aceeasi galeata. Folosim helperul ipKeyGenerator
+	// al express-rate-limit: un keyGenerator custom care foloseste req.ip fara el
+	// e respins la validare (ERR_ERL_KEY_GEN_IPV6) si limitele cad pe keying implicit.
+	return ipKeyGenerator(ip, 64);
 };
 
 const cheieIdentitateVerificata = (req) =>

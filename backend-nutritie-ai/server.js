@@ -137,6 +137,9 @@ if (config.imagekit.publicKey && config.imagekit.privateKey && config.imagekit.u
 }
 
 const app = express();
+// Decizie (audit): 1 = un singur hop de proxy in fata (Render) — req.ip provine
+// din X-Forwarded-For setat de proxy, nu din header-ul clientului. Gruparea IPv6
+// si legarea cheilor de rate-limit pe IP se fac in utils/rateLimit.js (ipKeyGenerator).
 app.set('trust proxy', 1);
 app.use(helmet());
 app.use(compression());
@@ -380,7 +383,7 @@ function valideazaUrlImagine(valoare) {
   return { ok: true, url: adresa.toString() };
 }
 
-app.post('/api/trigger-analiza-mancare', requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/trigger-analiza-mancare', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res) => {
   if (!config.triggerSecretKey) {
     return res.status(503).json({
       eroare: 'Trigger.dev nu este activat (lipseste TRIGGER_SECRET_KEY in variabilele de mediu backend).',
@@ -559,13 +562,13 @@ const handleAnalizaFoto = async (req, res) => {
   }
 };
 
-app.post('/api/analiza-foto', requireAuth, aiLimiter, upload.single('imagine'), handleAnalizaFoto);
-app.post('/api/analizeaza-mancare-structurat', requireAuth, aiLimiter, upload.single('imagine'), handleAnalizaFoto);
+app.post('/api/analiza-foto', requireAuth, aiLimiter, checkAiUsageQuota, upload.single('imagine'), handleAnalizaFoto);
+app.post('/api/analizeaza-mancare-structurat', requireAuth, aiLimiter, checkAiUsageQuota, upload.single('imagine'), handleAnalizaFoto);
 
 // ==========================================
 // RUTA 2: CHAT CONVERSATIONAL (GROQ / LLAMA 3.3)
 // ==========================================
-app.post('/api/chat', requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/chat', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res) => {
   try {
     return res.json(await serviciuChat.ruleazaChat(req.body));
   } catch (err) {
@@ -578,7 +581,7 @@ app.post('/api/chat', requireAuth, aiLimiter, async (req, res) => {
 // ==========================================
 // RUTA DEDICATA: LOGARE MASA DIN CHAT (JSON STRICT MEAL_PROPOSAL)
 // ==========================================
-app.post('/api/log-food-from-chat', requireAuth, aiLimiter, async (req, res) => {
+app.post('/api/log-food-from-chat', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res) => {
   try {
     return res.json(await serviciuChat.logFoodDinChat(req.body));
   } catch (err) {
