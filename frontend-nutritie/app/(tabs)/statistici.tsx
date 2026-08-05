@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { Flame, Activity, TrendingUp, Award, Scale, TrendingDown, Sparkles, Plus, Target } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../supabase';
 import { localDayKey } from '../../lib/dateUtils';
@@ -56,6 +57,7 @@ const AnimatedTrendArrow = ({ isLoss, color }: { isLoss: boolean; color: string 
 
 export default function StatisticiScreen() {
   const { colors } = useTheme();
+  const { t, i18n } = useTranslation();
   const { scrollPaddingTop, scrollPaddingBottom } = useResponsiveLayout();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'calorii' | 'greutate'>('calorii');
@@ -234,19 +236,19 @@ export default function StatisticiScreen() {
 
   const calculPredicieAI = () => {
     const diferenta = greutateCurenta - greutateTinta;
-    if (Math.abs(diferenta) < 0.2) return { text: "Felicitări! Ai atins deja sau ești extrem de aproape de greutatea țintă!", dataEst: "Azi", saptamani: 0 };
-    
+    if (Math.abs(diferenta) < 0.2) return { text: t('stats.predictionAtGoal'), dataEst: t('stats.dataEstAzi'), saptamani: 0 };
+
     const deficit = caloriiTinta > medieCalorii && medieCalorii > 0 ? (caloriiTinta - medieCalorii) : 450;
     const kgPerSaptamana = Math.max(0.2, (deficit * 7) / 7700);
     const saptamaniNecesare = Math.max(1, Math.round(Math.abs(diferenta) / kgPerSaptamana));
     const zileNecesare = saptamaniNecesare * 7;
-    
+
     const d = new Date();
     d.setDate(d.getDate() + zileNecesare);
-    const dataEst = d.toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' });
-    
+    const dataEst = d.toLocaleDateString(i18n.language ?? 'ro-RO', { day: 'numeric', month: 'long', year: 'numeric' });
+
     return {
-      text: `Menținând deficitul tău caloric mediu (estimat la ~${Math.round(deficit)} kcal/zi), ritmul tău de slăbire este de ~${kgPerSaptamana.toFixed(1)} kg/săptămână.`,
+      text: t('stats.predictionPace', { deficit: Math.round(deficit), ritm: kgPerSaptamana.toFixed(1) }),
       dataEst,
       saptamani: saptamaniNecesare
     };
@@ -266,7 +268,7 @@ export default function StatisticiScreen() {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Se calculează statisticile...</Text>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('stats.loading')}</Text>
       </View>
     );
   }
@@ -284,9 +286,9 @@ export default function StatisticiScreen() {
         }
       >
         <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Evoluția Ta</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{t('stats.title')}</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            {activeTab === 'calorii' ? 'Analiza detaliată a aportului pe ultimele 7 zile' : 'Monitorizarea greutății și predicție AI'}
+            {activeTab === 'calorii' ? t('stats.subtitleCalories') : t('stats.subtitleWeight')}
           </Text>
 
           {/* Segmented Control Switcher */}
@@ -296,10 +298,10 @@ export default function StatisticiScreen() {
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab('calorii'); }}
               accessibilityRole="button"
               accessibilityState={{ selected: activeTab === 'calorii' }}
-              accessibilityLabel="Fila aport caloric"
+              accessibilityLabel={t('stats.tabCaloriesA11y')}
             >
               <Text style={[styles.tabText, { color: activeTab === 'calorii' ? colors.background : colors.textSecondary, fontWeight: activeTab === 'calorii' ? '800' : '600' }]}>
-                📊 Aport Caloric
+                {t('stats.tabCalories')}
               </Text>
             </TouchableOpacity>
 
@@ -308,10 +310,10 @@ export default function StatisticiScreen() {
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setActiveTab('greutate'); }}
               accessibilityRole="button"
               accessibilityState={{ selected: activeTab === 'greutate' }}
-              accessibilityLabel="Fila evoluție greutate"
+              accessibilityLabel={t('stats.tabWeightA11y')}
             >
               <Text style={[styles.tabText, { color: activeTab === 'greutate' ? colors.background : colors.textSecondary, fontWeight: activeTab === 'greutate' ? '800' : '600' }]}>
-                ⚖️ Evoluție Greutate
+                {t('stats.tabWeight')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -326,12 +328,12 @@ export default function StatisticiScreen() {
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setModalInitialTab('curenta'); setModalGreutateVisible(true); }}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={`Greutatea curentă, ${greutateCurenta} kg. Modifică`}
+                accessibilityLabel={t('stats.currentWeightA11y', { greutate: greutateCurenta })}
               >
                 <LinearGradient colors={[colors.accentSecondary + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
                   <Scale size={20} color={colors.accentSecondary} />
                   <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{greutateCurenta} kg</Text>
-                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>Curentă</Text>
+                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>{t('stats.currentLabel')}</Text>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -340,12 +342,12 @@ export default function StatisticiScreen() {
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setModalInitialTab('tinta'); setModalGreutateVisible(true); }}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={`Greutatea țintă, ${greutateTinta} kg. Modifică`}
+                accessibilityLabel={t('stats.targetWeightA11y', { greutate: greutateTinta })}
               >
                 <LinearGradient colors={[colors.accent + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
                   <Target size={20} color={colors.accent} />
                   <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{greutateTinta} kg</Text>
-                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>Țintă</Text>
+                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>{t('stats.targetLabel')}</Text>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -356,7 +358,7 @@ export default function StatisticiScreen() {
                     {Math.abs(Math.round((greutateCurenta - greutateTinta) * 10) / 10)} kg
                   </Text>
                   <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>
-                    {greutateCurenta >= greutateTinta ? 'Rămas de slăbit' : 'Rămas de pus'}
+                    {greutateCurenta >= greutateTinta ? t('stats.remainingToLose') : t('stats.remainingToGain')}
                   </Text>
                 </LinearGradient>
               </View>
@@ -369,15 +371,15 @@ export default function StatisticiScreen() {
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setModalInitialTab('curenta'); setModalGreutateVisible(true); }}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel="Modifică greutatea curentă sau țintă"
+                accessibilityLabel={t('stats.recordWeightA11y')}
               >
                 <LinearGradient colors={[colors.accentSecondary + '20', 'rgba(0,0,0,0)']} style={styles.recordGrad}>
                   <View style={[styles.recordIcon, { backgroundColor: colors.accentSecondary }]}>
                     <Plus size={20} color={colors.background} strokeWidth={3} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.recordTitle, { color: colors.textPrimary }]}>⚖️ Modifică Greutatea Curentă sau Țintă</Text>
-                    <Text style={[styles.recordSub, { color: colors.textSecondary }]}>Adaugă greutatea curentă sau modifică obiectivul tău de {greutateTinta} kg</Text>
+                    <Text style={[styles.recordTitle, { color: colors.textPrimary }]}>{t('stats.recordWeightTitle')}</Text>
+                    <Text style={[styles.recordSub, { color: colors.textSecondary }]}>{t('stats.recordWeightSub', { greutate: greutateTinta })}</Text>
                   </View>
                 </LinearGradient>
               </TouchableOpacity>
@@ -389,8 +391,8 @@ export default function StatisticiScreen() {
                 <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.chartGrad}>
                   <View style={styles.chartHeader}>
                     <View>
-                      <Text style={[styles.chartTitle, { color: colors.textPrimary }]}>⚖️ Grafic Greutate</Text>
-                      <Text style={[styles.chartTargetLbl, { color: colors.textSecondary }]}>Istoric pe ultimele {zileChart} zile</Text>
+                      <Text style={[styles.chartTitle, { color: colors.textPrimary }]}>{t('stats.weightChartTitle')}</Text>
+                      <Text style={[styles.chartTargetLbl, { color: colors.textSecondary }]}>{t('stats.weightChartHistory', { zile: zileChart })}</Text>
                     </View>
                     <View style={[styles.chartSwitcher, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
                       <TouchableOpacity
@@ -398,18 +400,18 @@ export default function StatisticiScreen() {
                         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setZileChart('7'); }}
                         accessibilityRole="button"
                         accessibilityState={{ selected: zileChart === '7' }}
-                        accessibilityLabel="Afișează ultimele 7 zile de greutate"
+                        accessibilityLabel={t('stats.range7A11y')}
                       >
-                        <Text style={[styles.chartSwitchText, { color: zileChart === '7' ? colors.background : colors.textSecondary }]}>7Z</Text>
+                        <Text style={[styles.chartSwitchText, { color: zileChart === '7' ? colors.background : colors.textSecondary }]}>{t('stats.range7')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.chartSwitchBtn, zileChart === '30' && { backgroundColor: colors.accentSecondary }]}
                         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setZileChart('30'); }}
                         accessibilityRole="button"
                         accessibilityState={{ selected: zileChart === '30' }}
-                        accessibilityLabel="Afișează ultimele 30 de zile de greutate"
+                        accessibilityLabel={t('stats.range30A11y')}
                       >
-                        <Text style={[styles.chartSwitchText, { color: zileChart === '30' ? colors.background : colors.textSecondary }]}>30Z</Text>
+                        <Text style={[styles.chartSwitchText, { color: zileChart === '30' ? colors.background : colors.textSecondary }]}>{t('stats.range30')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -418,7 +420,7 @@ export default function StatisticiScreen() {
                     {(() => {
                       const displayData = zileChart === '7' ? istoricGreutate.slice(-7) : istoricGreutate.slice(-30);
                       const required = zileChart === '7' ? 7 : 30;
-                      const paddedData: any[] = [...displayData];
+                      const paddedData: ({ data: string; ziNume: string; greutate: number; isPadding?: boolean })[] = [...displayData];
                       while (paddedData.length < required) {
                         paddedData.unshift({ data: `pad-${paddedData.length}`, ziNume: '', greutate: 0, isPadding: true });
                       }
@@ -475,8 +477,8 @@ export default function StatisticiScreen() {
                       <Sparkles size={20} color={colors.accent} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.predictTitle, { color: colors.textPrimary }]}>🤖 Predicție NutriAI</Text>
-                      <Text style={[styles.predictSub, { color: colors.textSecondary }]}>Algoritm bazat pe ritmul și deficitul tău caloric</Text>
+                      <Text style={[styles.predictTitle, { color: colors.textPrimary }]}>{t('stats.predictionTitle')}</Text>
+                      <Text style={[styles.predictSub, { color: colors.textSecondary }]}>{t('stats.predictionSub')}</Text>
                     </View>
                   </View>
 
@@ -486,7 +488,7 @@ export default function StatisticiScreen() {
                       <>
                         <View style={[styles.predictBox, { backgroundColor: 'rgba(0,0,0,0.2)', borderColor: 'rgba(255,255,255,0.04)' }]}>
                           <Text style={[styles.predictDate, { color: colors.accent }]}>🎯 {predictie.dataEst}</Text>
-                          <Text style={[styles.predictWeeks, { color: colors.textSecondary }]}>În aproximativ {predictie.saptamani} săptămâni</Text>
+                          <Text style={[styles.predictWeeks, { color: colors.textSecondary }]}>{t('stats.predictionWeeks', { saptamani: predictie.saptamani })}</Text>
                         </View>
                         <Text style={[styles.predictText, { color: colors.textSecondary }]}>
                           {predictie.text}
@@ -506,7 +508,7 @@ export default function StatisticiScreen() {
             <LinearGradient colors={[colors.accent + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
               <Flame size={20} color={colors.accent} />
               <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{medieCalorii}</Text>
-              <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>Medie kcal / zi</Text>
+              <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>{t('stats.averageCaloriesLabel')}</Text>
             </LinearGradient>
           </View>
 
@@ -514,7 +516,7 @@ export default function StatisticiScreen() {
             <LinearGradient colors={[colors.accentSecondary + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
               <Activity size={20} color={colors.accentSecondary} />
               <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{medieProteine}g</Text>
-              <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>Medie proteine</Text>
+              <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>{t('stats.averageProteinLabel')}</Text>
             </LinearGradient>
           </View>
 
@@ -522,7 +524,7 @@ export default function StatisticiScreen() {
             <LinearGradient colors={[colors.warning + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
               <Award size={20} color={colors.warning} />
               <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{zileInTinta}/7</Text>
-              <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>Zile în țintă</Text>
+              <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>{t('stats.daysInTarget')}</Text>
             </LinearGradient>
           </View>
         </Animated.View>
@@ -532,15 +534,15 @@ export default function StatisticiScreen() {
           <BlurView intensity={20} tint="dark" style={styles.chartBlur}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.chartGrad}>
               <View style={styles.chartHeader}>
-                <Text style={[styles.chartTitle, { color: colors.textPrimary }]}>📊 Consum Calorii</Text>
-                <Text style={[styles.chartTargetLbl, { color: colors.textSecondary }]}>Țintă: {caloriiTinta} kcal</Text>
+                <Text style={[styles.chartTitle, { color: colors.textPrimary }]}>{t('stats.caloriesChartTitle')}</Text>
+                <Text style={[styles.chartTargetLbl, { color: colors.textSecondary }]}>{t('stats.target', { tinta: caloriiTinta })}</Text>
               </View>
 
               <View style={styles.chartArea}>
                 {zile.map((zi, index) => {
                   const inaltimeBara = Math.max((zi.calorii / maxCalorii) * 160, zi.calorii > 0 ? 12 : 4);
                   const depasit = zi.calorii > caloriiTinta * 1.05;
-                  const culoriBara: readonly [string, string, ...string[]] = depasit ? ['#f43f5e', '#fb7185'] : colors.accentGradient;
+                  const culoriBara: readonly [string, string, ...string[]] = depasit ? [colors.danger, colors.danger + 'AA'] : colors.accentGradient;
 
                   return (
                     <Animated.View key={zi.data} entering={FadeInUp.duration(500).delay(index * 60)} style={styles.barContainer}>
@@ -575,9 +577,9 @@ export default function StatisticiScreen() {
         <Animated.View entering={FadeInUp.duration(600).delay(300)} style={[styles.infoCard, { borderColor: colors.cardBorder }]}>
           <BlurView intensity={15} tint="dark" style={styles.infoBlur}>
             <LinearGradient colors={['rgba(255,255,255,0.03)', 'rgba(0,0,0,0)']} style={styles.infoGrad}>
-              <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>✨ Despre consistență</Text>
+              <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>{t('stats.consistencyTitle')}</Text>
               <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-                O zi peste sau sub ținta calorică nu afectează rezultatele pe termen lung. Ceea ce contează cel mai mult este media săptămânală și aportul adecvat de proteine!
+                {t('stats.consistencyText')}
               </Text>
             </LinearGradient>
           </BlurView>
@@ -604,7 +606,7 @@ const styles = StyleSheet.create({
   glowTop: { position: 'absolute', top: -150, right: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.05 },
   glowBottom: { position: 'absolute', bottom: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.05 },
 
-  scroll: { paddingHorizontal: 20 },
+  scroll: { paddingHorizontal: 20, width: '100%', maxWidth: 560, alignSelf: 'center' },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 15, fontWeight: '500' },
@@ -629,7 +631,9 @@ const styles = StyleSheet.create({
   chartArea: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 200, paddingTop: 10 },
   barContainer: { flex: 1, alignItems: 'center', gap: 6 },
   barValue: { fontSize: 10, fontWeight: '700' },
-  barTrack: { width: 22, height: 160, justifyContent: 'flex-end', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 11, overflow: 'hidden' },
+  // flexShrink: 30 de bare cu width fix ar depăși ecranul; lăsăm barele să se
+  // comprime proporțional cu spațiul disponibil (min. lizibile pe 7 zile).
+  barTrack: { width: 22, maxWidth: '100%', flexShrink: 1, height: 160, justifyContent: 'flex-end', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 11, overflow: 'hidden' },
   barFill: { width: '100%', borderRadius: 11 },
   barLabel: { fontSize: 12, marginTop: 4 },
 

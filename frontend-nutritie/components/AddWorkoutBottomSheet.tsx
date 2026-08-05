@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Dumbbell, Plus, Trash2, Search, Check, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -26,14 +27,15 @@ import { useGamificare } from '../hooks/useGamificare';
 import { useNotify } from '../hooks/useNotify';
 import { EquipmentIcon } from './fitness/EquipmentIcon';
 
+// numeKey = cheie i18n pentru eticheta chipului (tradusă la render sub namespace-ul workoutSheet.*)
 const ECHIPAMENTE_OPTIONS = [
-  { id: 'all', nume: '🏋️ Toate' },
-  { id: 'bară', nume: 'Halteră / Bară' },
-  { id: 'gantere', nume: 'Gantere' },
-  { id: 'băncuță', nume: 'Băncuță' },
-  { id: 'cabluri', nume: 'Cabluri' },
-  { id: 'aparat', nume: 'Aparat' },
-  { id: 'greutate_corp', nume: 'Greutatea corpului' },
+  { id: 'all', numeKey: 'workoutSheet.echipamentToate' },
+  { id: 'bară', numeKey: 'workoutSheet.echipamentBara' },
+  { id: 'gantere', numeKey: 'workoutSheet.echipamentGantere' },
+  { id: 'băncuță', numeKey: 'workoutSheet.echipamentBancuta' },
+  { id: 'cabluri', numeKey: 'workoutSheet.echipamentCabluri' },
+  { id: 'aparat', numeKey: 'workoutSheet.echipamentAparat' },
+  { id: 'greutate_corp', numeKey: 'workoutSheet.echipamentGreutateCorp' },
 ];
 import { Holographic3DAnatomyBody } from './fitness/HolographicAnatomyBody';
 
@@ -50,6 +52,7 @@ interface AddWorkoutBottomSheetProps {
 export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWorkoutBottomSheetProps>(
   ({ onSuccess }, ref) => {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const { user } = useAuth();
     const notify = useNotify();
     const { adaugaProgres } = useGamificare();
@@ -195,7 +198,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         });
 
         if (result === null) {
-          notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+          notify.error(t('workoutSheet.eroare'), t('workoutSheet.eroareSalvareAntrenament'));
           return;
         }
 
@@ -209,11 +212,11 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
           console.warn('[AddWorkout] Nu s-a putut acorda XP-ul pentru quick add.');
         }
 
-        notify.reward('Exercițiu salvat rapid!', `+50 XP • ${kcal} kcal arse`);
+        notify.reward(t('workoutSheet.exercitiuSalvatRapid'), t('workoutSheet.xpKcalArse', { xp: 50, kcal }));
         onSuccess?.();
         bottomSheetRef.current?.close();
       } catch {
-        notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+        notify.error(t('workoutSheet.eroare'), t('workoutSheet.eroareSalvareAntrenament'));
       } finally {
         setLoading(false);
       }
@@ -262,7 +265,13 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         if (rounded > maxLimit) {
           rounded = maxLimit;
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          notify.warning('Limita maximă atinsă', `Limita umană maximă este de ${maxLimit} ${camp === 'greutate' ? 'kg' : 'repetări'}.`);
+          notify.warning(
+            t('workoutSheet.limitaMaxima'),
+            t('workoutSheet.limitaUmana', {
+              max: maxLimit,
+              unitate: camp === 'greutate' ? t('workoutSheet.unitateKg') : t('workoutSheet.unitateRepetari'),
+            })
+          );
         }
         return {
           ...item,
@@ -280,7 +289,13 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         num = maxLimit;
         valStr = String(maxLimit);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        notify.warning('Limita maximă atinsă', `Limita umană maximă este de ${maxLimit} ${camp === 'greutate' ? 'kg' : 'repetări'}.`);
+        notify.warning(
+          t('workoutSheet.limitaMaxima'),
+          t('workoutSheet.limitaUmana', {
+            max: maxLimit,
+            unitate: camp === 'greutate' ? t('workoutSheet.unitateKg') : t('workoutSheet.unitateRepetari'),
+          })
+        );
       }
       setSeturi(prev => prev.map((item, i) => {
         if (i !== idx) return item;
@@ -312,11 +327,11 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
 
     const rankInfoEditor = useMemo(() => {
       const scor = scorIntensitateEditor;
-      if (scor >= 85) return { rank: 'RANK S+ • ELITE PRO 👑⚡', badgeColor: '#FACC15', stele: '⭐⭐⭐⭐⭐' };
-      if (scor >= 65) return { rank: 'RANK A • ADVANCED HYPERTROPHY 🔥', badgeColor: '#00F0FF', stele: '⭐⭐⭐⭐' };
-      if (scor >= 45) return { rank: 'RANK B • INTERMEDIATE STRENGTH 💪', badgeColor: '#4ADE80', stele: '⭐⭐⭐' };
-      return { rank: 'RANK C • FOUNDATION & FORM 🌊', badgeColor: '#38BDF8', stele: '⭐⭐' };
-    }, [scorIntensitateEditor]);
+      if (scor >= 85) return { rank: t('workoutSheet.rankSPlus'), badgeColor: colors.warning, stele: '⭐⭐⭐⭐⭐' };
+      if (scor >= 65) return { rank: t('workoutSheet.rankA'), badgeColor: colors.accentTertiary, stele: '⭐⭐⭐⭐' };
+      if (scor >= 45) return { rank: t('workoutSheet.rankB'), badgeColor: colors.success, stele: '⭐⭐⭐' };
+      return { rank: t('workoutSheet.rankC'), badgeColor: colors.accentSecondary, stele: '⭐⭐' };
+    }, [scorIntensitateEditor, colors, t]);
 
     const salveazaDinEditor = async () => {
       if (!exercitiuEditor) return;
@@ -340,7 +355,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         });
 
         if (result === null) {
-          notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+          notify.error(t('workoutSheet.eroare'), t('workoutSheet.eroareSalvareAntrenament'));
           return;
         }
 
@@ -354,12 +369,12 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
           console.warn('[AddWorkout] Nu s-a putut acorda XP-ul pentru editor.');
         }
 
-        notify.reward('Antrenament salvat!', `+100 XP • ${kcalLive} kcal`);
+        notify.reward(t('workoutSheet.antrenamentSalvat'), t('workoutSheet.xpKcal', { xp: 100, kcal: kcalLive }));
         onSuccess?.();
         setExercitiuEditor(null);
         bottomSheetRef.current?.close();
       } catch {
-        notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+        notify.error(t('workoutSheet.eroare'), t('workoutSheet.eroareSalvareAntrenament'));
       } finally {
         setLoading(false);
       }
@@ -372,7 +387,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
         const result = await adaugaAntrenament({
-          nume: `${exercitiuEditor.nume} (Copie)`,
+          nume: t('workoutSheet.numeCopie', { nume: exercitiuEditor.nume }),
           tip: exercitiuEditor.categorie,
           durata_min: durataMin,
           calorii_arse: kcalLive,
@@ -386,7 +401,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
             },
             {
               exercitiuId: exercitiuEditor.id,
-              nume: `${exercitiuEditor.nume} (Set duplicat)`,
+              nume: t('workoutSheet.numeSetDuplicat', { nume: exercitiuEditor.nume }),
               seturi: seturi.map((s, i) => ({ ...s, serie: i + 1 })),
               durataMin,
               kcal: kcalLive,
@@ -396,16 +411,16 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         });
 
         if (result === null) {
-          notify.error('Eroare', 'Nu s-a putut duplica exercițiul.');
+          notify.error(t('workoutSheet.eroare'), t('workoutSheet.eroareDuplicareExercitiu'));
           return;
         }
 
-        notify.reward('Exercițiu duplicat!', `+150 XP • ${kcalLive * 2} kcal`);
+        notify.reward(t('workoutSheet.exercitiuDuplicat'), t('workoutSheet.xpKcal', { xp: 150, kcal: kcalLive * 2 }));
         onSuccess?.();
         setExercitiuEditor(null);
         bottomSheetRef.current?.close();
       } catch {
-        notify.error('Eroare', 'Nu s-a putut duplica exercițiul.');
+        notify.error(t('workoutSheet.eroare'), t('workoutSheet.eroareDuplicareExercitiu'));
       } finally {
         setLoading(false);
       }
@@ -437,7 +452,8 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
             e.stopPropagation();
             handleQuickAdd(item);
           }}
-          accessibilityLabel="Adaugă rapid exercițiul"
+          accessibilityRole="button"
+          accessibilityLabel={t('workoutSheet.adaugaRapid')}
         >
           <Plus size={18} color={colors.background} strokeWidth={3} />
         </TouchableOpacity>
@@ -460,9 +476,15 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
             <View style={styles.editorHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.editorTitle, { color: colors.textPrimary }]}>{exercitiuEditor.nume}</Text>
-                <Text style={[styles.editorSub, { color: colors.accent }]}>{kcalLive} kcal • {volumTotalCalc} kg volum total</Text>
+                <Text style={[styles.editorSub, { color: colors.accent }]}>{t('workoutSheet.kcalVolumTotal', { kcal: kcalLive, volum: volumTotalCalc })}</Text>
               </View>
-              <TouchableOpacity onPress={() => setExercitiuEditor(null)} style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+              <TouchableOpacity
+                onPress={() => setExercitiuEditor(null)}
+                style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]}
+                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                accessibilityRole="button"
+                accessibilityLabel={t('workoutSheet.inchideEditor')}
+              >
                 <X size={20} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
@@ -491,18 +513,21 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                   <View style={{ height: '100%', width: `${scorIntensitateEditor}%`, backgroundColor: rankInfoEditor.badgeColor }} />
                 </View>
                 <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                  Efort: <Text style={{ fontWeight: '800', color: rankInfoEditor.badgeColor }}>{scorIntensitateEditor}/100 PTS</Text> • Volum total: <Text style={{ fontWeight: '800', color: colors.textPrimary }}>{volumTotalCalc} kg</Text>
+                  {t('workoutSheet.efort')}: <Text style={{ fontWeight: '800', color: rankInfoEditor.badgeColor }}>{scorIntensitateEditor}/100 PTS</Text> • {t('workoutSheet.volumTotal')}: <Text style={{ fontWeight: '800', color: colors.textPrimary }}>{volumTotalCalc} kg</Text>
                 </Text>
               </View>
             </View>
 
             {exercitiuEditor.categorie === 'cardio' ? (
               <View style={[styles.cardioBox, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
-                <Text style={[styles.cardioLabel, { color: colors.textSecondary }]}>Durată (minute):</Text>
+                <Text style={[styles.cardioLabel, { color: colors.textSecondary }]}>{t('workoutSheet.durataMinute')}:</Text>
                 <View style={styles.counterRow}>
                   <TouchableOpacity
                     style={[styles.counterBtn, { backgroundColor: colors.cardBorder }]}
                     onPress={() => setDurataMin(Math.max(5, durataMin - 5))}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('workoutSheet.scadeDurata')}
+                    accessibilityState={{ disabled: durataMin <= 5 }}
                   >
                     <Text style={[styles.counterText, { color: colors.textPrimary }]}>-</Text>
                   </TouchableOpacity>
@@ -515,7 +540,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                       if (num > 120) {
                         num = 120;
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                        notify.warning('Limita maximă atinsă', 'Durata maximă admisă este de 120 minute (7200s).');
+                        notify.warning(t('workoutSheet.limitaMaxima'), t('workoutSheet.durataMaxima'));
                       }
                       setDurataMin(num);
                     }}
@@ -528,11 +553,14 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                       if (durataMin + 5 > 120) {
                         setDurataMin(120);
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                        notify.warning('Limita maximă atinsă', 'Durata maximă admisă este de 120 minute (7200s).');
+                        notify.warning(t('workoutSheet.limitaMaxima'), t('workoutSheet.durataMaxima'));
                       } else {
                         setDurataMin(durataMin + 5);
                       }
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('workoutSheet.cresteDurata')}
+                    accessibilityState={{ disabled: durataMin >= 120 }}
                   >
                     <Text style={[styles.counterText, { color: colors.textPrimary }]}>+</Text>
                   </TouchableOpacity>
@@ -541,9 +569,9 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
             ) : (
               <>
                 <View style={styles.seturiHeader}>
-                  <Text style={[styles.colLabel, { width: 32, color: colors.textSecondary }]}>SERIA</Text>
-                  <Text style={[styles.colLabel, { flex: 1, textAlign: 'center', color: colors.textSecondary }]}>REPETĂRI</Text>
-                  <Text style={[styles.colLabel, { flex: 1, textAlign: 'center', color: colors.textSecondary }]}>GREUTATE (KG)</Text>
+                  <Text style={[styles.colLabel, { width: 32, color: colors.textSecondary }]}>{t('workoutSheet.seria')}</Text>
+                  <Text style={[styles.colLabel, { flex: 1, textAlign: 'center', color: colors.textSecondary }]}>{t('workoutSheet.repetari')}</Text>
+                  <Text style={[styles.colLabel, { flex: 1, textAlign: 'center', color: colors.textSecondary }]}>{t('workoutSheet.greutateKg')}</Text>
                   <View style={{ width: 28 }} />
                 </View>
 
@@ -552,7 +580,13 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                     <Text style={[styles.serieNr, { color: colors.accent }]}>#{item.serie}</Text>
 
                     <View style={styles.counterGroup}>
-                      <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'repetari', -1)} style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}>
+                      <TouchableOpacity
+                        onPress={() => actualizeazaSerie(idx, 'repetari', -1)}
+                        style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('workoutSheet.scadeRepetari', { serie: item.serie })}
+                        accessibilityState={{ disabled: (item.repetari || 0) <= 0 }}
+                      >
                         <Text style={[styles.miniBtnText, { color: colors.textPrimary }]}>-</Text>
                       </TouchableOpacity>
                       <BottomSheetTextInput
@@ -564,13 +598,25 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                         placeholder="0"
                         placeholderTextColor={colors.textSecondary}
                       />
-                      <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'repetari', 1)} style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}>
+                      <TouchableOpacity
+                        onPress={() => actualizeazaSerie(idx, 'repetari', 1)}
+                        style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('workoutSheet.cresteRepetari', { serie: item.serie })}
+                        accessibilityState={{ disabled: (item.repetari || 0) >= 100 }}
+                      >
                         <Text style={[styles.miniBtnText, { color: colors.textPrimary }]}>+</Text>
                       </TouchableOpacity>
                     </View>
 
                     <View style={styles.counterGroup}>
-                      <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'greutate', -2.5)} style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}>
+                      <TouchableOpacity
+                        onPress={() => actualizeazaSerie(idx, 'greutate', -2.5)}
+                        style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('workoutSheet.scadeGreutate', { serie: item.serie })}
+                        accessibilityState={{ disabled: (item.greutate || 0) <= 0 }}
+                      >
                         <Text style={[styles.miniBtnText, { color: colors.textPrimary }]}>-</Text>
                       </TouchableOpacity>
                       <BottomSheetTextInput
@@ -582,12 +628,23 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                         placeholder="0"
                         placeholderTextColor={colors.textSecondary}
                       />
-                      <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'greutate', 2.5)} style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}>
+                      <TouchableOpacity
+                        onPress={() => actualizeazaSerie(idx, 'greutate', 2.5)}
+                        style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('workoutSheet.cresteGreutate', { serie: item.serie })}
+                        accessibilityState={{ disabled: (item.greutate || 0) >= 600 }}
+                      >
                         <Text style={[styles.miniBtnText, { color: colors.textPrimary }]}>+</Text>
                       </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity onPress={() => stergeSerie(idx)} style={styles.delBtn}>
+                    <TouchableOpacity
+                      onPress={() => stergeSerie(idx)}
+                      style={styles.delBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('workoutSheet.stergeSerie', { serie: item.serie })}
+                    >
                       <Trash2 size={16} color={colors.danger} />
                     </TouchableOpacity>
                   </View>
@@ -597,9 +654,11 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                   <TouchableOpacity
                     style={[styles.addSerieBtn, { flex: 1, borderColor: colors.accent, marginBottom: 0 }]}
                     onPress={adaugaSerie}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('workoutSheet.adaugaSetNou')}
                   >
                     <Plus size={16} color={colors.accent} />
-                    <Text style={[styles.addSerieText, { color: colors.accent }]}>+ Set nou</Text>
+                    <Text style={[styles.addSerieText, { color: colors.accent }]}>+ {t('workoutSheet.setNou')}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -609,9 +668,11 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                       const ultima = seturi[seturi.length - 1] || { serie: 1, repetari: 10, greutate: 0 };
                       setSeturi([...seturi, { serie: seturi.length + 1, repetari: ultima.repetari, greutate: ultima.greutate }]);
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('workoutSheet.adaugaSetSimilar')}
                   >
                     <Plus size={16} color={colors.accentSecondary} />
-                    <Text style={[styles.addSerieText, { color: colors.accentSecondary }]}>+ Set similar</Text>
+                    <Text style={[styles.addSerieText, { color: colors.accentSecondary }]}>+ {t('workoutSheet.setSimilar')}</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -621,6 +682,8 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
               style={styles.saveMainBtn}
               onPress={salveazaDinEditor}
               disabled={loading}
+              accessibilityRole="button"
+              accessibilityLabel={t('workoutSheet.salveazaAntrenamentul')}
             >
               <LinearGradient colors={colors.accentGradient} style={styles.saveGrad}>
                 {loading ? (
@@ -628,7 +691,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                 ) : (
                   <>
                     <Check size={20} color={colors.background} strokeWidth={3} />
-                    <Text style={[styles.saveMainText, { color: colors.background }]}>SALVEAZĂ ANTRENAMENTUL</Text>
+                    <Text style={[styles.saveMainText, { color: colors.background }]}>{t('workoutSheet.salveazaAntrenamentul')}</Text>
                   </>
                 )}
               </LinearGradient>
@@ -638,16 +701,18 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
               style={[styles.addSerieBtn, { borderColor: colors.cardBorder, marginTop: 12, marginBottom: 10 }]}
               onPress={duplicaDinEditor}
               disabled={loading}
+              accessibilityRole="button"
+              accessibilityLabel={t('workoutSheet.duplicaExercitiul')}
             >
-              <Text style={[styles.addSerieText, { color: colors.textSecondary }]}>📑 Duplică exercițiul</Text>
+              <Text style={[styles.addSerieText, { color: colors.textSecondary }]}>{t('workoutSheet.duplicaExercitiul')}</Text>
             </TouchableOpacity>
           </BottomSheetScrollView>
         ) : (
           // CATALOG & FILTRE
           <View style={styles.catalogWrap}>
             <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Adaugă Exercițiu</Text>
-              <Text style={[styles.sheetSub, { color: colors.textSecondary }]}>Caută, filtrează sau folosește adăugare rapidă</Text>
+              <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>{t('workoutSheet.adaugaExercitiu')}</Text>
+              <Text style={[styles.sheetSub, { color: colors.textSecondary }]}>{t('workoutSheet.subtitlu')}</Text>
             </View>
 
             {/* Căutare */}
@@ -655,13 +720,18 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
               <Search size={18} color={colors.textSecondary} />
               <BottomSheetTextInput
                 style={[styles.searchInput, { color: colors.textPrimary }]}
-                placeholder="Caută exercițiu (ex: Arnold, Biceps)..."
+                placeholder={t('workoutSheet.placeholderCauta')}
                 placeholderTextColor={colors.textSecondary}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
               {searchQuery ? (
-                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+                <TouchableOpacity
+                  onPress={() => setSearchQuery('')}
+                  hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('workoutSheet.golesteCautarea')}
+                >
                   <X size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               ) : null}
@@ -672,7 +742,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
               <FlatList
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                data={[{ id: null, nume: 'Toate' }, ...CATEGORII]}
+                data={[{ id: null, nume: t('workoutSheet.toate') }, ...CATEGORII]}
                 keyExtractor={(item) => String(item.id || 'all')}
                 contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
                 renderItem={({ item }) => {
@@ -723,8 +793,8 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                         setEchipamentSelectat(item.id);
                       }}
                     >
-                      <Text style={[styles.catChipText, { fontSize: 11, color: active ? '#FFF' : colors.textSecondary }]}>
-                        {item.nume}
+                      <Text style={[styles.catChipText, { fontSize: 11, color: active ? colors.textPrimary : colors.textSecondary }]}>
+                        {t(item.numeKey)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -742,11 +812,11 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
               ListHeaderComponent={
                 recenteExercises.length > 0 ? (
                   <View style={{ marginBottom: 16 }}>
-                    <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>EXERCIȚII RECENTE</Text>
+                    <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>{t('workoutSheet.exercitiiRecente')}</Text>
                     {recenteExercises.map((item) => (
                       <View key={item.id}>{renderCard({ item })}</View>
                     ))}
-                    <Text style={[styles.sectionHeading, { color: colors.textSecondary, marginTop: 12 }]}>TOATE EXERCIȚIILE</Text>
+                    <Text style={[styles.sectionHeading, { color: colors.textSecondary, marginTop: 12 }]}>{t('workoutSheet.toateExercitiile')}</Text>
                   </View>
                 ) : null
               }
@@ -801,7 +871,7 @@ const styles = StyleSheet.create({
   miniBtn: { width: 32, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
   miniBtnText: { fontSize: 18, fontWeight: '800' },
   serieVal: { minWidth: 32, textAlign: 'center', fontSize: 18, fontWeight: '800' },
-  serieInputText: { flex: 1, minWidth: 44, height: 36, textAlign: 'center', fontSize: 15, fontWeight: '800', borderRadius: 10, borderWidth: 1, paddingHorizontal: 2, paddingVertical: 2 },
+  serieInputText: { flex: 1, minWidth: 0, flexShrink: 1, height: 36, textAlign: 'center', fontSize: 15, fontWeight: '800', borderRadius: 10, borderWidth: 1, paddingHorizontal: 2, paddingVertical: 2 },
   durataInputText: { width: 80, height: 50, textAlign: 'center', fontSize: 20, fontWeight: '800', borderRadius: 14, borderWidth: 1 },
   delBtn: { width: 28, height: 36, justifyContent: 'center', alignItems: 'center' },
 

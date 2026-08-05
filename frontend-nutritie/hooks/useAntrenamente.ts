@@ -84,18 +84,30 @@ function toInsertPayload(row: Antrenament, userId: string) {
 }
 
 export function normalizeAntrenament(row: Antrenament): Antrenament {
-  const computed = computeWorkoutMetrics(row.exercitii || []);
   const hasStoredLoad = Boolean(row.muscle_load && Object.keys(row.muscle_load).length > 0);
+  // computeWorkoutMetrics e costisitor (parcurge seturi × exerciții). Îl rulăm
+  // DOAR când lipsește cel puțin un câmp derivat; în cazul comun (antrenament
+  // salvat complet), reutilizăm valorile stocate. normalizeAntrenament rulează pe
+  // fiecare fetch, deci fără asta am recalcula întregul istoric la fiecare refresh.
+  const needsCompute =
+    !hasStoredLoad ||
+    row.external_volume_kg == null ||
+    row.equivalent_volume_kg == null ||
+    row.session_score == null ||
+    row.volum_total == null ||
+    !row.rank_key ||
+    !row.rank_label;
+  const computed = needsCompute ? computeWorkoutMetrics(row.exercitii || []) : null;
   return {
     ...row,
     // IMPORTANT: {} nu este o hartă validă. Recalculăm din exercițiile salvate.
-    muscle_load: hasStoredLoad ? row.muscle_load : computed.muscleLoad,
-    external_volume_kg: row.external_volume_kg ?? computed.externalVolumeKg,
-    equivalent_volume_kg: row.equivalent_volume_kg ?? computed.equivalentVolumeKg,
-    session_score: row.session_score ?? computed.sessionScore,
-    rank_key: row.rank_key || computed.rank.key,
-    rank_label: row.rank_label || computed.rank.label,
-    volum_total: row.volum_total ?? computed.externalVolumeKg,
+    muscle_load: hasStoredLoad ? row.muscle_load : (computed?.muscleLoad ?? row.muscle_load),
+    external_volume_kg: row.external_volume_kg ?? computed?.externalVolumeKg ?? 0,
+    equivalent_volume_kg: row.equivalent_volume_kg ?? computed?.equivalentVolumeKg ?? 0,
+    session_score: row.session_score ?? computed?.sessionScore ?? 0,
+    rank_key: row.rank_key || computed?.rank.key || '',
+    rank_label: row.rank_label || computed?.rank.label || '',
+    volum_total: row.volum_total ?? computed?.externalVolumeKg ?? 0,
   };
 }
 
@@ -215,9 +227,15 @@ export function useAntrenamente(dataSelectata?: Date) {
     });
     let cloud: Antrenament[] = [];
     if (currentUser) {
+      // Proiectie explicita: normalizarea reutilizeaza valorile stocate (fast
+      // path), iar `exercitii` e necesar atat pentru lista expandata din jurnal,
+      // cat si pentru recomputare. Fara select('*') nu mai aducem coloane pe care
+      // ecranul nu le foloseste.
       const { data } = await supabase
         .from('antrenamente')
-        .select('*')
+        .select(
+          'id, user_id, nume, tip, durata_min, calorii_arse, exercitii, volum_total, muscle_load, external_volume_kg, equivalent_volume_kg, session_score, rank_key, rank_label, created_at',
+        )
         .eq('user_id', currentUser.id)
         .gte('created_at', pastDate.toISOString())
         .order('created_at', { ascending: false });

@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { X, Pencil, Trash2, Dumbbell, Flame, Sparkles, CheckCircle2, ShieldCheck, Info } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { Masa, AminoaciziEsentiali } from '../types';
 import { FoodDetailModal } from './food/FoodDetailModal';
 
@@ -59,6 +60,7 @@ function getAminoProfile(proteineTotal: number, customAmino?: AminoaciziEsential
 
 export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: Props) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [detailAliment, setDetailAliment] = useState<any>(null);
   const [detailVisible, setDetailVisible] = useState(false);
 
@@ -117,6 +119,8 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
               onPress={onClose}
               style={[styles.closeBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel={t('a11y.mealDetails.close')}
             >
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
@@ -162,6 +166,8 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
                     onPress={() => { setDetailAliment(al); setDetailVisible(true); }}
                     style={styles.detailBtn}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('a11y.mealDetails.ingredientInfo', { nume: al.nume })}
                   >
                     <Info size={15} color={colors.accent} />
                   </TouchableOpacity>
@@ -179,13 +185,13 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
             <View style={[styles.aminoSection, { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: colors.cardBorder }]}>
               <View style={styles.aminoHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Dumbbell size={16} color="#00F0FF" />
+                  <Dumbbell size={16} color={colors.accentTertiary} />
                   <Text style={[styles.aminoTitle, { color: colors.textPrimary }]}>
                     Profil Aminoacizi Esențiali (EAA)
                   </Text>
                 </View>
-                <View style={[styles.bcaaBadge, { backgroundColor: '#00F0FF1F', borderColor: '#00F0FF55' }]}>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#00F0FF' }}>
+                <View style={[styles.bcaaBadge, { backgroundColor: colors.accentTertiary + '1F', borderColor: colors.accentTertiary + '55' }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: colors.accentTertiary }}>
                     BCAA: {totalBcaa} mg
                   </Text>
                 </View>
@@ -199,17 +205,17 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
 
               <View style={styles.aminoGrid}>
                 <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: '#00F0FF' }]}>Leucină (BCAA)</Text>
+                  <Text style={[styles.aminoName, { color: colors.accentTertiary }]}>Leucină (BCAA)</Text>
                   <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.leucina} mg</Text>
                 </View>
 
                 <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: '#00F0FF' }]}>Izoleucină (BCAA)</Text>
+                  <Text style={[styles.aminoName, { color: colors.accentTertiary }]}>Izoleucină (BCAA)</Text>
                   <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.izoleucina} mg</Text>
                 </View>
 
                 <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: '#00F0FF' }]}>Valină (BCAA)</Text>
+                  <Text style={[styles.aminoName, { color: colors.accentTertiary }]}>Valină (BCAA)</Text>
                   <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.valina} mg</Text>
                 </View>
 
@@ -256,6 +262,8 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
                   onClose();
                   onEdit(masa);
                 }}
+                accessibilityRole="button"
+                accessibilityLabel={t('a11y.mealDetails.edit', { nume: masa.nume })}
               >
                 <Pencil size={16} color={colors.textPrimary} />
                 <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>Editează</Text>
@@ -270,6 +278,8 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
                   onClose();
                   onDelete(masa);
                 }}
+                accessibilityRole="button"
+                accessibilityLabel={t('a11y.mealDetails.delete', { nume: masa.nume })}
               >
                 <Trash2 size={16} color={colors.danger} />
                 <Text style={[styles.actionBtnText, { color: colors.danger }]}>Șterge</Text>

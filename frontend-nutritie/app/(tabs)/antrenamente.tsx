@@ -11,6 +11,7 @@ import {
   MoveUp, Timer, Trash2, Plus,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 
 import KeyboardAwareScreen, { CONTENT_BOTTOM_PADDING } from '../../components/ui/KeyboardAwareScreen';
 import BodyMap from '../../components/fitness/BodyMap';
@@ -30,7 +31,6 @@ import {
 } from '../../lib/workoutSets';
 
 const MAP_HEIGHT = 380;
-const CTA_COLOR = '#0EA5E9';
 const SESSION_KEY = 'current_workout_session';
 const SESSION_META_KEY = 'current_workout_session_meta';
 const REST_DEFAULT_SEC = 90;
@@ -55,6 +55,76 @@ const formatClock = (totalSec: number) => {
 };
 const localDayKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+// Cronometrul izometric se auto-ticăie în această componentă dedicată, nu în
+// părinte: altfel setTimerSeconds la 250ms re-randa tot ecranul (BodyMap,
+// FlashList header, celule vizibile) de 4×/sec cât merge cronometrul. Aici doar
+// acest <Text> se actualizează. Precizia afișată rămâne 1s (formatClock rotunjește).
+function TimerDisplay({ running, startedAtRef, idleValue, runningColor, idleColor }: {
+  running: boolean;
+  startedAtRef: { current: number | null };
+  idleValue: number;
+  runningColor: string;
+  idleColor: string;
+}) {
+  const [seconds, setSeconds] = useState(() => {
+    const s = startedAtRef.current;
+    return s != null ? Math.round((Date.now() - s) / 1000) : 0;
+  });
+
+  useEffect(() => {
+    if (!running) return;
+    setSeconds(0);
+    const id = setInterval(() => {
+      const s = startedAtRef.current;
+      if (s != null) setSeconds(Math.round((Date.now() - s) / 1000));
+    }, 250);
+    return () => clearInterval(id);
+  }, [running, startedAtRef]);
+
+  return (
+    <Text style={[styles.timerValue, { color: running ? runningColor : idleColor }]}>
+      {formatClock(running ? seconds : idleValue)}
+    </Text>
+  );
+}
+
+// Pauza dintre seturi se auto-ticăie în această componentă dedicată, nu în
+// părinte: altfel un setTimeout la 1s re-randa tot ecranul (BodyMap, FlashList
+// header, celule vizibile) la fiecare secundă cât ține pauza. Aici doar acest
+// <Text> se actualizează, exact ca în TimerDisplay. Părintele restartă pauza
+// remontând componenta printr-un `key` nou (restSessionId) și o ascunde prin
+// `onComplete` când se termină sau când utilizatorul sare peste ea.
+function RestCountdown({ initialSeconds, onComplete }: {
+  initialSeconds: number;
+  onComplete: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const [seconds, setSeconds] = useState(initialSeconds);
+
+  useEffect(() => {
+    if (seconds <= 0) {
+      onComplete();
+      return;
+    }
+    const tmo = setTimeout(() => setSeconds((s) => s - 1), 1000);
+    return () => clearTimeout(tmo);
+  }, [seconds, onComplete]);
+
+  return (
+    <View style={[styles.restBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
+      <Timer size={18} color={colors.accent} />
+      <Text style={[styles.restText, { color: colors.textPrimary }]}>{t('workouts.pauza', { timp: formatClock(seconds) })}</Text>
+      <Pressable onPress={() => setSeconds((s) => s + 15)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel={t('workouts.prelungestePauza')}>
+        <Text style={[styles.restBtnText, { color: colors.textSecondary }]}>{t('workouts.adauga15s')}</Text>
+      </Pressable>
+      <Pressable onPress={onComplete} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel={t('workouts.sariPestePauza')}>
+        <Text style={[styles.restBtnText, { color: colors.textSecondary }]}>{t('workouts.skip')}</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 type IntensityMap = Partial<Record<MuscleId, number>>;
 type InputState = { weight: string; reps: string; time: string };
@@ -89,6 +159,7 @@ function unionInto(target: IntensityMap, source: IntensityMap, scale = 1) {
 }
 
 export default function AntrenamenteScreen() {
+  const { t } = useTranslation();
   const { width: SCREEN_WIDTH } = useWindowDimensions();
   const { colors } = useTheme();
   const { adaugaAntrenament } = useAntrenamente();
@@ -103,10 +174,12 @@ export default function AntrenamenteScreen() {
   const [warmupFor, setWarmupFor] = useState<string>('');
   const [session, setSession] = useState<Record<string, LoggedSet[]>>({});
   const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [restLeft, setRestLeft] = useState(0);
+  // Pauza dintre seturi. În părinte trăiește DOAR un contor de sesiuni folosit ca
+  // `key` pentru a remonta <RestCountdown> (restart pe fiecare set nou); secunde
+  // care se scurg rămân în componenta copil, ca părintele să nu se re-randeze 1×/s.
+  const [restSessionId, setRestSessionId] = useState(0);
   const [saving, setSaving] = useState(false);
   const [timerExerciseId, setTimerExerciseId] = useState<string>('');
-  const [timerSeconds, setTimerSeconds] = useState(0);
   const timerStartRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -140,27 +213,16 @@ export default function AntrenamenteScreen() {
     return () => { active = false; };
   }, []);
 
-  useEffect(() => {
-    if (restLeft <= 0) return;
-    const t = setTimeout(() => setRestLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [restLeft]);
-
-  // Cronometru pentru exercițiile izometrice (plank, hollow, wall sit).
-  useEffect(() => {
-    if (!timerExerciseId || timerStartRef.current == null) return;
-    const id = setInterval(() => {
-      if (timerStartRef.current == null) return;
-      setTimerSeconds(Math.round((Date.now() - timerStartRef.current) / 1000));
-    }, 250);
-    return () => clearInterval(id);
-  }, [timerExerciseId]);
-
   const persistSession = useCallback((next: Record<string, LoggedSet[]>) => {
     AsyncStorage.setItem(SESSION_KEY, JSON.stringify(next)).catch(() => {
-      notify.warning('Salvare locală eșuată', 'Setul poate dispărea dacă închizi aplicația.');
+      notify.warning(t('workouts.salvareLocalaLipsa'), t('workouts.salvareLocalaLipsaDetaliu'));
     });
   }, [notify]);
+
+  // Ascunde pauza curentă. Referință stabilă (useCallback fără deps) pasată ca
+  // `onComplete` lui <RestCountdown>, ca efectul copilului să nu se re-ruleze
+  // la fiecare render al părintelui.
+  const stopRest = useCallback(() => setRestSessionId(0), []);
 
   const exercisesInCategory = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -210,6 +272,14 @@ export default function AntrenamenteScreen() {
     return { sets, volume, seconds, exercises: Object.keys(session).filter((k) => session[k]?.length).length };
   }, [session, exercitii]);
 
+  // Obiect stabil pentru extraData: înainte era literal nou la fiecare render, iar
+  // FlashList credea că datele s-au schimbat și re-randa toate celulele vizibile
+  // la orice update de stare nelegat de listă (ex. pauza/restSessionId).
+  const flashExtraData = useMemo(
+    () => ({ session, inputs, expandedExerciseId, warmupFor, timerExerciseId, colors }),
+    [session, inputs, expandedExerciseId, warmupFor, timerExerciseId, colors],
+  );
+
   /** Lista "ce ai lucrat" — exercițiile din sesiune, în ordinea logării. */
   const workedExercises = useMemo(() => {
     return Object.entries(session)
@@ -217,7 +287,7 @@ export default function AntrenamenteScreen() {
       .map(([exId, sets]) => {
         const ex = exercitii.find((e) => e.id === exId);
         const fields = getSetFields(ex);
-        return { exId, nume: ex?.nume ?? 'Exercițiu', sets, fields, summary: summarizeSets(sets, fields) };
+        return { exId, nume: ex?.nume ?? t('workouts.exercitiu'), sets, fields, summary: summarizeSets(sets, fields) };
       });
   }, [session, exercitii]);
 
@@ -278,15 +348,13 @@ export default function AntrenamenteScreen() {
   const startTimer = (ex: Exercitiu) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     timerStartRef.current = Date.now();
-    setTimerSeconds(0);
     setTimerExerciseId(ex.id);
   };
 
   const stopTimer = (ex: Exercitiu) => {
-    const elapsed = timerStartRef.current ? Math.round((Date.now() - timerStartRef.current) / 1000) : timerSeconds;
+    const elapsed = timerStartRef.current ? Math.round((Date.now() - timerStartRef.current) / 1000) : 0;
     timerStartRef.current = null;
     setTimerExerciseId('');
-    setTimerSeconds(0);
     if (elapsed > 0) setInputFor(ex, { time: String(elapsed) });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   };
@@ -294,7 +362,6 @@ export default function AntrenamenteScreen() {
   const resetTimer = () => {
     timerStartRef.current = null;
     setTimerExerciseId('');
-    setTimerSeconds(0);
   };
 
   const handleRecordSet = (ex: Exercitiu) => {
@@ -313,7 +380,7 @@ export default function AntrenamenteScreen() {
     };
 
     const error = validateLoggedSet(newSet, fields);
-    if (error) { notify.warning('Set incomplet', error); return; }
+    if (error) { notify.warning(t('workouts.setIncomplet'), error); return; }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     setSession((prev) => {
@@ -328,9 +395,9 @@ export default function AntrenamenteScreen() {
       AsyncStorage.setItem(SESSION_META_KEY, JSON.stringify({ startedAt: now, day: localDayKey() })).catch(() => {});
     }
 
-    setRestLeft(REST_DEFAULT_SEC);
+    setRestSessionId((n) => n + 1);
     setWarmupFor('');
-    notify.success(`Set ${newSet.serie} înregistrat`, describeSet(newSet, fields));
+    notify.success(t('workouts.setInregistrat', { serie: newSet.serie }), describeSet(newSet, fields));
   };
 
   const removeSet = (exId: string, index: number) => {
@@ -350,7 +417,7 @@ export default function AntrenamenteScreen() {
     if (saving) return;
     const entries = Object.entries(session).filter(([, sets]) => sets.length > 0);
     if (entries.length === 0) {
-      notify.warning('Nimic de salvat', 'Înregistrează cel puțin un set.');
+      notify.warning(t('workouts.nimicDeSalvat'), t('workouts.nimicDeSalvatDetaliu'));
       return;
     }
 
@@ -392,20 +459,20 @@ export default function AntrenamenteScreen() {
 
       // Sesiunea se șterge DOAR dacă salvarea a reușit.
       if (!result) {
-        notify.error('Antrenamentul nu a fost salvat', 'Sesiunea a rămas intactă. Încearcă din nou.');
+        notify.error(t('workouts.antrenamentNesalvat'), t('workouts.antrenamentNesalvatDetaliu'));
         return;
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      notify.success('Antrenament salvat', `${totalSets} seturi • ${Math.round(sessionStats.volume)} kg volum`);
+      notify.success(t('workouts.antrenamentSalvat'), t('workouts.antrenamentSalvatDetaliu', { seturi: totalSets, volum: Math.round(sessionStats.volume) }));
       setSession({});
       setInputs({});
       setStartedAt(null);
-      setRestLeft(0);
+      setRestSessionId(0);
       resetTimer();
       AsyncStorage.multiRemove([SESSION_KEY, SESSION_META_KEY]).catch(() => {});
     } catch {
-      notify.error('Eroare la salvare', 'Sesiunea a rămas intactă.');
+      notify.error(t('workouts.eroareLaSalvare'), t('workouts.eroareLaSalvareDetaliu'));
     } finally {
       setSaving(false);
     }
@@ -422,7 +489,7 @@ export default function AntrenamenteScreen() {
     return (
       <View style={[styles.trackerCardExpanded, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
         <View style={styles.trackerHeader}>
-          <Text style={[styles.trackerTitle, { color: colors.textPrimary }]}>Logheaзă set</Text>
+          <Text style={[styles.trackerTitle, { color: colors.textPrimary }]}>{t('workouts.logheazaSet')}</Text>
           <Text style={[styles.modeBadge, { color: colors.accent, borderColor: colors.accent }]}>{fields.modeLabel}</Text>
         </View>
 
@@ -431,9 +498,9 @@ export default function AntrenamenteScreen() {
             <Text style={[styles.setIndex, { color: colors.textTertiary }]}>#{idx + 1}</Text>
             <Text style={[styles.setValue, { color: colors.textPrimary }]}>{describeSet(s, fields)}</Text>
             {s.set_type === 'warmup' && (
-              <Text style={[styles.warmupTag, { color: colors.textTertiary, borderColor: colors.cardBorder }]}>încălzire</Text>
+              <Text style={[styles.warmupTag, { color: colors.textTertiary, borderColor: colors.cardBorder }]}>{t('workouts.incalzire')}</Text>
             )}
-            <Pressable onPress={() => removeSet(ex.id, idx)} accessibilityRole='button' accessibilityLabel={`Șterge setul ${idx + 1}`} hitSlop={8}>
+            <Pressable onPress={() => removeSet(ex.id, idx)} accessibilityRole='button' accessibilityLabel={t('workouts.stergeSetul', { numar: idx + 1 })} hitSlop={8}>
               <Trash2 size={16} color={colors.textTertiary} />
             </Pressable>
           </View>
@@ -441,22 +508,26 @@ export default function AntrenamenteScreen() {
 
         {fields.usesTime ? (
           <View style={[styles.timerBox, { borderColor: timerRunning ? colors.accent : colors.cardBorder }]}>
-            <Text style={[styles.timerValue, { color: timerRunning ? colors.accent : colors.textPrimary }]}>
-              {formatClock(timerRunning ? timerSeconds : parseInt(current.time, 10) || 0)}
-            </Text>
+            <TimerDisplay
+              running={timerRunning}
+              startedAtRef={timerStartRef}
+              idleValue={parseInt(current.time, 10) || 0}
+              runningColor={colors.accent}
+              idleColor={colors.textPrimary}
+            />
             <View style={styles.timerActions}>
               {timerRunning ? (
-                <Pressable onPress={() => stopTimer(ex)} style={[styles.timerBtn, { backgroundColor: colors.accent }]} accessibilityRole='button' accessibilityLabel='Oprește cronometrul'>
+                <Pressable onPress={() => stopTimer(ex)} style={[styles.timerBtn, { backgroundColor: colors.accent }]} accessibilityRole='button' accessibilityLabel={t('workouts.opresteCronometrul')}>
                   <Pause size={16} color='#0B0F14' />
-                  <Text style={styles.timerBtnText}>Stop</Text>
+                  <Text style={styles.timerBtnText}>{t('workouts.stop')}</Text>
                 </Pressable>
               ) : (
-                <Pressable onPress={() => startTimer(ex)} style={[styles.timerBtn, { backgroundColor: colors.accent }]} accessibilityRole='button' accessibilityLabel='Pornește cronometrul'>
+                <Pressable onPress={() => startTimer(ex)} style={[styles.timerBtn, { backgroundColor: colors.accent }]} accessibilityRole='button' accessibilityLabel={t('workouts.pornesteCronometrul')}>
                   <Play size={16} color='#0B0F14' />
-                  <Text style={styles.timerBtnText}>Start</Text>
+                  <Text style={styles.timerBtnText}>{t('workouts.start')}</Text>
                 </Pressable>
               )}
-              <Pressable onPress={resetTimer} style={[styles.timerGhost, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Resetează cronometrul'>
+              <Pressable onPress={resetTimer} style={[styles.timerGhost, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel={t('workouts.reseteazaCronometrul')}>
                 <RotateCcw size={15} color={colors.textSecondary} />
               </Pressable>
             </View>
@@ -466,7 +537,7 @@ export default function AntrenamenteScreen() {
         {fields.usesTime ? (
           <Stepper
             key={`t-${ex.id}`}
-            label='Durată set'
+            label={t('workouts.durataSet')}
             value={current.time}
             onDec={() => adjust(ex, 'time', -5, 0, 3600)}
             onInc={() => adjust(ex, 'time', 5, 0, 3600)}
@@ -477,7 +548,7 @@ export default function AntrenamenteScreen() {
         ) : (
           <Stepper
             key={`r-${ex.id}`}
-            label='Repetări'
+            label={t('workouts.repetari')}
             value={current.reps}
             onDec={() => adjust(ex, 'reps', -1, 0, 500)}
             onInc={() => adjust(ex, 'reps', 1, 0, 500)}
@@ -490,7 +561,7 @@ export default function AntrenamenteScreen() {
         {fields.usesWeight ? (
           <Stepper
             key={`w-${ex.id}`}
-            label={fields.weightRequired ? 'Greutate' : 'Greutate (opțional)'}
+            label={fields.weightRequired ? t('workouts.greutate') : t('workouts.greutateOptional')}
             value={current.weight}
             onDec={() => adjust(ex, 'weight', -2.5, 0, 1000)}
             onInc={() => adjust(ex, 'weight', 2.5, 0, 1000)}
@@ -500,7 +571,7 @@ export default function AntrenamenteScreen() {
           />
         ) : (
           <Text style={[styles.noWeightHint, { color: colors.textTertiary }]}>
-            Exercițiu cu greutatea corpului — nu are câmp de kilograme.
+            {t('workouts.greutateCorpHint')}
           </Text>
         )}
 
@@ -511,17 +582,17 @@ export default function AntrenamenteScreen() {
           style={[styles.warmupToggle, { borderColor: isWarmup ? colors.accent : colors.cardBorder, backgroundColor: isWarmup ? colors.accent + '22' : 'transparent' }]}
         >
           <Text style={[styles.warmupToggleText, { color: isWarmup ? colors.accent : colors.textSecondary }]}>
-            Set de încălzire (nu intră în volum)
+            {t('workouts.setIncalzire')}
           </Text>
         </Pressable>
 
         <Pressable
           onPress={() => handleRecordSet(ex)}
-          style={({ pressed }) => [styles.ctaButton, { backgroundColor: CTA_COLOR, opacity: pressed ? 0.85 : 1 }]}
+          style={({ pressed }) => [styles.ctaButton, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}
           accessibilityRole='button'
         >
-          <Plus size={20} color='#FFFFFF' />
-          <Text style={styles.ctaText}>Adaugă set</Text>
+          <Plus size={20} color={colors.background} />
+          <Text style={[styles.ctaText, { color: colors.background }]}>{t('workouts.adaugaSet')}</Text>
         </Pressable>
       </View>
     );
@@ -541,7 +612,7 @@ export default function AntrenamenteScreen() {
         <Pressable
           onPress={() => onSelectExercise(ex)}
           accessibilityRole='button'
-          accessibilityLabel={expanded ? `Închide ${ex.nume}` : `Deschide ${ex.nume}`}
+          accessibilityLabel={expanded ? t('workouts.inchide', { nume: ex.nume }) : t('workouts.deschide', { nume: ex.nume })}
           style={[styles.verticalCard, {
             backgroundColor: expanded ? colors.surfaceElevated : colors.surface,
             borderColor: expanded ? colors.accent : colors.cardBorder,
@@ -571,7 +642,7 @@ export default function AntrenamenteScreen() {
           <View style={styles.verticalTextWrap}>
             <Text style={[styles.verticalName, { color: colors.textPrimary }]} numberOfLines={1}>{ex.nume}</Text>
             <Text style={[styles.verticalSub, { color: colors.textTertiary }]} numberOfLines={1}>
-              {exSets.length > 0 ? summaryLabel(summary, fields) : `${fields.modeLabel} • ${ex.dificultate || 'mediu'}`}
+              {exSets.length > 0 ? summaryLabel(summary, fields) : `${fields.modeLabel} • ${ex.dificultate || t('workouts.mediu')}`}
             </Text>
           </View>
 
@@ -595,9 +666,9 @@ export default function AntrenamenteScreen() {
     <View>
       <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>Anatomie</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>{t('workouts.anatomie')}</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Harta rămâne aprinsă pe tot parcursul sesiunii
+              {t('workouts.hartaAprinsa')}
             </Text>
           </View>
         </View>
@@ -610,7 +681,7 @@ export default function AntrenamenteScreen() {
           <View style={styles.mapLegend}>
             <View style={[styles.legendDot, { backgroundColor: colors.accent }]} />
             <Text style={[styles.legendText, { color: colors.textSecondary }]}>
-              {activeMuscleCount > 0 ? `${activeMuscleCount} mușchi activi` : 'Selectează un exercițiu'}
+              {activeMuscleCount > 0 ? t('workouts.muschiActivi', { numar: activeMuscleCount }) : t('workouts.selecteazaExercitiu')}
             </Text>
           </View>
         </View>
@@ -619,15 +690,15 @@ export default function AntrenamenteScreen() {
           <View style={[styles.sessionBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.cardBorder }]}>
             <View style={styles.sessionItem}>
               <Text style={[styles.sessionValue, { color: colors.textPrimary }]}>{sessionStats.sets}</Text>
-              <Text style={[styles.sessionLabel, { color: colors.textTertiary }]}>seturi</Text>
+              <Text style={[styles.sessionLabel, { color: colors.textTertiary }]}>{t('workouts.seturi')}</Text>
             </View>
             <View style={styles.sessionItem}>
               <Text style={[styles.sessionValue, { color: colors.textPrimary }]}>{sessionStats.exercises}</Text>
-              <Text style={[styles.sessionLabel, { color: colors.textTertiary }]}>exerciții</Text>
+              <Text style={[styles.sessionLabel, { color: colors.textTertiary }]}>{t('workouts.exercitii')}</Text>
             </View>
             <View style={styles.sessionItem}>
               <Text style={[styles.sessionValue, { color: colors.textPrimary }]}>{Math.round(sessionStats.volume)}</Text>
-              <Text style={[styles.sessionLabel, { color: colors.textTertiary }]}>kg volum</Text>
+              <Text style={[styles.sessionLabel, { color: colors.textTertiary }]}>{t('workouts.kgVolum')}</Text>
             </View>
           </View>
         )}
@@ -635,7 +706,7 @@ export default function AntrenamenteScreen() {
         {/* CE AI LUCRAT — exercițiile din sesiunea curentă, cu seturile lor. */}
         {workedExercises.length > 0 && (
           <View style={[styles.workedCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-            <Text style={[styles.workedTitle, { color: colors.textPrimary }]}>Ce ai lucrat</Text>
+            <Text style={[styles.workedTitle, { color: colors.textPrimary }]}>{t('workouts.ceAiLucrat')}</Text>
             {workedExercises.map((entry) => (
               <View key={entry.exId} style={styles.workedItem}>
                 <View style={styles.workedRow}>
@@ -660,23 +731,14 @@ export default function AntrenamenteScreen() {
           </View>
         )}
 
-        {restLeft > 0 && (
-          <View style={[styles.restBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
-            <Timer size={18} color={colors.accent} />
-            <Text style={[styles.restText, { color: colors.textPrimary }]}>Pauză {formatClock(restLeft)}</Text>
-            <Pressable onPress={() => setRestLeft((s) => s + 15)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Prelungește pauza cu 15 secunde'>
-              <Text style={[styles.restBtnText, { color: colors.textSecondary }]}>+15s</Text>
-            </Pressable>
-            <Pressable onPress={() => setRestLeft(0)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Sari peste pauză'>
-              <Text style={[styles.restBtnText, { color: colors.textSecondary }]}>Skip</Text>
-            </Pressable>
-          </View>
+        {restSessionId > 0 && (
+          <RestCountdown key={restSessionId} initialSeconds={REST_DEFAULT_SEC} onComplete={stopRest} />
         )}
 
         <View style={[styles.searchContainer, { backgroundColor: colors.surfaceElevated }]}>
           <Search color={colors.textSecondary} size={20} style={{ marginRight: 10 }} />
           <TextInput
-            placeholder='Caută exercițiu...'
+            placeholder={t('workouts.cautaExercitiu')}
             placeholderTextColor={colors.textSecondary}
             style={[styles.searchInput, { color: colors.textPrimary }]}
             value={searchQuery}
@@ -684,7 +746,7 @@ export default function AntrenamenteScreen() {
           />
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: 10 }]}>Exerciții</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: 10 }]}>{t('workouts.sectiuneExercitii')}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
           {CATEGORII.map((cat) => {
             const active = selectedCategory === cat.id && searchQuery.trim().length === 0;
@@ -693,7 +755,7 @@ export default function AntrenamenteScreen() {
                 key={cat.id}
                 onPress={() => onSelectCategory(cat.id)}
                 accessibilityRole='button'
-                accessibilityLabel={`Categoria ${cat.nume}`}
+                accessibilityLabel={t('workouts.categoria', { nume: cat.nume })}
                 style={[styles.pill, { backgroundColor: active ? colors.accent : colors.surfaceElevated, borderColor: active ? colors.accent : colors.cardBorder }]}
               >
                 <MaterialCommunityIcons name={CATEGORY_ICON[cat.id]} size={18} color={active ? '#0B0F14' : colors.textSecondary} />
@@ -713,7 +775,7 @@ export default function AntrenamenteScreen() {
         data={exercisesInCategory}
         renderItem={renderExerciseItem}
         keyExtractor={(ex: Exercitiu) => ex.id}
-        extraData={{ session, inputs, expandedExerciseId, warmupFor, timerExerciseId, timerSeconds, colors }}
+        extraData={flashExtraData}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: CONTENT_BOTTOM_PADDING }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -734,7 +796,7 @@ export default function AntrenamenteScreen() {
               ) : (
                 <>
                   <MaterialCommunityIcons name='content-save' size={20} color='#0B0F14' />
-                  <Text style={[styles.saveText, { color: '#0B0F14' }]}>Salvează antrenamentul</Text>
+                  <Text style={[styles.saveText, { color: '#0B0F14' }]}>{t('workouts.salveazaAntrenamentul')}</Text>
                 </>
               )}
             </Pressable>
@@ -746,7 +808,8 @@ export default function AntrenamenteScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { padding: Spacing.lg } as ViewStyle,
+  // Centrează conținutul pe tablete; pe telefoane maxWidth > ecran, deci fără efect.
+  scrollContent: { padding: Spacing.lg, width: '100%', maxWidth: 560, alignSelf: 'center' } as ViewStyle,
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md } as ViewStyle,
   title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 } as TextStyle,
   subtitle: { fontSize: 13, marginTop: 2 } as TextStyle,
@@ -803,7 +866,7 @@ const styles = StyleSheet.create({
   warmupToggle: { borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginTop: Spacing.sm } as ViewStyle,
   warmupToggleText: { fontSize: 12, fontWeight: '700' } as TextStyle,
   ctaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: Radius.pill, gap: Spacing.sm, marginTop: Spacing.md } as ViewStyle,
-  ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' } as TextStyle,
+  ctaText: { color: '#0B0F14', fontSize: 15, fontWeight: '800' } as TextStyle,
   saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: Radius.pill, gap: Spacing.sm, marginTop: Spacing.lg } as ViewStyle,
   saveText: { fontSize: 16, fontWeight: '800' } as TextStyle,
 });

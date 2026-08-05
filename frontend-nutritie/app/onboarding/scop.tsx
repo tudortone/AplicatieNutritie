@@ -1,10 +1,11 @@
 import React from 'react'
 import { Text } from 'react-native'
+import { useTranslation } from 'react-i18next'
 
 import EcranPas from '../../components/onboarding/EcranPas'
 import CardOptiune from '../../components/onboarding/CardOptiune'
 import { useOnboarding } from '../../context/OnboardingContext'
-import { ETICHETE_SCOP, type Scop } from '../../lib/onboarding'
+import { type Scop } from '../../lib/onboarding'
 
 const SIMBOL: Record<Scop, string> = {
 	slabire: '\u2193',
@@ -15,20 +16,21 @@ const SIMBOL: Record<Scop, string> = {
 const ORDINE: Scop[] = ['slabire', 'mentinere', 'masa']
 
 export default function PasScop() {
+	const { t } = useTranslation()
 	const { date, actualizeaza } = useOnboarding()
 
 	return (
 		<EcranPas
 			pas="/onboarding/scop"
-			titlu="Care este obiectivul tau?"
-			subtitlu="Alege directia. Restul planului se construieste in jurul ei."
+			titlu={t('onboarding.scop.titlu')}
+			subtitlu={t('onboarding.scop.subtitlu')}
 			poateContinua={date.scop !== null}
 		>
 			{ORDINE.map((s) => (
 				<CardOptiune
 					key={s}
-					titlu={ETICHETE_SCOP[s].titlu}
-					detaliu={ETICHETE_SCOP[s].detaliu}
+					titlu={t(`onboarding.scop.optiuni.${s}.titlu`)}
+					detaliu={t(`onboarding.scop.optiuni.${s}.detaliu`)}
 					pictograma={<Text style={{ fontSize: 22 }}>{SIMBOL[s]}</Text>}
 					selectat={date.scop === s}
 					laSelectare={() => {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
+import { useTranslation } from 'react-i18next'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { BarChart3, Camera, Flame, PieChart, TrendingUp } from 'lucide-react-native'
 
@@ -10,34 +11,15 @@ import { useTheme } from '../../context/ThemeContext'
 import { useAppStore } from '../../hooks/useAppStore'
 
 const FUNCTII = [
-	{
-		Pictograma: Flame,
-		titlu: 'Urmarirea caloriilor',
-		detaliu: 'Adaugi mesele in cateva secunde si vezi cat ti-a mai ramas pe ziua respectiva.',
-	},
-	{
-		Pictograma: Camera,
-		titlu: 'Scanare cu AI',
-		detaliu: 'Fotografiezi farfuria sau codul de bare si primesti valorile nutritionale instant.',
-	},
-	{
-		Pictograma: PieChart,
-		titlu: 'Impartirea macronutrientilor',
-		detaliu: 'Proteine, carbohidrati si grasimi, calculate pentru fiecare masa.',
-	},
-	{
-		Pictograma: BarChart3,
-		titlu: 'Antrenamente si harta musculara',
-		detaliu: 'Vezi ce grupe musculare ai lucrat si care raman in urma.',
-	},
-	{
-		Pictograma: TrendingUp,
-		titlu: 'Progres si serii zilnice',
-		detaliu: 'Grafice pe termen lung si streak-uri care te tin consecvent.',
-	},
+	{ cheie: 'calorii', Pictograma: Flame },
+	{ cheie: 'scanare', Pictograma: Camera },
+	{ cheie: 'macro', Pictograma: PieChart },
+	{ cheie: 'antrenamente', Pictograma: BarChart3 },
+	{ cheie: 'progres', Pictograma: TrendingUp },
 ]
 
 export default function PasPrezentare() {
+	const { t } = useTranslation()
 	const { plan } = useOnboarding()
 	const { colors } = useTheme()
 	const { setOnboardingDone } = useAppStore()
@@ -56,20 +38,20 @@ export default function PasPrezentare() {
 	return (
 		<EcranPas
 			pas="/onboarding/prezentare"
-			titlu="Ce primesti in aplicatie"
+			titlu={t('onboarding.prezentare.titlu')}
 			subtitlu={
 				plan
-					? `Planul tau de ${plan.calorii} kcal pe zi te asteapta dupa ce iti creezi contul.`
-					: 'Tot ce ai nevoie ca sa iti tii nutritia sub control.'
+					? t('onboarding.prezentare.subtitluPlan', { kcal: plan.calorii })
+					: t('onboarding.prezentare.subtitluFaraPlan')
 			}
 			poateContinua
-			etichetaButon="Creeaza-ti contul"
+			etichetaButon={t('onboarding.prezentare.buton')}
 			seIncarca={seIncarca}
 			laContinuare={finalizeaza}
 		>
 			{FUNCTII.map((f, i) => (
 				<Animated.View
-					key={f.titlu}
+					key={f.cheie}
 					entering={FadeInDown.duration(420).delay(i * 70)}
 					style={styles.rand}
 				>
@@ -77,8 +59,12 @@ export default function PasPrezentare() {
 						<f.Pictograma size={20} color={colors.accent} strokeWidth={2.2} />
 					</View>
 					<View style={styles.text}>
-						<Text style={[styles.titlu, { color: colors.textPrimary }]}>{f.titlu}</Text>
-						<Text style={[styles.detaliu, { color: colors.textSecondary }]}>{f.detaliu}</Text>
+						<Text style={[styles.titlu, { color: colors.textPrimary }]}>
+							{t(`onboarding.prezentare.functii.${f.cheie}.titlu`)}
+						</Text>
+						<Text style={[styles.detaliu, { color: colors.textSecondary }]}>
+							{t(`onboarding.prezentare.functii.${f.cheie}.detaliu`)}
+						</Text>
 					</View>
 				</Animated.View>
 			))}

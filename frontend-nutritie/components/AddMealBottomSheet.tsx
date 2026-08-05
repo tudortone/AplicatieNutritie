@@ -9,11 +9,12 @@ import {
   ScrollView,
   Modal
 } from 'react-native';
-import BottomSheet, { 
-  BottomSheetScrollView, 
-  BottomSheetBackdrop, 
-  BottomSheetTextInput 
+import BottomSheet, {
+  BottomSheetScrollView,
+  BottomSheetBackdrop,
+  BottomSheetTextInput
 } from '@gorhom/bottom-sheet';
+import type { BottomSheetBackdropProps, BottomSheetScrollViewMethods } from '@gorhom/bottom-sheet';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Check, X, Heart, Trash2, Scale, Search } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -68,7 +69,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const { favorite, addFavorite, removeFavorite, isFavorite } = useFavorite();
     const { adaugaProgres } = useGamificareContext();
     const bottomSheetRef = useRef<BottomSheet>(null);
-    const scrollViewRef = useRef<any>(null);
+    const scrollViewRef = useRef<BottomSheetScrollViewMethods>(null);
     const [formSectionY, setFormSectionY] = useState<number>(0);
     const [gramajSectionY, setGramajSectionY] = useState<number>(0);
     const [highlightGramaj, setHighlightGramaj] = useState(false);
@@ -105,6 +106,13 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         return p.categorie === selectedCategory;
       });
     }, [selectedCategory, searchQuery]);
+
+    // Sugestii după nume introdus — memoizate ca filtrul să NU ruleze la fiecare apăsare de tastă
+    const nameSuggestions = useMemo(() => {
+      const q = nume.trim().toLowerCase();
+      if (!q) return [];
+      return foodPresets.filter(p => p.nume.toLowerCase().includes(q));
+    }, [nume]);
 
     const scrollToGramajSection = useCallback(() => {
       setHighlightGramaj(true);
@@ -285,7 +293,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     }));
 
     const renderBackdrop = useCallback(
-      (props: any) => (
+      (props: BottomSheetBackdropProps) => (
         <BottomSheetBackdrop
           {...props}
           disappearsOnIndex={-1}
@@ -333,7 +341,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           }
         ];
 
-        const payload: any = {
+        const payload = {
           user_id: user.id,
           nume: nume.trim(),
           calorii: calNumber,
@@ -397,9 +405,15 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         <BottomSheetScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>
-              {editingMasaId ? 'Editează Masa' : 'Adaugă Masă Nouă'}
+              {editingMasaId ? t('addMeal.editTitle') : t('addMeal.addTitle')}
             </Text>
-            <TouchableOpacity onPress={() => bottomSheetRef.current?.close()} style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+            <TouchableOpacity
+              onPress={() => bottomSheetRef.current?.close()}
+              style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+              accessibilityRole="button"
+              accessibilityLabel={t('addMeal.closeA11y')}
+            >
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -407,7 +421,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           {/* Favorite Foods Section */}
           {favorite.length > 0 && !editingMasaId && (
             <View style={{ marginBottom: 20 }}>
-              <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>❤️ ALIMENTE FAVORITE RAPIDE</Text>
+              <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>{t('addMeal.favoriteFoodsTitle')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
                 {favorite.map((fav) => (
                   <View
@@ -440,6 +454,8 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       onPress={() => removeFavorite(fav.id)}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       style={styles.favChipDelete}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('addMeal.removeFavoriteA11y', { nume: fav.nume })}
                     >
                       <Trash2 size={13} color={colors.textTertiary} />
                     </TouchableOpacity>
@@ -453,7 +469,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           {!editingMasaId && (
             <View style={{ marginBottom: 20 }}>
               <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>
-                🍽️ ALEGE DIN PRESETURI RAPIDE
+                {t('addMeal.presetSectionTitle')}
               </Text>
 
               <TouchableOpacity
@@ -474,14 +490,14 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               >
                 <Search size={16} color={colors.accent} />
                 <Text style={{ fontSize: 13, fontWeight: '700', color: colors.accent }}>
-                  🔍 Caută Produs, Brand sau Introducere Complet Manuală
+                  {t('addMeal.searchProductBtn')}
                 </Text>
               </TouchableOpacity>
 
               {/* Search */}
               <BottomSheetTextInput
                 style={[styles.input, { marginBottom: 12, color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-                placeholder="Caută aliment..."
+                placeholder={t('addMeal.searchPlaceholder')}
                 placeholderTextColor={colors.textTertiary}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -525,10 +541,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               {selectedCategory && !searchQuery && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingHorizontal: 4 }}>
                   <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>
-                    Afișare opțiuni pentru {categories.find(c => c.id === selectedCategory)?.name} {categories.find(c => c.id === selectedCategory)?.icon}
+                    {t('addMeal.displayOptionsFor')} {categories.find(c => c.id === selectedCategory)?.name} {categories.find(c => c.id === selectedCategory)?.icon}
                   </Text>
                   <TouchableOpacity onPress={() => setSelectedCategory(null)}>
-                    <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '800' }}>✕ Închide</Text>
+                    <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '800' }}>{t('addMeal.closeCategory')}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -536,7 +552,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               {!selectedCategory && !searchQuery && (
                 <View style={{ paddingVertical: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceBg, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder, marginBottom: 12 }}>
                   <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', paddingHorizontal: 16 }}>
-                    👆 Apasă pe o categorie de mai sus sau caută în bară pentru a explora cele peste 150 de alimente și preparate.
+                    {t('addMeal.exploreHint')}
                   </Text>
                 </View>
               )}
@@ -561,7 +577,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                     <ActivityIndicator color="#000000" size="small" />
                   ) : (
                     <Text style={{ color: '#000000', fontWeight: 'bold', fontSize: 14 }}>
-                      🤖 Calculează instant macros cu AI pentru „{searchQuery}”
+                      {t('addMeal.estimateAiButton', { query: searchQuery })}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -595,7 +611,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           <View style={styles.formSection} onLayout={(e) => setFormSectionY(e.nativeEvent.layout.y)}>
             {/* Meal Category Selector */}
             <View style={{ marginBottom: 16 }}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>🍽️ Categoria Mesei *</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('addMeal.mealCategoryLabel')}</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {MEAL_CATEGORIES.map((cat) => {
                   const isSelected = tipMasa === cat.id;
@@ -633,7 +649,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               </View>
             </View>
 
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Nume aliment / preparat *</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('addMeal.nameLabel')}</Text>
             <BottomSheetTextInput
               style={[
                 styles.input, 
@@ -643,24 +659,23 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   backgroundColor: colors.surfaceBg 
                 }
               ]}
-              placeholder="Ex: Piept de pui la grătar cu orez"
+              placeholder={t('addMeal.namePlaceholder')}
               placeholderTextColor={colors.textTertiary}
               value={nume}
               onChangeText={setNume}
               selectionColor={colors.accent}
             />
             {nume.length > 0 && !isNumeValid && (
-              <Text style={[styles.errorText, { color: colors.danger }]}>Numele trebuie să aibă cel puțin 2 caractere</Text>
+              <Text style={[styles.errorText, { color: colors.danger }]}>{t('addMeal.nameMinLengthError')}</Text>
             )}
 
             {!editingMasaId && nume.trim().length >= 2 && (
               <View style={{ marginTop: 8, marginBottom: 12, backgroundColor: colors.surfaceBg, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder, overflow: 'hidden', maxHeight: 220 }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 4, textTransform: 'uppercase' }}>
-                  💡 Sugestii automate găsite ({foodPresets.filter(p => p.nume.toLowerCase().includes(nume.trim().toLowerCase())).length}):
+                  {t('addMeal.suggestionsFound', { count: nameSuggestions.length })}
                 </Text>
                 <ScrollView nestedScrollEnabled style={{ maxHeight: 180 }}>
-                  {foodPresets
-                    .filter(p => p.nume.toLowerCase().includes(nume.trim().toLowerCase()))
+                  {nameSuggestions
                     .slice(0, 10)
                     .map((preset, index) => (
                       <TouchableOpacity
@@ -675,17 +690,17 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                         </View>
                       </TouchableOpacity>
                     ))}
-                  {foodPresets.filter(p => p.nume.toLowerCase().includes(nume.trim().toLowerCase())).length === 0 && (
+                  {nameSuggestions.length === 0 && (
                     <View style={{ padding: 14, alignItems: 'center' }}>
                       <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginBottom: 10 }}>
-                        Nu am găsit „{nume}” în lista de bază. Calculează valorile cu AI:
+                        {t('addMeal.noMatchFor', { nume })}
                       </Text>
                       <TouchableOpacity
                         style={{ backgroundColor: colors.accent, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 6 }}
                         onPress={() => estimateWithAI(nume)}
                         disabled={aiEstimating}
                       >
-                        {aiEstimating ? <ActivityIndicator color="#000" size="small" /> : <Text style={{ color: '#000', fontWeight: '800', fontSize: 13 }}>⚡ Calculează Valori Cu NutriAI</Text>}
+                        {aiEstimating ? <ActivityIndicator color="#000" size="small" /> : <Text style={{ color: '#000', fontWeight: '800', fontSize: 13 }}>{t('addMeal.calculateWithAi')}</Text>}
                       </TouchableOpacity>
                     </View>
                   )}
@@ -710,11 +725,11 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               <View style={styles.gramajHeaderRow}>
                 <Scale size={16} color={colors.accent} />
                 <Text style={[styles.label, { color: colors.textSecondary, flex: 1, marginBottom: 0 }]}>
-                  Gramaj / Cantitate porție (grame)
+                  {t('addMeal.gramajLabel')}
                 </Text>
                 {baseNutrition && (
                   <Text style={[styles.liveSyncBadge, { color: colors.accent }]}>
-                    ⚡ Calcul live
+                    {t('addMeal.liveCalculation')}
                   </Text>
                 )}
               </View>
@@ -728,7 +743,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                     backgroundColor: colors.surfaceBg,
                   },
                 ]}
-                placeholder="Ex: 150 (g)"
+                placeholder={t('addMeal.gramajPlaceholder')}
                 placeholderTextColor={colors.textTertiary}
                 keyboardType="numeric"
                 value={grame}
@@ -740,7 +755,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               {selectedPreset?.unitati && selectedPreset.unitati.length > 0 && (
                 <View style={{ marginTop: 10, marginBottom: 4 }}>
                   <Text style={[styles.inputLabel, { color: colors.textSecondary, marginBottom: 6, fontSize: 13 }]}>
-                    Alege cantitatea (porții rapide):
+                    {t('addMeal.chooseQuantity')}
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                     {selectedPreset.unitati.map((unit) => {
@@ -828,7 +843,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                         },
                       ]}
                     >
-                      Porție ({baseNutrition.defaultGrame}g)
+                      {t('addMeal.portion', { grame: baseNutrition.defaultGrame })}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -837,7 +852,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
             <View style={styles.row}>
               <View style={styles.halfWidth}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Calorii (kcal) *</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('addMeal.caloriiLabel')}</Text>
                 <BottomSheetTextInput
                   style={[
                     styles.input, 
@@ -847,7 +862,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       backgroundColor: colors.surfaceBg 
                     }
                   ]}
-                  placeholder="Ex: 450"
+                  placeholder={t('addMeal.caloriiPlaceholder')}
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="numeric"
                   value={calorii}
@@ -855,15 +870,15 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   selectionColor={colors.accent}
                 />
                 {calorii.length > 0 && !isCaloriiValid && (
-                  <Text style={[styles.errorText, { color: colors.danger }]}>Calorii nevalide</Text>
+                  <Text style={[styles.errorText, { color: colors.danger }]}>{t('addMeal.caloriiInvalid')}</Text>
                 )}
               </View>
 
               <View style={styles.halfWidth}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Proteine (g)</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('addMeal.proteineLabel')}</Text>
                 <BottomSheetTextInput
                   style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-                  placeholder="Ex: 35"
+                  placeholder={t('addMeal.proteinePlaceholder')}
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="numeric"
                   value={proteine}
@@ -875,10 +890,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
             <View style={styles.row}>
               <View style={styles.halfWidth}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Carbohidrați (g)</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('addMeal.carbohidratiLabel')}</Text>
                 <BottomSheetTextInput
                   style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-                  placeholder="Ex: 40"
+                  placeholder={t('addMeal.carbohidratiPlaceholder')}
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="numeric"
                   value={carbohidrati}
@@ -888,10 +903,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               </View>
 
               <View style={styles.halfWidth}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Grăsimi (g)</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('addMeal.grasimiLabel')}</Text>
                 <BottomSheetTextInput
                   style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-                  placeholder="Ex: 12"
+                  placeholder={t('addMeal.grasimiPlaceholder')}
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="numeric"
                   value={grasimi}
@@ -903,10 +918,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
             <View style={[styles.row, { marginTop: 12 }]}>
               <View style={styles.halfWidth}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Fibre (g) (opțional)</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('addMeal.fibreLabel')}</Text>
                 <BottomSheetTextInput
                   style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-                  placeholder="Ex: 5"
+                  placeholder={t('addMeal.fibrePlaceholder')}
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="numeric"
                   value={fibre}
@@ -948,7 +963,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   fill={isFavorite(nume) ? colors.danger : 'transparent'}
                 />
                 <Text style={[styles.favToggleText, { color: isFavorite(nume) ? colors.danger : colors.textPrimary }]}>
-                  {isFavorite(nume) ? 'Salvat la Favorite' : 'Salvează la Favorite'}
+                  {isFavorite(nume) ? t('addMeal.savedToFavorites') : t('addMeal.saveToFavorites')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -977,7 +992,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       styles.saveBtnText,
                       { color: isFormValid ? '#000000' : '#64748B' }
                     ]}>
-                      {editingMasaId ? 'Salvează Modificările' : 'Adaugă Masă'}
+                      {editingMasaId ? t('addMeal.saveChanges') : t('addMeal.addMeal')}
                     </Text>
                   </>
                 )}

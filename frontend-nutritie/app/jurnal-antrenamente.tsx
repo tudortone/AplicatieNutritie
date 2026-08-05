@@ -14,6 +14,7 @@ import { ArrowLeft, Dumbbell, Flame, Clock, Calendar, Trash2, ChevronDown, Chevr
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { useAntrenamente, Antrenament } from '../hooks/useAntrenamente';
 import { useNotify } from '../hooks/useNotify';
 import { ConfirmSheet } from '../components/ui/ConfirmSheet';
@@ -30,6 +31,7 @@ export default function JurnalAntrenamenteScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const notify = useNotify();
   const { fetchIstoric, stergeAntrenament } = useAntrenamente();
 
@@ -54,15 +56,15 @@ export default function JurnalAntrenamenteScreen() {
     incarcaJurnal();
   }, [incarcaJurnal]);
 
-  const toggleExpand = (id: string) => {
+  const toggleExpand = useCallback((id: string) => {
     Haptics.selectionAsync();
     setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
-  };
+  }, []);
 
-  const handleStergere = (item: Antrenament) => {
+  const handleStergere = useCallback((item: Antrenament) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setToDelete(item);
-  };
+  }, []);
 
   // Grupare pe zile (Azi, Ieri, ro-RO)
   const zileGrupate = useMemo((): ZiGrupata[] => {
@@ -104,6 +106,146 @@ export default function JurnalAntrenamenteScreen() {
     };
   }, [istoric]);
 
+  // Header și empty state memoizate, ca schimbarea de stare să nu refacă JSX-ul
+  // decât când chiar se schimbă (stats/colors).
+  const listHeader = useMemo(() => (
+    <View style={[styles.summaryCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
+      <View style={styles.statBox}>
+        <Dumbbell size={20} color={colors.accent} />
+        <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.totalSesiuni}</Text>
+        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Antrenamente</Text>
+      </View>
+      <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
+      <View style={styles.statBox}>
+        <Flame size={20} color={colors.accentSecondary} />
+        <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.totalKcal}</Text>
+        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>kcal arse</Text>
+      </View>
+      <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
+      <View style={styles.statBox}>
+        <Award size={20} color={colors.accentTertiary || colors.accent} />
+        <Text style={[styles.statValue, { color: colors.textPrimary }]}>{Math.round(stats.totalVolum)}</Text>
+        <Text style={[styles.statLabel, { color: colors.textSecondary }]}>kg volum</Text>
+      </View>
+    </View>
+  ), [stats, colors]);
+
+  const listEmpty = useMemo(() => (
+    <View style={styles.emptyWrap}>
+      <Calendar size={48} color={colors.textSecondary} />
+      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Jurnalul este gol</Text>
+      <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
+        Niciun antrenament înregistrat în ultimele 30 de zile.
+      </Text>
+    </View>
+  ), [colors]);
+
+  // renderItem stabil: se recreează doar când se schimbă culorile, expandarea
+  // sau handler-ii — nu la orice re-render al ecranului (ex. deschiderea ConfirmSheet).
+  const renderZi = useCallback(({ item: zi }: { item: ZiGrupata }) => (
+    <View style={styles.ziGroup}>
+      <Text style={[styles.ziTitle, { color: colors.textSecondary }]}>{zi.titlu.toUpperCase()}</Text>
+
+      {zi.items.map((ant) => {
+        const isExp = !!expandedIds[ant.id];
+        const nrEx = ant.exercitii?.length || 0;
+        const ora = new Date(ant.created_at).toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
+
+        return (
+          <View
+            key={ant.id}
+            style={[styles.card, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+          >
+            <TouchableOpacity
+              style={styles.cardHeader}
+              onPress={() => toggleExpand(ant.id)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={t('a11y.jurnalAntrenamente.toggleDetails', { nume: ant.nume })}
+              accessibilityState={{ expanded: isExp }}
+            >
+              <View style={{ flex: 1 }}>
+                <View style={styles.rowTop}>
+                  <Text style={[styles.antTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {ant.nume} {nrEx > 0 ? `(${nrEx} ex)` : ''}
+                  </Text>
+                  <Text style={[styles.antOra, { color: colors.textSecondary }]}>{ora}</Text>
+                </View>
+
+                <View style={styles.rowMeta}>
+                  <Clock size={13} color={colors.textSecondary} />
+                  <Text style={[styles.metaText, { color: colors.textSecondary }]}>{ant.durata_min} min</Text>
+                  <Text style={[styles.metaSep, { color: colors.textSecondary }]}>•</Text>
+                  <Flame size={13} color={colors.accentSecondary} />
+                  <Text style={[styles.metaText, { color: colors.accentSecondary }]}>{ant.calorii_arse} kcal</Text>
+                  {Number(ant.volum_total || 0) > 0 && (
+                    <>
+                      <Text style={[styles.metaSep, { color: colors.textSecondary }]}>•</Text>
+                      <Text style={[styles.metaText, { color: colors.accent }]}>{ant.volum_total} kg volum</Text>
+                    </>
+                  )}
+                </View>
+              </View>
+
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
+                  onPress={() => handleStergere(ant)}
+                  style={styles.iconBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('a11y.jurnalAntrenamente.delete', { nume: ant.nume })}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Trash2 size={16} color={colors.danger} />
+                </TouchableOpacity>
+                {isExp ? (
+                  <ChevronUp size={20} color={colors.textSecondary} />
+                ) : (
+                  <ChevronDown size={20} color={colors.textSecondary} />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {isExp && (
+              <View style={[styles.expWrap, { borderTopColor: colors.cardBorder }]}>
+                {(!ant.exercitii || ant.exercitii.length === 0) ? (
+                  <Text style={[styles.noExText, { color: colors.textSecondary }]}>Sesiune fără detalii despre seturi.</Text>
+                ) : (
+                  ant.exercitii.map((ex, i) => (
+                    <View key={i} style={styles.exItem}>
+                      <Text style={[styles.exName, { color: colors.textPrimary }]}>{ex.nume}</Text>
+                      <View style={styles.seturiWrap}>
+                        {ex.seturi?.map((s, j) => {
+                          const isWarmup = s.set_type === 'warmup';
+                          const isDropset = s.set_type === 'dropset';
+                          const isFailure = s.set_type === 'failure';
+                          const typeLabel = isWarmup ? 'W' : isDropset ? 'D' : isFailure ? 'F' : `#${s.serie}`;
+                          const typeColor = isWarmup ? colors.warning : isDropset ? colors.accentSecondary : isFailure ? colors.danger : colors.textSecondary;
+
+                          return (
+                            <View key={j} style={[styles.setPill, { backgroundColor: colors.background, borderColor: typeColor, borderWidth: s.set_type && s.set_type !== 'working' ? 1 : 0 }]}>
+                              <Text style={[styles.setPillText, { color: typeColor }]}>{typeLabel}: </Text>
+                              <Text style={[styles.setPillVal, { color: colors.accent }]}>{s.repetari} rap</Text>
+                              {s.greutate && s.greutate > 0 ? (
+                                <Text style={[styles.setPillVal, { color: colors.textPrimary }]}> × {s.greutate} kg</Text>
+                              ) : null}
+                              {s.rpe ? (
+                                <Text style={[styles.setPillVal, { color: colors.warning, marginLeft: 4, fontSize: 10 }]}>@ {s.rpe} RPE</Text>
+                              ) : null}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  ), [colors, expandedIds, toggleExpand, handleStergere]);
+
   return (
     <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
       {/* HEADER */}
@@ -126,133 +268,13 @@ export default function JurnalAntrenamenteScreen() {
         <FlatList
           data={zileGrupate}
           keyExtractor={(item) => item.dataScurta}
+          extraData={expandedIds}
           contentContainerStyle={[styles.listContent, { width: '100%', maxWidth: 520, alignSelf: 'center', paddingBottom: CONTENT_BOTTOM_PADDING }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={
-            <View style={[styles.summaryCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
-              <View style={styles.statBox}>
-                <Dumbbell size={20} color={colors.accent} />
-                <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.totalSesiuni}</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Antrenamente</Text>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
-              <View style={styles.statBox}>
-                <Flame size={20} color={colors.accentSecondary} />
-                <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.totalKcal}</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>kcal arse</Text>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
-              <View style={styles.statBox}>
-                <Award size={20} color={colors.accentTertiary || colors.accent} />
-                <Text style={[styles.statValue, { color: colors.textPrimary }]}>{Math.round(stats.totalVolum)}</Text>
-                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>kg volum</Text>
-              </View>
-            </View>
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyWrap}>
-              <Calendar size={48} color={colors.textSecondary} />
-              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Jurnalul este gol</Text>
-              <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
-                Niciun antrenament înregistrat în ultimele 30 de zile.
-              </Text>
-            </View>
-          }
-          renderItem={({ item: zi }) => (
-            <View style={styles.ziGroup}>
-              <Text style={[styles.ziTitle, { color: colors.textSecondary }]}>{zi.titlu.toUpperCase()}</Text>
-
-              {zi.items.map((ant) => {
-                const isExp = !!expandedIds[ant.id];
-                const nrEx = ant.exercitii?.length || 0;
-                const ora = new Date(ant.created_at).toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
-
-                return (
-                  <View
-                    key={ant.id}
-                    style={[styles.card, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                  >
-                    <TouchableOpacity
-                      style={styles.cardHeader}
-                      onPress={() => toggleExpand(ant.id)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <View style={styles.rowTop}>
-                          <Text style={[styles.antTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                            {ant.nume} {nrEx > 0 ? `(${nrEx} ex)` : ''}
-                          </Text>
-                          <Text style={[styles.antOra, { color: colors.textSecondary }]}>{ora}</Text>
-                        </View>
-
-                        <View style={styles.rowMeta}>
-                          <Clock size={13} color={colors.textSecondary} />
-                          <Text style={[styles.metaText, { color: colors.textSecondary }]}>{ant.durata_min} min</Text>
-                          <Text style={[styles.metaSep, { color: colors.textSecondary }]}>•</Text>
-                          <Flame size={13} color={colors.accentSecondary} />
-                          <Text style={[styles.metaText, { color: colors.accentSecondary }]}>{ant.calorii_arse} kcal</Text>
-                          {Number(ant.volum_total || 0) > 0 && (
-                            <>
-                              <Text style={[styles.metaSep, { color: colors.textSecondary }]}>•</Text>
-                              <Text style={[styles.metaText, { color: colors.accent }]}>{ant.volum_total} kg volum</Text>
-                            </>
-                          )}
-                        </View>
-                      </View>
-
-                      <View style={styles.actionsRow}>
-                        <TouchableOpacity onPress={() => handleStergere(ant)} style={styles.iconBtn}>
-                          <Trash2 size={16} color={colors.danger} />
-                        </TouchableOpacity>
-                        {isExp ? (
-                          <ChevronUp size={20} color={colors.textSecondary} />
-                        ) : (
-                          <ChevronDown size={20} color={colors.textSecondary} />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-
-                    {isExp && (
-                      <View style={[styles.expWrap, { borderTopColor: colors.cardBorder }]}>
-                        {(!ant.exercitii || ant.exercitii.length === 0) ? (
-                          <Text style={[styles.noExText, { color: colors.textSecondary }]}>Sesiune fără detalii despre seturi.</Text>
-                        ) : (
-                          ant.exercitii.map((ex, i) => (
-                            <View key={i} style={styles.exItem}>
-                              <Text style={[styles.exName, { color: colors.textPrimary }]}>{ex.nume}</Text>
-                              <View style={styles.seturiWrap}>
-                                {ex.seturi?.map((s, j) => {
-                                  const isWarmup = s.set_type === 'warmup';
-                                  const isDropset = s.set_type === 'dropset';
-                                  const isFailure = s.set_type === 'failure';
-                                  const typeLabel = isWarmup ? 'W' : isDropset ? 'D' : isFailure ? 'F' : `#${s.serie}`;
-                                  const typeColor = isWarmup ? '#F59E0B' : isDropset ? '#8B5CF6' : isFailure ? '#EF4444' : colors.textSecondary;
-                                  
-                                  return (
-                                    <View key={j} style={[styles.setPill, { backgroundColor: colors.background, borderColor: typeColor, borderWidth: s.set_type && s.set_type !== 'working' ? 1 : 0 }]}>
-                                      <Text style={[styles.setPillText, { color: typeColor }]}>{typeLabel}: </Text>
-                                      <Text style={[styles.setPillVal, { color: colors.accent }]}>{s.repetari} rap</Text>
-                                      {s.greutate && s.greutate > 0 ? (
-                                        <Text style={[styles.setPillVal, { color: colors.textPrimary }]}> × {s.greutate} kg</Text>
-                                      ) : null}
-                                      {s.rpe ? (
-                                        <Text style={[styles.setPillVal, { color: colors.warning, marginLeft: 4, fontSize: 10 }]}>@ {s.rpe} RPE</Text>
-                                      ) : null}
-                                    </View>
-                                  );
-                                })}
-                              </View>
-                            </View>
-                          ))
-                        )}
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          )}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
+          renderItem={renderZi}
         />
       )}
 

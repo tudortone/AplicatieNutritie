@@ -6,6 +6,7 @@ import {
 import { Search, Plus, X } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../supabase';
 import { API_URL } from '../../constants/config';
 import { foodPresets } from '../../constants/foodPresets';
@@ -13,6 +14,7 @@ import { FoodProduct } from './types';
 import { ProductSearchResult } from './ProductSearchResult';
 import { QuantityEditor } from './QuantityEditor';
 import { ManualProductForm } from './ManualProductForm';
+import { EmptyState } from '../ui/EmptyState';
 
 interface ProductSearchProps {
   initialBarcode?: string;
@@ -26,6 +28,7 @@ export function ProductSearch({
   onClose
 }: ProductSearchProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { session } = useAuth();
 
   const [query, setQuery] = useState('');
@@ -35,6 +38,9 @@ export function ProductSearch({
   const [isManualMode, setIsManualMode] = useState(Boolean(initialBarcode));
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Cache pentru căutarea cu query gol (presets + cămara): fără el, fiecare
+  // ștergere a căutării re-executa inutil SELECT-ul pe produse_camara.
+  const emptyResultsRef = useRef<FoodProduct[] | null>(null);
 
   const normalizeText = (text: string) =>
     text
@@ -46,6 +52,10 @@ export function ProductSearch({
   // 1. Căutare locală în foodPresets & produse personalizate din Supabase
   const searchCombined = useCallback(async (qRaw: string) => {
     const q = normalizeText(qRaw);
+    if (!q && emptyResultsRef.current) {
+      setResults(emptyResultsRef.current);
+      return;
+    }
     const list: FoodProduct[] = [];
 
     // A) Presets locale
@@ -150,7 +160,9 @@ export function ProductSearch({
       return true;
     });
 
-    setResults(deduped.slice(0, 25));
+    const finale = deduped.slice(0, 25);
+    if (!q) emptyResultsRef.current = finale;
+    setResults(finale);
   }, [session?.user?.id]);
 
   useEffect(() => {
@@ -200,19 +212,30 @@ export function ProductSearch({
           <Search size={18} color={colors.textSecondary} />
           <TextInput
             style={[styles.searchInput, { color: colors.textPrimary }]}
-            placeholder="Caută produs, brand sau aliment..."
+            placeholder={t('food.search.placeholder')}
             placeholderTextColor={colors.textSecondary + '77'}
             value={query}
             onChangeText={setQuery}
           />
           {query ? (
-            <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+            <TouchableOpacity
+              onPress={() => setQuery('')}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+              accessibilityRole="button"
+              accessibilityLabel={t('food.search.clear')}
+            >
               <X size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           ) : null}
         </View>
         {onClose ? (
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.closeBtn}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            accessibilityRole="button"
+            accessibilityLabel={t('food.search.close')}
+          >
             <X size={22} color={colors.textPrimary} />
           </TouchableOpacity>
         ) : null}
@@ -221,7 +244,7 @@ export function ProductSearch({
       {loading && (
         <View style={styles.loadingRow}>
           <ActivityIndicator size="small" color={colors.accent} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Căutăm în cataloage...</Text>
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('food.search.loading')}</Text>
         </View>
       )}
 
@@ -229,21 +252,34 @@ export function ProductSearch({
         data={results}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 20, ...(results.length === 0 ? { flexGrow: 1 } : {}) }}
         renderItem={({ item }) => (
           <ProductSearchResult
             product={item}
             onSelect={(p) => setSelectedForQuantity(p)}
           />
         )}
+        ListEmptyComponent={
+          !loading ? (
+            <EmptyState
+              icon="🔍"
+              title={t('food.search.emptyTitle')}
+              subtitle={t('food.search.emptySubtitle')}
+              accentColor={colors.accent}
+              textColor={colors.textPrimary}
+              mutedColor={colors.textSecondary}
+            />
+          ) : null
+        }
         ListFooterComponent={
           <TouchableOpacity
             style={[styles.manualRowFooter, { backgroundColor: colors.cardBg, borderColor: colors.accent }]}
             onPress={() => setIsManualMode(true)}
+            accessibilityRole="button"
           >
             <Plus size={18} color={colors.accent} />
             <Text style={[styles.manualFooterText, { color: colors.accent }]}>
-              Nu găsești produsul? Introdu-l complet manual
+              {t('food.search.manualEntry')}
             </Text>
           </TouchableOpacity>
         }

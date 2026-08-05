@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useTranslation } from 'react-i18next'
 
 import EcranPas from '../../components/onboarding/EcranPas'
 import { useOnboarding } from '../../context/OnboardingContext'
@@ -9,8 +10,8 @@ import { LIMITE_ONBOARDING, calculeazaVarsta } from '../../lib/onboarding'
 const INALTIME_RAND = 46
 
 const LUNI = [
-	'Ianuarie', 'Februarie', 'Martie', 'Aprilie', 'Mai', 'Iunie',
-	'Iulie', 'August', 'Septembrie', 'Octombrie', 'Noiembrie', 'Decembrie',
+	'ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie',
+	'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie',
 ]
 
 /** O coloana din selectorul de data, cu snap pe randuri. */
@@ -70,8 +71,11 @@ function Coloana({
 }
 
 export default function PasDataNasterii() {
+	const { t } = useTranslation()
 	const { date, actualizeaza } = useOnboarding()
 	const { colors } = useTheme()
+
+	const eticheteLuni = useMemo(() => LUNI.map((l) => t(`onboarding.luni.${l}`)), [t])
 
 	const anCurent = new Date().getFullYear()
 	const anMin = anCurent - LIMITE_ONBOARDING.varsta.max
@@ -109,8 +113,8 @@ export default function PasDataNasterii() {
 	return (
 		<EcranPas
 			pas="/onboarding/data-nasterii"
-			titlu="Cand te-ai nascut?"
-			subtitlu="Varsta schimba cate calorii arde corpul tau in repaus."
+			titlu={t('onboarding.dataNasterii.titlu')}
+			subtitlu={t('onboarding.dataNasterii.subtitlu')}
 			poateContinua
 			laContinuare={() => {
 				// Confirmam valoarea implicita daca nu a atins nicio roata.
@@ -123,7 +127,7 @@ export default function PasDataNasterii() {
 					<Coloana valori={zile} selectat={curent.zi} laSchimbare={(zi) => seteaza({ zi })} latime={70} />
 					<Coloana
 						valori={luni}
-						etichete={LUNI}
+						etichete={eticheteLuni}
 						selectat={curent.luna}
 						laSchimbare={(luna) => seteaza({ luna })}
 						latime={140}
@@ -133,7 +137,9 @@ export default function PasDataNasterii() {
 			</View>
 
 			{varsta !== null ? (
-				<Text style={[styles.varsta, { color: colors.textSecondary }]}>Ai {varsta} de ani</Text>
+				<Text style={[styles.varsta, { color: colors.textSecondary }]}>
+					{t('onboarding.dataNasterii.varsta', { ani: varsta })}
+				</Text>
 			) : null}
 		</EcranPas>
 	)

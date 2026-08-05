@@ -176,11 +176,15 @@ CREATE INDEX IF NOT EXISTS gamificare_user_id_idx ON gamificare(user_id);
 
 ALTER TABLE IF EXISTS gamificare ENABLE ROW LEVEL SECURITY;
 
+-- Doar SELECT, identic cu migrarea 20260805000002_gamificare_secure.sql:
+-- FOR ALL ar permite cheii anonime (publice in aplicatia mobila) sa faca upsert
+-- pe randul propriu de gamificare (xp/nivel/streak) — trisu. Scrierea trece
+-- exclusiv prin backend (service_role) pe POST /api/gamificare.
 DROP POLICY IF EXISTS "Users can manage their own gamification" ON gamificare;
-CREATE POLICY "Users can manage their own gamification" ON gamificare
-  FOR ALL
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can read their own gamification" ON gamificare;
+CREATE POLICY "Users can read their own gamification" ON gamificare
+  FOR SELECT
+  USING (auth.uid() = user_id);
 
 -- ==============================================================================
 -- 9. MIGRĂRI IDEMPOTENTE NUTRIAI v6 (AGENT B & AGENT C)
@@ -202,6 +206,7 @@ ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS zile_valabilitate 
 ALTER TABLE IF EXISTS produse_camara ADD COLUMN IF NOT EXISTS is_congelat BOOLEAN DEFAULT false;
 
 CREATE INDEX IF NOT EXISTS produse_camara_user_id_idx ON produse_camara(user_id);
+CREATE INDEX IF NOT EXISTS produse_camara_user_created_idx ON produse_camara(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS produse_camara_lower_nume_idx ON produse_camara(LOWER(nume));
 CREATE INDEX IF NOT EXISTS produse_camara_barcode_idx ON produse_camara(barcode) WHERE barcode IS NOT NULL;
 

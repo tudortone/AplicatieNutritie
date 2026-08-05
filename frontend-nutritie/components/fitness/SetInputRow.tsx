@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Minus, Plus, AlertTriangle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 export interface SetData {
   reps: number;
@@ -24,6 +25,7 @@ function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffi
   onChange: (v: number) => void; onLimitReached: () => void; suffix?: string;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
+  const { t } = useTranslation();
   const bump = useCallback((delta: number) => {
     const nextVal = Math.round((value + delta) * 100) / 100;
     if (nextVal > max) {
@@ -40,7 +42,14 @@ function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffi
     <View style={styles.field}>
       <Text style={[styles.fieldLabel, { color: colors.textTertiary }]}>{label}</Text>
       <View style={[styles.pill, { backgroundColor: colors.surfaceBg }]}>
-        <Pressable style={[styles.stepBtn, { backgroundColor: colors.background }]} onPress={() => bump(-step)} hitSlop={12}>
+        <Pressable
+          style={[styles.stepBtn, { backgroundColor: colors.background }]}
+          onPress={() => bump(-step)}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={t('a11y.setInputRow.decrease', { label })}
+          accessibilityState={{ disabled: value <= min }}
+        >
           <Minus size={16} color={colors.accent} strokeWidth={3} />
         </Pressable>
         <TextInput
@@ -62,7 +71,14 @@ function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffi
           selectTextOnFocus
         />
         {suffix ? <Text style={[styles.suffix, { color: colors.textSecondary }]}>{suffix}</Text> : null}
-        <Pressable style={[styles.stepBtn, { backgroundColor: colors.background }]} onPress={() => bump(step)} hitSlop={12}>
+        <Pressable
+          style={[styles.stepBtn, { backgroundColor: colors.background }]}
+          onPress={() => bump(step)}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={t('a11y.setInputRow.increase', { label })}
+          accessibilityState={{ disabled: value >= max }}
+        >
           <Plus size={16} color={colors.accent} strokeWidth={3} />
         </Pressable>
       </View>

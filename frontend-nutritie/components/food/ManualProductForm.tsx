@@ -6,6 +6,7 @@ import {
 import { Plus } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../supabase';
 import { FoodProduct } from './types';
 
@@ -23,6 +24,7 @@ export function ManualProductForm({
   onCancel,
 }: ManualProductFormProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { session } = useAuth();
 
   const [nume, setNume] = useState(initialName);
@@ -69,22 +71,22 @@ export function ManualProductForm({
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
     if (!nume.trim()) {
-      errs.nume = 'Numele produsului este obligatoriu.';
+      errs.nume = t('food.manual.errors.nameRequired');
     }
     if (cantitateGrame <= 0) {
-      errs.cantitate = 'Cantitatea trebuie să fie mai mare decât 0g.';
+      errs.cantitate = t('food.manual.errors.quantityInvalid');
     }
     if (kcal100 < 0 || kcal100 > 1000) {
-      errs.kcal = 'Caloriile per 100g trebuie să fie între 0 și 1000.';
+      errs.kcal = t('food.manual.errors.kcalRange');
     }
     if (prot100 < 0 || prot100 > 100) {
-      errs.prot = 'Proteinele per 100g trebuie să fie între 0 și 100.';
+      errs.prot = t('food.manual.errors.proteinRange');
     }
     if (carb100 < 0 || carb100 > 100) {
-      errs.carb = 'Carbohidrații per 100g trebuie să fie între 0 și 100.';
+      errs.carb = t('food.manual.errors.carbsRange');
     }
     if (fat100 < 0 || fat100 > 100) {
-      errs.fat = 'Grăsimile per 100g trebuie să fie între 0 și 100.';
+      errs.fat = t('food.manual.errors.fatsRange');
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -149,16 +151,16 @@ export function ManualProductForm({
         keyboardShouldPersistTaps="handled"
       >
         <Text style={[styles.title, { color: colors.textPrimary }]}>
-          Introducere Complet Manuală
+          {t('food.manual.title')}
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Completează valorile nutriționale fără nicio restricție.
+          {t('food.manual.subtitle')}
         </Text>
 
         {/* Live Preview Card */}
         <View style={[styles.previewCard, { backgroundColor: colors.cardBg, borderColor: colors.accent + '40' }]}>
           <Text style={[styles.previewTitle, { color: colors.textSecondary }]}>
-            PREVIZUALIZARE PENTRU {cantitateGrame || 0}g CONSUMATE
+            {t('food.manual.previewTitle', { grame: cantitateGrame || 0 })}
           </Text>
           <View style={styles.previewRow}>
             <View style={styles.previewItem}>
@@ -167,27 +169,27 @@ export function ManualProductForm({
             </View>
             <View style={styles.previewItem}>
               <Text style={[styles.previewVal, { color: colors.accentSecondary }]}>{previewMacro.prot}g</Text>
-              <Text style={[styles.previewLab, { color: colors.textSecondary }]}>proteine</Text>
+              <Text style={[styles.previewLab, { color: colors.textSecondary }]}>{t('food.macros.proteins')}</Text>
             </View>
             <View style={styles.previewItem}>
               <Text style={[styles.previewVal, { color: colors.accentTertiary }]}>{previewMacro.carb}g</Text>
-              <Text style={[styles.previewLab, { color: colors.textSecondary }]}>carbs</Text>
+              <Text style={[styles.previewLab, { color: colors.textSecondary }]}>{t('food.macros.carbs')}</Text>
             </View>
             <View style={styles.previewItem}>
               <Text style={[styles.previewVal, { color: colors.warning }]}>{previewMacro.fat}g</Text>
-              <Text style={[styles.previewLab, { color: colors.textSecondary }]}>grăsimi</Text>
+              <Text style={[styles.previewLab, { color: colors.textSecondary }]}>{t('food.macros.fats')}</Text>
             </View>
           </View>
         </View>
 
         {/* Câmpuri Obligatorii */}
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Informații Principale *</Text>
-        
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('food.manual.mainInfo')}</Text>
+
         <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Nume Produs *</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('food.manual.nameLabel')}</Text>
           <TextInput
             style={[styles.input, { color: colors.textPrimary, borderColor: errors.nume ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
-            placeholder="ex: Iaurt grecesc 10%"
+            placeholder={t('food.manual.namePlaceholder')}
             placeholderTextColor={colors.textSecondary + '77'}
             value={nume}
             onChangeText={(t) => {
@@ -200,7 +202,7 @@ export function ManualProductForm({
 
         <View style={styles.row}>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Cantitate Consumată (g) *</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('food.manual.quantityLabel')}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: errors.cantitate ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="100"
@@ -216,7 +218,7 @@ export function ManualProductForm({
           </View>
 
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Calorii per 100g *</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('food.manual.kcalLabel')}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: errors.kcal ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="ex: 125"
@@ -233,10 +235,10 @@ export function ManualProductForm({
         </View>
 
         {/* Macronutrienți */}
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Macronutrienți per 100g</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('food.manual.macrosSection')}</Text>
         <View style={styles.row}>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Proteine (g)</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('food.manual.proteinLabel')}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: errors.prot ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="0"
@@ -251,7 +253,7 @@ export function ManualProductForm({
             {errors.prot ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.prot}</Text> : null}
           </View>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Carbohidrați (g)</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('food.manual.carbsLabel')}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: errors.carb ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="0"
@@ -266,7 +268,7 @@ export function ManualProductForm({
             {errors.carb ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.carb}</Text> : null}
           </View>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Grăsimi (g)</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('food.manual.fatsLabel')}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: errors.fat ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="0"
@@ -283,23 +285,23 @@ export function ManualProductForm({
         </View>
 
         {/* Detalii opționale */}
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Informații Opționale</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('food.manual.optionalInfo')}</Text>
         <View style={styles.row}>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Brand</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('food.manual.brandLabel')}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
-              placeholder="ex: Napolact"
+              placeholder={t('food.manual.brandPlaceholder')}
               placeholderTextColor={colors.textSecondary + '77'}
               value={brand}
               onChangeText={setBrand}
             />
           </View>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Cod de bare</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('food.manual.barcodeLabel')}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
-              placeholder="Cod scanat"
+              placeholder={t('food.manual.barcodePlaceholder')}
               placeholderTextColor={colors.textSecondary + '77'}
               value={barcode}
               onChangeText={setBarcode}
@@ -309,7 +311,7 @@ export function ManualProductForm({
 
         <View style={styles.row}>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Fibre per 100g (g)</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('food.manual.fiberLabel')}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="0"
@@ -320,7 +322,7 @@ export function ManualProductForm({
             />
           </View>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Zahăr per 100g (g)</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('food.manual.sugarLabel')}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="0"
@@ -335,9 +337,9 @@ export function ManualProductForm({
         {/* Comutator Salvare pentru data viitoare */}
         <View style={[styles.switchCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>Salvează produsul pentru data viitoare</Text>
+            <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>{t('food.manual.saveToCatalogTitle')}</Text>
             <Text style={[styles.switchDesc, { color: colors.textSecondary }]}>
-              Produsul va apărea automat în căutările tale viitoare.
+              {t('food.manual.saveToCatalogDesc')}
             </Text>
           </View>
           <Switch
@@ -354,7 +356,7 @@ export function ManualProductForm({
               style={[styles.btnCancel, { borderColor: colors.cardBorder }]}
               onPress={onCancel}
             >
-              <Text style={[styles.btnCancelText, { color: colors.textSecondary }]}>Anulează</Text>
+              <Text style={[styles.btnCancelText, { color: colors.textSecondary }]}>{t('food.manual.cancel')}</Text>
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity
@@ -363,7 +365,7 @@ export function ManualProductForm({
             disabled={isSaving}
           >
             <Plus size={18} color="#000" />
-            <Text style={styles.btnSaveText}>{isSaving ? 'Se salvează...' : 'Adaugă Produsul'}</Text>
+            <Text style={styles.btnSaveText}>{isSaving ? t('food.manual.saving') : t('food.manual.addProduct')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

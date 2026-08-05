@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Plus } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { FoodProduct } from './types';
 
 interface ProductSearchResultProps {
@@ -11,19 +12,20 @@ interface ProductSearchResultProps {
 
 export function ProductSearchResult({ product, onSelect }: ProductSearchResultProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
 
   const getSourceBadge = () => {
     switch (product.source) {
       case 'preset':
-        return { label: 'Preset Rapid', color: colors.accent };
+        return { label: t('food.result.sourcePreset'), color: colors.accent };
       case 'user_saved':
-        return { label: 'Salvat de tine', color: '#00F0FF' };
+        return { label: t('food.result.sourceSaved'), color: colors.accentTertiary };
       case 'barcode_cache':
-        return { label: 'Catalog Verificat', color: '#10B981' };
+        return { label: t('food.result.sourceVerified'), color: colors.success };
       case 'openfoodfacts':
-        return { label: 'OpenFoodFacts', color: colors.textSecondary };
+        return { label: t('food.result.sourceOfff'), color: colors.textSecondary };
       default:
-        return { label: 'Manual', color: colors.accentSecondary };
+        return { label: t('food.result.sourceManual'), color: colors.accentSecondary };
     }
   };
 
@@ -34,6 +36,8 @@ export function ProductSearchResult({ product, onSelect }: ProductSearchResultPr
       style={[styles.container, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
       onPress={() => onSelect(product)}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={product.name}
     >
       <View style={styles.infoCol}>
         <View style={styles.headerRow}>
@@ -52,7 +56,11 @@ export function ProductSearchResult({ product, onSelect }: ProductSearchResultPr
             <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
           </View>
           <Text style={[styles.macros, { color: colors.accent }]}>
-            {Math.round(product.kcalPer100g)} kcal • P: {Math.round(product.proteinPer100g * 10) / 10}g • C: {Math.round(product.carbsPer100g * 10) / 10}g
+            {t('food.result.macros', {
+              kcal: Math.round(product.kcalPer100g),
+              proteine: Math.round(product.proteinPer100g * 10) / 10,
+              carbohidrati: Math.round(product.carbsPer100g * 10) / 10,
+            })}
           </Text>
         </View>
       </View>

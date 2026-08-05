@@ -48,11 +48,15 @@ export function useCamara() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
+        // Proiectie explicita + plafon: evita select('*') (aduce coloane
+        // nefolosite) si un payload nelimitat. Capul de 200 acopera o camera
+        // reala cu multa marja; produsele locale se combina oricum dupa.
         const { data, error } = await supabase
           .from('produse_camara')
-          .select('*')
+          .select('id, user_id, barcode, nume, brand, calorii_100g, proteine_100g, grasimi_100g, carbohidrati_100g, imagine_url, created_at, cantitate, cantitate_g, data_expirare, zile_valabilitate, is_congelat')
           .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(200);
 
         if (!error && data) {
           remoteProduse = data as ProdusCamara[];

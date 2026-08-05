@@ -8,6 +8,18 @@ import { useTheme } from '../../context/ThemeContext';
 
 type SportAction = 'progress' | 'history';
 
+// Componentă stabilă pentru iconițele tab-bar. Înainte, `icon = (Icon) => (...)`
+// crea o componentă nouă la fiecare render al TabLayout, iar React Navigation o
+// remonta (unmount+remount) la schimbare de temă sau resize.
+function TabIcon({ Icon, size, color, accent }: {
+  Icon: typeof Home;
+  size: number;
+  color: string;
+  accent: string;
+}) {
+  return <Icon size={size} color={color} strokeWidth={color === accent ? 2.5 : 1.5} />;
+}
+
 export default function TabLayout() {
   const { colors } = useTheme();
   const router = useRouter();
@@ -19,9 +31,16 @@ export default function TabLayout() {
   const tabHeight = (compact ? 54 : 58) + bottomInset;
   const iconSize = compact ? 21 : 24;
 
-  const icon = (Icon: typeof Home) => ({ color }: { color: string; size: number }) => (
-    <Icon size={iconSize} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />
-  );
+  // Funcțiile tabBarIcon au identitate stabilă (useMemo), deci React Navigation
+  // nu mai vede un tip de componentă nou la fiecare render.
+  const tabIcons = React.useMemo(() => ({
+    home: (p: { color: string; size: number }) => <TabIcon Icon={Home} size={iconSize} color={p.color} accent={colors.accent} />,
+    istoric: (p: { color: string; size: number }) => <TabIcon Icon={List} size={iconSize} color={p.color} accent={colors.accent} />,
+    sport: (p: { color: string; size: number }) => <TabIcon Icon={Dumbbell} size={iconSize} color={p.color} accent={colors.accent} />,
+    statistici: (p: { color: string; size: number }) => <TabIcon Icon={BarChart3} size={iconSize} color={p.color} accent={colors.accent} />,
+    chat: (p: { color: string; size: number }) => <TabIcon Icon={MessageCircle} size={iconSize} color={p.color} accent={colors.accent} />,
+    profil: (p: { color: string; size: number }) => <TabIcon Icon={User} size={iconSize} color={p.color} accent={colors.accent} />,
+  }), [iconSize, colors.accent]);
 
   const headerAction = (type: SportAction) => {
     const config = {
@@ -76,14 +95,14 @@ export default function TabLayout() {
           tabBarLabelStyle: [styles.tabBarLabel, compact && styles.compactLabel],
         }}
       >
-        <Tabs.Screen name="index" options={{ title: 'Acasă', tabBarAccessibilityLabel: 'Acasă', tabBarIcon: icon(Home) }} />
-        <Tabs.Screen name="istoric" options={{ title: 'Jurnal', tabBarAccessibilityLabel: 'Jurnal alimentar', tabBarIcon: icon(List) }} />
+        <Tabs.Screen name="index" options={{ title: 'Acasă', tabBarAccessibilityLabel: 'Acasă', tabBarIcon: tabIcons.home }} />
+        <Tabs.Screen name="istoric" options={{ title: 'Jurnal', tabBarAccessibilityLabel: 'Jurnal alimentar', tabBarIcon: tabIcons.istoric }} />
         <Tabs.Screen
           name="antrenamente"
           options={{
             title: 'Sport',
             tabBarAccessibilityLabel: 'Antrenamente',
-            tabBarIcon: icon(Dumbbell),
+            tabBarIcon: tabIcons.sport,
             headerShown: true,
             headerTitle: 'Sport',
             headerTitleStyle: { color: colors.textPrimary, fontWeight: '900' },
@@ -97,9 +116,9 @@ export default function TabLayout() {
             ),
           }}
         />
-        <Tabs.Screen name="statistici" options={{ title: compact ? 'Stats' : 'Statistici', tabBarAccessibilityLabel: 'Statistici', tabBarIcon: icon(BarChart3) }} />
-        <Tabs.Screen name="chat" options={{ title: compact ? 'AI' : 'Asistent', tabBarAccessibilityLabel: 'Asistent NutriAI', tabBarIcon: icon(MessageCircle) }} />
-        <Tabs.Screen name="profil" options={{ title: 'Profil', tabBarAccessibilityLabel: 'Profil', tabBarIcon: icon(User) }} />
+        <Tabs.Screen name="statistici" options={{ title: compact ? 'Stats' : 'Statistici', tabBarAccessibilityLabel: 'Statistici', tabBarIcon: tabIcons.statistici }} />
+        <Tabs.Screen name="chat" options={{ title: compact ? 'AI' : 'Asistent', tabBarAccessibilityLabel: 'Asistent NutriAI', tabBarIcon: tabIcons.chat }} />
+        <Tabs.Screen name="profil" options={{ title: 'Profil', tabBarAccessibilityLabel: 'Profil', tabBarIcon: tabIcons.profil }} />
       </Tabs>
     </View>
   );

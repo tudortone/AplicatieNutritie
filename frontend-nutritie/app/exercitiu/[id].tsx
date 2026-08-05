@@ -10,6 +10,7 @@ import {
   Zap, TrendingUp, Activity, Layers, Award, RotateCcw, ShieldCheck, Sparkles
 } from 'lucide-react-native';
 
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { Radius, Spacing } from '../../constants/theme';
 import { useExercitii } from '../../hooks/useExercitii';
@@ -28,6 +29,7 @@ export default function ExercitiuDetailScreen() {
   const notify = useNotify();
   const { adaugaAntrenament, adaugaExercitiu } = useAntrenamente();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { exercitii } = useExercitii();
 
   const [greutateKg, setGreutateKg] = useState(75);
@@ -49,7 +51,7 @@ export default function ExercitiuDetailScreen() {
     defaultSets: 3,
     defaultReps: 12,
     defaultWeightKg: 20,
-    unitLabel: 'Repetări',
+    unitLabel: t('exercitiu.repetari'),
     bodyweightFactor: 1.0,
   };
   const spec: MeasurementSpec = exercitiu ? (exercitiu.masurare ?? classifyMeasurement(exercitiu)) : DEFAULT_MEASUREMENT_SPEC;
@@ -58,12 +60,12 @@ export default function ExercitiuDetailScreen() {
   if (!exercitiu) {
     return (
       <View style={[styles.container, { paddingTop: insets.top + Spacing.lg, backgroundColor: colors.background }]}>
-        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('exercitiu.back')} hitSlop={12} style={styles.backBtn}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.notFoundWrap}>
-          <Text style={[styles.notFoundTitle, { color: colors.textPrimary }]}>Exercițiul nu a fost găsit</Text>
-          <Text style={[styles.notFoundText, { color: colors.textSecondary }]}>Alege un exercițiu din catalogul principal.</Text>
+          <Text style={[styles.notFoundTitle, { color: colors.textPrimary }]}>{t('exercitiu.notFoundTitle')}</Text>
+          <Text style={[styles.notFoundText, { color: colors.textSecondary }]}>{t('exercitiu.notFoundText')}</Text>
         </View>
       </View>
     );
@@ -73,8 +75,8 @@ export default function ExercitiuDetailScreen() {
 
   const instructiuni = exercitiu.instructiuni && exercitiu.instructiuni.length > 0
     ? exercitiu.instructiuni
-    : ['Execută mișcarea controlat, concentrându-te pe contracția musculară.'];
-  const descriere = exercitiu.descriere || 'Exercițiu eficient pentru planul tău de antrenament.';
+    : [t('exercitiu.defaultInstruction')];
+  const descriere = exercitiu.descriere || t('exercitiu.defaultDescription');
 
   const sessionLoad = computeSessionLoad(spec, {
     sets: sets.length > 0 ? sets.length : 3,
@@ -94,41 +96,41 @@ export default function ExercitiuDetailScreen() {
   const getExerciseRankInfo = () => {
     if (scorIntensitate >= 85) {
       return {
-        rank: 'RANK S+ • ELITE PRO 👑⚡',
-        badgeColor: '#FACC15',
+        rank: t('exercitiu.rankSPlus'),
+        badgeColor: colors.warning,
         stele: '⭐⭐⭐⭐⭐',
-        eficienta: 'Recrutare 99% Fibre Musculare',
-        mesaj: 'Stimulare hipertrofică maximă — nivel competițional absolut.',
-        hintNext: 'Ai atins nivelul maxim de măiestrie pentru acest exercițiu!'
+        eficienta: t('exercitiu.efficiencySPlus'),
+        mesaj: t('exercitiu.messageSPlus'),
+        hintNext: t('exercitiu.hintSPlus')
       };
     }
     if (scorIntensitate >= 65) {
       return {
-        rank: 'RANK A • ADVANCED HYPERTROPHY 🔥',
-        badgeColor: '#00F0FF',
+        rank: t('exercitiu.rankA'),
+        badgeColor: colors.accentTertiary,
         stele: '⭐⭐⭐⭐',
-        eficienta: 'Recrutare 92% Fibre Musculare',
-        mesaj: 'Tensiune mecanică intensă & adaptare structurală profundă.',
-        hintNext: `Adaugă +${Math.max(2, Math.round((85 - scorIntensitate) / 2))} kg sau 1 serie pentru a debloca Rank S+`
+        eficienta: t('exercitiu.efficiencyA'),
+        mesaj: t('exercitiu.messageA'),
+        hintNext: t('exercitiu.hintA', { kg: Math.max(2, Math.round((85 - scorIntensitate) / 2)) })
       };
     }
     if (scorIntensitate >= 45) {
       return {
-        rank: 'RANK B • INTERMEDIATE STRENGTH 💪',
-        badgeColor: '#4ADE80',
+        rank: t('exercitiu.rankB'),
+        badgeColor: colors.success,
         stele: '⭐⭐⭐',
-        eficienta: 'Recrutare 78% Fibre Musculare',
-        mesaj: 'Volum solid de lucru pentru creștere progresivă și tonifiere.',
-        hintNext: `Adaugă +${Math.max(2, Math.round((65 - scorIntensitate) / 2))} kg sau 2 repetări pentru Rank A`
+        eficienta: t('exercitiu.efficiencyB'),
+        mesaj: t('exercitiu.messageB'),
+        hintNext: t('exercitiu.hintB', { kg: Math.max(2, Math.round((65 - scorIntensitate) / 2)) })
       };
     }
     return {
-      rank: 'RANK C • FOUNDATION & FORM 🌊',
-      badgeColor: '#38BDF8',
+      rank: t('exercitiu.rankC'),
+      badgeColor: colors.accent,
       stele: '⭐⭐',
-      eficienta: 'Recrutare 60% Fibre Musculare',
-      mesaj: 'Execuție tehnică controlată și activare metabolică de bază.',
-      hintNext: `Crește greutatea sau adaugă repetări pentru a atinge Rank B`
+      eficienta: t('exercitiu.efficiencyC'),
+      mesaj: t('exercitiu.messageC'),
+      hintNext: t('exercitiu.hintC')
     };
   };
 
@@ -158,13 +160,13 @@ export default function ExercitiuDetailScreen() {
       });
 
       if (result === null) {
-        notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+        notify.error(t('exercitiu.errorTitle'), t('exercitiu.errorSaveFailed'));
         return;
       }
 
       notify.success(
-        'Adăugat în antrenament',
-        `${exercitiu.nume} a fost înregistrat cu succes!`
+        t('exercitiu.addedTitle'),
+        t('exercitiu.addedMessage', { nume: exercitiu.nume })
       );
       router.back();
     } catch (err: any) {
@@ -189,7 +191,7 @@ export default function ExercitiuDetailScreen() {
     <View style={[styles.container, { paddingTop: Math.max(insets.top, Spacing.lg), backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('exercitiu.back')} hitSlop={12} style={styles.backBtn}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -223,20 +225,20 @@ export default function ExercitiuDetailScreen() {
               <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
                 ~{caloriiEst} kcal
               </Text>
-              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>/ sesiune (est.)</Text>
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{t('exercitiu.perSessionEst')}</Text>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricItem}>
               <Clock size={16} color={colors.accentSecondary} />
               <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
-                {sets.length > 0 ? `${sets.length} serii setate` : 'Configurare'}
+                {sets.length > 0 ? t('exercitiu.setsConfigured', { numar: sets.length }) : t('exercitiu.configuration')}
               </Text>
-              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>pentru astăzi</Text>
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{t('exercitiu.forToday')}</Text>
             </View>
           </View>
 
           <View style={styles.musclesRow}>
-            <Text style={[styles.musclesLabel, { color: colors.textSecondary }]}>Mușchi lucrați: </Text>
+            <Text style={[styles.musclesLabel, { color: colors.textSecondary }]}>{t('exercitiu.musclesWorked')}</Text>
             {exercitiu.grupe.map((g, idx) => (
               <View key={idx} style={[styles.musclePill, { backgroundColor: colors.accent + '1A', borderColor: colors.accent + '33' }]}>
                 <Text style={[styles.muscleText, { color: colors.accent }]}>{g}</Text>
@@ -247,7 +249,7 @@ export default function ExercitiuDetailScreen() {
 
         {/* CORP UMAN HOLOGRAFIC - COMIC BOOK STYLE ANATOMY & HEATMAP */}
         <Holographic3DAnatomyBody
-          activeGroups={exercitiu.target_muscles || exercitiu.grupe || ['Corp complet']}
+          activeGroups={exercitiu.target_muscles || exercitiu.grupe || [t('exercitiu.fullBody')]}
           muschiTinta={exercitiu.activation || exercitiu.muschiTinta}
           intensityScore={scorIntensitate}
           accentColor={colors.accent}
@@ -264,8 +266,8 @@ export default function ExercitiuDetailScreen() {
             <View style={styles.rankTitleRow}>
               <ShieldCheck size={24} color={rankInfo.badgeColor} />
               <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={[styles.rankCategoryTitle, { color: colors.textSecondary }]}>MASTERY RANK SYSTEM</Text>
-                <Text style={[styles.rankBadgeTitle, { color: rankInfo.badgeColor }]} numberOfLines={1}>
+                <Text style={[styles.rankCategoryTitle, { color: colors.textSecondary }]}>{t('exercitiu.masteryRankSystem')}</Text>
+                <Text style={[styles.rankBadgeTitle, { color: rankInfo.badgeColor }]} numberOfLines={1} ellipsizeMode="tail">
                   {rankInfo.rank}
                 </Text>
               </View>
@@ -287,13 +289,13 @@ export default function ExercitiuDetailScreen() {
           {/* Linie de statistici perfect spațiată pe 2 coloane clare */}
           <View style={styles.rankStatsGrid}>
             <View style={styles.statsColLeft}>
-              <Text style={[styles.rankStatLabel, { color: colors.textSecondary }]}>Eficiență Anatomică</Text>
+              <Text style={[styles.rankStatLabel, { color: colors.textSecondary }]}>{t('exercitiu.anatomicalEfficiency')}</Text>
               <Text style={[styles.rankStatVal, { color: rankInfo.badgeColor }]}>{rankInfo.eficienta}</Text>
             </View>
             <View style={styles.statsColRight}>
-              <Text style={[styles.rankStatLabel, { color: colors.textSecondary, textAlign: 'right' }]}>Scor Efort</Text>
+              <Text style={[styles.rankStatLabel, { color: colors.textSecondary, textAlign: 'right' }]}>{t('exercitiu.effortScore')}</Text>
               <Text style={[styles.rankStatVal, { color: colors.textPrimary, textAlign: 'right' }]}>
-                {scorIntensitate} <Text style={{ fontSize: 12, color: colors.textSecondary }}>/ 100 PTS</Text>
+                {scorIntensitate} <Text style={{ fontSize: 12, color: colors.textSecondary }}>{t('exercitiu.hundredPts')}</Text>
               </Text>
             </View>
           </View>
@@ -307,14 +309,14 @@ export default function ExercitiuDetailScreen() {
         </View>
 
         {/* Jurnalizare Profesionala Set-by-Set */}
-        <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 16 }]}>LOG ANTRENAMENT</Text>
+        <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 16 }]}>{t('exercitiu.workoutLog')}</Text>
         <SetLogger 
           initialSets={sets}
           onChange={setSets}
         />
 
         {/* Instrucțiuni execuție */}
-        <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 8 }]}>CUM SE EXECUTĂ CORECT</Text>
+        <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 8 }]}>{t('exercitiu.howToExecute')}</Text>
         <View style={styles.stepsWrap}>
           {instructiuni.map((pas, idx) => (
             <View key={idx} style={[styles.stepCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
@@ -329,7 +331,7 @@ export default function ExercitiuDetailScreen() {
         {/* Greșeli comune */}
         {exercitiu.greseliComune && exercitiu.greseliComune.length > 0 && (
           <>
-            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>GREȘELI DE EVITAT</Text>
+            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>{t('exercitiu.mistakesToAvoid')}</Text>
             <View style={styles.mistakesWrap}>
               {exercitiu.greseliComune.map((gresala, idx) => (
                 <View key={idx} style={[styles.mistakeCard, { backgroundColor: colors.danger + '14', borderColor: colors.danger + '33' }]}>
@@ -357,12 +359,12 @@ export default function ExercitiuDetailScreen() {
               const totalReps = sets.reduce((sum, s) => sum + s.repetari, 0);
               
               if (spec.type === 'reps' && !hasWeight) {
-                return `Adaugă (${totalReps} repetări)`;
+                return t('exercitiu.addReps', { numar: totalReps });
               }
               if (spec.type === 'timed') {
-                return `Adaugă (${sets.length} serii)`;
+                return t('exercitiu.addSets', { numar: sets.length });
               }
-              return `Adaugă (${volumTotal} kg • ${rankInfo.rank.split(' • ')[0]})`;
+              return t('exercitiu.addWithRank', { volum: volumTotal, rank: rankInfo.rank.split(' • ')[0] });
             })()}
           </Text>
         </TouchableOpacity>
@@ -498,6 +500,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
     marginTop: 2,
+    flexShrink: 1,
   },
   starsBadgeWrap: {
     paddingLeft: 6,

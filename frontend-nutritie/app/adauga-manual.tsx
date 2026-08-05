@@ -80,7 +80,7 @@ export default function AdaugaManualScreen() {
 
           const detailedItems: AlimentDetaliat[] = parsed.map((a: any, idx: number) => ({
             id: String(idx + 1),
-            nume: a.nume || 'Aliment',
+            nume: a.nume || t('adaugaManual.aliment'),
             grame: Number(a.estimare_grame) || 100,
             calorii: Math.round((a.calorii_per_100g * a.estimare_grame) / 100) || 0,
             proteine: Math.round((a.proteine_per_100g * a.estimare_grame) / 100 * 10) / 10 || 0,
@@ -99,7 +99,7 @@ export default function AdaugaManualScreen() {
         setTipMasa(params.tip_masa as TipMasa);
       }
     }
-  }, [params?.alimente, params?.tip_masa]);
+  }, [params?.alimente, params?.tip_masa, t]);
 
   const handleSave = async () => {
     if (!nume.trim()) {
@@ -177,10 +177,10 @@ export default function AdaugaManualScreen() {
       <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
 
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity style={[styles.backBtn, { backgroundColor: colors.surfaceBg }]} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12}>
+        <TouchableOpacity style={[styles.backBtn, { backgroundColor: colors.surfaceBg }]} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('adaugaManual.inapoiA11y')} hitSlop={12}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Adaugă Masă Manual</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t('adaugaManual.titlu')}</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -195,7 +195,7 @@ export default function AdaugaManualScreen() {
           {/* Favorite Foods Section */}
           {favorite.length > 0 && (
             <Animated.View entering={FadeInDown.duration(500)} style={{ marginBottom: 20 }}>
-              <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>❤️ ALIMENTE FRECVENTE / FAVORITE</Text>
+              <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>{t('adaugaManual.favoriteTitlu')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
                 {favorite.map((fav) => (
                   <View
@@ -213,7 +213,7 @@ export default function AdaugaManualScreen() {
                       activeOpacity={0.8}
                       style={{ flex: 1 }}
                       accessibilityRole="button"
-                      accessibilityLabel={`Folosește alimentul favorit ${fav.nume}`}
+                      accessibilityLabel={t('adaugaManual.folosesteFavoritA11y', { nume: fav.nume })}
                     >
                       <Text style={[styles.favChipTitle, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{fav.nume}</Text>
                       <Text style={[styles.favChipSub, { color: colors.accent }]}>
@@ -225,7 +225,7 @@ export default function AdaugaManualScreen() {
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       style={styles.favChipDelete}
                       accessibilityRole="button"
-                      accessibilityLabel={`Șterge ${fav.nume} din favorite`}
+                      accessibilityLabel={t('adaugaManual.stergeFavoritA11y', { nume: fav.nume })}
                     >
                       <Trash2 size={13} color={colors.textTertiary} />
                     </TouchableOpacity>
@@ -237,7 +237,7 @@ export default function AdaugaManualScreen() {
 
           {/* Meal Category Selector Section */}
           <Animated.View entering={FadeInDown.duration(450)} style={{ marginBottom: 20 }}>
-            <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>🍽️ SELECTEAZĂ CATEGORIA MESEI *</Text>
+            <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>{t('adaugaManual.selecteazaCategoria')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
               {MEAL_CATEGORIES.map((cat) => {
                 const isSelected = tipMasa === cat.id;
@@ -258,7 +258,7 @@ export default function AdaugaManualScreen() {
                     activeOpacity={0.8}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`Categoria mesei ${cat.label}`}
+                    accessibilityLabel={t('adaugaManual.categoriaMeseiA11y', { nume: cat.label })}
                   >
                     <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
                     <Text style={[styles.catChipText, { color: isSelected ? colors.accent : colors.textPrimary, fontWeight: isSelected ? '800' : '600' }]}>
@@ -273,19 +273,19 @@ export default function AdaugaManualScreen() {
           <Animated.View entering={FadeInDown.duration(500)} style={[styles.card, { borderColor: colors.cardBorder }]}>
             <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
               <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>1. Despre ce aliment este vorba?</Text>
-                
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Nume aliment / preparat *</Text>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('adaugaManual.sectiuneAliment')}</Text>
+
+                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adaugaManual.numeAliment')}</Text>
                 <TextInput
                   style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-                  placeholder="Ex: Porție orez cu pui, măr, shake proteic..."
+                  placeholder={t('adaugaManual.placeholderNume')}
                   placeholderTextColor={colors.textTertiary}
                   value={nume}
                   onChangeText={setNume}
                   selectionColor={colors.accent}
                 />
 
-                <Text style={[styles.label, { color: colors.textSecondary, marginTop: 16 }]}>Gramaj estimat (opțional)</Text>
+                <Text style={[styles.label, { color: colors.textSecondary, marginTop: 16 }]}>{t('adaugaManual.gramajEstimat')}</Text>
                 <GramInput
                   value={grame}
                   onChange={setGrame}
@@ -299,11 +299,11 @@ export default function AdaugaManualScreen() {
           <Animated.View entering={FadeInDown.duration(600).delay(100)} style={[styles.card, { borderColor: colors.cardBorder, marginTop: 20 }]}>
             <BlurView intensity={20} tint="dark" style={styles.cardBlur}>
               <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>2. Valori Nutriționale</Text>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('adaugaManual.sectiuneValori')}</Text>
 
                 <View style={styles.row}>
                   <View style={styles.col}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>🔥 Calorii (kcal) *</Text>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adaugaManual.calorii')}</Text>
                     <TextInput
                       style={[styles.input, { color: colors.accent, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
                       placeholder="0"
@@ -318,7 +318,7 @@ export default function AdaugaManualScreen() {
                   </View>
 
                   <View style={styles.col}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>🥩 Proteine (g)</Text>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adaugaManual.proteine')}</Text>
                     <TextInput
                       style={[styles.input, { color: colors.accentSecondary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
                       placeholder="0"
@@ -335,7 +335,7 @@ export default function AdaugaManualScreen() {
 
                 <View style={[styles.row, { marginTop: 16 }]}>
                   <View style={styles.col}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>🌾 Carbohidrați (g)</Text>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adaugaManual.carbohidrati')}</Text>
                     <TextInput
                       style={[styles.input, { color: colors.accentTertiary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
                       placeholder="0"
@@ -350,7 +350,7 @@ export default function AdaugaManualScreen() {
                   </View>
 
                   <View style={styles.col}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>🥑 Grăsimi (g)</Text>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adaugaManual.grasimi')}</Text>
                     <TextInput
                       style={[styles.input, { color: colors.warning, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
                       placeholder="0"
@@ -367,7 +367,7 @@ export default function AdaugaManualScreen() {
 
                 <View style={[styles.row, { marginTop: 16 }]}>
                   <View style={styles.col}>
-                    <Text style={[styles.label, { color: colors.textSecondary }]}>🌿 Fibre (g) (opțional)</Text>
+                    <Text style={[styles.label, { color: colors.textSecondary }]}>{t('adaugaManual.fibre')}</Text>
                     <TextInput
                       style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
                       placeholder="0"
@@ -387,14 +387,14 @@ export default function AdaugaManualScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInUp.duration(600).delay(200)} style={{ marginTop: 28 }}>
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Salvează masa în jurnal">
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={t('adaugaManual.salveazaMasaA11y')}>
               <LinearGradient colors={colors.accentGradient} style={styles.saveBtnGrad}>
                 {loading ? (
                   <ActivityIndicator color="#000" />
                 ) : (
                   <>
                     <Check size={22} color="#000" strokeWidth={3} />
-                    <Text style={styles.saveBtnText}>Salvează în Jurnal</Text>
+                    <Text style={styles.saveBtnText}>{t('adaugaManual.salveazaInJurnal')}</Text>
                   </>
                 )}
               </LinearGradient>
@@ -420,11 +420,11 @@ export default function AdaugaManualScreen() {
               }}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel={isFavorite(nume) ? "Deja salvat la favorite" : "Salvează în lista de favorite"}
+              accessibilityLabel={isFavorite(nume) ? t('adaugaManual.dejaSalvatFavoritA11y') : t('adaugaManual.salveazaFavoritA11y')}
             >
               <Heart size={18} color="#f43f5e" fill={isFavorite(nume) ? "#f43f5e" : "transparent"} />
               <Text style={[styles.favSaveBtnText, { color: colors.textPrimary }]}>
-                {isFavorite(nume) ? "Deja salvat la Favorite" : "Salvează în lista de Favorite ❤️"}
+                {isFavorite(nume) ? t('adaugaManual.dejaSalvatFavorit') : t('adaugaManual.salveazaFavorit')}
               </Text>
             </TouchableOpacity>
           </Animated.View>

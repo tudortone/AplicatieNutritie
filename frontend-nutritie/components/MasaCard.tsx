@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Masa, AlimentDetaliat } from '../types';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 function parseAlimente(masa: Masa): AlimentDetaliat[] {
   if (Array.isArray(masa.alimente)) return masa.alimente;
@@ -32,6 +33,7 @@ export const MasaCard = React.memo(function MasaCard({
   onDelete,
 }: MasaCardProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const alimenteSubList = useMemo(() => parseAlimente(masa), [masa.alimente]);
 
   return (
@@ -70,6 +72,8 @@ export const MasaCard = React.memo(function MasaCard({
 
               <View style={styles.actionButtons}>
                 <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={t('a11y.masa.edit')}
                   style={[
                     styles.actionBtn,
                     {
@@ -86,6 +90,8 @@ export const MasaCard = React.memo(function MasaCard({
                   <Pencil size={15} color={colors.accentSecondary} />
                 </TouchableOpacity>
                 <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={t('a11y.masa.delete')}
                   style={[
                     styles.actionBtn,
                     {

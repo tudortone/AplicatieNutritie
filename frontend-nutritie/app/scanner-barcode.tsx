@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Platform,
   Modal,
   Pressable
 } from 'react-native';
@@ -17,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { ScanLine, X, Plus, Package, Trash2, ArrowLeft, CheckCircle2, Sparkles, ShoppingBag, Snowflake, ChefHat, Clock, Layers, Check, Wand2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
@@ -30,6 +30,7 @@ export default function ScannerBarcodeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { showBanner } = useNotificationBanner();
   const { produse, adaugaProdus, modificaCantitate, toggleCongelator, stergeProdus } = useCamara();
 
@@ -64,13 +65,13 @@ export default function ScannerBarcodeScreen() {
       .map(p => `${p.nume}${p.cantitate && p.cantitate > 1 ? ` (${p.cantitate}x)` : ''}`)
       .join(', ');
 
-    const promptReteta = `Salut! Am în cămară următoarele ingrediente: ${ingredienteSelectate}. Ce rețetă delicioasă, sănătoasă și bogată în proteine pot pregăti folosind aceste alimente? Te rog să îmi dai pași clari de preparare și estimarea valorilor nutriționale per porție.`;
+    const promptReteta = t('scanner.promptRetetaAI', { ingrediente: ingredienteSelectate });
 
     router.push({
       pathname: '/(tabs)/chat' as any,
       params: { prompt: promptReteta },
     });
-  }, [selectedCamaraItems, produse, router]);
+  }, [selectedCamaraItems, produse, router, t]);
 
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
 
@@ -129,8 +130,8 @@ export default function ScannerBarcodeScreen() {
     try {
       await adaugaProdus(p);
       showBanner({
-        title: "Salvat în Cămara Mea!",
-        message: `${p.nume} este acum disponibil pentru acces rapid.`,
+        title: t('scanner.salvatInCamaraBanner'),
+        message: t('scanner.salvatInCamaraBannerMesaj', { nume: p.nume }),
         type: "success",
       });
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
@@ -162,13 +163,13 @@ export default function ScannerBarcodeScreen() {
       const currentQty = produsInCamara.cantitate || 1;
       if (currentQty <= 1) {
         stergeProdus(produsInCamara.id);
-        showBanner({ title: '🗑️ Produs consumat', message: `"${productName}" a fost șters din cămară.`, type: 'success' });
+        showBanner({ title: t('scanner.produsConsumat'), message: t('scanner.produsConsumatMesaj', { nume: productName }), type: 'success' });
       } else {
         modificaCantitate(produsInCamara.id, -1);
-        showBanner({ title: '📉 Cantitate actualizată', message: `"${productName}" mai are ${currentQty - 1} bucăți în cămară.`, type: 'info' });
+        showBanner({ title: t('scanner.cantitateActualizata'), message: t('scanner.cantitateActualizataMesaj', { nume: productName, numar: currentQty - 1 }), type: 'info' });
       }
     }
-  }, [produse, stergeProdus, modificaCantitate, showBanner]);
+  }, [produse, stergeProdus, modificaCantitate, showBanner, t]);
 
   if (!permission) {
     return <View style={[styles.container, { backgroundColor: colors.background }]} />;
@@ -178,17 +179,17 @@ export default function ScannerBarcodeScreen() {
     return (
       <View style={[styles.permContainer, { backgroundColor: colors.background }]}>
         <ScanLine size={52} color={colors.accent} />
-        <Text style={[styles.permTitle, { color: colors.textPrimary }]}>Acces la cameră</Text>
+        <Text style={[styles.permTitle, { color: colors.textPrimary }]}>{t('scanner.accesCamera')}</Text>
         <Text style={[styles.permSub, { color: colors.textSecondary }]}>
-          Avem nevoie de permisiunea ta pentru a scana coduri de bare de pe produse.
+          {t('scanner.permisiuneDescriere')}
         </Text>
         <TouchableOpacity
           onPress={requestPermission}
           style={[styles.permBtn, { backgroundColor: colors.accent }]}
-          accessibilityLabel="Acordă permisiunea camerei"
+          accessibilityLabel={t('scanner.permisiuneAcordaA11y')}
           accessibilityRole="button"
         >
-          <Text style={styles.permBtnText}>Permite Accesul</Text>
+          <Text style={styles.permBtnText}>{t('scanner.permisiuneButon')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -197,11 +198,11 @@ export default function ScannerBarcodeScreen() {
   const handleAskGrokRecipes = () => {
     Haptics.selectionAsync();
     if (produse.length === 0) {
-      showBanner({ title: 'Cămara este goală', message: 'Scanează sau adaugă ingrediente înainte de a cere rețete AI.', type: 'warning' });
+      showBanner({ title: t('scanner.camaraGoala'), message: t('scanner.camaraGoalaMesaj'), type: 'warning' });
       return;
     }
     const ingredienteList = produse.map(p => `${p.nume} (${p.cantitate || 1}x${p.is_congelat ? ' - la congelator ❄️' : ''})`).join(', ');
-    const promptGrok = `Salut Grok! Am în Cămara Mea următoarele ingrediente: ${ingredienteList}. Ce rețete sănătoase, bogate în proteine și rapide pot găti astăzi folosind aceste alimente? Ține cont și de cele la congelator sau care expiră curând.`;
+    const promptGrok = t('scanner.promptGrokAI', { ingrediente: ingredienteList });
     router.push({
       pathname: '/(tabs)/chat',
       params: { prompt: promptGrok }
@@ -213,10 +214,10 @@ export default function ScannerBarcodeScreen() {
     return (
       <Pressable
         onPress={() => toggleCamaraSelect(item.id)}
-        style={[styles.pantryCard, { backgroundColor: colors.cardBg, borderColor: isSelected ? colors.accent : item.is_congelat ? '#00F0FF66' : colors.cardBorder }]}
+        style={[styles.pantryCard, { backgroundColor: colors.cardBg, borderColor: isSelected ? colors.accent : item.is_congelat ? colors.accentTertiary + '66' : colors.cardBorder }]}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isSelected }}
-        accessibilityLabel={`${item.nume}${isSelected ? ', selectat' : ''}. Selectează pentru rețete AI`}
+        accessibilityLabel={t('scanner.camaraCardA11y', { nume: item.nume, selectat: isSelected ? ', selectat' : '' })}
       >
         <TouchableOpacity
           onPress={() => toggleCamaraSelect(item.id)}
@@ -234,7 +235,7 @@ export default function ScannerBarcodeScreen() {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: isSelected }}
-          accessibilityLabel={isSelected ? `Deselectează ${item.nume}` : `Selectează ${item.nume}`}
+          accessibilityLabel={isSelected ? t('scanner.deselecteazaA11y', { nume: item.nume }) : t('scanner.selecteazaA11y', { nume: item.nume })}
         >
           {isSelected && <Check size={14} color={colors.background} strokeWidth={3} />}
         </TouchableOpacity>
@@ -242,17 +243,17 @@ export default function ScannerBarcodeScreen() {
         <View style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
           <View style={{ backgroundColor: colors.accent + '26', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
-            <Text style={{ fontSize: 11, fontWeight: '900', color: colors.accent }}>{item.cantitate || 1}x STACK</Text>
+            <Text style={{ fontSize: 11, fontWeight: '900', color: colors.accent }}>{item.cantitate || 1}x {t('scanner.stack')}</Text>
           </View>
           {item.is_congelat ? (
-            <View style={{ backgroundColor: '#00F0FF26', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Snowflake size={11} color="#00F0FF" />
-              <Text style={{ fontSize: 11, fontWeight: '800', color: '#00F0FF' }}>CONGELAT • ~90 zile</Text>
+            <View style={{ backgroundColor: colors.accentTertiary + '26', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Snowflake size={11} color={colors.accentTertiary} />
+              <Text style={{ fontSize: 11, fontWeight: '800', color: colors.accentTertiary }}>{t('scanner.congelatBadge')}</Text>
             </View>
           ) : (
             <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Clock size={11} color={colors.textSecondary} />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>Expiră în ~{item.zile_valabilitate || 14} zile</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>{t('scanner.expiraInZile', { zile: item.zile_valabilitate || 14 })}</Text>
             </View>
           )}
         </View>
@@ -273,7 +274,7 @@ export default function ScannerBarcodeScreen() {
           }}
           style={[styles.stackBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
           accessibilityRole="button"
-          accessibilityLabel={`Crește cantitatea pentru ${item.nume}`}
+          accessibilityLabel={t('scanner.cresteCantitateaA11y', { nume: item.nume })}
         >
           <Plus size={14} color={colors.textPrimary} />
         </TouchableOpacity>
@@ -284,18 +285,18 @@ export default function ScannerBarcodeScreen() {
             Haptics.selectionAsync();
             toggleCongelator(item.id);
           }}
-          style={[styles.stackBtn, { backgroundColor: item.is_congelat ? '#00F0FF26' : 'rgba(255,255,255,0.06)' }]}
+          style={[styles.stackBtn, { backgroundColor: item.is_congelat ? colors.accentTertiary + '26' : 'rgba(255,255,255,0.06)' }]}
           accessibilityRole="switch"
           accessibilityState={{ checked: item.is_congelat }}
-          accessibilityLabel={`${item.is_congelat ? 'Scoate din congelator' : 'Pune la congelator'} ${item.nume}`}
+          accessibilityLabel={item.is_congelat ? t('scanner.scoateDinCongelatorA11y', { nume: item.nume }) : t('scanner.puneLaCongelatorA11y', { nume: item.nume })}
         >
-          <Snowflake size={16} color={item.is_congelat ? '#00F0FF' : colors.textSecondary} />
+          <Snowflake size={16} color={item.is_congelat ? colors.accentTertiary : colors.textSecondary} />
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => handleAdaugaLaMasa(item)}
           style={[styles.addMasaBtn, { backgroundColor: colors.accent }]}
-          accessibilityLabel={`Adaugă ${item.nume} la masă`}
+          accessibilityLabel={t('scanner.adaugaLaMasaCamaraA11y', { nume: item.nume })}
           accessibilityRole="button"
         >
           <Plus size={18} color="#000" strokeWidth={3} />
@@ -304,7 +305,7 @@ export default function ScannerBarcodeScreen() {
         <TouchableOpacity
           onPress={() => stergeProdus(item.id)}
           style={[styles.deleteBtn, { backgroundColor: colors.danger + '1A' }]}
-          accessibilityLabel={`Șterge ${item.nume} din cămară`}
+          accessibilityLabel={t('scanner.stergeDinCamaraA11y', { nume: item.nume })}
           accessibilityRole="button"
         >
           <Trash2 size={16} color={colors.danger} />
@@ -317,12 +318,12 @@ export default function ScannerBarcodeScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Top Bar */}
-      <View style={styles.headerBar}>
+      <View style={[styles.headerBar, { paddingTop: insets.top + 14 }]}>
         <TouchableOpacity
           onPress={() => router.back()}
           hitSlop={12}
           style={[styles.navBtn, { backgroundColor: colors.surfaceBg }]}
-          accessibilityLabel="Înapoi"
+          accessibilityLabel={t('scanner.inapoiA11y')}
           accessibilityRole="button"
         >
           <ArrowLeft size={20} color={colors.textPrimary} />
@@ -337,10 +338,10 @@ export default function ScannerBarcodeScreen() {
             ]}
             accessibilityRole="button"
             accessibilityState={{ selected: activeTab === 'scan' }}
-            accessibilityLabel="Fila scanare cod de bare"
+            accessibilityLabel={t('scanner.filaScanareA11y')}
           >
             <Text style={[styles.tabText, { color: activeTab === 'scan' ? '#000' : colors.textPrimary }]}>
-              Scanare Barcode
+              {t('scanner.tabScanare')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -351,10 +352,10 @@ export default function ScannerBarcodeScreen() {
             ]}
             accessibilityRole="button"
             accessibilityState={{ selected: activeTab === 'camara' }}
-            accessibilityLabel={`Fila inventar cămară, ${produse.length} produse`}
+            accessibilityLabel={t('scanner.filaCamaraA11y', { numar: produse.length })}
           >
             <Text style={[styles.tabText, { color: activeTab === 'camara' ? '#000' : colors.textPrimary }]}>
-              Inventar ({produse.length})
+              {t('scanner.tabCamara', { numar: produse.length })}
             </Text>
           </TouchableOpacity>
         </View>
@@ -364,7 +365,7 @@ export default function ScannerBarcodeScreen() {
         <View style={styles.cameraWrap}>
           <CameraView
             testID="barcode-scanner-camera"
-            accessibilityLabel="Scanner cod de bare"
+            accessibilityLabel={t('scanner.scannerA11y')}
             style={StyleSheet.absoluteFill}
             barcodeScannerSettings={{
               barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'],
@@ -379,7 +380,7 @@ export default function ScannerBarcodeScreen() {
           <View style={styles.viewfinderOverlay}>
             <View style={[styles.targetBox, { borderColor: colors.accent }]} />
             <Text style={[styles.scanHint, { color: '#FFF' }]}>
-              Îndreaptă camera către codul de bare al produsului
+              {t('scanner.scanHint')}
             </Text>
           </View>
 
@@ -387,7 +388,7 @@ export default function ScannerBarcodeScreen() {
             <BlurView intensity={40} tint="dark" style={styles.loadingOverlay}>
               <ActivityIndicator size="large" color={colors.accent} />
               <Text style={[styles.loadingText, { color: colors.textPrimary }]}>
-                Căutăm produsul (Bază locală • Cache • AI)...
+                {t('scanner.cautamProdusul')}
               </Text>
             </BlurView>
           )}
@@ -407,7 +408,7 @@ export default function ScannerBarcodeScreen() {
                     lockRef.current = false;
                   }}
                   style={styles.resClose}
-                  accessibilityLabel="Închide detaliile produsului scanat"
+                  accessibilityLabel={t('scanner.inchideDetaliiA11y')}
                   accessibilityRole="button"
                   hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                 >
@@ -416,12 +417,12 @@ export default function ScannerBarcodeScreen() {
               </View>
 
               {Boolean(produsGasit.estimat || produsGasit.sursa === 'estimare_ai') && (
-                <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#F59E0B' }}>
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#F59E0B', marginBottom: 2 }}>
-                    ⚠️ Valori Estimate de Inteligența Artificială
+                <View style={{ backgroundColor: colors.warning + '26', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: colors.warning }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.warning, marginBottom: 2 }}>
+                    {t('scanner.valoriEstimateAI')}
                   </Text>
                   <Text style={{ fontSize: 11, color: colors.textSecondary, lineHeight: 15 }}>
-                    Acest produs nu a fost găsit în baza oficială. Valorile nutriționale și gramajul au fost generate de modelul AI și trebuie verificate înainte de adăugarea în jurnal.
+                    {t('scanner.valoriEstimateAIDescriere')}
                   </Text>
                 </View>
               )}
@@ -433,29 +434,33 @@ export default function ScannerBarcodeScreen() {
                 </View>
                 <View style={styles.macroBox}>
                   <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{produsGasit.proteine_100g}g</Text>
-                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Proteine</Text>
+                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>{t('scanner.macroProteine')}</Text>
                 </View>
                 <View style={styles.macroBox}>
                   <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{produsGasit.carbohidrati_100g}g</Text>
-                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Carbi</Text>
+                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>{t('scanner.macroCarbohidrati')}</Text>
                 </View>
                 <View style={styles.macroBox}>
                   <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{produsGasit.grasimi_100g}g</Text>
-                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Grăsimi</Text>
+                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>{t('scanner.macroGrasimi')}</Text>
                 </View>
               </View>
 
               {/* Profil Aminoacizi Esențiali & BCAA */}
               {produsGasit.proteine_100g > 0 && (
-                <View style={{ backgroundColor: 'rgba(0, 240, 255, 0.08)', borderRadius: 14, padding: 12, marginVertical: 12, borderWidth: 1, borderColor: 'rgba(0, 240, 255, 0.25)' }}>
+                <View style={{ backgroundColor: colors.accentTertiary + '14', borderRadius: 14, padding: 12, marginVertical: 12, borderWidth: 1, borderColor: colors.accentTertiary + '40' }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#00F0FF' }}>⚡ Profil Aminoacizi (EAA • BCAA)</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.accentTertiary }}>{t('scanner.profilAminoacizi')}</Text>
                     <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>
-                      ~{Math.round(produsGasit.proteine_100g * 184)} mg BCAA
+                      {t('scanner.bcaaMg', { mg: Math.round(produsGasit.proteine_100g * 184) })}
                     </Text>
                   </View>
                   <Text style={{ fontSize: 11, color: colors.textSecondary, lineHeight: 15 }}>
-                    Leucină ~{Math.round(produsGasit.proteine_100g * 82)}mg • Izoleucină ~{Math.round(produsGasit.proteine_100g * 48)}mg • Valină ~{Math.round(produsGasit.proteine_100g * 54)}mg per 100g. Profil complet în Jurnal.
+                    {t('scanner.profilAminoaciziDetalii', {
+                      leucina: Math.round(produsGasit.proteine_100g * 82),
+                      izoleucina: Math.round(produsGasit.proteine_100g * 48),
+                      valina: Math.round(produsGasit.proteine_100g * 54),
+                    })}
                   </Text>
                 </View>
               )}
@@ -465,18 +470,18 @@ export default function ScannerBarcodeScreen() {
                   onPress={handleSalveazaInCamara}
                   style={[styles.actionBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                   accessibilityRole="button"
-                  accessibilityLabel={`Salvează ${produsGasit.nume} în cămară`}
+                  accessibilityLabel={t('scanner.salveazaInCamaraA11y', { nume: produsGasit.nume })}
                 >
-                  <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>+ În Cămară</Text>
+                  <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>{t('scanner.inCamara')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   onPress={() => handleAdaugaLaMasa(produsGasit)}
                   style={[styles.actionBtnPrimary, { backgroundColor: colors.accent }]}
                   accessibilityRole="button"
-                  accessibilityLabel={`Adaugă ${produsGasit.nume} la masă în grame`}
+                  accessibilityLabel={t('scanner.adaugaLaMasaGrameA11y', { nume: produsGasit.nume })}
                 >
-                  <Text style={styles.actionPrimaryText}>Adaugă la Masă (g)</Text>
+                  <Text style={styles.actionPrimaryText}>{t('scanner.adaugaLaMasa')}</Text>
                 </TouchableOpacity>
               </View>
             </BlurView>
@@ -486,8 +491,8 @@ export default function ScannerBarcodeScreen() {
             <BlurView intensity={70} tint="dark" style={[styles.resultCard, { borderColor: colors.warning }]}>
               <View style={styles.resHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.resTitle, { color: colors.textPrimary }]}>Produs negăsit în baza de date</Text>
-                  <Text style={[styles.resBrand, { color: colors.textSecondary }]}>Ultimul cod scanat: {codNegasit}</Text>
+                  <Text style={[styles.resTitle, { color: colors.textPrimary }]}>{t('scanner.produsNegasit')}</Text>
+                  <Text style={[styles.resBrand, { color: colors.textSecondary }]}>{t('scanner.ultimulCod', { cod: codNegasit })}</Text>
                 </View>
                 <TouchableOpacity
                   onPress={() => {
@@ -495,7 +500,7 @@ export default function ScannerBarcodeScreen() {
                     lockRef.current = false;
                   }}
                   style={styles.resClose}
-                  accessibilityLabel="Închide detaliile codului negăsit"
+                  accessibilityLabel={t('scanner.inchideCodNegasitA11y')}
                   accessibilityRole="button"
                   hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                 >
@@ -504,7 +509,7 @@ export default function ScannerBarcodeScreen() {
               </View>
 
               <Text style={{ color: colors.textSecondary, fontSize: 13, marginVertical: 10 }}>
-                Nu am găsit acest produs în catalog sau OpenFoodFacts. Îl poți adăuga manual la masă sau poți estima valorile după nume.
+                {t('scanner.produsNegasitDescriere')}
               </Text>
 
               <View style={styles.resActions}>
@@ -516,9 +521,9 @@ export default function ScannerBarcodeScreen() {
                   }}
                   style={[styles.actionBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                   accessibilityRole="button"
-                  accessibilityLabel="Completează produsul manual"
+                  accessibilityLabel={t('scanner.completeazaManualA11y')}
                 >
-                  <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>Completează manual</Text>
+                  <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>{t('scanner.completeazaManual')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -527,7 +532,7 @@ export default function ScannerBarcodeScreen() {
                     setCodNegasit(null);
                     lockRef.current = false;
                     addMealSheetRef.current?.openWithItem({
-                      nume: `Produs EAN ${cod}`,
+                      nume: t('scanner.produsEAN', { cod }),
                       calorii: 100,
                       proteine: 5,
                       carbohidrati: 15,
@@ -537,9 +542,9 @@ export default function ScannerBarcodeScreen() {
                   }}
                   style={[styles.actionBtnPrimary, { backgroundColor: colors.accent }]}
                   accessibilityRole="button"
-                  accessibilityLabel="Estimează valorile produsului după nume"
+                  accessibilityLabel={t('scanner.estimeazaValoriA11y')}
                 >
-                  <Text style={styles.actionPrimaryText}>Estimează după nume</Text>
+                  <Text style={styles.actionPrimaryText}>{t('scanner.estimeazaDupaNume')}</Text>
                 </TouchableOpacity>
               </View>
             </BlurView>
@@ -558,16 +563,16 @@ export default function ScannerBarcodeScreen() {
                 gap: 8,
                 paddingVertical: 12,
                 borderRadius: 16,
-                backgroundColor: '#00F0FF1F',
+                backgroundColor: colors.accentTertiary + '1F',
                 borderWidth: 1.5,
-                borderColor: '#00F0FF'
+                borderColor: colors.accentTertiary
               }}
               accessibilityRole="button"
-              accessibilityLabel="Cere rețete AI cu ingredientele din cămară"
+              accessibilityLabel={t('scanner.reteteAIA11y')}
             >
-              <ChefHat size={18} color="#00F0FF" />
-              <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#00F0FF' }}>
-                Rețete AI Grok cu ingredientele din Cămară
+              <ChefHat size={18} color={colors.accentTertiary} />
+              <Text style={{ fontSize: 13.5, fontWeight: '900', color: colors.accentTertiary }}>
+                {t('scanner.reteteAIGrok')}
               </Text>
             </TouchableOpacity>
 
@@ -586,11 +591,11 @@ export default function ScannerBarcodeScreen() {
                 borderColor: colors.cardBorder
               }}
               accessibilityRole="button"
-              accessibilityLabel="Adaugă produs manual în cămară"
+              accessibilityLabel={t('scanner.adaugaProdusManualA11y')}
             >
               <Plus size={16} color={colors.accent} />
               <Text style={{ fontSize: 13, fontWeight: '800', color: colors.textPrimary }}>
-                + Adaugă Produs Manual (Ouă, Carne, Legume...)
+                {t('scanner.adaugaProdusManual')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -604,18 +609,18 @@ export default function ScannerBarcodeScreen() {
               <View style={styles.emptyPantry}>
                 <Package size={48} color={colors.textTertiary} />
                 <Text style={[styles.emptyPTitle, { color: colors.textPrimary }]}>
-                  Cămara ta este goală
+                  {t('scanner.camaraGoalaTitlu')}
                 </Text>
                 <Text style={[styles.emptyPSub, { color: colors.textSecondary }]}>
-                  Scanează codurile de bare ale produselor tale preferate pentru a le adăuga aici.
+                  {t('scanner.camaraGoalaDescriere')}
                 </Text>
                 <TouchableOpacity
                   onPress={() => setActiveTab('scan')}
                   style={[styles.emptyPBtn, { backgroundColor: colors.accent }]}
                   accessibilityRole="button"
-                  accessibilityLabel="Scanează primul produs"
+                  accessibilityLabel={t('scanner.scaneazaPrimulA11y')}
                 >
-                  <Text style={styles.emptyPBtnText}>Scanează Primul Produs</Text>
+                  <Text style={styles.emptyPBtnText}>{t('scanner.scaneazaPrimul')}</Text>
                 </TouchableOpacity>
               </View>
             }
@@ -655,11 +660,11 @@ export default function ScannerBarcodeScreen() {
                   onPress={handleGateateCuAICamara}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel={`Gătește cu AI folosind ${selectedCamaraItems.length} ingrediente selectate`}
+                  accessibilityLabel={t('scanner.gatesteAIA11y', { numar: selectedCamaraItems.length })}
                 >
                   <Wand2 size={18} color="#000" strokeWidth={2.5} />
                   <Text style={{ fontSize: 15, fontWeight: '800', color: '#000' }}>
-                    Gătește cu AI ({selectedCamaraItems.length})
+                    {t('scanner.gatesteAI', { numar: selectedCamaraItems.length })}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -684,9 +689,9 @@ export default function ScannerBarcodeScreen() {
             <View style={[styles.successIconBubble, { backgroundColor: colors.accent + '22', borderColor: colors.accent }]}>
               <CheckCircle2 size={44} color={colors.accent} />
             </View>
-            <Text style={[styles.successModalTitle, { color: colors.textPrimary }]}>Salvat în Cămară!</Text>
+            <Text style={[styles.successModalTitle, { color: colors.textPrimary }]}>{t('scanner.salvatInCamara')}</Text>
             <Text style={[styles.successModalSubtitle, { color: colors.textSecondary }]}>
-              {camaraSuccessModal.produs?.nume} a fost adăugat cu succes în cămara ta digitală.
+              {t('scanner.salvatInCamaraDescriere', { nume: camaraSuccessModal.produs?.nume })}
             </Text>
 
             {camaraSuccessModal.produs && (
@@ -708,9 +713,9 @@ export default function ScannerBarcodeScreen() {
                   lockRef.current = false;
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="Continuă scanarea codurilor de bare"
+                accessibilityLabel={t('scanner.continuaScanareaA11y')}
               >
-                <Text style={[styles.successBtnSecondaryText, { color: colors.textPrimary }]}>Continuă Scanarea</Text>
+                <Text style={[styles.successBtnSecondaryText, { color: colors.textPrimary }]}>{t('scanner.continuaScanarea')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -721,10 +726,10 @@ export default function ScannerBarcodeScreen() {
                   setActiveTab('camara');
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="Vezi cămara"
+                accessibilityLabel={t('scanner.veziCamaraA11y')}
               >
                 <ShoppingBag size={18} color="#000" />
-                <Text style={styles.successBtnPrimaryText}>Vezi Cămara</Text>
+                <Text style={styles.successBtnPrimaryText}>{t('scanner.veziCamara')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -742,23 +747,23 @@ export default function ScannerBarcodeScreen() {
           <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
           <View style={[styles.successModalCard, { backgroundColor: colors.surfaceBg, borderColor: colors.accent, width: '92%' }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 14 }}>
-              <Text style={{ fontSize: 18, fontWeight: '900', color: colors.textPrimary }}>+ Adaugă Produs Manual</Text>
-              <TouchableOpacity onPress={() => setManualModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} accessibilityRole="button" accessibilityLabel="Închide adăugarea manuală">
+              <Text style={{ fontSize: 18, fontWeight: '900', color: colors.textPrimary }}>{t('scanner.adaugaProdusManualTitlu')}</Text>
+              <TouchableOpacity onPress={() => setManualModalVisible(false)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} accessibilityRole="button" accessibilityLabel={t('scanner.inchideAdaugareA11y')}>
                 <X size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <Text style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 14, textAlign: 'center' }}>
-              Alege o presetare rapidă sau adaugă ingrediente fără cod de bare (ex. Ouă, Carne, Legume proaspete).
+              {t('scanner.alegePresetare')}
             </Text>
 
             <View style={{ gap: 8, width: '100%', marginBottom: 20 }}>
               {[
-                { nume: 'Ouă proaspete (10 buc)', cal: 155, p: 13, c: 1, g: 11, exp: 14, cong: false },
-                { nume: 'Carne de pui piept proaspăt (500g)', cal: 165, p: 31, c: 0, g: 3.6, exp: 90, cong: true },
-                { nume: 'Carne de vită slabă (500g)', cal: 250, p: 26, c: 0, g: 15, exp: 90, cong: true },
-                { nume: 'Brânză de vaci slabă (300g)', cal: 98, p: 18, c: 3.5, g: 1.2, exp: 10, cong: false },
-                { nume: 'Legume proaspete mix (1 kg)', cal: 45, p: 2, c: 9, g: 0.3, exp: 7, cong: false },
+                { nume: t('scanner.presetOua'), cal: 155, p: 13, c: 1, g: 11, exp: 14, cong: false },
+                { nume: t('scanner.presetPui'), cal: 165, p: 31, c: 0, g: 3.6, exp: 90, cong: true },
+                { nume: t('scanner.presetVita'), cal: 250, p: 26, c: 0, g: 15, exp: 90, cong: true },
+                { nume: t('scanner.presetBranza'), cal: 98, p: 18, c: 3.5, g: 1.2, exp: 10, cong: false },
+                { nume: t('scanner.presetLegume'), cal: 45, p: 2, c: 9, g: 0.3, exp: 7, cong: false },
               ].map((preset, idx) => (
                 <TouchableOpacity
                   key={idx}
@@ -776,25 +781,25 @@ export default function ScannerBarcodeScreen() {
                       { zileValabilitate: preset.exp, isCongelat: preset.cong, cantitate: 1 }
                     );
                     setManualModalVisible(false);
-                    showBanner({ title: 'Produs Adăugat', message: `✅ ${preset.nume} a fost adăugat în Cămară!`, type: 'success' });
+                    showBanner({ title: t('scanner.produsAdaugat'), message: t('scanner.produsAdaugatMesaj', { nume: preset.nume }), type: 'success' });
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Adaugă ${preset.nume} în cămară`}
+                  accessibilityLabel={t('scanner.adaugaPresetA11y', { nume: preset.nume })}
                   style={{
                     flexDirection: 'row',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: 14,
                     borderRadius: 14,
-                    backgroundColor: preset.cong ? '#00F0FF14' : colors.cardBg,
+                    backgroundColor: preset.cong ? colors.accentTertiary + '14' : colors.cardBg,
                     borderWidth: 1,
-                    borderColor: preset.cong ? '#00F0FF40' : colors.cardBorder
+                    borderColor: preset.cong ? colors.accentTertiary + '40' : colors.cardBorder
                   }}
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14, fontWeight: '800', color: colors.textPrimary }}>{preset.nume}</Text>
                     <Text style={{ fontSize: 12, color: colors.accent, marginTop: 2 }}>
-                      {preset.cal} kcal • P: {preset.p}g {preset.cong ? '• ❄️ CONGELATOR' : `• ⏳ ~${preset.exp} zile`}
+                      {t('scanner.presetCalProt', { cal: preset.cal, p: preset.p })}{preset.cong ? t('scanner.congelator') : t('scanner.expiraZile', { zile: preset.exp })}
                     </Text>
                   </View>
                   <Plus size={18} color={colors.accent} />
@@ -819,11 +824,11 @@ export default function ScannerBarcodeScreen() {
                   gap: 8,
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="Introdu alt produs complet manual"
+                accessibilityLabel={t('scanner.introduAltProdusA11y')}
               >
                 <Plus size={18} color={colors.accent} />
                 <Text style={{ fontSize: 14, fontWeight: '800', color: colors.accent }}>
-                  Introdu alt produs complet manual
+                  {t('scanner.introduAltProdus')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -860,8 +865,8 @@ export default function ScannerBarcodeScreen() {
               );
               setFullManualModalVisible(false);
               showBanner({
-                title: 'Produs Adăugat',
-                message: `✅ ${prod.name} a fost adăugat în Cămară!`,
+                title: t('scanner.produsAdaugat'),
+                message: t('scanner.produsAdaugatMesaj', { nume: prod.name }),
                 type: 'success',
               });
             }}
@@ -887,7 +892,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 54 : 30,
     paddingBottom: 14,
     gap: 12,
     zIndex: 10,

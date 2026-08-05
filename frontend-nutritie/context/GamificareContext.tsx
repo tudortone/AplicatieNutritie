@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import { API_URL } from '../constants/config';
@@ -162,36 +162,70 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
     stareRef.current = stare;
   });
 
+  // Persistența e debounced (500ms): înainte, fiecare progres făcea serial
+  // JSON.stringify + AsyncStorage + getSession + fetch POST. Upsert-ul e idempotent
+  // (xpTotal/streak/questuri/insigne), deci ultima stare dintr-o fereastră de 500ms
+  // se scrie o singură dată și o acoperă pe toate.
+  const persistRef = useRef<StareGamificare | null>(null);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const schedulePersist = useCallback((newState: StareGamificare) => {
+    persistRef.current = newState;
+    if (persistTimerRef.current) return;
+    persistTimerRef.current = setTimeout(async () => {
+      persistTimerRef.current = null;
+      const dePersistat = persistRef.current;
+      persistRef.current = null;
+      if (!dePersistat) return;
+      try {
+        await AsyncStorage.setItem(GAMIFICARE_STORAGE_KEY, JSON.stringify(dePersistat));
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.user) {
+          // Scrierea trece prin backend (service_role + validare server-side, nivel
+          // recalculat din XP); tabelul are RLS SELECT-only (P2.8).
+          await fetch(`${API_URL}/api/gamificare`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              xpTotal: dePersistat.xpTotal,
+              streak: dePersistat.streak,
+              ultimaZiActiva: dePersistat.ultimaZiActiva,
+              questuriAzi: dePersistat.questuriAzi,
+              insigne: dePersistat.insigne,
+            }),
+          });
+        }
+      } catch (err) {
+        // Logheaza eroarea de salvare în loc de fail silent complet (XP se pierdea invizibil offline)
+        console.warn('[Gamificare] saveStare a eșuat (offline sau RLS):', err);
+      }
+    }, 500);
+  }, []);
+
   const saveStare = useCallback(async (newState: StareGamificare) => {
     setStare(newState);
-    try {
-      await AsyncStorage.setItem(GAMIFICARE_STORAGE_KEY, JSON.stringify(newState));
+    schedulePersist(newState);
+  }, [schedulePersist]);
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.user) {
-        // Scrierea trece prin backend (service_role + validare server-side, nivel
-        // recalculat din XP); tabelul are RLS SELECT-only (P2.8).
-        await fetch(`${API_URL}/api/gamificare`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            xpTotal: newState.xpTotal,
-            streak: newState.streak,
-            ultimaZiActiva: newState.ultimaZiActiva,
-            questuriAzi: newState.questuriAzi,
-            insigne: newState.insigne,
-          }),
-        });
+  // La unmount scriem best-effort ultima stare pending în AsyncStorage, ca să nu
+  // pierdem progresul din ultimii 500ms la închiderea ecranului sau a aplicației.
+  useEffect(() => {
+    return () => {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current);
+        const pending = persistRef.current;
+        persistRef.current = null;
+        if (pending) {
+          AsyncStorage.setItem(GAMIFICARE_STORAGE_KEY, JSON.stringify(pending)).catch(() => {});
+        }
       }
-    } catch (err) {
-      // Logheaza eroarea de salvare în loc de fail silent complet (XP se pierdea invizibil offline)
-      console.warn('[Gamificare] saveStare a eșuat (offline sau RLS):', err);
-    }
+    };
   }, []);
 
   const initSauCheckZiNoua = useCallback(
@@ -430,8 +464,11 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
     });
   }, [saveStare, showNotification]);
 
-  const detaliiNivel = calculeazaNivel(stare.xpTotal);
-  const toateQuesturileCompletate = stare.questuriAzi.every((q) => q.completat);
+  const detaliiNivel = useMemo(() => calculeazaNivel(stare.xpTotal), [stare.xpTotal]);
+  const toateQuesturileCompletate = useMemo(
+    () => stare.questuriAzi.every((q) => q.completat),
+    [stare.questuriAzi],
+  );
 
   const value = React.useMemo(() => ({
     ...stare,

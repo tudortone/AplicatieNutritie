@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Plus, Check, Trash2 } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
 import type { SetExercitiu, SetType } from '../../hooks/useAntrenamente';
 
@@ -13,6 +14,7 @@ interface SetLoggerProps {
 
 export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLoggerProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   
   const [sets, setSets] = useState<SetExercitiu[]>(
     initialSets.length > 0 ? initialSets : [{ serie: 1, repetari: 10, greutate: 0, set_type: 'working', rpe: 8, completed: false }]
@@ -133,26 +135,58 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
           </View>
 
           <View style={[styles.colExtra, styles.rpeWrap, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
-            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.min(10, (set.rpe || 8) + 1))}>
+            <TouchableOpacity
+              onPress={() => updateSet(idx, 'rpe', Math.min(10, (set.rpe || 8) + 1))}
+              disabled={(set.rpe || 8) >= 10}
+              accessibilityRole="button"
+              accessibilityLabel={t('a11y.setLogger.increaseRpe')}
+              accessibilityState={{ disabled: (set.rpe || 8) >= 10 }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <Text style={[styles.rpeArrow, { color: colors.textTertiary }]}>▲</Text>
             </TouchableOpacity>
             <Text style={[styles.stepVal, { color: colors.warning }]}>{set.rpe || 8}</Text>
-            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.max(1, (set.rpe || 8) - 1))}>
+            <TouchableOpacity
+              onPress={() => updateSet(idx, 'rpe', Math.max(1, (set.rpe || 8) - 1))}
+              disabled={(set.rpe || 8) <= 1}
+              accessibilityRole="button"
+              accessibilityLabel={t('a11y.setLogger.decreaseRpe')}
+              accessibilityState={{ disabled: (set.rpe || 8) <= 1 }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <Text style={[styles.rpeArrow, { color: colors.textTertiary }]}>▼</Text>
             </TouchableOpacity>
           </View>
 
           <View style={[styles.colAction, styles.actionsWrap]}>
             {!set.completed ? (
-              <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: withAlpha(colors.accent, 0.13) }]}>
+              <TouchableOpacity
+                onPress={() => toggleComplete(idx)}
+                style={[styles.actionBtn, { backgroundColor: withAlpha(colors.accent, 0.13) }]}
+                accessibilityRole="checkbox"
+                accessibilityLabel={t('a11y.setLogger.complete')}
+                accessibilityState={{ checked: false }}
+              >
                 <Check size={18} color={colors.accent} />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: colors.success }]}>
+              <TouchableOpacity
+                onPress={() => toggleComplete(idx)}
+                style={[styles.actionBtn, { backgroundColor: colors.success }]}
+                accessibilityRole="checkbox"
+                accessibilityLabel={t('a11y.setLogger.complete')}
+                accessibilityState={{ checked: true }}
+              >
                 <Check size={18} color={colors.background} />
               </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={() => removeSet(idx)} style={{ padding: 4 }}>
+            <TouchableOpacity
+              onPress={() => removeSet(idx)}
+              style={{ padding: 4 }}
+              accessibilityRole="button"
+              accessibilityLabel={t('a11y.setLogger.delete')}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Trash2 size={16} color={colors.danger} opacity={0.7} />
             </TouchableOpacity>
           </View>

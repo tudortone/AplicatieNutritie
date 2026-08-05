@@ -8,6 +8,7 @@ import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
 import { Minus, Plus, AlertTriangle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { useNotify } from '../../hooks/useNotify';
 import type { MeasurementSpec } from '../../lib/measurement';
 
@@ -32,6 +33,8 @@ function Stepper({
   onInc,
   suffix,
   isDecimal = false,
+  decDisabled = false,
+  incDisabled = false,
 }: {
   label: string;
   value: number;
@@ -40,8 +43,11 @@ function Stepper({
   onInc: () => void;
   suffix?: string;
   isDecimal?: boolean;
+  decDisabled?: boolean;
+  incDisabled?: boolean;
 }) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   return (
     <View style={styles.field}>
       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
@@ -52,6 +58,9 @@ function Stepper({
           onPress={onDec}
           style={[styles.stepBtn, { borderColor: colors.border }]}
           hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={t('a11y.seriesConfigurator.decrease', { label })}
+          accessibilityState={{ disabled: decDisabled }}
         >
           <Minus size={16} color={colors.textPrimary} />
         </Pressable>
@@ -77,6 +86,9 @@ function Stepper({
           onPress={onInc}
           style={[styles.stepBtn, { borderColor: colors.border }]}
           hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={t('a11y.seriesConfigurator.increase', { label })}
+          accessibilityState={{ disabled: incDisabled }}
         >
           <Plus size={16} color={colors.textPrimary} />
         </Pressable>
@@ -129,6 +141,8 @@ export function SeriesConfigurator({ spec, value, onChange }: Props) {
         <Stepper
           label="Serii"
           value={value.sets}
+          decDisabled={value.sets <= 1}
+          incDisabled={value.sets >= 50}
           onChangeVal={(val) => set({ sets: Math.max(1, Math.min(50, val)) })}
           onDec={() => {
             Haptics.selectionAsync();
@@ -147,6 +161,8 @@ export function SeriesConfigurator({ spec, value, onChange }: Props) {
           <Stepper
             label={spec.unitLabel}
             value={value.reps}
+            decDisabled={value.reps <= 1}
+            incDisabled={value.reps >= 100}
             onChangeVal={(val) => set({ reps: Math.max(1, Math.min(100, val)) })}
             onDec={() => {
               Haptics.selectionAsync();
@@ -167,6 +183,8 @@ export function SeriesConfigurator({ spec, value, onChange }: Props) {
             label="Secunde / serie"
             value={value.durationSec}
             suffix="s"
+            decDisabled={value.durationSec <= 5}
+            incDisabled={value.durationSec >= 7200}
             onDec={() => {
               Haptics.selectionAsync();
               set({ durationSec: Math.max(5, value.durationSec - 5) });

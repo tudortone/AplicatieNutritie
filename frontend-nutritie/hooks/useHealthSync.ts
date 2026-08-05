@@ -3,6 +3,7 @@ import { Platform, AppState, AppStateStatus } from 'react-native';
 import { Pedometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import i18n from '@/i18n';
 
 const HEALTH_SYNC_ENABLED_KEY = 'health_sync_enabled';
 const STEP_GOAL_KEY = 'health_step_goal';
@@ -19,11 +20,11 @@ export interface HealthProviderInfo {
 }
 
 export const HEALTH_PROVIDERS: HealthProviderInfo[] = [
-  { id: 'google_fit', name: 'Google Fit', icon: '🟢', description: 'Sincronizare cu serviciile Google Health' },
-  { id: 'samsung_health', name: 'Samsung Health', icon: '🔵', description: 'Conectare cu ceasuri Galaxy și Samsung Health' },
-  { id: 'apple_health', name: 'Apple Health', icon: '🍎', description: 'Integrare cu Apple Watch și HealthKit' },
-  { id: 'smartwatch', name: 'Brățară / Smartwatch', icon: '⌚', description: 'Garmin, Fitbit, Xiaomi, Huawei Health' },
-  { id: 'general', name: 'Senzor Telefon (General)', icon: '📱', description: 'Pedometer intern pe telefon' },
+  { id: 'google_fit', name: 'Google Fit', icon: '🟢', description: i18n.t('healthSync.descGoogle') },
+  { id: 'samsung_health', name: 'Samsung Health', icon: '🔵', description: i18n.t('healthSync.descSamsung') },
+  { id: 'apple_health', name: 'Apple Health', icon: '🍎', description: i18n.t('healthSync.descApple') },
+  { id: 'smartwatch', name: i18n.t('healthSync.nameSmartwatch'), icon: '⌚', description: i18n.t('healthSync.descSmartwatch') },
+  { id: 'general', name: i18n.t('healthSync.nameGeneral'), icon: '📱', description: i18n.t('healthSync.descGeneral') },
 ];
 
 export interface HealthSyncState {

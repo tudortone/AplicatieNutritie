@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
 import {
   EMPTY_REWARD_STATE,
@@ -8,6 +8,7 @@ import {
   type RewardState,
 } from '../../lib/questsEngine';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 export type DailyQuestsCardProps = {
   snapshot: DailySnapshot;
@@ -37,12 +38,24 @@ function formatCountdown(milliseconds: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+// Countdown-ul HH:MM:SS se auto-ticăie aici: înainte, setInterval la 1s re-randa
+// întregul card (toate questurile) de 60×/min. Acum doar acest <Text> se actualizează.
+function CountdownText({ color }: { color: string }) {
+  const { t } = useTranslation();
+  const [remainingMs, setRemainingMs] = useState(() => msUntilMidnight());
+  useEffect(() => {
+    const id = setInterval(() => setRemainingMs(msUntilMidnight()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <Text style={[styles.resetText, { color }]}>{t('quests.resetIn', { timp: formatCountdown(remainingMs) })}</Text>;
+}
+
 export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [quests, setQuests] = useState<Quest[]>([]);
   const [reward, setReward] = useState<RewardState>(EMPTY_REWARD_STATE);
   const [xpToday, setXpToday] = useState(0);
-  const [remainingMs, setRemainingMs] = useState(() => msUntilMidnight());
   const [activeDay, setActiveDay] = useState(() => localDayKey());
 
   const refresh = useCallback(async () => {
@@ -56,11 +69,12 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
     let alive = true;
     refresh().catch((error) => console.warn('[Questuri] Sincronizare eșuată:', error));
 
+    // Rolul intervalului e doar detectarea trecerii zilei (regenerare questuri);
+    // countdown-ul HH:MM:SS s-a mutat în <CountdownText>, care se re-randează
+    // singur la 1s, fără să re-randeze întregul card.
     const tick = () => {
       if (!alive) return;
-      const now = new Date();
-      const nextDay = localDayKey(now);
-      setRemainingMs(msUntilMidnight(now));
+      const nextDay = localDayKey(new Date());
       if (nextDay !== activeDay) {
         setActiveDay(nextDay);
         // syncProgress vede cheia zilei noi și generează automat alte questuri,
@@ -69,7 +83,7 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
       }
     };
 
-    const interval = setInterval(tick, 1000);
+    const interval = setInterval(tick, 60_000);
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') tick();
     });
@@ -81,14 +95,13 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
   }, [activeDay, refresh]);
 
   const doneCount = quests.filter((q) => q.done).length;
-  const resetLabel = useMemo(() => formatCountdown(remainingMs), [remainingMs]);
 
   return (
     <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Questuri zilnice</Text>
-          <Text style={[styles.resetText, { color: colors.textTertiary }]}>Reset în {resetLabel}</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{t('quests.title')}</Text>
+          <CountdownText color={colors.textTertiary} />
         </View>
         <Text style={[styles.counter, { color: colors.accent }]}>
           {doneCount}/{quests.length} · {xpToday} XP
@@ -96,7 +109,7 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
       </View>
 
       {quests.length === 0 ? (
-        <Text style={[styles.loading, { color: colors.textSecondary }]}>Se generează questurile zilei…</Text>
+        <Text style={[styles.loading, { color: colors.textSecondary }]}>{t('quests.generating')}</Text>
       ) : quests.map((q) => (
         <View key={q.id} style={styles.quest}>
           <Text style={styles.questIcon}>{q.icon}</Text>
@@ -125,8 +138,8 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
       {!compact ? (
         <View style={[styles.streakBox, { borderColor: colors.cardBorder }]}>
           <View style={styles.streakRow}>
-            <Text style={[styles.streakLabel, { color: colors.textSecondary }]}>🔥 Serie: {reward.streak} zile</Text>
-            <Text style={[styles.streakLabel, { color: colors.textTertiary }]}>Record: {reward.bestStreak}</Text>
+            <Text style={[styles.streakLabel, { color: colors.textSecondary }]}>{t('quests.streak', { zile: reward.streak })}</Text>
+            <Text style={[styles.streakLabel, { color: colors.textTertiary }]}>{t('quests.bestStreak', { record: reward.bestStreak })}</Text>
           </View>
         </View>
       ) : null}

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp, FadeOutDown } from 'react-native-reanimated';
 import { Scale, X, Check, Target } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 interface AddWeightModalProps {
   visible: boolean;
@@ -26,6 +27,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
   initialTab = 'curenta',
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { width } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<'curenta' | 'tinta'>(initialTab);
   const [inputVal, setInputVal] = useState(greutateCurenta.toString());
@@ -71,7 +73,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
         <Animated.View entering={FadeInUp.duration(350).springify()} exiting={FadeOutDown.duration(250)} style={[styles.modalCard, { width: width - 40, backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
@@ -95,7 +97,13 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
                 </Text>
               </View>
             </View>
-            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} onPress={onClose} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+            <TouchableOpacity
+              style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]}
+              onPress={onClose}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+              accessibilityRole="button"
+              accessibilityLabel={t('a11y.addWeight.close')}
+            >
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -106,6 +114,9 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
               <TouchableOpacity
                 style={[styles.tabBtn, activeTab === 'curenta' && { backgroundColor: colors.accentSecondary }]}
                 onPress={() => handleTabSwitch('curenta')}
+                accessibilityRole="tab"
+                accessibilityLabel={t('a11y.addWeight.tabCurrent', { greutate: greutateCurenta })}
+                accessibilityState={{ selected: activeTab === 'curenta' }}
               >
                 <Text style={[styles.tabText, { color: activeTab === 'curenta' ? colors.background : colors.textSecondary }]}>
                   ⚖️ Curentă ({greutateCurenta} kg)
@@ -114,6 +125,9 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
               <TouchableOpacity
                 style={[styles.tabBtn, activeTab === 'tinta' && { backgroundColor: colors.accent }]}
                 onPress={() => handleTabSwitch('tinta')}
+                accessibilityRole="tab"
+                accessibilityLabel={t('a11y.addWeight.tabTarget', { greutate: greutateTinta })}
+                accessibilityState={{ selected: activeTab === 'tinta' }}
               >
                 <Text style={[styles.tabText, { color: activeTab === 'tinta' ? '#000000' : colors.textSecondary }]}>
                   🎯 Țintă ({greutateTinta} kg)
@@ -165,7 +179,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
           </TouchableOpacity>
 
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -187,7 +201,7 @@ const styles = StyleSheet.create({
   input: { fontSize: 48, fontWeight: '900', textAlign: 'center', minWidth: 100 },
   unit: { fontSize: 24, fontWeight: '800', marginLeft: 8, alignSelf: 'flex-end', marginBottom: 8 },
   
-  quickButtons: { flexDirection: 'row', gap: 10 },
+  quickButtons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10 },
   quickBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
   quickBtnText: { fontSize: 14, fontWeight: '800' },
   

@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 
 import EcranPas from '../../components/onboarding/EcranPas'
 import SelectorValoare from '../../components/onboarding/SelectorValoare'
@@ -8,14 +9,15 @@ import { LIMITE_ONBOARDING } from '../../lib/onboarding'
 const IMPLICIT = 175
 
 export default function PasInaltime() {
+	const { t } = useTranslation()
 	const { date, actualizeaza } = useOnboarding()
 	const valoare = date.inaltimeCm ?? IMPLICIT
 
 	return (
 		<EcranPas
 			pas="/onboarding/inaltime"
-			titlu="Cat de inalt esti?"
-			subtitlu="Impreuna cu greutatea, ne spune de cata energie ai nevoie zilnic."
+			titlu={t('onboarding.inaltime.titlu')}
+			subtitlu={t('onboarding.inaltime.subtitlu')}
 			poateContinua
 			laContinuare={() => {
 				// Salvam explicit valoarea implicita daca nu a atins rigla.

@@ -2,11 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, RefreshControl } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
+import type { Href } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, FadeInDown, useAnimatedProps, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell, Bell, RotateCcw, X } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
 import { useNotificationBanner } from '../../context/NotificationBannerContext';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
@@ -90,6 +92,7 @@ function RingProgress({ procent, color, bgColor }: { procent: number; color: str
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const { unreadCount } = useNotificationBanner();
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
@@ -199,15 +202,15 @@ export default function HomeScreen() {
 
   const calState = getCalorieState(caloriiConsumate, caloriiTinta, colors.accent, colors.accentSecondary);
 
-  const userName = user?.email ? user.email.split('@')[0] : 'Prieten';
+  const userName = user?.email ? user.email.split('@')[0] : t('home.greetingFriend');
   const capitalizedName = userName.charAt(0).toUpperCase() + userName.slice(1);
 
   const getSalut = () => {
     const ora = new Date().getHours();
-    if (ora >= 5 && ora < 12) return "Bună dimineața";
-    if (ora >= 12 && ora < 18) return "Bună ziua";
-    if (ora >= 18 && ora < 23) return "Bună seara";
-    return "Noapte bună";
+    if (ora >= 5 && ora < 12) return t('home.greetingMorning');
+    if (ora >= 12 && ora < 18) return t('home.greetingAfternoon');
+    if (ora >= 18 && ora < 23) return t('home.greetingEvening');
+    return t('home.greetingNight');
   };
   const getEmoji = () => {
     const ora = new Date().getHours();
@@ -218,16 +221,16 @@ export default function HomeScreen() {
   };
 
   const sfaturiZilnice = [
-    "💡 Hidratarea este cheia metabolizării eficiente a nutrienților. Bea un pahar cu apă cu 30 de minute înainte de fiecare masă.",
-    "💡 Proteinele ajută la sațietate pe termen lung și menținerea masei musculare în deficit caloric.",
-    "💡 Nu uita de fibre! Încearcă să incluzi cel puțin o porție de legume proaspete sau frunze verzi la prânz și cină.",
-    "💡 Grăsimile sănătoase din avocado, nuci sau ulei de măsline sunt esențiale pentru absorbția vitaminelor A, D, E și K.",
-    "💡 Somnul de 7-8 ore este vital pentru reglarea hormonilor foamei (grelina și leptina). Odihnește-te bine!",
-    "💡 Carbohidrații complecși (ovăz, cartof dulce, orez brun) îți oferă energie constantă fără vârfuri de insulină.",
-    "💡 Nu te stresa dacă într-o zi depășești ușor ținta. Consecvența pe termen lung este mult mai importantă decât perfecțiunea zilnică.",
-    "💡 Consumă alimente bogate în magneziu și zinc pentru o recuperare musculară optimă după antrenamente.",
-    "💡 Mănâncă încet și mestecă bine mâncarea — creierul are nevoie de aproximativ 20 de minute pentru a înregistra sațietatea.",
-    "💡 Planifică-ți mesele principale în avans pentru a evita deciziile impulsive când apare senzația de foame."
+    t('home.tip1'),
+    t('home.tip2'),
+    t('home.tip3'),
+    t('home.tip4'),
+    t('home.tip5'),
+    t('home.tip6'),
+    t('home.tip7'),
+    t('home.tip8'),
+    t('home.tip9'),
+    t('home.tip10')
   ];
   const sfatAles = sfaturiZilnice[new Date().getDate() % sfaturiZilnice.length];
 
@@ -271,15 +274,15 @@ export default function HomeScreen() {
               <Text style={s.greetingEmoji}>{getEmoji()}</Text>
             </View>
             <View style={s.greetingSubRow}>
-              <Text style={[s.greetingSub, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">Urmărește-ți nutriția de astăzi</Text>
+              <Text style={[s.greetingSub, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">{t('home.greetingSubtitle')}</Text>
               <Text style={[s.caloriiInline, { color: calState.ringColor }]} numberOfLines={1} ellipsizeMode="tail">  {calState.emoji} {calState.mesaj}</Text>
             </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TouchableOpacity
-              onPress={() => router.push('/notificari' as any)}
+              onPress={() => router.push('/notificari' as Href)}
               accessibilityRole="button"
-              accessibilityLabel={`Notificări${unreadCount > 0 ? `, ${unreadCount} necitite` : ''}`}
+              accessibilityLabel={unreadCount > 0 ? t('home.notificationsUnread', { numar: unreadCount }) : t('home.notifications')}
               style={{
                 width: 38,
                 height: 38,
@@ -317,7 +320,7 @@ export default function HomeScreen() {
             <View style={s.streakBadge}>
               <LinearGradient colors={colors.accentGradient} style={s.streakGrad}>
                 <Flame size={14} color={colors.background} />
-                <Text style={[s.streakText, { color: colors.background }]}>{numarMese} mese</Text>
+                <Text style={[s.streakText, { color: colors.background }]}>{t('home.streakMeals', { numar: numarMese })}</Text>
               </LinearGradient>
             </View>
           </View>
@@ -330,7 +333,7 @@ export default function HomeScreen() {
               <View style={s.ringCardTop}>
                 <View style={s.ringCardInfo}>
                   <Text style={[s.ringCardTitle, { color: caloriiRamase < 0 ? colors.danger : colors.textSecondary }]}>
-                    {caloriiRamase < 0 ? 'CALORII DEPĂȘITE' : 'CALORII RĂMASE'}
+                    {caloriiRamase < 0 ? t('home.caloriesOver') : t('home.caloriesLeft')}
                   </Text>
                   <View style={s.ringCardValueRow}>
                     <Text style={[s.ringCardValue, { color: caloriiRamase < 0 ? colors.danger : colors.textPrimary }]}>
@@ -339,16 +342,16 @@ export default function HomeScreen() {
                     <Text style={[s.ringCardUnit, { color: caloriiRamase < 0 ? colors.danger : colors.accent }]}>kcal</Text>
                   </View>
                   <View style={s.ringCardSubRow}>
-                    <Text style={[s.ringCardSubLabel, { color: colors.textSecondary }]}>Consumat: </Text>
+                    <Text style={[s.ringCardSubLabel, { color: colors.textSecondary }]}>{t('home.consumedLabel')}</Text>
                     <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]}>{caloriiConsumate} kcal</Text>
-                    <Text style={[s.ringCardSubSep, { color: colors.textSecondary }]}>  •  Țintă: </Text>
+                    <Text style={[s.ringCardSubSep, { color: colors.textSecondary }]}>{t('home.targetLabel')}</Text>
                     <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]}>{caloriiTinta} kcal</Text>
                   </View>
                   {totalCaloriiArse > 0 && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
                       <Dumbbell size={14} color={colors.warning} />
                       <Text style={{ fontSize: 13, fontWeight: '800', color: colors.warning }}>
-                        Ars prin sport: +{totalCaloriiArse} kcal
+                        {t('home.burnedBySport', { kcal: totalCaloriiArse })}
                       </Text>
                     </View>
                   )}
@@ -369,10 +372,10 @@ export default function HomeScreen() {
                     <Text style={[s.macroValue, { color: proteineConsumate > (proteineTinta || 150) ? colors.danger : colors.textPrimary }]}>{proteineConsumate}</Text>
                     <Text style={[s.macroUnit, { color: colors.textSecondary }]}>/ {proteineTinta || 150}g</Text>
                   </View>
-                  <Text style={[s.macroLabel, { color: colors.textSecondary }]}>Proteine</Text>
+                  <Text style={[s.macroLabel, { color: colors.textSecondary }]}>{t('home.macroProtein')}</Text>
                   <View style={s.macroBarBg}>
                     <LinearGradient
-                      colors={proteineConsumate > (proteineTinta || 150) ? [colors.danger, '#f43f5e'] : colors.accentSecondaryGradient}
+                      colors={proteineConsumate > (proteineTinta || 150) ? [colors.danger, colors.danger + 'AA'] : colors.accentSecondaryGradient}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={[s.macroBarFill, { width: `${procentProteine}%` }]}
@@ -390,10 +393,10 @@ export default function HomeScreen() {
                     <Text style={[s.macroValue, { color: totalCarbohidrati > (carbiTinta || 250) ? colors.danger : colors.textPrimary }]}>{totalCarbohidrati}</Text>
                     <Text style={[s.macroUnit, { color: colors.textSecondary }]}>/ {carbiTinta || 250}g</Text>
                   </View>
-                  <Text style={[s.macroLabel, { color: colors.textSecondary }]}>Carbi</Text>
+                  <Text style={[s.macroLabel, { color: colors.textSecondary }]}>{t('home.macroCarbs')}</Text>
                   <View style={s.macroBarBg}>
                     <LinearGradient
-                      colors={totalCarbohidrati > (carbiTinta || 250) ? [colors.danger, '#f43f5e'] : [colors.accentTertiary, colors.accentTertiary + 'AA']}
+                      colors={totalCarbohidrati > (carbiTinta || 250) ? [colors.danger, colors.danger + 'AA'] : [colors.accentTertiary, colors.accentTertiary + 'AA']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={[s.macroBarFill, { width: `${Math.min((totalCarbohidrati / (carbiTinta || 250)) * 100, 100)}%` }]}
@@ -411,10 +414,10 @@ export default function HomeScreen() {
                     <Text style={[s.macroValue, { color: totalGrasimi > (grasimiTinta || 70) ? colors.danger : colors.textPrimary }]}>{totalGrasimi}</Text>
                     <Text style={[s.macroUnit, { color: colors.textSecondary }]}>/ {grasimiTinta || 70}g</Text>
                   </View>
-                  <Text style={[s.macroLabel, { color: colors.textSecondary }]}>Grăsimi</Text>
+                  <Text style={[s.macroLabel, { color: colors.textSecondary }]}>{t('home.macroFats')}</Text>
                   <View style={s.macroBarBg}>
                     <LinearGradient
-                      colors={totalGrasimi > (grasimiTinta || 70) ? [colors.danger, '#f43f5e'] : [colors.warning, colors.warning + 'AA']}
+                      colors={totalGrasimi > (grasimiTinta || 70) ? [colors.danger, colors.danger + 'AA'] : [colors.warning, colors.warning + 'AA']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={[s.macroBarFill, { width: `${Math.min((totalGrasimi / (grasimiTinta || 70)) * 100, 100)}%` }]}
@@ -430,7 +433,7 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.duration(700).delay(250)}>
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Scanează Mâncarea cu camera foto sau din galerie"
+            accessibilityLabel={t('home.scanAccessibility')}
             style={[s.scanCTA, { shadowColor: colors.accent }]}
             onPress={() => router.push('/camera')}
             activeOpacity={0.85}
@@ -440,8 +443,8 @@ export default function HomeScreen() {
                 <Camera size={28} color={colors.background} strokeWidth={2.5} />
               </View>
               <View style={s.scanCTAText}>
-                <Text style={[s.scanCTATitle, { color: colors.background }]}>Scanează Mâncarea cu AI</Text>
-                <Text style={s.scanCTASub}>Analiză foto instantă a caloriilor</Text>
+                <Text style={[s.scanCTATitle, { color: colors.background }]}>{t('home.scanTitle')}</Text>
+                <Text style={s.scanCTASub}>{t('home.scanSubtitle')}</Text>
               </View>
               <View style={s.scanCTAArrow}>
                 <Scan size={20} color={colors.background} />
@@ -454,22 +457,22 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.duration(700).delay(280)} style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Scanează cod de bare produs"
+            accessibilityLabel={t('home.barcodeAccessibility')}
             style={[s.secActionCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
-            onPress={() => router.push('/scanner-barcode' as any)}
+            onPress={() => router.push('/scanner-barcode' as Href)}
           >
             <Scan size={18} color={colors.accent} />
-            <Text style={[s.secActionText, { color: colors.textPrimary }]}>Cod de Bare</Text>
+            <Text style={[s.secActionText, { color: colors.textPrimary }]}>{t('home.barcodeAction')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Adaugă o masă manual"
+            accessibilityLabel={t('home.manualAccessibility')}
             style={[s.secActionCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
             onPress={() => addMealSheetRef.current?.open()}
           >
             <PlusCircle size={18} color={colors.accentSecondary} />
-            <Text style={[s.secActionText, { color: colors.textPrimary }]}>Adaugă Manual</Text>
+            <Text style={[s.secActionText, { color: colors.textPrimary }]}>{t('home.manualAction')}</Text>
           </TouchableOpacity>
         </Animated.View>
 
@@ -478,41 +481,41 @@ export default function HomeScreen() {
           <TouchableOpacity
             onPress={() => router.push('/profil')}
             accessibilityRole="button"
-            accessibilityLabel="Greutate și progres. Modifică"
+            accessibilityLabel={t('home.weightAccessibility')}
             style={[s.weightCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
           >
             <View style={s.weightIconWrap}>
               <Scale size={20} color={colors.accent} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[s.weightLabel, { color: colors.textSecondary }]}>GREUTATE & PROGRES</Text>
+              <Text style={[s.weightLabel, { color: colors.textSecondary }]}>{t('home.weightTitle')}</Text>
               <Text style={[s.weightValue, { color: colors.textPrimary, fontSize: greutate ? 20 : 14 }]}>
-                {greutate ? `${greutate} kg` : 'Atinge pentru a adăuga'}
+                {greutate ? `${greutate} kg` : t('home.tapToAdd')}
               </Text>
             </View>
-            <Text style={[s.weightLink, { color: colors.accent }]}>Editează →</Text>
+            <Text style={[s.weightLink, { color: colors.accent }]}>{t('home.weightEdit')}</Text>
           </TouchableOpacity>
         </Animated.View>
 
         {/* Water Hydration Card */}
-        <Animated.View entering={FadeInDown.duration(700).delay(320)} style={[s.waterCard, { borderColor: '#00e5ff33' }]}>
+        <Animated.View entering={FadeInDown.duration(700).delay(320)} style={[s.waterCard, { borderColor: colors.accentTertiary + '33' }]}>
           <BlurView intensity={20} tint="dark" style={s.waterBlur}>
-            <LinearGradient colors={['#00e5ff15', 'rgba(0,0,0,0)']} style={s.waterGrad}>
+            <LinearGradient colors={[colors.accentTertiary + '15', 'rgba(0,0,0,0)']} style={s.waterGrad}>
               <View style={s.waterHeader}>
                 <View style={s.waterTitleRow}>
-                  <View style={[s.waterIconBg, { backgroundColor: '#00e5ff25' }]}>
-                    <Droplet size={20} color="#00e5ff" fill="#00e5ff" />
+                  <View style={[s.waterIconBg, { backgroundColor: colors.accentTertiary + '25' }]}>
+                    <Droplet size={20} color={colors.accentTertiary} fill={colors.accentTertiary} />
                   </View>
                   <View>
-                    <Text style={[s.waterTitle, { color: colors.textPrimary }]}>Hidratare & Apă</Text>
-                    <Text style={[s.waterSub, { color: colors.textSecondary }]}>Obiectiv: {tintaPahare} pahare ({tintaPahare * 250} ml)</Text>
+                    <Text style={[s.waterTitle, { color: colors.textPrimary }]}>{t('home.waterTitle')}</Text>
+                    <Text style={[s.waterSub, { color: colors.textSecondary }]}>{t('home.waterObjective', { pahare: tintaPahare, ml: tintaPahare * 250 })}</Text>
                   </View>
                 </View>
                 
                 <View style={s.waterControls}>
                   <TouchableOpacity
                     accessibilityRole="button"
-                    accessibilityLabel="Scade un pahar de apă"
+                    accessibilityLabel={t('home.waterDecrease')}
                     style={[s.waterBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                     onPress={scadePahar}
                   >
@@ -520,12 +523,12 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     accessibilityRole="button"
-                    accessibilityLabel="Adaugă un pahar de apă"
-                    style={[s.waterBtnAdd, { shadowColor: '#00e5ff' }]}
+                    accessibilityLabel={t('home.waterIncrease')}
+                    style={[s.waterBtnAdd, { shadowColor: colors.accentTertiary }]}
                     onPress={adaugaPahar}
                   >
-                    <LinearGradient colors={['#00e5ff', '#0088ff']} style={s.waterBtnAddGrad}>
-                      <Text style={[s.waterBtnAddText, { color: '#000' }]}>+</Text>
+                    <LinearGradient colors={[colors.accentTertiary, colors.accentTertiary + 'AA']} style={s.waterBtnAddGrad}>
+                      <Text style={[s.waterBtnAddText, { color: colors.background }]}>+</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
@@ -533,7 +536,7 @@ export default function HomeScreen() {
 
               <View style={s.waterProgressBg}>
                 <LinearGradient 
-                  colors={['#00e5ff', '#0088ff']} 
+                  colors={[colors.accentTertiary, colors.accentTertiary + 'AA']} 
                   start={{ x: 0, y: 0 }} 
                   end={{ x: 1, y: 0 }} 
                   style={[s.waterProgressFill, { width: `${Math.min((pahare / tintaPahare) * 100, 100)}%` }]} 
@@ -542,7 +545,7 @@ export default function HomeScreen() {
 
               <View style={s.waterFooter}>
                 <Text style={[s.waterCount, { color: colors.textPrimary }]}>
-                  <Text style={{ fontSize: 22, fontWeight: '900', color: '#00e5ff' }}>{pahare}</Text> / {tintaPahare} pahare băute azi
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: colors.accentTertiary }}>{pahare}</Text>{t('home.waterCount', { tinta: tintaPahare })}
                 </Text>
                 <Text style={[s.waterMl, { color: colors.textTertiary }]}>{pahare * 250} ml</Text>
               </View>
@@ -558,7 +561,7 @@ export default function HomeScreen() {
                 router.push('/(tabs)/profil');
               }}
               accessibilityRole="button"
-              accessibilityLabel="Setări sănătate și pași"
+              accessibilityLabel={t('home.healthAccessibility')}
             >
               <BlurView intensity={20} tint="dark" style={s.healthBlur}>
                 <LinearGradient colors={[isEnabled ? colors.accent + '15' : 'rgba(255,255,255,0.03)', 'rgba(0,0,0,0)']} style={s.healthGrad}>
@@ -569,10 +572,10 @@ export default function HomeScreen() {
                       </View>
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <Text style={[s.healthTitle, { color: colors.textPrimary }]}>{providerInfo?.icon || '📱'} {platformName} & Pași</Text>
+                          <Text style={[s.healthTitle, { color: colors.textPrimary }]}>{providerInfo?.icon || '📱'} {t('home.healthTitle', { platform: platformName })}</Text>
                         </View>
                         <Text style={[s.healthSub, { color: colors.textSecondary }]}>
-                          {isEnabled ? `Ajustare calorică automată: +${activeCalories} kcal • Apasă pentru setări →` : 'Apasă oriunde pe card pentru a conecta în Profil →'}
+                          {isEnabled ? t('home.healthSubEnabled', { kcal: activeCalories }) : t('home.healthSubDisabled')}
                         </Text>
                       </View>
                     </View>
@@ -591,18 +594,18 @@ export default function HomeScreen() {
                       </View>
                       <View style={s.healthFooter}>
                         <Text style={[s.healthCount, { color: colors.textPrimary }]}>
-                          <Text style={{ fontSize: 22, fontWeight: '900', color: colors.accent }}>{steps.toLocaleString()}</Text> / {stepGoal.toLocaleString()} pași
+                          <Text style={{ fontSize: 22, fontWeight: '900', color: colors.accent }}>{steps.toLocaleString()}</Text>{t('home.stepsCount', { total: stepGoal.toLocaleString() })}
                         </Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                           <Flame size={14} color={colors.warning} />
-                          <Text style={[s.healthCalories, { color: colors.warning }]}>+{activeCalories} kcal arse</Text>
+                          <Text style={[s.healthCalories, { color: colors.warning }]}>{t('home.kcalBurned', { kcal: activeCalories })}</Text>
                         </View>
                       </View>
                     </>
                   ) : (
                     <View style={s.healthOfflineBox}>
                       <Text style={[s.healthOfflineText, { color: colors.textTertiary }]}>
-                        Sincronizează brățara sau telefonul pentru a adăuga caloriile arse din mișcare direct în balanța ta de dietă!
+                        {t('home.healthOffline')}
                       </Text>
                     </View>
                   )}
@@ -615,26 +618,26 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.duration(700).delay(345)}>
           <TouchableOpacity
             activeOpacity={0.9}
-            onPress={() => router.push('/(tabs)/antrenamente' as any)}
+            onPress={() => router.push('/(tabs)/antrenamente' as Href)}
             accessibilityRole="button"
-            accessibilityLabel="Hartă musculară live. Deschide antrenamentele"
+            accessibilityLabel={t('home.muscleMapAccessibility')}
             style={[s.liveHeatmapCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
           >
             <View style={s.liveHeatmapHeader}>
               <View style={s.liveHeatmapTitleRow}>
-                <View style={[s.liveHeatmapDot, { backgroundColor: '#FF003C' }]} />
-                <Text style={[s.liveHeatmapTitle, { color: colors.textPrimary }]}>HARTĂ MUSCULARĂ LIVE</Text>
+                <View style={[s.liveHeatmapDot, { backgroundColor: colors.danger }]} />
+                <Text style={[s.liveHeatmapTitle, { color: colors.textPrimary }]}>{t('home.muscleMapTitle')}</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setViewSideHome(v => v === 'front' ? 'back' : 'front')}
                 style={[s.liveHeatmapToggle, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={viewSideHome === 'front' ? 'Arată partea din spate a hărții musculare' : 'Arată partea din față a hărții musculare'}
+                accessibilityLabel={t(viewSideHome === 'front' ? 'home.muscleMapShowBack' : 'home.muscleMapShowFront')}
               >
                 <RotateCcw size={12} color={colors.accent} />
                 <Text style={[s.liveHeatmapToggleText, { color: colors.accent }]}>
-                  {viewSideHome === 'front' ? 'FAȚĂ' : 'SPATE'}
+                  {viewSideHome === 'front' ? t('home.muscleMapSideFront') : t('home.muscleMapSideBack')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -651,8 +654,8 @@ export default function HomeScreen() {
               <Dumbbell size={14} color={colors.accentSecondary} />
               <Text style={[s.liveHeatmapFooterText, { color: colors.textSecondary }]}>
                 {antrenamente && antrenamente.length > 0
-                  ? `${antrenamente.length} antrenamente azi • intensitate musculară în timp real`
-                  : 'Niciun antrenament înregistrat azi • atinge pentru a începe'}
+                  ? t('home.muscleMapFooterActive', { numar: antrenamente.length })
+                  : t('home.muscleMapFooterEmpty')}
               </Text>
             </View>
           </TouchableOpacity>
@@ -664,13 +667,13 @@ export default function HomeScreen() {
             <BlurView intensity={20} tint="dark" style={s.tipsBlur}>
               <LinearGradient colors={[colors.accentSecondary + '14', 'rgba(0,0,0,0)']} style={s.tipsGrad}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={[s.tipsTitle, { color: colors.textPrimary, marginBottom: 0 }]}>✨ Sfat NutriAI al Zilei</Text>
+                  <Text style={[s.tipsTitle, { color: colors.textPrimary, marginBottom: 0 }]}>{t('home.tipTitle')}</Text>
                   <TouchableOpacity
                     onPress={handleCloseTip}
                     style={{ padding: 4 }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                     accessibilityRole="button"
-                    accessibilityLabel="Închide sfatul zilei"
+                    accessibilityLabel={t('home.tipClose')}
                   >
                     <X size={18} color={colors.textSecondary} />
                   </TouchableOpacity>
@@ -693,7 +696,7 @@ const s = StyleSheet.create({
   container: { flex: 1 },
   glowTop: { position: 'absolute', top: -200, right: -100, width: 400, height: 400, borderRadius: 200, opacity: 0.04 },
   glowBottom: { position: 'absolute', bottom: -150, left: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.06 },
-  scroll: { paddingHorizontal: 20 },
+  scroll: { paddingHorizontal: 20, width: '100%', maxWidth: 560, alignSelf: 'center' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 15, fontWeight: '500' },
 

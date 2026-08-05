@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, TextInput, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Send } from 'lucide-react-native';
 import { useTheme } from '@/context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import type { AlimentScanat } from '@/components/food/FoodScanSuccessModal';
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 
 export default function IngredientCorrectionInput({ ingredienteCurente, onCorectat, onSend }: Props) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -34,7 +36,7 @@ export default function IngredientCorrectionInput({ ingredienteCurente, onCorect
     <View style={[styles.wrap, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
       <TextInput
         style={[styles.input, { color: colors.textPrimary }]}
-        placeholder='Ex: "plăcinta are făină de migdale"'
+        placeholder={t('food.correction.placeholder')}
         placeholderTextColor={colors.textSecondary}
         value={text}
         onChangeText={setText}
@@ -47,6 +49,8 @@ export default function IngredientCorrectionInput({ ingredienteCurente, onCorect
         style={[styles.sendBtn, { backgroundColor: colors.accent, opacity: text.trim() && !loading ? 1 : 0.5 }]}
         onPress={handleSend}
         disabled={!text.trim() || loading}
+        accessibilityRole="button"
+        accessibilityLabel={t('food.correction.send')}
       >
         {loading ? (
           <ActivityIndicator size="small" color={colors.background} />

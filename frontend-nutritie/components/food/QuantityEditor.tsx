@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { Check, X } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { FoodProduct } from './types';
 
 interface QuantityEditorProps {
@@ -12,6 +13,7 @@ interface QuantityEditorProps {
 
 export function QuantityEditor({ product, onConfirm, onCancel }: QuantityEditorProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [grameStr, setGrameStr] = useState<string>(
     product.servingGrams ? String(product.servingGrams) : '100'
   );
@@ -42,12 +44,18 @@ export function QuantityEditor({ product, onConfirm, onCancel }: QuantityEditorP
             <Text style={[styles.brand, { color: colors.textSecondary }]}>{product.brand}</Text>
           ) : null}
         </View>
-        <TouchableOpacity onPress={onCancel} style={styles.closeBtn} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+        <TouchableOpacity
+          onPress={onCancel}
+          style={styles.closeBtn}
+          hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+          accessibilityRole="button"
+          accessibilityLabel={t('food.quantity.close')}
+        >
           <X size={20} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
-      <Text style={[styles.label, { color: colors.textSecondary }]}>Setați Cantitatea (g):</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>{t('food.quantity.setQuantity')}</Text>
       <View style={styles.inputRow}>
         <TextInput
           style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
@@ -84,15 +92,15 @@ export function QuantityEditor({ product, onConfirm, onCancel }: QuantityEditorP
         </View>
         <View style={styles.sumCol}>
           <Text style={[styles.sumVal, { color: colors.accentSecondary }]}>{calc.prot}g</Text>
-          <Text style={[styles.sumLab, { color: colors.textSecondary }]}>proteine</Text>
+          <Text style={[styles.sumLab, { color: colors.textSecondary }]}>{t('food.macros.proteins')}</Text>
         </View>
         <View style={styles.sumCol}>
           <Text style={[styles.sumVal, { color: colors.accentTertiary }]}>{calc.carb}g</Text>
-          <Text style={[styles.sumLab, { color: colors.textSecondary }]}>carbs</Text>
+          <Text style={[styles.sumLab, { color: colors.textSecondary }]}>{t('food.macros.carbs')}</Text>
         </View>
         <View style={styles.sumCol}>
           <Text style={[styles.sumVal, { color: colors.warning }]}>{calc.fat}g</Text>
-          <Text style={[styles.sumLab, { color: colors.textSecondary }]}>grăsimi</Text>
+          <Text style={[styles.sumLab, { color: colors.textSecondary }]}>{t('food.macros.fats')}</Text>
         </View>
       </View>
 
@@ -102,7 +110,7 @@ export function QuantityEditor({ product, onConfirm, onCancel }: QuantityEditorP
         onPress={() => onConfirm(grame)}
       >
         <Check size={18} color="#000" />
-        <Text style={styles.confirmText}>Confirmă {calc.kcal} kcal ({grame}g)</Text>
+        <Text style={styles.confirmText}>{t('food.quantity.confirm', { kcal: calc.kcal, grame })}</Text>
       </TouchableOpacity>
     </View>
   );

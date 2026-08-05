@@ -28,6 +28,7 @@ import { AddMealBottomSheet, AddMealBottomSheetRef } from '../../components/AddM
 import { MonthCalendar } from '../../components/MonthCalendar';
 import { MealDetailsModal } from '../../components/MealDetailsModal';
 import { MasaCard } from '../../components/MasaCard';
+import { EmptyState } from '../../components/ui/EmptyState';
 import KeyboardAwareScreen, { CONTENT_BOTTOM_PADDING } from '@/components/ui/KeyboardAwareScreen';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
@@ -58,8 +59,8 @@ export default function HistoryScreen() {
   })();
 
   const formatDataTitlu = () => {
-    if (esteAzi) return "Astăzi";
-    if (esteIeri) return "Ieri";
+    if (esteAzi) return t('istoric.today');
+    if (esteIeri) return t('istoric.yesterday');
     return dataSelectata.toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
@@ -73,7 +74,9 @@ export default function HistoryScreen() {
   );
 
   const onRefresh = useCallback(async () => {
-    await Promise.all([refresh(false, true), refreshZileCuMese()]);
+    // force=true: pull-to-refresh e un gest explicit al utilizatorului, deci
+    // ocolim cache-ul de 60s din useZileCuMese pentru markerii calendarului.
+    await Promise.all([refresh(false, true), refreshZileCuMese(true)]);
   }, [refresh, refreshZileCuMese]);
 
   // 1. Ștergere masă cu confirmare
@@ -110,8 +113,24 @@ export default function HistoryScreen() {
     mealSheetRef.current?.open(masa);
   }, []);
 
-  const renderGroupedSections = () => {
+  const renderGroupedSections = useCallback(() => {
     if (!categoriiMeseList) return null;
+
+    const areMese = categoriiMeseList.some((cat) => cat.mese && cat.mese.length > 0);
+    if (!areMese) {
+      return (
+        <EmptyState
+          icon="🍽️"
+          title={t('istoric.empty.title')}
+          subtitle={t('istoric.empty.subtitle')}
+          actionLabel={t('istoric.empty.action')}
+          onAction={() => mealSheetRef.current?.open()}
+          accentColor={colors.accent}
+          textColor={colors.textPrimary}
+          mutedColor={colors.textSecondary}
+        />
+      );
+    }
 
     return (
       <View style={{ gap: 24, marginTop: 8 }}>
@@ -132,7 +151,11 @@ export default function HistoryScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.sectionTitleText, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{cat.label}</Text>
                     <Text style={[styles.sectionSubtitleText, { color: colors.textSecondary }]}>
-                      {hasMeals ? `${cat.mese.length} ${cat.mese.length === 1 ? 'masă înregistrată' : 'mese înregistrate'}` : 'Nicio masă adăugată'}
+                      {hasMeals
+                        ? cat.mese.length === 1
+                          ? t('istoric.sectionMealSingular', { numar: cat.mese.length })
+                          : t('istoric.sectionMealPlural', { numar: cat.mese.length })
+                        : t('istoric.sectionNoMeals')}
                     </Text>
                   </View>
                 </View>
@@ -141,7 +164,7 @@ export default function HistoryScreen() {
                   <View style={styles.sectionMacrosSummary}>
                     <Text style={[styles.sectionTotalCal, { color: colors.accent }]}>{cat.totalCalorii} kcal</Text>
                     <Text style={[styles.sectionTotalMacros, { color: colors.textTertiary }]}>
-                      P:{cat.totalProteine}g • C:{cat.totalCarbohidrati}g • G:{cat.totalGrasimi}g
+                      {t('istoric.macroSummary', { proteine: cat.totalProteine, carbohidrati: cat.totalCarbohidrati, grasimi: cat.totalGrasimi })}
                     </Text>
                   </View>
                 ) : (
@@ -153,10 +176,10 @@ export default function HistoryScreen() {
                     }}
                     activeOpacity={0.8}
                     accessibilityRole="button"
-                    accessibilityLabel={`Adaugă ${cat.label}`}
+                    accessibilityLabel={t('istoric.addToCategory', { nume: cat.label })}
                   >
                     <PlusCircle size={15} color={colors.accent} />
-                    <Text style={[styles.discreteAddBtnText, { color: colors.accent }]}>Adaugă {cat.label}</Text>
+                    <Text style={[styles.discreteAddBtnText, { color: colors.accent }]}>{t('istoric.addToCategory', { nume: cat.label })}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -182,10 +205,10 @@ export default function HistoryScreen() {
                     }}
                     activeOpacity={0.7}
                     accessibilityRole="button"
-                    accessibilityLabel={`Adaugă încă o masă la ${cat.label}`}
+                    accessibilityLabel={t('istoric.addAnotherMealTo', { nume: cat.label })}
                   >
                     <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>
-                      + Adaugă încă o masă la {cat.label}
+                      + {t('istoric.addAnotherMealTo', { nume: cat.label })}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -195,21 +218,21 @@ export default function HistoryScreen() {
         })}
       </View>
     );
-  };
+  }, [categoriiMeseList, colors, t]);
 
   const renderHeader = () => (
     <>
       <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Jurnalul tău</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{t('istoric.title')}</Text>
           <TouchableOpacity
             style={[styles.addBtnHeader, { backgroundColor: colors.accent + '20', borderColor: colors.accent + '40' }]}
             onPress={() => mealSheetRef.current?.open()}
             accessibilityRole="button"
-            accessibilityLabel="Adaugă o masă"
+            accessibilityLabel={t('istoric.addMealAccessibility')}
           >
             <PlusCircle size={18} color={colors.accent} />
-            <Text style={[styles.addBtnHeaderText, { color: colors.accent }]}>Adaugă</Text>
+            <Text style={[styles.addBtnHeaderText, { color: colors.accent }]}>{t('istoric.add')}</Text>
           </TouchableOpacity>
         </View>
         
@@ -226,8 +249,8 @@ export default function HistoryScreen() {
             📅 {formatDataTitlu()}
           </Text>
           {!esteAzi && (
-            <TouchableOpacity onPress={() => setDataSelectata(new Date())} style={{ backgroundColor: colors.accent, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }} accessibilityRole="button" accessibilityLabel="Revino la ziua de azi">
-              <Text style={{ color: '#000', fontWeight: '800', fontSize: 12 }}>Revino la azi</Text>
+            <TouchableOpacity onPress={() => setDataSelectata(new Date())} style={{ backgroundColor: colors.accent, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }} accessibilityRole="button" accessibilityLabel={t('istoric.backToTodayAccessibility')}>
+              <Text style={{ color: colors.background, fontWeight: '800', fontSize: 12 }}>{t('istoric.backToToday')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -237,7 +260,7 @@ export default function HistoryScreen() {
       <Animated.View entering={FadeInDown.duration(600).delay(100)} style={[styles.summaryCard, { borderColor: colors.cardBorder }]}>
         <BlurView intensity={20} tint="dark" style={styles.summaryBlur}>
           <LinearGradient colors={[colors.accent + '12', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
-            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>REZUMAT CALORIC & MACRO</Text>
+            <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>{t('istoric.summaryLabel')}</Text>
             
             <View style={{ alignItems: 'center', marginVertical: 12 }}>
               <MacroRing consumat={totalCalorii} tinta={caloriiTinta || 2000} size={150} strokeWidth={14} />
@@ -253,13 +276,13 @@ export default function HistoryScreen() {
               <View style={styles.summaryItem}>
                 <Activity size={20} color={colors.accentSecondary} />
                 <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{totalProteine}g</Text>
-                <Text style={[styles.summaryUnit, { color: colors.textSecondary }]}>proteine</Text>
+                <Text style={[styles.summaryUnit, { color: colors.textSecondary }]}>{t('istoric.summaryProtein')}</Text>
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryEmoji}>🍽️</Text>
                 <Text style={[styles.summaryValue, { color: colors.textPrimary }]}>{mese.length}</Text>
-                <Text style={[styles.summaryUnit, { color: colors.textSecondary }]}>mese</Text>
+                <Text style={[styles.summaryUnit, { color: colors.textSecondary }]}>{t('istoric.summaryMeals')}</Text>
               </View>
             </View>
 
@@ -271,9 +294,9 @@ export default function HistoryScreen() {
                 mealSheetRef.current?.open();
               }}
               accessibilityRole="button"
-              accessibilityLabel="Adaugă masă"
+              accessibilityLabel={t('istoric.empty.action')}
             >
-              <Text style={[styles.addMealBtnText, { color: colors.background }]}>Adaugă masă</Text>
+              <Text style={[styles.addMealBtnText, { color: colors.background }]}>{t('istoric.empty.action')}</Text>
             </TouchableOpacity>
           </LinearGradient>
         </BlurView>
@@ -343,7 +366,9 @@ const styles = StyleSheet.create({
   glowTop: { position: 'absolute', top: -150, right: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.04 },
   glowBottom: { position: 'absolute', bottom: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.04 },
 
-  scroll: { paddingHorizontal: 20 },
+  // width+maxWidth+alignSelf centrează conținutul pe tablete; pe telefoane
+  // maxWidth (560) > ecran, deci nu schimbă nimic.
+  scroll: { paddingHorizontal: 20, width: '100%', maxWidth: 560, alignSelf: 'center' },
 
   header: { marginBottom: 20 },
   title: { fontSize: 36, fontWeight: '900', letterSpacing: -0.5 },

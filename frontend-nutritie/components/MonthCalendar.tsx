@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 interface MonthCalendarProps {
   selectedDate: Date;
@@ -15,6 +16,7 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
   markedDates = []
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [currentMonth, setCurrentMonth] = useState(new Date(selectedDate));
   const [showPicker, setShowPicker] = useState(false);
   const [selectedYear, setSelectedYear] = useState(currentMonth.getFullYear());
@@ -89,6 +91,9 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
           ]}
           onPress={() => onSelectDate(date)}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={t('a11y.calendar.day', { day, month: monthNames[currentMonth.getMonth()] })}
+          accessibilityState={{ selected: isSelected }}
         >
           <Text style={[
             styles.dayText,
@@ -122,7 +127,12 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
   return (
     <View style={[styles.container, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={prevMonth} style={styles.arrowBtn}>
+        <TouchableOpacity
+          onPress={prevMonth}
+          style={styles.arrowBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t('a11y.calendar.previousMonth')}
+        >
           <ChevronLeft size={20} color={colors.accent} />
         </TouchableOpacity>
 
@@ -147,7 +157,12 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={nextMonth} style={styles.arrowBtn}>
+        <TouchableOpacity
+          onPress={nextMonth}
+          style={styles.arrowBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t('a11y.calendar.nextMonth')}
+        >
           <ChevronRight size={20} color={colors.accent} />
         </TouchableOpacity>
       </View>
@@ -243,18 +258,18 @@ const styles = StyleSheet.create({
   },
   weekRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
   },
   weekDay: {
-    width: 40,
+    flex: 1,
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 8,
   },
   dayCell: {
-    width: 40,
-    height: 40,
+    flex: 1,
+    aspectRatio: 1,
     justifyContent: 'center',
     alignItems: 'center',
     margin: 2,

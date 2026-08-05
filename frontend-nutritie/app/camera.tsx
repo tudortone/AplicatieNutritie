@@ -114,7 +114,7 @@ export default function CameraScreen() {
   const analizeazaImaginea = useCallback(
     async (imageUri: string) => {
       if (!session?.access_token) {
-        setScanError('Sesiunea a expirat. Autentifică-te din nou.');
+        setScanError(t('camera.eroareSesiuneExpirata'));
         return;
       }
 
@@ -165,22 +165,22 @@ export default function CameraScreen() {
         }
 
         if (!response.ok || !Array.isArray(payload)) {
-          let message = 'Nu am putut identifica alimentele din imagine.';
+          let message = t('camera.eroareIdentificareAlimente');
           if (!Array.isArray(payload) && payload && payload.eroare) {
             message = payload.eroare;
           } else if (response.status === 404) {
-            message = `Eroare 404: Endpoint-ul de analiză vizuală nu a fost găsit pe server (${API_URL}).`;
+            message = t('camera.eroareEndpoint404', { url: API_URL });
           } else if (response.status === 401) {
-            message = 'Eroare de autentificare. Vă rugăm să vă reconectați în aplicație.';
+            message = t('camera.eroareAutentificareReconectare');
           } else if (response.status >= 500) {
-            message = `Eroare server (${response.status}): Serviciul AI întâmpină probleme temporare.`;
+            message = t('camera.eroareServerTemporar', { status: response.status });
           }
           throw new Error(message);
         }
 
         const normalized = payload
           .map((item) => ({
-            nume: String(item.nume || 'Aliment identificat'),
+            nume: String(item.nume || t('camera.alimentIdentificat')),
             estimare_grame: Math.max(1, Number(item.estimare_grame) || 100),
             calorii_per_100g: Math.max(0, Number(item.calorii_per_100g) || 0),
             proteine_per_100g: Math.max(0, Number(item.proteine_per_100g) || 0),
@@ -197,7 +197,9 @@ export default function CameraScreen() {
         // Dupa un scan REUSIT, incarcam poza pe ImageKit CDN (nu aruncam gunoi pe CDN
         // pentru poze esuate). URL-ul ajunge in masa salvata (campul alimente, JSONB).
         imageKitUrlRef.current = null;
-        uploadImageToImageKit(imageUri, undefined, session?.user?.id)
+        // Urcam poza redimensionata pe client, nu originalul de 15MB (bandwidth
+        // si stocare aproape duble inutil; 1024px e suficient pentru poza de masa).
+        uploadImageToImageKit(imagineOptimizata.uri, undefined, session?.user?.id)
           .then((r) => {
             imageKitUrlRef.current = r.url;
           })
@@ -213,7 +215,7 @@ export default function CameraScreen() {
         setScanError(
           error instanceof Error
             ? error.message
-            : 'A apărut o eroare la analiza imaginii.',
+            : t('camera.eroareAnalizaImagine'),
         );
       } finally {
         if (abortControllerRef.current === controller) {
@@ -222,7 +224,7 @@ export default function CameraScreen() {
         if (isMountedRef.current) setSeIncarca(false);
       }
     },
-    [session?.access_token, selectedAI],
+    [session?.access_token, selectedAI, t],
   );
 
   const anuleazaScanarea = useCallback(() => {
@@ -421,19 +423,19 @@ export default function CameraScreen() {
               <Scan size={44} color={colors.background} strokeWidth={2.5} />
             </LinearGradient>
           </Animated.View>
-          <Text style={[styles.permissionTitle, { color: colors.textPrimary }]}>Permisiune Cameră</Text>
-          <Text style={[styles.permissionSub, { color: colors.textSecondary }]}>NutriAI are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.</Text>
-          
+          <Text style={[styles.permissionTitle, { color: colors.textPrimary }]}>{t('camera.permisiuneTitlu')}</Text>
+          <Text style={[styles.permissionSub, { color: colors.textSecondary }]}>{t('camera.permisiuneDescriere')}</Text>
+
           <Animated.View entering={FadeInUp.duration(600).delay(200)} style={[styles.permissionBtn, { shadowColor: colors.accent }]}>
-            <TouchableOpacity onPress={requestPermission} accessibilityRole="button" accessibilityLabel="Acordă permisiunea camerei">
+            <TouchableOpacity onPress={requestPermission} accessibilityRole="button" accessibilityLabel={t('camera.permisiuneAcordaA11y')}>
               <LinearGradient colors={colors.accentGradient} style={styles.permissionBtnGrad}>
-                <Text style={[styles.permissionBtnText, { color: colors.background }]}>Permite accesul</Text>
+                <Text style={[styles.permissionBtnText, { color: colors.background }]}>{t('camera.permisiuneButon')}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
 
-          <TouchableOpacity style={styles.cancelLink} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12}>
-            <Text style={[styles.cancelLinkText, { color: colors.textSecondary }]}>Înapoi</Text>
+          <TouchableOpacity style={styles.cancelLink} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('camera.inapoi')} hitSlop={12}>
+            <Text style={[styles.cancelLinkText, { color: colors.textSecondary }]}>{t('camera.inapoi')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -454,12 +456,12 @@ export default function CameraScreen() {
               fetchAiStatus();
             }}
             accessibilityRole="button"
-            accessibilityLabel="Alege furnizorul AI pentru analiza imaginii"
+            accessibilityLabel={t('camera.alegeAIA11y')}
           >
             <View style={[styles.topBadgeBlur, { paddingVertical: 8 }]}>
               <Zap size={14} color={colors.accent} fill={colors.accent} />
               <Text style={[styles.topBadgeText, { color: colors.textPrimary }]}>
-                {selectedAI === 'auto' ? 'AI Inteligent' : selectedAI.toUpperCase()}
+                {selectedAI === 'auto' ? t('camera.aiInteligent') : selectedAI.toUpperCase()}
               </Text>
               <ChevronDown size={14} color={colors.textSecondary} />
             </View>
@@ -467,7 +469,7 @@ export default function CameraScreen() {
         </View>
 
         {/* Buton X în Dreapta (Fără să se suprapună) */}
-        <TouchableOpacity style={styles.closeButton} onPress={() => { anuleazaScanarea(); router.back(); }} accessibilityRole="button" accessibilityLabel="Închide camera">
+        <TouchableOpacity style={styles.closeButton} onPress={() => { anuleazaScanarea(); router.back(); }} accessibilityRole="button" accessibilityLabel={t('camera.inchideCameraA11y')}>
           <Text style={styles.closeButtonText}>X</Text>
         </TouchableOpacity>
       </View>
@@ -482,7 +484,7 @@ export default function CameraScreen() {
         {aiMenuVisible && (
           <Animated.View entering={FadeIn.duration(200)} style={[styles.aiDropdownMenu, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
             <BlurView intensity={80} tint="dark" style={styles.aiDropdownBlur}>
-              <Text style={styles.aiDropdownHeader}>SELECTEAZĂ CREIERUL AI</Text>
+              <Text style={styles.aiDropdownHeader}>{t('camera.selecteazaCreierAI')}</Text>
               
               {(['auto', 'gemini', 'openai', 'groq'] as const).map((aiKey) => {
                 const info = aiStatus[aiKey === 'auto' ? 'gemini' : aiKey];
@@ -502,16 +504,18 @@ export default function CameraScreen() {
                       setAiMenuVisible(false);
                     }}
                     accessibilityRole="button"
-                    accessibilityLabel={`Selectează AI ${aiKey}`}
+                    accessibilityLabel={t('camera.selecteazaAIA11y', { nume: aiKey })}
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.aiDropdownTitle, isSelected && { color: colors.accent }]}>
-                        {aiKey === 'auto' ? '✨ NutriAI Auto-Routing (Recomandat)' : 
-                         aiKey === 'gemini' ? '🧠 Google Gemini Pro Vision' :
-                         aiKey === 'openai' ? '👁️ OpenAI GPT-4o Mini' : '⚡ Groq LLaVA Fast'}
+                        {aiKey === 'auto' ? t('camera.aiAuto') :
+                         aiKey === 'gemini' ? t('camera.aiGemini') :
+                         aiKey === 'openai' ? t('camera.aiOpenai') : t('camera.aiGroq')}
                       </Text>
                       <Text style={styles.aiDropdownDesc}>
-                        {isCooldown ? `⏳ Cooldown (${info?.secundeRamase}s)` : '✅ Activ și pregătit'}
+                        {isCooldown
+                          ? t('camera.cooldown', { secunde: info?.secundeRamase })
+                          : t('camera.aiActiv')}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -533,12 +537,12 @@ export default function CameraScreen() {
               <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay}>
                 <BlurView intensity={60} tint="dark" style={styles.scanningBlur}>
                   <ActivityIndicator size="large" color={colors.accent} />
-                  <Text style={[styles.scanningText, { color: colors.accent }]}>Analizez farfuria...</Text>
+                  <Text style={[styles.scanningText, { color: colors.accent }]}>{t('camera.analizezFarfuria')}</Text>
                 </BlurView>
               </Animated.View>
             )}
           </View>
-          <Text style={styles.scanHint}>Încadrează farfuria clar și luminos</Text>
+          <Text style={styles.scanHint}>{t('camera.scanHint')}</Text>
         </View>
       </CameraView>
 
@@ -551,7 +555,7 @@ export default function CameraScreen() {
                 <View style={styles.resultHandle} />
                 
                 <View style={styles.resultSection}>
-                  <Text style={[styles.resultTitle, { color: colors.textPrimary }]}>Ingredientele detectate</Text>
+                  <Text style={[styles.resultTitle, { color: colors.textPrimary }]}>{t('camera.ingredienteDetectate')}</Text>
 
                   <ScrollView style={styles.itemsList} showsVerticalScrollIndicator={false}>
                     {rezultat.map((ingredient, index) => (
@@ -575,11 +579,11 @@ export default function CameraScreen() {
                         setCautareProdusVisible(true);
                       }}
                       accessibilityRole="button"
-                      accessibilityLabel="Adaugă alt produs la masă"
+                      accessibilityLabel={t('camera.adaugaAltProdusA11y')}
                     >
                       <Plus size={16} color={colors.accent} />
                       <Text style={[styles.addExtraText, { color: colors.accent, fontWeight: '700' }]}>
-                        + Adaugă alt produs
+                        {t('camera.adaugaAltProdus')}
                       </Text>
                     </TouchableOpacity>
 
@@ -601,28 +605,28 @@ export default function CameraScreen() {
                   <View style={styles.macroDivider} />
                   <View style={styles.macroItem}>
                     <Text style={[styles.macroValue, { color: colors.accentSecondary }]}>{Math.round(totalCalculat.proteine)}g</Text>
-                    <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>proteine</Text>
+                    <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>{t('camera.macroProteine')}</Text>
                   </View>
                   <View style={styles.macroDivider} />
                   <View style={styles.macroItem}>
                     <Text style={[styles.macroValue, { color: colors.accentTertiary }]}>{Math.round(totalCalculat.carbohidrati)}g</Text>
-                    <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>carbs</Text>
+                    <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>{t('camera.macroCarbohidrati')}</Text>
                   </View>
                   <View style={styles.macroDivider} />
                   <View style={styles.macroItem}>
                     <Text style={[styles.macroValue, { color: colors.warning }]}>{Math.round(totalCalculat.grasimi)}g</Text>
-                    <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>grăsimi</Text>
+                    <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>{t('camera.macroGrasimi')}</Text>
                   </View>
                 </View>
 
-                <TouchableOpacity style={[styles.addBtn, { shadowColor: colors.accent }]} onPress={adaugaInJurnal} accessibilityRole="button" accessibilityLabel="Adaugă masa în jurnal">
+                <TouchableOpacity style={[styles.addBtn, { shadowColor: colors.accent }]} onPress={adaugaInJurnal} accessibilityRole="button" accessibilityLabel={t('camera.adaugaMasaJurnalA11y')}>
                   <LinearGradient colors={colors.accentGradient} style={styles.addBtnGrad}>
-                    <Text style={[styles.addBtnText, { color: colors.background }]}>+ Adaugă {Math.round(totalCalculat.calorii)} kcal în Jurnal</Text>
+                    <Text style={[styles.addBtnText, { color: colors.background }]}>{t('camera.adaugaInJurnalButon', { kcal: Math.round(totalCalculat.calorii) })}</Text>
                   </LinearGradient>
                 </TouchableOpacity>
                 
-                <TouchableOpacity style={styles.retryBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); anuleazaScanarea(); }} accessibilityRole="button" accessibilityLabel="Anulează și scanează din nou">
-                  <Text style={styles.retryBtnText}>🔄 Anulează & Scanează din nou</Text>
+                <TouchableOpacity style={styles.retryBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); anuleazaScanarea(); }} accessibilityRole="button" accessibilityLabel={t('camera.anuleazaScaneazaA11y')}>
+                  <Text style={styles.retryBtnText}>{t('camera.anuleazaScaneaza')}</Text>
                 </TouchableOpacity>
               </LinearGradient>
             </BlurView>
@@ -633,8 +637,8 @@ export default function CameraScreen() {
       {scanError && (
         <View style={styles.errorCard}>
           <Text style={styles.errorText}>{scanError}</Text>
-          <Pressable onPress={() => setScanError(null)} accessibilityRole="button" accessibilityLabel="Închide mesajul de eroare">
-            <Text style={styles.retryText}>Închide</Text>
+          <Pressable onPress={() => setScanError(null)} accessibilityRole="button" accessibilityLabel={t('camera.inchideEroareA11y')}>
+            <Text style={styles.retryText}>{t('camera.inchide')}</Text>
           </Pressable>
         </View>
       )}
@@ -651,8 +655,8 @@ export default function CameraScreen() {
 
       {isSavingDiary && (
         <View style={styles.savingOverlay}>
-          <ActivityIndicator size="large" color="#CCFF00" />
-          <Text style={styles.savingText}>Salvez în jurnal...</Text>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={[styles.savingText, { color: colors.accent }]}>{t('camera.salvezInJurnal')}</Text>
         </View>
       )}
 
@@ -689,19 +693,19 @@ export default function CameraScreen() {
             <TouchableOpacity
               testID="gallery-button"
               accessibilityRole="button"
-              accessibilityLabel="Alege o poză din galerie"
+              accessibilityLabel={t('camera.alegePozaGalerieA11y')}
               style={[styles.galleryBtn, { borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.5)' }]}
               onPress={alegeDinGalerie}
               disabled={seIncarca}
             >
               <ImageIcon size={22} color="#FFFFFF" />
-              <Text style={styles.galleryBtnText}>Galerie</Text>
+              <Text style={styles.galleryBtnText}>{t('camera.galerie')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               testID="shutter-button"
               accessibilityRole="button"
-              accessibilityLabel="Scanează mâncarea cu aparatul foto"
+              accessibilityLabel={t('camera.scaneazaAparatFotoA11y')}
               style={[styles.shutterBtn, { shadowColor: colors.accent, borderColor: colors.accent + '4D' }]}
               onPress={analizeazaFoto}
               disabled={seIncarca}
@@ -719,7 +723,7 @@ export default function CameraScreen() {
 
             <View style={{ width: 72 }} />
           </View>
-          <Text style={styles.shutterLabel}>Apasă pe buton sau alege o poză din galerie</Text>
+          <Text style={styles.shutterLabel}>{t('camera.shutterHint')}</Text>
         </Animated.View>
       )}
     </View>
@@ -802,7 +806,7 @@ const styles = StyleSheet.create({
   itemsList: { maxHeight: 220, marginBottom: 20 },
   ingredientRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   ingredientName: { fontSize: 16, fontWeight: '600', flex: 1, marginRight: 12, paddingVertical: 4 },
-  ingredientAmount: { fontSize: 15, fontWeight: '700', color: '#CCFF00' },
+  ingredientAmount: { fontSize: 15, fontWeight: '700' },
   gramContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 12, paddingHorizontal: 12, borderWidth: 1 },
   gramInput: { fontSize: 16, fontWeight: '800', paddingVertical: 8, minWidth: 40, textAlign: 'center' },
   gramUnit: { fontSize: 14, fontWeight: '600', marginLeft: 4 },
@@ -825,7 +829,7 @@ const styles = StyleSheet.create({
   retryText: { color: '#FFFFFF', fontWeight: '900', fontSize: 14, textDecorationLine: 'underline' },
 
   savingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(5,8,13,0.85)', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
-  savingText: { color: '#CCFF00', fontSize: 18, fontWeight: '800', marginTop: 16 },
+  savingText: { fontSize: 18, fontWeight: '800', marginTop: 16 },
 
   shutterArea: { position: 'absolute', bottom: 60, left: 0, right: 0, alignItems: 'center' },
   shutterBtn: { width: 80, height: 80, borderRadius: 40, overflow: 'hidden', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.6, shadowRadius: 24, elevation: 20, borderWidth: 3 },

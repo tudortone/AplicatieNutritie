@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, RefreshControl, Alert, ActivityIndicator, Platform, Switch, Linking
@@ -54,6 +54,10 @@ export default function ProfilScreen() {
   const [nume, setNume] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showSuccessAnim, setShowSuccessAnim] = useState(false);
+  // Curățăm cronometrul animației de succes la demontare — un setTimeout fără
+  // cleanup poate apela setState după ce componentul a fost demontat.
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (successTimerRef.current) clearTimeout(successTimerRef.current); }, []);
   
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
@@ -83,7 +87,7 @@ export default function ProfilScreen() {
         if (!nm) nm = await AsyncStorage.getItem('nume_profil');
         if (!av) av = await AsyncStorage.getItem('avatar_url');
 
-        setNume(nm ? String(nm) : (session.user.email?.split('@')[0] || 'Utilizator'));
+        setNume(nm ? String(nm) : (session.user.email?.split('@')[0] || t('profile.utilizator')));
         setAvatarUrl(av ? String(av) : null);
 
         setGreutate(g ? String(g) : '75');
@@ -131,8 +135,8 @@ export default function ProfilScreen() {
   const salveaza = async () => {
     if (!greutate || !greutateTinta || !caloriiTinta || !proteineTinta || !carbiTinta || !grasimiTinta) {
       showBanner({
-        title: "Date incomplete",
-        message: "Te rog să completezi toate obiectivele.",
+        title: t('alerts.titluri.dateIncomplete'),
+        message: t('profile.completeazaObiectivele'),
         type: 'warning'
       });
       return;
@@ -166,14 +170,14 @@ export default function ProfilScreen() {
       await AsyncStorage.setItem('nume_profil', nume);
       if (avatarUrl) await AsyncStorage.setItem('avatar_url', avatarUrl);
 
-      notify.success('Profil actualizat', 'Modificările au fost salvate');
+      notify.success(t('profile.notifyProfilActualizat'), t('profile.notifyModificariSalvate'));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowSuccessAnim(true);
-      setTimeout(() => setShowSuccessAnim(false), 2600);
+      successTimerRef.current = setTimeout(() => setShowSuccessAnim(false), 2600);
     } catch {
       showBanner({
-        title: "Salvat local",
-        message: "Conexiune indisponibilă. Datele au fost salvate local.",
+        title: t('profile.salvatLocal'),
+        message: t('profile.conexiuneIndisponibilaSalvareLocala'),
         type: 'info'
       });
     } finally {
@@ -226,7 +230,7 @@ export default function ProfilScreen() {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Se încarcă profilul...</Text>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('profile.seIncarcaProfilul')}</Text>
       </View>
     );
   }
@@ -234,7 +238,7 @@ export default function ProfilScreen() {
   if (!session) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Nu ești autentificat.</Text>
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>{t('profile.nuEstiAutentificat')}</Text>
       </View>
     );
   }
@@ -268,7 +272,7 @@ export default function ProfilScreen() {
 
         {/* Avatar header */}
         <Animated.View entering={FadeInDown.duration(500)} style={styles.avatarSection}>
-          <TouchableOpacity activeOpacity={0.85} onPress={alegePozaProfil} accessibilityRole="button" accessibilityLabel="Alege o poză de profil">
+          <TouchableOpacity activeOpacity={0.85} onPress={alegePozaProfil} accessibilityRole="button" accessibilityLabel={t('profile.alegePozaProfil')}>
             <LinearGradient colors={colors.accentGradient} style={[styles.avatarRing, { shadowColor: colors.accent }]}>
               <View style={[styles.avatarInner, { backgroundColor: '#0F1318', overflow: 'hidden' }]}>
                 {avatarUrl ? (
@@ -280,7 +284,7 @@ export default function ProfilScreen() {
                     contentFit="cover"
                     transition={200}
                     cachePolicy="disk"
-                    accessibilityLabel="Poza de profil"
+                    accessibilityLabel={t('profile.pozaDeProfil')}
                   />
                 ) : (
                   <Text style={[styles.avatarText, { color: colors.accent }]}>{initials}</Text>
@@ -315,12 +319,12 @@ export default function ProfilScreen() {
                   <Pencil size={18} color={colors.accent} />
                 </View>
                 <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Nume / Pseudonim Afișat</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('profile.numePseudonimAfisat')}</Text>
                   <TextInput
                     style={[styles.inputField, { color: colors.textPrimary, fontSize: 18 }]}
                     value={nume}
                     onChangeText={setNume}
-                    placeholder="Introdu numele tău..."
+                    placeholder={t('profile.placeholderIntroduNumele')}
                     placeholderTextColor={colors.textSecondary}
                     selectionColor={colors.accent}
                   />
@@ -334,7 +338,7 @@ export default function ProfilScreen() {
         <Animated.View entering={FadeInDown.duration(600).delay(50)}>
           <View style={styles.sectionHeaderRow}>
             <Palette size={16} color={colors.accent} />
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>TEMĂ VIZUALĂ</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('profile.temaVizuala')}</Text>
           </View>
           <View style={styles.themeGrid}>
             {(['midnight', 'ocean', 'sunset'] as ThemeName[]).map((tName) => {
@@ -352,7 +356,7 @@ export default function ProfilScreen() {
                   activeOpacity={0.8}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isSelected }}
-                  accessibilityLabel={`Tema ${themeDisplayNames[tName]}`}
+                  accessibilityLabel={t('profile.temaNume', { nume: themeDisplayNames[tName] })}
                 >
                   <View style={styles.themeSwatchRow}>
                     <View style={[styles.themeSwatch, { backgroundColor: tColors.background }]} />
@@ -370,7 +374,7 @@ export default function ProfilScreen() {
 
         {/* Notifications section */}
         <Animated.View entering={FadeInDown.duration(600).delay(80)}>
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>REMINDERE & NOTIFICĂRI</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('profile.remindereNotificari')}</Text>
           <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 20 }]}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
               <View style={[styles.inputRow, { alignItems: 'center' }]}>
@@ -378,8 +382,8 @@ export default function ProfilScreen() {
                   <Bell size={18} color={colors.accent} />
                 </View>
                 <View style={[styles.inputContent, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Remindere Zilnice de Masă</Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Primești 3 notificări la 08:00, 13:00 și 19:30</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>{t('profile.remindereZilniceDeMasa')}</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{t('profile.treiNotificariOrar')}</Text>
                 </View>
                 <Switch
                   value={notificationsEnabled}
@@ -391,7 +395,7 @@ export default function ProfilScreen() {
               {isExpoGo && (
                 <View style={{ paddingHorizontal: 20, paddingBottom: 14 }}>
                   <Text style={{ color: colors.textSecondary, fontSize: 11, fontStyle: 'italic' }}>
-                    ℹ️ Expo Go: Notificările push necesită development build. Reminderele locale orare rămân active.
+                    {t('profile.expoGoNotificari')}
                   </Text>
                 </View>
               )}
@@ -404,7 +408,7 @@ export default function ProfilScreen() {
           <Animated.View entering={FadeInDown.duration(600).delay(90)}>
             <View style={styles.sectionHeaderRow}>
               <ShieldCheck size={16} color={colors.accent} />
-              <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>SECURITATE AVANSATĂ</Text>
+              <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>{t('profile.securitateAvansata')}</Text>
             </View>
             <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 20, marginTop: 12 }]}>
               <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
@@ -413,8 +417,8 @@ export default function ProfilScreen() {
                     <Lock size={18} color={colors.accent} />
                   </View>
                   <View style={[styles.inputContent, { flex: 1 }]}>
-                    <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Blocare cu {biometricType}</Text>
-                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Solicită autentificare la pornire și după 5 min inactivitate</Text>
+                    <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>{t('profile.blocareCu', { tip: biometricType })}</Text>
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{t('profile.solicitaAutentificare')}</Text>
                   </View>
                   <Switch
                     value={isEnabled}
@@ -432,7 +436,7 @@ export default function ProfilScreen() {
         <Animated.View entering={FadeInDown.duration(600).delay(95)}>
           <View style={styles.sectionHeaderRow}>
             <Activity size={16} color={colors.accent} />
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>CONECTIVITATE FITNESS & BRĂȚĂRI</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>{t('profile.conectivitateFitness')}</Text>
           </View>
           <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 20, marginTop: 12 }]}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
@@ -441,8 +445,8 @@ export default function ProfilScreen() {
                   <Footprints size={18} color={colors.accent} />
                 </View>
                 <View style={[styles.inputContent, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Sincronizare Activă ({platformName})</Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Preluare automată pași și calcul calorii arse în jurnal</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>{t('profile.sincronizareActiva', { platform: platformName })}</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{t('profile.preluareAutomatPasi')}</Text>
                 </View>
                 <Switch
                   value={healthSyncEnabled}
@@ -457,7 +461,7 @@ export default function ProfilScreen() {
 
               <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 16 }}>
                 <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '700', marginBottom: 10, textTransform: 'uppercase' }}>
-                  Alege Aplicația sau Brățara de Fitness:
+                  {t('profile.alegeAplicatiaBratara')}
                 </Text>
                 <View style={{ gap: 8 }}>
                   {HEALTH_PROVIDERS.map((p) => {
@@ -479,7 +483,7 @@ export default function ProfilScreen() {
                         activeOpacity={0.75}
                         accessibilityRole="radio"
                         accessibilityState={{ checked: active }}
-                        accessibilityLabel={`Sincronizare cu ${p.name}`}
+                        accessibilityLabel={t('profile.sincronizareCu', { nume: p.name })}
                       >
                         <Text style={{ fontSize: 22 }}>{p.icon}</Text>
                         <View style={{ flex: 1 }}>
@@ -509,7 +513,7 @@ export default function ProfilScreen() {
             activeOpacity={0.85}
             style={{
               backgroundColor: colors.accent + '12',
-              borderColor: '#FFD45A44',
+              borderColor: colors.warning + '44',
               borderWidth: 1,
               borderRadius: 18,
               padding: 16,
@@ -519,26 +523,26 @@ export default function ProfilScreen() {
               gap: 14,
             }}
             accessibilityRole="button"
-            accessibilityLabel="Detalii abonament NutriAI Premium"
+            accessibilityLabel={t('profile.detaliiAbonamentPremium')}
           >
             <View
               style={{
                 width: 44,
                 height: 44,
                 borderRadius: 22,
-                backgroundColor: '#FFD45A22',
+                backgroundColor: colors.warning + '22',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Crown size={22} color="#FFD45A" />
+              <Crown size={22} color={colors.warning} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 15, fontWeight: '900', color: colors.textPrimary }}>
                 NutriAI Premium
               </Text>
               <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
-                Scanări AI nelimitate, chat fără restricții și macro-uri personalizate
+                {t('profile.premiumSubtitle')}
               </Text>
             </View>
             <ChevronRight size={18} color={colors.textSecondary} />
@@ -563,7 +567,7 @@ export default function ProfilScreen() {
               gap: 14,
             }}
             accessibilityRole="button"
-            accessibilityLabel="Upgrade la planul Family"
+            accessibilityLabel={t('profile.upgradePlanFamily')}
           >
             <View
               style={{
@@ -582,7 +586,7 @@ export default function ProfilScreen() {
                 Upgrade la Plan Family
               </Text>
               <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
-                Conturi pentru întreaga familie, cu un singur abonament
+                {t('profile.familySubtitle')}
               </Text>
             </View>
             <ChevronRight size={18} color={colors.textSecondary} />
@@ -592,7 +596,7 @@ export default function ProfilScreen() {
         {/* Secțiune Insigne & Gamificare */}
         <Animated.View entering={FadeInDown.duration(600).delay(80)}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-            INSIGNE & RECOMPENSE ({insigne.length}/{INSIGNE_LIST.length})
+            {t('profile.insigneRecompense', { obtinute: insigne.length, total: INSIGNE_LIST.length })}
           </Text>
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
@@ -661,12 +665,12 @@ export default function ProfilScreen() {
         <Animated.View entering={FadeInDown.duration(600).delay(100)}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('profile.daily_targets')}</Text>
 
-          <TouchableOpacity style={[styles.aiSetupBtn, { borderColor: colors.accent + '33' }]} onPress={() => router.push('/calculator-ai')} accessibilityRole="button" accessibilityLabel="Asistent configurare profil cu AI">
+          <TouchableOpacity style={[styles.aiSetupBtn, { borderColor: colors.accent + '33' }]} onPress={() => router.push('/calculator-ai')} accessibilityRole="button" accessibilityLabel={t('profile.asistentConfigurareProfilAI')}>
             <LinearGradient colors={[colors.accent + '25', 'rgba(0,0,0,0)']} style={styles.aiSetupGrad}>
               <Sparkles size={22} color={colors.accent} />
               <View style={styles.aiSetupTextWrap}>
-                <Text style={[styles.aiSetupTitle, { color: colors.textPrimary }]}>Asistent Configurare Profil</Text>
-                <Text style={[styles.aiSetupSub, { color: colors.textTertiary }]}>Calculează țintele automat cu AI</Text>
+                <Text style={[styles.aiSetupTitle, { color: colors.textPrimary }]}>{t('profile.asistentConfigurareProfil')}</Text>
+                <Text style={[styles.aiSetupSub, { color: colors.textTertiary }]}>{t('profile.calculeazaTinteleAI')}</Text>
               </View>
               <ChevronRight size={20} color={colors.textSecondary} />
             </LinearGradient>
@@ -680,7 +684,7 @@ export default function ProfilScreen() {
                   <Scale size={18} color={colors.accent} />
                 </View>
                 <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Greutate (kg)</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('profile.weight')}</Text>
                   <TextInput
                     style={[styles.inputField, { color: colors.textPrimary }]}
                     value={greutate}
@@ -699,7 +703,7 @@ export default function ProfilScreen() {
                   <Target size={18} color={colors.accent} />
                 </View>
                 <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Greutate Țintă (kg)</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('profile.greutateTintaKg')}</Text>
                   <TextInput
                     style={[styles.inputField, { color: colors.textPrimary }]}
                     value={greutateTinta}
@@ -718,7 +722,7 @@ export default function ProfilScreen() {
                   <Target size={18} color={colors.accent} />
                 </View>
                 <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Țintă Calorii (kcal/zi)</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('profile.tintaCalorii')}</Text>
                   <TextInput
                     style={[styles.inputField, { color: colors.textPrimary }]}
                     value={caloriiTinta}
@@ -737,7 +741,7 @@ export default function ProfilScreen() {
                   <Zap size={18} color={colors.accentSecondary} />
                 </View>
                 <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Țintă Proteine (g/zi)</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('profile.tintaProteine')}</Text>
                   <TextInput
                     style={[styles.inputField, { color: colors.textPrimary }]}
                     value={proteineTinta}
@@ -756,7 +760,7 @@ export default function ProfilScreen() {
                   <Zap size={18} color={colors.accentTertiary} />
                 </View>
                 <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Țintă Carbohidrați (g/zi)</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('profile.tintaCarbohidrati')}</Text>
                   <TextInput
                     style={[styles.inputField, { color: colors.textPrimary }]}
                     value={carbiTinta}
@@ -775,7 +779,7 @@ export default function ProfilScreen() {
                   <Zap size={18} color={colors.warning} />
                 </View>
                 <View style={styles.inputContent}>
-                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Țintă Grăsimi (g/zi)</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>{t('profile.tintaGrasimi')}</Text>
                   <TextInput
                     style={[styles.inputField, { color: colors.textPrimary }]}
                     value={grasimiTinta}
@@ -793,7 +797,7 @@ export default function ProfilScreen() {
 
         {/* Save button */}
         <Animated.View entering={FadeInDown.duration(600).delay(200)}>
-          <TouchableOpacity style={[styles.saveBtn, { shadowColor: colors.accent }]} onPress={salveaza} disabled={loading} accessibilityRole="button" accessibilityLabel="Salvează profilul">
+          <TouchableOpacity style={[styles.saveBtn, { shadowColor: colors.accent }]} onPress={salveaza} disabled={loading} accessibilityRole="button" accessibilityLabel={t('profile.salveazaProfilul')}>
             <LinearGradient colors={colors.accentGradient} style={styles.saveBtnGrad}>
               {loading ? (
                 <ActivityIndicator color={colors.background} />
@@ -811,9 +815,9 @@ export default function ProfilScreen() {
         <Animated.View entering={FadeInUp.duration(600).delay(300)} style={styles.infoCard}>
           <BlurView intensity={15} tint="dark" style={styles.infoCardBlur}>
             <LinearGradient colors={['rgba(255,255,255,0.03)', 'rgba(0,0,0,0)']} style={styles.infoCardGrad}>
-              <Text style={styles.infoCardTitle}>💡 Cum funcționează</Text>
+              <Text style={styles.infoCardTitle}>{t('profile.cumFunctioneaza')}</Text>
               <Text style={[styles.infoCardText, { color: colors.textSecondary }]}>
-                Obiectivele pe care le setezi sunt folosite de asistentul AI pentru a-ți oferi recomandări personalizate și a-ți urmări progresul zilnic.
+                {t('profile.explicatieObiective')}
               </Text>
             </LinearGradient>
           </BlurView>
@@ -821,7 +825,7 @@ export default function ProfilScreen() {
 
         {/* Suport & Legal */}
         <Animated.View entering={FadeInUp.duration(600).delay(320)}>
-          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>SUPORT & LEGAL</Text>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t('profile.suportLegal')}</Text>
           <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 24 }]}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
               <TouchableOpacity
@@ -829,15 +833,15 @@ export default function ProfilScreen() {
                 onPress={abreSuport}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel="Contactează echipa de suport"
+                accessibilityLabel={t('profile.contacteazaEchipaSuport')}
               >
                 <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
                   <Mail size={18} color={colors.accent} />
                 </View>
                 <View style={[styles.inputContent, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Contactează-ne</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>{t('alerts.titluri.contacteazaNe')}</Text>
                   <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    {EMAIL_SUPORT ? `Ne poți scrie la ${EMAIL_SUPORT}` : 'Trimite un e-mail echipei de suport'}
+                    {EMAIL_SUPORT ? t('profile.nePotiScrieLa', { email: EMAIL_SUPORT }) : t('profile.trimiteEmailSuport')}
                   </Text>
                 </View>
                 <ChevronRight size={18} color={colors.textSecondary} />
@@ -850,14 +854,14 @@ export default function ProfilScreen() {
                 onPress={() => router.push('/legal' as never)}
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel="Termeni și confidențialitate"
+                accessibilityLabel={t('profile.termeniConfidentialitate')}
               >
                 <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
                   <FileText size={18} color={colors.accent} />
                 </View>
                 <View style={[styles.inputContent, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Termeni & Confidențialitate</Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Condiții de utilizare și politică de confidențialitate</Text>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>{t('profile.termeniSiConfidentialitate')}</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{t('profile.conditiiUtilizare')}</Text>
                 </View>
                 <ChevronRight size={18} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -867,9 +871,9 @@ export default function ProfilScreen() {
 
         {/* Logout */}
         <Animated.View entering={FadeInUp.duration(600).delay(400)}>
-          <TouchableOpacity style={[styles.logoutBtn, { borderColor: colors.danger + '33', backgroundColor: colors.danger + '0A' }]} onPress={deconectare} accessibilityRole="button" accessibilityLabel="Deconectează-te din aplicație">
+          <TouchableOpacity style={[styles.logoutBtn, { borderColor: colors.danger + '33', backgroundColor: colors.danger + '0A' }]} onPress={deconectare} accessibilityRole="button" accessibilityLabel={t('profile.deconecteazaTe')}>
             <LogOut size={18} color={colors.danger} />
-            <Text style={[styles.logoutText, { color: colors.danger }]}>Deconectare</Text>
+            <Text style={[styles.logoutText, { color: colors.danger }]}>{t('profile.logout')}</Text>
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
@@ -882,8 +886,8 @@ export default function ProfilScreen() {
               <Animated.View entering={FadeInUp.duration(400).delay(100).springify()} style={[styles.successIconCircle, { backgroundColor: colors.accent }]}>
                 <CheckCircle2 size={44} color="#000" />
               </Animated.View>
-              <Text style={[styles.successTitle, { color: colors.textPrimary }]}>Profil Actualizat!</Text>
-              <Text style={[styles.successSub, { color: colors.textSecondary }]}>Modificările tale (poză, nume și obiective) au fost salvate cu succes.</Text>
+              <Text style={[styles.successTitle, { color: colors.textPrimary }]}>{t('profile.successProfilActualizat')}</Text>
+              <Text style={[styles.successSub, { color: colors.textSecondary }]}>{t('profile.successModificariSalvate')}</Text>
             </LinearGradient>
           </BlurView>
         </Animated.View>
@@ -897,7 +901,7 @@ const styles = StyleSheet.create({
   glowTop: { position: 'absolute', top: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.04 },
   glowBottom: { position: 'absolute', bottom: 50, right: -80, width: 280, height: 280, borderRadius: 140, opacity: 0.05 },
 
-  scroll: { paddingHorizontal: 20 },
+  scroll: { paddingHorizontal: 20, width: '100%', maxWidth: 560, alignSelf: 'center' },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 15, fontWeight: '500' },

@@ -46,7 +46,8 @@ const midnight: ThemeColors = {
   accentSecondary: '#A855F7',
   accentTertiary: '#00F0FF',
   textPrimary: '#FFFFFF',
-  textSecondary: '#6B7280',
+  // #8A93A3 pe #12161A ≈ 5.9:1 (AA 4.5:1) — #6B7280 dadea doar 3.8:1.
+  textSecondary: '#8A93A3',
   textTertiary: '#9CA3AF',
   danger: '#F87171',
   warning: '#FB923C',
@@ -76,7 +77,8 @@ const ocean: ThemeColors = {
   accentSecondary: '#818CF8',
   accentTertiary: '#2DD4BF',
   textPrimary: '#F0F9FF',
-  textSecondary: '#64748B',
+  // #8494AB pe #0F1E36 ≈ 5.4:1 (AA 4.5:1).
+  textSecondary: '#8494AB',
   textTertiary: '#94A3B8',
   danger: '#FB7185',
   warning: '#FBBF24',
@@ -106,7 +108,8 @@ const sunset: ThemeColors = {
   accentSecondary: '#F472B6',
   accentTertiary: '#FBBF24',
   textPrimary: '#FFF7ED',
-  textSecondary: '#78716C',
+  // #9A958E pe #261217 ≈ 6:1 (AA 4.5:1).
+  textSecondary: '#9A958E',
   textTertiary: '#A8A29E',
   danger: '#EF4444',
   warning: '#F59E0B',
@@ -152,7 +155,7 @@ export const Colors = {
   accentSecondary: '#A855F7',
   accentTertiary: '#00F0FF',
   textPrimary: '#FFFFFF',
-  textSecondary: '#6B7280',
+  textSecondary: '#8A93A3',
   textTertiary: '#9CA3AF',
   danger: '#F87171',
   warning: '#FB923C',

@@ -6,6 +6,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated'
 import { ArrowLeft, ArrowRight } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useRouter } from 'expo-router'
+import { useTranslation } from 'react-i18next'
 
 import { useTheme } from '../../context/ThemeContext'
 import { useOnboarding } from '../../context/OnboardingContext'
@@ -19,7 +20,7 @@ export type EcranPasProps = {
 	children: React.ReactNode
 	/** Cand e false, butonul de continuare e dezactivat. */
 	poateContinua: boolean
-	/** Eticheta butonului principal. Implicit `Continua`. */
+	/** Eticheta butonului principal. Implicit `Continua` (localizat). */
 	etichetaButon?: string
 	/**
 	 * Actiune la apasarea butonului, rulata inainte de navigare.
@@ -42,14 +43,18 @@ export default function EcranPas({
 	subtitlu,
 	children,
 	poateContinua,
-	etichetaButon = 'Continua',
+	etichetaButon,
 	laContinuare,
 	seIncarca = false,
 	faraAntet = false,
 }: EcranPasProps) {
+	const { t } = useTranslation()
 	const { colors } = useTheme()
 	const { date } = useOnboarding()
 	const router = useRouter()
+
+	// Implicit `Continua` - eticheta butonului principal, localizata.
+	const etichetaButonEfectiva = etichetaButon ?? t('onboarding.butonContinua')
 
 	const pasi = pasiActivi(date.scop)
 	const indice = pasi.indexOf(pas)
@@ -78,7 +83,7 @@ export default function EcranPas({
 						onPress={() => router.canGoBack() && router.back()}
 						style={styles.butonInapoi}
 						hitSlop={12}
-						accessibilityLabel="Inapoi"
+						accessibilityLabel={t('onboarding.inapoi')}
 						accessibilityRole="button"
 					>
 						<ArrowLeft size={24} color={colors.textPrimary} />
@@ -133,7 +138,7 @@ export default function EcranPas({
 							<ActivityIndicator color={colors.background} />
 						) : (
 							<>
-								<Text style={[styles.butonText, { color: colors.background }]}>{etichetaButon}</Text>
+								<Text style={[styles.butonText, { color: colors.background }]}>{etichetaButonEfectiva}</Text>
 								<ArrowRight size={20} color={colors.background} strokeWidth={2.5} />
 							</>
 						)}

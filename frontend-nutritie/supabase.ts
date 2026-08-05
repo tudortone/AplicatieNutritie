@@ -61,8 +61,8 @@ function secureStoreDisponibil(): Promise<boolean> {
       } catch {
         console.warn(
           '[NutriAI] SecureStore indisponibil pe acest dispozitiv. ' +
-          'Sesiunea va fi stocată în AsyncStorage (text simplu). ' +
-          'Activează criptarea dispozitivului pentru securitate maximă.',
+          'Sesiunea nu va fi persistata (fail-visible): salvarea in AsyncStorage ' +
+          'ar expune tokenul in text simplu.',
         );
         return false;
       }
@@ -165,11 +165,11 @@ async function getItem(cheie: string): Promise<string | null> {
   const magazin = await citesteMagazin(cheie);
 
   if (magazin === 'async' || !disponibil) {
-    try {
-      return await AsyncStorage.getItem(cheie);
-    } catch {
-      return null;
-    }
+    // Securitate: nu restituim un token de sesiune stocat în text simplu. Dacă o
+    // versiune veche l-a lăsat în AsyncStorage, îl ștergem — utilizatorul se
+    // re-autentifică o singură dată, dar token-ul nu persistă necriptat.
+    try { await AsyncStorage.removeItem(cheie); } catch { /* ignorăm */ }
+    return null;
   }
 
   try {
@@ -179,39 +179,39 @@ async function getItem(cheie: string): Promise<string | null> {
     console.warn('[NutriAI] Citire SecureStore eșuată pentru sesiune:', err);
   }
 
-  // Recuperare: o versiune anterioară putea lăsa valoarea în AsyncStorage.
-  try {
-    return await AsyncStorage.getItem(cheie);
-  } catch {
-    return null;
-  }
+  // Recuperarea din AsyncStorage a fost eliminată: nu mai scriem token-uri în
+  // text simplu, deci nu există o valoare legitimă de recuperat. Orice reziduu
+  // vechi îl curățăm.
+  try { await AsyncStorage.removeItem(cheie); } catch { /* ignorăm */ }
+  return null;
 }
 
 async function setItem(cheie: string, valoare: string): Promise<void> {
   const disponibil = await secureStoreDisponibil();
 
-  if (disponibil) {
-    try {
-      await scrieInSecure(cheie, valoare);
-      await scrieMagazin(cheie, 'secure');
-      // Eliminăm o eventuală copie mai veche din AsyncStorage, ca să nu rămână
-      // un token valid în stocare necriptată.
-      try { await AsyncStorage.removeItem(cheie); } catch { /* ignorăm */ }
-      return;
-    } catch (err) {
-      console.warn(
-        '[NutriAI] Scriere SecureStore eșuată, revin la AsyncStorage:',
-        err,
-      );
-    }
+  // Fail-visible: tokenul de sesiune NU este scris niciodata in stocare
+  // necriptata (AsyncStorage). Daca SecureStore lipseste sau scrierea esueaza,
+  // aruncam o eroare in loc sa ocolim in tacere — o sesiune nepersistata e de
+  // preferat uneia care sta in plaintext pe disc.
+  if (!disponibil) {
+    throw new Error(
+      '[NutriAI] SecureStore indisponibil: sesiunea nu poate fi salvata in siguranta.',
+    );
   }
 
-  // Fallback. Marcăm magazinul ÍNAINTE de scriere: dacă procesul moare imediat
-  // după, citirea va căuta în AsyncStorage și va găsi fie valoarea nouă, fie nimic
-  // — niciodată valoarea veche din SecureStore, care ar fi în urmă.
-  await scrieMagazin(cheie, 'async');
-  await AsyncStorage.setItem(cheie, valoare);
-  await stergeDinSecure(cheie);
+  try {
+    await scrieInSecure(cheie, valoare);
+  } catch (err) {
+    throw new Error(
+      '[NutriAI] Scriere SecureStore esuata: sesiunea nu a fost salvata (' +
+        (err instanceof Error ? err.message : String(err)) + ').',
+    );
+  }
+
+  // Rutarea citirii si curatenia sunt optimizari: un esec aici nu invalideaza
+  // tokenul deja scris in SecureStore.
+  try { await scrieMagazin(cheie, 'secure'); } catch { /* ignorăm */ }
+  try { await AsyncStorage.removeItem(cheie); } catch { /* ignorăm */ }
 }
 
 async function removeItem(cheie: string): Promise<void> {

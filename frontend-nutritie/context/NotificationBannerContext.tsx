@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import Constants from 'expo-constants';
 import InAppNotification from '../components/InAppNotification';
+import i18n from '@/i18n';
 
 export type NotificationType = 'success' | 'info' | 'warning' | 'error' | 'reward' | 'reminder';
 
@@ -186,7 +187,7 @@ export function NotificationBannerProvider({ children }: { children: React.React
       const subscription = Notifications.addNotificationReceivedListener((notification) => {
         const content = notification.request.content;
         showNotification({
-          title: content.title || 'NutriAI Reminder',
+          title: content.title || i18n.t('banner.pushDefaultTitle'),
           message: content.body || undefined,
           type: 'reminder',
           duration: 4000,

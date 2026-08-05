@@ -45,6 +45,31 @@ interface MealProposal {
   };
 }
 
+// Forma brută a răspunsului AI (nume chei variante RO/EN) înainte de normalizare.
+interface MealProposalRawItem {
+  name?: string;
+  nume?: string;
+  qty?: number;
+  grame?: number;
+  unit?: string;
+  protein_g?: number;
+  proteine?: number;
+  carbs_g?: number;
+  carbohidrati?: number;
+  fat_g?: number;
+  grasimi?: number;
+  fiber_g?: number;
+  fibre?: number;
+  kcal?: number;
+  calorii?: number;
+}
+
+interface MealProposalRaw {
+  meal_type?: string;
+  items?: MealProposalRawItem[];
+  totals?: { kcal?: number; protein_g?: number; carbs_g?: number; fat_g?: number };
+}
+
 // Generator de id stabil pentru mesajele de chat (folosit ca `key` in lista).
 const newMsgId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -56,19 +81,19 @@ interface ChatMessage {
   text: string;
 }
 
-function parseMealProposal(text: any): MealProposal | null {
+function parseMealProposal(text: unknown): MealProposal | null {
   if (!text) return null;
-  
-  let targetObj: any = null;
+
+  let targetObj: MealProposalRaw | null = null;
   if (typeof text === 'object') {
-    targetObj = text;
+    targetObj = text as MealProposalRaw;
   } else {
     try {
       const stringToParse = String(text);
       const startIndex = stringToParse.indexOf('{');
       const endIndex = stringToParse.lastIndexOf('}');
       if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-        targetObj = JSON.parse(stringToParse.substring(startIndex, endIndex + 1));
+        targetObj = JSON.parse(stringToParse.substring(startIndex, endIndex + 1)) as MealProposalRaw;
       }
     } catch (e) {
       console.warn("Eroare parsare JSON meal proposal:", e);
@@ -76,22 +101,24 @@ function parseMealProposal(text: any): MealProposal | null {
   }
 
   if (targetObj && Array.isArray(targetObj.items) && targetObj.items.length > 0) {
+    const items = targetObj.items;
     let calcKcal = 0, calcP = 0, calcC = 0, calcF = 0;
-    targetObj.items.forEach((it: any) => {
+    items.forEach((it) => {
       calcKcal += Number(it.kcal || it.calorii || 0);
       calcP += Number(it.protein_g || it.proteine || 0);
       calcC += Number(it.carbs_g || it.carbohidrati || 0);
       calcF += Number(it.fat_g || it.grasimi || 0);
     });
 
-    const totals = (targetObj.totals && Number(targetObj.totals.kcal || 0) > 0)
-      ? targetObj.totals
+    const rawTotals = targetObj.totals;
+    const totals: MealProposal['totals'] = (rawTotals && Number(rawTotals.kcal || 0) > 0)
+      ? (rawTotals as MealProposal['totals'])
       : { kcal: calcKcal, protein_g: calcP, carbs_g: calcC, fat_g: calcF };
 
     return {
       type: "MEAL_PROPOSAL",
       meal_type: targetObj.meal_type || "gustare",
-      items: targetObj.items.map((it: any) => ({
+      items: items.map((it) => ({
         name: it.name || it.nume || "Aliment",
         qty: Number(it.qty || it.grame || 100),
         unit: it.unit || "g",
@@ -130,11 +157,13 @@ export default function ChatScreen() {
   const [mealProposalVisible, setMealProposalVisible] = useState(false);
   const [savingProposal, setSavingProposal] = useState(false);
   const [mesaje, setMesaje] = useState<ChatMessage[]>([
-    { id: newMsgId(), role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
+    { id: newMsgId(), role: 'ai', text: t('chat.initialGreeting') }
   ]);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const mesajeRef = useRef(mesaje);
+  const chatPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chatPersistSnapshotRef = useRef<ChatMessage[] | null>(null);
 
   useEffect(() => {
     mesajeRef.current = mesaje;
@@ -183,18 +212,39 @@ export default function ChatScreen() {
     loadHistory();
   }, []);
 
+  // Persistența e debounced (600ms): înainte, fiecare mesaj nou declanșa un
+  // JSON.stringify + AsyncStorage.setItem pe thread-ul JS — chiar și pentru
+  // schimburi rapide (user + răspuns AI). Coalescem într-o singură scriere.
   useEffect(() => {
-    const saveHistory = async () => {
-      try {
-        if (mesaje.length > 1) {
-          await AsyncStorage.setItem(getChatStorageKey(), JSON.stringify(mesaje.slice(-50)));
+    if (mesaje.length <= 1) return;
+    chatPersistSnapshotRef.current = mesaje.slice(-50);
+    if (chatPersistTimerRef.current) return;
+    chatPersistTimerRef.current = setTimeout(() => {
+      chatPersistTimerRef.current = null;
+      const deSalvat = chatPersistSnapshotRef.current;
+      chatPersistSnapshotRef.current = null;
+      if (deSalvat && deSalvat.length > 1) {
+        AsyncStorage.setItem(getChatStorageKey(), JSON.stringify(deSalvat)).catch((e) =>
+          console.error('Eroare la salvarea istoricului chat:', e),
+        );
+      }
+    }, 600);
+  }, [mesaje]);
+
+  // La unmount scriem best-effort ultima stare pending, ca să nu pierdem ultimele
+  // mesaje la închiderea ecranului sau a aplicației.
+  useEffect(() => {
+    return () => {
+      if (chatPersistTimerRef.current) {
+        clearTimeout(chatPersistTimerRef.current);
+        const pending = chatPersistSnapshotRef.current;
+        chatPersistSnapshotRef.current = null;
+        if (pending && pending.length > 1) {
+          AsyncStorage.setItem(getChatStorageKey(), JSON.stringify(pending)).catch(() => {});
         }
-      } catch (e) {
-        console.error('Eroare la salvarea istoricului chat:', e);
       }
     };
-    saveHistory();
-  }, [mesaje]);
+  }, []);
 
   useEffect(() => {
     setTimeout(() => {
@@ -228,13 +278,16 @@ export default function ChatScreen() {
     setLoadingChat(true);
 
     if (!session) {
-      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: "Nu ești autentificat. Te rog să te conectezi din nou." }]);
+      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: t('chat.notAuthenticated') }]);
       setLoadingChat(false);
       return;
     }
 
     try {
-      const istoricActivat = [...mesajeRef.current, { role: 'user' as const, text: mesajText }];
+      // Trimitem ultimele 12 mesaje, nu întregul istoric (ajunge la 50 de mesaje
+      // lungi); contextul pentru AI rămâne suficient, iar payload-ul nu crește
+      // nelimitat cu durata conversației.
+      const istoricActivat = [...mesajeRef.current.slice(-12), { role: 'user' as const, text: mesajText }];
       const raspuns = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 
@@ -253,7 +306,7 @@ export default function ChatScreen() {
       const date = await raspuns.json();
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
-      let raspunsText = date.raspuns || "Eroare la procesarea răspunsului.";
+      let raspunsText = date.raspuns || t('chat.processingError');
       let parsed = parseMealProposal(date) || parseMealProposal(raspunsText);
 
       if (!parsed && isMealLogIntent(mesajText)) {
@@ -279,12 +332,12 @@ export default function ChatScreen() {
         if (Array.isArray(parsed.items)) parsed.type = 'MEAL_PROPOSAL';
         setMealProposal(parsed);
         setMealProposalVisible(true);
-        raspunsText = "Am identificat alimentele! Apasă pe butonul de confirmare care a apărut pe ecran.";
+        raspunsText = t('chat.mealIdentified');
       }
 
       setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: raspunsText }]);
     } catch {
-      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: "Eroare de conexiune cu serverul AI. Te rog încearcă din nou mai târziu." }]);
+      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: t('chat.aiConnectionError') }]);
     } finally {
       setLoadingChat(false);
       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
@@ -356,7 +409,7 @@ export default function ChatScreen() {
       setMealProposalVisible(false);
       setMealProposal(null);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: '✅ Masa a fost confirmată și adăugată cu succes în Jurnal!' }]);
+      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: t('chat.mealConfirmed') }]);
       
     } catch (e: any) {
       console.error('Eroare salvare propunere masă:', e);
@@ -385,7 +438,7 @@ export default function ChatScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {}
     const initialMsg: ChatMessage[] = [
-      { id: newMsgId(), role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
+      { id: newMsgId(), role: 'ai', text: t('chat.initialGreeting') }
     ];
     setMesaje(initialMsg);
     await AsyncStorage.removeItem(getChatStorageKey());
@@ -414,10 +467,10 @@ export default function ChatScreen() {
               </View>
               <View style={styles.aiMeta}>
                 <Text style={[styles.title, { color: colors.textPrimary }]}>NutriAI Coach</Text>
-                <Text style={[styles.aiSubtitle, { color: colors.textSecondary }]}>nutriție, mese, progres</Text>
+                <Text style={[styles.aiSubtitle, { color: colors.textSecondary }]}>{t('chat.subtitle')}</Text>
                 <View style={styles.onlineRow}>
                   <View style={[styles.onlineDot, { backgroundColor: colors.accent }]} />
-                  <Text style={[styles.onlineText, { color: colors.accent }]}>online acum</Text>
+                  <Text style={[styles.onlineText, { color: colors.accent }]}>{t('chat.onlineNow')}</Text>
                 </View>
               </View>
             </View>
@@ -427,9 +480,9 @@ export default function ChatScreen() {
               style={[styles.newChatPill, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel="Începe o conversație nouă de chat"
+              accessibilityLabel={t('chat.newChatAccessibility')}
             >
-              <Text style={[styles.newChatPillText, { color: colors.textPrimary }]}>Chat nou</Text>
+              <Text style={[styles.newChatPillText, { color: colors.textPrimary }]}>{t('chat.newChat')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -438,7 +491,7 @@ export default function ChatScreen() {
               <Text style={[styles.contextChipText, { color: colors.accent }]}>{totalCalorii} / {caloriiTinta} kcal</Text>
             </View>
             <View style={[styles.contextChip, { backgroundColor: colors.accentSecondary + '14', borderColor: colors.accentSecondary + '26' }]}>
-              <Text style={[styles.contextChipText, { color: colors.accentSecondary }]}>{totalProteine} / {proteineTinta} g proteine</Text>
+              <Text style={[styles.contextChipText, { color: colors.accentSecondary }]}>{t('chat.proteinChip', { consumat: totalProteine, tinta: proteineTinta })}</Text>
             </View>
           </View>
         </Animated.View>
@@ -447,7 +500,7 @@ export default function ChatScreen() {
           <Animated.View entering={FadeInUp.duration(400)} exiting={FadeOut.duration(300)} style={[styles.newChatBanner, { backgroundColor: colors.accentSecondary + '22', borderColor: colors.accentSecondary }]}>
             <Sparkles size={16} color={colors.accentSecondary} />
             <Text style={[styles.newChatBannerText, { color: colors.textPrimary }]}>
-              Conversație nouă pornită — Gata să te ajut!
+              {t('chat.newChatBanner')}
             </Text>
           </Animated.View>
         )}
@@ -465,9 +518,9 @@ export default function ChatScreen() {
                 <View style={[styles.emptyAvatar, { backgroundColor: colors.accentSecondary + '22' }]}>
                   <Text style={styles.emptyAvatarText}>NC</Text>
                 </View>
-                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Salut, eu sunt NutriAI Coach</Text>
+                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('chat.emptyTitle')}</Text>
                 <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                  Îți pot analiza ziua, sugera mese și ajusta aportul după ce ai mâncat deja.
+                  {t('chat.emptySubtitle')}
                 </Text>
               </LinearGradient>
             </BlurView>
@@ -475,27 +528,27 @@ export default function ChatScreen() {
             <View style={styles.quickActionsList}>
               <TouchableOpacity
                 style={[styles.quickActionCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                onPress={() => trimitePromptDirect('Analizează mesele mele de azi și spune-mi ce să mai mănânc până diseară.')}
+                onPress={() => trimitePromptDirect(t('chat.promptAnalyzeDay'))}
                 accessibilityRole="button"
-                accessibilityLabel="Analiza zilei: vezi unde ești cu kcal și proteine"
+                accessibilityLabel={t('chat.quickAnalyzeA11y')}
               >
                 <Text style={styles.quickActionEmoji}>📊</Text>
                 <View style={styles.quickActionBody}>
-                  <Text style={[styles.quickActionTitle, { color: colors.textPrimary }]}>Analiza zilei</Text>
-                  <Text style={[styles.quickActionText, { color: colors.textSecondary }]}>Vezi unde ești cu kcal și proteine</Text>
+                  <Text style={[styles.quickActionTitle, { color: colors.textPrimary }]}>{t('chat.quickAnalyzeTitle')}</Text>
+                  <Text style={[styles.quickActionText, { color: colors.textSecondary }]}>{t('chat.quickAnalyzeSub')}</Text>
                 </View>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.quickActionCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                onPress={() => trimitePromptDirect('Sugerează-mi o masă bogată în proteine, sub 600 kcal.')}
+                onPress={() => trimitePromptDirect(t('chat.promptHighProteinMeal'))}
                 accessibilityRole="button"
-                accessibilityLabel="Sugerează o masă bogată în proteine, sub 600 kcal"
+                accessibilityLabel={t('chat.quickProteinA11y')}
               >
                 <Text style={styles.quickActionEmoji}>💪</Text>
                 <View style={styles.quickActionBody}>
-                  <Text style={[styles.quickActionTitle, { color: colors.textPrimary }]}>Masă bogată în proteine</Text>
-                  <Text style={[styles.quickActionText, { color: colors.textSecondary }]}>Rapid, simplu, util</Text>
+                  <Text style={[styles.quickActionTitle, { color: colors.textPrimary }]}>{t('chat.quickProteinTitle')}</Text>
+                  <Text style={[styles.quickActionText, { color: colors.textSecondary }]}>{t('chat.quickProteinSub')}</Text>
                 </View>
               </TouchableOpacity>
 
@@ -503,12 +556,12 @@ export default function ChatScreen() {
                 style={[styles.quickActionCard, { backgroundColor: colors.accent, borderColor: colors.accent }]}
                 onPress={() => setRecipeModalVisible(true)}
                 accessibilityRole="button"
-                accessibilityLabel="Deschide generatorul de rețete"
+                accessibilityLabel={t('chat.recipeGeneratorA11y')}
               >
                 <Text style={styles.quickActionEmoji}>🥗</Text>
                 <View style={styles.quickActionBody}>
-                  <Text style={[styles.quickActionTitle, { color: colors.background }]}>Generator rețete</Text>
-                  <Text style={[styles.quickActionText, { color: colors.background }]}>Rețete după ce ți-a mai rămas azi</Text>
+                  <Text style={[styles.quickActionTitle, { color: colors.background }]}>{t('chat.recipeGeneratorTitle')}</Text>
+                  <Text style={[styles.quickActionText, { color: colors.background }]}>{t('chat.recipeGeneratorSub')}</Text>
                 </View>
               </TouchableOpacity>
             </View>
@@ -574,40 +627,40 @@ export default function ChatScreen() {
                   style={[styles.actionChip, { backgroundColor: colors.accent, borderColor: colors.accent }]}
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setRecipeModalVisible(true); }}
                   accessibilityRole="button"
-                  accessibilityLabel="Generator de rețete"
+                  accessibilityLabel={t('chat.recipeChipA11y')}
                 >
                   <Text style={{ fontSize: 14 }}>🥗</Text>
-                  <Text style={[styles.actionChipText, { color: colors.background, fontWeight: '800' }]}>Generator Rețete</Text>
+                  <Text style={[styles.actionChipText, { color: colors.background, fontWeight: '800' }]}>{t('chat.recipeChipLabel')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                  onPress={() => trimitePromptDirect("Ce pot găti rapid și sănătos în mai puțin de 15 minute?")}
+                  onPress={() => trimitePromptDirect(t('chat.promptQuickDinner'))}
                   accessibilityRole="button"
-                  accessibilityLabel="Sugerează o cină rapidă, sub 15 minute"
+                  accessibilityLabel={t('chat.quickDinnerA11y')}
                 >
                   <Text style={{ fontSize: 14 }}>⚡</Text>
-                  <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Cină rapidă (&lt;15 min)</Text>
+                  <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>{t('chat.quickDinnerLabel')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                  onPress={() => trimitePromptDirect(`Care este cea mai eficientă rețetă bogată în proteine pentru a-mi atinge ținta de ${proteineTinta}g?`)}
+                  onPress={() => trimitePromptDirect(t('chat.promptProteinBomb', { tinta: proteineTinta }))}
                   accessibilityRole="button"
-                  accessibilityLabel="Cere o rețetă bogată în proteine"
+                  accessibilityLabel={t('chat.proteinBombA11y')}
                 >
                   <Text style={{ fontSize: 14 }}>💪</Text>
-                  <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Bomba de proteine</Text>
+                  <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>{t('chat.proteinBombLabel')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                  onPress={() => trimitePromptDirect("Analizează mesele mele de azi și dă-mi o evaluare generală și un sfat pentru seară.")}
+                  onPress={() => trimitePromptDirect(t('chat.promptEveningReview'))}
                   accessibilityRole="button"
-                  accessibilityLabel="Analizează ziua curentă în chat"
+                  accessibilityLabel={t('chat.analyzeDayA11y')}
                 >
                   <Text style={{ fontSize: 14 }}>📊</Text>
-                  <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Analiză zi curentă</Text>
+                  <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>{t('chat.analyzeDayLabel')}</Text>
                 </TouchableOpacity>
               </ScrollView>
             </Animated.View>
@@ -623,9 +676,9 @@ export default function ChatScreen() {
             <LinearGradient colors={[colors.accentSecondary + '14', 'rgba(0,0,0,0)']} style={styles.inputGrad}>
               <TextInput
                 testID="chat-input"
-                accessibilityLabel="Scrie un mesaj către NutriAI"
+                accessibilityLabel={t('chat.inputAccessibility')}
                 style={[styles.input, { color: colors.textPrimary }]}
-                placeholder="Scrie un mesaj..."
+                placeholder={t('chat.inputPlaceholder')}
                 placeholderTextColor={colors.textSecondary}
                 value={chatInput}
                 onChangeText={setChatInput}
@@ -638,7 +691,7 @@ export default function ChatScreen() {
               <TouchableOpacity
                 testID="send-button"
                 accessibilityRole="button"
-                accessibilityLabel="Trimite mesajul"
+                accessibilityLabel={t('chat.sendA11y')}
                 style={[styles.sendBtn, !chatInput.trim() && { opacity: 0.4 }]}
                 onPress={trimiteMesaj}
                 disabled={loadingChat || !chatInput.trim()}
@@ -666,9 +719,9 @@ export default function ChatScreen() {
             <View style={[styles.modalIconRing, { backgroundColor: colors.accentSecondary + '20', borderColor: colors.accentSecondary }]}>
               <RotateCcw size={36} color={colors.accentSecondary} />
             </View>
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Începi o conversație nouă?</Text>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('chat.newChatModalTitle')}</Text>
             <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-              Istoricul curent va fi șters din sesiune și vei începe o conversație proaspătă cu asistentul AI.
+              {t('chat.newChatModalSubtitle')}
             </Text>
 
             <View style={styles.modalBtnRow}>
@@ -676,19 +729,19 @@ export default function ChatScreen() {
                 style={[styles.modalCancelBtn, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
                 onPress={() => setNewChatModalVisible(false)}
                 accessibilityRole="button"
-                accessibilityLabel="Anulează conversația nouă"
+                accessibilityLabel={t('chat.cancelNewChatA11y')}
               >
-                <Text style={[styles.modalCancelText, { color: colors.textPrimary }]}>Anulează</Text>
+                <Text style={[styles.modalCancelText, { color: colors.textPrimary }]}>{t('alerts.butoane.anuleaza')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.modalConfirmBtn, { backgroundColor: colors.accentSecondary }]}
                 onPress={confirmResetChat}
                 accessibilityRole="button"
-                accessibilityLabel="Confirmă începerea unei conversații noi"
+                accessibilityLabel={t('chat.confirmNewChatA11y')}
               >
                 <Sparkles size={16} color="#FFF" />
-                <Text style={styles.modalConfirmText}>Chat Nou</Text>
+                <Text style={styles.modalConfirmText}>{t('chat.newChatConfirm')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -697,10 +750,14 @@ export default function ChatScreen() {
 
       <ConfirmSheet
         visible={mealProposalVisible}
-        title="✨ Confirmare Jurnal Alimentar"
-        message={mealProposal ? `Alimente: ${mealProposal.items.map(i => `${i.name} (${i.qty}${i.unit})`).join(', ')}\nTotal: ${mealProposal.totals?.kcal || 0} kcal | ${mealProposal.totals?.protein_g || 0}g P` : ''}
-        confirmLabel={savingProposal ? 'Se salvează...' : 'Adaugă în Jurnal'}
-        cancelLabel="Anulează"
+        title={t('chat.confirmSheetTitle')}
+        message={mealProposal ? t('chat.confirmSheetMessage', {
+          alimente: mealProposal.items.map(i => `${i.name} (${i.qty}${i.unit})`).join(', '),
+          total: mealProposal.totals?.kcal || 0,
+          proteine: mealProposal.totals?.protein_g || 0
+        }) : ''}
+        confirmLabel={savingProposal ? t('chat.saving') : t('chat.addToJournal')}
+        cancelLabel={t('alerts.butoane.anuleaza')}
         destructive={false}
         onConfirm={confirmMealProposal}
         onCancel={() => {
