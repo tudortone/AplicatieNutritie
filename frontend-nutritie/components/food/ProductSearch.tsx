@@ -8,6 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../supabase';
 import { API_URL } from '../../constants/config';
+import { API_PREFIX } from '../../lib/api';
 import { foodPresets } from '../../constants/foodPresets';
 import { FoodProduct } from './types';
 import { ProductSearchResult } from './ProductSearchResult';
@@ -111,7 +112,7 @@ export function ProductSearch({
 
       try {
         setLoading(true);
-        const res = await fetch(`${API_URL}/api/cauta-produs?q=${encodeURIComponent(qRaw)}`, {
+        const res = await fetch(`${API_URL}${API_PREFIX}/cauta-produs?q=${encodeURIComponent(qRaw)}`, {
           signal: abortControllerRef.current.signal,
         });
         if (res.ok) {

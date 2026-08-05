@@ -9,6 +9,16 @@ const STEP_GOAL_KEY = 'health_step_goal';
 const MANUAL_STEPS_KEY_PREFIX = 'manual_steps_';
 const HEALTH_PROVIDER_KEY = 'health_sync_provider';
 
+// Cheia zilei se derivează din calendarul LOCAL, nu UTC — pașii manuali trebuie
+// să se alinieze la fereastra „de la miezul nopții local" din getStepCountAsync.
+function ziLocalDeAzi(): string {
+  const acum = new Date();
+  const an = acum.getFullYear();
+  const luna = String(acum.getMonth() + 1).padStart(2, '0');
+  const ziua = String(acum.getDate()).padStart(2, '0');
+  return `${an}-${luna}-${ziua}`;
+}
+
 export type HealthProvider = 'google_fit' | 'samsung_health' | 'apple_health' | 'smartwatch' | 'general';
 
 export interface HealthProviderInfo {
@@ -61,6 +71,11 @@ export function useHealthSync(): HealthSyncState {
   // re-randeze toți consumatorii pentru fiecare pas.
   const stepBufferRef = useRef(0);
   const lastStepFlushRef = useRef(0);
+  // watchStepCount raportează pașii CUMULATIVI de la startul watch-ului, nu
+  // delte per eveniment (verificat în PedometerModule.kt/.swift). Păstrăm ultima
+  // valoare cumulativă ca să calculăm delta reală; `null` = următorul eveniment
+  // re-stabilește linia de bază (după o citire autoritativă sau repornire watch).
+  const lastWatchStepsRef = useRef<number | null>(null);
 
   const flushSteps = useCallback(() => {
     const buffered = stepBufferRef.current;
@@ -83,12 +98,13 @@ export function useHealthSync(): HealthSyncState {
   // 1. Extragem pașii de la miezul nopții până acum
   const fetchStepsToday = useCallback(async (sensorAvailable = isAvailable, currentWeight = weight) => {
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = ziLocalDeAzi();
       const manualKey = `${MANUAL_STEPS_KEY_PREFIX}${todayStr}`;
       const manualStr = await AsyncStorage.getItem(manualKey);
       const manualSteps = manualStr ? parseInt(manualStr, 10) : 0;
 
       let sensorSteps = 0;
+      let citireSenzorOk = false;
       if (sensorAvailable) {
         const end = new Date();
         const start = new Date();
@@ -97,10 +113,20 @@ export function useHealthSync(): HealthSyncState {
           const result = await Pedometer.getStepCountAsync(start, end);
           if (result && typeof result.steps === 'number') {
             sensorSteps = result.steps;
+            citireSenzorOk = true;
           }
         } catch (err) {
           if (__DEV__) console.debug('[useHealthSync] Pedometer indisponibil:', err);
         }
+      }
+
+      if (citireSenzorOk) {
+        // Citirea autoritativă (de la miezul nopții) devine sursa totalului afișat.
+        // Resetăm linia de bază a watch-ului și buffer-ul: pașii deja incluși aici
+        // nu trebuie adunați de două ori de următoarele evenimente watch.
+        lastWatchStepsRef.current = null;
+        stepBufferRef.current = 0;
+        lastStepFlushRef.current = 0;
       }
 
       // Pașii totali sunt suma celor citiți din senzor și a celor adăugați/simulați pentru testare
@@ -123,9 +149,13 @@ export function useHealthSync(): HealthSyncState {
       let available = false;
       try {
         const permResult = await Pedometer.requestPermissionsAsync();
-        available = permResult.granted || (await Pedometer.isAvailableAsync());
+        // Ambele condiții: hardware prezent ȘI permisiune acordată. Înainte,
+        // `||` raporta sincronizarea activă când senzorul exista chiar dacă
+        // permisiunea era refuzată.
+        available = permResult.granted && (await Pedometer.isAvailableAsync());
       } catch {
-        available = await Pedometer.isAvailableAsync();
+        // Nu putem confirma permisiunea — fail-safe: indisponibil.
+        available = false;
       }
       setIsAvailable(available);
 
@@ -163,9 +193,26 @@ export function useHealthSync(): HealthSyncState {
       subscriptionRef.current.remove();
       subscriptionRef.current = null;
     }
+    // Un watch nou pornește un contor cumulativ de la zero; primul eveniment
+    // devine linia de bază, ca să nu numărăm pași deja acoperiți de citirea
+    // autoritativă din fetchStepsToday.
+    lastWatchStepsRef.current = null;
     try {
       subscriptionRef.current = Pedometer.watchStepCount((result) => {
-        stepBufferRef.current += result.steps;
+        const cumulative = result.steps;
+        const last = lastWatchStepsRef.current;
+        if (last === null) {
+          lastWatchStepsRef.current = cumulative;
+          return;
+        }
+        if (cumulative <= last) {
+          // Contorul s-a resetat (reboot / restart pedometru): re-bază, fără delta.
+          lastWatchStepsRef.current = cumulative;
+          return;
+        }
+        const delta = cumulative - last;
+        lastWatchStepsRef.current = cumulative;
+        stepBufferRef.current += delta;
         const now = Date.now();
         if (now - lastStepFlushRef.current >= 1000) {
           lastStepFlushRef.current = now;
@@ -214,7 +261,7 @@ export function useHealthSync(): HealthSyncState {
         let avail = isAvailable;
         try {
           const permResult = await Pedometer.requestPermissionsAsync();
-          avail = permResult.granted || (await Pedometer.isAvailableAsync());
+          avail = permResult.granted && (await Pedometer.isAvailableAsync());
           setIsAvailable(avail);
         } catch {}
         setIsEnabled(true);
@@ -263,7 +310,7 @@ export function useHealthSync(): HealthSyncState {
   const addSimulatedSteps = async (amount: number) => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = ziLocalDeAzi();
       const manualKey = `${MANUAL_STEPS_KEY_PREFIX}${todayStr}`;
       const manualStr = await AsyncStorage.getItem(manualKey);
       const currentManual = manualStr ? parseInt(manualStr, 10) : 0;

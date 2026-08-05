@@ -184,24 +184,29 @@ async function curataPlaintextVechi(cheie: string): Promise<void> {
 }
 
 async function getItem(cheie: string): Promise<string | null> {
+  // Memoria deține valoarea cea mai recentă: e populată doar când scrierea în
+  // SecureStore a eșuat (vezi setItem), deci are prioritate față de valoarea
+  // persistentă, care ar fi una veche (chunk-uri scrise parțial, manifest vechi).
   const dinMemorie = memorieSesiune.get(cheie);
+  if (dinMemorie !== undefined) return dinMemorie;
+
   const disponibil = await secureStoreDisponibil();
 
   if (!disponibil) {
     await curataPlaintextVechi(cheie);
-    return dinMemorie ?? null;
+    return null;
   }
 
   try {
     const valoare = await citesteDinSecure(cheie);
     await curataPlaintextVechi(cheie);
-    if (valoare !== null) return valoare;
+    return valoare;
   } catch (err) {
     console.warn(`[NutriAI] Citire SecureStore esuata (${codEroare(err)}).`);
   }
 
   await curataPlaintextVechi(cheie);
-  return dinMemorie ?? null;
+  return null;
 }
 
 async function setItem(cheie: string, valoare: string): Promise<void> {

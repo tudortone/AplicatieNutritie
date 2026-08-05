@@ -5,6 +5,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { API_URL } from '@/constants/config';
+import { API_PREFIX } from '@/lib/api';
 import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { Sparkles, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '../supabase';
@@ -87,7 +88,7 @@ export default function CalculatorAI() {
         return;
       }
 
-      const raspuns = await fetch(`${API_URL}/api/calculeaza-profil`, {
+      const raspuns = await fetch(`${API_URL}${API_PREFIX}/calculeaza-profil`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

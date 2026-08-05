@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 
 import { API_URL } from '../constants/config';
+import { API_PREFIX } from '../lib/api';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -174,7 +175,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.nuEstiAutentificat'));
           return;
         }
-        const res = await fetch(`${API_URL}/api/estimeaza-mancare-text`, {
+        const res = await fetch(`${API_URL}${API_PREFIX}/estimeaza-mancare-text`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

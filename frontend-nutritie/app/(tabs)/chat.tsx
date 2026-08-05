@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/config';
+import { API_PREFIX } from '@/lib/api';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -250,7 +251,7 @@ export default function ChatScreen() {
 
     try {
       const istoricActivat = [...mesajeRef.current, { role: 'user' as const, text: mesajText }];
-      const raspuns = await fetch(`${API_URL}/api/chat`, {
+      const raspuns = await fetch(`${API_URL}${API_PREFIX}/chat`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -265,15 +266,37 @@ export default function ChatScreen() {
           proteineTinta
         }),
       });
-      const date = await raspuns.json();
+      let date: any = null;
+      try {
+        date = await raspuns.json();
+      } catch {
+        date = null;
+      }
+
+      if (!raspuns.ok) {
+        // Statusurile non-2xx se mapau pe mesaje clare; altfel un 401/429/500
+        // apărea ca un răspuns AI normal ("Eroare la procesarea răspunsului.").
+        const mesajServer = date?.raspuns || date?.eroare || date?.message;
+        let textEroare: string;
+        if (raspuns.status === 401) {
+          textEroare = "Sesiunea a expirat. Te rog să te autentifici din nou.";
+        } else if (raspuns.status === 429) {
+          textEroare = mesajServer || "Ai atins limita de cereri AI. Încearcă din nou mai târziu.";
+        } else {
+          textEroare = mesajServer || "Serverul AI a întâmpinat o problemă. Încearcă din nou peste câteva momente.";
+        }
+        setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: textEroare }]);
+        return;
+      }
+
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      
-      let raspunsText = date.raspuns || "Eroare la procesarea răspunsului.";
+
+      let raspunsText = date?.raspuns || "Eroare la procesarea răspunsului.";
       let parsed = parseMealProposal(date) || parseMealProposal(raspunsText);
 
       if (!parsed && isMealLogIntent(mesajText)) {
         try {
-          const logResp = await fetch(`${API_URL}/api/log-food-from-chat`, {
+          const logResp = await fetch(`${API_URL}${API_PREFIX}/log-food-from-chat`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
