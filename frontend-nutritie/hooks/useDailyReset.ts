@@ -9,9 +9,9 @@ export type DailyQuest = {
   [key: string]: unknown;
 };
 
-type Options = {
-  questuriAzi: DailyQuest[];
-  setQuesturiAzi: React.Dispatch<React.SetStateAction<DailyQuest[]>>;
+type Options<TQuest extends DailyQuest> = {
+  questuriAzi: TQuest[];
+  setQuesturiAzi: React.Dispatch<React.SetStateAction<TQuest[]>>;
   storageKey?: string;
 };
 
@@ -31,11 +31,11 @@ const nextMidnightDelay = () => {
   return Math.max(1000, next.getTime() - now.getTime() + 50);
 };
 
-export function useDailyReset({
+export function useDailyReset<TQuest extends DailyQuest>({
   questuriAzi,
   setQuesturiAzi,
   storageKey = DEFAULT_KEY,
-}: Options) {
+}: Options<TQuest>) {
   const [isResetting, setIsResetting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
