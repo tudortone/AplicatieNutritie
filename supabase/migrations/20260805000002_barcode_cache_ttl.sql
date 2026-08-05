@@ -59,7 +59,7 @@ BEGIN
     PERFORM cron.schedule(
       'nutriai-curata-barcode-cache',
       '0 4 * * *',          -- zilnic la 04:00 (ora bazei de date)
-      $$select public.curata_barcode_cache_vechi(30);$$
+      $sql$select public.curata_barcode_cache_vechi(30);$sql$
     );
   END IF;
 END $$;

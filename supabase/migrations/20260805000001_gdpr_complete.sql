@@ -91,7 +91,7 @@ BEGIN
     PERFORM cron.schedule(
       'nutriai-curata-audit-log',
       '0 3 * * *',          -- zilnic la 03:00 (ora bazei de date)
-      $$select public.curata_audit_log_vechi(90);$$
+      $sql$select public.curata_audit_log_vechi(90);$sql$
     );
   END IF;
 END $$;
