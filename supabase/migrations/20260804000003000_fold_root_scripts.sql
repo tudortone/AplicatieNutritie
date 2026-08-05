@@ -122,8 +122,15 @@ ALTER TABLE public.mese ADD  CONSTRAINT mese_alimente_shape_check CHECK (
 -- ==============================================================================
 -- 6. [MIGRATION_FIX / RLS_POLICIES] Index pe audit_log (user_id, created_at DESC)
 --    — singurul index pe audit_log cu user_id (migrarea gdpr are doar created_at).
+--    Pe o bază veche fără audit_log, indexul e sărit — nu blocăm fold-ul.
 -- ==============================================================================
-CREATE INDEX IF NOT EXISTS audit_log_user_created_idx ON public.audit_log(user_id, created_at DESC);
+DO $$
+BEGIN
+  IF to_regclass('public.audit_log') IS NOT NULL THEN
+    CREATE INDEX IF NOT EXISTS audit_log_user_created_idx
+      ON public.audit_log(user_id, created_at DESC);
+  END IF;
+END $$;
 
 -- ==============================================================================
 -- 7. [RLS_POLICIES] produse_camara — tabelă care exista DOAR în scriptul rădăcină.
@@ -174,15 +181,16 @@ COMMENT ON COLUMN public.produse_camara.calorii_100g IS 'DEPRECAT — folosește
 
 -- ==============================================================================
 -- 8. [RLS_POLICIES] antrenamente — coloane de extindere care nu erau în migrarea 001.
+--    ALTER TABLE IF EXISTS: pe o bază fără tabel, coloanele se săresc — nu blocăm.
 -- ==============================================================================
-ALTER TABLE public.antrenamente ADD COLUMN IF NOT EXISTS muscle_load JSONB DEFAULT '{}'::jsonb;
-ALTER TABLE public.antrenamente ADD COLUMN IF NOT EXISTS external_volume_kg NUMERIC DEFAULT 0;
-ALTER TABLE public.antrenamente ADD COLUMN IF NOT EXISTS equivalent_volume_kg NUMERIC;
-ALTER TABLE public.antrenamente ADD COLUMN IF NOT EXISTS session_score INTEGER;
-ALTER TABLE public.antrenamente ADD COLUMN IF NOT EXISTS rank_key TEXT;
-ALTER TABLE public.antrenamente ADD COLUMN IF NOT EXISTS rank_label TEXT;
-ALTER TABLE public.antrenamente ADD COLUMN IF NOT EXISTS calculation_version INTEGER DEFAULT 1;
-ALTER TABLE public.antrenamente ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+ALTER TABLE IF EXISTS public.antrenamente ADD COLUMN IF NOT EXISTS muscle_load JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE IF EXISTS public.antrenamente ADD COLUMN IF NOT EXISTS external_volume_kg NUMERIC DEFAULT 0;
+ALTER TABLE IF EXISTS public.antrenamente ADD COLUMN IF NOT EXISTS equivalent_volume_kg NUMERIC;
+ALTER TABLE IF EXISTS public.antrenamente ADD COLUMN IF NOT EXISTS session_score INTEGER;
+ALTER TABLE IF EXISTS public.antrenamente ADD COLUMN IF NOT EXISTS rank_key TEXT;
+ALTER TABLE IF EXISTS public.antrenamente ADD COLUMN IF NOT EXISTS rank_label TEXT;
+ALTER TABLE IF EXISTS public.antrenamente ADD COLUMN IF NOT EXISTS calculation_version INTEGER DEFAULT 1;
+ALTER TABLE IF EXISTS public.antrenamente ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
 
 -- ==============================================================================
 -- 9. [RLS_POLICIES] gamificare — tabelă care exista DOAR în scriptul rădăcină.
