@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import { clearLocalUserData, prepareLocalDataForUser } from '../lib/userDataCleanup';
+import { sincronizeazaOnboardingLaProfil } from '../lib/onboarding';
 
 interface AuthContextType {
   session: Session | null;
@@ -23,6 +24,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         if (nextSession?.user) {
           await prepareLocalDataForUser(nextSession.user.id);
+          await sincronizeazaOnboardingLaProfil(nextSession.user.id, supabase);
         } else if (clearWhenEmpty) {
           await clearLocalUserData();
         }

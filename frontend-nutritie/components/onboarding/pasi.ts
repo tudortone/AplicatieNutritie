@@ -9,6 +9,7 @@ export const PASI_ONBOARDING = [
 	'/onboarding/activitate',
 	'/onboarding/ritm',
 	'/onboarding/dieta',
+	'/onboarding/calculating',
 	'/onboarding/plan',
 	'/onboarding/prezentare',
 ] as const

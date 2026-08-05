@@ -93,12 +93,29 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         sterge('audit_log'),
       ]);
 
-      // C1: curatam explicit maparea Clerk -> Supabase. La identitati mapate Clerk,
-      // randul din auth.users poate lipsi (comentariul de mai sus), caz in care
-      // cascada FK peste clerk_user_map nu se declanseaza si ramane o mapare orfana.
-      // clerk_user_map e admin-only (RLS deny-all), deci stergerea se face prin
-      // service_role, nu prin ctx.db. Eroarea aici nu blocheaza restul: datele cu
-      // continut real sunt deja sterse, iar maparea e doar o legatura de identitate.
+      // Curățare fișiere imagine utilizator din ImageKit CDN
+      if (process.env.IMAGEKIT_PRIVATE_KEY && process.env.IMAGEKIT_PUBLIC_KEY) {
+        try {
+          const ImageKit = require('imagekit');
+          const ik = new ImageKit({
+            publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+            privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+            urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/nutriai',
+          });
+          ik.listFiles({ searchQuery: `name : "*${userId}*"` }, (err, result) => {
+            if (!err && Array.isArray(result) && result.length > 0) {
+              const fileIds = result.map((f) => f.fileId);
+              ik.bulkDeleteFiles(fileIds, (delErr) => {
+                if (delErr) console.warn('[GDPR] Ștergere fișiere ImageKit eșuată:', delErr.message);
+              });
+            }
+          });
+        } catch (ikErr) {
+          console.warn('[GDPR] Curățare ImageKit CDN omisă sau neconfigurată:', ikErr.message);
+        }
+      }
+
+      // C1: curatam explicit maparea Clerk -> Supabase.
       try {
         await supabaseAdmin.from('clerk_user_map').delete().eq('supabase_user_id', userId);
       } catch (err) {

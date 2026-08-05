@@ -27,6 +27,9 @@ import { useGamificare } from '../../hooks/useGamificare';
 import KeyboardAwareScreen from '../../components/ui/KeyboardAwareScreen';
 import { INSIGNE_LIST } from '../../constants/insigne';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { FeedbackModal } from '../../components/ui/FeedbackModal';
+import { API_URL } from '../../constants/config';
+import { API_PREFIX } from '../../lib/api';
 
 // TODO: completează aici adresa reală de e-mail pentru suport înainte de lansare.
 // Cât rămâne gol, rândul „Contactează-ne" afișează o alertă în loc de un mailto.
@@ -53,9 +56,49 @@ export default function ProfilScreen() {
   const [nume, setNume] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showSuccessAnim, setShowSuccessAnim] = useState(false);
+  const [feedbackVisible, setFeedbackVisible] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+
+  const stergereContDefinitiva = async () => {
+    Alert.alert(
+      'Ștergere Cont Definitivă',
+      'Ești sigur că vrei să-ți ștergi contul? Toate datele tale (mese, profil, poze CDN, antrenamente) vor fi șterse definitiv și nu vor mai putea fi recuperate.',
+      [
+        { text: 'Anulează', style: 'cancel' },
+        {
+          text: 'Șterge definitiv contul',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const res = await fetch(`${API_URL}${API_PREFIX}/user/delete-account`, {
+                method: 'DELETE',
+                headers: {
+                  Authorization: `Bearer ${session?.access_token}`,
+                },
+              });
+              if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.eroare || 'Ștergerea contului a eșuat.');
+              }
+              await supabase.auth.signOut();
+              showBanner({
+                title: 'Cont Șters',
+                message: 'Contul și toate datele tale au fost șterse definitiv.',
+                type: 'info',
+              });
+            } catch (err: any) {
+              Alert.alert('Eroare', err.message || 'Nu s-a putut șterge contul.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const initProfile = useCallback(async () => {
     if (loadingAuth) return;
@@ -832,6 +875,25 @@ export default function ProfilScreen() {
 
               <TouchableOpacity
                 style={[styles.inputRow, { alignItems: 'center' }]}
+                onPress={() => setFeedbackVisible(true)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Raportează o problemă sau trimite feedback"
+              >
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <Sparkles size={18} color={colors.accent} />
+                </View>
+                <View style={[styles.inputContent, { flex: 1 }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Trimite Feedback / Raportare</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Trimite sugestii sau raportează o problemă</Text>
+                </View>
+                <ChevronRight size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <View style={styles.separator} />
+
+              <TouchableOpacity
+                style={[styles.inputRow, { alignItems: 'center' }]}
                 onPress={() => router.push('/legal' as never)}
                 activeOpacity={0.7}
                 accessibilityRole="button"
@@ -850,14 +912,25 @@ export default function ProfilScreen() {
           </BlurView>
         </Animated.View>
 
-        {/* Logout */}
-        <Animated.View entering={FadeInUp.duration(600).delay(400)}>
+        {/* Logout & Account Deletion */}
+        <Animated.View entering={FadeInUp.duration(600).delay(400)} style={{ gap: 12, marginBottom: 24 }}>
           <TouchableOpacity style={[styles.logoutBtn, { borderColor: colors.danger + '33', backgroundColor: colors.danger + '0A' }]} onPress={deconectare} accessibilityRole="button" accessibilityLabel="Deconectează-te din aplicație">
             <LogOut size={18} color={colors.danger} />
             <Text style={[styles.logoutText, { color: colors.danger }]}>Deconectare</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.logoutBtn, { borderColor: colors.danger + '55', backgroundColor: 'transparent' }]}
+            onPress={stergereContDefinitiva}
+            accessibilityRole="button"
+            accessibilityLabel="Șterge contul definitiv (GDPR)"
+          >
+            <Text style={[styles.logoutText, { color: colors.danger, fontSize: 14 }]}>Șterge Contul Definitiv (GDPR)</Text>
+          </TouchableOpacity>
         </Animated.View>
       </ScrollView>
+
+      <FeedbackModal visible={feedbackVisible} onClose={() => setFeedbackVisible(false)} />
 
       {/* Success Animation Modal Overlay */}
       {showSuccessAnim && (

@@ -49,13 +49,14 @@ export default function PasPlan() {
 	return (
 		<EcranPas
 			pas="/onboarding/plan"
-			titlu="Planul tau este gata"
+			titlu="Planul tău este gata"
 			subtitlu={
 				date.scop === 'mentinere'
-					? 'Atat iti trebuie zilnic ca sa iti mentii greutatea actuala.'
-					: `Estimarea noastra ca sa ajungi la ${date.greutateTintaKg?.toFixed(1)} kg.`
+					? 'Atât îți trebuie zilnic ca să îți menții greutatea actuală.'
+					: `Estimarea noastră ca să ajungi la ${date.greutateTintaKg?.toFixed(1)} kg.`
 			}
 			poateContinua
+			etichetaButon="Salvează planul și continuă"
 		>
 			<Animated.View entering={FadeInDown.duration(500)}>
 				<LinearGradient

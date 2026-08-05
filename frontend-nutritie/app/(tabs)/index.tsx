@@ -21,6 +21,8 @@ import BodyMap from '../../components/fitness/BodyMap';
 import { computeDailyMuscleIntensity, normalizeMuscleLoadToIntensity } from '../../lib/fitnessEngine';
 import { useExercitii } from '../../hooks/useExercitii';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { useGamificareContext } from '../../context/GamificareContext';
+import { StreakBottomSheet, StreakBottomSheetRef } from '../../components/gamification/StreakBottomSheet';
 
 const AnimatedRingCircle = Animated.createAnimatedComponent(Circle);
 
@@ -94,7 +96,10 @@ export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { unreadCount } = useNotificationBanner();
+  const { streak } = useGamificareContext();
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
+  const streakSheetRef = useRef<StreakBottomSheetRef>(null);
+  const [dataSelectata, setDataSelectata] = useState<Date>(new Date());
 
   const { 
     totalCalorii, 
@@ -110,7 +115,7 @@ export default function HomeScreen() {
     user,
     loading, 
     refresh 
-  } = useMeseAzi();
+  } = useMeseAzi(dataSelectata);
   const { pahare, tinta: tintaPahare, adaugaPahar, scadePahar } = useApa();
   const { steps, activeCalories, stepGoal, isEnabled, platformName, providerInfo, refreshSteps } = useHealthSync();
   const { totalCaloriiArse, antrenamente, refresh: refreshAntrenamente } = useAntrenamente();
@@ -316,13 +321,56 @@ export default function HomeScreen() {
               ) : null}
             </TouchableOpacity>
 
-            <View style={s.streakBadge}>
+            <TouchableOpacity
+              onPress={() => streakSheetRef.current?.open()}
+              accessibilityRole="button"
+              accessibilityLabel={`Seria de ${streak} zile`}
+              style={s.streakBadge}
+            >
               <LinearGradient colors={colors.accentGradient} style={s.streakGrad}>
-                <Flame size={14} color={colors.background} />
-                <Text style={[s.streakText, { color: colors.background }]}>{numarMese} mese</Text>
+                <Flame size={14} color={colors.background} fill={colors.background} />
+                <Text style={[s.streakText, { color: colors.background }]}>{streak} zile</Text>
               </LinearGradient>
-            </View>
+            </TouchableOpacity>
           </View>
+        </Animated.View>
+
+        {/* 14-Day Interactive Horizontal Date Strip */}
+        <Animated.View entering={FadeInDown.duration(500).delay(80)} style={{ marginBottom: 16 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {Array.from({ length: 14 }).map((_, idx) => {
+              const d = new Date();
+              d.setDate(d.getDate() - (13 - idx));
+              const esteSelectata = d.toDateString() === dataSelectata.toDateString();
+              const esteAzi = d.toDateString() === new Date().toDateString();
+              const numeZi = d.toLocaleDateString('ro-RO', { weekday: 'narrow' }).toUpperCase();
+              const numarZi = d.getDate();
+
+              return (
+                <TouchableOpacity
+                  key={d.toISOString()}
+                  onPress={() => setDataSelectata(d)}
+                  style={{
+                    width: 44,
+                    height: 60,
+                    borderRadius: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: esteSelectata ? colors.accent : esteAzi ? colors.cardBg : colors.overlayLight,
+                    borderWidth: 1,
+                    borderColor: esteSelectata ? colors.accent : colors.cardBorder,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: esteSelectata ? colors.background : colors.textSecondary }}>
+                    {numeZi}
+                  </Text>
+                  <Text style={{ fontSize: 16, fontWeight: '900', marginTop: 2, color: esteSelectata ? colors.background : colors.textPrimary }}>
+                    {numarZi}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </Animated.View>
 
         {/* Main calorie ring card */}
@@ -687,6 +735,7 @@ export default function HomeScreen() {
 
       {/* Reusable Gorhom Bottom Sheet for adding meals */}
       <AddMealBottomSheet ref={addMealSheetRef} onSuccess={refresh} />
+      <StreakBottomSheet ref={streakSheetRef} />
     </View>
   );
 }

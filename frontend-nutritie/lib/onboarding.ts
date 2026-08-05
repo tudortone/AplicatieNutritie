@@ -216,3 +216,63 @@ export async function incarcaDateOnboarding(): Promise<DateOnboarding | null> {
 export async function stergeDateOnboarding(): Promise<void> {
 	await AsyncStorage.removeItem(CHEIE_ONBOARDING)
 }
+
+/**
+ * Sincronizează răspunsurile și planul calculat în baza de date Supabase `profil`
+ * și în AsyncStorage local la autentificare.
+ */
+export async function sincronizeazaOnboardingLaProfil(
+	userId: string,
+	supabaseClient: any,
+): Promise<boolean> {
+	try {
+		const date = await incarcaDateOnboarding()
+		if (!date || !date.gen || !date.greutateKg) return false
+		const plan = calculeazaPlan(date)
+		if (!plan) return false
+
+		const profileData = {
+			user_id: userId,
+			greutate: date.greutateKg,
+			greutateTinta: date.greutateTintaKg ?? date.greutateKg,
+			caloriiTinta: plan.calorii,
+			proteineTinta: plan.proteineG,
+			carbiTinta: plan.carbohidratiG,
+			grasimiTinta: plan.grasimiG,
+			sex: date.gen,
+			varsta: plan.varsta,
+			inaltime: date.inaltimeCm,
+			nivel_activitate: date.activitate,
+			obiectiv: date.scop,
+			dieta: date.dieta,
+			updated_at: new Date().toISOString(),
+		}
+
+		await AsyncStorage.multiSet([
+			['caloriiTinta', String(plan.calorii)],
+			['proteineTinta', String(plan.proteineG)],
+			['carbiTinta', String(plan.carbohidratiG)],
+			['grasimiTinta', String(plan.grasimiG)],
+			['greutate', String(date.greutateKg)],
+			['greutateTinta', String(date.greutateTintaKg ?? date.greutateKg)],
+			['sex', String(date.gen)],
+			['varsta', String(plan.varsta)],
+			['inaltime', String(date.inaltimeCm)],
+			['nivel_activitate', String(date.activitate)],
+			['obiectiv', String(date.scop)],
+		])
+
+		if (supabaseClient) {
+			const { error } = await supabaseClient.from('profil').upsert(profileData, { onConflict: 'user_id' })
+			if (error) {
+				console.warn('[OnboardingSync] Upsert profil esuat:', error.message)
+			}
+		}
+
+		return true
+	} catch (e) {
+		console.warn('[OnboardingSync] Eroare sincronizare profil:', e)
+		return false
+	}
+}
+
