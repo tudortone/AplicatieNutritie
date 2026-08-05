@@ -10,7 +10,9 @@
     "carbs": "Carbs",
     "fats": "Fats",
     "save": "SAVE PROFILE",
-    "logout": "Logout"
+    "logout": "Logout",
+    "watch_selector_title": "Select Watch / Device",
+    "watch_selector_sub": "Choose your fitness provider for data sync"
   },
   "alerts": {
     "titluri": {

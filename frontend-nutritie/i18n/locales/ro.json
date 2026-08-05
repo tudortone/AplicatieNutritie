@@ -10,7 +10,9 @@
     "carbs": "Carbohidrați",
     "fats": "Grăsimi",
     "save": "SALVEAZĂ PROFIL",
-    "logout": "Deconectare"
+    "logout": "Deconectare",
+    "watch_selector_title": "Selectează Ceasul / Dispozitivul",
+    "watch_selector_sub": "Alege furnizorul de fitness pentru sincronizarea datelor"
   },
   "alerts": {
     "titluri": {

@@ -19,7 +19,16 @@ function ziLocalDeAzi(): string {
   return `${an}-${luna}-${ziua}`;
 }
 
-export type HealthProvider = 'google_fit' | 'samsung_health' | 'apple_health' | 'smartwatch' | 'general';
+export type HealthProvider =
+  | 'google_fit'
+  | 'samsung_health'
+  | 'apple_health'
+  | 'garmin'
+  | 'fitbit'
+  | 'xiaomi'
+  | 'huawei'
+  | 'smartwatch'
+  | 'general';
 
 export interface HealthProviderInfo {
   id: HealthProvider;
@@ -29,11 +38,15 @@ export interface HealthProviderInfo {
 }
 
 export const HEALTH_PROVIDERS: HealthProviderInfo[] = [
-  { id: 'google_fit', name: 'Google Fit', icon: '🟢', description: 'Sincronizare cu serviciile Google Health' },
-  { id: 'samsung_health', name: 'Samsung Health', icon: '🔵', description: 'Conectare cu ceasuri Galaxy și Samsung Health' },
-  { id: 'apple_health', name: 'Apple Health', icon: '🍎', description: 'Integrare cu Apple Watch și HealthKit' },
-  { id: 'smartwatch', name: 'Brățară / Smartwatch', icon: '⌚', description: 'Garmin, Fitbit, Xiaomi, Huawei Health' },
-  { id: 'general', name: 'Senzor Telefon (General)', icon: '📱', description: 'Pedometer intern pe telefon' },
+  { id: 'apple_health', name: 'Apple Health / Apple Watch', icon: '🍎', description: 'Integrare cu Apple Watch și HealthKit' },
+  { id: 'garmin', name: 'Garmin Connect', icon: '⌚', description: 'Sincronizare cu ceasuri și ciclocomputere Garmin' },
+  { id: 'samsung_health', name: 'Samsung Health / Galaxy Watch', icon: '🔵', description: 'Conectare cu ceasuri Galaxy și Samsung Health' },
+  { id: 'google_fit', name: 'Google Fit / Pixel Watch', icon: '🟢', description: 'Sincronizare cu Google Health & Pixel Watch' },
+  { id: 'fitbit', name: 'Fitbit', icon: '⌚', description: 'Conectare cu brățări și ceasuri Fitbit' },
+  { id: 'xiaomi', name: 'Xiaomi / Mi Fitness / Amazfit', icon: '⌚', description: 'Sincronizare cu brățări Mi Band și Amazfit' },
+  { id: 'huawei', name: 'Huawei Health', icon: '⌚', description: 'Conectare cu ceasuri Huawei GT & Fit' },
+  { id: 'smartwatch', name: 'Brățară / Smartwatch General', icon: '⌚', description: 'Brățări de fitness generice' },
+  { id: 'general', name: 'Fără Ceas (Senzor Telefon)', icon: '📱', description: 'Pedometer intern pe telefon' },
 ];
 
 export interface HealthSyncState {

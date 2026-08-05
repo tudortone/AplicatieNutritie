@@ -28,6 +28,7 @@ import KeyboardAwareScreen from '../../components/ui/KeyboardAwareScreen';
 import { INSIGNE_LIST } from '../../constants/insigne';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { FeedbackModal } from '../../components/ui/FeedbackModal';
+import { WatchSelectorSheet, WatchSelectorSheetRef } from '../../components/ui/WatchSelectorSheet';
 import { API_URL } from '../../constants/config';
 import { API_PREFIX } from '../../lib/api';
 
@@ -41,7 +42,8 @@ export default function ProfilScreen() {
   const { colors, themeName, setTheme } = useTheme();
   const { enabled: notificationsEnabled, toggleReminders, isExpoGo } = useNotifications();
   const { isSupported, biometricType, isEnabled, toggleBiometric } = useBiometrics();
-  const { isEnabled: healthSyncEnabled, platformName, toggleSync: toggleHealthSync, selectedProvider, setProvider } = useHealthSync();
+  const { isEnabled: healthSyncEnabled, platformName, toggleSync: toggleHealthSync, selectedProvider, providerInfo } = useHealthSync();
+  const watchSheetRef = React.useRef<WatchSelectorSheetRef>(null);
   const { session, user, loadingAuth } = useAuth();
   const { showBanner } = useNotificationBanner();
   const notify = useNotify();
@@ -483,48 +485,36 @@ export default function ProfilScreen() {
                 />
               </View>
 
-              <View style={{ marginTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 16 }}>
-                <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '700', marginBottom: 10, textTransform: 'uppercase' }}>
-                  Alege Aplicația sau Brățara de Fitness:
-                </Text>
-                <View style={{ gap: 8 }}>
-                  {HEALTH_PROVIDERS.map((p) => {
-                    const active = selectedProvider === p.id;
-                    return (
-                      <TouchableOpacity
-                        key={p.id}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          padding: 12,
-                          borderRadius: 14,
-                          borderWidth: 1,
-                          borderColor: active ? colors.accent : 'rgba(255,255,255,0.08)',
-                          backgroundColor: active ? colors.accent + '15' : 'rgba(255,255,255,0.02)',
-                          gap: 12,
-                        }}
-                        onPress={() => setProvider(p.id)}
-                        activeOpacity={0.75}
-                        accessibilityRole="radio"
-                        accessibilityState={{ checked: active }}
-                        accessibilityLabel={`Sincronizare cu ${p.name}`}
-                      >
-                        <Text style={{ fontSize: 22 }}>{p.icon}</Text>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ color: active ? colors.accent : colors.textPrimary, fontWeight: active ? '800' : '600', fontSize: 14 }}>
-                            {p.name}
-                          </Text>
-                          <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }}>
-                            {p.description}
-                          </Text>
-                        </View>
-                        {active && (
-                          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent }} />
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+              <View style={{ marginTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 14, paddingHorizontal: 20, paddingBottom: 16 }}>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    borderRadius: 18,
+                    backgroundColor: colors.surfaceBg,
+                    borderWidth: 1,
+                    borderColor: colors.cardBorder,
+                    gap: 12,
+                  }}
+                  onPress={() => watchSheetRef.current?.open()}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityLabel="Schimbă ceasul sau echipamentul conectat"
+                  testID="watch_selector_trigger"
+                >
+                  <Text style={{ fontSize: 24 }}>{providerInfo?.icon || '⌚'}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.textSecondary, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Echipament / Ceas Conectat
+                    </Text>
+                    <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '800', marginTop: 2 }}>
+                      {providerInfo?.name || 'Neconectat'}
+                    </Text>
+                  </View>
+                  <ChevronRight size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
               </View>
             </LinearGradient>
           </BlurView>
@@ -931,6 +921,7 @@ export default function ProfilScreen() {
       </ScrollView>
 
       <FeedbackModal visible={feedbackVisible} onClose={() => setFeedbackVisible(false)} />
+      <WatchSelectorSheet ref={watchSheetRef} />
 
       {/* Success Animation Modal Overlay */}
       {showSuccessAnim && (
