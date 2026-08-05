@@ -2,7 +2,14 @@
 
 const express = require('express');
 
-const STATUSURI_PUBLICE = new Set(['disponibil', 'ok', 'cooldown', 'rate_limit', 'indisponibil']);
+const STATUSURI_PUBLICE = new Set([
+  'active',
+  'disponibil',
+  'ok',
+  'cooldown',
+  'rate_limit',
+  'indisponibil',
+]);
 
 function statusPublic(detalii) {
   const statusBrut = String(detalii?.status || 'indisponibil');
