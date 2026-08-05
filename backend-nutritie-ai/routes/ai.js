@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-const router = express.Router();
 const fs = require('fs');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Sentry = require('@sentry/node');
@@ -37,6 +36,9 @@ function createAiRouter({
   serviciuChat,
   semaforAi,
 }) {
+  // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
+  const router = express.Router();
+
   // ==========================================
   // IMAGEKIT AUTHENTICATION ENDPOINT
   // ==========================================

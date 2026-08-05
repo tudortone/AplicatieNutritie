@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-const router = express.Router();
 
 const { esteUuid } = require('../utils/identitate');
 const { valideazaMasa } = require('../utils/validareMese');
@@ -15,6 +14,9 @@ const { valideazaMasa } = require('../utils/validareMese');
  * ar lipsi. Validarea este partajata cu utils/validareMese.js.
  */
 function createMeseRouter({ requireAuth, generalLimiter, contextDate, meseRepo }) {
+  // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
+  const router = express.Router();
+
   // ==========================================
   // RUTA 4: STERGERE MASA
   // ==========================================

@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-const router = express.Router();
 
 const { tabelUtilizator } = require('../utils/clientUtilizator');
 
@@ -18,6 +17,9 @@ const { tabelUtilizator } = require('../utils/clientUtilizator');
  * o singură ștergere curăță totul în cascadă, fără rânduri orfane.
  */
 function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate, profilRepo }) {
+  // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
+  const router = express.Router();
+
   // GET /api/user/export-data
   router.get('/export-data', requireAuth, generalLimiter, async (req, res) => {
     try {

@@ -2,7 +2,6 @@
 'use strict';
 
 const express = require('express');
-const router = express.Router();
 
 /**
  * B-17: tipurile nutritionale au o singura sursa de adevar — contractul partajat
@@ -26,6 +25,9 @@ const { construiesteUrlOpenFoodFacts, EroareProprietateProdus } = require('../ut
  * intre `sursa` si `source` - clientul trebuia sa ghiceasca.
  */
 function createBarcodeRouter({ requireAuth, generalLimiter, contextDate, barcodeRepo }) {
+  // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
+  const router = express.Router();
+
   const raspunsBarcode = (res, { produs, sursa, estimat, dinCache }) =>
     res.json({
       produs,

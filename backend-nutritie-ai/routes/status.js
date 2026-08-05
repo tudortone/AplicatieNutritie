@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-const router = express.Router();
 
 /**
  * Rute de status AI (GET /api/ai-status).
@@ -11,6 +10,9 @@ const router = express.Router();
  * re-aplica limiter aici — altfel fiecare cerere ar fi contorizata de doua ori.
  */
 function createStatusRouter({ getProviderStatus, getAiStatistici }) {
+  // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
+  const router = express.Router();
+
   router.get('/ai-status', async (req, res) => {
     res.json({
       gemini: await getProviderStatus('gemini'),

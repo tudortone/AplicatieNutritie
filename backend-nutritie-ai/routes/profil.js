@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-const router = express.Router();
 
 const Sentry = require('@sentry/node');
 const { callWithTimeout } = require('../utils/httpTimeout');
@@ -15,6 +14,9 @@ const { callWithTimeout } = require('../utils/httpTimeout');
  * "premium" — un raspuns de eroare nu poate fi folosit ca sa se acorde privilegii.
  */
 function createProfilRouter({ requireAuth, generalLimiter, config }) {
+  // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
+  const router = express.Router();
+
   // ==========================================
   // RUTA 3: CALCUL PROFIL NUTRITIONAL (DETERMINIST)
   // ==========================================
