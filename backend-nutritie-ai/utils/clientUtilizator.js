@@ -18,7 +18,7 @@
  * fiecare interogare.
  *
  * Aceasta nu este o bariera de securitate. Este o convingere. Un endpoint nou
- * scris grabit, fara acel filtru, expune jurnalul alimentar al tuturor — si nu
+ * scris grabit, fara acel filtru, expune jurnalul alimentar al tuturor - si nu
  * exista niciun test care sa prinda asta, pentru ca interogarea e perfect valida.
  *
  * ==========================================================================
@@ -27,17 +27,17 @@
  * Pentru tabelele care AU politici, folosim un client construit din cheia anona
  * plus JWT-ul utilizatorului. Postgres primeste un `auth.uid()` real si aplica
  * politicile. Daca filtrul din cod lipseste, baza de date returneaza zero randuri
- * in loc sa returneze datele altcuiva. Filtrul ramane totusi in cod — aparare in
+ * in loc sa returneze datele altcuiva. Filtrul ramane totusi in cod - aparare in
  * adancime, nu inlocuire.
  *
  * Pentru tabelele care NU au politici de utilizator, clientul admin este singura
  * cale corecta, nu o scurtatura:
- *   - `barcode_cache`      — politica `using (false)`: cache global, backend-only
- *   - `clerk_user_map`     — RLS activ fara nicio politica: deny-all
- *   - `exercitii`          — catalog partajat, read-only pentru utilizatori
+ *   - `barcode_cache`      - politica `using (false)`: cache global, backend-only
+ *   - `clerk_user_map`     - RLS activ fara nicio politica: deny-all
+ *   - `exercitii`          - catalog partajat, read-only pentru utilizatori
  *
  * ==========================================================================
- * LIMITARE IMPORTANTA — UTILIZATORII CLERK
+ * LIMITARE IMPORTANTA - UTILIZATORII CLERK
  * ==========================================================================
  * Un utilizator autentificat prin Clerk NU are un JWT Supabase. Pentru el nu se
  * poate construi un client cu `auth.uid()` valid, deci RLS nu poate fi aplicat
@@ -49,10 +49,25 @@
  * Rezolvarea corecta pe termen lung este una din doua:
  *   (a) emiterea unui JWT Supabase pentru utilizatorii Clerk (JWT template), sau
  *   (b) renuntarea la una dintre cele doua metode de autentificare.
- * Pana atunci, `modAdmin: true` marcheaza explicit cererile neprotejate de RLS.
+ * Pana atunci, `modAdmin: true` marcheaza explicit cererile neprotejate de RLS,
+ * iar `statisticiContext()` spune CAT trafic este in aceasta situatie. O limitare
+ * cunoscuta si nemasurata este doar o vulnerabilitate cu documentatie buna.
+ *
+ * ==========================================================================
+ * C-3 (audit 2026-08-05): degradarea tacuta a fost eliminata
+ * ==========================================================================
+ * Varianta anterioara prindea orice eroare de construire a clientului cu RLS,
+ * scria un `console.warn` si continua pe `service_role`. Adica fix scenariul pe
+ * care comentariul de mai sus il declara mai periculos decat esecul. Un
+ * `SUPABASE_ANON_KEY` absent dezactiva RLS pe TOT traficul Supabase, in tacere,
+ * la runtime, fara ca vreun test sau vreo alerta sa observe.
+ *
+ * Acum ramura Supabase este fail-closed: arunca `EroareContextDate` (503).
+ * Calea Clerk nu este afectata - ea nu intra niciodata pe aceasta ramura.
  */
 
 const { createClient } = require('@supabase/supabase-js');
+const { Logger } = require('./logger');
 
 /** Tabele cu politici RLS pe `auth.uid() = user_id`. */
 const TABELE_CU_RLS_UTILIZATOR = Object.freeze([
@@ -73,11 +88,38 @@ const TABELE_DOAR_ADMIN = Object.freeze([
 ]);
 
 /**
+ * Esec la construirea contextului de date. Se traduce in 503, nu in 500:
+ * serverul este configurat gresit, cererea nu este vinovata.
+ */
+class EroareContextDate extends Error {
+	constructor(mesaj, cod = 'CONTEXT_DATE_INDISPONIBIL') {
+		super(mesaj);
+		this.name = 'EroareContextDate';
+		this.cod = cod;
+		this.status = 503;
+	}
+}
+
+/**
+ * Contoare de proces. Raspund la o singura intrebare, dar cea corecta:
+ * cat din traficul autentificat ruleaza fara plasa de siguranta a bazei de date?
+ */
+const _statistici = { cereriCuRls: 0, cereriModAdmin: 0, esecuriClientRls: 0 };
+
+function statisticiContext() {
+	const total = _statistici.cereriCuRls + _statistici.cereriModAdmin;
+	return {
+		..._statistici,
+		procentFaraRls: total === 0 ? 0 : Math.round((_statistici.cereriModAdmin / total) * 100),
+	};
+}
+
+/**
  * Construieste un client legat de JWT-ul utilizatorului.
  *
  * Nu persista sesiunea si nu reinnoieste tokenul: obiectul trebuie sa traiasca
  * exact cat cererea HTTP. Un client per-cerere refolosit intre cereri ar duce la
- * scurgerea identitatii de la un utilizator la altul — exact defectul pe care
+ * scurgerea identitatii de la un utilizator la altul - exact defectul pe care
  * incercam sa il eliminam.
  */
 function creeazaClientUtilizator({ url, anonKey, token }) {
@@ -110,9 +152,12 @@ function creeazaClientUtilizator({ url, anonKey, token }) {
  *   - `modAdmin` true cand RLS NU protejeaza aceasta cerere (cale Clerk)
  *
  * `sursaToken` este 'supabase' cand tokenul primit este un JWT Supabase valid.
- * Pentru orice alta sursa, `db` cade pe clientul admin: fara `auth.uid()`, un
- * client anon nu ar putea citi nimic, iar cererea ar esua in loc sa fie doar
- * mai putin protejata.
+ * Pe acea cale, imposibilitatea de a construi clientul restrans este o eroare,
+ * nu o degradare acceptabila (C-3).
+ *
+ * Pentru orice alta sursa (Clerk), `db` cade pe clientul admin: fara `auth.uid()`
+ * un client anon nu ar putea citi nimic, iar cererea ar esua in loc sa fie doar
+ * mai putin protejata. Cazul este numarat, nu doar comentat.
  */
 function creeazaContextDate({
 	config,
@@ -132,18 +177,25 @@ function creeazaContextDate({
 				anonKey: config.supabase.anonKey,
 				token,
 			});
+			_statistici.cereriCuRls += 1;
 			return { db, admin: supabaseAdmin, userId, modAdmin: false };
 		} catch (err) {
-			// Daca nu putem construi clientul restrans, NU tacem: o cerere care se
-			// crede protejata de RLS dar nu este, e mai periculoasa decat una care
-			// stie ca nu este.
-			console.warn(
-				'[securitate] Client RLS indisponibil, se continua in mod admin:',
-				err.message,
+			// FAIL-CLOSED. O cerere care se crede protejata de RLS dar nu este
+			// e mai periculoasa decat una care esueaza vizibil. Nu logam
+			// err.message prin console: Logger aplica lista alba de chei (B-11).
+			_statistici.esecuriClientRls += 1;
+			Logger.error('Client RLS indisponibil pe cale Supabase; cerere refuzata', {
+				userId,
+				status: 'CLIENT_RLS_INDISPONIBIL',
+			});
+			throw new EroareContextDate(
+				'Serviciul de date este temporar indisponibil.',
+				'CLIENT_RLS_INDISPONIBIL',
 			);
 		}
 	}
 
+	_statistici.cereriModAdmin += 1;
 	return { db: supabaseAdmin, admin: supabaseAdmin, userId, modAdmin: true };
 }
 
@@ -181,7 +233,9 @@ function tabelUtilizator(ctx, tabela) {
 module.exports = {
 	TABELE_CU_RLS_UTILIZATOR,
 	TABELE_DOAR_ADMIN,
+	EroareContextDate,
 	creeazaClientUtilizator,
 	creeazaContextDate,
+	statisticiContext,
 	tabelUtilizator,
 };
