@@ -72,6 +72,31 @@ const TABELE_DOAR_ADMIN = Object.freeze([
 	'clerk_user_map',
 ]);
 
+/** Contoare interne (A-3): masoara ce procent din trafic ruleaza fara RLS. */
+let cereriCuRls = 0;
+let cereriModAdmin = 0;
+let esecuriClientRls = 0;
+
+/**
+ * Eroare aruncata cand clientul legat de JWT nu poate fi construit pe calea
+ * Supabase (A-3). Fail-closed: o cerere care se crede protejata de RLS dar nu
+ * este, e mai periculoasa decat una care stie ca nu este. Handler-ul global de
+ * erori din server.js o traduce in 503 cu mesaj neutru.
+ */
+class EroareContextDate extends Error {
+	constructor() {
+		super('Client de date indisponibil.');
+		this.name = 'EroareContextDate';
+		this.cod = 'CLIENT_RLS_INDISPONIBIL';
+		this.status = 503;
+	}
+}
+
+/** Expune contoarele interne pentru observabilitate (A-3). */
+function getStatisticiClientDate() {
+	return { cereriCuRls, cereriModAdmin, esecuriClientRls };
+}
+
 /**
  * Construieste un client legat de JWT-ul utilizatorului.
  *
@@ -125,6 +150,7 @@ function creeazaContextDate({
 		throw new Error('Contextul de date necesita un userId rezolvat.');
 	}
 
+	const eroareContext = new EroareContextDate();
 	if (sursaToken === 'supabase' && token) {
 		try {
 			const db = creeazaClientUtilizator({
@@ -132,18 +158,24 @@ function creeazaContextDate({
 				anonKey: config.supabase.anonKey,
 				token,
 			});
+			cereriCuRls++;
 			return { db, admin: supabaseAdmin, userId, modAdmin: false };
-		} catch (err) {
+		} catch {
 			// Daca nu putem construi clientul restrans, NU tacem: o cerere care se
 			// crede protejata de RLS dar nu este, e mai periculoasa decat una care
 			// stie ca nu este.
-			console.warn(
-				'[securitate] Client RLS indisponibil, se continua in mod admin:',
-				err.message,
+			// A-3: fail-closed — in loc sa degradam silențios pe clientul admin
+			// (care ocoleste RLS prin definitie), aruncam si cererea e refuzata cu 503.
+			esecuriClientRls++;
+			console.error(
+				'[securitate] Client RLS indisponibil, cerere refuzata:',
+				eroareContext.cod,
 			);
+			throw eroareContext;
 		}
 	}
 
+	cereriModAdmin++;
 	return { db: supabaseAdmin, admin: supabaseAdmin, userId, modAdmin: true };
 }
 
@@ -184,4 +216,6 @@ module.exports = {
 	creeazaClientUtilizator,
 	creeazaContextDate,
 	tabelUtilizator,
+	EroareContextDate,
+	getStatisticiClientDate,
 };

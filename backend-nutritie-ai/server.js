@@ -28,7 +28,7 @@ const { TokenCache } = require('./utils/tokenCache');
 const { rezolvaIdentitate, EroareIdentitate } = require('./utils/identitate');
 const { callWithTimeout } = require('./utils/httpTimeout');
 const { Semafor } = require('./utils/semafor');
-const { creeazaContextDate } = require('./utils/clientUtilizator');
+const { creeazaContextDate, EroareContextDate } = require('./utils/clientUtilizator');
 const { idempotencyMiddleware } = require('./utils/idempotency');
 const { checkAiUsageQuota } = require('./utils/aiUsageQuota');
 const createGdprRouter = require('./routes/gdpr');
@@ -417,6 +417,11 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   }
   if (message.includes('Tip fișier nepermis')) {
     return res.status(400).json({ eroare: message });
+  }
+  if (err instanceof EroareContextDate) {
+    // A-3: clientul legat de JWT nu a putut fi construit pe calea Supabase —
+    // refuzam cu 503 (mesaj neutru, fara detalii interne), nu degradam pe admin.
+    return res.status(err.status).json({ eroare: 'Serviciul de date este indisponibil.' });
   }
   res.status(500).json({ eroare: 'Eroare internă a serverului.' });
 });
