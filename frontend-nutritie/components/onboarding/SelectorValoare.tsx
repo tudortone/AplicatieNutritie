@@ -66,6 +66,8 @@ export default function SelectorValoare({
 	// Pozitionam rigla pe valoarea curenta cand aceasta se schimba din exterior.
 	useEffect(() => {
 		if (manevreaza.current) return
+		if (valoare === ultimaValoare.current) return
+		ultimaValoare.current = valoare
 		const x = indiceDinValoare(valoare) * LATIME_PAS
 		refScroll.current?.scrollTo({ x, animated: false })
 	}, [valoare, indiceDinValoare])
@@ -110,6 +112,8 @@ export default function SelectorValoare({
 					showsHorizontalScrollIndicator={false}
 					snapToInterval={LATIME_PAS}
 					decelerationRate="fast"
+					bounces={false}
+					overScrollMode="never"
 					contentContainerStyle={{ paddingHorizontal: padding }}
 					onScroll={laDerulare}
 					scrollEventThrottle={16}
@@ -121,11 +125,17 @@ export default function SelectorValoare({
 					onScrollBeginDrag={() => {
 						manevreaza.current = true
 					}}
+					onMomentumScrollBegin={() => {
+						manevreaza.current = true
+					}}
 					onMomentumScrollEnd={() => {
 						manevreaza.current = false
 					}}
 					onScrollEndDrag={() => {
-						manevreaza.current = false
+						// Nu dezactivam manevreaza daca exista in continuare inertie de derulare.
+						setTimeout(() => {
+							manevreaza.current = false
+						}, 150)
 					}}
 				>
 					{gradatii.map((g, i) => {
