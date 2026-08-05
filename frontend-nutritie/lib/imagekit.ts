@@ -34,10 +34,13 @@ export async function getImageKitAuthParams(): Promise<{ token: string; expire: 
  */
 export async function uploadImageToImageKit(
   fileUri: string,
-  fileName: string = 'mancare.jpg'
+  fileName: string = 'mancare.jpg',
+  userId?: string
 ): Promise<ImageKitUploadResult> {
   const authParams = await getImageKitAuthParams();
   const urlEndpoint = authParams.urlEndpoint || 'https://ik.imagekit.io/nutriai';
+
+  const folderPath = userId ? `/meals/${userId}` : '/mancare';
 
   const formData = new FormData();
   formData.append('file', {
@@ -51,7 +54,7 @@ export async function uploadImageToImageKit(
   formData.append('signature', authParams.signature);
   formData.append('publicKey', process.env.EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY || 'public_mock_key');
   formData.append('useUniqueFileName', 'true');
-  formData.append('folder', '/mancare');
+  formData.append('folder', folderPath);
 
   const uploadRes = await fetch(`https://upload.imagekit.io/api/v1/files/upload`, {
     method: 'POST',

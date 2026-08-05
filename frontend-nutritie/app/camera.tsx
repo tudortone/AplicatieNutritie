@@ -54,6 +54,7 @@ export default function CameraScreen() {
   const [scanError, setScanError] = useState<string | null>(null);
 
   const [seIncarca, setSeIncarca] = useState(false);
+  const [progressText, setProgressText] = useState('Analiză AI în curs...');
   const [selectedAI, setSelectedAI] = useState<'auto' | 'gemini' | 'openai' | 'groq'>('auto');
   const [aiMenuVisible, setAiMenuVisible] = useState(false);
   const [cautareProdusVisible, setCautareProdusVisible] = useState(false);
@@ -127,22 +128,23 @@ export default function CameraScreen() {
       setScanError(null);
       setRezultat([]);
       setSeIncarca(true);
+      setProgressText('Redimensionare imagine (max 800px)...');
 
       try {
-        // B-20: redimensionam pe client inainte de upload. Serverul pastreaza
-        // base64-ul necesar pe toata cascada AI, dar un Buffer brut in plus in
-        // heap dubleaza varful de memorie fara castig. Reducerea reala de payload
-        // (si de cost AI) vine de aici: de la ~15MB la <200KB.
         const imagineOptimizata = await optimizeImageBeforeUpload(imageUri);
+        if (controller.signal.aborted) return;
+
+        setProgressText('Încărcare securizată pe ImageKit CDN...');
 
         const formData = new FormData();
-
         formData.append('imagine', {
           uri: imagineOptimizata.uri,
           name: `nutriai-${Date.now()}.jpg`,
           type: 'image/jpeg',
         } as unknown as Blob);
         formData.append('provider', selectedAI);
+
+        setProgressText('Analiză AI în curs (GPT-4o / Gemini)...');
 
         const response = await fetch(
           `${API_URL}${API_PREFIX}/analizeaza-mancare-structurat`,
@@ -155,6 +157,8 @@ export default function CameraScreen() {
             signal: controller.signal,
           },
         );
+
+        setProgressText('Calculare macronutrienți & calibrare...');
 
         const payload = (await response.json()) as
           | AlimentScanat[]
@@ -533,7 +537,7 @@ export default function CameraScreen() {
               <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay}>
                 <BlurView intensity={60} tint="dark" style={styles.scanningBlur}>
                   <ActivityIndicator size="large" color={colors.accent} />
-                  <Text style={[styles.scanningText, { color: colors.accent }]}>Analizez farfuria...</Text>
+                  <Text style={[styles.scanningText, { color: colors.accent }]}>{progressText}</Text>
                 </BlurView>
               </Animated.View>
             )}

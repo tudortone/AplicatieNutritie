@@ -18,6 +18,12 @@ function modelsDeIncercat() {
 
 exports.analizaMancareTask = task({
   id: 'analiza-mancare-ai',
+  retry: {
+    maxAttempts: 3,
+    minTimeoutInMs: 1000,
+    maxTimeoutInMs: 5000,
+    factor: 2,
+  },
   run: async (payload) => {
     const { imageUrl, tipMasa, userId } = payload || {};
     if (!imageUrl) {
@@ -133,6 +139,15 @@ exports.analizaMancareTask = task({
           incredere: String(i.incredere || 'mediu').substring(0, 20),
         }))
         .filter((i) => i.nume.trim().length > 0);
+
+      if (normalizate.length === 0 || normalizate.some(i => /nu.*mancare|non-food|nu s-a detectat|nu contine/i.test(i.nume))) {
+        return {
+          success: false,
+          isNotFood: true,
+          eroare: 'Imaginea încărcată nu pare să conțină alimente. Te rugăm să încerci cu o poză clară a unei mese.',
+          processedAt: new Date().toISOString(),
+        };
+      }
 
       const totalKcal = normalizate.reduce(
         (s, i) => s + (i.calorii_per_100g * i.estimare_grame) / 100,
