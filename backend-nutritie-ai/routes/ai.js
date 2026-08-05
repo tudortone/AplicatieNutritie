@@ -149,19 +149,6 @@ function createAiRouter({
         return res.status(400).json({ eroare: 'Tip fișier nepermis. Doar fisierele de tip imagine sunt acceptate.' });
       }
 
-      let fileBuffer = await fs.promises.readFile(req.file.path);
-      const imageMime = serviciuVision.detectImageMime(fileBuffer);
-      if (!imageMime) {
-        return res.status(400).json({ eroare: 'Tip fișier nepermis. Doar imagini JPEG/PNG/WEBP sunt acceptate.' });
-      }
-
-      const imageBase64 = fileBuffer.toString('base64');
-      // B-20: eliberam Buffer-ul brut dupa encodare. Base64-ul ramane necesar pe
-      // toata cascada (fiecare furnizor are nevoie de imagine), dar tinand ambele
-      // copii in heap dublam varful de memorie fara castig. Reducerea reala de
-      // payload vine din redimensionarea pe client (camera.tsx), inainte de upload.
-      fileBuffer = null;
-
       const requestedProvider = String(
         req.body?.provider || citesteQuery(req, 'provider') || 'auto',
       ).toLowerCase();
@@ -179,15 +166,35 @@ function createAiRouter({
 
       let rezultatCascada;
       try {
-        // Plafon de concurenta: protejeaza heap-ul si bugetul de API la varf de trafic.
-        rezultatCascada = await semaforAi.ruleaza(() => serviciuCascada.ruleazaCascadaVision({
-          imageBase64,
-          imageMime,
-          requestedProvider,
-        }));
+        // Citirea fișierului și encodarea Base64 au loc ÎN INTERIORUL semaforului.
+        // Înainte rulau înainte de plafonare: N cereri concurente își duplicau
+        // imaginea în heap, iar semaforul nu proteja vârful de memorie.
+        rezultatCascada = await semaforAi.ruleaza(async () => {
+          let fileBuffer = await fs.promises.readFile(req.file.path);
+          const imageMime = serviciuVision.detectImageMime(fileBuffer);
+          if (!imageMime) {
+            const eroare400 = new Error('Tip fișier nepermis. Doar imagini JPEG/PNG/WEBP sunt acceptate.');
+            eroare400.status = 400;
+            throw eroare400;
+          }
+          const imageBase64 = fileBuffer.toString('base64');
+          // B-20: eliberam Buffer-ul brut dupa encodare. Base64-ul ramane necesar
+          // pe toata cascada, dar tinand ambele copii in heap dublam varful de
+          // memorie fara castig. Reducerea reala de payload vine din redimensionarea
+          // pe client (camera.tsx), inainte de upload.
+          fileBuffer = null;
+          return serviciuCascada.ruleazaCascadaVision({
+            imageBase64,
+            imageMime,
+            requestedProvider,
+          });
+        });
       } catch (errSemafor) {
         if (errSemafor?.cod === 'AI_SUPRAINCARCAT') {
           return res.status(503).json({ eroare: errSemafor.message });
+        }
+        if (errSemafor?.status === 400) {
+          return res.status(400).json({ eroare: errSemafor.message });
         }
         throw errSemafor;
       }

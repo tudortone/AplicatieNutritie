@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../supabase';
 import { API_URL } from '@/constants/config';
+import { API_PREFIX } from '@/lib/api';
 import Animated, { FadeIn, FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { X, Scan, Zap, ChevronDown, Plus, Heart, Image as ImageIcon, Send, Sparkles } from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -77,7 +78,7 @@ export default function CameraScreen() {
       let active = true;
       const fetchStatus = async () => {
         try {
-          const res = await fetch(`${API_URL}/api/ai-status`);
+          const res = await fetch(`${API_URL}${API_PREFIX}/ai-status`);
           if (res.ok) {
             const data = await res.json();
             if (active) setAiStatus(data);
@@ -144,7 +145,7 @@ export default function CameraScreen() {
         formData.append('provider', selectedAI);
 
         const response = await fetch(
-          `${API_URL}/api/analizeaza-mancare-structurat`,
+          `${API_URL}${API_PREFIX}/analizeaza-mancare-structurat`,
           {
             method: 'POST',
             headers: {
@@ -240,7 +241,7 @@ export default function CameraScreen() {
     try {
       if (__DEV__) console.log('[Camera] Trimit corecție:', textCorectie.substring(0, 50));
       
-      const response = await fetch(`${API_URL}/api/corecteaza-mancare-vizual-text`, {
+      const response = await fetch(`${API_URL}${API_PREFIX}/corecteaza-mancare-vizual-text`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

@@ -22,11 +22,14 @@ const USER_EXACT_KEYS = new Set([
   'nutriai_last_workout_reset_date', 'nutriai_last_opened_date',
   'nutriai:last_reset_date', 'nutriai_apa_azi_ml',
   'nutriai_temp_calorii_azi', 'nutriai_mese_cache_azi',
+  // Date de sănătate strict per-utilizator — alt cont pe același telefon
+  // nu trebuie să moștenească pașii/obiectivul/furnizorul contului precedent.
+  'health_sync_enabled', 'health_step_goal', 'health_sync_provider',
 ]);
 
 const USER_PREFIXES = [
   'chat_history_', 'nutriai_mese_', 'nutriai_apa_', 'nutriai_camara_',
-  'nutriai_quest', 'nutriai_workout',
+  'nutriai_quest', 'nutriai_workout', 'manual_steps_',
 ];
 
 export async function clearLocalUserData(): Promise<void> {
