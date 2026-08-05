@@ -61,9 +61,14 @@ UPDATE public.barcode_cache
 DELETE FROM public.barcode_cache WHERE source = 'estimare_ai';
 
 -- ==============================================================================
--- 3. [MIGRATION_FIX] Backfill mese.data/ora din created_at (ziua locală).
---    Migrarea 001 creează coloanele, dar nu populează rândurile existente.
+-- 3. [MIGRATION_FIX] mese.data/ora — coloanele + backfill din created_at (ziua
+--    locală). Migrarea 001 le creează pe schema nouă, dar pe o bază care a primit
+--    doar scripturile vechi (mese din patch_critic C1, fără data/ora) coloanele
+--    lipsesc — ADD COLUMN IF NOT EXISTS acoperă ambele cazuri, backfill-ul umple.
 -- ==============================================================================
+ALTER TABLE public.mese ADD COLUMN IF NOT EXISTS data DATE;
+ALTER TABLE public.mese ADD COLUMN IF NOT EXISTS ora  TIME;
+
 UPDATE public.mese
    SET data = (created_at AT TIME ZONE 'Europe/Bucharest')::date,
        ora  = (created_at AT TIME ZONE 'Europe/Bucharest')::time
