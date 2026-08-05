@@ -16,6 +16,11 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
+// Contul de admin se logheaza cu username-ul „admin" (nu email). Supabase cere
+// email la autentificare, deci identificatorul se mapeaza intern la adresa contului.
+const ADMIN_USERNAME = 'admin';
+const ADMIN_EMAIL = 'admin@nutriai.app';
+
 const getFriendlyErrorMessage = (rawMsg: string): string => {
   const m = rawMsg.toLowerCase();
   if (m.includes('invalid login credentials') || m.includes('invalid credentials')) {
@@ -56,12 +61,14 @@ export default function AuthScreen() {
 
   const submit = async () => {
     setAuthError(null);
-    if (!email || !parola) { 
+    const identificator = email.trim();
+    const esteAdminLogin = !isSignUp && identificator.toLowerCase() === ADMIN_USERNAME;
+    if (!identificator || !parola) {
       setAuthError("Email și parolă sunt obligatorii.");
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
-      return; 
+      return;
     }
-    if (!isValidEmail(email)) {
+    if (!isValidEmail(identificator) && !esteAdminLogin) {
       setAuthError("Te rugăm să introduci o adresă de email validă.");
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
       return;
@@ -101,7 +108,7 @@ export default function AuthScreen() {
           Alert.alert(t('alerts.titluri.contCreat'), t('alerts.mesaje.verificaEmailConfirmare'));
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: parola });
+        const { error } = await supabase.auth.signInWithPassword({ email: esteAdminLogin ? ADMIN_EMAIL : identificator, password: parola });
         if (error) {
           const msg = getFriendlyErrorMessage(error.message);
           setAuthError(msg);
@@ -201,7 +208,7 @@ export default function AuthScreen() {
                 </View>
                 <TextInput
                   style={[styles.input, { color: colors.textPrimary }]}
-                  placeholder="Adresă de email"
+                  placeholder="Email sau utilizator"
                   placeholderTextColor={colors.textSecondary}
                   value={email}
                   onChangeText={(t) => {

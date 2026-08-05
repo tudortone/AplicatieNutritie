@@ -7,6 +7,12 @@
  * catre un cont Supabase in `clerk_user_map`. Fara mapare -> 409, fail-closed.
  * Nu se scrie NICIODATA in baza de date un identificator care nu e UUID.
  *
+ * Rolul de admin se citeste din `app_metadata.rol`, NU din `user_metadata`:
+ * `app_metadata` este controlat de server (GoTrue/admin API), in timp ce
+ * `user_metadata` poate fi rescris de orice utilizator prin SDK-ul client
+ * (supabase.auth.updateUser({ data: ... })). Folosirea `user_metadata` pentru
+ * privilegii ar permite auto-escaladare la admin.
+ *
  * Adaugat dupa auditul urmator: identitatea returnata include `expiraLaMs`,
  * momentul real de expirare al tokenului. Fara el, cache-ul de sesiuni memora
  * orbeste 60 de secunde, deci un token expirat ramanea acceptat.
@@ -93,7 +99,7 @@ async function leagaContClerk(supabaseAdmin, { clerkUserId, supabaseUserId }) {
 /**
  * Valideaza un token si intoarce o identitate normalizata.
  *
- * @returns {Promise<{id: string, email: string|null, provider: 'supabase'|'clerk', expiraLaMs: number|null}>}
+ * @returns {Promise<{id: string, email: string|null, provider: 'supabase'|'clerk', expiraLaMs: number|null, esteAdmin: boolean}>}
  * @throws {EroareIdentitate}
  */
 async function rezolvaIdentitate({
@@ -122,6 +128,7 @@ async function rezolvaIdentitate({
 			email: utilizator.email ?? null,
 			provider: 'supabase',
 			expiraLaMs: citesteExpiraLaMs(token),
+			esteAdmin: utilizator.app_metadata?.rol === 'admin',
 		};
 	}
 
@@ -189,6 +196,7 @@ async function rezolvaIdentitate({
 		expiraLaMs: Number.isFinite(Number(payloadClerk.exp))
 			? Number(payloadClerk.exp) * 1000
 			: citesteExpiraLaMs(token),
+		esteAdmin: false,
 	};
 }
 

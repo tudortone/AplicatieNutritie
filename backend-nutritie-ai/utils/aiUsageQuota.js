@@ -27,6 +27,11 @@ function creeazaCheckAiUsageQuota({ contor, limitaZi = DAILY_LIMIT, fereastraMs 
       });
     }
 
+    // Contul de admin are analize AI nelimitate — nu consuma din plafonul zilnic.
+    if (req.user?.esteAdmin) {
+      return next();
+    }
+
     const count = await sursa.increment(userId, fereastraMs);
     if (!Number.isFinite(count)) {
       return res.status(503).json({

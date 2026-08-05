@@ -117,7 +117,7 @@ function RootNavigator() {
 
   return <ThemeProvider value={appDarkTheme}>
     <OfflineBanner />
-    <PremiumProvider appUserId={session?.user.id ?? null}>
+    <PremiumProvider appUserId={session?.user.id ?? null} isAdmin={session?.user?.app_metadata?.rol === 'admin'}>
       <Stack screenOptions={{ headerShown: false, gestureEnabled: true, animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, fullScreenGestureEnabled: true, contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
         <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />

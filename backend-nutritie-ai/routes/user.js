@@ -36,6 +36,12 @@ function createUserRouter({ requireAuth, generalLimiter, config }) {
   const router = express.Router();
 
   router.get('/premium-status', requireAuth, generalLimiter, async (req, res) => {
+    // Contul de admin (app_metadata.rol === 'admin') are Premium permanent,
+    // fara a depinde de RevenueCat sau de o cheie configurata.
+    if (req.user?.esteAdmin) {
+      return res.json({ premium: true, entitlement: null, expiresDate: null, validatServer: true });
+    }
+
     if (!config.revenuecat.secretApiKey) {
       return res.status(503).json({
         eroare: 'Validarea premium nu este configurata (lipseste REVENUECAT_SECRET_API_KEY).',

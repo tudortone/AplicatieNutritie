@@ -92,7 +92,7 @@ export function usePremium(): PremiumStatus {
   return useContext(PremiumContext);
 }
 
-export function PremiumProvider({ children, appUserId }: { children: React.ReactNode; appUserId: string | null }) {
+export function PremiumProvider({ children, appUserId, isAdmin = false }: { children: React.ReactNode; appUserId: string | null; isAdmin?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [subscriptionPackages, setSubscriptionPackages] = useState<PurchasesPackage[]>([]);
@@ -216,7 +216,10 @@ export function PremiumProvider({ children, appUserId }: { children: React.React
   const value = useMemo<PremiumStatus>(
     () => ({
       purchasesAvailable,
-      isPremium,
+      // Contul de admin are Premium permanent, independent de RevenueCat:
+      // flag-ul vine din app_metadata.rol (server-controlled), deci nu poate fi
+      // auto-acordat de un utilizator.
+      isPremium: isAdmin ? true : isPremium,
       loading,
       subscriptionPackages,
       creditProducts,
@@ -225,7 +228,7 @@ export function PremiumProvider({ children, appUserId }: { children: React.React
       purchaseCredits,
       restore,
     }),
-    [purchasesAvailable, isPremium, loading, subscriptionPackages, creditProducts, refresh, purchaseSubscription, purchaseCredits, restore],
+    [purchasesAvailable, isPremium, isAdmin, loading, subscriptionPackages, creditProducts, refresh, purchaseSubscription, purchaseCredits, restore],
   );
 
   return <PremiumContext.Provider value={value}>{children}</PremiumContext.Provider>;
