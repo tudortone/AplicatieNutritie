@@ -86,8 +86,6 @@ const tokenCache = {
   },
 };
 
-const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_mock_clerk_key';
-
 LogBox.ignoreLogs(['expo-notifications: Android Push notifications', '`expo-notifications` functionality is not fully supported in Expo Go']);
 export const unstable_settings = { anchor: '(tabs)' };
 const PUSH_ANIMATION = 'slide_from_right' as const;

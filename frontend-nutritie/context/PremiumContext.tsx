@@ -32,11 +32,20 @@ try {
   PurchasesApi = null;
 }
 
-/** Cheia API publică RevenueCat (per-platform, din tab-ul App Settings). */
-const REVENUECAT_API_KEYS: Record<string, string> = {
-  android: 'PLACEHOLDER_REVENUECAT_GOOGLE_KEY',
-  ios: 'PLACEHOLDER_REVENUECAT_APPLE_KEY',
-};
+/**
+ * Cheia API publică RevenueCat, citită din env (EXPO_PUBLIC_REVENUECAT_*_KEY) și
+ * inline-uită la build. NU se hardcodează în sursă: un placeholder în git ar duce
+ * fie la chei reale comise, fie la un build care pare configurat dar nu e.
+ * Cheile RevenueCat sunt publicabile (verificarea reală e server-side, prin
+ * revenuecat-secret), deci inlinierea în bundle la build e comportamentul
+ * standard al SDK-ului.
+ */
+function cheieApiRevenueCat(): string | null {
+  const cheie = Platform.OS === 'ios'
+    ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY
+    : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY;
+  return cheie?.trim() || null;
+}
 
 /** Entitlement-ul abonamentului Premium (definit în dashboard-ul RevenueCat). */
 const PREMIUM_ENTITLEMENT = 'premium';
@@ -83,7 +92,9 @@ export function PremiumProvider({ children, appUserId }: { children: React.React
   const [isPremium, setIsPremium] = useState(false);
   const [subscriptionPackages, setSubscriptionPackages] = useState<PurchasesPackage[]>([]);
   const [creditProducts, setCreditProducts] = useState<PurchasesStoreProduct[]>([]);
-  const purchasesAvailable = PurchasesApi != null;
+  // Fail-closed: fără cheie de platformă, achizițiile sunt indisponibile (SDK-ul
+  // nu se configurează niciodată cu o cheie goală sau un placeholder).
+  const purchasesAvailable = PurchasesApi != null && cheieApiRevenueCat() != null;
 
   const hasPremium = useCallback((info?: CustomerInfo | null) => {
     try {
@@ -141,11 +152,10 @@ export function PremiumProvider({ children, appUserId }: { children: React.React
 
   // Configurare + sincronizare cu userul Supabase
   useEffect(() => {
-    if (!PurchasesApi) return;
+    const cheie = cheieApiRevenueCat();
+    if (!PurchasesApi || !cheie) return;
     try {
-      PurchasesApi.configure({
-        apiKey: REVENUECAT_API_KEYS[Platform.OS] ?? REVENUECAT_API_KEYS.android,
-      });
+      PurchasesApi.configure({ apiKey: cheie });
     } catch {
       return;
     }

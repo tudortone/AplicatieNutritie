@@ -295,7 +295,9 @@ const requireAuth = async (req, res, next) => {
     if (err instanceof EroareIdentitate) {
       return res.status(err.status).json({ eroare: err.message, cod: err.cod });
     }
-    console.error('[Auth] Eroare neasteptata:', err);
+    // Logam doar mesajul, nu obiectul/stack-ul: erorile SDK pot include path-uri
+    // interne sau fragmente de date; raspunsul catre client ramane generic.
+    console.error('[Auth] Eroare neasteptata:', err instanceof Error ? err.message : String(err));
     return res.status(503).json({ eroare: 'Serviciul de autentificare este indisponibil.' });
   }
 };

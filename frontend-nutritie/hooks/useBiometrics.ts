@@ -6,8 +6,6 @@ import * as Haptics from 'expo-haptics';
 
 const BIOMETRIC_STORAGE_KEY = 'biometric_lock_enabled';
 const LAST_ACTIVE_KEY = 'biometric_last_active_timestamp';
-// AUTO_LOCK_TIMEOUT_MS rezervat pentru funcționalitate viitoare (5 min)
-// const AUTO_LOCK_TIMEOUT_MS = 5 * 60 * 1000;
 
 export function useBiometrics() {
   const [isSupported, setIsSupported] = useState<boolean>(false);
@@ -126,14 +124,29 @@ export function useBiometrics() {
     }
   };
 
-  // 5. Autentificarea se cere DOAR la pornirea inițială sau logare, fără re-blocare la comutarea aplicației
+  // 5. Auto-blocare la revenirea din background dacă lock-ul biometric e activ.
+  //    Fără re-blocare, datele de sănătate și sesiunea rămân expuse după ce
+  //    aplicația a stat în fundal (bypass clasic al screen-lock-ului). Re-blocăm
+  //    doar dacă utilizatorul a fost plecat mai mult de AUTO_LOCK_TIMEOUT_MS, ca
+  //    o comutare rapidă de aplicație să nu ceară biometrie de fiecare dată.
   useEffect(() => {
+    const AUTO_LOCK_TIMEOUT_MS = 5 * 60 * 1000;
+    let backgroundAt: number | null = null;
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      const prev = appState.current;
       appState.current = nextAppState;
+      if (nextAppState !== 'active') {
+        if (prev === 'active') backgroundAt = Date.now();
+        return;
+      }
+      if (!isEnabled) return;
+      const plecat = backgroundAt != null ? Date.now() - backgroundAt : 0;
+      backgroundAt = null;
+      if (plecat >= AUTO_LOCK_TIMEOUT_MS) setIsLocked(true);
     };
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
-  }, []);
+  }, [isEnabled]);
 
   return {
     isSupported,

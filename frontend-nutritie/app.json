@@ -20,11 +20,11 @@
     "android": {
       "package": "com.nutriai.app",
       "icon": "./assets/images/icon.png",
+      "allowBackup": false,
       "permissions": [
         "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.CAMERA",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_EXTERNAL_STORAGE"
+        "android.permission.READ_MEDIA_IMAGES"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#090C0E",
