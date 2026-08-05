@@ -1,16 +1,25 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
-import { EXERCITII_DB as STATIC_EXERCISES } from '../constants/exercitii';
 import type { Exercitiu } from '../constants/exercitii';
 
 const CACHE_KEY = 'exercitii_cache';
 const LAST_SYNC_KEY = 'exercitii_last_sync';
 
 export function useExercitii() {
-  const [exercitii, setExercitii] = useState<Exercitiu[]>(STATIC_EXERCISES); // Fallback inițial la static
+  // Nu mai încărcăm sincron baza statică (~127KB) în lanțul de startup.
+  // Începem gol; datele vin din cache (AsyncStorage), din Supabase sau — ca
+  // ultimă soluție — din importul dinamic al bazei statice.
+  const [exercitii, setExercitii] = useState<Exercitiu[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
+  // Odată ce avem date „reale" (cache/supabase), baza statică nu le mai poate suprascrie.
+  const hasRealData = useRef(false);
+
+  const applyRealData = useCallback((data: Exercitiu[]) => {
+    hasRealData.current = true;
+    setExercitii(data);
+  }, []);
 
   const fetchExercises = useCallback(async (force = false) => {
     try {
@@ -20,7 +29,7 @@ export function useExercitii() {
         try {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setExercitii(parsed);
+            applyRealData(parsed);
           }
         } catch { /* cache corupt, îl ignorăm */ }
         setLoading(false); // UI-ul se poate randa imediat
@@ -54,7 +63,7 @@ export function useExercitii() {
       }
 
       if (data && data.length > 0) {
-        setExercitii(data);
+        applyRealData(data);
         await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
         await AsyncStorage.setItem(LAST_SYNC_KEY, acum.toString());
         setIsOffline(false);
@@ -67,11 +76,27 @@ export function useExercitii() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyRealData]);
 
   useEffect(() => {
     fetchExercises();
   }, [fetchExercises]);
+
+  // Fallback static încărcat lazily (import dinamic → nu mai intră în lanțul de
+  // startup). Se aplică doar dacă până acum nu a venit nicio sursă de date reală.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const mod = await import('../constants/exercitii');
+        if (!active || hasRealData.current) return;
+        setExercitii(mod.EXERCITII_DB);
+      } catch {
+        // Baza statică nu s-a putut încărca — rămânem pe datele curente.
+      }
+    })();
+    return () => { active = false; };
+  }, []);
 
   const refresh = () => fetchExercises(true);
 

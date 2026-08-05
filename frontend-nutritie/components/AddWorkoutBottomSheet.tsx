@@ -10,7 +10,8 @@ import {
 import BottomSheet, {
   BottomSheetScrollView,
   BottomSheetBackdrop,
-  BottomSheetTextInput
+  BottomSheetTextInput,
+  BottomSheetFlashList
 } from '@gorhom/bottom-sheet';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Dumbbell, Plus, Trash2, Search, Check, X } from 'lucide-react-native';
@@ -34,7 +35,7 @@ const ECHIPAMENTE_OPTIONS = [
   { id: 'aparat', nume: 'Aparat' },
   { id: 'greutate_corp', nume: 'Greutatea corpului' },
 ];
-import { Holographic3DAnatomyBody } from '../app/exercitiu/[id]';
+import { Holographic3DAnatomyBody } from './fitness/HolographicAnatomyBody';
 
 export interface AddWorkoutBottomSheetRef {
   open: () => void;
@@ -731,21 +732,25 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
               />
             </View>
 
-            <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 160 }}>
-              {recenteExercises.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>EXERCIȚII RECENTE</Text>
-                  {recenteExercises.map((item) => (
-                    <View key={item.id}>{renderCard({ item })}</View>
-                  ))}
-                  <Text style={[styles.sectionHeading, { color: colors.textSecondary, marginTop: 12 }]}>TOATE EXERCIȚIILE</Text>
-                </View>
-              )}
-
-              {filteredExercises.map((item) => (
-                <View key={item.id}>{renderCard({ item })}</View>
-              ))}
-            </BottomSheetScrollView>
+            <BottomSheetFlashList
+              data={filteredExercises}
+              keyExtractor={(item: Exercitiu) => item.id}
+              renderItem={renderCard}
+              extraData={{ colors, greutateUser, recenteExercises }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 160 }}
+              ListHeaderComponent={
+                recenteExercises.length > 0 ? (
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>EXERCIȚII RECENTE</Text>
+                    {recenteExercises.map((item) => (
+                      <View key={item.id}>{renderCard({ item })}</View>
+                    ))}
+                    <Text style={[styles.sectionHeading, { color: colors.textSecondary, marginTop: 12 }]}>TOATE EXERCIȚIILE</Text>
+                  </View>
+                ) : null
+              }
+            />
           </View>
         )}
       </BottomSheet>

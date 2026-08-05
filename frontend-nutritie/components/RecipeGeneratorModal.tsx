@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp, FadeOutDown } from 'react-native-reanimated';
 import { Sparkles, X, Plus, Check, Clock, Utensils, Refrigerator } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import { useCamara } from '../hooks/useCamara';
-
-const { height } = Dimensions.get('window');
 
 const INGREDIENTE_PREDEFINITE = [
   'Pui', 'Ouă', 'Spanac', 'Orez', 'Roșii', 
@@ -35,6 +33,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
   proteineRamase,
 }) => {
   const { colors } = useTheme();
+  const { height: windowHeight } = useWindowDimensions();
   const { produse } = useCamara();
   const [ingredienteSelectate, setIngredienteSelectate] = useState<string[]>(['Ouă', 'Roșii', 'Brânză / Telemea']);
   const [inputCustom, setInputCustom] = useState('');
@@ -88,7 +87,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
-        <Animated.View entering={FadeInUp.duration(400).springify()} exiting={FadeOutDown.duration(300)} style={[styles.modalCard, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
+        <Animated.View entering={FadeInUp.duration(400).springify()} exiting={FadeOutDown.duration(300)} style={[styles.modalCard, { maxHeight: windowHeight * 0.85, backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
           <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
           
           <View style={styles.header}>
@@ -106,7 +105,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+          <ScrollView style={{ maxHeight: windowHeight * 0.55 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
             
             {/* Input ingredient custom */}
             <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>ADAUTĂ SAU SELECTEAZĂ INGREDIENTE</Text>
@@ -233,7 +232,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject },
-  modalCard: { maxHeight: height * 0.85, borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 24 },
+  modalCard: { borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, overflow: 'hidden', paddingHorizontal: 20, paddingTop: 24 },
   glowTop: { position: 'absolute', top: -100, alignSelf: 'center', width: 300, height: 300, borderRadius: 150, opacity: 0.1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -242,7 +241,6 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, fontWeight: '500', marginTop: 2 },
   closeBtn: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   
-  scroll: { maxHeight: height * 0.55 },
   sectionTitle: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, marginTop: 6 },
   

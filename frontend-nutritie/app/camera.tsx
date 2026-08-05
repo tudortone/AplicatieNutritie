@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator, Pressable, Text, View, StyleSheet, TouchableOpacity,
-  TextInput, ScrollView, Dimensions, Alert, KeyboardAvoidingView, Platform, Modal
+  TextInput, ScrollView, useWindowDimensions, Alert, KeyboardAvoidingView, Platform, Modal
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { BlurView } from 'expo-blur';
@@ -32,10 +32,11 @@ import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInp
 import { uploadImageToImageKit } from '@/lib/imagekit';
 import { optimizeImageBeforeUpload } from '@/lib/imageOptimizer';
 
-const { width, height } = Dimensions.get('window');
-const SCAN_BOX_SIZE = width * 0.78;
-
 export default function CameraScreen() {
+  // Dimensiunile ferestrei sunt reactive (rotire / resize) — nu le mai citim
+  // static la modul scope.
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const SCAN_BOX_SIZE = windowWidth * 0.78;
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { session } = useAuth();
@@ -70,37 +71,32 @@ export default function CameraScreen() {
     };
   }, []);
 
+  // Statusul AI se ia o singur\u0103 dat\u0103 la focus (nu mai exist\u0103 polling de 30s \u2014
+  // economise\u0219te re\u021bea/baterie). Cooldown-urile se re\u00eemprosp\u0103teaz\u0103 on-demand
+  // c\u00e2nd utilizatorul deschide meniul de selectare AI.
+  const fetchAiStatus = useCallback(async () => {
+    try {
+      // Statusul AI e acum protejat cu autentificare (P2.5), deci trimitem token-ul.
+      const res = await fetch(`${API_URL}/api/ai-status`, {
+        headers: session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : undefined,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiStatus(data);
+      }
+    } catch {
+      // Polling necritic - erorile sunt normale in dev
+      // nu trebuie sa blocheze UI-ul, dar e util in development.
+      if (__DEV__) console.debug('[Camera] Status AI indisponibil (posibil offline).');
+    }
+  }, [session?.access_token]);
+
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      const fetchStatus = async () => {
-        try {
-          // Statusul AI e acum protejat cu autentificare (P2.5), deci trimitem token-ul.
-          const res = await fetch(`${API_URL}/api/ai-status`, {
-            headers: session?.access_token
-              ? { Authorization: `Bearer ${session.access_token}` }
-              : undefined,
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (active) setAiStatus(data);
-          }
-        } catch {
-          // Polling necritic - erorile sunt normale in dev
-          // nu trebuie sa blocheze UI-ul, dar e util in development.
-          if (__DEV__) console.debug('[Camera] Status AI indisponibil (posibil offline).');
-        }
-      };
-      fetchStatus();
-      // Polling la 30s (evita 429 rate-limit)
-      // /api/ai-status este acum exclus din rate-limiter \u00een backend, dar men\u021binem intervalul mare
-      // pentru a nu consuma inutil resurse de re\u021bea \u0219i baterie.
-      const timer = setInterval(fetchStatus, 30000);
-      return () => {
-        active = false;
-        clearInterval(timer);
-      };
-    }, [])
+      fetchAiStatus();
+    }, [fetchAiStatus])
   );
 
   const updateIngredient = useCallback(
@@ -454,6 +450,8 @@ export default function CameraScreen() {
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setAiMenuVisible(prev => !prev);
+              // Reîmprospătăm cooldown-urile exact când utilizatorul vede meniul.
+              fetchAiStatus();
             }}
             accessibilityRole="button"
             accessibilityLabel="Alege furnizorul AI pentru analiza imaginii"
@@ -525,7 +523,7 @@ export default function CameraScreen() {
 
         {/* Box Scanare */}
         <View style={styles.scanArea}>
-          <View style={[styles.scanBox, { borderColor: colors.cardBorder }]}>
+          <View style={[styles.scanBox, { width: SCAN_BOX_SIZE, height: SCAN_BOX_SIZE, borderColor: colors.cardBorder }]}>
             <View style={[styles.corner, styles.cornerTL, { borderColor: colors.accent }]} />
             <View style={[styles.corner, styles.cornerTR, { borderColor: colors.accent }]} />
             <View style={[styles.corner, styles.cornerBL, { borderColor: colors.accent }]} />
@@ -548,7 +546,7 @@ export default function CameraScreen() {
       {rezultat.length > 0 && (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <Animated.View entering={FadeInUp.duration(500).springify()} style={[styles.resultSheet, { borderColor: colors.accent + '26' }]}>
-            <BlurView intensity={50} tint="dark" style={styles.resultBlur}>
+            <BlurView intensity={50} tint="dark" style={[styles.resultBlur, { maxHeight: windowHeight * 0.8 }]}>
               <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={styles.resultGrad}>
                 <View style={styles.resultHandle} />
                 
@@ -781,7 +779,7 @@ const styles = StyleSheet.create({
 
   scanArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scanBox: {
-    width: SCAN_BOX_SIZE, height: SCAN_BOX_SIZE, borderRadius: 24,
+    borderRadius: 24,
     justifyContent: 'center', alignItems: 'center', overflow: 'hidden',
   },
   corner: { position: 'absolute', width: 36, height: 36, borderWidth: 3 },
@@ -795,7 +793,7 @@ const styles = StyleSheet.create({
   scanHint: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '500', marginTop: 24, letterSpacing: 0.5 },
 
   resultSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 40, borderTopRightRadius: 40, overflow: 'hidden', borderWidth: 1 },
-  resultBlur: { overflow: 'hidden', maxHeight: height * 0.8 },
+  resultBlur: { overflow: 'hidden' },
   resultGrad: { padding: 32, paddingTop: 20 },
   resultHandle: { width: 48, height: 5, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 3, alignSelf: 'center', marginBottom: 24 },
   resultTitle: { fontSize: 20, fontWeight: '800', marginBottom: 16, letterSpacing: -0.3 },

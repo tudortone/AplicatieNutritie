@@ -1,6 +1,7 @@
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import 'react-native-reanimated';
 import { useEffect, useMemo } from 'react';
 import { View, ActivityIndicator, Text, LogBox } from 'react-native';
@@ -89,6 +90,8 @@ const tokenCache = {
 const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_mock_clerk_key';
 
 LogBox.ignoreLogs(['expo-notifications: Android Push notifications', '`expo-notifications` functionality is not fully supported in Expo Go']);
+// Ținem splash-ul nativ până când primul frame de JS e gata (evităm flash-ul alb).
+SplashScreen.preventAutoHideAsync().catch(() => {});
 export const unstable_settings = { anchor: '(tabs)' };
 const PUSH_ANIMATION = 'slide_from_right' as const;
 const PUSH_DURATION = 260;
@@ -151,12 +154,20 @@ function RootNavigator() {
   </ThemeProvider>;
 }
 
+function SplashHider() {
+  useEffect(() => {
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
+  return null;
+}
+
 export default function RootLayout() {
   const clerkKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
   const hasValidClerkKey = Boolean(clerkKey && clerkKey.startsWith('pk_') && clerkKey !== 'pk_test_mock_clerk_key');
 
   const innerApp = (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <SplashHider />
       <SafeAreaProvider style={{ flex: 1 }}>
         <AppThemeProvider>
           <AuthProvider>

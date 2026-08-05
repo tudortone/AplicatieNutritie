@@ -2,8 +2,9 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   useWindowDimensions, View, Text, StyleSheet, ScrollView, Pressable, TextInput,
-  ActivityIndicator, RefreshControl, type TextStyle, type ViewStyle,
+  ActivityIndicator, type TextStyle, type ViewStyle,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   Play, Pause, RotateCcw, ChevronUp, Search, Dumbbell, PersonStanding, Activity,
@@ -526,17 +527,73 @@ export default function AntrenamenteScreen() {
     );
   };
 
-  return (
-    <KeyboardAwareScreen style={{ backgroundColor: colors.background }}>
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: CONTENT_BOTTOM_PADDING }]}
-        keyboardShouldPersistTaps='handled'
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} />
-        }
-      >
-        <View style={styles.header}>
+  // Element din catalogul virtualizat. Închide peste starea sesiunii — FlashList
+  // re-randează celulele vizibile când extraData se schimbă, deci doar cardurile
+  // de pe ecran se re-randeză la fiecare update de timer/set, nu toate cele 356.
+  const renderExerciseItem = ({ item: ex }: { item: Exercitiu }) => {
+    const expanded = expandedExerciseId === ex.id;
+    const fields = getSetFields(ex);
+    const exSets = session[ex.id] ?? [];
+    const summary = summarizeSets(exSets, fields);
+
+    return (
+      <View style={{ marginBottom: Spacing.md }}>
+        <Pressable
+          onPress={() => onSelectExercise(ex)}
+          accessibilityRole='button'
+          accessibilityLabel={expanded ? `Închide ${ex.nume}` : `Deschide ${ex.nume}`}
+          style={[styles.verticalCard, {
+            backgroundColor: expanded ? colors.surfaceElevated : colors.surface,
+            borderColor: expanded ? colors.accent : colors.cardBorder,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: expanded ? 0.2 : 0.05,
+            shadowRadius: 8,
+            elevation: expanded ? 4 : 1,
+            borderBottomLeftRadius: expanded ? 0 : Radius.md,
+            borderBottomRightRadius: expanded ? 0 : Radius.md,
+          }]}
+        >
+          <View style={[styles.verticalIcon, { backgroundColor: expanded ? colors.accent : colors.surfaceElevated }]}>
+            {fields.usesTime ? (
+              <Timer size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
+            ) : ex.categorie === 'piept' || ex.categorie === 'spate' || ex.categorie === 'brate' || ex.categorie === 'umeri' ? (
+              <Dumbbell size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
+            ) : ex.categorie === 'picioare' || ex.categorie === 'abdomen' ? (
+              <PersonStanding size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
+            ) : ex.categorie === 'cardio' ? (
+              <Activity size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
+            ) : (
+              <MoveUp size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
+            )}
+          </View>
+
+          <View style={styles.verticalTextWrap}>
+            <Text style={[styles.verticalName, { color: colors.textPrimary }]} numberOfLines={1}>{ex.nume}</Text>
+            <Text style={[styles.verticalSub, { color: colors.textTertiary }]} numberOfLines={1}>
+              {exSets.length > 0 ? summaryLabel(summary, fields) : `${fields.modeLabel} • ${ex.dificultate || 'mediu'}`}
+            </Text>
+          </View>
+
+          {exSets.length > 0 ? (
+            <View style={[styles.setsBadge, { backgroundColor: colors.accent }]}>
+              <Text style={styles.setsBadgeText}>{exSets.length}</Text>
+            </View>
+          ) : null}
+
+          <View style={[styles.verticalAction, { backgroundColor: expanded ? colors.accent : colors.surfaceElevated }]}>
+            {expanded ? <ChevronUp size={16} color='#0B0F14' /> : <Play size={16} color={colors.textSecondary} fill={colors.textSecondary} />}
+          </View>
+        </Pressable>
+
+        {expanded && renderTracker(ex, fields)}
+      </View>
+    );
+  };
+
+  const listHeader = (
+    <View>
+      <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Anatomie</Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
@@ -646,88 +703,44 @@ export default function AntrenamenteScreen() {
           })}
         </ScrollView>
 
-        <View style={styles.vScroll}>
-          {exercisesInCategory.map((ex) => {
-            const expanded = expandedExerciseId === ex.id;
-            const fields = getSetFields(ex);
-            const exSets = session[ex.id] ?? [];
-            const summary = summarizeSets(exSets, fields);
+      </View>
+  );
 
-            return (
-              <View key={ex.id} style={{ marginBottom: Spacing.md }}>
-                <Pressable
-                  onPress={() => onSelectExercise(ex)}
-                  accessibilityRole='button'
-                  accessibilityLabel={expanded ? `Închide ${ex.nume}` : `Deschide ${ex.nume}`}
-                  style={[styles.verticalCard, {
-                    backgroundColor: expanded ? colors.surfaceElevated : colors.surface,
-                    borderColor: expanded ? colors.accent : colors.cardBorder,
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: expanded ? 0.2 : 0.05,
-                    shadowRadius: 8,
-                    elevation: expanded ? 4 : 1,
-                    borderBottomLeftRadius: expanded ? 0 : Radius.md,
-                    borderBottomRightRadius: expanded ? 0 : Radius.md,
-                  }]}
-                >
-                  <View style={[styles.verticalIcon, { backgroundColor: expanded ? colors.accent : colors.surfaceElevated }]}>
-                    {fields.usesTime ? (
-                      <Timer size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
-                    ) : ex.categorie === 'piept' || ex.categorie === 'spate' || ex.categorie === 'brate' || ex.categorie === 'umeri' ? (
-                      <Dumbbell size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
-                    ) : ex.categorie === 'picioare' || ex.categorie === 'abdomen' ? (
-                      <PersonStanding size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
-                    ) : ex.categorie === 'cardio' ? (
-                      <Activity size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
-                    ) : (
-                      <MoveUp size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
-                    )}
-                  </View>
-
-                  <View style={styles.verticalTextWrap}>
-                    <Text style={[styles.verticalName, { color: colors.textPrimary }]} numberOfLines={1}>{ex.nume}</Text>
-                    <Text style={[styles.verticalSub, { color: colors.textTertiary }]} numberOfLines={1}>
-                      {exSets.length > 0 ? summaryLabel(summary, fields) : `${fields.modeLabel} • ${ex.dificultate || 'mediu'}`}
-                    </Text>
-                  </View>
-
-                  {exSets.length > 0 ? (
-                    <View style={[styles.setsBadge, { backgroundColor: colors.accent }]}>
-                      <Text style={styles.setsBadgeText}>{exSets.length}</Text>
-                    </View>
-                  ) : null}
-
-                  <View style={[styles.verticalAction, { backgroundColor: expanded ? colors.accent : colors.surfaceElevated }]}>
-                    {expanded ? <ChevronUp size={16} color='#0B0F14' /> : <Play size={16} color={colors.textSecondary} fill={colors.textSecondary} />}
-                  </View>
-                </Pressable>
-
-                {expanded && renderTracker(ex, fields)}
-              </View>
-            );
-          })}
-        </View>
-
-        {sessionStats.sets > 0 && (
-          <Pressable
-            onPress={handleSaveWorkout}
-            disabled={saving}
-            accessibilityRole='button'
-            accessibilityState={{ disabled: saving, busy: saving }}
-            style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.accent, opacity: pressed || saving ? 0.85 : 1 }]}
-          >
-            {saving ? (
-              <ActivityIndicator color='#0B0F14' />
-            ) : (
-              <>
-                <MaterialCommunityIcons name='content-save' size={20} color='#0B0F14' />
-                <Text style={[styles.saveText, { color: '#0B0F14' }]}>Salvează antrenamentul</Text>
-              </>
-            )}
-          </Pressable>
-        )}
-      </ScrollView>
+  return (
+    <KeyboardAwareScreen style={{ backgroundColor: colors.background }}>
+      <FlashList
+        style={{ flex: 1 }}
+        data={exercisesInCategory}
+        renderItem={renderExerciseItem}
+        keyExtractor={(ex: Exercitiu) => ex.id}
+        extraData={{ session, inputs, expandedExerciseId, warmupFor, timerExerciseId, timerSeconds, colors }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: CONTENT_BOTTOM_PADDING }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        refreshing={loading}
+        onRefresh={refresh}
+        ListHeaderComponent={listHeader}
+        ListFooterComponent={
+          sessionStats.sets > 0 ? (
+            <Pressable
+              onPress={handleSaveWorkout}
+              disabled={saving}
+              accessibilityRole='button'
+              accessibilityState={{ disabled: saving, busy: saving }}
+              style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.accent, opacity: pressed || saving ? 0.85 : 1 }]}
+            >
+              {saving ? (
+                <ActivityIndicator color='#0B0F14' />
+              ) : (
+                <>
+                  <MaterialCommunityIcons name='content-save' size={20} color='#0B0F14' />
+                  <Text style={[styles.saveText, { color: '#0B0F14' }]}>Salvează antrenamentul</Text>
+                </>
+              )}
+            </Pressable>
+          ) : null
+        }
+      />
     </KeyboardAwareScreen>
   );
 }
@@ -762,7 +775,6 @@ const styles = StyleSheet.create({
   legendText: { fontSize: 12, fontWeight: '600' } as TextStyle,
   sectionTitle: { fontSize: 17, fontWeight: '700', marginBottom: Spacing.md, marginTop: Spacing.sm } as TextStyle,
   hScroll: { paddingBottom: Spacing.lg, gap: Spacing.md } as ViewStyle,
-  vScroll: { marginTop: Spacing.sm, paddingBottom: Spacing.xl } as ViewStyle,
   pill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radius.pill, borderWidth: 1, gap: 6 } as ViewStyle,
   pillText: { fontSize: 13, fontWeight: '700' } as TextStyle,
   verticalCard: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, borderRadius: Radius.md, borderWidth: 1 } as ViewStyle,

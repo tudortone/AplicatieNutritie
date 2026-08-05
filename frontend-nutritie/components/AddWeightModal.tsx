@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInUp, FadeOutDown } from 'react-native-reanimated';
 import { Scale, X, Check, Target } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
-
-const { width } = Dimensions.get('window');
 
 interface AddWeightModalProps {
   visible: boolean;
@@ -28,6 +26,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
   initialTab = 'curenta',
 }) => {
   const { colors } = useTheme();
+  const { width } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<'curenta' | 'tinta'>(initialTab);
   const [inputVal, setInputVal] = useState(greutateCurenta.toString());
 
@@ -75,7 +74,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
-        <Animated.View entering={FadeInUp.duration(350).springify()} exiting={FadeOutDown.duration(250)} style={[styles.modalCard, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
+        <Animated.View entering={FadeInUp.duration(350).springify()} exiting={FadeOutDown.duration(250)} style={[styles.modalCard, { width: width - 40, backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
           <View style={[styles.glowTop, { backgroundColor: activeTab === 'curenta' ? colors.accentSecondary : colors.accent }]} />
 
           <View style={styles.header}>
@@ -174,7 +173,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   backdrop: { ...StyleSheet.absoluteFillObject },
-  modalCard: { width: width - 40, borderRadius: 28, borderWidth: 1, overflow: 'hidden', padding: 24 },
+  modalCard: { borderRadius: 28, borderWidth: 1, overflow: 'hidden', padding: 24 },
   glowTop: { position: 'absolute', top: -80, alignSelf: 'center', width: 250, height: 250, borderRadius: 125, opacity: 0.12 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

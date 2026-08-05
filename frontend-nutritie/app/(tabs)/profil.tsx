@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, RefreshControl, Alert, ActivityIndicator, Platform, Switch, Image, Linking
+  ScrollView, RefreshControl, Alert, ActivityIndicator, Platform, Switch, Linking
 } from 'react-native';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../../supabase';
@@ -240,6 +241,17 @@ export default function ProfilScreen() {
 
   const initials = session.user.email?.slice(0, 2).toUpperCase() || 'NU';
 
+  // Avatarele ImageKit sunt redimensionate/comprimate la sursă (256px, q70) ca
+  // să nu se descarce originalul; URI-urile locale (file://) rămân neschimbate.
+  const avatarSource = (uri: string) => {
+    if (uri.startsWith('file:') || uri.startsWith('content:')) return uri;
+    if (uri.includes('ik.imagekit.io')) {
+      const sep = uri.includes('?') ? '&' : '?';
+      return `${uri}${sep}tr=w-256,q-70`;
+    }
+    return uri;
+  };
+
   return (
     <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
@@ -261,10 +273,13 @@ export default function ProfilScreen() {
               <View style={[styles.avatarInner, { backgroundColor: '#0F1318', overflow: 'hidden' }]}>
                 {avatarUrl ? (
                   <Image
-                    source={{ uri: avatarUrl }}
+                    source={{ uri: avatarSource(avatarUrl) }}
                     style={{ width: '100%', height: '100%', borderRadius: 29 }}
-                    // FIX UI: fara resizeMode imaginea era intinsa/deformata.
-                    resizeMode="cover"
+                    // expo-image: contentFit înlocuiește resizeMode și aduce cache pe disk
+                    // (local URI-urile și avatarele remote nu se mai re-descarcă).
+                    contentFit="cover"
+                    transition={200}
+                    cachePolicy="disk"
                     accessibilityLabel="Poza de profil"
                   />
                 ) : (

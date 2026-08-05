@@ -7,7 +7,7 @@ import { AppState } from 'react-native';
  * Folosește NetInfo pentru detecție instantă + un health-check periodic
  * către backend ca verificare de layer 7 (detectează captive portals, DNS failure etc.).
  */
-export function useNetworkStatus(pollIntervalMs = 45_000) {
+export function useNetworkStatus(pollIntervalMs = 180_000) {
   const [isConnected, setIsConnected] = useState(true);
   const [isInternetReachable, setIsInternetReachable] = useState<boolean | null>(true);
   const lastState = useRef<NetInfoState | null>(null);

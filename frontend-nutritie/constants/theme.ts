@@ -1,4 +1,4 @@
-import { Dimensions, Platform } from 'react-native';
+import { Platform } from 'react-native';
 
 export type ThemeName = 'midnight' | 'ocean' | 'sunset';
 
@@ -175,23 +175,6 @@ export const Colors = {
 export const Spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 export const Radius = { sm: 8, md: 12, lg: 16, xl: 24, pill: 999 } as const;
 
-const { width, height } = Dimensions.get('window');
-
-export const Device = {
-  width,
-  height,
-  isSmallPhone: width <= 360,
-  isMediumPhone: width > 360 && width < 430,
-  isLargePhone: width >= 430,
-  isTablet: width >= 768,
-  tabBarHeight: Platform.OS === 'ios' ? 96 : 74,
-};
-
-export const getBubbleMaxWidth = (): string => {
-  if (Device.isTablet) return '70%';
-  if (Device.isSmallPhone) return '88%';
-  return '82%';
-};
-
+export const tabBarHeight = Platform.OS === 'ios' ? 96 : 74;
 
 
