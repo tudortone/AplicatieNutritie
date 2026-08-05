@@ -58,12 +58,24 @@ const config = incarcaConfig();
 // PLASA DE SIGURANTA A PROCESULUI
 // ==========================================
 process.on('unhandledRejection', (motiv) => {
-  console.error('[Proces] Promisiune respinsa netratata:', motiv);
+  // B-2: nu logam obiectul brut — mesajele de eroare pot contine URL-uri cu
+  // parole (Redis) sau date de utilizator. Se logheaza cod/name si maxim 200
+  // de caractere din mesaj.
+  console.error('[Proces] Promisiune respinsa netratata:', {
+    cod: motiv?.code ?? motiv?.name ?? 'NECUNOSCUT',
+    nume: motiv?.name ?? 'Necunoscut',
+    mesaj: String(motiv?.message ?? '').slice(0, 200),
+  });
   if (config.sentryDsn) Sentry.captureException(motiv);
 });
 
 process.on('uncaughtException', (eroare) => {
-  console.error('[Proces] Exceptie netratata:', eroare);
+  // B-2: aceeasi restrangere ca la unhandledRejection.
+  console.error('[Proces] Exceptie netratata:', {
+    cod: eroare?.code ?? eroare?.name ?? 'NECUNOSCUT',
+    nume: eroare?.name ?? 'Necunoscut',
+    mesaj: String(eroare?.message ?? '').slice(0, 200),
+  });
   if (config.sentryDsn) Sentry.captureException(eroare);
   // O exceptie necapturata lasa procesul intr-o stare nesigura: raportam si iesim,
   // ca orchestratorul sa porneasca o instanta curata.
@@ -96,12 +108,15 @@ if (config.sentryDsn) {
       }
       if (Array.isArray(event.breadcrumbs)) {
         event.breadcrumbs = event.breadcrumbs.map((crumb) => {
-          if (crumb?.message && crumb.message.length > 200) {
-            const c = { ...crumb, message: crumb.message.slice(0, 200) + '...[truncat]' };
-            if (c.data && typeof c.data === 'object') c.data = '[SCRUBBED_PII]';
-            return c;
+          // B-1: scrub-ul se aplica neconditionat oricarui breadcrumb cu obiect
+          // `data`, nu doar celor cu mesaj lung — un breadcrumb cu mesaj scurt dar
+          // `data` ce contine PII ar scapa altfel la Sentry.
+          const c = { ...crumb };
+          if (c.data && typeof c.data === 'object') c.data = '[SCRUBBED_PII]';
+          if (c.message && c.message.length > 200) {
+            c.message = c.message.slice(0, 200) + '...[truncat]';
           }
-          return crumb;
+          return c;
         });
       }
       return event;
