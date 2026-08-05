@@ -14,11 +14,14 @@
 -- CREATE OR REPLACE, deci poate fi rulată de mai multe ori.
 --
 -- ORDONARE / NUMEROTARE:
--- Versiunea 20260804000003000 (precizie de milisecunde) sortează ÎNTRE
--- migrările 003 (20260804000003) și audit_critic (20260804000004). Este singura
--- poziție care asigură ca `barcode_cache.payload` — cerut de INSERT-ul din
--- audit_critic — să existe ÎNAINTE de audit_critic, fără a muta audit_critic
--- de pe 004 (D-2: redenumire păstrează ordinea relativă).
+-- Versiunea 20260804000004 sortează ÎNTRE migrările 003 (20260804000003) și
+-- audit_critic (20260804000005). Este singura poziție care asigură ca
+-- `barcode_cache.payload` — cerut de INSERT-ul din audit_critic — să existe
+-- ÎNAINTE de audit_critic.
+-- (Corectat din 20260804000003000: versiunile non-14-cifre răstoarnă ordinea
+-- fișier/versiune — `20260804000003000_*.sql` se sortează ÎNAINTE de
+-- `20260804000003_*.sql`, dar versiunea e MAI MARE — și blochează
+-- `supabase db push` cu "Remote migration versions not found".)
 --
 -- CONFLICTE REZOLVATE (canonicul rămâne în migrările numerotate, NU se reintroduce):
 --  * mese.fibre: rls_policies zice `INTEGER DEFAULT 0`, migrarea 001 zice

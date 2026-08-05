@@ -25,7 +25,7 @@
  *      date poate, pentru ca doar ea blocheaza randul.
  *      Aici: scrierea trece prin RPC-ul `salveaza_produs_barcode_sigur`, care face
  *      un singur INSERT ... ON CONFLICT DO UPDATE ... WHERE.
- *      Migrarea: supabase/migrations/20260804_audit_critic.sql
+ *      Migrarea: supabase/migrations/20260804000005_audit_critic.sql
  *
  * Migrarile SQL necesare sunt in backend-nutritie-ai/PATCH-CRITIC.md.
  */

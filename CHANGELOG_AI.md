@@ -7,7 +7,7 @@ Acest fișier înregistrează modificările efectuate istoric în proiectul Nutr
 [2026-08-05] — Consolidare SQL (D-1)
 Agent: audit ETAPA A–E
 Fișiere atinse:
-- supabase/migrations/20260804000003000_fold_root_scripts.sql [NEW]
+- supabase/migrations/20260804000004_fold_root_scripts.sql [NEW]
 - supabase_indexes_week1.sql [ȘTERS]
 - supabase_migration_fix.sql [ȘTERS]
 - supabase_patch_critic.sql [ȘTERS]

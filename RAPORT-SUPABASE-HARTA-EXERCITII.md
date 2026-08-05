@@ -138,7 +138,7 @@ git apply --check fix-supabase-harta-exercitii.patch
 git apply fix-supabase-harta-exercitii.patch
 ```
 
-Apoi, în Supabase SQL Editor, rulează fold-ul consolidat `supabase/migrations/20260804000003000_fold_root_scripts.sql` (idempotent). Conține unique index-ul pe `gamificare.user_id` (`gamificare_user_id_key`) și restul conținutului fostului `supabase_rls_policies.sql` (scriptul a fost pliat în migrările numerotate — D-1). Indexul `mese_user_data_idx` din scriptul vechi este acoperit de `idx_mese_user_data` din migrarea 003 (același prefix `user_id`).
+Apoi, în Supabase SQL Editor, rulează fold-ul consolidat `supabase/migrations/20260804000004_fold_root_scripts.sql` (idempotent). Conține unique index-ul pe `gamificare.user_id` (`gamificare_user_id_key`) și restul conținutului fostului `supabase_rls_policies.sql` (scriptul a fost pliat în migrările numerotate — D-1). Indexul `mese_user_data_idx` din scriptul vechi este acoperit de `idx_mese_user_data` din migrarea 003 (același prefix `user_id`).
 
 Dacă patch-ul nu se aplică (ai modificat între timp fișierele), folosește direct fișierele din folderul `fisiere-corectate/`.
 
