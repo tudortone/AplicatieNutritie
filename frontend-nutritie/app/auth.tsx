@@ -10,11 +10,14 @@ import { supabase } from '../supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
-import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff } from 'lucide-react-native';
+import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, Sparkles } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../context/ThemeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { useAppStore } from '../hooks/useAppStore';
+import { incarcaDateOnboarding, calculeazaPlan, type PlanNutritional } from '../lib/onboarding';
 
 // Contul de admin se logheaza cu username-ul „admin" (nu email). Supabase cere
 // email la autentificare, deci identificatorul se mapeaza intern la adresa contului.
@@ -45,12 +48,24 @@ export default function AuthScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { contentMaxWidth, horizontalPadding, fontScale, isTablet } = useResponsiveLayout();
+  const router = useRouter();
+  const { setOnboardingDone } = useAppStore();
+  const [planCalculat, setPlanCalculat] = useState<PlanNutritional | null>(null);
   const [email, setEmail] = useState('');
   const [parola, setParola] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  React.useEffect(() => {
+    incarcaDateOnboarding().then((d) => {
+      if (d) {
+        const p = calculeazaPlan(d);
+        if (p) setPlanCalculat(p);
+      }
+    });
+  }, []);
 
   const isMinLength = parola.length >= 8;
   const hasUpperCase = /[A-Z]/.test(parola);
@@ -189,10 +204,49 @@ export default function AuthScreen() {
           </LinearGradient>
         </Animated.View>
 
-        <Animated.View entering={FadeInUp.duration(600).delay(200)} style={styles.titleWrap}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>NutriAI</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Nutriție inteligentă, personalizată pentru tine.</Text>
-        </Animated.View>
+        {/* Calculated Plan Banner */}
+        {planCalculat ? (
+          <Animated.View entering={FadeInUp.duration(600).delay(280)} style={[styles.planCard, { maxWidth: contentMaxWidth }]}>
+            <LinearGradient colors={colors.accentGradient} style={styles.planGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+              <View style={styles.planHeaderRow}>
+                <Sparkles size={20} color={colors.background} />
+                <Text style={[styles.planBadgeText, { color: colors.background }]}>Planul tău zilnic calculat AI</Text>
+              </View>
+              <Text style={[styles.planKcalText, { color: colors.background }]}>{planCalculat.calorii} kcal/zi</Text>
+              <View style={styles.planMacroRow}>
+                <View style={[styles.planMacroPill, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
+                  <Text style={[styles.planMacroText, { color: colors.background }]}>{planCalculat.proteineG}g Proteine</Text>
+                </View>
+                <View style={[styles.planMacroPill, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
+                  <Text style={[styles.planMacroText, { color: colors.background }]}>{planCalculat.carbohidratiG}g Carbi</Text>
+                </View>
+                <View style={[styles.planMacroPill, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
+                  <Text style={[styles.planMacroText, { color: colors.background }]}>{planCalculat.grasimiG}g Grăsimi</Text>
+                </View>
+              </View>
+              <Text style={[styles.planSubtext, { color: colors.background }]}>
+                Creează-ți contul sau conectează-te pentru a-ți activa planul în aplicație.
+              </Text>
+            </LinearGradient>
+          </Animated.View>
+        ) : (
+          <Animated.View entering={FadeInUp.duration(600).delay(280)} style={{ width: '100%', maxWidth: contentMaxWidth, marginBottom: 20 }}>
+            <TouchableOpacity
+              style={[styles.noPlanCard, { borderColor: colors.accent + '44', backgroundColor: colors.cardBg }]}
+              onPress={() => {
+                setOnboardingDone(false);
+                router.replace('/onboarding');
+              }}
+              activeOpacity={0.8}
+            >
+              <Sparkles size={20} color={colors.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.noPlanTitle, { color: colors.textPrimary }]}>Vrei să-ți calculezi planul mai întâi?</Text>
+                <Text style={[styles.noPlanSub, { color: colors.accent }]}>Parcurge chestionarul NutriAI ➔</Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
 
         {/* Form card */}
         <Animated.View entering={FadeInDown.duration(700).delay(400).springify()} style={[styles.formCard, { borderColor: colors.cardBorder, maxWidth: contentMaxWidth }]}>
@@ -420,4 +474,18 @@ const styles = StyleSheet.create({
   ruleText: { fontSize: 13, fontWeight: '600' },
   errorBanner: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 12, marginBottom: 14 },
   errorText: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
+
+  planCard: { width: '100%', borderRadius: 24, overflow: 'hidden', marginBottom: 20 },
+  planGrad: { padding: 20, alignItems: 'center' },
+  planHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  planBadgeText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
+  planKcalText: { fontSize: 36, fontWeight: '900', letterSpacing: -1, marginVertical: 2 },
+  planMacroRow: { flexDirection: 'row', gap: 8, marginVertical: 8 },
+  planMacroPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  planMacroText: { fontSize: 12, fontWeight: '800' },
+  planSubtext: { fontSize: 12, textAlign: 'center', opacity: 0.9, marginTop: 4 },
+
+  noPlanCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, borderWidth: 1, padding: 16, gap: 14 },
+  noPlanTitle: { fontSize: 14, fontWeight: '700' },
+  noPlanSub: { fontSize: 13, fontWeight: '800', marginTop: 2 },
 });
