@@ -1,7 +1,16 @@
+// @ts-check
 'use strict';
 
 const express = require('express');
 const router = express.Router();
+
+/**
+ * B-17: tipurile nutritionale au o singura sursa de adevar — contractul partajat
+ * backend-nutritie-ai/contracts/nutritie/types.ts. Referentiat aici prin JSDoc,
+ * fara import runtime (CommonJS). Forma emisa de ruta (produs de barcode) NU este
+ * AlimentAI — typedef-ul de mai jos leaga contractul, nu forteaza un tip gresit.
+ * @typedef {import('../contracts/nutritie/types').AlimentAI} AlimentAI
+ */
 
 const { callWithTimeout } = require('../utils/httpTimeout');
 const { parseJsonFromLlm } = require('../utils/llmJson');
@@ -149,7 +158,12 @@ RETURNEAZA STRICT EXCLUSIV UN OBIECT JSON valid in acest format:
         if (aiResp.ok) {
           const aiData = await aiResp.json();
           const content = aiData.choices?.[0]?.message?.content;
-          const parsed = content ? parseJsonFromLlm(content, { asteapta: 'obiect' }) : null;
+          // parsed e JSON nevalidat emis de LLM (B-17): tipat Record<string, unknown>,
+          // nu un tip precis pe output-ul unui model. @ts-check accepta accesele, iar
+          // normalizeazaMaiJos face toti pasii de siguranta (String/numarModel).
+          const parsed = /** @type {Record<string, unknown>} */ (
+            content ? parseJsonFromLlm(content, { asteapta: 'obiect' }) : null
+          );
 
           if (parsed && parsed.nume) {
             const normalizedAi = {

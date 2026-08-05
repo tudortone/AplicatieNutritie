@@ -1,7 +1,7 @@
 import { cautaProdusRomanescLocal } from '../constants/produseRomanesti';
 import { API_URL } from '../constants/config';
 import { supabase } from '../supabase';
-import type { AminoaciziEsentiali, Micronutrienti } from '../types';
+import type { AminoaciziEsentiali, Micronutrienti } from '../../backend-nutritie-ai/contracts/nutritie/types';
 
 export interface ProdusScanat {
   barcode: string;
