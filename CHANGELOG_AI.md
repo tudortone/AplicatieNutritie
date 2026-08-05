@@ -4,6 +4,19 @@
 
 Acest fișier înregistrează modificările efectuate istoric în proiectul NutriAI, grupate pe agenți specializați.
 
+[2026-08-05] — Consolidare SQL (D-1)
+Agent: audit ETAPA A–E
+Fișiere atinse:
+- supabase/migrations/20260804000003000_fold_root_scripts.sql [NEW]
+- supabase_indexes_week1.sql [ȘTERS]
+- supabase_migration_fix.sql [ȘTERS]
+- supabase_patch_critic.sql [ȘTERS]
+- supabase_rls_policies.sql [ȘTERS]
+- supabase_unique_constraints_week1.sql [ȘTERS]
+Ce am schimbat:
+- Conținutul celor 5 scripturi SQL rădăcină care NU exista deja în migrările numerotate a fost pliat într-o singură migrare idempotentă, numerotată să sorteze între 003 și audit_critic (coloana `barcode_cache.payload` trebuie să existe înainte de INSERT-ul din audit_critic). Apoi cele 5 scripturi au fost șterse.
+- Întrările istorice de mai jos care menționează `supabase_rls_policies.sql` descriu starea de la momentul respectiv; conținutul lor trăiește acum în fold.
+
 [2026-07-24] —
 Agent: Antigravity AI Senior Architect
 Fișiere atinse:
