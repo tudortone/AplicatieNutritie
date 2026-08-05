@@ -3,13 +3,15 @@
  *
  * Abonament Premium (entitlement `premium`) + pachete de credite AI (consumabile).
  *
- * IMPORTANT: SDK-ul nativ rulează doar în development/production build (EAS).
- * În Expo Go modulul nativ lipsește — totul e încercuit cu try/catch, iar
- * `purchasesAvailable` devine false, ca aplicația să nu crape.
+ * IMPORTANT: SDK-ul rulează nativ doar în development/production build (EAS).
+ * În Expo Go se încarcă în „Browser Mode" (fără store nativ), iar `configure()`
+ * eșuează — nu-l mai apelăm deloc, iar `purchasesAvailable` devine false,
+ * ca aplicația să nu crape și să nu lase utilizatorul să intre în paywall.
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { API_PREFIX } from '../lib/api';
 import { PRODUCT_CATEGORY } from 'react-native-purchases';
 import { supabase } from '../supabase';
@@ -31,6 +33,9 @@ try {
 } catch {
   PurchasesApi = null;
 }
+
+/** În Expo Go SDK-ul se încarcă (Browser Mode) dar store-ul nativ lipsește — achizițiile nu pot funcționa. */
+const isExpoGo = Constants.appOwnership === 'expo';
 
 /** Cheia API publică RevenueCat (per-platform, din tab-ul App Settings). */
 const REVENUECAT_API_KEYS: Record<string, string> = {
@@ -83,7 +88,7 @@ export function PremiumProvider({ children, appUserId }: { children: React.React
   const [isPremium, setIsPremium] = useState(false);
   const [subscriptionPackages, setSubscriptionPackages] = useState<PurchasesPackage[]>([]);
   const [creditProducts, setCreditProducts] = useState<PurchasesStoreProduct[]>([]);
-  const purchasesAvailable = PurchasesApi != null;
+  const purchasesAvailable = PurchasesApi != null && !isExpoGo;
 
   const hasPremium = useCallback((info?: CustomerInfo | null) => {
     try {
@@ -141,7 +146,7 @@ export function PremiumProvider({ children, appUserId }: { children: React.React
 
   // Configurare + sincronizare cu userul Supabase
   useEffect(() => {
-    if (!PurchasesApi) return;
+    if (!PurchasesApi || isExpoGo) return;
     try {
       PurchasesApi.configure({
         apiKey: REVENUECAT_API_KEYS[Platform.OS] ?? REVENUECAT_API_KEYS.android,

@@ -21,9 +21,14 @@ import OfflineBanner from '../components/OfflineBanner';
 import { GlobalErrorBoundary } from '../components/GlobalErrorBoundary';
 import '../i18n';
 
-if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
+// DSN-ul Sentry are forma https://<cheiePublica>@o<org>.ingest.<regiune>.sentry.io/<proiect>.
+// Fara segmentul `@` (cheia publica), SDK-ul arunca "Invalid Sentry Dsn" la fiecare boot.
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+const isSentryDsnValid = !!SENTRY_DSN && /^https:\/\/[^@\s]+@.+/.test(SENTRY_DSN);
+
+if (isSentryDsnValid) {
   Sentry.init({
-    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    dsn: SENTRY_DSN,
     debug: false,
     beforeSend(event) {
       const req = event.request;
@@ -65,6 +70,8 @@ if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
   } catch {
     // 'unhandledrejection' nu e suportat pe toate runtime-urile RN — il ignoram.
   }
+} else if (SENTRY_DSN) {
+  console.warn('[Sentry] DSN invalid in .env — lipseste cheia publica (`@`). Copiaza DSN-ul complet din Sentry → Settings → Projects → Client Keys (DSN).');
 }
 
 LogBox.ignoreLogs(['expo-notifications: Android Push notifications', '`expo-notifications` functionality is not fully supported in Expo Go']);
