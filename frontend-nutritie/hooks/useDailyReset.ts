@@ -9,12 +9,6 @@ export type DailyQuest = {
   [key: string]: unknown;
 };
 
-/**
- * Alias păstrat pentru codul din modif-qredd-design care tipiza questurile
- * local prin QuestBase. Contractul public exportat rămâne DailyQuest.
- */
-export type QuestBase = DailyQuest;
-
 type Options<TQuest extends DailyQuest> = {
   questuriAzi: TQuest[];
   setQuesturiAzi: React.Dispatch<React.SetStateAction<TQuest[]>>;
