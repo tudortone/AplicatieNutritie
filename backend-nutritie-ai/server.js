@@ -40,7 +40,7 @@ const createUserRouter = require('./routes/user');
 const createMeseRepo = require('./repositories/meseRepo');
 const createBarcodeRepo = require('./repositories/barcodeRepo');
 const createProfilRepo = require('./repositories/profilRepo');
-const { creazaStoreRateLimit, creazaRegistruCheiValori } = require('./utils/storePartajat');
+const { creeazaStoreRateLimit, creeazaRegistruCheiValori } = require('./utils/storePartajat');
 const { getAiStatistici } = require('./utils/metrics');
 const { sanitizeRequest } = require('./utils/sanitize');
 
@@ -170,7 +170,7 @@ app.use(idempotencyMiddleware);
 // ==========================================
 // B-10: daca REDIS_URL e configurat, store-ul este partajat intre instante.
 // Fara el, creeazaLimitatoare foloseste MemoryStore (per-proces).
-const storePartajat = creazaStoreRateLimit({ url: config.redisUrl });
+const storePartajat = creeazaStoreRateLimit({ url: config.redisUrl });
 const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter } =
   creeazaLimitatoare({
     store: storePartajat?.store,
@@ -342,7 +342,7 @@ const genAI = new GoogleGenerativeAI(config.ai.geminiApiKey);
 // ==========================================
 
 // B-10: cooldown-ul e partajat intre instante prin acelasi store ca rate-limiting.
-const registruAi = creazaRegistruCheiValori({ url: config.redisUrl, prefix: 'nutri:ai' });
+const registruAi = creeazaRegistruCheiValori({ url: config.redisUrl, prefix: 'nutri:ai' });
 
 // Wiring-ul serviciilor AI (B-14): compute-ul a fost extras in services/ai/,
 // aici doar le tesem cu dependintele construite la radacina.

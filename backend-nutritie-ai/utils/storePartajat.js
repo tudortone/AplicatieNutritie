@@ -160,7 +160,7 @@ class StoreCuRezerva {
  * Store compatibil express-rate-limit. Returneaza null daca `url` lipseste
  * (MemoryStore ramane implicit in utils/rateLimit.js).
  */
-function creazaStoreRateLimit({ url }) {
+function creeazaStoreRateLimit({ url }) {
   if (!url) return null;
   if (storeRateLimitCache) return storeRateLimitCache;
   const { RedisStore } = require('rate-limit-redis');
@@ -234,7 +234,7 @@ class MapCuExpirare {
  * API: { get(key) -> valoare|null, set(key, valoare, ttlMs), del(key) }
  * Toate intorc Promise. Suporta Redis cu rezerva locala, sau doar memorie.
  */
-function creazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
+function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
   const cheieFinala = (key) => `${prefix}:${key}`;
   const rezerva = new MapCuExpirare();
   rezerva.pornesteCuratare();
@@ -297,8 +297,8 @@ function creazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
 
 module.exports = {
   creeazaClientRedis,
-  creazaStoreRateLimit,
-  creazaRegistruCheiValori,
+  creeazaStoreRateLimit,
+  creeazaRegistruCheiValori,
   StoreCuRezerva,
   codEroare,
 };
