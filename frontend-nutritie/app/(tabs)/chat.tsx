@@ -8,9 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/config';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut, Layout } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut } from 'react-native-reanimated';
 import { Send, Sparkles, RotateCcw, MessageSquarePlus, CheckCircle2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
@@ -183,18 +182,34 @@ export default function ChatScreen() {
     loadHistory();
   }, []);
 
+  // Salvare istoric debounce-uită (800ms): la mesaje succesive rapide scriem o
+  // singură dată în AsyncStorage, iar la unmount golitm orice salvare restantă.
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    const saveHistory = async () => {
-      try {
-        if (mesaje.length > 1) {
-          await AsyncStorage.setItem(getChatStorageKey(), JSON.stringify(mesaje.slice(-50)));
+    if (mesaje.length <= 1) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      AsyncStorage.setItem(getChatStorageKey(), JSON.stringify(mesaje.slice(-50))).catch((e) =>
+        console.error('Eroare la salvarea istoricului chat:', e),
+      );
+    }, 800);
+  }, [mesaje]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        const restant = mesajeRef.current.slice(-50);
+        if (restant.length > 1) {
+          AsyncStorage.setItem(getChatStorageKey(), JSON.stringify(restant)).catch((e) =>
+            console.error('Eroare la salvarea istoricului chat:', e),
+          );
         }
-      } catch (e) {
-        console.error('Eroare la salvarea istoricului chat:', e);
       }
     };
-    saveHistory();
-  }, [mesaje]);
+  }, []);
 
   useEffect(() => {
     setTimeout(() => {
@@ -404,7 +419,7 @@ export default function ChatScreen() {
       <KeyboardAwareScreen style={styles.container}>
 
         {/* Header */}
-        <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
+        <Animated.View entering={FadeInDown.duration(500)} style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <View style={styles.headerMainRow}>
             <View style={styles.headerIdentity}>
               <View style={[styles.aiAvatar, { borderColor: colors.accentSecondary + '44' }]}>
@@ -460,7 +475,7 @@ export default function ChatScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <BlurView intensity={40} tint="dark" style={[styles.emptyHeroCard, { borderColor: colors.cardBorder }]}>
+            <View style={[styles.emptyHeroCard, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceElevated }]}>
               <LinearGradient colors={[colors.accentSecondary + '18', 'rgba(0,0,0,0.18)']} style={styles.emptyHeroGradient}>
                 <View style={[styles.emptyAvatar, { backgroundColor: colors.accentSecondary + '22' }]}>
                   <Text style={styles.emptyAvatarText}>NC</Text>
@@ -470,7 +485,7 @@ export default function ChatScreen() {
                   Îți pot analiza ziua, sugera mese și ajusta aportul după ce ai mâncat deja.
                 </Text>
               </LinearGradient>
-            </BlurView>
+            </View>
 
             <View style={styles.quickActionsList}>
               <TouchableOpacity
@@ -531,7 +546,6 @@ export default function ChatScreen() {
                 <Animated.View
                   key={msg.id ?? `msg-${index}`}
                   entering={FadeIn.duration(400)}
-                  layout={Layout.springify()}
                   style={[styles.bubble, msg.role === 'user' ? styles.bubbleUser : styles.bubbleAI]}
                 >
                   {msg.role !== 'user' && (
@@ -542,11 +556,11 @@ export default function ChatScreen() {
                       <Text style={[styles.textUser, { color: colors.background }]}>{msg.text}</Text>
                     </LinearGradient>
                   ) : (
-                    <BlurView intensity={50} tint="dark" style={[styles.bubbleContentAI, { borderColor: colors.accentSecondary + '40' }]}>
+                    <View style={[styles.bubbleContentAI, { borderColor: colors.accentSecondary + '40', backgroundColor: colors.surface }]}>
                       <LinearGradient colors={[colors.accentSecondary + '26', 'rgba(0,0,0,0.3)']} style={styles.bubbleContentAIGrad}>
                         <Text style={[styles.textAI, { color: colors.textPrimary }]}>{msg.text}</Text>
                       </LinearGradient>
-                    </BlurView>
+                    </View>
                   )}
                 </Animated.View>
               ))}
@@ -554,7 +568,7 @@ export default function ChatScreen() {
               {loadingChat && (
                 <Animated.View entering={FadeInDown.duration(300)} style={[styles.bubble, styles.bubbleAI]}>
                   <Text style={[styles.aiBubbleLabel, { color: colors.textTertiary }]}>NutriAI Coach</Text>
-                  <BlurView intensity={50} tint="dark" style={[styles.bubbleContentAI, { borderColor: colors.accentSecondary + '40' }]}>
+                  <View style={[styles.bubbleContentAI, { borderColor: colors.accentSecondary + '40', backgroundColor: colors.surface }]}>
                     <LinearGradient colors={[colors.accentSecondary + '26', 'rgba(0,0,0,0.3)']} style={styles.bubbleContentAIGrad}>
                       <View style={styles.typingRow}>
                         <BouncingDot delay={0} color={colors.accentSecondary} />
@@ -562,7 +576,7 @@ export default function ChatScreen() {
                         <BouncingDot delay={300} color={colors.accentSecondary} />
                       </View>
                     </LinearGradient>
-                  </BlurView>
+                  </View>
                 </Animated.View>
               )}
             </ScrollView>
@@ -619,7 +633,7 @@ export default function ChatScreen() {
           entering={FadeInDown.duration(600).delay(200)}
           style={[styles.inputWrapper, { paddingBottom: inputBottomPadding }]}
         >
-          <BlurView intensity={40} tint="dark" style={[styles.inputContainer, { borderColor: colors.accentSecondary + '33' }]}>
+          <View style={[styles.inputContainer, { borderColor: colors.accentSecondary + '33', backgroundColor: colors.surfaceElevated }]}>
             <LinearGradient colors={[colors.accentSecondary + '14', 'rgba(0,0,0,0)']} style={styles.inputGrad}>
               <TextInput
                 testID="chat-input"
@@ -648,7 +662,7 @@ export default function ChatScreen() {
                 </LinearGradient>
               </TouchableOpacity>
             </LinearGradient>
-          </BlurView>
+          </View>
         </Animated.View>
 
       </KeyboardAwareScreen>
@@ -661,7 +675,7 @@ export default function ChatScreen() {
         onRequestClose={() => setNewChatModalVisible(false)}
       >
         <View style={styles.modalBackdrop}>
-          <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, styles.modalBackdropFill]} />
           <View style={[styles.modalCard, { backgroundColor: colors.surfaceBg, borderColor: colors.accentSecondary }]}>
             <View style={[styles.modalIconRing, { backgroundColor: colors.accentSecondary + '20', borderColor: colors.accentSecondary }]}>
               <RotateCcw size={36} color={colors.accentSecondary} />
@@ -929,6 +943,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+  },
+  modalBackdropFill: {
+    backgroundColor: 'rgba(0,0,0,0.7)',
   },
   modalCard: {
     width: '100%',

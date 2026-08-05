@@ -9,6 +9,7 @@ import Animated, {
   Easing 
 } from 'react-native-reanimated';
 import { useTheme } from '../context/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface SkeletonLoaderProps {
   width?: DimensionValue;
@@ -25,8 +26,10 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
 }) => {
   const { colors } = useTheme();
   const opacity = useSharedValue(0.3);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reduceMotion) return;
     opacity.value = withRepeat(
       withSequence(
         withTiming(0.75, { duration: 800, easing: Easing.inOut(Easing.ease) }),
@@ -35,7 +38,7 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
       -1,
       true
     );
-  }, [opacity]);
+  }, [opacity, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

@@ -83,11 +83,22 @@ export default function SelectorValoare({
 		}
 	}
 
+	// Pentru TalkBack/VoiceOver rigla expune controale increment/decrement, ca
+	// valoarea sa poata fi ajustata si fara gesturi de tragere.
+	const laActiuneAccesibilitate = (e: { nativeEvent: { actionName: string } }) => {
+		const pasCuSemn = e.nativeEvent.actionName === 'increment' ? pas : -pas
+		const noua = Math.min(max, Math.max(min, Number((valoare + pasCuSemn).toFixed(zecimale))))
+		ultimaValoare.current = noua
+		laSchimbare(noua)
+	}
+
+	const valoareAfisata = Number.isFinite(valoare) ? valoare.toFixed(zecimale) : Number(min.toFixed(zecimale))
+
 	return (
 		<View>
 			<View style={styles.valoareWrap}>
 				<Text style={[styles.valoare, { color: colors.textPrimary }]}>
-					{valoare.toFixed(zecimale)}
+					{valoareAfisata}
 				</Text>
 				<Text style={[styles.unitate, { color: colors.textSecondary }]}>{unitate}</Text>
 			</View>
@@ -102,6 +113,11 @@ export default function SelectorValoare({
 					contentContainerStyle={{ paddingHorizontal: padding }}
 					onScroll={laDerulare}
 					scrollEventThrottle={16}
+					accessibilityRole="adjustable"
+					accessibilityLabel={`Selectează ${unitate}`}
+					accessibilityValue={{ min, max, now: valoare, text: `${valoareAfisata} ${unitate}` }}
+					accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+					onAccessibilityAction={laActiuneAccesibilitate}
 					onScrollBeginDrag={() => {
 						manevreaza.current = true
 					}}

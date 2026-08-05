@@ -9,6 +9,7 @@ import Animated, {
   withDelay,
 } from 'react-native-reanimated';
 import { useTheme } from '../context/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface BouncingDotProps {
   delay: number;
@@ -18,8 +19,10 @@ interface BouncingDotProps {
 export default function BouncingDot({ delay, color }: BouncingDotProps) {
   const { colors } = useTheme();
   const translateY = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reduceMotion) return;
     translateY.value = withDelay(
       delay,
       withRepeat(
@@ -31,7 +34,7 @@ export default function BouncingDot({ delay, color }: BouncingDotProps) {
         true
       )
     );
-  }, [delay, translateY]);
+  }, [delay, translateY, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],

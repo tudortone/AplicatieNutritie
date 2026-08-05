@@ -34,7 +34,9 @@ export const MacroRing: React.FC<MacroRingProps> = ({
   }, [procent, progressValue]);
 
   const animatedProps = useAnimatedProps(() => {
-    const strokeDashoffset = circumference * (1 - progressValue.value);
+    // Reanimated 4 + Fabric arunca "Loss of precision" pe valori fractionare
+    // transmise prin useAnimatedProps; rotunjim la intreg — imperceptibil pe inel.
+    const strokeDashoffset = Math.round(circumference * (1 - progressValue.value));
     return {
       strokeDashoffset,
     };

@@ -36,7 +36,11 @@ export class GlobalErrorBoundary extends React.Component<Props, State> {
         extra: { componentStack: errorInfo.componentStack || null },
       });
     }
+    // componentStack identifica exact componenta care a cazut — esential la debugging.
     console.error('[GlobalErrorBoundary] Eroare prinsa:', error.message);
+    if (errorInfo.componentStack) {
+      console.error('[GlobalErrorBoundary] Component stack:', errorInfo.componentStack);
+    }
   }
 
   handleRetry = () => {

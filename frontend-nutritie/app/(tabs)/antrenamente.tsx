@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   useWindowDimensions, View, Text, StyleSheet, ScrollView, Pressable, TextInput,
-  ActivityIndicator, RefreshControl, type TextStyle, type ViewStyle,
+  ActivityIndicator, RefreshControl, type TextStyle, type ViewStyle, type StyleProp,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
@@ -29,7 +29,6 @@ import {
 } from '../../lib/workoutSets';
 
 const MAP_HEIGHT = 380;
-const CTA_COLOR = '#0EA5E9';
 const SESSION_KEY = 'current_workout_session';
 const SESSION_META_KEY = 'current_workout_session_meta';
 const REST_DEFAULT_SEC = 90;
@@ -52,6 +51,35 @@ const formatClock = (totalSec: number) => {
   const s = Math.max(0, Math.round(totalSec));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
+
+// Cronometru self-contained: tick-uiește local (250ms) ca să NU re-randeze întregul
+// ecran de antrenament. Mount-unmout-ul e controlat de `timerExerciseId`.
+function TimerValue({ startedAt, style }: { startedAt: number | null; style: StyleProp<TextStyle> }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 250);
+    return () => clearInterval(id);
+  }, []);
+  const secs = startedAt == null ? 0 : Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+  return <Text style={style}>{formatClock(secs)}</Text>;
+}
+
+// Numărătoarea inversă de repaus: tick-uiește local (500ms) și apelează `onDone`
+// când ajunge la 0, ca restul ecranului să nu se re-randeze pe secundă.
+function RestCountdown({ endsAt, onDone }: { endsAt: number; onDone: () => void }) {
+  const [remaining, setRemaining] = useState(() => Math.max(0, Math.round((endsAt - Date.now()) / 1000)));
+  useEffect(() => {
+    const id = setInterval(
+      () => setRemaining(Math.max(0, Math.round((endsAt - Date.now()) / 1000))),
+      500,
+    );
+    return () => clearInterval(id);
+  }, [endsAt]);
+  useEffect(() => {
+    if (remaining <= 0) onDone();
+  }, [remaining, onDone]);
+  return <>{formatClock(remaining)}</>;
+}
 const localDayKey = (date = new Date()) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
@@ -102,10 +130,9 @@ export default function AntrenamenteScreen() {
   const [warmupFor, setWarmupFor] = useState<string>('');
   const [session, setSession] = useState<Record<string, LoggedSet[]>>({});
   const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [restLeft, setRestLeft] = useState(0);
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [timerExerciseId, setTimerExerciseId] = useState<string>('');
-  const [timerSeconds, setTimerSeconds] = useState(0);
   const timerStartRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -138,22 +165,6 @@ export default function AntrenamenteScreen() {
     })();
     return () => { active = false; };
   }, []);
-
-  useEffect(() => {
-    if (restLeft <= 0) return;
-    const t = setTimeout(() => setRestLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [restLeft]);
-
-  // Cronometru pentru exercițiile izometrice (plank, hollow, wall sit).
-  useEffect(() => {
-    if (!timerExerciseId || timerStartRef.current == null) return;
-    const id = setInterval(() => {
-      if (timerStartRef.current == null) return;
-      setTimerSeconds(Math.round((Date.now() - timerStartRef.current) / 1000));
-    }, 250);
-    return () => clearInterval(id);
-  }, [timerExerciseId]);
 
   const persistSession = useCallback((next: Record<string, LoggedSet[]>) => {
     AsyncStorage.setItem(SESSION_KEY, JSON.stringify(next)).catch(() => {
@@ -277,15 +288,13 @@ export default function AntrenamenteScreen() {
   const startTimer = (ex: Exercitiu) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     timerStartRef.current = Date.now();
-    setTimerSeconds(0);
     setTimerExerciseId(ex.id);
   };
 
   const stopTimer = (ex: Exercitiu) => {
-    const elapsed = timerStartRef.current ? Math.round((Date.now() - timerStartRef.current) / 1000) : timerSeconds;
+    const elapsed = timerStartRef.current ? Math.round((Date.now() - timerStartRef.current) / 1000) : 0;
     timerStartRef.current = null;
     setTimerExerciseId('');
-    setTimerSeconds(0);
     if (elapsed > 0) setInputFor(ex, { time: String(elapsed) });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   };
@@ -293,7 +302,6 @@ export default function AntrenamenteScreen() {
   const resetTimer = () => {
     timerStartRef.current = null;
     setTimerExerciseId('');
-    setTimerSeconds(0);
   };
 
   const handleRecordSet = (ex: Exercitiu) => {
@@ -327,7 +335,7 @@ export default function AntrenamenteScreen() {
       AsyncStorage.setItem(SESSION_META_KEY, JSON.stringify({ startedAt: now, day: localDayKey() })).catch(() => {});
     }
 
-    setRestLeft(REST_DEFAULT_SEC);
+    setRestEndsAt(Date.now() + REST_DEFAULT_SEC * 1000);
     setWarmupFor('');
     notify.success(`Set ${newSet.serie} înregistrat`, describeSet(newSet, fields));
   };
@@ -400,7 +408,7 @@ export default function AntrenamenteScreen() {
       setSession({});
       setInputs({});
       setStartedAt(null);
-      setRestLeft(0);
+      setRestEndsAt(null);
       resetTimer();
       AsyncStorage.multiRemove([SESSION_KEY, SESSION_META_KEY]).catch(() => {});
     } catch {
@@ -421,7 +429,7 @@ export default function AntrenamenteScreen() {
     return (
       <View style={[styles.trackerCardExpanded, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
         <View style={styles.trackerHeader}>
-          <Text style={[styles.trackerTitle, { color: colors.textPrimary }]}>Logheaзă set</Text>
+          <Text style={[styles.trackerTitle, { color: colors.textPrimary }]}>Loghează set</Text>
           <Text style={[styles.modeBadge, { color: colors.accent, borderColor: colors.accent }]}>{fields.modeLabel}</Text>
         </View>
 
@@ -440,9 +448,13 @@ export default function AntrenamenteScreen() {
 
         {fields.usesTime ? (
           <View style={[styles.timerBox, { borderColor: timerRunning ? colors.accent : colors.cardBorder }]}>
-            <Text style={[styles.timerValue, { color: timerRunning ? colors.accent : colors.textPrimary }]}>
-              {formatClock(timerRunning ? timerSeconds : parseInt(current.time, 10) || 0)}
-            </Text>
+            {timerRunning ? (
+              <TimerValue startedAt={timerStartRef.current} style={[styles.timerValue, { color: colors.accent }]} />
+            ) : (
+              <Text style={[styles.timerValue, { color: colors.textPrimary }]}>
+                {formatClock(parseInt(current.time, 10) || 0)}
+              </Text>
+            )}
             <View style={styles.timerActions}>
               {timerRunning ? (
                 <Pressable onPress={() => stopTimer(ex)} style={[styles.timerBtn, { backgroundColor: colors.accent }]} accessibilityRole='button' accessibilityLabel='Oprește cronometrul'>
@@ -516,11 +528,11 @@ export default function AntrenamenteScreen() {
 
         <Pressable
           onPress={() => handleRecordSet(ex)}
-          style={({ pressed }) => [styles.ctaButton, { backgroundColor: CTA_COLOR, opacity: pressed ? 0.85 : 1 }]}
+          style={({ pressed }) => [styles.ctaButton, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}
           accessibilityRole='button'
         >
-          <Plus size={20} color='#FFFFFF' />
-          <Text style={styles.ctaText}>Adaugă set</Text>
+          <Plus size={20} color={colors.background} />
+          <Text style={[styles.ctaText, { color: colors.background }]}>Adaugă set</Text>
         </Pressable>
       </View>
     );
@@ -603,14 +615,17 @@ export default function AntrenamenteScreen() {
           </View>
         )}
 
-        {restLeft > 0 && (
+        {restEndsAt != null && (
           <View style={[styles.restBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
             <Timer size={18} color={colors.accent} />
-            <Text style={[styles.restText, { color: colors.textPrimary }]}>Pauză {formatClock(restLeft)}</Text>
-            <Pressable onPress={() => setRestLeft((s) => s + 15)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Prelungește pauza cu 15 secunde'>
+            <Text style={[styles.restText, { color: colors.textPrimary }]}>
+              Pauză{' '}
+              <RestCountdown endsAt={restEndsAt} onDone={() => setRestEndsAt(null)} />
+            </Text>
+            <Pressable onPress={() => setRestEndsAt((s) => (s ?? Date.now()) + 15000)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Prelungește pauza cu 15 secunde'>
               <Text style={[styles.restBtnText, { color: colors.textSecondary }]}>+15s</Text>
             </Pressable>
-            <Pressable onPress={() => setRestLeft(0)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Sari peste pauză'>
+            <Pressable onPress={() => setRestEndsAt(null)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Sari peste pauză'>
               <Text style={[styles.restBtnText, { color: colors.textSecondary }]}>Skip</Text>
             </Pressable>
           </View>
@@ -753,7 +768,7 @@ const styles = StyleSheet.create({
   setChip: { fontSize: 11, fontWeight: '600', borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 } as TextStyle,
   restBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderRadius: Radius.pill, borderWidth: 1, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginBottom: Spacing.md } as ViewStyle,
   restText: { flex: 1, fontSize: 14, fontWeight: '700' } as TextStyle,
-  restBtn: { borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 4 } as ViewStyle,
+  restBtn: { borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 14, minHeight: 44, justifyContent: 'center' } as ViewStyle,
   restBtnText: { fontSize: 12, fontWeight: '700' } as TextStyle,
   searchContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, borderRadius: Radius.md, marginBottom: Spacing.md } as ViewStyle,
   searchInput: { flex: 1, fontSize: 16, padding: 0 } as TextStyle,

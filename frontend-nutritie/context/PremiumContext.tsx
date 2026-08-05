@@ -3,13 +3,15 @@
  *
  * Abonament Premium (entitlement `premium`) + pachete de credite AI (consumabile).
  *
- * IMPORTANT: SDK-ul nativ rulează doar în development/production build (EAS).
- * În Expo Go modulul nativ lipsește — totul e încercuit cu try/catch, iar
- * `purchasesAvailable` devine false, ca aplicația să nu crape.
+ * IMPORTANT: SDK-ul rulează nativ doar în development/production build (EAS).
+ * În Expo Go se încarcă în „Browser Mode" (fără store nativ), iar `configure()`
+ * eșuează — nu-l mai apelăm deloc, iar `purchasesAvailable` devine false,
+ * ca aplicația să nu crape și să nu lase utilizatorul să intre în paywall.
  */
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { API_PREFIX } from '../lib/api';
 import { PRODUCT_CATEGORY } from 'react-native-purchases';
 import { supabase } from '../supabase';
@@ -31,6 +33,9 @@ try {
 } catch {
   PurchasesApi = null;
 }
+
+/** În Expo Go SDK-ul se încarcă (Browser Mode) dar store-ul nativ lipsește — achizițiile nu pot funcționa. */
+const isExpoGo = Constants.appOwnership === 'expo';
 
 /**
  * Cheia API publică RevenueCat, citită din env (EXPO_PUBLIC_REVENUECAT_*_KEY) și
@@ -92,9 +97,9 @@ export function PremiumProvider({ children, appUserId }: { children: React.React
   const [isPremium, setIsPremium] = useState(false);
   const [subscriptionPackages, setSubscriptionPackages] = useState<PurchasesPackage[]>([]);
   const [creditProducts, setCreditProducts] = useState<PurchasesStoreProduct[]>([]);
-  // Fail-closed: fără cheie de platformă, achizițiile sunt indisponibile (SDK-ul
-  // nu se configurează niciodată cu o cheie goală sau un placeholder).
-  const purchasesAvailable = PurchasesApi != null && cheieApiRevenueCat() != null;
+  // Fail-closed: fără cheie de platformă sau în Expo Go, achizițiile sunt
+  // indisponibile (SDK-ul nu se configurează niciodată cu o cheie goală).
+  const purchasesAvailable = PurchasesApi != null && !isExpoGo && cheieApiRevenueCat() != null;
 
   const hasPremium = useCallback((info?: CustomerInfo | null) => {
     try {
@@ -153,7 +158,7 @@ export function PremiumProvider({ children, appUserId }: { children: React.React
   // Configurare + sincronizare cu userul Supabase
   useEffect(() => {
     const cheie = cheieApiRevenueCat();
-    if (!PurchasesApi || !cheie) return;
+    if (!PurchasesApi || isExpoGo || !cheie) return;
     try {
       PurchasesApi.configure({ apiKey: cheie });
     } catch {

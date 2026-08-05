@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 
 import EcranPas from '../../components/onboarding/EcranPas'
 import { useOnboarding } from '../../context/OnboardingContext'
@@ -51,6 +51,9 @@ function Coloana({
 				return (
 					<View key={v} style={styles.rand}>
 						<Text
+							numberOfLines={1}
+							adjustsFontSizeToFit
+							minimumFontScale={0.75}
 							style={[
 								styles.textRand,
 								{
@@ -72,6 +75,14 @@ function Coloana({
 export default function PasDataNasterii() {
 	const { date, actualizeaza } = useOnboarding()
 	const { colors } = useTheme()
+	const { width } = useWindowDimensions()
+
+	// Coloanele se scaleaza cu latimea disponibila (padding EcranPas 24*2),
+	// ca rotile sa nu depaseasca ecranul pe telefoane mici.
+	const latimeDisponibila = Math.max(250, width - 48)
+	const latimeZi = Math.round(latimeDisponibila * 0.24)
+	const latimeLuna = Math.round(latimeDisponibila * 0.46)
+	const latimeAn = Math.round(latimeDisponibila * 0.3)
 
 	const anCurent = new Date().getFullYear()
 	const anMin = anCurent - LIMITE_ONBOARDING.varsta.max
@@ -120,15 +131,15 @@ export default function PasDataNasterii() {
 			<View style={[styles.roataWrap, { borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}>
 				<View pointerEvents="none" style={[styles.evidentiere, { backgroundColor: colors.overlayLight }]} />
 				<View style={styles.coloane}>
-					<Coloana valori={zile} selectat={curent.zi} laSchimbare={(zi) => seteaza({ zi })} latime={70} />
+					<Coloana valori={zile} selectat={curent.zi} laSchimbare={(zi) => seteaza({ zi })} latime={latimeZi} />
 					<Coloana
 						valori={luni}
 						etichete={LUNI}
 						selectat={curent.luna}
 						laSchimbare={(luna) => seteaza({ luna })}
-						latime={140}
+						latime={latimeLuna}
 					/>
-					<Coloana valori={ani} selectat={curent.an} laSchimbare={(an) => seteaza({ an })} latime={90} />
+					<Coloana valori={ani} selectat={curent.an} laSchimbare={(an) => seteaza({ an })} latime={latimeAn} />
 				</View>
 			</View>
 
@@ -157,6 +168,6 @@ const styles = StyleSheet.create({
 	},
 	coloane: { flexDirection: 'row', justifyContent: 'center' },
 	rand: { height: INALTIME_RAND, alignItems: 'center', justifyContent: 'center' },
-	textRand: { fontSize: 19 },
+	textRand: { fontSize: 19, width: '100%', textAlign: 'center' },
 	varsta: { textAlign: 'center', marginTop: 20, fontSize: 15, fontWeight: '600' },
 })

@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface SkeletonBlockProps {
   width?: number | string;
@@ -13,9 +15,15 @@ interface SkeletonBlockProps {
  * Foloseste o animatie de pulse pentru a indica incarcarea.
  */
 export function SkeletonBlock({ width = '100%', height = 16, borderRadius = 8, style }: SkeletonBlockProps) {
-  const opacity = useRef(new Animated.Value(0.3)).current;
+  const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
+  const opacity = useRef(new Animated.Value(0.45)).current;
 
   useEffect(() => {
+    if (reduceMotion) {
+      opacity.setValue(0.45);
+      return;
+    }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
@@ -24,13 +32,13 @@ export function SkeletonBlock({ width = '100%', height = 16, borderRadius = 8, s
     );
     loop.start();
     return () => loop.stop();
-  }, [opacity]);
+  }, [opacity, reduceMotion]);
 
   return (
     <Animated.View
       style={[
         styles.block,
-        { width: width as any, height, borderRadius, opacity },
+        { backgroundColor: colors.surfaceElevated, width: width as any, height, borderRadius, opacity },
         style,
       ]}
     />
@@ -42,8 +50,9 @@ export function SkeletonBlock({ width = '100%', height = 16, borderRadius = 8, s
  * Imita structura unui card real.
  */
 export function SkeletonCard() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
       <View style={styles.cardHeader}>
         <SkeletonBlock width={120} height={18} borderRadius={6} />
         <SkeletonBlock width={60} height={14} borderRadius={6} />
@@ -92,7 +101,7 @@ export function HomeSkeleton() {
 
 const styles = StyleSheet.create({
   block: {
-    backgroundColor: '#1A1F25',
+    // backgroundColor: suprascris inline cu colors.surfaceElevated
   },
   container: {
     padding: 16,
@@ -109,12 +118,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   card: {
-    backgroundColor: '#12161A',
     borderRadius: 16,
     padding: 16,
     gap: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
   },
   cardHeader: {
     flexDirection: 'row',

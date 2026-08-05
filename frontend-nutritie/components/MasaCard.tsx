@@ -44,6 +44,8 @@ export const MasaCard = React.memo(function MasaCard({
           } catch {}
           onPress(masa);
         }}
+        accessibilityRole="button"
+        accessibilityLabel={`Masa ${masa.nume}, ${masa.calorii || 0} kcal`}
       >
         <View
           style={[
@@ -82,6 +84,8 @@ export const MasaCard = React.memo(function MasaCard({
                     onEdit(masa);
                   }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Editează masa"
                 >
                   <Pencil size={15} color={colors.accentSecondary} />
                 </TouchableOpacity>
@@ -98,6 +102,8 @@ export const MasaCard = React.memo(function MasaCard({
                     onDelete(masa);
                   }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Șterge masa"
                 >
                   <Trash2 size={15} color={colors.danger} />
                 </TouchableOpacity>
