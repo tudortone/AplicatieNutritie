@@ -125,6 +125,18 @@ async function rezolvaIdentitate({
 		};
 	}
 
+	// B-6: daca serviciul Auth este indisponibil (eroare de transport cu status 0,
+	// sau 5xx de la GoTrue), NU raportam 401 — clientul ar deconecta utilizatori cu
+	// sesiuni valide la o pana. Doar respingerea explicita a tokenului (4xx) cade
+	// mai departe, pe 401 existent.
+	if (error && (error.status === 0 || error.status >= 500)) {
+		throw new EroareIdentitate(
+			'Serviciul de autentificare este indisponibil.',
+			'AUTH_INDISPONIBIL',
+			503,
+		);
+	}
+
 	// 2. Clerk — acceptat doar daca exista o mapare catre un cont Supabase.
 	if (!clerkSecretKey) {
 		throw new EroareIdentitate(
