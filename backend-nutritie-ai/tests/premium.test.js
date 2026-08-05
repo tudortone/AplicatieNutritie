@@ -1,12 +1,7 @@
 const request = require('supertest');
 
-// B-09: valideaza parsing-ul endpointului /api/user/premium-status care verifica
-// entitlement-ul premium pe server (RevenueCat server API), fail-closed.
-
-// Trebuie setata INAINTE de require('../server') ca incarcaConfig sa o vada.
 process.env.REVENUECAT_SECRET_API_KEY = 'rc_key_test';
 
-// Mock Supabase Auth (identitate).
 jest.mock('@supabase/supabase-js', () => {
   return {
     createClient: jest.fn(() => ({
@@ -24,8 +19,13 @@ jest.mock('@supabase/supabase-js', () => {
 });
 
 const app = require('../server');
+const createUserRouter = require('../routes/user');
 
 describe('B-09 — Validare premium server-side (RevenueCat)', () => {
+  beforeEach(() => {
+    createUserRouter.curataPremiumCache();
+  });
+
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -51,13 +51,30 @@ describe('B-09 — Validare premium server-side (RevenueCat)', () => {
     );
   });
 
+  it('ar trebui sa refoloseasca timp de 60s numai un raspuns RevenueCat reusit', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({ subscriber: { entitlements: {} } }),
+    });
+
+    const prima = await request(app)
+      .get('/api/user/premium-status')
+      .set('Authorization', 'Bearer token_valid');
+    const aDoua = await request(app)
+      .get('/api/user/premium-status')
+      .set('Authorization', 'Bearer token_valid');
+
+    expect(prima.statusCode).toBe(200);
+    expect(aDoua.statusCode).toBe(200);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('ar trebui sa returneze premium=false la entitlement inactiv (fail-closed)', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: jest.fn().mockResolvedValue({
-        subscriber: { entitlements: {} },
-      }),
+      json: jest.fn().mockResolvedValue({ subscriber: { entitlements: {} } }),
     });
 
     const res = await request(app)
