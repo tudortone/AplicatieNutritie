@@ -84,6 +84,23 @@ function incarcaConfig() {
 		);
 	}
 
+	// B-3: cheia Gemini trebuie sa existe in productie. Fara ea, server.js ar porni
+	// cu un literal placeholder si ar esua abia la prima cerere reala de utilizator.
+	if (esteProductie && !process.env.GEMINI_API_KEY) {
+		opreste('GEMINI_API_KEY este obligatorie in productie.');
+	}
+	// B-4: fara REDIS_URL, rate-limiting-ul si cooldown-urile sunt per-proces. Pe
+	// mai multe instante, un atacator obtine de N ori limita configurata, iar
+	// cooldown-urile furnizorilor AI nu se propaga intre instante.
+	if (esteProductie && !process.env.REDIS_URL) {
+		opreste('REDIS_URL este obligatoriu in productie (rate-limiting partajat intre instante).');
+	}
+	if (!esteProductie && !esteTest && !process.env.REDIS_URL) {
+		console.warn(
+			'REDIS_URL lipseste: rate-limiting-ul e per-proces. Acceptabil doar pe o singura instanta.',
+		);
+	}
+
 	const config = Object.freeze({
 		NODE_ENV,
 		esteProductie,
@@ -98,6 +115,9 @@ function incarcaConfig() {
 		}),
 		ai: Object.freeze({
 			geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+			// B-3: cheia trece prin config validata (obligatorie in productie), nu se
+			// citeste direct din process.env in bootstrap.
+			geminiApiKey: process.env.GEMINI_API_KEY || null,
 			groqVisionModels: listaDinEnv(process.env.GROQ_VISION_MODELS),
 			// Plafon de cereri AI simultane pe instanta. Fara el, 20 de utilizatori
 			// paraleli inseamna 20 de imagini base64 de pana la 6,7 MB tinute in heap

@@ -321,7 +321,9 @@ function contextDate(req, res) {
   return req._ctxDate;
 }
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'lipsa');
+// B-3: cheia vine din config validat (obligatorie in productie), nu citita direct
+// in bootstrap. Fara literal placeholder — un deploy fara cheie moare la boot.
+const genAI = new GoogleGenerativeAI(config.ai.geminiApiKey);
 
 // ==========================================
 // REGISTRU STARE FURNIZORI AI (COOLDOWN & STATUS)
