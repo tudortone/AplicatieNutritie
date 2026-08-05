@@ -11,6 +11,8 @@
  * SE RULEAZA SEPARAT: `npm run test:integration`. Nu se include in suita CI
  * rapida. Daca variabilele de mai jos lipsesc, suita se salta (describe.skip),
  * ca CI-ul rapid sa nu fie blocat de un Postgres absent.
+ * E-1: cu `RLS_TESTS_REQUIRED=1`, lipsa configurarii devine EȘEC (nu skip) si
+ * motivul exact (ce variabile lipsesc) e raportat in consola.
  *
  * Variabile de mediu necesare (ex. dupa `supabase start` local):
  *   INTEGRATION_SUPABASE_URL   http://localhost:54321
@@ -28,7 +30,17 @@ const ANON_KEY = process.env.INTEGRATION_ANON_KEY;
 const JWT_SECRET = process.env.INTEGRATION_JWT_SECRET;
 const DB_URL = process.env.INTEGRATION_DB_URL;
 
-const configurat = Boolean(URL && ANON_KEY && JWT_SECRET && DB_URL);
+// E-1: motivul exact al sării — care variabile lipsesc, nu doar un boolean.
+const lipsesc = [];
+if (!URL) lipsesc.push('INTEGRATION_SUPABASE_URL');
+if (!ANON_KEY) lipsesc.push('INTEGRATION_ANON_KEY');
+if (!JWT_SECRET) lipsesc.push('INTEGRATION_JWT_SECRET');
+if (!DB_URL) lipsesc.push('INTEGRATION_DB_URL');
+
+const configurat = lipsesc.length === 0;
+// E-1: în dev lipsa configurării = skip; cu RLS_TESTS_REQUIRED=1 devine EȘEC,
+// ca CI-ul RLS să nu sară testele pe tăcere.
+const RLS_REQUIRED = process.env.RLS_TESTS_REQUIRED === '1';
 
 const USER_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -45,8 +57,19 @@ function emiteJwt(sub) {
   );
 }
 
-// Daca nu e configurat, suita e skipp-ata; `npm test` nu e blocat.
-const testDescribe = configurat ? describe : describe.skip;
+// E-1: configurat → rulează. Neconfigurat fără RLS_TESTS_REQUIRED → skip în dev,
+// cu motivul exact logat mai jos. Neconfigurat CU RLS_TESTS_REQUIRED=1 → describe
+// normal, iar beforeAll aruncă — toată suita EȘUEAZĂ (nu e skip).
+const testDescribe = configurat ? describe : (RLS_REQUIRED ? describe : describe.skip);
+
+if (!configurat) {
+  const motiv = lipsesc.join(', ');
+  if (RLS_REQUIRED) {
+    console.error(`[E-1] RLS_TESTS_REQUIRED=1, dar configurarea de integrare lipsește: ${motiv}. Testele RLS vor EȘUA.`);
+  } else {
+    console.warn(`[E-1] Suita RLS e SĂRITĂ (dev). Lipsește: ${motiv}. Setează INTEGRATION_* (ex. după 'supabase start') sau RLS_TESTS_REQUIRED=1 ca lipsa configurării să devină eșec.`);
+  }
+}
 
 testDescribe('B-05 — RLS pe Postgres real (fara jest.mock)', () => {
   let pool;
@@ -54,6 +77,14 @@ testDescribe('B-05 — RLS pe Postgres real (fara jest.mock)', () => {
   let clientB;
 
   beforeAll(async () => {
+    // E-1: modul fail — cu RLS_TESTS_REQUIRED=1 configurarea e obligatorie.
+    if (!configurat && RLS_REQUIRED) {
+      throw new Error(
+        `E-1: RLS_TESTS_REQUIRED=1, dar variabilele de integrare lipsesc: ${lipsesc.join(', ')}. ` +
+        'Testele RLS pe Postgres real nu pot rula; setează INTEGRATION_SUPABASE_URL, ' +
+        'INTEGRATION_ANON_KEY, INTEGRATION_JWT_SECRET și INTEGRATION_DB_URL (ex. după \'supabase start\').',
+      );
+    }
     pool = new pg.Pool({ connectionString: DB_URL, max: 2 });
 
     // Tabel de proba, izolat de schema reala, ca sa nu depinda testul de ce

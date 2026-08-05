@@ -9,14 +9,21 @@ jest.mock('@supabase/supabase-js', () => {
   const uB = '22222222-2222-4222-8222-222222222222';
   const mB = '33333333-3333-4333-8333-333333333333';
 
-  // `let`, nu `const`: delete()/update() din mock trebuie sa modifice tabelul
-  // ca sa existe si control pozitiv, nu doar eforturi esuate.
-  let db = [
+  // E-2: seed-ul tabelului mock. `db` se cloneaza din el la fiecare reset, ca
+  // beforeEach din fisierul de test sa refaca exact starea initiala — suita nu
+  // depinde de ordinea de executie (--runInBand sau fara).
+  const seedDb = [
     { id: '10000000-0000-4000-8000-000000000000', user_id: uA, nume: 'Masa A' },
     { id: mB, user_id: uB, nume: 'Masa B' }
   ];
 
+  // `let`, nu `const`: delete()/update() din mock trebuie sa modifice tabelul
+  // ca sa existe si control pozitiv, nu doar eforturi esuate.
+  let db = seedDb.map((m) => ({ ...m }));
+
   return {
+    // E-2: expus pentru beforeEach din tests/user_isolation.test.js.
+    __resetDbMock: () => { db = seedDb.map((m) => ({ ...m })); },
     createClient: jest.fn(() => ({
       auth: {
         getUser: jest.fn((token) => {
@@ -94,7 +101,17 @@ jest.mock('@supabase/supabase-js', () => {
 
 const app = require('../server');
 
+// E-2: reset expus de mock — reface tabelul la starea inițială (seed) între teste.
+const { __resetDbMock } = require('@supabase/supabase-js');
+
 describe('VALUL 0 — Test de Integrare Izolare Utilizatori (User Isolation)', () => {
+  // E-2: fără reset, testele 4-5 mută `db`-ul mock partajat, iar suita ar depinde
+  // de ordinea de execuție (--runInBand sau paralel). Resetul face fiecare test
+  // independent: se pornește mereu de la cele două mese de seed.
+  beforeEach(() => {
+    __resetDbMock();
+  });
+
   it('1. User A încearcă să ștergă masa lui User B → Trebuie să primească strict 404 (Masa nu a fost găsită)', async () => {
     const res = await request(app)
       .delete(`/api/mese/${mockMasaUserBId}`)
