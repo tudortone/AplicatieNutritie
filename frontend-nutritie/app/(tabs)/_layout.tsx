@@ -19,9 +19,13 @@ export default function TabLayout() {
   const tabHeight = (compact ? 54 : 58) + bottomInset;
   const iconSize = compact ? 21 : 24;
 
-  const icon = (Icon: typeof Home) => ({ color }: { color: string; size: number }) => (
-    <Icon size={iconSize} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />
-  );
+  const icon = (Icon: typeof Home) => {
+    const TabIcon = ({ color }: { color: string; size: number }) => (
+      <Icon size={iconSize} color={color} strokeWidth={color === colors.accent ? 2.5 : 1.5} />
+    );
+    TabIcon.displayName = 'TabIcon';
+    return TabIcon;
+  };
 
   const headerAction = (type: SportAction) => {
     const config = {
