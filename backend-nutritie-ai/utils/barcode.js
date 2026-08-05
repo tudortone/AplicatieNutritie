@@ -149,9 +149,13 @@ function normalizeazaProdusOff(product, cod) {
  * accesibila DOAR prin service_role. Aici clientul admin este corect, nu o scurtatura.
  */
 async function citesteDinCacheGlobal(supabaseAdmin, cod) {
+	// Proiectie explicita: barcode_cache poarta un payload JSONB mare, iar
+	// select('*') il incarca integral chiar daca nu e folosit (P-3).
 	const { data, error } = await supabaseAdmin
 		.from('barcode_cache')
-		.select('*')
+		.select(
+			'code, name, brand, quantity, kcal_100g, protein_100g, carbs_100g, fat_100g, source, updated_at',
+		)
 		.eq('code', cod)
 		.maybeSingle();
 
@@ -188,7 +192,9 @@ async function citesteEstimareUtilizator(supabaseAdmin, { userId, cod }) {
 
 	const { data, error } = await supabaseAdmin
 		.from('barcode_estimari_utilizator')
-		.select('*')
+		.select(
+			'code, name, brand, quantity, kcal_100g, protein_100g, carbs_100g, fat_100g, updated_at',
+		)
 		.eq('user_id', userId)
 		.eq('code', cod)
 		.maybeSingle();

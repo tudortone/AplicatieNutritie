@@ -433,11 +433,17 @@ const serviciuChat = creeazaServiciuChat({ config, genAI });
 // detalii despre furnizori, cooldown-uri si costuri. Inainte era public pentru
 // oricine stia URL-ul; acum e vizibil doar pentru utilizatori autentificati.
 app.get('/api/ai-status', requireAuth, generalLimiter, async (req, res) => {
+  const [gemini, openai, groq, openrouter] = await Promise.all([
+    serviciuCascada.getProviderStatus('gemini'),
+    serviciuCascada.getProviderStatus('openai'),
+    serviciuCascada.getProviderStatus('groq'),
+    serviciuCascada.getProviderStatus('openrouter'),
+  ]);
   res.json({
-    gemini: await serviciuCascada.getProviderStatus('gemini'),
-    openai: await serviciuCascada.getProviderStatus('openai'),
-    groq: await serviciuCascada.getProviderStatus('groq'),
-    openrouter: await serviciuCascada.getProviderStatus('openrouter'),
+    gemini,
+    openai,
+    groq,
+    openrouter,
     // B-23: tokeni, cost estimat si rata de esec, per furnizor si ruta.
     metriciAi: getAiStatistici(),
   });
@@ -569,8 +575,11 @@ app.post('/api/analizeaza-mancare-structurat', requireAuth, aiLimiter, checkAiUs
 // ==========================================
 app.post('/api/chat', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res) => {
   try {
-    return res.json(await serviciuChat.ruleazaChat(req.body));
+    // B-20/P-15: apelul AI e plafonat prin semafor ca analiza-foto, ca un varf
+    // de trafic text sa nu porneasca apeluri platite nelimitate in paralel.
+    return res.json(await semaforAi.ruleaza(() => serviciuChat.ruleazaChat(req.body)));
   } catch (err) {
+    if (err?.cod === 'AI_SUPRAINCARCAT') return res.status(503).json({ raspuns: err.message });
     if (err instanceof EroareAiClient) return res.status(err.status).json({ raspuns: err.mesaj });
     console.error('Eroare la generarea chat-ului AI:', err.message || err);
     return res.status(500).json({ raspuns: 'A aparut o problema de conexiune cu asistentul AI. Te rugam sa mai incerci peste cateva momente!' });
@@ -582,8 +591,9 @@ app.post('/api/chat', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res
 // ==========================================
 app.post('/api/log-food-from-chat', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res) => {
   try {
-    return res.json(await serviciuChat.logFoodDinChat(req.body));
+    return res.json(await semaforAi.ruleaza(() => serviciuChat.logFoodDinChat(req.body)));
   } catch (err) {
+    if (err?.cod === 'AI_SUPRAINCARCAT') return res.status(503).json({ eroare: err.message });
     if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
     console.error('Eroare in /api/log-food-from-chat:', err.message);
     return res.status(500).json({ eroare: 'Nu s-a putut genera propunerea de masa.' });
@@ -595,8 +605,9 @@ app.post('/api/log-food-from-chat', requireAuth, aiLimiter, checkAiUsageQuota, a
 // ==========================================
 app.post('/api/estimeaza-mancare-text', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res) => {
   try {
-    return res.json(await serviciuChat.estimeazaMancareText(req.body));
+    return res.json(await semaforAi.ruleaza(() => serviciuChat.estimeazaMancareText(req.body)));
   } catch (err) {
+    if (err?.cod === 'AI_SUPRAINCARCAT') return res.status(503).json({ eroare: err.message });
     if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
     console.error('Eroare estimare AI aliment:', err.message);
     return res.status(500).json({ eroare: 'Nu s-a putut estima alimentul cu AI.' });
@@ -673,9 +684,15 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
     });
 
     let content = null;
-    let lastErr = null;
+    try {
+      // B-20/P-15: cascada de furnizori (Groq → OpenAI → Gemini) e plafonata prin
+      // semafor, ca analiza-foto, ca varfurile de trafic sa nu porneasca apeluri
+      // AI nelimitate in paralel. Blocul de dedesubt ramane la indentarea veche,
+      // dar ruleaza in interiorul functiei trimise lui semaforAi.ruleaza.
+      content = await semaforAi.ruleaza(async () => {
+      let lastErr = null;
 
-    for (const key of serviciuVision.getApiKeysList('GROQ_API_KEY')) {
+      for (const key of serviciuVision.getApiKeysList('GROQ_API_KEY')) {
       try {
         const response = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
@@ -766,8 +783,16 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
       }
     }
 
-    if (!content) {
-      throw lastErr || new Error('Toate modelele AI au esuat pentru corectie/fallback.');
+      if (!content) {
+        throw lastErr || new Error('Toate modelele AI au esuat pentru corectie/fallback.');
+      }
+      return content;
+      });
+    } catch (errSemafor) {
+      if (errSemafor?.cod === 'AI_SUPRAINCARCAT') {
+        return res.status(503).json({ eroare: errSemafor.message });
+      }
+      throw errSemafor;
     }
 
     const parsed = parseJsonFromLlm(content, { asteapta: 'obiect' });
@@ -912,7 +937,7 @@ app.get('/api/produs-barcode/:code', requireAuth, generalLimiter, async (req, re
     // `estimat: true` si salvate strict per utilizator; clientul are obligatia
     // sa le afiseze ca estimari, nu ca date verificate.
     try {
-      console.warn(`Barcode ${code} negasit in cache sau OpenFoodFacts, activam estimare AI...`);
+      console.log(`Barcode ${code} negasit in cache sau OpenFoodFacts, activam estimare AI...`);
       const aiPrompt = `Utilizatorul din Romania a scanat codul de bare EAN/UPC "${code}" dar nu a fost gasit in baza internationala.
 Daca cunosti cu certitudine acest cod de bare si produsul asociat, returneaza detaliile reale.
 Daca NU cunosti produsul, returneaza un profil generic marcat clar ca estimare (ex. Nume: "Produs alimentar ambalat (${code})").
@@ -1297,12 +1322,50 @@ app.use('/api/user', createGdprRouter({ requireAuth, generalLimiter, supabaseAdm
 // Fail-closed: fara cheie configurata sau la eroare de retea, NU se raporteaza
 // "premium" — un raspuns de eroare nu poate fi folosit ca sa se acorde privilegii.
 // ==========================================
+// Cache in-memory pe 60s: fiecare apel ajungea la RevenueCat cu timeout de 8s.
+// La TTL expirat re-validam; la eroare (502/network) STERGEM intrarea — nu servim
+// o validare veche dupa o eroare, ramanand strict fail-closed.
+const premiumCache = new Map();
+const PREMIUM_CACHE_TTL_MS = 60_000;
+const PREMIUM_CACHE_MAX_ENTRIES = 10_000;
+// Expus prin app.locals ca testele sa poata curata cache-ul intre cazuri.
+app.locals.premiumCache = premiumCache;
+
+// Plafoneaza dimensiunea cache-ului: la depasire sterge intai intrarile expirate,
+// apoi cea mai veche, ca o multime de conturi sa nu creasca memoria la nesfarsit.
+function seteazaPremiumCache(userId, payload) {
+  if (premiumCache.size >= PREMIUM_CACHE_MAX_ENTRIES) {
+    const acum = Date.now();
+    for (const [id, { cachedAt }] of premiumCache) {
+      if (acum - cachedAt >= PREMIUM_CACHE_TTL_MS) premiumCache.delete(id);
+    }
+    if (premiumCache.size >= PREMIUM_CACHE_MAX_ENTRIES) {
+      let celMaiVechi = null;
+      for (const [id, { cachedAt }] of premiumCache) {
+        if (!celMaiVechi || cachedAt < celMaiVechi.cachedAt) {
+          celMaiVechi = { id, cachedAt };
+        }
+      }
+      if (celMaiVechi) premiumCache.delete(celMaiVechi.id);
+    }
+  }
+  premiumCache.set(userId, { cachedAt: Date.now(), payload });
+}
+
 app.get('/api/user/premium-status', requireAuth, generalLimiter, async (req, res) => {
   if (!config.revenuecat.secretApiKey) {
     return res.status(503).json({
       eroare: 'Validarea premium nu este configurata (lipseste REVENUECAT_SECRET_API_KEY).',
       status: 'disabled',
     });
+  }
+  const cached = premiumCache.get(req.user.id);
+  if (cached) {
+    if (Date.now() - cached.cachedAt < PREMIUM_CACHE_TTL_MS) {
+      return res.json(cached.payload);
+    }
+    // Expirata: eliberam intrarea si re-validam fresh (fail-closed ramane).
+    premiumCache.delete(req.user.id);
   }
   try {
     const rcResp = await callWithTimeout((signal) => fetch(
@@ -1311,21 +1374,25 @@ app.get('/api/user/premium-status', requireAuth, generalLimiter, async (req, res
     ), 8000);
 
     if (!rcResp.ok) {
+      premiumCache.delete(req.user.id);
       return res.status(502).json({ eroare: `RevenueCat a raspuns cu ${rcResp.status}.` });
     }
 
     const data = await rcResp.json();
     const entitlement = data?.subscriber?.entitlements?.premium;
     const premium = entitlement?.active === true;
-    return res.json({
+    const payload = {
       premium,
       entitlement: premium ? entitlement : null,
       expiresDate: entitlement?.expires_date || null,
       validatServer: true,
-    });
+    };
+    seteazaPremiumCache(req.user.id, payload);
+    return res.json(payload);
   } catch (err) {
     if (config.sentryDsn) Sentry.captureException(err);
     console.error('Eroare validare premium RevenueCat:', err.message);
+    premiumCache.delete(req.user.id);
     return res.status(503).json({ eroare: 'Nu s-a putut valida abonamentul.' });
   }
 });

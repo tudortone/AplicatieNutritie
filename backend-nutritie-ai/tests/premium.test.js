@@ -26,6 +26,12 @@ jest.mock('@supabase/supabase-js', () => {
 const app = require('../server');
 
 describe('B-09 — Validare premium server-side (RevenueCat)', () => {
+  // Cache-ul de 60s din server.js e module-scope; il curatam intre cazuri
+  // ca fiecare test sa loveasca RevenueCat fresh (mock-urile sunt per-test).
+  beforeEach(() => {
+    app.locals.premiumCache?.clear();
+  });
+
   afterEach(() => {
     jest.restoreAllMocks();
   });
