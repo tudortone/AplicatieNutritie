@@ -18,7 +18,7 @@
  * Cheile trebuie sa fie hash-uri de token (SHA-256), niciodata token-uri brute.
  */
 class TokenCache {
-	constructor({ maxEntries = 5000, ttlMs = 60 * 1000 } = {}) {
+	constructor({ maxEntries = 5000, ttlMs = 60 * 1000, cheiHashuite = false } = {}) {
 		if (!Number.isInteger(maxEntries) || maxEntries < 1) {
 			throw new TypeError('maxEntries trebuie sa fie un intreg pozitiv.');
 		}
@@ -27,8 +27,11 @@ class TokenCache {
 		}
 		this.maxEntries = maxEntries;
 		this.ttlMs = ttlMs;
+		// A-4: cand e true, se impune strict SHA-256 (64 hex) ca cheie. Implicit
+		// e false, ca testele existente (chei scurte 'a'/'b'/'c') sa ramana verzi.
+		this.cheiHashuite = cheiHashuite === true;
 		this._intrari = new Map();
-		this._statistici = { hits: 0, misses: 0, evacuari: 0, expirate: 0 };
+		this._statistici = { hits: 0, misses: 0, evacuari: 0, expirate: 0, cheiRespinse: 0 };
 	}
 
 	get size() {
@@ -40,7 +43,39 @@ class TokenCache {
 		return { ...this._statistici, dimensiune: this._intrari.size };
 	}
 
+	/**
+	 * Validare de chei (A-4). Respinge cheile care arata ca JWT brut sau ca un
+	 * identificator suspect; hash-urile SHA-256 trec intotdeauna.
+	 */
+	_valideazaCheia(cheie) {
+		if (typeof cheie !== 'string' || !cheie) {
+			this._statistici.cheiRespinse += 1;
+			return false;
+		}
+		if (this.cheiHashuite) {
+			if (!/^[0-9a-f]{64}$/i.test(cheie)) {
+				this._statistici.cheiRespinse += 1;
+				return false;
+			}
+			return true;
+		}
+		if (cheie.startsWith('eyJ')) {
+			this._statistici.cheiRespinse += 1;
+			return false;
+		}
+		if (cheie.includes('.') || cheie.includes(' ')) {
+			this._statistici.cheiRespinse += 1;
+			return false;
+		}
+		if (cheie.length > 128) {
+			this._statistici.cheiRespinse += 1;
+			return false;
+		}
+		return true;
+	}
+
 	get(cheie) {
+		if (!this._valideazaCheia(cheie)) return null;
 		const intrare = this._intrari.get(cheie);
 		if (!intrare) {
 			this._statistici.misses += 1;
@@ -67,8 +102,8 @@ class TokenCache {
 	 * @param {{ expiraLaMs?: number|null }} [optiuni] Expirarea reala a tokenului.
 	 */
 	set(cheie, utilizator, { expiraLaMs = null } = {}) {
-		if (typeof cheie !== 'string' || !cheie) {
-			throw new TypeError('Cheia de cache trebuie sa fie un string nevid.');
+		if (!this._valideazaCheia(cheie)) {
+			throw new TypeError('Cheie de cache invalida. Foloseste un hash de token.');
 		}
 
 		const acum = Date.now();
