@@ -8,7 +8,6 @@ const multer = require('multer');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { createClient } = require('@supabase/supabase-js');
 const os = require('os');
-const path = require('path');
 const crypto = require('crypto');
 const Sentry = require('@sentry/node');
 // FIX: pachetul `imagekit` v6 are getAuthenticationParameters(); `@imagekit/nodejs` v7
@@ -185,6 +184,16 @@ app.use('/api/', (req, res, next) => {
   return preAuthLimiter(req, res, next);
 });
 
+// C-3: extensia fișierului temporar vine din mimetype, NU din numele trimis de
+// client. `originalname` e controlabil de atacator; pe disc se scrie doar o
+// extensie din maparea fixă de mai jos (riscul e mic — directorul temporar nu e
+// servit — dar numele de fișier nu trebuie să fie o armă).
+const EXTENSIE_MIMETYPE = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
+
 // Upload pe disc temporar pentru prevenirea OOM
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -192,7 +201,7 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'nutri-' + uniqueSuffix + path.extname(file.originalname || '.jpg'));
+    cb(null, 'nutri-' + uniqueSuffix + (EXTENSIE_MIMETYPE[file.mimetype] || '.jpg'));
   },
 });
 
