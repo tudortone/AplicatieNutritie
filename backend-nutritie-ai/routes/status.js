@@ -2,11 +2,24 @@
 
 const express = require('express');
 
+const STATUSURI_PUBLICE = new Set(['disponibil', 'ok', 'cooldown', 'rate_limit', 'indisponibil']);
+
+function statusPublic(detalii) {
+  const statusBrut = String(detalii?.status || 'indisponibil');
+  const status = STATUSURI_PUBLICE.has(statusBrut) ? statusBrut : 'indisponibil';
+  const secunde = Number(detalii?.secundeRamase);
+  return {
+    status,
+    secundeRamase: Number.isFinite(secunde) ? Math.max(0, Math.min(Math.ceil(secunde), 3600)) : 0,
+  };
+}
+
 /**
- * Rute de status AI (GET /api/ai-status).
- * Limiter-ul este selectat o singura data in server.js.
+ * GET /api/ai-status ramane utilizabil de ecranul camerei, dar expune numai
+ * disponibilitatea necesara UI-ului. Modelele, mesajele interne, tokenii,
+ * costurile si rata de esec nu mai sunt trimise pe un endpoint public.
  */
-function createStatusRouter({ getProviderStatus, getAiStatistici }) {
+function createStatusRouter({ getProviderStatus }) {
   const router = express.Router();
 
   router.get('/ai-status', async (req, res, next) => {
@@ -18,11 +31,10 @@ function createStatusRouter({ getProviderStatus, getAiStatistici }) {
         getProviderStatus('openrouter'),
       ]);
       return res.json({
-        gemini,
-        openai,
-        groq,
-        openrouter,
-        metriciAi: getAiStatistici(),
+        gemini: statusPublic(gemini),
+        openai: statusPublic(openai),
+        groq: statusPublic(groq),
+        openrouter: statusPublic(openrouter),
       });
     } catch (err) {
       return next(err);
@@ -31,5 +43,7 @@ function createStatusRouter({ getProviderStatus, getAiStatistici }) {
 
   return router;
 }
+
+createStatusRouter.statusPublic = statusPublic;
 
 module.exports = createStatusRouter;
