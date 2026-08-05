@@ -37,6 +37,7 @@ const createBarcodeRouter = require('./routes/barcode');
 const createProfilRouter = require('./routes/profil');
 const createMeseRouter = require('./routes/mese');
 const createUserRouter = require('./routes/user');
+const createWebhooksRouter = require('./routes/webhooks');
 const createMeseRepo = require('./repositories/meseRepo');
 const createBarcodeRepo = require('./repositories/barcodeRepo');
 const createProfilRepo = require('./repositories/profilRepo');
@@ -398,6 +399,7 @@ const statusR = createStatusRouter({
   getAiStatistici,
 });
 const gdprR = createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate, profilRepo: createProfilRepo() });
+const webhooksR = createWebhooksRouter({ supabaseAdmin, config });
 
 // /api/v1 — versiunea curenta a API-ului. Router-ele sunt montate O SINGURA
 // data; aliasele de mai jos refolosesc exact aceleasi obiecte, deci nu exista
@@ -407,6 +409,8 @@ app.use('/api/v1', aiR);
 app.use('/api/v1', barcodeR);
 app.use('/api/v1', profilR);
 app.use('/api/v1', meseR);
+app.use('/api/v1/webhooks', webhooksR);
+app.use('/api/webhooks', webhooksR);
 // Rute GDPR (export date & stergere cont). Se bazeaza pe supabaseAdmin pentru
 // export, dar acoperite de requireAuth; izolarea pe export este doar cosmetica
 // fata de RLS-ul real aplicat pe scrieri.

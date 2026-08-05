@@ -30,7 +30,8 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
     "rate-limit-redis": "^6.0.1",
-    "redis": "^6.2.0"
+    "redis": "^6.2.0",
+    "svix": "^1.99.1"
   },
   "devDependencies": {
     "eslint": "^10.8.0",

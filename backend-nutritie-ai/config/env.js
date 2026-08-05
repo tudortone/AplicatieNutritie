@@ -134,6 +134,7 @@ function incarcaConfig() {
 			})(),
 		}),
 		clerkSecretKey: process.env.CLERK_SECRET_KEY || null,
+		clerkWebhookSecret: process.env.CLERK_WEBHOOK_SECRET || process.env.CLERK_WEBHOOK_SIGNING_SECRET || null,
 		sentryDsn: process.env.SENTRY_DSN || null,
 		triggerSecretKey: process.env.TRIGGER_SECRET_KEY || null,
 		// Store partajat Redis (B-10). Lipsește => MemoryStore per-proces.
