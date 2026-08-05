@@ -12,6 +12,7 @@ import {
   Modal,
   Pressable
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
@@ -30,6 +31,7 @@ export default function ScannerBarcodeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const { showBanner } = useNotificationBanner();
   const { produse, adaugaProdus, modificaCantitate, toggleCongelator, stergeProdus } = useCamara();
 
@@ -188,7 +190,7 @@ export default function ScannerBarcodeScreen() {
           accessibilityLabel="Acordă permisiunea camerei"
           accessibilityRole="button"
         >
-          <Text style={styles.permBtnText}>Permite Accesul</Text>
+          <Text style={[styles.permBtnText, { color: colors.background }]}>Permite Accesul</Text>
         </TouchableOpacity>
       </View>
     );
@@ -213,7 +215,7 @@ export default function ScannerBarcodeScreen() {
     return (
       <Pressable
         onPress={() => toggleCamaraSelect(item.id)}
-        style={[styles.pantryCard, { backgroundColor: colors.cardBg, borderColor: isSelected ? colors.accent : item.is_congelat ? '#00F0FF66' : colors.cardBorder }]}
+        style={[styles.pantryCard, { backgroundColor: colors.cardBg, borderColor: isSelected ? colors.accent : item.is_congelat ? `${colors.accentTertiary}66` : colors.cardBorder }]}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isSelected }}
         accessibilityLabel={`${item.nume}${isSelected ? ', selectat' : ''}. Selectează pentru rețete AI`}
@@ -245,9 +247,9 @@ export default function ScannerBarcodeScreen() {
             <Text style={{ fontSize: 11, fontWeight: '900', color: colors.accent }}>{item.cantitate || 1}x STACK</Text>
           </View>
           {item.is_congelat ? (
-            <View style={{ backgroundColor: '#00F0FF26', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Snowflake size={11} color="#00F0FF" />
-              <Text style={{ fontSize: 11, fontWeight: '800', color: '#00F0FF' }}>CONGELAT • ~90 zile</Text>
+            <View style={{ backgroundColor: `${colors.accentTertiary}26`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Snowflake size={11} color={colors.accentTertiary} />
+              <Text style={{ fontSize: 11, fontWeight: '800', color: colors.accentTertiary }}>CONGELAT • ~90 zile</Text>
             </View>
           ) : (
             <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -284,12 +286,12 @@ export default function ScannerBarcodeScreen() {
             Haptics.selectionAsync();
             toggleCongelator(item.id);
           }}
-          style={[styles.stackBtn, { backgroundColor: item.is_congelat ? '#00F0FF26' : 'rgba(255,255,255,0.06)' }]}
+          style={[styles.stackBtn, { backgroundColor: item.is_congelat ? `${colors.accentTertiary}26` : 'rgba(255,255,255,0.06)' }]}
           accessibilityRole="switch"
           accessibilityState={{ checked: item.is_congelat }}
           accessibilityLabel={`${item.is_congelat ? 'Scoate din congelator' : 'Pune la congelator'} ${item.nume}`}
         >
-          <Snowflake size={16} color={item.is_congelat ? '#00F0FF' : colors.textSecondary} />
+          <Snowflake size={16} color={item.is_congelat ? colors.accentTertiary : colors.textSecondary} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -298,7 +300,7 @@ export default function ScannerBarcodeScreen() {
           accessibilityLabel={`Adaugă ${item.nume} la masă`}
           accessibilityRole="button"
         >
-          <Plus size={18} color="#000" strokeWidth={3} />
+          <Plus size={18} color={colors.background} strokeWidth={3} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -317,7 +319,7 @@ export default function ScannerBarcodeScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Top Bar */}
-      <View style={styles.headerBar}>
+      <View style={[styles.headerBar, { paddingTop: insets.top + (Platform.OS === 'ios' ? 10 : 12) }]}>
         <TouchableOpacity
           onPress={() => router.back()}
           hitSlop={12}
@@ -339,7 +341,7 @@ export default function ScannerBarcodeScreen() {
             accessibilityState={{ selected: activeTab === 'scan' }}
             accessibilityLabel="Fila scanare cod de bare"
           >
-            <Text style={[styles.tabText, { color: activeTab === 'scan' ? '#000' : colors.textPrimary }]}>
+            <Text style={[styles.tabText, { color: activeTab === 'scan' ? colors.background : colors.textPrimary }]}>
               Scanare Barcode
             </Text>
           </TouchableOpacity>
@@ -353,7 +355,7 @@ export default function ScannerBarcodeScreen() {
             accessibilityState={{ selected: activeTab === 'camara' }}
             accessibilityLabel={`Fila inventar cămară, ${produse.length} produse`}
           >
-            <Text style={[styles.tabText, { color: activeTab === 'camara' ? '#000' : colors.textPrimary }]}>
+            <Text style={[styles.tabText, { color: activeTab === 'camara' ? colors.background : colors.textPrimary }]}>
               Inventar ({produse.length})
             </Text>
           </TouchableOpacity>
@@ -393,7 +395,7 @@ export default function ScannerBarcodeScreen() {
           )}
 
           {produsGasit && (
-            <BlurView intensity={70} tint="dark" style={[styles.resultCard, { borderColor: colors.accent }]}>
+            <BlurView intensity={70} tint="dark" style={[styles.resultCard, { bottom: Math.max(insets.bottom, 16) + 14, borderColor: colors.accent }]}>
               <View style={styles.resHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.resTitle, { color: colors.textPrimary }]} numberOfLines={2} ellipsizeMode="tail">{produsGasit.nume}</Text>
@@ -416,8 +418,8 @@ export default function ScannerBarcodeScreen() {
               </View>
 
               {Boolean(produsGasit.estimat || produsGasit.sursa === 'estimare_ai') && (
-                <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#F59E0B' }}>
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#F59E0B', marginBottom: 2 }}>
+                <View style={{ backgroundColor: `${colors.warning}26`, borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: colors.warning }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.warning, marginBottom: 2 }}>
                     ⚠️ Valori Estimate de Inteligența Artificială
                   </Text>
                   <Text style={{ fontSize: 11, color: colors.textSecondary, lineHeight: 15 }}>
@@ -447,9 +449,9 @@ export default function ScannerBarcodeScreen() {
 
               {/* Profil Aminoacizi Esențiali & BCAA */}
               {produsGasit.proteine_100g > 0 && (
-                <View style={{ backgroundColor: 'rgba(0, 240, 255, 0.08)', borderRadius: 14, padding: 12, marginVertical: 12, borderWidth: 1, borderColor: 'rgba(0, 240, 255, 0.25)' }}>
+                <View style={{ backgroundColor: `${colors.accentTertiary}14`, borderRadius: 14, padding: 12, marginVertical: 12, borderWidth: 1, borderColor: `${colors.accentTertiary}40` }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#00F0FF' }}>⚡ Profil Aminoacizi (EAA • BCAA)</Text>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: colors.accentTertiary }}>⚡ Profil Aminoacizi (EAA • BCAA)</Text>
                     <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>
                       ~{Math.round(produsGasit.proteine_100g * 184)} mg BCAA
                     </Text>
@@ -476,14 +478,14 @@ export default function ScannerBarcodeScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Adaugă ${produsGasit.nume} la masă în grame`}
                 >
-                  <Text style={styles.actionPrimaryText}>Adaugă la Masă (g)</Text>
+                  <Text style={[styles.actionPrimaryText, { color: colors.background }]}>Adaugă la Masă (g)</Text>
                 </TouchableOpacity>
               </View>
             </BlurView>
           )}
 
           {codNegasit && !produsGasit && (
-            <BlurView intensity={70} tint="dark" style={[styles.resultCard, { borderColor: colors.warning }]}>
+            <BlurView intensity={70} tint="dark" style={[styles.resultCard, { bottom: Math.max(insets.bottom, 16) + 14, borderColor: colors.warning }]}>
               <View style={styles.resHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.resTitle, { color: colors.textPrimary }]}>Produs negăsit în baza de date</Text>
@@ -539,7 +541,7 @@ export default function ScannerBarcodeScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Estimează valorile produsului după nume"
                 >
-                  <Text style={styles.actionPrimaryText}>Estimează după nume</Text>
+                  <Text style={[styles.actionPrimaryText, { color: colors.background }]}>Estimează după nume</Text>
                 </TouchableOpacity>
               </View>
             </BlurView>
@@ -558,15 +560,15 @@ export default function ScannerBarcodeScreen() {
                 gap: 8,
                 paddingVertical: 12,
                 borderRadius: 16,
-                backgroundColor: '#00F0FF1F',
+                backgroundColor: `${colors.accentTertiary}1F`,
                 borderWidth: 1.5,
-                borderColor: '#00F0FF'
+                borderColor: colors.accentTertiary
               }}
               accessibilityRole="button"
               accessibilityLabel="Cere rețete AI cu ingredientele din cămară"
             >
-              <ChefHat size={18} color="#00F0FF" />
-              <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#00F0FF' }}>
+              <ChefHat size={18} color={colors.accentTertiary} />
+              <Text style={{ fontSize: 13.5, fontWeight: '900', color: colors.accentTertiary }}>
                 Rețete AI Grok cu ingredientele din Cămară
               </Text>
             </TouchableOpacity>
@@ -615,7 +617,7 @@ export default function ScannerBarcodeScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Scanează primul produs"
                 >
-                  <Text style={styles.emptyPBtnText}>Scanează Primul Produs</Text>
+                  <Text style={[styles.emptyPBtnText, { color: colors.background }]}>Scanează Primul Produs</Text>
                 </TouchableOpacity>
               </View>
             }
@@ -627,7 +629,7 @@ export default function ScannerBarcodeScreen() {
                 position: 'absolute',
                 left: 16,
                 right: 16,
-                bottom: 24,
+                bottom: Math.max(insets.bottom, 16) + 8,
                 borderRadius: 22,
                 borderWidth: 1,
                 borderColor: colors.cardBorder,
@@ -657,8 +659,8 @@ export default function ScannerBarcodeScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Gătește cu AI folosind ${selectedCamaraItems.length} ingrediente selectate`}
                 >
-                  <Wand2 size={18} color="#000" strokeWidth={2.5} />
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#000' }}>
+                  <Wand2 size={18} color={colors.background} strokeWidth={2.5} />
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.background }}>
                     Gătește cu AI ({selectedCamaraItems.length})
                   </Text>
                 </TouchableOpacity>
@@ -723,8 +725,8 @@ export default function ScannerBarcodeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Vezi cămara"
               >
-                <ShoppingBag size={18} color="#000" />
-                <Text style={styles.successBtnPrimaryText}>Vezi Cămara</Text>
+                <ShoppingBag size={18} color={colors.background} />
+                <Text style={[styles.successBtnPrimaryText, { color: colors.background }]}>Vezi Cămara</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -786,9 +788,9 @@ export default function ScannerBarcodeScreen() {
                     alignItems: 'center',
                     padding: 14,
                     borderRadius: 14,
-                    backgroundColor: preset.cong ? '#00F0FF14' : colors.cardBg,
+                    backgroundColor: preset.cong ? `${colors.accentTertiary}14` : colors.cardBg,
                     borderWidth: 1,
-                    borderColor: preset.cong ? '#00F0FF40' : colors.cardBorder
+                    borderColor: preset.cong ? `${colors.accentTertiary}40` : colors.cardBorder
                   }}
                 >
                   <View style={{ flex: 1 }}>
@@ -881,13 +883,13 @@ const styles = StyleSheet.create({
   permTitle: { fontSize: 24, fontWeight: '900', marginTop: 18, marginBottom: 8 },
   permSub: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
   permBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16 },
-  permBtnText: { color: '#000', fontSize: 16, fontWeight: '800' },
+  permBtnText: { fontSize: 16, fontWeight: '800' },
 
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 54 : 30,
+    // paddingTop: suprascris inline cu insets.top + 12
     paddingBottom: 14,
     gap: 12,
     zIndex: 10,
@@ -929,7 +931,7 @@ const styles = StyleSheet.create({
   actionBtn: { flex: 1, height: 48, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
   actionBtnText: { fontSize: 14, fontWeight: '800' },
   actionBtnPrimary: { flex: 1.3, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  actionPrimaryText: { color: '#000', fontSize: 14, fontWeight: '900' },
+  actionPrimaryText: { fontSize: 14, fontWeight: '900' },
 
   pantryWrap: { flex: 1 },
   pantryCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 18, borderWidth: 1, marginBottom: 12 },
@@ -945,7 +947,7 @@ const styles = StyleSheet.create({
   emptyPTitle: { fontSize: 20, fontWeight: '900', marginTop: 16, marginBottom: 8 },
   emptyPSub: { fontSize: 14, lineHeight: 22, textAlign: 'center', marginBottom: 24 },
   emptyPBtn: { paddingHorizontal: 20, paddingVertical: 14, borderRadius: 14 },
-  emptyPBtnText: { color: '#000', fontSize: 15, fontWeight: '800' },
+  emptyPBtnText: { fontSize: 15, fontWeight: '800' },
 
   successModalBackdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   successModalCard: { width: '100%', borderRadius: 28, borderWidth: 1.5, padding: 24, alignItems: 'center' },
@@ -959,5 +961,5 @@ const styles = StyleSheet.create({
   successBtnSecondary: { flex: 1, minHeight: 50, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10 },
   successBtnSecondaryText: { fontSize: 13, fontWeight: '800', textAlign: 'center' },
   successBtnPrimary: { flex: 1.1, minHeight: 50, borderRadius: 16, flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 10 },
-  successBtnPrimaryText: { color: '#000', fontSize: 13.5, fontWeight: '900', textAlign: 'center' },
+  successBtnPrimaryText: { fontSize: 13.5, fontWeight: '900', textAlign: 'center' },
 });

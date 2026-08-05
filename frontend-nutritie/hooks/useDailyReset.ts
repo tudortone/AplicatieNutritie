@@ -2,16 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type DailyQuest = {
+type QuestBase = {
   id: string;
   progres: number;
   completat?: boolean;
-  [key: string]: unknown;
 };
 
-type Options = {
-  questuriAzi: DailyQuest[];
-  setQuesturiAzi: React.Dispatch<React.SetStateAction<DailyQuest[]>>;
+type Options<T extends QuestBase> = {
+  questuriAzi: T[];
+  setQuesturiAzi: React.Dispatch<React.SetStateAction<T[]>>;
   storageKey?: string;
 };
 
@@ -31,11 +30,11 @@ const nextMidnightDelay = () => {
   return Math.max(1000, next.getTime() - now.getTime() + 50);
 };
 
-export function useDailyReset({
+export function useDailyReset<T extends QuestBase>({
   questuriAzi,
   setQuesturiAzi,
   storageKey = DEFAULT_KEY,
-}: Options) {
+}: Options<T>) {
   const [isResetting, setIsResetting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
