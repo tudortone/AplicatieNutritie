@@ -7,14 +7,26 @@
 const Sentry = require('@sentry/node');
 const { stergeIdentitateClerk, stergeActiveImageKit } = require('../routes/gdpr');
 
+/**
+ * Singurele coduri care înseamnă „tabela nu există pe schema curentă" și pe care
+ * avem voie să le ignorăm. Orice altă eroare trebuie să oprească avansarea
+ * statusului: altfel marcăm `completed` o ștergere GDPR care nu s-a întâmplat.
+ */
+const CODURI_TABELA_INEXISTENTA = new Set(['42P01', 'PGRST205', 'PGRST106']);
+
 async function stergeRanduriDbUtilizator(supabaseAdmin, userId) {
   if (!userId || !supabaseAdmin) return;
   const tabele = ['mese', 'profil', 'antrenamente', 'barcode_estimari_utilizator', 'audit_log', 'credite_ai'];
   for (const tabela of tabele) {
-    try {
-      await supabaseAdmin.from(tabela).delete().eq('user_id', userId);
-    } catch {
-      // Ignorăm tabele opționale care nu există pe schema curentă
+    // supabase-js NU aruncă pentru erori de bază de date: le întoarce în `error`.
+    // Un `catch {}` aici nu s-ar executa niciodată pe calea reală și ar lăsa
+    // datele în baza de date cu rândul avansat spre `completed`.
+    const rezultat = await supabaseAdmin.from(tabela).delete().eq('user_id', userId);
+    const eroare = rezultat?.error;
+    if (eroare && !CODURI_TABELA_INEXISTENTA.has(eroare.code)) {
+      throw new Error(
+        `Ștergere eșuată din ${tabela}: ${eroare.code || 'FARA_COD'} ${eroare.message || ''}`.trim(),
+      );
     }
   }
 }
