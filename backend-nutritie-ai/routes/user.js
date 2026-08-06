@@ -32,8 +32,46 @@ function puneInPremiumCache(userId, payload) {
  * Validarea premium ramane fail-closed: erorile RevenueCat nu sunt servite din
  * cache si nu pot acorda privilegii. Cache-ul reduce doar apelurile reusite.
  */
-function createUserRouter({ requireAuth, generalLimiter, config }) {
+function createUserRouter({ requireAuth, generalLimiter, config, contextDate, profilRepo }) {
   const router = express.Router();
+
+  // GET /api/user/profil — verificarea server-side a completitudinii profilului.
+  // Folosit de gardul de navigare: un utilizator autentificat fara profil complet
+  // este trimis inapoi la onboarding. Citit prin ctx (client RLS legat de JWT,
+  // auth.uid() = user_id), nu prin clientul admin, deci doar propriul rand.
+  router.get('/profil', requireAuth, generalLimiter, async (req, res) => {
+    try {
+      const ctx = contextDate(req, res);
+      const profil = await profilRepo.getProfil(ctx);
+      const complet = !!(profil
+        && profil.greutate != null
+        && profil.inaltime != null
+        && profil.varsta != null
+        && profil.sex
+        && profil.calorii_tinta != null);
+      return res.json({
+        exista: !!profil,
+        complet,
+        profil: profil
+          ? {
+              varsta: profil.varsta,
+              greutate: profil.greutate,
+              inaltime: profil.inaltime,
+              sex: profil.sex,
+              activitate: profil.activitate,
+              obiectiv: profil.obiectiv,
+              caloriiTinta: profil.calorii_tinta,
+              proteineTinta: profil.proteine_tinta,
+              grasimiTinta: profil.grasimi_tinta,
+              carbiTinta: profil.carbi_tinta,
+            }
+          : null,
+      });
+    } catch (err) {
+      console.error('Eroare la citirea profilului:', err.message);
+      return res.status(503).json({ eroare: 'Nu s-a putut citi profilul.' });
+    }
+  });
 
   router.get('/premium-status', requireAuth, generalLimiter, async (req, res) => {
     // Contul de admin (app_metadata.rol === 'admin') are Premium permanent,

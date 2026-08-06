@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator, Pressable, Text, View, StyleSheet, TouchableOpacity,
-  TextInput, ScrollView, Dimensions, Alert, KeyboardAvoidingView, Platform, Modal
+  ScrollView, Dimensions, Alert, KeyboardAvoidingView, Platform, Modal, BackHandler
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -14,17 +14,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../supabase';
 import { API_URL } from '@/constants/config';
 import { API_PREFIX } from '@/lib/api';
-import Animated, { FadeIn, FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
-import { X, Scan, Zap, ChevronDown, Plus, Heart, Image as ImageIcon, Send, Sparkles } from 'lucide-react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
+import { Scan, Zap, ChevronDown, Plus, Image as ImageIcon } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { useNotify } from '../hooks/useNotify';
 import { localDayKey } from '../lib/dateUtils';
 import { getTipMasaDupaOra } from '../lib/mealUtils';
 import { GramInput } from '../components/ui/GramInput';
-import { useFavorite } from '../hooks/useFavorite';
 import { ProductSearch } from '../components/food/ProductSearch';
 import { foodProductToAlimentAI } from '../components/food/types';
 import FoodScanSuccessModal, {
@@ -42,7 +39,6 @@ export default function CameraScreen() {
   const { t } = useTranslation();
   const { session } = useAuth();
   const insets = useSafeAreaInsets();
-  const { addFavorite, isFavorite } = useFavorite();
   const [permission, requestPermission] = useCameraPermissions();
   
   const [rezultat, setRezultat] = useState<AlimentScanat[]>([]);
@@ -63,16 +59,39 @@ export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
+  const isCapturingRef = useRef(false);
   // URL-ul pozei incarcate pe ImageKit CDN dupa un scan reusit (salvat in alimente JSONB).
   const imageKitUrlRef = useRef<string | null>(null);
   const router = useRouter();
 
+  const anuleazaScanarea = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setTotaluri(null);
+    setRezultat([]);
+    setSuccessVisible(false);
+    setScanError(null);
+    setSeIncarca(false);
+    isCapturingRef.current = false;
+  }, []);
+
   useEffect(() => {
     isMountedRef.current = true;
+
+    const onBackPress = () => {
+      anuleazaScanarea();
+      router.back();
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
     return () => {
       isMountedRef.current = false;
+      subscription.remove();
+      abortControllerRef.current?.abort();
     };
-  }, []);
+  }, [anuleazaScanarea, router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -198,8 +217,10 @@ export default function CameraScreen() {
           }))
           .filter((item) => item.nume.trim().length > 0);
 
-        setRezultat(normalized);
-        setSuccessVisible(true);
+        if (isMountedRef.current && !controller.signal.aborted) {
+          setRezultat(normalized);
+          setSuccessVisible(true);
+        }
         // Dupa un scan REUSIT, incarcam poza pe ImageKit CDN (nu aruncam gunoi pe CDN
         // pentru poze esuate). URL-ul ajunge in masa salvata (campul alimente, JSONB).
         imageKitUrlRef.current = null;
@@ -210,11 +231,13 @@ export default function CameraScreen() {
           .catch((ikErr) => {
             if (__DEV__) console.log('ImageKit upload notice:', ikErr.message);
           });
-        await Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Success,
-        );
+        if (isMountedRef.current) {
+          await Haptics.notificationAsync(
+            Haptics.NotificationFeedbackType.Success,
+          );
+        }
       } catch (error) {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || !isMountedRef.current) return;
 
         setScanError(
           error instanceof Error
@@ -225,21 +248,12 @@ export default function CameraScreen() {
         if (abortControllerRef.current === controller) {
           abortControllerRef.current = null;
         }
+        isCapturingRef.current = false;
         if (isMountedRef.current) setSeIncarca(false);
       }
     },
     [session?.access_token, selectedAI],
   );
-
-  const anuleazaScanarea = useCallback(() => {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    setTotaluri(null);
-    setRezultat([]);
-    setSuccessVisible(false);
-    setScanError(null);
-    setSeIncarca(false);
-  }, []);
 
   const trimiteCorectieText = async (textCorectie: string) => {
     try {
@@ -308,7 +322,8 @@ export default function CameraScreen() {
   }, [rezultat, totaluri]);
 
   const analizeazaFoto = async () => {
-    if (!cameraRef.current || seIncarca || !session) return;
+    if (!cameraRef.current || seIncarca || !session || isCapturingRef.current) return;
+    isCapturingRef.current = true;
     try {
       const foto = await cameraRef.current.takePictureAsync({
         quality: 0.5,
@@ -317,19 +332,24 @@ export default function CameraScreen() {
         skipProcessing: Platform.OS === 'android'
       });
       if (foto && foto.uri) {
-        analizeazaImaginea(foto.uri);
+        await analizeazaImaginea(foto.uri);
+      } else {
+        isCapturingRef.current = false;
       }
     } catch (e) {
       console.error("Eroare captură foto:", e);
+      isCapturingRef.current = false;
     }
   };
 
   const alegeDinGalerie = async () => {
-    if (seIncarca || !session) return;
+    if (seIncarca || !session || isCapturingRef.current) return;
+    isCapturingRef.current = true;
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
         Alert.alert(t('alerts.titluri.permisiuneNecesara'), t('alerts.mesaje.permisiuneGaleriePoze'));
+        isCapturingRef.current = false;
         return;
       }
 
@@ -340,11 +360,14 @@ export default function CameraScreen() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        analizeazaImaginea(result.assets[0].uri);
+        await analizeazaImaginea(result.assets[0].uri);
+      } else {
+        isCapturingRef.current = false;
       }
     } catch (e) {
       console.error("Eroare galerie:", e);
       Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.galerieInaccesibila'));
+      isCapturingRef.current = false;
     }
   };
 

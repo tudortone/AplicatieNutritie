@@ -231,20 +231,21 @@ export async function sincronizeazaOnboardingLaProfil(
 		const plan = calculeazaPlan(date)
 		if (!plan) return false
 
+		// Doar coloanele reale ale tabelului `profil` (migrarea 20260804000001):
+		// snake_case, fara greutateTinta / dieta / nivel_activitate (nu exista).
+		// Valorile locale raman in AsyncStorage sub cheile camelCase de mai jos.
 		const profileData = {
 			user_id: userId,
 			greutate: date.greutateKg,
-			greutateTinta: date.greutateTintaKg ?? date.greutateKg,
-			caloriiTinta: plan.calorii,
-			proteineTinta: plan.proteineG,
-			carbiTinta: plan.carbohidratiG,
-			grasimiTinta: plan.grasimiG,
-			sex: date.gen,
 			varsta: plan.varsta,
 			inaltime: date.inaltimeCm,
-			nivel_activitate: date.activitate,
+			sex: date.gen,
+			activitate: date.activitate,
 			obiectiv: date.scop,
-			dieta: date.dieta,
+			calorii_tinta: plan.calorii,
+			proteine_tinta: plan.proteineG,
+			carbi_tinta: plan.carbohidratiG,
+			grasimi_tinta: plan.grasimiG,
 			updated_at: new Date().toISOString(),
 		}
 
@@ -273,6 +274,49 @@ export async function sincronizeazaOnboardingLaProfil(
 	} catch (e) {
 		console.warn('[OnboardingSync] Eroare sincronizare profil:', e)
 		return false
+	}
+}
+
+/** Forma in care endpoint-ul /api/v1/user/profil expune profilul din DB. */
+export type ProfilRestaurare = {
+	varsta?: number | null
+	greutate?: number | null
+	inaltime?: number | null
+	sex?: string | null
+	activitate?: string | null
+	obiectiv?: string | null
+	caloriiTinta?: number | null
+	proteineTinta?: number | null
+	grasimiTinta?: number | null
+	carbiTinta?: number | null
+}
+
+/**
+ * Restaureaza cheile locale din profilul DB (pentru un utilizator existent pe un
+ * dispozitiv nou / dupa stergerea storage-ului), ca sa nu repete chestionarul.
+ * Scrie doar valorile prezente; `greutateTinta` nu are coloana in DB, deci cade
+ * pe `greutate` (acelasi fallback ca la sincronizare).
+ */
+export async function restaureazaProfilLocal(profil: ProfilRestaurare): Promise<void> {
+	try {
+		const perechi: [string, string][] = []
+		const pune = (cheie: string, val: number | string | null | undefined) => {
+			if (val != null && val !== '') perechi.push([cheie, String(val)])
+		}
+		pune('caloriiTinta', profil.caloriiTinta)
+		pune('proteineTinta', profil.proteineTinta)
+		pune('carbiTinta', profil.carbiTinta)
+		pune('grasimiTinta', profil.grasimiTinta)
+		pune('greutate', profil.greutate)
+		pune('greutateTinta', profil.greutate)
+		pune('sex', profil.sex)
+		pune('varsta', profil.varsta)
+		pune('inaltime', profil.inaltime)
+		pune('nivel_activitate', profil.activitate)
+		pune('obiectiv', profil.obiectiv)
+		if (perechi.length > 0) await AsyncStorage.multiSet(perechi)
+	} catch (e) {
+		console.warn('[OnboardingSync] Eroare restaurare profil local:', e)
 	}
 }
 

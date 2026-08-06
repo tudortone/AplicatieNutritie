@@ -73,16 +73,16 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
           });
         }
 
-        // Upsert în tabela profil
+        // Upsert în tabela profil — doar coloanele reale din migrarea 20260804000001
+        // (nu există `greutate_kg`, `greutate_tinta_kg`, `*_tinta_g` sau `nume_complet`).
         await supabaseAdmin.from('profil').upsert({
           user_id: supabaseUserId,
-          nume_complet: `${data.first_name || ''} ${data.last_name || ''}`.trim() || null,
-          greutate_kg: Number(meta.greutate) || null,
-          greutate_tinta_kg: Number(meta.greutate_tinta) || null,
+          nume: `${data.first_name || ''} ${data.last_name || ''}`.trim() || null,
+          greutate: Number(meta.greutate) || null,
           calorii_tinta: Number(meta.calorii_tinta) || 2000,
-          proteine_tinta_g: Number(meta.proteine_tinta) || 150,
-          carbohidrati_tinta_g: Number(meta.carbi_tinta) || 250,
-          grasimi_tinta_g: Number(meta.grasimi_tinta) || 70,
+          proteine_tinta: Number(meta.proteine_tinta) || 150,
+          carbi_tinta: Number(meta.carbi_tinta) || 250,
+          grasimi_tinta: Number(meta.grasimi_tinta) || 70,
           updated_at: new Date().toISOString(),
         });
 
@@ -103,7 +103,7 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
 
         if (mapare?.supabase_user_id) {
           await supabaseAdmin.from('profil').update({
-            nume_complet: `${data.first_name || ''} ${data.last_name || ''}`.trim() || null,
+            nume: `${data.first_name || ''} ${data.last_name || ''}`.trim() || null,
             updated_at: new Date().toISOString(),
           }).eq('user_id', mapare.supabase_user_id);
         }

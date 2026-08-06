@@ -407,7 +407,7 @@ const aiR = createAiRouter({
 const barcodeR = createBarcodeRouter({ requireAuth, generalLimiter, contextDate, barcodeRepo: createBarcodeRepo() });
 const profilR = createProfilRouter({ requireAuth, generalLimiter, config });
 const meseR = createMeseRouter({ requireAuth, generalLimiter, contextDate, meseRepo: createMeseRepo() });
-const userR = createUserRouter({ requireAuth, generalLimiter, config });
+const userR = createUserRouter({ requireAuth, generalLimiter, config, contextDate, profilRepo: createProfilRepo() });
 const statusR = createStatusRouter({
   getProviderStatus: serviciuCascada.getProviderStatus,
   getAiStatistici,

@@ -1,0 +1,14 @@
+-- ==============================================================================
+-- NUTRIAI MIGRATION 2026-08-06: mese.imagine_url
+-- ------------------------------------------------------------------------------
+-- Poza mesei (URL ImageKit CDN) stocata pe randul mesei, ca sa apara in jurnal
+-- (MasaCard) cu posibilitatea de a o vedea marita.
+--
+-- Fara aceasta coloana, inserarile care includeau `imagine_url` din
+-- frontend-nutritie/app/camera.tsx si components/AddMealBottomSheet.tsx
+-- esuau cu `PGRST204 / column mese.imagine_url does not exist`, blocand
+-- salvarea oricarei mese cu poza.
+--
+-- Idempotenta: `IF NOT EXISTS` permite rularea sigura pe baze deja migrate.
+-- ==============================================================================
+ALTER TABLE public.mese ADD COLUMN IF NOT EXISTS imagine_url TEXT;

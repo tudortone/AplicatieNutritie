@@ -122,6 +122,8 @@ export const StreakBottomSheet = forwardRef<StreakBottomSheetRef>((_, ref) => {
   );
 });
 
+StreakBottomSheet.displayName = 'StreakBottomSheet';
+
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   sheet: { borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, maxHeight: '82%', paddingHorizontal: 20 },

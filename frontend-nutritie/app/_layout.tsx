@@ -2,7 +2,7 @@ import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, ActivityIndicator, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -19,6 +19,8 @@ import { PremiumProvider } from '../context/PremiumContext';
 import { useDailySync } from '../hooks/useDailySync';
 import OfflineBanner from '../components/OfflineBanner';
 import { GlobalErrorBoundary } from '../components/GlobalErrorBoundary';
+import { buildApiUrl } from '../lib/api';
+import { restaureazaProfilLocal, type ProfilRestaurare } from '../lib/onboarding';
 import '../i18n';
 
 // DSN-ul Sentry are forma https://<cheiePublica>@o<org>.ingest.<regiune>.sentry.io/<proiect>.
@@ -85,13 +87,58 @@ export { GlobalErrorBoundary as ErrorBoundary };
 function RootNavigator() {
   const { colors } = useTheme();
   const { session, loadingAuth } = useAuth();
-  const { isOnboardingDone, syncFromAsyncStorage } = useAppStore();
+  const { isOnboardingDone, syncFromAsyncStorage, setOnboardingDone } = useAppStore();
   const { isLocked, biometricType, unlockApp } = useBiometrics();
   useDailySync();
   const router = useRouter();
   const segments = useSegments();
 
+  // Verificare server-side a existentei profilului complet. `necunoscut` = inca
+  // necunoscut sau eroare de retea — in acest caz gate-ul se comporta ca inainte
+  // (fail-open), ca un utilizator offline sa nu fie prins in onboarding.
+  const [profilServer, setProfilServer] = useState<'necunoscut' | 'exista' | 'lipsa'>('necunoscut');
+  const [profilServerDate, setProfilServerDate] = useState<ProfilRestaurare | null>(null);
+
   useEffect(() => { syncFromAsyncStorage(); }, [syncFromAsyncStorage]);
+
+  useEffect(() => {
+    if (loadingAuth) return;
+    let activ = true;
+    if (!session) {
+      setProfilServer('necunoscut');
+      setProfilServerDate(null);
+      return () => { activ = false; };
+    }
+    const token = session.access_token;
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+    if (token && apiUrl) {
+      fetch(buildApiUrl('/user/profil'), { headers: { Authorization: `Bearer ${token}` } })
+        .then(async (resp) => {
+          if (!activ) return;
+          if (!resp.ok) {
+            setProfilServer('necunoscut');
+            setProfilServerDate(null);
+            return;
+          }
+          const body = await resp.json() as { exista?: boolean; complet?: boolean; profil?: ProfilRestaurare | null };
+          if (body.exista && body.complet && body.profil) {
+            setProfilServer('exista');
+            setProfilServerDate(body.profil);
+          } else {
+            setProfilServer('lipsa');
+            setProfilServerDate(null);
+          }
+        })
+        .catch(() => {
+          if (activ) {
+            setProfilServer('necunoscut');
+            setProfilServerDate(null);
+          }
+        });
+    }
+    return () => { activ = false; };
+  }, [session, loadingAuth]);
+
   const appDarkTheme = useMemo(() => ({ ...DarkTheme, colors: { ...DarkTheme.colors, background: colors.background } }), [colors.background]);
 
   useEffect(() => {
@@ -102,6 +149,15 @@ function RootNavigator() {
     // Cine nu a terminat onboarding-ul nu ajunge la ecranul de autentificare,
     // ca sa nu i se ceara cont inainte sa vada ce primeste.
     if (!isOnboardingDone) {
+      // Utilizator autentificat cu profil COMPLET in DB (dispozitiv nou / storage
+      // sters): restaurăm flag-ul si planul local, fara sa repetam chestionarul.
+      if (session && profilServer === 'exista' && profilServerDate) {
+        restaureazaProfilLocal(profilServerDate);
+        setOnboardingDone(true);
+        if (inOnboarding || inAuth) router.replace('/(tabs)');
+        return;
+      }
+      // Fara profil complet in DB (sau verificare in curs / offline): onboarding.
       if (!inOnboarding) router.replace('/onboarding');
       return;
     }
@@ -110,7 +166,7 @@ function RootNavigator() {
       return;
     }
     if (inAuth || inOnboarding) router.replace('/(tabs)');
-  }, [session, loadingAuth, isOnboardingDone, segments, router]);
+  }, [session, loadingAuth, isOnboardingDone, setOnboardingDone, profilServer, profilServerDate, segments, router]);
 
   if (loadingAuth) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}><ActivityIndicator size="large" color={colors.accent} /></View>;
   const push = { animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, gestureEnabled: true } as const;
