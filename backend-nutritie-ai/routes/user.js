@@ -18,12 +18,6 @@ function dataLaMs(valoare) {
   return Number.isFinite(ms) ? ms : null;
 }
 
-/**
- * RevenueCat v1 nu garanteaza un camp `active` pe entitlement. Sursa de adevar
- * este expirarea: o data valida trebuie sa fie strict in viitor. Pentru produse
- * lifetime, `expires_date` este null si cerem identificatorul produsului plus o
- * data de achizitie, ca un obiect gol sau malformat sa ramana fail-closed.
- */
 function entitlementEsteActiv(entitlement, acumMs = Date.now()) {
   if (!entitlement || typeof entitlement !== 'object' || Array.isArray(entitlement)) return false;
   if (entitlement.active === false) return false;
@@ -56,11 +50,6 @@ function puneInPremiumCache(userId, payload) {
   premiumCache.set(userId, { cachedAt: acum, expiraCacheLa, payload });
 }
 
-/**
- * Rute de utilizator (GET /api/user/premium-status).
- * Validarea premium este fail-closed: timeouturile, cheile lipsa, raspunsurile
- * malformate si entitlement-urile expirate nu pot acorda privilegii.
- */
 function createUserRouter({ requireAuth, generalLimiter, config }) {
   const router = express.Router();
 
@@ -84,8 +73,16 @@ function createUserRouter({ requireAuth, generalLimiter, config }) {
     }
 
     try {
+      const revenueCatUrl = [
+        'https:',
+        '',
+        'api.revenuecat.com',
+        'v1',
+        'subscribers',
+        encodeURIComponent(userId),
+      ].join('/');
       const rcResp = await callWithTimeout((signal) => fetch(
-        `{{https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId}})}`,
+        revenueCatUrl,
         {
           headers: { Authorization: `Bearer ${config.revenuecat.secretApiKey}` },
           signal,
