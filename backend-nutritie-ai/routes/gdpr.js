@@ -243,8 +243,10 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
           p_clerk_user_id: clerkUserId,
         });
       if (outboxErr) {
-        // Fallback: continuăm fără outbox dacă migrarea nu a rulat încă
-        console.warn('[GDPR] Outbox indisponibil, continuăm fără tracking:', codEroare(outboxErr));
+        console.error('[GDPR] Outbox indisponibil:', codEroare(outboxErr));
+        return res.status(503).json({
+          eroare: 'Ștergerea nu poate fi inițiată în siguranță acum. Reîncearcă în câteva minute.',
+        });
       }
 
       const actualizezaStatus = async (status, lastError = null) => {
