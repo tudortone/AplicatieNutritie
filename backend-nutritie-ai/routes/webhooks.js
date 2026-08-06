@@ -243,16 +243,37 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
         }
       }
 
-      // P-08: întotdeauna 200 (nu 500) ca Clerk să nu reintre în retry infinit.
+      // Confirmare succes către Clerk
       return res.json({ ok: true, type });
     } catch (err) {
       console.error(`[Webhook Clerk] Eroare la procesarea evenimentului ${type}:`, err.message);
-      // P-08: 200 chiar și la erori — Clerk nu mai reîncearcă la infinit.
-      // Eroarea e logată pentru monitorizare.
-      return res.status(200).json({
-        ok: false,
-        type,
-        avertisment: 'Eroare internă la procesarea webhook-ului — verificați logurile.',
+
+      // Trimitere alertă Sentry pentru monitorizare
+      try {
+        const Sentry = require('@sentry/node');
+        Sentry.withScope((scope) => {
+          scope.setLevel('error');
+          scope.setTag('webhook', 'clerk');
+          scope.setExtra('event_type', type);
+          scope.setExtra('clerk_user_id', clerkUserId);
+          Sentry.captureException(err);
+        });
+      } catch {
+        // Sentry indisponibil
+      }
+
+      // P-08: Erorile permanente de date (payload invalid/missing params) -> 200 cu avertisment ca Clerk să oprească retry-ul
+      if (err.isPermanent || err.code === '23505') {
+        return res.status(200).json({
+          ok: false,
+          type,
+          avertisment: 'Eroare permanentă la procesarea webhook-ului.',
+        });
+      }
+
+      // Erorile tranzitorii de infrastructură/DB network -> 500 pentru ca Clerk să reîncerce mai târziu
+      return res.status(500).json({
+        eroare: 'Eroare tranzitorie de infrastructură la procesarea webhook-ului.',
       });
     }
   });

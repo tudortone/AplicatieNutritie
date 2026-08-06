@@ -22,7 +22,7 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 | --- | --- | --- | --- | --- | --- |
 | P-03 | RLS inactiv pentru Clerk (fallback service_role) | 🔴 activ | ✅ | În lucru pe `main` | Migrare SQL template + RPC `get_auth_user_by_email` | — |
 | P-04 | Policy `ai_jobs` `auth.uid()=user_id` (NULL pt Clerk) | 🔴 activ | ✅ | În lucru pe `main` | Migrare SQL politică RLS pe `ai_jobs` | — |
-| P-08 | Webhook Clerk rupere >1000 useri | 🔴 activ | ✅ | În lucru pe `main` | Folosit RPC `get_auth_user_by_email` fără paginare + tratat email existat cu 200 idempotent | — |
+| P-08 | Webhook Clerk rupere >1000 useri | 🔴 activ | ✅ | `fix(P-08)` | Folosit RPC `get_auth_user_by_email` fără paginare, 5xx pe erori tranzitorii, 200 pe erori permanente + alertă Sentry | — |
 | P-20 | `updated_at` fără trigger | 🔴 activ | ✅ | În lucru pe `main` | Migrare SQL adăugat triggere `set_updated_at` pe `ai_jobs`, `mese`, `profil` | — |
 | P-21 | `require('crypto')` inexplicit | 🔴 activ | ✅ | În lucru pe `main` | Adăugat `const crypto = require('crypto')` explicit în `webhooks.js` | — |
 
