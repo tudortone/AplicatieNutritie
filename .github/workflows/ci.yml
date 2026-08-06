@@ -93,6 +93,15 @@ jobs:
             sleep 2
           done
 
+      - name: Apply Supabase Migrations
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for file in ../supabase/migrations/*.sql; do
+            echo "Applying $file..."
+            psql -h localhost -p 54322 -U postgres -d postgres -f "$file"
+          done
+
       - name: Run RLS Integration Tests
         env:
           RLS_TESTS_REQUIRED: '1'

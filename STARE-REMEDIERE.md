@@ -70,7 +70,7 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 
 | ID | Verdict | Status | Commit | Cum s-a rezolvat | Ce a rămas |
 | --- | --- | --- | --- | --- | --- |
-| P-15 | Test RLS neconectat în CI (auto-skip) | 🔴 activ | ✅ | În lucru pe `main` | Job `rls-integration` cu Postgres real în `.github/workflows/ci.yml` | — |
+| P-15 | Test RLS neconectat în CI (auto-skip) | 🔴 activ | ✅ | `fix(P-15)` | Aplicat migrările SQL din `supabase/migrations/*.sql` pe containerul Postgres din CI | — |
 | P-16/17 | Fără audit/dep-review/secret-scan/EAS + fallback-uri dummy | 🔴 activ | ✅ | În lucru pe `main` | Adăugat npm audit, secret scan, dep review în CI.yml | — |
 | P-18b | Config jest frontend lipsă | 🔴 activ | ✅ | În lucru pe `main` | Adăugat `jest.config.js` în `frontend-nutritie` | — |
 | P-22 | Doc sprawl (7 .md + .zcode/.agents/bat) | 🔴 activ | ⬜ | — | — | — |
