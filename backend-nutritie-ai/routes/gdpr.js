@@ -103,8 +103,15 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
             urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/nutriai',
           });
 
+          // Fișierele sunt încărcate în folderul per-utilizator `/meals/<userId>/`
+          // (frontend-nutritie/lib/imagekit.ts), cu nume unic generat de CDN care
+          // NU conține userId. Căutarea după `name` nu găsea nimic; `folderPath`
+          // e câmpul corect. Păstrăm și căutarea veche după nume, ca fallback
+          // pentru eventuale fișiere legacy.
           const fileList = await new Promise((resolve) => {
-            ik.listFiles({ searchQuery: `name : "*${userId}*"` }, (err, res) => {
+            ik.listFiles({
+              searchQuery: `folderPath : "/meals/${userId}/*" OR name : "*${userId}*"`,
+            }, (err, res) => {
               if (err || !Array.isArray(res)) resolve([]);
               else resolve(res);
             });

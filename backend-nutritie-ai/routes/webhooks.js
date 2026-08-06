@@ -5,6 +5,58 @@ const { Webhook } = require('svix');
 const { tasks } = require('@trigger.dev/sdk/v3');
 
 /**
+ * Determină un id de utilizator Supabase REAL pentru un eveniment Clerk.
+ *
+ * Fără asta, `data.external_id || crypto.randomUUID()` crea un id inexistent în
+ * `auth.users`, iar FK-urile de pe `profil.user_id` și `clerk_user_map.supabase_user_id`
+ * erau încălcate → webhook 500 + retry infinit din partea Clerk.
+ *
+ * Ordine: (1) external_id valid în auth.users, (2) utilizator existent cu același
+ * email, (3) creare auth user real (email_confirm) ca FK-ul să fie satisfăcut.
+ * Returnează null dacă niciuna nu reușește.
+ */
+async function determinareSauCreareSupabaseUser({ supabaseAdmin, externalId, email }) {
+  // 1. external_id dat și valid în auth.users → îl folosim direct.
+  if (externalId) {
+    try {
+      const { data, error } = await supabaseAdmin.auth.admin.getUserById(externalId);
+      if (!error && data?.user) return data.user.id;
+    } catch {
+      // continuăm cu următoarele variante
+    }
+  }
+
+  // 2. Email existent în auth.users → idempotență / utilizator deja înregistrat
+  //    (inclusiv cei creați de fluxul Supabase auth din aplicație).
+  if (email) {
+    try {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+      if (!error && Array.isArray(data?.users)) {
+        const gasit = data.users.find((u) => u.email && u.email.toLowerCase() === email.toLowerCase());
+        if (gasit) return gasit.id;
+      }
+    } catch {
+      // continuăm
+    }
+  }
+
+  // 3. Cream auth user-ul real, ca FK-urile să fie valide. Parola e aleatoare:
+  //    autentificarea reală vine de la Clerk, nu de la parolă.
+  if (!email) return null;
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      password: crypto.randomUUID().replace(/-/g, '') + 'Aa1!',
+    });
+    if (error || !data?.user) return null;
+    return data.user.id;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Endpoint securizat pentru recepționarea webhook-urilor Clerk și sincronizarea
  * stării utilizatorilor cu baza de date Supabase și Trigger.dev.
  */
@@ -65,8 +117,18 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
         let supabaseUserId = mapareExistent?.supabase_user_id;
 
         if (!supabaseUserId) {
-          // Creăm o legătură în clerk_user_map folosind id-ul asociat sau generat
-          supabaseUserId = data.external_id || crypto.randomUUID();
+          // Id Supabase REAL (external_id valid / email existent / auth user creat),
+          // ca FK-ul de pe profil și clerk_user_map să nu fie încălcat.
+          supabaseUserId = await determinareSauCreareSupabaseUser({
+            supabaseAdmin,
+            externalId: data.external_id,
+            email,
+          });
+          if (!supabaseUserId) {
+            return res.status(500).json({
+              eroare: 'Nu s-a putut crea utilizatorul Supabase asociat contului Clerk.',
+            });
+          }
           await supabaseAdmin.from('clerk_user_map').upsert({
             clerk_user_id: clerkUserId,
             supabase_user_id: supabaseUserId,
@@ -151,3 +213,4 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
 }
 
 module.exports = createWebhooksRouter;
+module.exports.determinareSauCreareSupabaseUser = determinareSauCreareSupabaseUser;
