@@ -68,6 +68,10 @@ export interface AlimentDetaliat {
   fibre?: number;
   aminoacizi?: AminoaciziEsentiali;
   micronutrienti?: Micronutrienti;
+  // Poza mesei (ImageKit CDN), persistata in JSONB `alimente`. `imageKitFileId`
+  // permite stergearea assetului de pe CDN la request-ul GDPR, nu doar URL-ul.
+  imageUrl?: string;
+  imageKitFileId?: string;
 }
 
 export interface AlimentAI {

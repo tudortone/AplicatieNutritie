@@ -1,20 +1,28 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 
+export interface OptimizedImage {
+  uri: string;
+}
+
 /**
- * Redimensionează și comprimă imaginile pe client înainte de upload.
- * Base64 nu este cerut aici: upload-ul folosește URI-ul, iar păstrarea ambelor
- * copii creștea inutil vârful de memorie pe dispozitivele mobile.
+ * Redimensionează și comprimă obligatoriu imaginile înainte de upload.
+ * Eșuează închis dacă transformarea nu reușește: încărcarea originalului mare ar
+ * consuma trafic și memorie și ar încălca limita de payload a backendului.
  */
-export async function optimizeImageBeforeUpload(uri: string): Promise<{ uri: string }> {
-  try {
-    const result = await ImageManipulator.manipulateAsync(
-      uri,
-      [{ resize: { width: 1024 } }],
-      { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG }
-    );
-    return { uri: result.uri };
-  } catch (error) {
-    console.warn('[imageOptimizer] Nu s-a putut optimiza imaginea pe client, se folosește originalul:', error);
-    return { uri };
+export async function optimizeImageBeforeUpload(uri: string): Promise<OptimizedImage> {
+  if (typeof uri !== 'string' || !uri.trim()) {
+    throw new TypeError('URI-ul imaginii este invalid.');
   }
+
+  const result = await ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: { width: 1024 } }],
+    {
+      compress: 0.75,
+      format: ImageManipulator.SaveFormat.JPEG,
+    },
+  );
+
+  if (!result.uri) throw new Error('Optimizarea imaginii nu a produs un fișier valid.');
+  return { uri: result.uri };
 }

@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator, Pressable, Text, View, StyleSheet, TouchableOpacity,
-  ScrollView, Dimensions, Alert, KeyboardAvoidingView, Platform, Modal, BackHandler
+  TextInput, ScrollView, Dimensions, Alert, KeyboardAvoidingView, Platform, Modal
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -14,14 +14,17 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../supabase';
 import { API_URL } from '@/constants/config';
 import { API_PREFIX } from '@/lib/api';
-import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
-import { Scan, Zap, ChevronDown, Plus, Image as ImageIcon } from 'lucide-react-native';
+import Animated, { FadeIn, FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
+import { X, Scan, Zap, ChevronDown, Plus, Heart, Image as ImageIcon, Send, Sparkles } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { useNotify } from '../hooks/useNotify';
 import { localDayKey } from '../lib/dateUtils';
-import { getTipMasaDupaOra, insereazaMasaCuPoza } from '../lib/mealUtils';
+import { getTipMasaDupaOra } from '../lib/mealUtils';
 import { GramInput } from '../components/ui/GramInput';
+import { useFavorite } from '../hooks/useFavorite';
 import { ProductSearch } from '../components/food/ProductSearch';
 import { foodProductToAlimentAI } from '../components/food/types';
 import FoodScanSuccessModal, {
@@ -39,6 +42,7 @@ export default function CameraScreen() {
   const { t } = useTranslation();
   const { session } = useAuth();
   const insets = useSafeAreaInsets();
+  const { addFavorite, isFavorite } = useFavorite();
   const [permission, requestPermission] = useCameraPermissions();
   
   const [rezultat, setRezultat] = useState<AlimentScanat[]>([]);
@@ -50,7 +54,6 @@ export default function CameraScreen() {
   const [scanError, setScanError] = useState<string | null>(null);
 
   const [seIncarca, setSeIncarca] = useState(false);
-  const [progressText, setProgressText] = useState('Analiză AI în curs...');
   const [selectedAI, setSelectedAI] = useState<'auto' | 'gemini' | 'openai' | 'groq'>('auto');
   const [aiMenuVisible, setAiMenuVisible] = useState(false);
   const [cautareProdusVisible, setCautareProdusVisible] = useState(false);
@@ -59,42 +62,19 @@ export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
-  const isCapturingRef = useRef(false);
   // URL-ul pozei incarcate pe ImageKit CDN dupa un scan reusit (salvat in alimente JSONB).
   const imageKitUrlRef = useRef<string | null>(null);
-  // Promisiunea upload-ului ImageKit in curs: `adaugaInJurnal` o asteapta inainte
-  // de salvare, ca poza sa fie gata (altfel masa se salva fara poza - race).
-  const imageKitUploadRef = useRef<Promise<unknown> | null>(null);
+  // fileId-ul ImageKit al pozei scanate: persistat in alimente JSONB ca stergearea
+  // GDPR sa poata identifica si sterge assetul media de pe CDN (nu doar URL-ul).
+  const imageKitFileIdRef = useRef<string | null>(null);
   const router = useRouter();
-
-  const anuleazaScanarea = useCallback(() => {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    setTotaluri(null);
-    setRezultat([]);
-    setSuccessVisible(false);
-    setScanError(null);
-    setSeIncarca(false);
-    isCapturingRef.current = false;
-  }, []);
 
   useEffect(() => {
     isMountedRef.current = true;
-
-    const onBackPress = () => {
-      anuleazaScanarea();
-      router.back();
-      return true;
-    };
-
-    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-
     return () => {
       isMountedRef.current = false;
-      subscription.remove();
-      abortControllerRef.current?.abort();
     };
-  }, [anuleazaScanarea, router]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -150,23 +130,22 @@ export default function CameraScreen() {
       setScanError(null);
       setRezultat([]);
       setSeIncarca(true);
-      setProgressText('Redimensionare imagine (max 800px)...');
 
       try {
+        // B-20: redimensionam pe client inainte de upload. Serverul pastreaza
+        // base64-ul necesar pe toata cascada AI, dar un Buffer brut in plus in
+        // heap dubleaza varful de memorie fara castig. Reducerea reala de payload
+        // (si de cost AI) vine de aici: de la ~15MB la <200KB.
         const imagineOptimizata = await optimizeImageBeforeUpload(imageUri);
-        if (controller.signal.aborted) return;
-
-        setProgressText('Încărcare securizată pe ImageKit CDN...');
 
         const formData = new FormData();
+
         formData.append('imagine', {
           uri: imagineOptimizata.uri,
           name: `nutriai-${Date.now()}.jpg`,
           type: 'image/jpeg',
         } as unknown as Blob);
         formData.append('provider', selectedAI);
-
-        setProgressText('Analiză AI în curs (GPT-4o / Gemini)...');
 
         const response = await fetch(
           `${API_URL}${API_PREFIX}/analizeaza-mancare-structurat`,
@@ -179,8 +158,6 @@ export default function CameraScreen() {
             signal: controller.signal,
           },
         );
-
-        setProgressText('Calculare macronutrienți & calibrare...');
 
         const payload = (await response.json()) as
           | AlimentScanat[]
@@ -220,27 +197,26 @@ export default function CameraScreen() {
           }))
           .filter((item) => item.nume.trim().length > 0);
 
-        if (isMountedRef.current && !controller.signal.aborted) {
-          setRezultat(normalized);
-          setSuccessVisible(true);
-        }
+        setRezultat(normalized);
+        setSuccessVisible(true);
         // Dupa un scan REUSIT, incarcam poza pe ImageKit CDN (nu aruncam gunoi pe CDN
-        // pentru poze esuate). URL-ul ajunge in masa salvata (campul alimente, JSONB).
+        // pentru poze esuate). URL-ul + fileId-ul ajung in masa salvata (campul
+        // alimente, JSONB) ca stergearea GDPR sa cunoasca assetul.
         imageKitUrlRef.current = null;
-        imageKitUploadRef.current = uploadImageToImageKit(imageUri)
+        imageKitFileIdRef.current = null;
+        uploadImageToImageKit(imageUri)
           .then((r) => {
             imageKitUrlRef.current = r.url;
+            imageKitFileIdRef.current = r.fileId;
           })
           .catch((ikErr) => {
             if (__DEV__) console.log('ImageKit upload notice:', ikErr.message);
           });
-        if (isMountedRef.current) {
-          await Haptics.notificationAsync(
-            Haptics.NotificationFeedbackType.Success,
-          );
-        }
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
       } catch (error) {
-        if (controller.signal.aborted || !isMountedRef.current) return;
+        if (controller.signal.aborted) return;
 
         setScanError(
           error instanceof Error
@@ -251,12 +227,21 @@ export default function CameraScreen() {
         if (abortControllerRef.current === controller) {
           abortControllerRef.current = null;
         }
-        isCapturingRef.current = false;
         if (isMountedRef.current) setSeIncarca(false);
       }
     },
     [session?.access_token, selectedAI],
   );
+
+  const anuleazaScanarea = useCallback(() => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setTotaluri(null);
+    setRezultat([]);
+    setSuccessVisible(false);
+    setScanError(null);
+    setSeIncarca(false);
+  }, []);
 
   const trimiteCorectieText = async (textCorectie: string) => {
     try {
@@ -325,8 +310,7 @@ export default function CameraScreen() {
   }, [rezultat, totaluri]);
 
   const analizeazaFoto = async () => {
-    if (!cameraRef.current || seIncarca || !session || isCapturingRef.current) return;
-    isCapturingRef.current = true;
+    if (!cameraRef.current || seIncarca || !session) return;
     try {
       const foto = await cameraRef.current.takePictureAsync({
         quality: 0.5,
@@ -335,24 +319,19 @@ export default function CameraScreen() {
         skipProcessing: Platform.OS === 'android'
       });
       if (foto && foto.uri) {
-        await analizeazaImaginea(foto.uri);
-      } else {
-        isCapturingRef.current = false;
+        analizeazaImaginea(foto.uri);
       }
     } catch (e) {
       console.error("Eroare captură foto:", e);
-      isCapturingRef.current = false;
     }
   };
 
   const alegeDinGalerie = async () => {
-    if (seIncarca || !session || isCapturingRef.current) return;
-    isCapturingRef.current = true;
+    if (seIncarca || !session) return;
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
         Alert.alert(t('alerts.titluri.permisiuneNecesara'), t('alerts.mesaje.permisiuneGaleriePoze'));
-        isCapturingRef.current = false;
         return;
       }
 
@@ -363,14 +342,11 @@ export default function CameraScreen() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        await analizeazaImaginea(result.assets[0].uri);
-      } else {
-        isCapturingRef.current = false;
+        analizeazaImaginea(result.assets[0].uri);
       }
     } catch (e) {
       console.error("Eroare galerie:", e);
       Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.galerieInaccesibila'));
-      isCapturingRef.current = false;
     }
   };
 
@@ -391,21 +367,6 @@ export default function CameraScreen() {
     try {
       const now = new Date();
 
-      // Asteapta upload-ul ImageKit daca e in curs, ca URL-ul pozei sa fie gata
-      // la salvare (elimina race-ul dintre analiza si "Adauga in jurnal").
-      if (imageKitUploadRef.current) {
-        try {
-          await imageKitUploadRef.current;
-        } catch {}
-        imageKitUploadRef.current = null;
-      }
-      // Fallback-ul upload-ului întoarce URI local (file://), inaccesibil pe alt
-      // dispozitiv: persistam doar URL-uri https de pe CDN-ul ImageKit.
-      const imagineUrl =
-        imageKitUrlRef.current && imageKitUrlRef.current.startsWith('https')
-          ? imageKitUrlRef.current
-          : null;
-
       // FIX 2.5: convertim din per-100g în AlimentDetaliat cu valori absolute
       const alimente = rezultat.map((r) => {
         const f = r.estimare_grame / 100;
@@ -417,8 +378,10 @@ export default function CameraScreen() {
           carbohidrati: Math.round((r.carbohidrati_per_100g ?? 0) * f),
           grasimi: Math.round((r.grasimi_per_100g ?? 0) * f),
           fibre: 0,
-          // Poza scanului, incarcata pe ImageKit CDN (doar URL-uri https).
-          ...(imagineUrl ? { imageUrl: imagineUrl } : {}),
+          // Poza scanului, incarcata pe ImageKit CDN (camp JSONB flexibil, fara migrare).
+          // Persistam si fileId-ul ca stergearea GDPR sa poata sterge assetul de pe CDN.
+          ...(imageKitUrlRef.current ? { imageUrl: imageKitUrlRef.current } : {}),
+          ...(imageKitFileIdRef.current ? { imageKitFileId: imageKitFileIdRef.current } : {}),
         };
       });
 
@@ -428,7 +391,7 @@ export default function CameraScreen() {
       const totalCarbohidrati = alimente.reduce((s, a) => s + a.carbohidrati, 0);
 
       // FIX 2.1 + 2.4: scriem DIRECT în Supabase, cu data/ora locale
-      const { error } = await insereazaMasaCuPoza(supabase, {
+      const { error } = await supabase.from('mese').insert({
         user_id: session.user.id,
         nume: rezultat.map((r) => `${r.nume} (${Math.round(r.estimare_grame)}g)`).join(', '),
         calorii: totalCalorii,
@@ -437,7 +400,6 @@ export default function CameraScreen() {
         carbohidrati: totalCarbohidrati,
         fibre: 0,
         tip_masa: getTipMasaDupaOra(now), // FIX: nu mai hardcoda 'gustare'
-        imagine_url: imagineUrl,
         alimente,
         data: localDayKey(now),
       });
@@ -579,7 +541,7 @@ export default function CameraScreen() {
               <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay}>
                 <BlurView intensity={60} tint="dark" style={styles.scanningBlur}>
                   <ActivityIndicator size="large" color={colors.accent} />
-                  <Text style={[styles.scanningText, { color: colors.accent }]}>{progressText}</Text>
+                  <Text style={[styles.scanningText, { color: colors.accent }]}>Analizez farfuria...</Text>
                 </BlurView>
               </Animated.View>
             )}

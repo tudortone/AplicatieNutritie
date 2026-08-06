@@ -35,5 +35,9 @@ export interface Masa {
   tip_masa?: TipMasa;
   fibre?: number;
   alimente?: AlimentDetaliat[];
+  // Poza mesei incarcata pe ImageKit. Optional la nivel de tip: consumatorii
+  // care au pe randurile `mese` coloana `imagine_url` o pot citi, iar cei care
+  // nu o au o ignora la run-time. Sursa principala a pozei este `alimente[].imageUrl`
+  // (JSONB), persistata fara migrare de camera.tsx.
   imagine_url?: string;
 }
