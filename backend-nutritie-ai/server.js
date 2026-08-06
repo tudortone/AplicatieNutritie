@@ -99,6 +99,17 @@ if (config.imagekit.publicKey && config.imagekit.privateKey && config.imagekit.u
   console.log('ImageKit SDK initializat cu succes');
 }
 
+// Aceste dependinte trebuie construite inainte de body parsers: webhook-ul Clerk
+// verifica semnatura Svix pe bytes-ii originali, nu pe un obiect JSON reserializat.
+const storePartajat = creeazaStoreRateLimit({ url: config.redisUrl });
+const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter } = creeazaLimitatoare({
+  store: storePartajat?.store,
+  avertizeazaFaraStore: config.esteProductie,
+});
+const supabase = createClient(config.supabase.url, config.supabase.anonKey);
+const supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey);
+const webhooksR = createWebhooksRouter({ supabaseAdmin, config });
+
 const app = express();
 app.set('trust proxy', 1);
 app.use(helmet());
@@ -109,6 +120,20 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
   exposedHeaders: ['Idempotency-Status', 'Retry-After', 'X-AI-Quota-Remaining', 'X-Protectie-RLS'],
 }));
+
+// Limiteaza toate request-urile API inainte de parsarea corpului.
+app.use('/api/', (req, res, next) => {
+  if (req.path === '/ai-status' || req.path === '/v1/ai-status') {
+    return statusLimiter(req, res, next);
+  }
+  return preAuthLimiter(req, res, next);
+});
+
+// IMPORTANT: trebuie montat inainte de express.json()/urlencoded(). Router-ul
+// foloseste express.raw({ type: 'application/json' }) pentru verificarea Svix.
+app.use('/api/v1/webhooks', webhooksR);
+app.use('/api/webhooks', webhooksR);
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(sanitizeRequest);
@@ -126,19 +151,6 @@ app.use((req, res, next) => {
     }
   }
   next();
-});
-
-const storePartajat = creeazaStoreRateLimit({ url: config.redisUrl });
-const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter } = creeazaLimitatoare({
-  store: storePartajat?.store,
-  avertizeazaFaraStore: config.esteProductie,
-});
-
-app.use('/api/', (req, res, next) => {
-  if (req.path === '/ai-status' || req.path === '/v1/ai-status') {
-    return statusLimiter(req, res, next);
-  }
-  return preAuthLimiter(req, res, next);
 });
 
 const EXTENSIE_MIMETYPE = {
@@ -162,8 +174,6 @@ const upload = multer({
   },
 });
 
-const supabase = createClient(config.supabase.url, config.supabase.anonKey);
-const supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey);
 const tokenCache = new TokenCache({
   maxEntries: 5000,
   ttlMs: 60 * 1000,
@@ -288,6 +298,7 @@ const userR = createUserRouter({
   profilRepo: createProfilRepo(),
 });
 const statusR = createStatusRouter({
+  requireAuth,
   getProviderStatus: serviciuCascada.getProviderStatus,
   getAiStatistici,
 });
@@ -298,7 +309,6 @@ const gdprR = createGdprRouter({
   contextDate,
   profilRepo: createProfilRepo(),
 });
-const webhooksR = createWebhooksRouter({ supabaseAdmin, config });
 
 for (const prefix of ['/api/v1', '/api']) {
   app.use(prefix, statusR);
@@ -309,9 +319,6 @@ for (const prefix of ['/api/v1', '/api']) {
   app.use(`${prefix}/user`, gdprR);
   app.use(`${prefix}/user`, userR);
 }
-
-app.use('/api/v1/webhooks', webhooksR);
-app.use('/api/webhooks', webhooksR);
 
 app.use((_req, res) => {
   res.status(404).json({ eroare: 'Ruta solicitată nu există (404).' });

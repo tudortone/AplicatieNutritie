@@ -22,14 +22,20 @@ function statusPublic(detalii) {
 }
 
 /**
- * GET /api/ai-status ramane utilizabil de ecranul camerei, dar expune numai
- * disponibilitatea necesara UI-ului. Modelele, mesajele interne, tokenii,
- * costurile si rata de esec nu mai sunt trimise pe un endpoint public.
+ * GET /api/ai-status este protejat cu JWT si rate limiting. Raspunsul ramane
+ * minimal: nu expune modele, tokeni, costuri sau mesaje interne ale providerilor.
  */
-function createStatusRouter({ getProviderStatus }) {
+function createStatusRouter({ requireAuth, getProviderStatus }) {
+  if (typeof requireAuth !== 'function') {
+    throw new TypeError('requireAuth este obligatoriu pentru status router.');
+  }
+  if (typeof getProviderStatus !== 'function') {
+    throw new TypeError('getProviderStatus este obligatoriu pentru status router.');
+  }
+
   const router = express.Router();
 
-  router.get('/ai-status', async (req, res, next) => {
+  router.get('/ai-status', requireAuth, async (_req, res, next) => {
     try {
       const [gemini, openai, groq, openrouter] = await Promise.all([
         getProviderStatus('gemini'),
