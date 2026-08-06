@@ -30,7 +30,7 @@ import FoodScanSuccessModal, {
 } from '@/components/food/FoodScanSuccessModal';
 import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInput';
 import { uploadImageToImageKit } from '@/lib/imagekit';
-import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft } from '@/lib/imageOptimizer';
+import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts } from '@/lib/imageOptimizer';
 
 export default function CameraScreen() {
   const { colors } = useTheme();
@@ -65,10 +65,32 @@ export default function CameraScreen() {
   // fileId-ul ImageKit al pozei scanate: persistat in alimente JSONB ca stergearea
   // GDPR sa poata identifica si sterge assetul media de pe CDN (nu doar URL-ul).
   const imageKitFileIdRef = useRef<string | null>(null);
+  const draftCurrentUriRef = useRef<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     isMountedRef.current = true;
+    listPendingDrafts().then((pending) => {
+      if (pending.length > 0 && isMountedRef.current) {
+        const ultimulDraft = pending[pending.length - 1];
+        Alert.alert(
+          'Imagine neanalizată',
+          'Există o poză neanalizată din sesiunea anterioară. Dorești să reiei analiza?',
+          [
+            {
+              text: 'Renunță',
+              style: 'destructive',
+              onPress: () => discardLocalImageDraft(ultimulDraft).catch(() => {}),
+            },
+            {
+              text: 'Reia analiza',
+              onPress: () => analizeazaImaginea(ultimulDraft),
+            },
+          ],
+        );
+      }
+    }).catch(() => {});
+
     return () => {
       isMountedRef.current = false;
     };
@@ -143,6 +165,7 @@ export default function CameraScreen() {
         const imagineOptimizata = await optimizeImageBeforeUpload(imageUri);
         // U-03: Salvează poza în stocarea persistentă locală înainte de upload ca să nu fie pierdută la căderea rețelei
         const draftPersistentUri = await saveLocalImageDraft(imagineOptimizata.uri);
+        draftCurrentUriRef.current = draftPersistentUri;
 
         const formData = new FormData();
 
@@ -243,6 +266,10 @@ export default function CameraScreen() {
   );
 
   const anuleazaScanarea = useCallback(() => {
+    if (draftCurrentUriRef.current) {
+      discardLocalImageDraft(draftCurrentUriRef.current).catch(() => {});
+      draftCurrentUriRef.current = null;
+    }
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setTotaluri(null);

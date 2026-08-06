@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import {
   saveLocalImageDraft,
   discardLocalImageDraft,
@@ -11,7 +11,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   setItem: jest.fn(),
 }));
 
-jest.mock('expo-file-system', () => ({
+jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///data/user/0/com.app/files/',
   getInfoAsync: jest.fn(),
   makeDirectoryAsync: jest.fn(),

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Image } from 'react-native';
 
@@ -13,7 +13,7 @@ export interface OptimizedImage {
 /** Dimensiunea maximă a laturii lungi a imaginii optimizate (bounding box 800×800). */
 const MAX_DIMENSION = 800;
 
-const DRAFT_DIR = `${(FileSystem as any).documentDirectory || ''}drafts/`;
+const DRAFT_DIR = `${FileSystem.documentDirectory || ''}drafts/`;
 const INDEX_KEY = 'nutriai:image-drafts';
 
 function getImageSize(uri: string): Promise<{ width: number; height: number }> {
@@ -91,5 +91,15 @@ export async function discardLocalImageDraft(path: string): Promise<void> {
 
 export async function listPendingDrafts(): Promise<string[]> {
   const raw = await AsyncStorage.getItem(INDEX_KEY);
-  return raw ? JSON.parse(raw) : [];
+  const index: string[] = raw ? JSON.parse(raw) : [];
+  if (index.length > 10) {
+    const deSters = index.slice(0, index.length - 10);
+    for (const p of deSters) {
+      await FileSystem.deleteAsync(p, { idempotent: true }).catch(() => {});
+    }
+    const ramas = index.slice(-10);
+    await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(ramas));
+    return ramas;
+  }
+  return index;
 }
