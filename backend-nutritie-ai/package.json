@@ -4,8 +4,8 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "test": "jest --forceExit --reporters=default --reporters=./tests/githubActionsReporter.js",
-    "test:integration": "jest --forceExit tests/rls_integration.test.js --reporters=default --reporters=./tests/githubActionsReporter.js",
+    "test": "node tests/runJestWithAnnotations.js",
+    "test:integration": "node tests/runJestWithAnnotations.js tests/rls_integration.test.js",
     "lint": "eslint .",
     "start": "node server.js"
   },
