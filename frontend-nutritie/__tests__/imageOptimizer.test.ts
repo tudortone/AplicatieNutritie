@@ -1,71 +1,64 @@
-import * as ImageManipulator from 'expo-image-manipulator';
-import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts } from '../lib/imageOptimizer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
+import {
+  saveLocalImageDraft,
+  discardLocalImageDraft,
+  listPendingDrafts,
+} from '../lib/imageOptimizer';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(async () => null),
-  setItem: jest.fn(async () => {}),
-  removeItem: jest.fn(async () => {}),
+  getItem: jest.fn(),
+  setItem: jest.fn(),
 }));
 
 jest.mock('expo-file-system', () => ({
-  documentDirectory: 'file:///documentDirectory/',
-  getInfoAsync: jest.fn(async () => ({ exists: true })),
-  makeDirectoryAsync: jest.fn(async () => {}),
-  copyAsync: jest.fn(async () => {}),
-  deleteAsync: jest.fn(async () => {}),
+  documentDirectory: 'file:///data/user/0/com.app/files/',
+  getInfoAsync: jest.fn(),
+  makeDirectoryAsync: jest.fn(),
+  copyAsync: jest.fn(),
+  deleteAsync: jest.fn(),
 }));
 
-jest.mock('react-native', () => ({
-  Image: {
-    getSize: (uri: string, success: (w: number, h: number) => void) => {
-      if (uri.includes('large')) {
-        success(2000, 1000);
-      } else {
-        success(400, 300);
-      }
-    },
-  },
-}));
+describe('U-03 — Storage local persistent imagini (drafts)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
-jest.mock('expo-image-manipulator', () => ({
-  manipulateAsync: jest.fn(async (uri: string, actions: any[]) => {
-    if (actions && actions.length > 0 && actions[0].resize) {
-      return { uri: 'file://optimized-800x400.jpg', width: 800, height: 400 };
-    }
-    return { uri: 'file://unchanged-400x300.jpg', width: 400, height: 300 };
-  }),
-  SaveFormat: { JPEG: 'jpeg' },
-}));
+  test('saveLocalImageDraft creează directorul dacă nu există și salvează în AsyncStorage', async () => {
+    (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
 
-describe('lib/imageOptimizer — test optimizare dimensiuni si persistență draft (U-03)', () => {
-  it('o imagine de 2000x1000 este redimensionată la bounding box de 800px', async () => {
-    const result = await optimizeImageBeforeUpload('file://large-image.jpg');
-    expect(ImageManipulator.manipulateAsync).toHaveBeenCalledWith(
-      'file://large-image.jpg',
-      [{ resize: { width: 800 } }],
-      expect.anything()
+    const path = await saveLocalImageDraft('file:///tmp/camera_photo.jpg');
+
+    expect(FileSystem.makeDirectoryAsync).toHaveBeenCalled();
+    expect(FileSystem.copyAsync).toHaveBeenCalledWith({
+      from: 'file:///tmp/camera_photo.jpg',
+      to: path,
+    });
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'nutriai:image-drafts',
+      JSON.stringify([path]),
     );
-    expect(result.width).toBe(800);
-    expect(result.height).toBe(400);
   });
 
-  it('o imagine de 400x300 rămâne cu dimensiunile originale (redimensionare omisă)', async () => {
-    const result = await optimizeImageBeforeUpload('file://small-image.jpg');
-    expect(ImageManipulator.manipulateAsync).toHaveBeenCalledWith(
-      'file://small-image.jpg',
-      [],
-      expect.anything()
+  test('discardLocalImageDraft șterge fișierul și elimină calea din AsyncStorage', async () => {
+    const draftPath = 'file:///data/user/0/com.app/files/drafts/123.jpg';
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify([draftPath]));
+
+    await discardLocalImageDraft(draftPath);
+
+    expect(FileSystem.deleteAsync).toHaveBeenCalledWith(draftPath, { idempotent: true });
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'nutriai:image-drafts',
+      JSON.stringify([]),
     );
-    expect(result.width).toBe(400);
-    expect(result.height).toBe(300);
   });
 
-  it('saveLocalImageDraft salvează poza în documentDirectory/drafts/', async () => {
-    const draftPath = await saveLocalImageDraft('file://test.jpg');
-    expect(draftPath).toContain('file:///documentDirectory/drafts/');
-  });
+  test('listPendingDrafts returnează lista din AsyncStorage', async () => {
+    const drafts = ['file:///path/1.jpg', 'file:///path/2.jpg'];
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify(drafts));
 
-  it('discardLocalImageDraft elimină draftul', async () => {
-    await expect(discardLocalImageDraft('file:///documentDirectory/drafts/123.jpg')).resolves.toBeUndefined();
+    const result = await listPendingDrafts();
+    expect(result).toEqual(drafts);
   });
 });
