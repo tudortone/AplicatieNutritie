@@ -45,13 +45,15 @@ function listaDinEnv(valoare) {
 		.filter(Boolean);
 }
 
-function numarDinEnv(valoare, implicit, { min = 1, max = 10000 } = {}) {
-	if (valoare === undefined || valoare === null || valoare === '') return implicit;
+function numarDinEnv(valoare, implicit) {
 	const numar = Number(valoare);
-	if (Number.isInteger(numar) && numar >= min && numar <= max) {
-		return numar;
-	}
-	return implicit;
+	return Number.isFinite(numar) && numar > 0 ? numar : implicit;
+}
+
+function intregDinEnv(valoare, implicit, { minimZero = false } = {}) {
+	const numar = Number(valoare);
+	const admisibil = minimZero ? numar >= 0 : numar > 0;
+	return Number.isInteger(numar) && admisibil ? numar : implicit;
 }
 
 let configCache = null;
@@ -109,7 +111,7 @@ function incarcaConfig() {
 		NODE_ENV,
 		esteProductie,
 		esteTest,
-		port: numarDinEnv(process.env.PORT, 3000, { min: 1, max: 65535 }),
+		port: numarDinEnv(process.env.PORT, 3000),
 		host: process.env.HOST || '0.0.0.0',
 		cors: Object.freeze({ origini, permiteOrice }),
 		supabase: Object.freeze({
@@ -126,8 +128,8 @@ function incarcaConfig() {
 			// Plafon de cereri AI simultane pe instanta. Fara el, 20 de utilizatori
 			// paraleli inseamna 20 de imagini base64 de pana la 6,7 MB tinute in heap
 			// pe toata durata cascadei de furnizori.
-			maxConcurenta: numarDinEnv(process.env.AI_MAX_CONCURENTA, 4, { min: 1, max: 50 }),
-			maxCoada: numarDinEnv(process.env.AI_MAX_COADA, 12, { min: 1, max: 200 }),
+			maxConcurenta: intregDinEnv(process.env.AI_MAX_CONCURENTA, 4),
+			maxCoada: intregDinEnv(process.env.AI_MAX_COADA, 12, { minimZero: true }),
 			// Plafon de apeluri de furnizori per cerere AI (anti-cost). Peste el,
 			// cascada inceteaza sa mai incerce alti provideri la acelasi upload.
 			// 8 = intregul lant de fallback cu cate o cheie (1 OpenAI + 2 Groq + 3
