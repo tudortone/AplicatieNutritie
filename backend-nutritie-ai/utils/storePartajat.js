@@ -2,26 +2,6 @@
 
 const { MemoryStore } = require('express-rate-limit');
 
-/**
- * Store partajat pentru rate-limit si pentru registry-ul de cooldown al
- * furnizorilor AI (B-10).
- *
- * Daca `REDIS_URL` este configurat, limitele si cooldown-urile sunt partajate
- * intre instante: doua procese locale imparte aceeasi limita. Fara Redis
- * (ex. sub Jest sau pe o instanta unica) se foloseste MemoryStore / map local,
- * iar limitele efective se inmultesc cu numarul de instante — acceptabil in dev.
- *
- * Un Redis cazut NU trebuie sa duca serverul la pamant: toate operatiile sunt
- * izolate prin try/catch si esueaza graceful, cadea pe valoarea implicita.
- *
- * A-1: rate-limiting-ul este un mecanism de protectie; daca store-ul Redis cade,
- * traficul trece pe un store local de rezerva (MemoryStore), nu se transforma in
- * 500 pe tot /api/. Acelasi tratament se aplica registry-ului de cooldown.
- * A-2: nicio logare din acest fisier nu expune mesajul brut al erorii — mesajele
- * de eroare Redis contin URL-ul complet cu parola (redis://utilizator:parola@gazda).
- * Se logheaza exclusiv err.code / err.name prin `codEroare()`.
- */
-
 const PLAFON_INTRARI = 5000;
 const CURATARE_INTERVAL_MS = 5 * 60 * 1000;
 const SALTIRE_LOGGING_MS = 30 * 1000;
@@ -30,18 +10,11 @@ let storeRateLimitCache = null;
 let clientRedisCache = null;
 let ultimulAvertisment = 0;
 
-/**
- * Cod de eroare sigur de logat (A-2). Nu intoarce niciodata mesajul brut.
- */
 function codEroare(err) {
   if (!err) return 'NECUNOSCUT';
   return err?.code || err?.name || 'NECUNOSCUT';
 }
 
-/**
- * Avertisment cu throttling de 30 de secunde: un Redis cazut nu trebuie sa
- * genereze o linie de log per cerere.
- */
 function logWarnThrottled(mesaj) {
   const acum = Date.now();
   if (acum - ultimulAvertisment < SALTIRE_LOGGING_MS) return;
@@ -49,10 +22,6 @@ function logWarnThrottled(mesaj) {
   console.warn(mesaj);
 }
 
-/**
- * Eroare de semnal pentru „Redis indisponibil". Se propaga doar in interiorul
- * acestui fisier, pentru ca logarea sa poarte codul, nu mesajul original.
- */
 function eroareRedisNeconectat() {
   const err = new Error('REDIS_NECONECTAT');
   err.code = 'REDIS_NECONECTAT';
@@ -64,7 +33,6 @@ function creeazaClientRedis({ url }) {
   const redis = require('redis');
   const client = redis.createClient({ url });
   client.on('error', (err) => {
-    // Doar avertisment: inca o cale care functioneaza in lipsa Redis.
     logWarnThrottled(`[Redis] Eroare client: ${codEroare(err)}`);
   });
   client.connect().catch((err) => {
@@ -74,22 +42,11 @@ function creeazaClientRedis({ url }) {
   return client;
 }
 
-/**
- * Store compatibil cu interfata express-rate-limit v8 (init / increment /
- * decrement / resetKey / resetAll / localKeys).
- *
- * Fiecare operatie incearca intai store-ul Redis; daca clientul nu e gata
- * (`isReady === false`) sau operatia arunca, executa aceeasi operatie pe
- * MemoryStore-ul de rezerva si intoarce rezultatul acestuia. Cererea nu
- * esueaza niciodata din cauza Redis.
- */
 class StoreCuRezerva {
   constructor({ client, storeRedis }) {
     this.client = client;
     this.storeRedis = storeRedis;
     this.storeRezerva = new MemoryStore();
-    // Store-ul primar e Redis (partajat intre instante), deci localKeys ramane
-    // false — la fel ca la RedisStore-ul simplu.
     this.localKeys = false;
   }
 
@@ -156,10 +113,6 @@ class StoreCuRezerva {
   }
 }
 
-/**
- * Store compatibil express-rate-limit. Returneaza null daca `url` lipseste
- * (MemoryStore ramane implicit in utils/rateLimit.js).
- */
 function creeazaStoreRateLimit({ url }) {
   if (!url) return null;
   if (storeRateLimitCache) return storeRateLimitCache;
@@ -176,11 +129,6 @@ function creeazaStoreRateLimit({ url }) {
   return storeRateLimitCache;
 }
 
-/**
- * Map in memorie cu TTL, plafon de intrari cu evacuarea celei mai vechi chei si
- * curatare periodica a expirarilor. Este rezerva locala a registry-ului cand
- * Redis e indisponibil (si singurul backend cand url lipseste).
- */
 class MapCuExpirare {
   constructor() {
     this.map = new Map();
@@ -198,9 +146,6 @@ class MapCuExpirare {
   }
 
   set(cheie, valoare, ttlMs) {
-    // Plafon de igiena: la depasire se evacueaza cea mai veche cheie (Map
-    // pastreaza ordinea de insertie). Fara aceasta garda, o cheie scrisa fara
-    // TTL ar ramane in memorie la nesfarsit.
     if (this.map.size >= PLAFON_INTRARI && !this.map.has(cheie)) {
       const ceaMaiVeche = this.map.keys().next().value;
       if (ceaMaiVeche !== undefined) this.map.delete(ceaMaiVeche);
@@ -209,6 +154,12 @@ class MapCuExpirare {
       valoare,
       expira: ttlMs && ttlMs > 0 ? Date.now() + ttlMs : 0,
     });
+  }
+
+  setIfAbsent(cheie, valoare, ttlMs) {
+    if (this.get(cheie) !== null) return false;
+    this.set(cheie, valoare, ttlMs);
+    return true;
   }
 
   del(cheie) {
@@ -227,13 +178,6 @@ class MapCuExpirare {
   }
 }
 
-/**
- * Registru cheie-valoare cu TTL, sincron API async. Folosit pentru cooldown-ul
- * furnizorilor AI si (optional) pentru orice contor partajat.
- *
- * API: { get(key) -> valoare|null, set(key, valoare, ttlMs), del(key) }
- * Toate intorc Promise. Suporta Redis cu rezerva locala, sau doar memorie.
- */
 function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
   const cheieFinala = (key) => `${prefix}:${key}`;
   const rezerva = new MapCuExpirare();
@@ -254,8 +198,6 @@ function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
         }
       },
       async set(key, value, ttlMs) {
-        // Se inscrie si in rezerva ca sa existe o copie locala pentru fereastra
-        // in care Redis e indisponibil; scrierea Redis nu trebuie sa pice set-ul.
         rezerva.set(cheieFinala(key), value, ttlMs);
         if (!client.isReady) return;
         try {
@@ -267,6 +209,23 @@ function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
           }
         } catch (err) {
           logWarnThrottled(`[Redis] set esuat (${codEroare(err)}); ramane doar rezerva.`);
+        }
+      },
+      async setIfAbsent(key, value, ttlMs) {
+        const finala = cheieFinala(key);
+        if (!client.isReady) return rezerva.setIfAbsent(finala, value, ttlMs);
+        try {
+          const optiuni = { NX: true };
+          if (ttlMs && ttlMs > 0) optiuni.PX = ttlMs;
+          const rezultat = await client.set(finala, JSON.stringify(value), optiuni);
+          if (rezultat === 'OK') {
+            rezerva.set(finala, value, ttlMs);
+            return true;
+          }
+          return false;
+        } catch (err) {
+          logWarnThrottled(`[Redis] SET NX esuat (${codEroare(err)}); trec pe rezerva.`);
+          return rezerva.setIfAbsent(finala, value, ttlMs);
         }
       },
       async del(key) {
@@ -289,6 +248,9 @@ function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
     async set(key, value, ttlMs) {
       rezerva.set(cheieFinala(key), value, ttlMs);
     },
+    async setIfAbsent(key, value, ttlMs) {
+      return rezerva.setIfAbsent(cheieFinala(key), value, ttlMs);
+    },
     async del(key) {
       rezerva.del(cheieFinala(key));
     },
@@ -300,5 +262,6 @@ module.exports = {
   creeazaStoreRateLimit,
   creeazaRegistruCheiValori,
   StoreCuRezerva,
+  MapCuExpirare,
   codEroare,
 };
