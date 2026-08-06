@@ -21,7 +21,7 @@ const { rezolvaIdentitate, EroareIdentitate } = require('./utils/identitate');
 const { callWithTimeout } = require('./utils/httpTimeout');
 const { Semafor } = require('./utils/semafor');
 const { creeazaContextDate, EroareContextDate } = require('./utils/clientUtilizator');
-const { idempotencyMiddleware } = require('./utils/idempotency');
+const { idempotencyMiddleware, idempotencyMiddlewareCritic } = require('./utils/idempotency');
 const { checkAiUsageQuota } = require('./utils/aiUsageQuota');
 const createGdprRouter = require('./routes/gdpr');
 const createStatusRouter = require('./routes/status');
@@ -31,6 +31,7 @@ const createProfilRouter = require('./routes/profil');
 const createMeseRouter = require('./routes/mese');
 const createUserRouter = require('./routes/user');
 const createWebhooksRouter = require('./routes/webhooks');
+const createWebhooksRevenueCatRouter = require('./routes/webhooksRevenueCat');
 const createMeseRepo = require('./repositories/meseRepo');
 const createBarcodeRepo = require('./repositories/barcodeRepo');
 const createProfilRepo = require('./repositories/profilRepo');
@@ -148,10 +149,15 @@ const webhooksLimiter = rateLimit({
 // PR1-backend: webhook-urile (Clerk/Svix) sunt montate ÎNAINTE de body-parse,
 // ca Svix sa prime bytes-urile brute netransformate. O singura periere webhooksR.
 const webhooksR = createWebhooksRouter({ supabaseAdmin, config });
+const webhooksRevenueCatR = createWebhooksRevenueCatRouter({ supabaseAdmin, config });
 app.use('/api/v1/webhooks', webhooksLimiter);
 app.use('/api/v1/webhooks', webhooksR);
+app.use('/api/v1/webhooks/revenuecat', webhooksLimiter);
+app.use('/api/v1/webhooks/revenuecat', webhooksRevenueCatR);
 app.use('/api/webhooks', webhooksLimiter);
 app.use('/api/webhooks', webhooksR);
+app.use('/api/webhooks/revenuecat', webhooksLimiter);
+app.use('/api/webhooks/revenuecat', webhooksRevenueCatR);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
@@ -339,15 +345,31 @@ const gdprR = createGdprRouter({
   contextDate,
   profilRepo: createProfilRepo(),
 });
-for (const prefix of ['/api/v1', '/api']) {
-  app.use(prefix, statusR);
-  app.use(prefix, aiR);
-  app.use(prefix, barcodeR);
-  app.use(prefix, profilR);
-  app.use(prefix, meseR);
-  app.use(`${prefix}/user`, gdprR);
-  app.use(`${prefix}/user`, userR);
-}
+// /api/v1 = prefix canonic
+app.use('/api/v1', statusR);
+app.use('/api/v1', aiR);
+app.use('/api/v1', barcodeR);
+app.use('/api/v1', profilR);
+app.use('/api/v1', meseR);
+app.use('/api/v1/user', gdprR);
+app.use('/api/v1/user', userR);
+
+// P-19: /api = prefix deprecat, anunțat cu Sunset + Deprecation
+// Clientul (lib/api.ts) construiește deja URL-uri cu /api/v1.
+// Prefixul /api rămâne activ până la 2026-09-30 pentru compatibilitate.
+app.use('/api', (req, res, next) => {
+  res.setHeader('Sunset', 'Wed, 30 Sep 2026 00:00:00 GMT');
+  res.setHeader('Deprecation', 'true');
+  res.setHeader('Link', '</api/v1>; rel="successor-version"');
+  next();
+});
+app.use('/api', statusR);
+app.use('/api', aiR);
+app.use('/api', barcodeR);
+app.use('/api', profilR);
+app.use('/api', meseR);
+app.use('/api/user', gdprR);
+app.use('/api/user', userR);
 
 app.use((_req, res) => {
   res.status(404).json({ eroare: 'Ruta solicitată nu există (404).' });

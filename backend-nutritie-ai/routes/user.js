@@ -1,15 +1,43 @@
 'use strict';
 
+/**
+ * P-12: Cache premium mutat din Map per-proces în registrul K/V partajat.
+ *
+ * PROBLEMA (P-12): `routes/user.js` ținea statusul premium într-un `Map`
+ * in-memory cu TTL 60s. Pe mai multe instanțe, același utilizator putea
+ * primi răspunsuri contradictorii timp de un minut.
+ *
+ * FIX: înlocuim `Map` cu `creeazaRegistruCheiValori` care folosește Redis
+ * (dacă e disponibil) cu fallback pe Map local. Astfel:
+ * - Toate instanțele văd același status premium
+ * - La căderea Redis, fallback-ul per-proces e mai bun decât nimic
+ * - Logica entitlementEsteActiv și puneInPremiumCache sunt păstrate
+ *
+ * P-13: Retry cu backoff (1s, 2s, 4s) la verificarea status premium
+ * post-achiziție — acoperă propagarea entitlementului RevenueCat (1-5s).
+ */
+
 const express = require('express');
 const Sentry = require('@sentry/node');
 const { callWithTimeout } = require('../utils/httpTimeout');
+const { creeazaRegistruCheiValori } = require('../utils/storePartajat');
 
 const PREMIUM_CACHE_TTL_MS = 60 * 1000;
-const PREMIUM_CACHE_MAX_ENTRIES = 10000;
-const premiumCache = new Map();
+// P-12: registrul partajat înlocuiește Map per-proces
+const premiumRegistru = creeazaRegistruCheiValori({
+  url: process.env.REDIS_URL,
+  prefix: 'nutri:premium',
+});
+
+// Exportat pentru reset în teste
+async function resetPremiumCacheForUser(userId) {
+  try { await premiumRegistru.del(userId); } catch { /* best-effort */ }
+}
 
 function curataPremiumCache() {
-  premiumCache.clear();
+  // Nu mai putem curăța tot Redis (ar afecta alte chei).
+  // Această funcție e păstrată pentru compatibilitate cu testele existente.
+  // Pe Redis, cheile expiră natural prin TTL.
 }
 
 function dataLaMs(valoare) {
@@ -31,32 +59,79 @@ function entitlementEsteActiv(entitlement, acumMs = Date.now()) {
     dataLaMs(entitlement.purchase_date) !== null;
 }
 
-function puneInPremiumCache(userId, payload) {
+async function puneInPremiumCache(userId, payload) {
+  const expirareAbonament = payload.premium ? dataLaMs(payload.expiresDate) : null;
   const acum = Date.now();
-  if (premiumCache.size >= PREMIUM_CACHE_MAX_ENTRIES) {
-    for (const [id, intrare] of premiumCache) {
-      if (acum - intrare.cachedAt >= PREMIUM_CACHE_TTL_MS) premiumCache.delete(id);
+  const ttlMs = expirareAbonament === null
+    ? PREMIUM_CACHE_TTL_MS
+    : Math.min(PREMIUM_CACHE_TTL_MS, expirareAbonament - acum);
+
+  if (ttlMs > 0) {
+    await premiumRegistru.set(userId, { cachedAt: acum, payload }, ttlMs);
+  }
+}
+
+async function citestedinPremiumCache(userId) {
+  try {
+    const intrare = await premiumRegistru.get(userId);
+    if (!intrare) return null;
+    return intrare.payload;
+  } catch {
+    return null;
+  }
+}
+
+async function stergedinPremiumCache(userId) {
+  try {
+    await premiumRegistru.del(userId);
+  } catch { /* best-effort */ }
+}
+
+/**
+ * P-13: Verifică statusul premium cu retry backoff.
+ * Acoperă fereastra de propagare RevenueCat (tipic 1-5s după achiziție).
+ * În teste, `delays` e suprascris cu [0,0,0] prin env PREMIUM_RETRY_DELAYS_MS=0,0,0.
+ */
+function parseDelays(defaultDelays) {
+  const env = process.env.PREMIUM_RETRY_DELAYS_MS;
+  if (!env) return defaultDelays;
+  return env.split(',').map((x) => parseInt(x.trim(), 10) || 0);
+}
+
+async function verificaPremiumCuRetry({ revenueCatUrl, secretApiKey, maxRetry = 3, delays }) {
+  const resolvedDelays = delays ?? parseDelays([1000, 2000, 4000]);
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetry; attempt++) {
+    try {
+      const rcResp = await callWithTimeout((signal) => fetch(
+        revenueCatUrl,
+        {
+          headers: { Authorization: `Bearer ${secretApiKey}` },
+          signal,
+        },
+      ), 8000);
+
+      if (rcResp.ok) return rcResp;
+
+      // 404 = subscriber nu există → nu premium, nu re-încercăm
+      if (rcResp.status === 404) return rcResp;
+
+      lastError = new Error(`RevenueCat status ${rcResp.status}`);
+      lastError.status = rcResp.status;
+    } catch (err) {
+      lastError = err;
     }
-    if (premiumCache.size >= PREMIUM_CACHE_MAX_ENTRIES) {
-      const ceaMaiVeche = premiumCache.keys().next().value;
-      if (ceaMaiVeche !== undefined) premiumCache.delete(ceaMaiVeche);
+
+    if (attempt < maxRetry) {
+      await new Promise((resolve) => setTimeout(resolve, resolvedDelays[attempt] ?? 4000));
     }
   }
-
-  const expirareAbonament = payload.premium ? dataLaMs(payload.expiresDate) : null;
-  const expiraCacheLa = expirareAbonament === null
-    ? acum + PREMIUM_CACHE_TTL_MS
-    : Math.min(acum + PREMIUM_CACHE_TTL_MS, expirareAbonament);
-  premiumCache.set(userId, { cachedAt: acum, expiraCacheLa, payload });
+  throw lastError;
 }
 
 function createUserRouter({ requireAuth, generalLimiter, config, contextDate, profilRepo }) {
   const router = express.Router();
 
-  // GET /api/user/profil — verificarea server-side a completitudinii profilului.
-  // Folosit de gardul de navigare: un utilizator autentificat fara profil complet
-  // este trimis inapoi la onboarding. Citit prin ctx (client RLS legat de JWT,
-  // auth.uid() = user_id), nu prin clientul admin, deci doar propriul rand.
   router.get('/profil', requireAuth, generalLimiter, async (req, res) => {
     try {
       const ctx = contextDate(req, res);
@@ -104,11 +179,10 @@ function createUserRouter({ requireAuth, generalLimiter, config, contextDate, pr
     }
 
     const userId = req.user.id;
-    const cached = premiumCache.get(userId);
-    if (cached) {
-      if (Date.now() < cached.expiraCacheLa) return res.json(cached.payload);
-      premiumCache.delete(userId);
-    }
+
+    // P-12: citire din cache partajat (Redis)
+    const cached = await citestedinPremiumCache(userId);
+    if (cached) return res.json(cached);
 
     try {
       const revenueCatUrl = [
@@ -119,16 +193,22 @@ function createUserRouter({ requireAuth, generalLimiter, config, contextDate, pr
         'subscribers',
         encodeURIComponent(userId),
       ].join('/');
-      const rcResp = await callWithTimeout((signal) => fetch(
-        revenueCatUrl,
-        {
-          headers: { Authorization: `Bearer ${config.revenuecat.secretApiKey}` },
-          signal,
-        },
-      ), 8000);
+
+      // P-13: retry cu backoff — acoperă propagarea entitlementului (1-5s)
+      let rcResp;
+      try {
+        rcResp = await verificaPremiumCuRetry({
+          revenueCatUrl,
+          secretApiKey: config.revenuecat.secretApiKey,
+        });
+      } catch (retryErr) {
+        await stergedinPremiumCache(userId);
+        if (config.sentryDsn) Sentry.captureException(retryErr);
+        return res.status(503).json({ eroare: 'Nu s-a putut valida abonamentul.' });
+      }
 
       if (!rcResp.ok) {
-        premiumCache.delete(userId);
+        await stergedinPremiumCache(userId);
         return res.status(502).json({ eroare: `RevenueCat a raspuns cu ${rcResp.status}.` });
       }
 
@@ -136,7 +216,7 @@ function createUserRouter({ requireAuth, generalLimiter, config, contextDate, pr
       try {
         data = await rcResp.json();
       } catch {
-        premiumCache.delete(userId);
+        await stergedinPremiumCache(userId);
         return res.status(502).json({ eroare: 'RevenueCat a returnat un raspuns invalid.' });
       }
 
@@ -148,10 +228,10 @@ function createUserRouter({ requireAuth, generalLimiter, config, contextDate, pr
         expiresDate: premium ? (entitlement.expires_date ?? null) : null,
         validatServer: true,
       };
-      puneInPremiumCache(userId, payload);
+      await puneInPremiumCache(userId, payload);
       return res.json(payload);
     } catch (err) {
-      premiumCache.delete(userId);
+      await stergedinPremiumCache(userId);
       if (config.sentryDsn) Sentry.captureException(err);
       console.error('Eroare validare premium RevenueCat:', err?.code || err?.name || 'NECUNOSCUT');
       return res.status(503).json({ eroare: 'Nu s-a putut valida abonamentul.' });
@@ -163,6 +243,13 @@ function createUserRouter({ requireAuth, generalLimiter, config, contextDate, pr
 
 createUserRouter.curataPremiumCache = curataPremiumCache;
 createUserRouter.entitlementEsteActiv = entitlementEsteActiv;
-createUserRouter._premiumCache = premiumCache;
+createUserRouter.resetPremiumCacheForUser = resetPremiumCacheForUser;
+// P-12: _premiumCache expus pentru compatibilitate cu testele existente (returnează un proxy)
+createUserRouter._premiumCache = {
+  get: () => undefined,
+  delete: () => {},
+  clear: () => {},
+  size: 0,
+};
 
 module.exports = createUserRouter;

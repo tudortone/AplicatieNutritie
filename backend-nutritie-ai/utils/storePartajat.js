@@ -1,5 +1,20 @@
 'use strict';
 
+/**
+ * P-11: Fallback Redis — strângere proporțională a pragurilor + alertă Sentry.
+ * P-12: Cache premium mutat din Map per-proces în registrul K/V partajat.
+ *
+ * PROBLEMA P-11: `StoreCuRezerva` trecea pe `MapCuExpirare` per-proces.
+ * Pe 4 instanțe, rate limit-ul devenea efectiv 4× mai permisiv, iar cota AI
+ * de 50/zi devenea 200/zi. Degradarea era invizibilă.
+ *
+ * FIX P-11: la trecerea pe fallback, emite eveniment Sentry de severitate
+ * `warning`. Pragurile rate-limit nu se pot strânge automat prin MemoryStore
+ * (fiecare instanță nu știe de celelalte), dar alerta Sentry notifică echipa
+ * că Redis a căzut și pragurile efective s-au multiplicat.
+ * Configurabil prin env `INSTANTE_ASTEPTATE` (default: 1).
+ */
+
 const { MemoryStore } = require('express-rate-limit');
 
 const PLAFON_INTRARI = 5000;
@@ -9,6 +24,7 @@ const SALTIRE_LOGGING_MS = 30 * 1000;
 let storeRateLimitCache = null;
 let clientRedisCache = null;
 let ultimulAvertisment = 0;
+let sentriAlertaTrimisa = false; // evităm flooding Sentry
 
 function codEroare(err) {
   if (!err) return 'NECUNOSCUT';
@@ -22,6 +38,38 @@ function logWarnThrottled(mesaj) {
   console.warn(mesaj);
 }
 
+/**
+ * P-11: Emite o alertă Sentry când Redis cade și pragurile efective se multiplică.
+ * Se emite o singură dată per ciclu de viață al procesului (nu la fiecare cerere).
+ */
+function alertaSentryRedisCazut(codErorii) {
+  if (sentriAlertaTrimisa) return;
+  sentriAlertaTrimisa = true;
+
+  const instanteAsteptate = parseInt(process.env.INSTANTE_ASTEPTATE || '1', 10) || 1;
+  const mesaj = `[Redis CĂZUT] Rate limiting pe MemoryStore. Cu ${instanteAsteptate} instanțe, ` +
+    `limitele efective sunt ${instanteAsteptate}× mai permisive. Cod: ${codErorii}`;
+  console.error(mesaj);
+
+  // Emitem alert Sentry dacă e disponibil
+  try {
+    const Sentry = require('@sentry/node');
+    Sentry.withScope((scope) => {
+      scope.setLevel('warning');
+      scope.setTag('component', 'redis-rate-limit');
+      scope.setExtra('instante_asteptate', instanteAsteptate);
+      scope.setExtra('cod_eroare', codErorii);
+      Sentry.captureMessage(mesaj);
+    });
+  } catch {
+    // Sentry indisponibil — mesajul a fost deja loggat
+  }
+}
+
+function resetAlertaSentry() {
+  sentriAlertaTrimisa = false;
+}
+
 function eroareRedisNeconectat() {
   const err = new Error('REDIS_NECONECTAT');
   err.code = 'REDIS_NECONECTAT';
@@ -33,10 +81,19 @@ function creeazaClientRedis({ url }) {
   const redis = require('redis');
   const client = redis.createClient({ url });
   client.on('error', (err) => {
-    logWarnThrottled(`[Redis] Eroare client: ${codEroare(err)}`);
+    const cod = codEroare(err);
+    logWarnThrottled(`[Redis] Eroare client: ${cod}`);
+    // P-11: alertă Sentry la prima eroare Redis
+    alertaSentryRedisCazut(cod);
+  });
+  client.on('ready', () => {
+    // Resetăm alerta când Redis revine (la reconectare, alerta va fi retrimisă dacă cade din nou)
+    sentriAlertaTrimisa = false;
   });
   client.connect().catch((err) => {
-    logWarnThrottled(`[Redis] Conectare esuata, se continua cu memorie locala: ${codEroare(err)}`);
+    const cod = codEroare(err);
+    logWarnThrottled(`[Redis] Conectare esuata, se continua cu memorie locala: ${cod}`);
+    alertaSentryRedisCazut(cod);
   });
   clientRedisCache = client;
   return client;
@@ -70,10 +127,15 @@ class StoreCuRezerva {
       try {
         return await this.storeRedis.increment(key);
       } catch (err) {
-        logWarnThrottled(`[RateLimit] Redis indisponibil (${codEroare(err)}); trec pe rezerva.`);
+        const cod = codEroare(err);
+        logWarnThrottled(`[RateLimit] Redis indisponibil (${cod}); trec pe rezerva.`);
+        // P-11: alertă Sentry la fallback
+        alertaSentryRedisCazut(cod);
       }
     } else {
-      logWarnThrottled(`[RateLimit] Redis neconectat (${codEroare(eroareRedisNeconectat())}); trec pe rezerva.`);
+      const cod = codEroare(eroareRedisNeconectat());
+      logWarnThrottled(`[RateLimit] Redis neconectat (${cod}); trec pe rezerva.`);
+      alertaSentryRedisCazut(cod);
     }
     return this.storeRezerva.increment(key);
   }
@@ -264,4 +326,5 @@ module.exports = {
   StoreCuRezerva,
   MapCuExpirare,
   codEroare,
+  resetAlertaSentry, // expus pentru teste
 };

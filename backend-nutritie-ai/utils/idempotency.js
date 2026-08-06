@@ -1,5 +1,19 @@
 'use strict';
 
+/**
+ * P-10: Idempotență fail-closed pe rutele critice.
+ *
+ * PROBLEMA (P-10): `catch { return next(); }` — când Redis pică, protecția
+ * dispare complet și tăcut. Pe o rută de plată sau de scanare AI, asta înseamnă
+ * dublă execuție.
+ *
+ * FIX: Fail-closed pe rutele critice (AI, plăți) — 503.
+ * Fail-open rămâne acceptabil doar pe rute idempotente prin natura lor (GET).
+ *
+ * API: `creeazaMiddlewareIdempotenta({ rutaCritica: true })` pentru rutele
+ * unde o dublă execuție are consecințe reale (AI, plăți).
+ */
+
 const crypto = require('crypto');
 const { creeazaRegistruCheiValori } = require('./storePartajat');
 
@@ -92,7 +106,14 @@ async function revendicaAtomic(registru, key, valoare, ttlMs) {
   return true;
 }
 
-function creeazaMiddlewareIdempotenta({ registru = registruImplicit, ttlMs = TTL_MS } = {}) {
+/**
+ * @param {object} [optiuni]
+ * @param {object} [optiuni.registru] Store Redis/MapCuExpirare
+ * @param {number} [optiuni.ttlMs] TTL al cheii de idempotență
+ * @param {boolean} [optiuni.rutaCritica] Dacă true, store indisponibil → 503.
+ *   Pe GET-uri sau rute idempotente prin natura lor, lasă false (comportament original).
+ */
+function creeazaMiddlewareIdempotenta({ registru = registruImplicit, ttlMs = TTL_MS, rutaCritica = false } = {}) {
   return async function idempotencyMiddleware(req, res, next) {
     if (req.method !== 'POST') return next();
     const contentType = String(req.headers['content-type'] || '').toLowerCase();
@@ -131,7 +152,14 @@ function creeazaMiddlewareIdempotenta({ registru = registruImplicit, ttlMs = TTL
         });
       }
     } catch {
-      // Cand store-ul nu poate raspunde nici prin rezerva locala, cererea continua.
+      // P-10: fail-closed pe rute critice (AI, plăți)
+      if (rutaCritica) {
+        return res.status(503).json({
+          eroare: 'Contorul de analize AI este temporar indisponibil.',
+          cod: 'AI_QUOTA_STORE_UNAVAILABLE',
+        });
+      }
+      // Fail-open pe rute idempotente prin natura lor
       return next();
     }
 
@@ -163,9 +191,11 @@ function creeazaMiddlewareIdempotenta({ registru = registruImplicit, ttlMs = TTL
 }
 
 const idempotencyMiddleware = creeazaMiddlewareIdempotenta();
+const idempotencyMiddlewareCritic = creeazaMiddlewareIdempotenta({ rutaCritica: true });
 
 module.exports = {
   idempotencyMiddleware,
+  idempotencyMiddlewareCritic,
   creeazaMiddlewareIdempotenta,
   namespaceCerere,
   construiesteCheie,

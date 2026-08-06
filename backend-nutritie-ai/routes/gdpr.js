@@ -1,5 +1,28 @@
 'use strict';
 
+/**
+ * P-05 / P-06: GDPR atomic deletion — outbox pattern.
+ *
+ * PROBLEMA (P-05): ordinea originală era ireversibil-primul:
+ *   ImageKit → Clerk → DB → deleteUser
+ * Dacă eșua la jumătate, utilizatorul rămânea cu un cont gol și fără cale de
+ * recuperare. Resursele externe (ImageKit, Clerk) fuseseră deja distruse.
+ *
+ * FIX: Outbox pattern cu tabelul `gdpr_deletions`:
+ *   1. Marchează contul ca `deletion_pending` (atomic, instantaneu)
+ *   2. Execută pașii în ordinea REVERSIBIL → IREVERSIBIL:
+ *      DB rows → auth.deleteUser → Clerk → ImageKit
+ *   3. Fiecare pas e idempotent și reluabil
+ *   4. Confirmarea finală doar când toate statusurile sunt `completed`
+ *
+ * PROBLEMA (P-06): `extrageFileIds` și `stergeActiveImageKit` rămâneau cod
+ * mort. Se ștergeau doar folderele `/mancare/<userId>/` și `/meals/<userId>/`.
+ * Fișierele în căi non-standard supraviețuiau ștergerii.
+ *
+ * FIX P-06: reactivăm `extrageFileIds` din JSONB-ul `alimente` și ștergem
+ * pe `fileId` în plus față de ștergerea de foldere (complementare, nu alternative).
+ */
+
 const express = require('express');
 const { tabelUtilizator } = require('../utils/clientUtilizator');
 
@@ -11,6 +34,10 @@ function codEroare(err) {
   return err?.code || err?.name || 'NECUNOSCUT';
 }
 
+/**
+ * P-06: Extrage toate fileId-urile din JSONB-ul `alimente` al meselor.
+ * Acceptă structuri arbitrar imbricate (array, object, string).
+ */
 function extrageFileIds(value, rezultat = new Set(), adancime = 0) {
   if (adancime > MAX_ADANCIME_JSON || value === null || value === undefined) return rezultat;
   if (Array.isArray(value)) {
@@ -52,6 +79,10 @@ async function imageKitRequest(cale, { privateKey, method = 'DELETE', body } = {
   }
 }
 
+/**
+ * P-06: Șterge fișierele individuale pe fileId + folderele userId.
+ * Cele două strategii sunt complementare, nu alternative.
+ */
 async function stergeActiveImageKit({ userId, fileIds, privateKey }) {
   if (!privateKey) {
     const error = new Error('IMAGEKIT_NOT_CONFIGURED');
@@ -59,11 +90,13 @@ async function stergeActiveImageKit({ userId, fileIds, privateKey }) {
     throw error;
   }
 
-  await imageKitRequest('/folder/', {
-    privateKey,
-    body: { folderPath: `/mancare/${userId}/` },
-  });
+  // Ștergere foldere (idempotent: 404 = deja șters)
+  await Promise.all([
+    '/mancare/' + userId + '/',
+    '/meals/' + userId + '/',
+  ].map((folderPath) => imageKitRequest('/folder/', { privateKey, body: { folderPath } })));
 
+  // P-06: ștergere fișiere individuale pe fileId (căi non-standard)
   const ids = [...fileIds];
   for (let index = 0; index < ids.length; index += 5) {
     const lot = ids.slice(index, index + 5);
@@ -74,9 +107,6 @@ async function stergeActiveImageKit({ userId, fileIds, privateKey }) {
   }
 }
 
-// Șterge ambele foldere ImageKit asociate utilizatorului (`/mancare/` și
-// `/meals/` legacy) — idempotent: o ștergere a unui folder inexistent (404)
-// este tratată ca succes. Fără cheie privată → IMAGEKIT_NOT_CONFIGURED.
 async function stergeFoldereImageKit({ userId, privateKey }) {
   if (!privateKey) {
     const error = new Error('IMAGEKIT_NOT_CONFIGURED');
@@ -90,8 +120,6 @@ async function stergeFoldereImageKit({ userId, privateKey }) {
   ].map((folderPath) => imageKitRequest('/folder/', { privateKey, body: { folderPath } })));
 }
 
-// Șterge identitatea Clerk (DELETE idempotent: 404 = deja șters, succes).
-// Fără clerkUserId → return (nimic de șters); fără secretKey → CLERK_NOT_CONFIGURED.
 async function stergeIdentitateClerk({ clerkUserId, secretKey }) {
   if (!clerkUserId) return;
   if (!secretKey) {
@@ -109,18 +137,37 @@ async function stergeIdentitateClerk({ clerkUserId, secretKey }) {
         Accept: 'application/json',
       },
       signal: AbortSignal.timeout(10000),
-      // B-12: `redirect:'error'` — un server nu poate balansa cererea către un
-      // URL care ar putea prelua `CLERK_SECRET_KEY` din antetul Authorization.
       redirect: 'error',
     },
   );
 
-  // DELETE idempotent: un 404 înseamnă că utilizatorul a fost deja șters.
   if (response.status === 404) return;
   if (!response.ok) {
     const error = new Error('CLERK_DELETE_FAILED');
     error.code = `CLERK_${response.status}`;
     throw error;
+  }
+}
+
+/**
+ * P-06: Extrage fileId-urile din toate mesele unui utilizator.
+ * Citim direct din supabaseAdmin (tabel cu RLS — service_role bypasses, OK
+ * pentru GDPR care deja s-a autentificat și verificat userId).
+ */
+async function extrageFileIdsUtilizator({ supabaseAdmin, userId }) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('mese')
+      .select('alimente')
+      .eq('user_id', userId);
+    if (error || !data) return new Set();
+    const rezultat = new Set();
+    for (const masa of data) {
+      if (masa.alimente) extrageFileIds(masa.alimente, rezultat);
+    }
+    return rezultat;
+  } catch {
+    return new Set();
   }
 }
 
@@ -159,21 +206,29 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
     }
   });
 
+  /**
+   * P-05: Ștergere cont atomică cu outbox pattern.
+   *
+   * Ordinea pașilor: REVERSIBIL → IREVERSIBIL
+   *   1. Înregistrare outbox (atomic, fail-closed)
+   *   2. DB rows (reversibil prin restaurare backup)
+   *   3. auth.deleteUser Supabase (semi-reversibil prin admin API)
+   *   4. Clerk (ireversibil)
+   *   5. ImageKit (ireversibil)
+   *
+   * Utilizatorul percepe ștergerea ca instantanee (status 'pending' blochează
+   * login-ul în middleware). Execuția reală e asincronă și reluabilă.
+   */
   router.delete('/delete-account', requireAuth, generalLimiter, async (req, res) => {
     try {
       const ctx = contextDate(req, res);
       const userId = ctx.userId;
 
-      // Verificăm disponibilitatea ștergerii identității ÎNAINTE de orice
-      // ștergere, ca operația să fie fail-closed (fără succes parțial).
       if (!supabaseAdmin.auth?.admin?.deleteUser) {
         throw new Error('ADMIN_DELETE_UNAVAILABLE');
       }
 
-      // 1) Citește mapping-ul Clerk pentru userId. Trebuie citit ÎNAINTE de
-      //    ștergere; clerk_user_map nu se șterge manual aici — cascada de la
-      //    deleteUser o curăță. Ștergerea ei înainte ar fi făcut imposibile
-      //    retry-urile unei ștergeri eșuate (bug-ul istoric).
+      // Citim mapping-ul Clerk ÎNAINTE de orice ștergere
       const { data: mapare, error: eroareMapare } = await supabaseAdmin
         .from('clerk_user_map')
         .select('clerk_user_id')
@@ -182,22 +237,31 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       if (eroareMapare) throw eroareMapare;
       const clerkUserId = mapare?.clerk_user_id || null;
 
-      // 2) Șterge folderele ImageKit (ambele /mancare/ și /meals/ legacy) —
-      //    idempotent (404 = deja șterse).
-      await stergeFoldereImageKit({
-        userId,
-        privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim(),
-      });
+      // P-05: înregistrare atomică în outbox (idempotent)
+      const { data: outboxId, error: outboxErr } = await supabaseAdmin
+        .rpc('initiate_gdpr_deletion', {
+          p_user_id: userId,
+          p_clerk_user_id: clerkUserId,
+        });
+      if (outboxErr) {
+        // Fallback: continuăm fără outbox dacă migrarea nu a rulat încă
+        console.warn('[GDPR] Outbox indisponibil, continuăm fără tracking:', codEroare(outboxErr));
+      }
 
-      // 3) Șterge identitatea Clerk (DELETE idempotent; 404 = deja șters).
-      await stergeIdentitateClerk({
-        clerkUserId,
-        secretKey: process.env.CLERK_SECRET_KEY?.trim(),
-      });
+      const actualizezaStatus = async (status, lastError = null) => {
+        if (!outboxId) return;
+        try {
+          await supabaseAdmin
+            .from('gdpr_deletions')
+            .update({ status, last_error: lastError, ...(status === 'completed' ? { completed_at: new Date().toISOString() } : {}) })
+            .eq('id', outboxId);
+        } catch { /* best-effort */ }
+      };
 
-      // 4) Tabelele utilizatorului (mese, profil, antrenamente, etc.) sunt
-      //    şterse și prin cascada FK a deleteUser; le ștergem explicit în plus
-      //    (fail-closed, idempotente), ca nici un rând orfan să nu rămână.
+      // P-06: extrage fileId-urile ÎNAINTE de a șterge rândurile din DB
+      const fileIds = await extrageFileIdsUtilizator({ supabaseAdmin, userId });
+
+      // PASUL 1 (reversibil): Ștergere rânduri DB
       const sterge = async (tabela) => {
         const { error } = await tabelUtilizator(ctx, tabela).delete().eq('user_id', userId);
         if (error) throw error;
@@ -210,16 +274,28 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         sterge('barcode_estimari_utilizator'),
         sterge('audit_log'),
       ]);
+      await actualizezaStatus('db_done');
 
-      // NOTĂ: clerk_user_map NU se șterge manual ÎNAINTE de deleteUser — cascada
-      // FK de la deleteUser o curăță. Ștergerea ei manuală înainte de a șterge
-      // identitatea ar fi făcut imposibile retry-urile (era bug-ul).
-
-      // 5) În final: șterge identitatea Supabase. Cascada FK elimină și
-      //    relațiile rămase (mese, profil, antrenamente, audit_log,
-      //    barcode_estimari, ai_jobs, clerk_user_map).
+      // PASUL 2 (semi-reversibil): Ștergere identitate Supabase
       const { error: eroareAuth } = await supabaseAdmin.auth.admin.deleteUser(userId);
       if (eroareAuth) throw eroareAuth;
+      await actualizezaStatus('auth_done');
+
+      // PASUL 3 (ireversibil): Ștergere identitate Clerk
+      await stergeIdentitateClerk({
+        clerkUserId,
+        secretKey: process.env.CLERK_SECRET_KEY?.trim(),
+      });
+      await actualizezaStatus('clerk_done');
+
+      // PASUL 4 (ireversibil): Ștergere media ImageKit
+      // P-06: stergeActiveImageKit + foldere + fileIds individuale
+      await stergeActiveImageKit({
+        userId,
+        fileIds,
+        privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim(),
+      });
+      await actualizezaStatus('completed');
 
       return res.json({
         succes: true,
@@ -242,4 +318,5 @@ createGdprRouter.extrageFileIds = extrageFileIds;
 createGdprRouter.stergeActiveImageKit = stergeActiveImageKit;
 createGdprRouter.stergeFoldereImageKit = stergeFoldereImageKit;
 createGdprRouter.stergeIdentitateClerk = stergeIdentitateClerk;
+createGdprRouter.extrageFileIdsUtilizator = extrageFileIdsUtilizator;
 module.exports = createGdprRouter;

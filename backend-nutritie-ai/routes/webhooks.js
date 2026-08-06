@@ -1,18 +1,34 @@
 'use strict';
 
+/**
+ * P-08: Handler Clerk webhooks — fix deblocare >1000 utilizatori.
+ *
+ * PROBLEMA (P-08): handlerul `user.created` apela
+ * `supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })` și căuta liniar
+ * după email. Peste pagina 1, potrivirea eșua → `createUser` pe email existent
+ * → eroare → 500 → Clerk reîncerca la infinit.
+ *
+ * FIX: RPC `get_auth_user_by_email` în loc de scanare totală. Dacă RPC-ul
+ * eșuează (e.g. nu a fost aplicat încă), se cade pe `createUser` cu tratarea
+ * "email already exists" ca succes idempotent (200, nu 500).
+ *
+ * P-21: `require('crypto')` explicit în loc de global Node.
+ */
+
 const express = require('express');
+const crypto = require('crypto'); // P-21: explicit, nu global
 const { Webhook } = require('svix');
 const { tasks } = require('@trigger.dev/sdk/v3');
 
 /**
  * Determină un id de utilizator Supabase REAL pentru un eveniment Clerk.
  *
- * Fără asta, `data.external_id || crypto.randomUUID()` crea un id inexistent în
- * `auth.users`, iar FK-urile de pe `profil.user_id` și `clerk_user_map.supabase_user_id`
- * erau încălcate → webhook 500 + retry infinit din partea Clerk.
+ * Ordine:
+ * 1. external_id valid în auth.users → îl folosim direct
+ * 2. Email — RPC `get_auth_user_by_email` (fără paginare, O(log n))
+ * 3. Creare auth user real (email_confirm) ca FK-ul să fie satisfăcut
+ *    — tratăm "email deja existent" ca succes idempotent
  *
- * Ordine: (1) external_id valid în auth.users, (2) utilizator existent cu același
- * email, (3) creare auth user real (email_confirm) ca FK-ul să fie satisfăcut.
  * Returnează null dacă niciuna nu reușește.
  */
 async function determinareSauCreareSupabaseUser({ supabaseAdmin, externalId, email }) {
@@ -22,26 +38,26 @@ async function determinareSauCreareSupabaseUser({ supabaseAdmin, externalId, ema
       const { data, error } = await supabaseAdmin.auth.admin.getUserById(externalId);
       if (!error && data?.user) return data.user.id;
     } catch {
-      // continuăm cu următoarele variante
+      // continuăm cu alternativele
     }
   }
 
-  // 2. Email existent în auth.users → idempotență / utilizator deja înregistrat
-  //    (inclusiv cei creați de fluxul Supabase auth din aplicație).
+  // 2. P-08 FIX: RPC `get_auth_user_by_email` fără paginare.
+  //    Funcția e definită în migrarea 20260807000001_fix_identitate_rls.sql.
   if (email) {
     try {
-      const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-      if (!error && Array.isArray(data?.users)) {
-        const gasit = data.users.find((u) => u.email && u.email.toLowerCase() === email.toLowerCase());
-        if (gasit) return gasit.id;
+      const { data: rpcData, error: rpcError } = await supabaseAdmin
+        .rpc('get_auth_user_by_email', { p_email: email });
+      if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+        return rpcData[0].id;
       }
     } catch {
-      // continuăm
+      // RPC indisponibil (migrarea nu a rulat încă) → continuăm
     }
   }
 
-  // 3. Cream auth user-ul real, ca FK-urile să fie valide. Parola e aleatoare:
-  //    autentificarea reală vine de la Clerk, nu de la parolă.
+  // 3. Creare auth user real. Tratăm "email already exists" (23505 / ALREADY_EXISTS)
+  //    ca succes idempotent — returnăm 200, nu 500, ca Clerk să oprească retry-ul.
   if (!email) return null;
   try {
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -49,7 +65,30 @@ async function determinareSauCreareSupabaseUser({ supabaseAdmin, externalId, ema
       email_confirm: true,
       password: crypto.randomUUID().replace(/-/g, '') + 'Aa1!',
     });
-    if (error || !data?.user) return null;
+    if (error) {
+      // Email deja existent → idempotent, refacem căutarea directă
+      if (
+        error.code === '23505' ||
+        (error.message && error.message.toLowerCase().includes('already exists'))
+      ) {
+        // Ultima șansă: căutăm cu listUsers (perPage mic = primii 50)
+        try {
+          const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
+            perPage: 50,
+          });
+          if (!listErr && Array.isArray(listData?.users)) {
+            const gasit = listData.users.find(
+              (u) => u.email && u.email.toLowerCase() === email.toLowerCase(),
+            );
+            if (gasit) return gasit.id;
+          }
+        } catch {
+          // ignorăm
+        }
+      }
+      return null;
+    }
+    if (!data?.user) return null;
     return data.user.id;
   } catch {
     return null;
@@ -107,7 +146,7 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
         const email = data.email_addresses?.[0]?.email_address || null;
         const meta = data.unsafe_metadata || data.public_metadata || {};
 
-        // Verificăm dacă există deja o mapare pentru acest clerk_user_id
+        // Verificăm dacă există deja o mapare pentru acest clerk_user_id (idempotent)
         const { data: mapareExistent } = await supabaseAdmin
           .from('clerk_user_map')
           .select('supabase_user_id')
@@ -117,16 +156,20 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
         let supabaseUserId = mapareExistent?.supabase_user_id;
 
         if (!supabaseUserId) {
-          // Id Supabase REAL (external_id valid / email existent / auth user creat),
-          // ca FK-ul de pe profil și clerk_user_map să nu fie încălcat.
+          // P-08: determinareSauCreareSupabaseUser folosește RPC, nu listUsers(1000)
           supabaseUserId = await determinareSauCreareSupabaseUser({
             supabaseAdmin,
             externalId: data.external_id,
             email,
           });
           if (!supabaseUserId) {
-            return res.status(500).json({
-              eroare: 'Nu s-a putut crea utilizatorul Supabase asociat contului Clerk.',
+            // Returnăm 200 (nu 500) ca Clerk să NU reintre în retry infinit.
+            // Logăm pentru monitorizare manuală.
+            console.error('[Webhook Clerk] Nu s-a putut determina/crea userId Supabase pentru:', clerkUserId);
+            return res.status(200).json({
+              ok: false,
+              type,
+              avertisment: 'userId Supabase nedeterminat — mapare omisă.',
             });
           }
           await supabaseAdmin.from('clerk_user_map').upsert({
@@ -135,8 +178,7 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
           });
         }
 
-        // Upsert în tabela profil — doar coloanele reale din migrarea 20260804000001
-        // (nu există `greutate_kg`, `greutate_tinta_kg`, `*_tinta_g` sau `nume_complet`).
+        // Upsert în tabela profil
         await supabaseAdmin.from('profil').upsert({
           user_id: supabaseUserId,
           nume: `${data.first_name || ''} ${data.last_name || ''}`.trim() || null,
@@ -148,7 +190,6 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
           updated_at: new Date().toISOString(),
         });
 
-        // Apelare task asincron în Trigger.dev dacă este configurat
         if (config.triggerSecretKey) {
           try {
             await tasks.trigger('user-sync', { action: 'user.created', clerkUserId, supabaseUserId, email, meta });
@@ -202,10 +243,17 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
         }
       }
 
+      // P-08: întotdeauna 200 (nu 500) ca Clerk să nu reintre în retry infinit.
       return res.json({ ok: true, type });
     } catch (err) {
       console.error(`[Webhook Clerk] Eroare la procesarea evenimentului ${type}:`, err.message);
-      return res.status(500).json({ eroare: 'Eroare internă la procesarea webhook-ului.' });
+      // P-08: 200 chiar și la erori — Clerk nu mai reîncearcă la infinit.
+      // Eroarea e logată pentru monitorizare.
+      return res.status(200).json({
+        ok: false,
+        type,
+        avertisment: 'Eroare internă la procesarea webhook-ului — verificați logurile.',
+      });
     }
   });
 
