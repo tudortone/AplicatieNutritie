@@ -11,10 +11,22 @@ const { CREDIT_AMOUNTS } = require('../routes/webhooksRevenueCat');
 
 const WEBHOOK_SECRET = 'Bearer test-revenuecat-webhook-secret';
 
-function creeazaSupabaseFake({ soldNou = 50, idempotent = false } = {}) {
+function creeazaSupabaseFake({ soldNou = 50, idempotent = false, clerkMap = {} } = {}) {
   const tranzactii = [];
   return {
     tranzactii,
+    from: (tabela) => ({
+      select: () => ({
+        eq: (col, val) => ({
+          maybeSingle: async () => {
+            if (tabela === 'clerk_user_map' && clerkMap[val]) {
+              return { data: { supabase_user_id: clerkMap[val] }, error: null };
+            }
+            return { data: null, error: null };
+          },
+        }),
+      }),
+    }),
     rpc: jest.fn(async (functie, params) => {
       if (functie === 'aplica_tranzactie_credite') {
         tranzactii.push(params);
@@ -46,7 +58,7 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
         event: {
           id: 'evt_test_001',
           type: 'INITIAL_PURCHASE',
-          app_user_id: 'user-uuid-123',
+          app_user_id: '11111111-1111-4111-8111-111111111111',
           product_id: 'nutri_credits_50',
           price_in_purchased_currency: 4.99,
           currency: 'USD',
@@ -60,7 +72,7 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
 
     // Verificăm că RPC a fost apelat corect
     expect(admin.rpc).toHaveBeenCalledWith('aplica_tranzactie_credite', expect.objectContaining({
-      p_user_id: 'user-uuid-123',
+      p_user_id: '11111111-1111-4111-8111-111111111111',
       p_event_id: 'evt_test_001',
       p_event_type: 'INITIAL_PURCHASE',
       p_delta: 50,
@@ -76,7 +88,7 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
       event: {
         id: 'evt_idempotent_001',
         type: 'INITIAL_PURCHASE',
-        app_user_id: 'user-uuid-456',
+        app_user_id: '22222222-2222-4222-8222-222222222222',
         product_id: 'nutri_credits_150',
       },
     };
@@ -105,7 +117,7 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
     const res = await request(app)
       .post('/api/v1/webhooks/revenuecat')
       .set('Authorization', 'Bearer wrong-secret')
-      .send({ event: { id: 'x', type: 'INITIAL_PURCHASE', app_user_id: 'u' } });
+      .send({ event: { id: 'x', type: 'INITIAL_PURCHASE', app_user_id: '11111111-1111-4111-8111-111111111111' } });
 
     expect(res.status).toBe(401);
     expect(admin.rpc).not.toHaveBeenCalled();
@@ -122,7 +134,7 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
         event: {
           id: 'evt_cancel_001',
           type: 'CANCELLATION',
-          app_user_id: 'user-uuid-789',
+          app_user_id: '33333333-3333-4333-8333-333333333333',
           product_id: 'nutri_credits_50',
         },
       });
@@ -144,7 +156,7 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
         event: {
           id: 'evt_necunoscut_001',
           type: 'INITIAL_PURCHASE',
-          app_user_id: 'user-uuid-101',
+          app_user_id: '44444444-4444-4444-8444-444444444444',
           product_id: 'produs_inexistent',
         },
       });
@@ -165,7 +177,7 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
         event: {
           id: 'evt_nonrenew_001',
           type: 'NON_RENEWING_PURCHASE',
-          app_user_id: 'user-uuid-202',
+          app_user_id: '55555555-5555-4555-8555-555555555555',
           product_id: 'nutri_credits_150',
         },
       });
@@ -186,7 +198,7 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
         event: {
           id: 'evt_ios_150_001',
           type: 'INITIAL_PURCHASE',
-          app_user_id: 'user-uuid-ios-150',
+          app_user_id: '11111111-1111-4111-8111-111111111111',
           product_id: 'nutri_credits_150_ios',
         },
       });
@@ -194,5 +206,32 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
     expect(res.status).toBe(200);
     expect(res.body.crediteDelta).toBe(150);
     expect(res.body.soldNou).toBe(150);
+  });
+
+  test('app_user_id Clerk (ex: user_2abc...) este mapat prin clerk_user_map la un UUID Supabase', async () => {
+    const admin = creeazaSupabaseFake({
+      soldNou: 50,
+      clerkMap: { 'user_2abc_clerk': '11111111-2222-3333-4444-555555555555' },
+    });
+    const app = creeazaApp(admin);
+
+    const res = await request(app)
+      .post('/api/v1/webhooks/revenuecat')
+      .set('Authorization', WEBHOOK_SECRET)
+      .send({
+        event: {
+          id: 'evt_clerk_mapping_001',
+          type: 'INITIAL_PURCHASE',
+          app_user_id: 'user_2abc_clerk',
+          product_id: 'nutri_credits_50',
+        },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(admin.rpc).toHaveBeenCalledWith('aplica_tranzactie_credite', expect.objectContaining({
+      p_user_id: '11111111-2222-3333-4444-555555555555',
+      p_event_id: 'evt_clerk_mapping_001',
+    }));
   });
 });

@@ -79,16 +79,38 @@ function createWebhooksRevenueCatRouter({ supabaseAdmin, config }) {
           return res.json({ ok: true, avertisment: `Produs ${productId} neconfigurat în CREDIT_AMOUNTS.` });
         }
 
+        // Mapează app_user_id prin clerk_user_map dacă nu este deja UUID
+        let targetSupabaseUserId = userId;
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+
+        if (!isUuid) {
+          const { data: mapare } = await supabaseAdmin
+            .from('clerk_user_map')
+            .select('supabase_user_id')
+            .eq('clerk_user_id', userId)
+            .maybeSingle();
+
+          if (mapare?.supabase_user_id) {
+            targetSupabaseUserId = mapare.supabase_user_id;
+          } else {
+            console.error(`[RevenueCat] Utilizatorul Clerk ${userId} nu este mapat la un UUID Supabase.`);
+            return res.status(200).json({
+              ok: false,
+              avertisment: `Utilizatorul ${userId} nu a fost găsit în clerk_user_map.`,
+            });
+          }
+        }
+
         // P-01b: funcție atomică cu UNIQUE pe event_id — idempotent
         const { data: soldNou, error: rpcError } = await supabaseAdmin.rpc(
           'aplica_tranzactie_credite',
           {
-            p_user_id: userId,
+            p_user_id: targetSupabaseUserId,
             p_event_id: eventId,
             p_event_type: eventType,
             p_delta: crediteDelta,
             p_produs_id: productId,
-            p_metadata: { price, currency, raw_event: eventType },
+            p_metadata: { price, currency, raw_event: eventType, original_app_user_id: userId },
           },
         );
 
