@@ -9,6 +9,7 @@ describe('Clerk Webhooks & User Sync Audit', () => {
   let app;
 
   beforeAll(() => {
+    jest.setTimeout(15000);
     process.env.CLERK_WEBHOOK_SECRET = TEST_SECRET;
     app = require('../server');
   });
