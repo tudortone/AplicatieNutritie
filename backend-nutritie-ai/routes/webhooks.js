@@ -1,35 +1,57 @@
 'use strict';
 
 /**
- * P-08: Handler Clerk webhooks — fix deblocare >1000 utilizatori.
- *
- * PROBLEMA (P-08): handlerul `user.created` apela
- * `supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })` și căuta liniar
- * după email. Peste pagina 1, potrivirea eșua → `createUser` pe email existent
- * → eroare → 500 → Clerk reîncerca la infinit.
- *
- * FIX: RPC `get_auth_user_by_email` în loc de scanare totală. Dacă RPC-ul
- * eșuează (e.g. nu a fost aplicat încă), se cade pe `createUser` cu tratarea
- * "email already exists" ca succes idempotent (200, nu 500).
- *
- * P-21: `require('crypto')` explicit în loc de global Node.
+ * P-08: Handler Clerk webhooks — fix deblocare >1000 utilizatori + tratare erori tranzitorii/permanente & dead-letter.
  */
 
 const express = require('express');
-const crypto = require('crypto'); // P-21: explicit, nu global
+const crypto = require('crypto');
 const { Webhook } = require('svix');
 const { tasks } = require('@trigger.dev/sdk/v3');
+const Sentry = require('@sentry/node');
+
+class EroareTranzitorie extends Error {
+  constructor(mesaj, cauza) {
+    super(mesaj);
+    this.name = 'EroareTranzitorie';
+    this.tranzitorie = true;
+    this.cauza = cauza;
+  }
+}
+
+const CODURI_PERMANENTE = new Set([
+  '23505', // unique_violation
+  '23502', // not_null_violation
+  '23503', // foreign_key_violation
+  '23514', // check_violation
+  '22P02', // invalid_text_representation
+  '22001', // string_data_right_truncation
+]);
+
+function estePermanent(err) {
+  return !!(err && err.code && CODURI_PERMANENTE.has(err.code));
+}
+
+async function inregistreazaWebhookEsuat({ supabaseAdmin, clerkUserId, type, motiv, payload }) {
+  try {
+    if (!supabaseAdmin) return false;
+    const { error } = await supabaseAdmin.from('clerk_webhook_esuate').upsert({
+      clerk_user_id: clerkUserId,
+      event_type: type,
+      motiv,
+      payload: payload ? (typeof payload === 'object' ? payload : { data: payload }) : null,
+      created_at: new Date().toISOString(),
+    }, { onConflict: 'clerk_user_id,event_type' });
+
+    return !error;
+  } catch (e) {
+    console.error('[Webhook Clerk] Nu am putut scrie în clerk_webhook_esuate:', e.message);
+    return false;
+  }
+}
 
 /**
  * Determină un id de utilizator Supabase REAL pentru un eveniment Clerk.
- *
- * Ordine:
- * 1. external_id valid în auth.users → îl folosim direct
- * 2. Email — RPC `get_auth_user_by_email` (fără paginare, O(log n))
- * 3. Creare auth user real (email_confirm) ca FK-ul să fie satisfăcut
- *    — tratăm "email deja existent" ca succes idempotent
- *
- * Returnează null dacă niciuna nu reușește.
  */
 async function determinareSauCreareSupabaseUser({ supabaseAdmin, externalId, email }) {
   // 1. external_id dat și valid în auth.users → îl folosim direct.
@@ -37,41 +59,47 @@ async function determinareSauCreareSupabaseUser({ supabaseAdmin, externalId, ema
     try {
       const { data, error } = await supabaseAdmin.auth.admin.getUserById(externalId);
       if (!error && data?.user) return data.user.id;
-    } catch {
-      // continuăm cu alternativele
+    } catch (e) {
+      if (!estePermanent(e)) {
+        throw new EroareTranzitorie('Căutare getUserById eșuată', e);
+      }
     }
   }
 
-  // 2. P-08 FIX: RPC `get_auth_user_by_email` fără paginare.
-  //    Funcția e definită în migrarea 20260807000001_fix_identitate_rls.sql.
+  // 2. RPC `get_auth_user_by_email` fără paginare.
   if (email) {
     try {
       const { data: rpcData, error: rpcError } = await supabaseAdmin
         .rpc('get_auth_user_by_email', { p_email: email });
-      if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+      if (rpcError) {
+        if (!estePermanent(rpcError)) {
+          throw new EroareTranzitorie('RPC get_auth_user_by_email eșuat', rpcError);
+        }
+      } else if (Array.isArray(rpcData) && rpcData.length > 0) {
         return rpcData[0].id;
       }
-    } catch {
-      // RPC indisponibil (migrarea nu a rulat încă) → continuăm
+    } catch (e) {
+      if (e instanceof EroareTranzitorie) throw e;
+      if (!estePermanent(e)) {
+        throw new EroareTranzitorie('RPC get_auth_user_by_email indisponibil', e);
+      }
     }
   }
 
-  // 3. Creare auth user real. Tratăm "email already exists" (23505 / ALREADY_EXISTS)
-  //    ca succes idempotent — returnăm 200, nu 500, ca Clerk să oprească retry-ul.
   if (!email) return null;
+
   try {
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       email_confirm: true,
       password: crypto.randomUUID().replace(/-/g, '') + 'Aa1!',
     });
+
     if (error) {
-      // Email deja existent → idempotent, refacem căutarea directă
       if (
         error.code === '23505' ||
         (error.message && error.message.toLowerCase().includes('already exists'))
       ) {
-        // Ultima șansă: căutăm cu listUsers (perPage mic = primii 50)
         try {
           const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
             perPage: 50,
@@ -82,27 +110,26 @@ async function determinareSauCreareSupabaseUser({ supabaseAdmin, externalId, ema
             );
             if (gasit) return gasit.id;
           }
-        } catch {
-          // ignorăm
+        } catch (e) {
+          throw new EroareTranzitorie('listUsers eșuat pe fallback email deja existent', e);
         }
+      } else if (!estePermanent(error)) {
+        throw new EroareTranzitorie('createUser eșuat', error);
       }
       return null;
     }
+
     if (!data?.user) return null;
     return data.user.id;
-  } catch {
-    return null;
+  } catch (e) {
+    if (e instanceof EroareTranzitorie) throw e;
+    throw new EroareTranzitorie('Eroare internă la determinareSauCreareSupabaseUser', e);
   }
 }
 
-/**
- * Endpoint securizat pentru recepționarea webhook-urilor Clerk și sincronizarea
- * stării utilizatorilor cu baza de date Supabase și Trigger.dev.
- */
 function createWebhooksRouter({ supabaseAdmin, config }) {
   const router = express.Router();
 
-  // Webhook-ul Clerk folosește corpul brut JSON pentru verificarea semnăturii
   router.post('/clerk', express.raw({ type: 'application/json' }), async (req, res) => {
     const webhookSecret = config.clerkWebhookSecret;
 
@@ -146,7 +173,6 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
         const email = data.email_addresses?.[0]?.email_address || null;
         const meta = data.unsafe_metadata || data.public_metadata || {};
 
-        // Verificăm dacă există deja o mapare pentru acest clerk_user_id (idempotent)
         const { data: mapareExistent } = await supabaseAdmin
           .from('clerk_user_map')
           .select('supabase_user_id')
@@ -156,29 +182,37 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
         let supabaseUserId = mapareExistent?.supabase_user_id;
 
         if (!supabaseUserId) {
-          // P-08: determinareSauCreareSupabaseUser folosește RPC, nu listUsers(1000)
           supabaseUserId = await determinareSauCreareSupabaseUser({
             supabaseAdmin,
             externalId: data.external_id,
             email,
           });
+
           if (!supabaseUserId) {
-            // Returnăm 200 (nu 500) ca Clerk să NU reintre în retry infinit.
-            // Logăm pentru monitorizare manuală.
-            console.error('[Webhook Clerk] Nu s-a putut determina/crea userId Supabase pentru:', clerkUserId);
-            return res.status(200).json({
-              ok: false,
+            const scrisDl = await inregistreazaWebhookEsuat({
+              supabaseAdmin,
+              clerkUserId,
               type,
-              avertisment: 'userId Supabase nedeterminat — mapare omisă.',
+              motiv: 'USER_ID_NEDETERMINAT',
+              payload: data,
             });
+            if (scrisDl) {
+              console.warn('[Webhook Clerk] userId Supabase nedeterminat, salvat în dead-letter:', clerkUserId);
+              return res.status(200).json({
+                ok: false,
+                type,
+                avertisment: 'userId Supabase nedeterminat — înregistrat pentru intervenție manuală.',
+              });
+            }
+            return res.status(500).json({ eroare: 'Nu s-a putut scrie în dead-letter.' });
           }
+
           await supabaseAdmin.from('clerk_user_map').upsert({
             clerk_user_id: clerkUserId,
             supabase_user_id: supabaseUserId,
           });
         }
 
-        // Upsert în tabela profil
         await supabaseAdmin.from('profil').upsert({
           user_id: supabaseUserId,
           nume: `${data.first_name || ''} ${data.last_name || ''}`.trim() || null,
@@ -243,27 +277,24 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
         }
       }
 
-      // Confirmare succes către Clerk
       return res.json({ ok: true, type });
     } catch (err) {
       console.error(`[Webhook Clerk] Eroare la procesarea evenimentului ${type}:`, err.message);
 
-      // Trimitere alertă Sentry pentru monitorizare
       try {
-        const Sentry = require('@sentry/node');
         Sentry.withScope((scope) => {
           scope.setLevel('error');
           scope.setTag('webhook', 'clerk');
-          scope.setExtra('event_type', type);
-          scope.setExtra('clerk_user_id', clerkUserId);
+          scope.setTag('webhook.event_type', String(type));
+          scope.setTag('webhook.are_user_id', String(!!clerkUserId));
+          scope.setFingerprint(['clerk-webhook', String(type)]);
           Sentry.captureException(err);
         });
       } catch {
         // Sentry indisponibil
       }
 
-      // P-08: Erorile permanente de date (payload invalid/missing params) -> 200 cu avertisment ca Clerk să oprească retry-ul
-      if (err.isPermanent || err.code === '23505') {
+      if (estePermanent(err)) {
         return res.status(200).json({
           ok: false,
           type,
@@ -271,7 +302,6 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
         });
       }
 
-      // Erorile tranzitorii de infrastructură/DB network -> 500 pentru ca Clerk să reîncerce mai târziu
       return res.status(500).json({
         eroare: 'Eroare tranzitorie de infrastructură la procesarea webhook-ului.',
       });
@@ -283,3 +313,4 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
 
 module.exports = createWebhooksRouter;
 module.exports.determinareSauCreareSupabaseUser = determinareSauCreareSupabaseUser;
+module.exports.EroareTranzitorie = EroareTranzitorie;

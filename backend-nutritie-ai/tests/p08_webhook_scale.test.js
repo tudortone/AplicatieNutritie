@@ -1,20 +1,14 @@
 'use strict';
 
 /**
- * P-08: Test webhook Clerk rezistent la >1000 utilizatori.
- *
- * Verifică că:
- * 1. La >1000 utilizatori, RPC get_auth_user_by_email e apelat (nu listUsers)
- * 2. Același eveniment livrat de 3 ori → o singură înregistrare, 3× răspuns 200
- * 3. La eroarea "email already exists", returnăm 200 (nu 500) → Clerk nu reîncearcă infinit
- * 4. require('crypto') explicit (P-21) — nu globalul Node
+ * P-08: Teste webhook Clerk — scalabilitate, erori permanente/tranzitorii și dead-lettering.
  */
 
 const express = require('express');
 const request = require('supertest');
 const { Webhook } = require('svix');
 const createWebhooksRouter = require('../routes/webhooks');
-const { determinareSauCreareSupabaseUser } = require('../routes/webhooks');
+const { determinareSauCreareSupabaseUser, EroareTranzitorie } = require('../routes/webhooks');
 
 const TEST_SECRET = 'whsec_' + Buffer.from('12345678901234567890123456789012').toString('base64');
 
@@ -29,9 +23,6 @@ function semneaza(payload, msgId = 'msg_test_p08') {
 }
 
 describe('P-08 — Webhook Clerk rezistent la >1000 utilizatori', () => {
-  // -----------------------------------------------------------------------
-  // Test 1: RPC get_auth_user_by_email e apelat în loc de listUsers(1000)
-  // -----------------------------------------------------------------------
   test('determinareSauCreareSupabaseUser apelează RPC, nu listUsers paginat', async () => {
     const rpcApeluri = [];
     const listUsersApeluri = [];
@@ -44,7 +35,7 @@ describe('P-08 — Webhook Clerk rezistent la >1000 utilizatori', () => {
             listUsersApeluri.push('listUsers');
             return { data: { users: [] }, error: null };
           },
-          createUser: async (params) => ({
+          createUser: async () => ({
             data: { user: { id: 'nou-id-creat' } },
             error: null,
           }),
@@ -68,13 +59,9 @@ describe('P-08 — Webhook Clerk rezistent la >1000 utilizatori', () => {
     expect(rezultat).toBe('gasit-prin-rpc');
     expect(rpcApeluri.length).toBe(1);
     expect(rpcApeluri[0].p_email).toBe('test@example.com');
-    // listUsers NU trebuie apelat (P-08 fix)
     expect(listUsersApeluri.length).toBe(0);
   });
 
-  // -----------------------------------------------------------------------
-  // Test 2: Același eveniment livrat de 3 ori → o singură înregistrare, 3× 200
-  // -----------------------------------------------------------------------
   test('user.created livrat de 3 ori → idempotent (3× 200, o singură mapare)', async () => {
     let upsertCount = 0;
     const admin = {
@@ -89,9 +76,8 @@ describe('P-08 — Webhook Clerk rezistent la >1000 utilizatori', () => {
       from(tabela) {
         return {
           select: () => ({
-            eq: (col, val) => ({
+            eq: () => ({
               maybeSingle: async () => {
-                // Simulăm că prima dată nu există mapare, apoi există
                 if (tabela === 'clerk_user_map' && upsertCount > 0) {
                   return { data: { supabase_user_id: 'id-mapat' }, error: null };
                 }
@@ -99,7 +85,7 @@ describe('P-08 — Webhook Clerk rezistent la >1000 utilizatori', () => {
               },
             }),
           }),
-          upsert: async (payload) => {
+          upsert: async () => {
             if (tabela === 'clerk_user_map') upsertCount++;
             return { error: null };
           },
@@ -122,42 +108,89 @@ describe('P-08 — Webhook Clerk rezistent la >1000 utilizatori', () => {
       },
     });
 
-    // Livrăm de 3 ori (Clerk retry behavior)
     for (let i = 0; i < 3; i++) {
       const res = await request(app)
         .post('/api/v1/webhooks/clerk')
         .set(semneaza(payload, `msg_idem_p08_${i}`))
         .set('content-type', 'application/json')
         .send(payload);
-      // P-08: întotdeauna 200
       expect(res.status).toBe(200);
     }
 
-    // Maparea a fost creată o singură dată (prima livrare)
     expect(upsertCount).toBe(1);
   });
 
-  // -----------------------------------------------------------------------
-  // Test 3: "Email already exists" → 200 (nu 500), Clerk nu reîncearcă infinit
-  // -----------------------------------------------------------------------
-  test('user.created cu email deja existent returnează 200, nu 500', async () => {
+  test('Eroare permanentă 23503 → 200 cu avertisment', async () => {
     const admin = {
       auth: {
         admin: {
-          getUserById: async () => ({ data: null, error: new Error('not found') }),
+          getUserById: async (id) => ({ data: { user: { id } }, error: null }),
           listUsers: async () => ({ data: { users: [] }, error: null }),
-          createUser: async () => ({
-            data: null,
-            error: { code: '23505', message: 'User already exists' },
-          }),
+          createUser: async () => ({ data: { user: { id: 'creat' } }, error: null }),
         },
       },
-      rpc: async () => ({ data: [], error: null }),
+      rpc: async () => ({ data: [{ id: 'user_id_valid' }], error: null }),
       from(tabela) {
         return {
           select: () => ({
             eq: () => ({
               maybeSingle: async () => ({ data: null, error: null }),
+            }),
+          }),
+          upsert: async (payload) => {
+            if (tabela === 'profil') {
+              const err = new Error('foreign key constraint violation');
+              err.code = '23503';
+              throw err;
+            }
+            return { error: null };
+          },
+        };
+      },
+    };
+
+    const app = express();
+    app.use('/api/v1/webhooks', createWebhooksRouter({
+      supabaseAdmin: admin,
+      config: { clerkWebhookSecret: TEST_SECRET, triggerSecretKey: null },
+    }));
+
+    const payload = JSON.stringify({
+      type: 'user.created',
+      data: {
+        id: 'user_fk_err',
+        external_id: 'sub_123',
+        email_addresses: [{ email_address: 'fk@example.com' }],
+      },
+    });
+
+    const res = await request(app)
+      .post('/api/v1/webhooks/clerk')
+      .set(semneaza(payload, 'msg_fk_err'))
+      .set('content-type', 'application/json')
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(res.body.avertisment).toContain('Eroare permanentă');
+  });
+
+  test('Eroare tranzitorie de rețea/DB → 500 pentru retry Clerk', async () => {
+    const admin = {
+      auth: {
+        admin: {
+          getUserById: async () => ({ data: null, error: new Error('not found') }),
+          listUsers: async () => ({ data: { users: [] }, error: null }),
+          createUser: async () => ({ data: null, error: null }),
+        },
+      },
+      rpc: async () => ({ data: [], error: null }),
+      from() {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => {
+                throw new Error('Connection lost');
+              },
             }),
           }),
           upsert: async () => ({ error: null }),
@@ -174,37 +207,95 @@ describe('P-08 — Webhook Clerk rezistent la >1000 utilizatori', () => {
     const payload = JSON.stringify({
       type: 'user.created',
       data: {
-        id: 'user_email_existent',
-        email_addresses: [{ email_address: 'existent@example.com' }],
+        id: 'user_net_err',
+        email_addresses: [{ email_address: 'net@example.com' }],
       },
     });
 
     const res = await request(app)
       .post('/api/v1/webhooks/clerk')
-      .set(semneaza(payload, 'msg_existent'))
+      .set(semneaza(payload, 'msg_net_err'))
       .set('content-type', 'application/json')
       .send(payload);
 
-    // P-08: 200 (nu 500) — Clerk nu reîncearcă infinit
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(500);
+    expect(res.body.eroare).toContain('Eroare tranzitorie');
   });
 
-  // -----------------------------------------------------------------------
-  // Test 4: P-21 — require('crypto') explicit
-  // -----------------------------------------------------------------------
-  test('P-21 — webhooks.js importă crypto explicit (nu global)', () => {
+  test('Supabase căzut în determinareSauCreareSupabaseUser → aruncă EroareTranzitorie → 500', async () => {
+    const adminFake = {
+      auth: {
+        admin: {
+          getUserById: async () => { throw new Error('Timeout 504'); },
+          listUsers: async () => { throw new Error('Timeout 504'); },
+          createUser: async () => { throw new Error('Timeout 504'); },
+        },
+      },
+      rpc: async () => { throw new Error('Timeout 504'); },
+    };
+
+    await expect(determinareSauCreareSupabaseUser({
+      supabaseAdmin: adminFake,
+      externalId: 'ext_1',
+      email: 't@example.com',
+    })).rejects.toThrow(EroareTranzitorie);
+  });
+
+  test('Scriere rând în clerk_webhook_esuate (dead-letter) când userId este nedeterminat', async () => {
+    let dlScris = false;
+    const admin = {
+      auth: {
+        admin: {
+          getUserById: async () => ({ data: null, error: null }),
+          listUsers: async () => ({ data: { users: [] }, error: null }),
+          createUser: async () => ({ data: null, error: null }),
+        },
+      },
+      rpc: async () => ({ data: [], error: null }),
+      from(tabela) {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: null, error: null }),
+            }),
+          }),
+          upsert: async (record) => {
+            if (tabela === 'clerk_webhook_esuate') dlScris = true;
+            return { error: null };
+          },
+        };
+      },
+    };
+
+    const app = express();
+    app.use('/api/v1/webhooks', createWebhooksRouter({
+      supabaseAdmin: admin,
+      config: { clerkWebhookSecret: TEST_SECRET, triggerSecretKey: null },
+    }));
+
+    const payload = JSON.stringify({
+      type: 'user.created',
+      data: {
+        id: 'user_no_id_determined',
+      },
+    });
+
+    const res = await request(app)
+      .post('/api/v1/webhooks/clerk')
+      .set(semneaza(payload, 'msg_noid'))
+      .set('content-type', 'application/json')
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(res.body.avertisment).toContain('intervenție manuală');
+    expect(dlScris).toBe(true);
+  });
+
+  test('P-21 — webhooks.js importă crypto explicit', () => {
     const src = require('fs').readFileSync(
       require('path').join(__dirname, '../routes/webhooks.js'),
       'utf8',
     );
     expect(src).toContain("require('crypto')");
-    // Nu se folosește crypto.randomUUID() fără import
-    const liniiRandomUUID = src.split('\n')
-      .filter(l => l.includes('crypto.randomUUID') && !l.startsWith('//') && !l.startsWith(' *'));
-    // Toate apelurile la crypto.randomUUID presupun importul explicit
-    const areImport = src.includes("const crypto = require('crypto')");
-    if (liniiRandomUUID.length > 0) {
-      expect(areImport).toBe(true);
-    }
   });
 });

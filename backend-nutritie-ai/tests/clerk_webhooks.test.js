@@ -28,6 +28,10 @@ function creeazaSupabaseAdminFake({ userCreat = { id: 'supabase-user-creat' } } 
         },
       },
     },
+    rpc: async (nume, params) => {
+      apeluri.push({ tip: 'rpc', nume, params });
+      return { data: [], error: null };
+    },
     from(tabela) {
       return {
         select: () => ({
