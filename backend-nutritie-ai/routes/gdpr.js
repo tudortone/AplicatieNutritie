@@ -102,14 +102,25 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
             privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
             urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/nutriai',
           });
-          ik.listFiles({ searchQuery: `name : "*${userId}*"` }, (err, result) => {
-            if (!err && Array.isArray(result) && result.length > 0) {
-              const fileIds = result.map((f) => f.fileId);
-              ik.bulkDeleteFiles(fileIds, (delErr) => {
-                if (delErr) console.warn('[GDPR] Ștergere fișiere ImageKit eșuată:', delErr.message);
+
+          const fileList = await new Promise((resolve) => {
+            ik.listFiles({ searchQuery: `name : "*${userId}*"` }, (err, res) => {
+              if (err || !Array.isArray(res)) resolve([]);
+              else resolve(res);
+            });
+          });
+
+          if (fileList.length > 0) {
+            const fileIds = fileList.map((f) => f.fileId).filter(Boolean);
+            if (fileIds.length > 0) {
+              await new Promise((resolve) => {
+                ik.bulkDeleteFiles(fileIds, (delErr) => {
+                  if (delErr) console.warn('[GDPR] Ștergere fișiere ImageKit eșuată:', delErr.message);
+                  resolve();
+                });
               });
             }
-          });
+          }
         } catch (ikErr) {
           console.warn('[GDPR] Curățare ImageKit CDN omisă sau neconfigurată:', ikErr.message);
         }

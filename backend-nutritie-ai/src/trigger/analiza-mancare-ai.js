@@ -10,6 +10,17 @@ const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash
 const MAX_IMAGINE_BYTES = 5 * 1024 * 1024;
 const MIME_PERMISE = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
+function detectaMagicBytes(buffer) {
+  if (!buffer || buffer.length < 12) return null;
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return 'image/png';
+  if (
+    buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+    buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+  ) return 'image/webp';
+  return null;
+}
+
 function modelsDeIncercat() {
   const preferat = (process.env.GEMINI_MODEL || '').trim();
   if (!preferat) return [...GEMINI_MODELS];
@@ -78,7 +89,12 @@ exports.analizaMancareTask = task({
         throw new Error('Imaginea depaseste limita de 5 MB.');
       }
 
-      const imagePart = { inlineData: { data: buffer.toString('base64'), mimeType } };
+      const magicMime = detectaMagicBytes(buffer);
+      if (!magicMime || !MIME_PERMISE.has(magicMime)) {
+        throw new Error('Fisierul descarcat nu este o imagine JPEG, PNG sau WEBP (magic bytes nevalide).');
+      }
+
+      const imagePart = { inlineData: { data: buffer.toString('base64'), mimeType: magicMime } };
       let text = null;
       let lastError = null;
       const chei = [

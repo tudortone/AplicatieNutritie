@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { localDayKey } from '../lib/dateUtils';
-import { getTipMasaDupaOra } from '../lib/mealUtils';
+import { getTipMasaDupaOra, insereazaMasaCuPoza } from '../lib/mealUtils';
 import { GramInput } from '../components/ui/GramInput';
 import { ProductSearch } from '../components/food/ProductSearch';
 import { foodProductToAlimentAI } from '../components/food/types';
@@ -62,6 +62,9 @@ export default function CameraScreen() {
   const isCapturingRef = useRef(false);
   // URL-ul pozei incarcate pe ImageKit CDN dupa un scan reusit (salvat in alimente JSONB).
   const imageKitUrlRef = useRef<string | null>(null);
+  // Promisiunea upload-ului ImageKit in curs: `adaugaInJurnal` o asteapta inainte
+  // de salvare, ca poza sa fie gata (altfel masa se salva fara poza - race).
+  const imageKitUploadRef = useRef<Promise<unknown> | null>(null);
   const router = useRouter();
 
   const anuleazaScanarea = useCallback(() => {
@@ -224,7 +227,7 @@ export default function CameraScreen() {
         // Dupa un scan REUSIT, incarcam poza pe ImageKit CDN (nu aruncam gunoi pe CDN
         // pentru poze esuate). URL-ul ajunge in masa salvata (campul alimente, JSONB).
         imageKitUrlRef.current = null;
-        uploadImageToImageKit(imageUri)
+        imageKitUploadRef.current = uploadImageToImageKit(imageUri)
           .then((r) => {
             imageKitUrlRef.current = r.url;
           })
@@ -388,6 +391,21 @@ export default function CameraScreen() {
     try {
       const now = new Date();
 
+      // Asteapta upload-ul ImageKit daca e in curs, ca URL-ul pozei sa fie gata
+      // la salvare (elimina race-ul dintre analiza si "Adauga in jurnal").
+      if (imageKitUploadRef.current) {
+        try {
+          await imageKitUploadRef.current;
+        } catch {}
+        imageKitUploadRef.current = null;
+      }
+      // Fallback-ul upload-ului întoarce URI local (file://), inaccesibil pe alt
+      // dispozitiv: persistam doar URL-uri https de pe CDN-ul ImageKit.
+      const imagineUrl =
+        imageKitUrlRef.current && imageKitUrlRef.current.startsWith('https')
+          ? imageKitUrlRef.current
+          : null;
+
       // FIX 2.5: convertim din per-100g în AlimentDetaliat cu valori absolute
       const alimente = rezultat.map((r) => {
         const f = r.estimare_grame / 100;
@@ -399,8 +417,8 @@ export default function CameraScreen() {
           carbohidrati: Math.round((r.carbohidrati_per_100g ?? 0) * f),
           grasimi: Math.round((r.grasimi_per_100g ?? 0) * f),
           fibre: 0,
-          // Poza scanului, incarcata pe ImageKit CDN (camp JSONB flexibil, fara migrare).
-          ...(imageKitUrlRef.current ? { imageUrl: imageKitUrlRef.current } : {}),
+          // Poza scanului, incarcata pe ImageKit CDN (doar URL-uri https).
+          ...(imagineUrl ? { imageUrl: imagineUrl } : {}),
         };
       });
 
@@ -410,7 +428,7 @@ export default function CameraScreen() {
       const totalCarbohidrati = alimente.reduce((s, a) => s + a.carbohidrati, 0);
 
       // FIX 2.1 + 2.4: scriem DIRECT în Supabase, cu data/ora locale
-      const { error } = await supabase.from('mese').insert({
+      const { error } = await insereazaMasaCuPoza(supabase, {
         user_id: session.user.id,
         nume: rezultat.map((r) => `${r.nume} (${Math.round(r.estimare_grame)}g)`).join(', '),
         calorii: totalCalorii,
@@ -419,7 +437,7 @@ export default function CameraScreen() {
         carbohidrati: totalCarbohidrati,
         fibre: 0,
         tip_masa: getTipMasaDupaOra(now), // FIX: nu mai hardcoda 'gustare'
-        imagine_url: imageKitUrlRef.current || null,
+        imagine_url: imagineUrl,
         alimente,
         data: localDayKey(now),
       });
