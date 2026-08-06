@@ -1,31 +1,57 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, AlertTriangle, FileText, Landmark, Mail, Building2, Scale } from 'lucide-react-native';
+import { ArrowLeft, FileText, Landmark, Mail, Building2, Scale, Calendar, ChevronRight } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTheme } from '../context/ThemeContext';
+import { getLegalUrls } from '../lib/legalUrls';
 
-// ATENȚIE: acest ecran este un schelet — textele legale NU sunt revizuite juridic.
-// Înainte de lansare trebuie completate denumirea operatorului, jurisdicția și
-// contactul, apoi întregul conținut revizuit de un specialist.
+// ATENȚIE: conținutul juridic este informativ și principalul document obligatoriu
+// (Termenii și Politica de Confidențialitate) se deschide extern din documentele
+// legale oficiale configurate prin EXPO_PUBLIC_TERMS_URL / EXPO_PUBLIC_PRIVACY_URL.
+
+// Adresa oficială de suport pentru relații cu utilizatorii.
+const EMAIL_SUPORT = 'suport@nutriai.app';
 
 export default function LegalScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
-  const placeholder = (text: string) => (
-    <Text style={[styles.placeholderText, { color: colors.textSecondary }]}>{text}</Text>
-  );
-
-  const section = (icon: React.ReactNode, title: string, children: React.ReactNode) => (
-    <Animated.View entering={FadeInDown.duration(450).delay(80)} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+  const section = (icon: React.ReactNode, title: string, children: React.ReactNode, delay = 80) => (
+    <Animated.View entering={FadeInDown.duration(450).delay(delay)} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={[styles.cardHeader, { borderBottomColor: colors.border }]}>
         <View style={[styles.cardIcon, { backgroundColor: colors.accent + '1F' }]}>{icon}</View>
         <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{title}</Text>
       </View>
       <View style={styles.cardBody}>{children}</View>
     </Animated.View>
+  );
+
+  const deschideDocument = async (tip: 'terms' | 'privacy', nume: string) => {
+    try {
+      const { termsUrl, privacyUrl } = getLegalUrls();
+      const url = tip === 'terms' ? termsUrl : privacyUrl;
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Document indisponibil', `Documentul „${nume}” nu este momentan disponibil.`);
+    }
+  };
+
+  const actiuneDocument = (icon: React.ReactNode, titlu: string, subtitlu: string, urlKey: 'terms' | 'privacy') => (
+    <Pressable
+      style={({ pressed }) => [styles.actionRow, { borderColor: colors.border, opacity: pressed ? 0.6 : 1 }]}
+      onPress={() => deschideDocument(urlKey, titlu)}
+      accessibilityRole="button"
+      accessibilityLabel={titlu}
+    >
+      <View style={[styles.actionIcon, { backgroundColor: colors.accent + '1F' }]}>{icon}</View>
+      <View style={styles.actionBody}>
+        <Text style={[styles.actionTitle, { color: colors.textPrimary }]}>{titlu}</Text>
+        <Text style={[styles.actionSub, { color: colors.textSecondary }]}>{subtitlu}</Text>
+      </View>
+      <ChevronRight size={18} color={colors.textSecondary} />
+    </Pressable>
   );
 
   return (
@@ -64,60 +90,56 @@ export default function LegalScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 24) + 24 }]}
       >
-        {/* Avertisment roșu: documente nefinalizate */}
-        <Animated.View
-          entering={FadeInDown.duration(400)}
-          style={[styles.warningBanner, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}
-        >
-          <AlertTriangle size={22} color={colors.danger} />
-          <View style={styles.warningBody}>
-            <Text style={[styles.warningTitle, { color: colors.danger }]}>DOCUMENTE NEFINALIZATE</Text>
-            <Text style={[styles.warningText, { color: colors.textSecondary }]}>
-              Aceste texte sunt un schelet și nu au fost revizuite juridic. Datele operatorului, jurisdicția și
-              conținutul complet trebuie adăugate și aprobate înainte de publicare. Nu distribuie aplicația cu acest
-              ecran în forma actuală.
-            </Text>
-          </View>
-        </Animated.View>
+        {actiuneDocument(
+          <FileText size={18} color={colors.accent} />,
+          'Termeni și Condiții',
+          'Deschide documentul complet în browser',
+          'terms'
+        )}
+
+        {actiuneDocument(
+          <Scale size={18} color={colors.accent} />,
+          'Politica de Confidențialitate',
+          'Deschide documentul complet în browser',
+          'privacy'
+        )}
 
         {section(
           <Building2 size={18} color={colors.accent} />,
-          'Operator / Denumirea persoanei juridice',
-          placeholder('[De completat] Denumirea completă a operatorului, forma juridică și numărul de înregistrare.')
+          'Operator',
+          <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
+            NutriPre S.R.L., operatorul aplicației, este responsabil de prelucrarea datelor personale.
+          </Text>,
+          120
         )}
 
         {section(
           <Landmark size={18} color={colors.accent} />,
           'Jurisdicție',
-          placeholder('[De completat] Sediul social, țara de înregistrare, limba aplicabilă și instanța competentă.')
+          <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
+            Documentele sunt guvernate de legislația română și, unde este aplicabil, de Regulamentul (UE) 2016/679
+            (GDPR). Litigiile se soluționează de instanțele competente din România.
+          </Text>,
+          160
         )}
 
         {section(
           <Mail size={18} color={colors.accent} />,
-          'Contact',
-          placeholder('[De completat] Adresa de e-mail și numărul de telefon ale operatorului pentru relații cu utilizatorii.')
+          'Contact & Suport',
+          <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
+            Pentru relații cu utilizatorii, sesizări și întrebări despre datele tale personale, scrie la{' '}
+            {EMAIL_SUPORT}.
+          </Text>,
+          200
         )}
 
         {section(
-          <FileText size={18} color={colors.accent} />,
-          'Termeni și Condiții de Utilizare',
+          <Calendar size={18} color={colors.accent} />,
+          'Data efectivă',
           <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
-            [De completat] Condițiile de utilizare a aplicației, inclusiv limitarea răspunderii pentru informațiile
-            furnizate, regulile privind abonamentele și drepturile de proprietate intelectuală. Textul provizoriu:
-            utilizarea aplicației presupune acceptarea prezentelor condiții; conținutul are scop informativ și nu
-            înlocuiește sfatul medical profesional.
-          </Text>
-        )}
-
-        {section(
-          <Scale size={18} color={colors.accent} />,
-          'Politica de Confidențialitate',
-          <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
-            [De completat] Modul în care colectăm, procesăm și stocăm datele personale (inclusiv datele de sănătate),
-            temeiul legal al procesării, perioada de stocare și drepturile utilizatorilor conform reglementărilor
-            aplicabile. Textul provizoriu: datele tale sunt folosite doar pentru funcționalitățile aplicației și nu
-            sunt vândute terților.
-          </Text>
+            Prezentul document este efectiv începând cu 1 august 2026.
+          </Text>,
+          240
         )}
       </ScrollView>
     </View>
@@ -149,18 +171,25 @@ const styles = StyleSheet.create({
 
   scroll: { paddingHorizontal: 20, paddingTop: 16 },
 
-  warningBanner: {
+  actionRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
     padding: 16,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    marginBottom: 20,
+    marginBottom: 12,
   },
-  warningBody: { flex: 1 },
-  warningTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 1, marginBottom: 6 },
-  warningText: { fontSize: 13, lineHeight: 19 },
+  actionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBody: { flex: 1 },
+  actionTitle: { fontSize: 15, fontWeight: '800' },
+  actionSub: { fontSize: 12, marginTop: 2 },
 
   card: {
     borderRadius: 20,
@@ -185,6 +214,5 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 15, fontWeight: '800', flex: 1 },
   cardBody: { padding: 16 },
 
-  placeholderText: { fontSize: 13, lineHeight: 19, fontStyle: 'italic' },
-  bodyText: { fontSize: 13, lineHeight: 20 },
+  bodyText: { fontSize: 14, lineHeight: 21 },
 });

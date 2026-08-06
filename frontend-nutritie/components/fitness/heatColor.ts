@@ -47,20 +47,20 @@ export function isOutline(fill?: string): boolean {
  * Culoare pentru mușchi NEANTRENAT (intensitate 0 / lipsă de date).
  * Un corp neantrenat primeste o culoare neutra, nu albastru "odihnit".
  */
-export const COLOR_INACTIVE = '#3F3F46';
+export const COLOR_INACTIVE = '#2A323D';
 
 /** Culoare de repaus — activitate prezentă, dar foarte mică */
 export const COLOR_REST = '#38BDF8';
 export const COLOR_STAB = '#FACC15';
 export const COLOR_SECONDARY = '#FF7B00';
-export const COLOR_PRIMARY = '#FF003C';
+export const COLOR_PRIMARY = '#FF0033';
 
 /** Stops: t, culoare hex, RGB tuple */
 const STOPS: { t: number; hex: string; rgb: [number, number, number] }[] = [
   { t: 0.00, hex: COLOR_REST,      rgb: [56, 189, 248] },  // Albastru
   { t: 0.40, hex: COLOR_STAB,      rgb: [250, 204, 21] },   // Galben
   { t: 0.75, hex: COLOR_SECONDARY, rgb: [255, 123, 0] },    // Portocaliu
-  { t: 1.00, hex: COLOR_PRIMARY,   rgb: [255, 0, 60] },     // Roșu
+  { t: 1.00, hex: COLOR_PRIMARY,   rgb: [255, 0, 51] },     // Roșu
 ];
 
 function lerp(a: number, b: number, t: number): number {

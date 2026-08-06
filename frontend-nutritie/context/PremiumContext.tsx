@@ -110,9 +110,10 @@ export function PremiumProvider({ children, appUserId, isAdmin = false }: { chil
   }, []);
 
   // B-09: entitlement-ul este verificat si pe server (revenuecat-secret), nu doar
-  // local. Fail-open la eroare de retea/indisponibilitate; downgrade DOAR la un
-  // verdict explicit `premium:false` din partea serverului. Astfel un eventual
-  // flag local fals nu poate acorda singur privilegii de premium.
+  // local. Fail-closed: premium-ul se acorda DOAR pe un verdict afirmativ
+  // `premium:true` din partea serverului. Daca serverul e indisponibil, raspunde
+  // cu eroare sau cu altceva, starea ramane `false` — flag-ul local nu poate
+  // acorda singur privilegii de premium.
   const verificaServerPremium = useCallback(async (forAppUserId: string | null) => {
     try {
       const { data } = await supabase.auth.getSession();
@@ -135,21 +136,22 @@ export function PremiumProvider({ children, appUserId, isAdmin = false }: { chil
       setLoading(true);
       const customer = await PurchasesApi.getCustomerInfo();
       const premiumLocal = hasPremium(customer);
-      setIsPremium(premiumLocal);
+      // Fail-closed: fara entitlement local — nu e premium. Cu entitlement local,
+      // premium-ul ramane activ DOAR daca serverul (revenuecat-secret) raspunde
+      // afirmativ `premium:true`. Server indisponibil/eroare => nu e premium.
+      if (!premiumLocal) {
+        setIsPremium(false);
+      } else {
+        const server = await verificaServerPremium(appUserId);
+        setIsPremium(server?.premium === true);
+      }
 
       const offerings = await PurchasesApi.getOfferings();
       setSubscriptionPackages(offerings.current?.availablePackages ?? []);
       setCreditProducts(await PurchasesApi.getProducts([...CREDIT_PRODUCT_IDS], PRODUCT_CATEGORY.NON_SUBSCRIPTION));
-
-      if (premiumLocal) {
-        const server = await verificaServerPremium(appUserId);
-        if (server && server.premium !== true) {
-          setIsPremium(false);
-          console.warn('[Premium] SDK local raporteaza premium, dar serverul revendica premium=false — downgrade server-side.');
-        }
-      }
     } catch {
-      // offline / configure eșuat — starea rămâne cea anterioară
+      // offline / configure eșuat — fail-closed: nu acordam premium pe starea anterioara
+      setIsPremium(false);
     } finally {
       setLoading(false);
     }
@@ -165,8 +167,10 @@ export function PremiumProvider({ children, appUserId, isAdmin = false }: { chil
       return;
     }
 
-    PurchasesApi.addCustomerInfoUpdateListener((info) => {
-      setIsPremium(hasPremium(info));
+    PurchasesApi.addCustomerInfoUpdateListener(() => {
+      // Orice schimbare de customer info declanseaza un refresh complet, care
+      // re-verifica premium-ul prin server (fail-closed), nu doar local.
+      refresh();
     });
 
     if (appUserId) {

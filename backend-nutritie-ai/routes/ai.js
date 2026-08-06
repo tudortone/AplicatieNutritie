@@ -13,6 +13,7 @@ const { valideazaIngrediente } = require('../utils/promptSafety');
 const { construiesteGazdePermise, creeazaValideazaUrlImagine } = require('../utils/valideazaUrlImagine');
 const { numarModel, NUME_FURNIZORI_AI } = require('../services/ai/vision');
 const { EroareAiClient } = require('../services/ai/chat');
+const { createClient } = require('@supabase/supabase-js');
 
 /**
  * Rute AI (analiza foto, chat, estimare text, corectie vizual+text) + orfanele
@@ -39,6 +40,13 @@ function createAiRouter({
 }) {
   // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
   const router = express.Router();
+
+  // Client admin (service_role) exclusiv pentru tabelele backend-only: `ai_jobs`
+  // nu are politici de insert/update (revoke pe anon/authenticated), deci singura
+  // cale corecta prin care backendul scrie job-uri e clientul privilegiat.
+  const supabaseAdmin = config?.supabase?.url && config?.supabase?.serviceRoleKey
+    ? createClient(config.supabase.url, config.supabase.serviceRoleKey)
+    : null;
 
   // ==========================================
   // IMAGEKIT AUTHENTICATION ENDPOINT
@@ -91,13 +99,35 @@ function createAiRouter({
         return res.status(400).json({ eroare: verificare.eroare });
       }
 
+      // JOB-UL se creeaza in `ai_jobs` (status `queued`) iar task-ul Trigger primeste
+      // `jobId` in payload ca sa isi actualizeze propria stare (processing/completed/failed).
+      let jobId = null;
+      if (supabaseAdmin) {
+        const { data: rand, error: insertErr } = await supabaseAdmin
+          .from('ai_jobs')
+          .insert({ user_id: req.user.id, status: 'queued' })
+          .select('id')
+          .single();
+        if (!insertErr) jobId = rand?.id || null;
+      }
+
       const handle = await tasks.trigger('analiza-mancare-ai', {
         imageUrl: verificare.url,
         tipMasa: tipMasa || 'Pranz',
         userId: req.user.id,
+        jobId,
       });
 
-      return res.json({
+      // Asocim trigger_run_id-ul cu job-ul creat.
+      if (jobId && supabaseAdmin) {
+        await supabaseAdmin
+          .from('ai_jobs')
+          .update({ trigger_run_id: handle.id })
+          .eq('id', jobId);
+      }
+
+      return res.status(202).json({
+        jobId,
         succes: true,
         taskId: handle.id,
         status: 'pending',

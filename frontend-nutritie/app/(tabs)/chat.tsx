@@ -112,6 +112,49 @@ function parseMealProposal(text: any): MealProposal | null {
   return null;
 }
 
+/**
+ * Rută dedicată de meal-intent, invocată ÎNAINTE de POST /chat.
+ * POST către "/api/log-food-from-chat" cu Authorization Bearer + JSON { mesaj },
+ * apoi parsează răspunsul server (format MEAL_PROPOSAL).
+ * Aruncă la status != 2xx sau dacă răspunsul nu conține o propunere validă.
+ */
+async function cerePropunereMasa(mesaj: string, accessToken: string): Promise<MealProposal> {
+  const response = await fetch(buildApiUrl('/log-food-from-chat'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ mesaj }),
+  });
+
+  if (!response.ok) {
+    let statusText: string | null = null;
+    try {
+      const erori = await response.json();
+      statusText = erori?.eroare || erori?.message || erori?.raspun || null;
+    } catch {
+      // Corpul de eroare nu e JSON; folosim mesajul generic dedesubt.
+    }
+    throw new Error(
+      statusText || `Serverul nu a putut genera propunerea de masă (status ${response.status}).`,
+    );
+  }
+
+  let date: any = null;
+  try {
+    date = await response.json();
+  } catch {
+    date = null;
+  }
+
+  const propunere = parseMealProposal(date) || parseMealProposal(date?.raspuns);
+  if (!propunere || propunere.type !== 'MEAL_PROPOSAL') {
+    throw new Error('Serverul nu a returnat o propunere de masă validă.');
+  }
+  return propunere;
+}
+
 const isMealLogIntent = (text: string) => {
   const lower = text.toLowerCase().trim();
   // Aliniat cu regex-ul din backend (/api/chat): "am mâncat"/"am consumat" se caută
@@ -257,6 +300,28 @@ export default function ChatScreen() {
     const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
 
     try {
+      // Meal-intent ESTE rutat direct catre propunerea de masa ANT de a ajunge la
+      // /chat general. Persistarea ramane la confirmarea explicita a utilizatorului
+      // (confirmMealProposal); aici doar obtinem propunerea si o afisam.
+      if (isMealLogIntent(mesajText)) {
+        try {
+          const propunere = await cerePropunereMasa(mesajText, session.access_token);
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setMealProposal(propunere);
+          setMealProposalVisible(true);
+          setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: "Am identificat alimentele! Apasă pe butonul de confirmare care a apărut pe ecran." }]);
+          return;
+        } catch (errMeal) {
+          console.warn('Eroare rută dedicată de masă:', (errMeal as any)?.message || errMeal);
+          setMesaje(prev => [...prev, {
+            id: newMsgId(),
+            role: 'ai',
+            text: (errMeal as any)?.message || "Nu am putut pregăti propunerea de masă. Încearcă din nou, te rog.",
+          }]);
+          return;
+        }
+      }
+
       const istoricActivat = [...mesajeRef.current, { role: 'user' as const, text: mesajText }];
       const raspuns = await fetch(buildApiUrl('/chat'), {
         method: 'POST',

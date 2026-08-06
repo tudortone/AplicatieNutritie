@@ -18,16 +18,28 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
   const [seIncarca, setSeIncarca] = useState(false);
   const [trimis, setTrimis] = useState(false);
 
+  // Sanitize feedback-ul ÎNAINTE de trimitere: eliminăm textul brut sensibil
+  // (JWT, email, telefon) și limităm lungimea — NU trimitem niciodată date raw.
+  const sanitizeFeedback = (value: string): string =>
+    value
+      .trim()
+      .slice(0, 2000)
+      .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[JWT_REDACTED]')
+      .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[EMAIL_REDACTED]')
+      .replace(/\+?\d[\d\s().-]{7,}\d/g, '[PHONE_REDACTED]');
+
   const trimiteFeedback = async () => {
-    if (!mesaj.trim()) return;
     setSeIncarca(true);
 
     try {
-      // Trimitem mesajul de feedback prin API-ul Sentry
-      Sentry.captureMessage(`[USER_FEEDBACK] ${mesaj.trim()}`, {
-        level: 'info',
-        tags: { type: 'user_feedback' },
-      });
+      const sanitized = sanitizeFeedback(mesaj);
+      if (!sanitized) {
+        setSeIncarca(false);
+        return;
+      }
+
+      // Trimitem doar mesajul sanitizat prin API-ul Sentry (nu text raw).
+      Sentry.captureFeedback({ message: sanitized });
 
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       setTrimis(true);
@@ -37,7 +49,7 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
         setSeIncarca(false);
         onClose();
       }, 1500);
-    } catch (e) {
+    } catch {
       setSeIncarca(false);
       Alert.alert('Eroare', 'Nu s-a putut trimite feedback-ul. Încearcă din nou.');
     }
@@ -97,6 +109,10 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
               onChangeText={setMesaj}
             />
 
+            <Text style={[styles.notaSansibilitate, { color: colors.textSecondary }]}>
+              Nu include parole, date medicale, informații de plată sau tokenuri.
+            </Text>
+
             <TouchableOpacity
               style={[styles.btn, (!mesaj.trim() || seIncarca) && { opacity: 0.5 }]}
               onPress={trimiteFeedback}
@@ -130,6 +146,7 @@ const styles = StyleSheet.create({
   closeBtn: { padding: 4 },
   subtitlu: { fontSize: 13, lineHeight: 18 },
   input: { borderRadius: 16, borderWidth: 1, padding: 14, minHeight: 110, fontSize: 14 },
+  notaSansibilitate: { fontSize: 11, fontStyle: 'italic', marginTop: 6, marginBottom: 4 },
   btn: { borderRadius: 16, overflow: 'hidden', marginTop: 4 },
   btnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, gap: 8 },
   btnText: { fontSize: 16, fontWeight: '900' },

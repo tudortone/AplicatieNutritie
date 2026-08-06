@@ -19,7 +19,7 @@ import { themes, themeDisplayNames, ThemeName } from '../../constants/theme';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useAuth } from '../../context/AuthContext';
 import { useBiometrics } from '../../hooks/useBiometrics';
-import { useHealthSync, HEALTH_PROVIDERS } from '../../hooks/useHealthSync';
+import { useHealthSync } from '../../hooks/useHealthSync';
 import { useNotificationBanner } from '../../context/NotificationBannerContext';
 import { useNotify } from '../../hooks/useNotify';
 import { useGamificare } from '../../hooks/useGamificare';
@@ -31,6 +31,7 @@ import { FeedbackModal } from '../../components/ui/FeedbackModal';
 import { WatchSelectorSheet, WatchSelectorSheetRef } from '../../components/ui/WatchSelectorSheet';
 import { API_URL } from '../../constants/config';
 import { API_PREFIX } from '../../lib/api';
+import { getLegalUrls } from '../../lib/legalUrls';
 
 // Adresa oficiala de suport pentru sesizari si suport utilizatori.
 const EMAIL_SUPORT = 'suport@nutriai.app';
@@ -41,7 +42,7 @@ export default function ProfilScreen() {
   const { colors, themeName, setTheme } = useTheme();
   const { enabled: notificationsEnabled, toggleReminders, isExpoGo } = useNotifications();
   const { isSupported, biometricType, isEnabled, toggleBiometric } = useBiometrics();
-  const { isEnabled: healthSyncEnabled, platformName, toggleSync: toggleHealthSync, selectedProvider, providerInfo } = useHealthSync();
+  const { isEnabled: healthSyncEnabled, platformName, toggleSync: toggleHealthSync, providerInfo } = useHealthSync();
   const watchSheetRef = React.useRef<WatchSelectorSheetRef>(null);
   const { session, user, loadingAuth } = useAuth();
   const { showBanner } = useNotificationBanner();
@@ -263,6 +264,23 @@ export default function ProfilScreen() {
       return;
     }
     await Linking.openURL(`mailto:${EMAIL_SUPORT}`);
+  };
+
+  // Deschide un document legal oficial (Termeni / Confidențialitate) în
+  // browser extern. Dacă URL-ul nu e configurat sau e invalid, afișăm fallback.
+  const openLegalUrl = async (tip: 'terms' | 'privacy') => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const { termsUrl, privacyUrl } = getLegalUrls();
+      await Linking.openURL(tip === 'terms' ? termsUrl : privacyUrl);
+    } catch {
+      Alert.alert(
+        'Document indisponibil',
+        tip === 'terms'
+          ? 'Termenii și Condițiile nu sunt momentan disponibile.'
+          : 'Politica de Confidențialitate nu este momentan disponibilă.'
+      );
+    }
   };
 
   if (checkingSession) {
@@ -894,6 +912,45 @@ export default function ProfilScreen() {
                 <View style={[styles.inputContent, { flex: 1 }]}>
                   <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Termeni & Confidențialitate</Text>
                   <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Condiții de utilizare și politică de confidențialitate</Text>
+                </View>
+                <ChevronRight size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <View style={styles.separator} />
+
+              {/* Butoane directe către documentele legale oficiale (browser extern) */}
+              <TouchableOpacity
+                style={[styles.inputRow, { alignItems: 'center' }]}
+                onPress={() => openLegalUrl('terms')}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Deschide Termenii și Condițiile"
+              >
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <FileText size={18} color={colors.accent} />
+                </View>
+                <View style={[styles.inputContent, { flex: 1 }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Termeni</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Deschide Termenii și Condițiile de utilizare</Text>
+                </View>
+                <ChevronRight size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <View style={styles.separator} />
+
+              <TouchableOpacity
+                style={[styles.inputRow, { alignItems: 'center' }]}
+                onPress={() => openLegalUrl('privacy')}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Deschide Politica de Confidențialitate"
+              >
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <ShieldCheck size={18} color={colors.accent} />
+                </View>
+                <View style={[styles.inputContent, { flex: 1 }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>Confidențialitate</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Deschide Politica de Confidențialitate</Text>
                 </View>
                 <ChevronRight size={18} color={colors.textSecondary} />
               </TouchableOpacity>

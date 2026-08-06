@@ -2,7 +2,8 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator, Pressable, Text, View, StyleSheet, TouchableOpacity,
-  TextInput, ScrollView, Dimensions, Alert, KeyboardAvoidingView, Platform, Modal
+  TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform, Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -34,11 +35,12 @@ import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInp
 import { uploadImageToImageKit } from '@/lib/imagekit';
 import { optimizeImageBeforeUpload } from '@/lib/imageOptimizer';
 
-const { width, height } = Dimensions.get('window');
-const SCAN_BOX_SIZE = width * 0.78;
-
 export default function CameraScreen() {
   const { colors } = useTheme();
+  const { width, height } = useWindowDimensions();
+  // Dimensiuni reactive (fold/unfold pe dispozitive); scan box limitat la 48%
+  // din inaltime sau 360px ca sa nu depaseasca ecranul pe telefoane mici/landscape.
+  const scanBoxSize = Math.round(Math.min(width * 0.78, height * 0.48, 360));
   const { t } = useTranslation();
   const { session } = useAuth();
   const insets = useSafeAreaInsets();
@@ -81,7 +83,13 @@ export default function CameraScreen() {
       let active = true;
       const fetchStatus = async () => {
         try {
-          const res = await fetch(`${API_URL}${API_PREFIX}/ai-status`);
+          const res = await fetch(`${API_URL}${API_PREFIX}/ai-status`, {
+            headers: {
+              Authorization: session?.access_token
+                ? `Bearer ${session.access_token}`
+                : '',
+            },
+          });
           if (res.ok) {
             const data = await res.json();
             if (active) setAiStatus(data);
@@ -101,7 +109,7 @@ export default function CameraScreen() {
         active = false;
         clearInterval(timer);
       };
-    }, [])
+    }, [session?.access_token])
   );
 
   const updateIngredient = useCallback(
@@ -531,7 +539,7 @@ export default function CameraScreen() {
 
         {/* Box Scanare */}
         <View style={styles.scanArea}>
-          <View style={[styles.scanBox, { borderColor: colors.cardBorder }]}>
+          <View style={[styles.scanBox, { width: scanBoxSize, height: scanBoxSize, borderColor: colors.cardBorder }]}>
             <View style={[styles.corner, styles.cornerTL, { borderColor: colors.accent }]} />
             <View style={[styles.corner, styles.cornerTR, { borderColor: colors.accent }]} />
             <View style={[styles.corner, styles.cornerBL, { borderColor: colors.accent }]} />
@@ -554,7 +562,7 @@ export default function CameraScreen() {
       {rezultat.length > 0 && (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <Animated.View entering={FadeInUp.duration(500).springify()} style={[styles.resultSheet, { borderColor: colors.accent + '26' }]}>
-            <BlurView intensity={50} tint="dark" style={styles.resultBlur}>
+            <BlurView intensity={50} tint="dark" style={[styles.resultBlur, { maxHeight: height * 0.8 }]}>
               <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={[styles.resultGrad, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
                 <View style={styles.resultHandle} />
                 
@@ -787,7 +795,7 @@ const styles = StyleSheet.create({
 
   scanArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scanBox: {
-    width: SCAN_BOX_SIZE, height: SCAN_BOX_SIZE, borderRadius: 24,
+    borderRadius: 24,
     justifyContent: 'center', alignItems: 'center', overflow: 'hidden',
   },
   corner: { position: 'absolute', width: 36, height: 36, borderWidth: 3 },
@@ -801,7 +809,7 @@ const styles = StyleSheet.create({
   scanHint: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '500', marginTop: 24, letterSpacing: 0.5 },
 
   resultSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 40, borderTopRightRadius: 40, overflow: 'hidden', borderWidth: 1 },
-  resultBlur: { overflow: 'hidden', maxHeight: height * 0.8 },
+  resultBlur: { overflow: 'hidden' },
   resultGrad: { padding: 32, paddingTop: 20 },
   resultHandle: { width: 48, height: 5, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 3, alignSelf: 'center', marginBottom: 24 },
   resultTitle: { fontSize: 20, fontWeight: '800', marginBottom: 16, letterSpacing: -0.3 },

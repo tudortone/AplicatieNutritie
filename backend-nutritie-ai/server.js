@@ -61,6 +61,19 @@ process.on('uncaughtException', (eroare) => {
   if (config.esteProductie) setTimeout(() => process.exit(1), 1000).unref();
 });
 
+const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
+const BEARER_RE = /Bearer\s+\S+/gi;
+const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
+const PHONE_RE = /(?:\+?\d[\s().-]*){9,15}/g;
+function redacteazaPii(text) {
+  if (typeof text !== 'string') return text;
+  return text
+    .replace(JWT_RE, '[REDACTED_JWT]')
+    .replace(BEARER_RE, '[REDACTED_BEARER]')
+    .replace(EMAIL_RE, '[REDACTED_EMAIL]')
+    .replace(PHONE_RE, '[REDACTED_PHONE]');
+}
+
 if (config.sentryDsn) {
   Sentry.init({
     dsn: config.sentryDsn,
@@ -68,6 +81,7 @@ if (config.sentryDsn) {
     tracesSampleRate: config.esteProductie ? 0.1 : 1.0,
     sendDefaultPii: false,
     beforeSend(event) {
+      if (event.message) event.message = redacteazaPii(event.message);
       if (event.request) {
         event.request.data = '[SCRUBBED_PII]';
         event.request.headers = {};
@@ -77,11 +91,16 @@ if (config.sentryDsn) {
       if (event.extra) event.extra = { redacted: true };
       if (event.contexts) event.contexts = {};
       if (Array.isArray(event.breadcrumbs)) {
-        event.breadcrumbs = event.breadcrumbs.slice(-50).map((crumb) => ({
-          ...crumb,
-          data: crumb.data ? { redacted: true } : undefined,
-          message: typeof crumb.message === 'string' ? crumb.message.slice(0, 200) : crumb.message,
-        }));
+        event.breadcrumbs = event.breadcrumbs.slice(-50).map((crumb) => {
+          const message = typeof crumb.message === 'string'
+            ? redacteazaPii(crumb.message).slice(0, 200)
+            : crumb.message;
+          return {
+            ...crumb,
+            data: crumb.data ? { redacted: true } : undefined,
+            message,
+          };
+        });
       }
       return event;
     },
@@ -109,6 +128,14 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
   exposedHeaders: ['Idempotency-Status', 'Retry-After', 'X-AI-Quota-Remaining', 'X-Protectie-RLS'],
 }));
+const supabase = createClient(config.supabase.url, config.supabase.anonKey);
+const supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey);
+// PR1-backend: webhook-urile (Clerk/Svix) sunt montate ÎNAINTE de body-parse,
+// ca Svix sa primeasca bytes-ii bruti netransformati. O singura periere webhooksR.
+const webhooksR = createWebhooksRouter({ supabaseAdmin, config });
+app.use('/api/v1/webhooks', webhooksR);
+app.use('/api/webhooks', webhooksR);
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(sanitizeRequest);
@@ -134,12 +161,9 @@ const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter } = creeazaLimi
   avertizeazaFaraStore: config.esteProductie,
 });
 
-app.use('/api/', (req, res, next) => {
-  if (req.path === '/ai-status' || req.path === '/v1/ai-status') {
-    return statusLimiter(req, res, next);
-  }
-  return preAuthLimiter(req, res, next);
-});
+// PR1-backend: statusLimiter nu mai e aplicat global pe /ai-status in server.js,
+// ci direct pe ruta din routes/status.js (imprenn cu requireAuth).
+app.use('/api/', (req, res, next) => preAuthLimiter(req, res, next));
 
 const EXTENSIE_MIMETYPE = {
   'image/jpeg': '.jpg',
@@ -162,8 +186,6 @@ const upload = multer({
   },
 });
 
-const supabase = createClient(config.supabase.url, config.supabase.anonKey);
-const supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey);
 const tokenCache = new TokenCache({
   maxEntries: 5000,
   ttlMs: 60 * 1000,
@@ -290,6 +312,8 @@ const userR = createUserRouter({
 const statusR = createStatusRouter({
   getProviderStatus: serviciuCascada.getProviderStatus,
   getAiStatistici,
+  requireAuth,
+  statusLimiter,
 });
 const gdprR = createGdprRouter({
   requireAuth,
@@ -298,8 +322,6 @@ const gdprR = createGdprRouter({
   contextDate,
   profilRepo: createProfilRepo(),
 });
-const webhooksR = createWebhooksRouter({ supabaseAdmin, config });
-
 for (const prefix of ['/api/v1', '/api']) {
   app.use(prefix, statusR);
   app.use(prefix, aiR);
@@ -309,9 +331,6 @@ for (const prefix of ['/api/v1', '/api']) {
   app.use(`${prefix}/user`, gdprR);
   app.use(`${prefix}/user`, userR);
 }
-
-app.use('/api/v1/webhooks', webhooksR);
-app.use('/api/webhooks', webhooksR);
 
 app.use((_req, res) => {
   res.status(404).json({ eroare: 'Ruta solicitată nu există (404).' });

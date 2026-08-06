@@ -59,9 +59,17 @@ const app = require('../server');
 // ── 1. Auth Guard Verification ────────────────────────────────────────────
 
 describe('Auth Guard Verification', () => {
-  describe('GET /api/v1/ai-status (public endpoint)', () => {
-    it('returns 200 without any authentication', async () => {
+  describe('GET /api/v1/ai-status (JWT-protected endpoint)', () => {
+    it('returns 401 without any authentication', async () => {
       const res = await request(app).get('/api/v1/ai-status');
+      expect(res.statusCode).toBe(401);
+      expect(res.body).toHaveProperty('eroare');
+    });
+
+    it('returns 200 with a valid bearer token', async () => {
+      const res = await request(app)
+        .get('/api/v1/ai-status')
+        .set('Authorization', 'Bearer token_valid');
       expect(res.statusCode).toBe(200);
       expect(res.body).toHaveProperty('gemini');
       expect(res.body).toHaveProperty('openai');
@@ -70,7 +78,9 @@ describe('Auth Guard Verification', () => {
     });
 
     it('does not expose internal model names, costs, or error messages', async () => {
-      const res = await request(app).get('/api/v1/ai-status');
+      const res = await request(app)
+        .get('/api/v1/ai-status')
+        .set('Authorization', 'Bearer token_valid');
       const providers = ['gemini', 'openai', 'groq', 'openrouter'];
       for (const p of providers) {
         const entry = res.body[p];

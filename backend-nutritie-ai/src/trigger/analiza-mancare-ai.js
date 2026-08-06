@@ -1,6 +1,7 @@
 'use strict';
 
 const { task } = require('@trigger.dev/sdk/v3');
+const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { PROMPT_ANALIZA_FOTO, numarModel } = require('../../services/ai/vision');
 const { parseJsonFromLlm } = require('../../utils/llmJson');
@@ -21,6 +22,43 @@ const VARIABILE_OBLIGATORII = Object.freeze([
 ]);
 const REGEX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TIPURI_MASA = new Set(['mic_dejun', 'pranz', 'cina', 'gustare', 'Mic dejun', 'Pranz', 'Cina', 'Gustare']);
+
+// Client admin (service_role) pentru tabela `ai_jobs` — nu are politici de
+// insert/update pentru clienti (revoke pe anon/authenticated), deci doar
+// backendul scrie aici. Lazy: construit doar daca variabilele exista.
+let clientAiJobs = null;
+function supabaseAiJobs() {
+  if (clientAiJobs) return clientAiJobs;
+  const url = (process.env.SUPABASE_URL || '').trim();
+  const cheie = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  if (!url || !cheie) return null;
+  clientAiJobs = createClient(url, cheie);
+  return clientAiJobs;
+}
+
+/**
+ * Actualizeaza starea unui job din tabela `ai_jobs`.
+ * Best-effort: o eroare la DB nu trebuie sa darame analiza AI in sine.
+ */
+async function updateAiJob(jobId, patch) {
+  if (!jobId || typeof jobId !== 'string') return;
+  const client = supabaseAiJobs();
+  if (!client) {
+    console.warn('updateAiJob: lipsesc SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY — nu pot urmari jobul.');
+    return;
+  }
+  try {
+    const { error } = await client
+      .from('ai_jobs')
+      .update(patch)
+      .eq('id', jobId);
+    if (error) {
+      console.warn('updateAiJob: esec actualizare ai_jobs:', error.message);
+    }
+  } catch (err) {
+    console.warn('updateAiJob: eroare neasteptata:', (err && err.message) || err);
+  }
+}
 
 function modelsDeIncercat() {
   const preferat = (process.env.GEMINI_MODEL || '').trim();
@@ -84,9 +122,16 @@ exports.analizaMancareTask = task({
     factor: 2,
   },
   run: async (payload) => {
+    const { imageUrl, tipMasa, userId, jobId } = payload || {};
+    // Marcheaza job-ul ca fiind in curs, din oficiu (persistarea ramane la confirmarea
+    // explicita a utilizatorului in frontend; aici urmarim doar stadiul analizei).
+    if (jobId) await updateAiJob(jobId, { status: 'processing' });
+
     const lipsesteCheiaPrincipalaGemini = !process.env.GEMINI_API_KEY;
     const lipsa = VARIABILE_OBLIGATORII.filter((cheie) => !process.env[cheie]?.trim());
     if (lipsesteCheiaPrincipalaGemini || lipsa.length > 0) {
+      // Eroare de configurare: nu se retry (ar esua identic), dar se raporteaza.
+      if (jobId) await updateAiJob(jobId, { status: 'failed', error_code: 'NEEDS_CONFIG' });
       return {
         success: false,
         status: 'needs_config',
@@ -95,8 +140,8 @@ exports.analizaMancareTask = task({
       };
     }
 
-    const { imageUrl, tipMasa, userId } = payload || {};
     if (typeof imageUrl !== 'string' || !imageUrl.trim() || !REGEX_UUID.test(String(userId || ''))) {
+      if (jobId) await updateAiJob(jobId, { status: 'failed', error_code: 'PAYLOAD_INVALID' });
       return { success: false, eroare: 'Payload invalid pentru analiza imaginii.' };
     }
 
@@ -107,7 +152,10 @@ exports.analizaMancareTask = task({
       }),
     });
     const verificare = valideazaImagine(imageUrl);
-    if (!verificare.ok) return { success: false, eroare: verificare.eroare };
+    if (!verificare.ok) {
+      if (jobId) await updateAiJob(jobId, { status: 'failed', error_code: 'URL_IMAGINE_INVALIDA' });
+      return { success: false, eroare: verificare.eroare };
+    }
 
     try {
       const resp = await fetch(verificare.url, {
@@ -181,12 +229,15 @@ exports.analizaMancareTask = task({
       // alimente filtrate sau nume care semnaleaza non-food). Raspuns explicit
       // pentru frontend, distinct de o eroare tehnica.
       if (normalizate.some((item) => /nu.*mancare|non-food|nu s-a detectat|nu contine/i.test(item.nume))) {
-        return {
+        const rezultatNotFood = {
           success: false,
           isNotFood: true,
           eroare: 'Imaginea încărcată nu pare să conțină alimente. Te rugăm să încerci cu o poză clară a unei mese.',
           processedAt: new Date().toISOString(),
         };
+        // Rezultat procesat valid: jobul se considera completed, nu o eroare tehnica.
+        if (jobId) await updateAiJob(jobId, { status: 'completed', result: rezultatNotFood });
+        return rezultatNotFood;
       }
 
       const totalKcal = normalizate.reduce(
@@ -194,7 +245,7 @@ exports.analizaMancareTask = task({
         0,
       );
 
-      return {
+      const rezultatFinal = {
         success: true,
         items: normalizate,
         totals: { kcal: Math.round(totalKcal) },
@@ -202,6 +253,8 @@ exports.analizaMancareTask = task({
         userId,
         processedAt: new Date().toISOString(),
       };
+      if (jobId) await updateAiJob(jobId, { status: 'completed', result: rezultatFinal });
+      return rezultatFinal;
     } catch (err) {
       if (process.env.SENTRY_DSN) {
         try {
@@ -212,14 +265,12 @@ exports.analizaMancareTask = task({
       }
       const cod = codEroareSigur(err);
       console.error('[Trigger analiza-mancare-ai] Esuare:', cod);
-      return {
-        success: false,
-        cod,
-        eroare: 'Analiza imaginii nu a putut fi finalizata.',
-        processedAt: new Date().toISOString(),
-      };
+      // Marcam esecul in ai_jobs apoi RE-ARUNCAM: retry-ul Trigger.dev (maxAttempts: 3)
+      // depinde de `throw`, nu de un `return { success: false }`.
+      if (jobId) await updateAiJob(jobId, { status: 'failed', error_code: cod });
+      throw err;
     }
   },
 });
 
-exports._test = { citesteCorpLimitat, detecteazaMime, codEroareSigur };
+exports._test = { citesteCorpLimitat, detecteazaMime, codEroareSigur, updateAiJob };

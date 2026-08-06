@@ -1,7 +1,6 @@
-import React, { forwardRef, useImperativeHandle, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, Pressable } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { forwardRef, useImperativeHandle, useRef, useMemo, useCallback } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { BottomSheetModal, BottomSheetScrollView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Watch, CheckCircle2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -19,112 +18,120 @@ export const WatchSelectorSheet = forwardRef<WatchSelectorSheetRef>((_, ref) => 
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { selectedProvider, setProvider } = useHealthSync();
-  const [visible, setVisible] = useState(false);
+  const bottomSheetRef = useRef<BottomSheetModal>(null);
+  const snapPoints = useMemo(() => ['58%'], []);
 
   useImperativeHandle(ref, () => ({
-    open: () => setVisible(true),
-    close: () => setVisible(false),
+    open: () => bottomSheetRef.current?.present(),
+    close: () => bottomSheetRef.current?.dismiss(),
   }));
+
+  const renderBackdrop = useCallback(
+    (props: any) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        opacity={0.6}
+        pressBehavior="close"
+      />
+    ),
+    []
+  );
 
   const selectHandler = async (providerId: HealthProvider) => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {}
     await setProvider(providerId);
-    setVisible(false);
+    bottomSheetRef.current?.dismiss();
   };
 
   return (
-    <Modal
-      visible={visible}
-      onRequestClose={() => setVisible(false)}
-      animationType="slide"
-      transparent
+    <BottomSheetModal
+      ref={bottomSheetRef}
+      snapPoints={snapPoints}
+      enablePanDownToClose
+      enableDynamicSizing={false}
+      backdropComponent={renderBackdrop}
+      backgroundStyle={{ backgroundColor: colors.background, borderColor: colors.cardBorder, borderWidth: 1 }}
+      handleIndicatorStyle={{ backgroundColor: colors.overlayStrong, width: 44 }}
     >
-      <Pressable style={styles.backdrop} onPress={() => setVisible(false)}>
-        <Pressable
-          style={[styles.sheet, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={styles.indicatorWrap}>
-            <View style={[styles.indicator, { backgroundColor: colors.overlayStrong }]} />
-          </View>
+      <View style={styles.indicatorWrap}>
+        <View style={[styles.indicator, { backgroundColor: colors.overlayStrong }]} />
+      </View>
 
-          <TouchableOpacity
-            style={styles.closeBtn}
-            onPress={() => setVisible(false)}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.close', 'Închide')}
-          >
-            <X size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.closeBtn}
+        onPress={() => bottomSheetRef.current?.dismiss()}
+        accessibilityRole="button"
+        accessibilityLabel={t('common.close', 'Închide')}
+      >
+        <X size={20} color={colors.textSecondary} />
+      </TouchableOpacity>
 
-          <View style={styles.header}>
-            <View style={[styles.iconBg, { backgroundColor: colors.accent + '20' }]}>
-              <Watch size={24} color={colors.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.title, { color: colors.textPrimary }]}>
-                {t('profile.watch_selector_title', 'Selectează Ceasul / Dispozitivul')}
-              </Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                {t('profile.watch_selector_sub', 'Alege furnizorul de fitness pentru sincronizarea datelor')}
-              </Text>
-            </View>
-          </View>
+      <View style={styles.header}>
+        <View style={[styles.iconBg, { backgroundColor: colors.accent + '20' }]}>
+          <Watch size={24} color={colors.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
+            {t('profile.watch_selector_title', 'Selectează Ceasul / Dispozitivul')}
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            {t('profile.watch_selector_sub', 'Alege furnizorul de fitness pentru sincronizarea datelor')}
+          </Text>
+        </View>
+      </View>
 
-          <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-            {HEALTH_PROVIDERS.map((p, index) => {
-              const active = selectedProvider === p.id;
-              return (
-                <Animated.View key={p.id} entering={FadeInDown.duration(350).delay(index * 40)}>
-                  <TouchableOpacity
-                    style={[
-                      styles.item,
-                      {
-                        backgroundColor: active ? colors.accent + '15' : colors.cardBg,
-                        borderColor: active ? colors.accent : colors.cardBorder,
-                      }
-                    ]}
-                    onPress={() => selectHandler(p.id)}
-                    activeOpacity={0.75}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: active }}
-                    accessibilityLabel={p.name}
-                    testID={`watch_option_${p.id}`}
-                  >
-                    <Text style={{ fontSize: 24 }}>{p.icon}</Text>
+      <BottomSheetScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+        {HEALTH_PROVIDERS.map((p, index) => {
+          const active = selectedProvider === p.id;
+          return (
+            <Animated.View key={p.id} entering={FadeInDown.duration(350).delay(index * 30)}>
+              <TouchableOpacity
+                style={[
+                  styles.item,
+                  {
+                    backgroundColor: active ? colors.accent + '15' : colors.cardBg,
+                    borderColor: active ? colors.accent : colors.cardBorder,
+                  }
+                ]}
+                onPress={() => selectHandler(p.id)}
+                activeOpacity={0.75}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: active }}
+                accessibilityLabel={p.name}
+                testID={`watch_option_${p.id}`}
+              >
+                <Text style={{ fontSize: 24 }}>{p.icon}</Text>
 
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.itemName, { color: active ? colors.accent : colors.textPrimary, fontWeight: active ? '800' : '600' }]}>
-                        {p.name}
-                      </Text>
-                      <Text style={[styles.itemDesc, { color: colors.textSecondary }]}>
-                        {p.description}
-                      </Text>
-                    </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.itemName, { color: active ? colors.accent : colors.textPrimary, fontWeight: active ? '800' : '600' }]}>
+                    {p.name}
+                  </Text>
+                  <Text style={[styles.itemDesc, { color: colors.textSecondary }]}>
+                    {p.description}
+                  </Text>
+                </View>
 
-                    {active ? (
-                      <CheckCircle2 size={22} color={colors.accent} />
-                    ) : (
-                      <View style={[styles.radioCircle, { borderColor: colors.overlayStrong }]} />
-                    )}
-                  </TouchableOpacity>
-                </Animated.View>
-              );
-            })}
-          </ScrollView>
-        </Pressable>
-      </Pressable>
-    </Modal>
+                {active ? (
+                  <CheckCircle2 size={22} color={colors.accent} />
+                ) : (
+                  <View style={[styles.radioCircle, { borderColor: colors.overlayStrong }]} />
+                )}
+              </TouchableOpacity>
+            </Animated.View>
+          );
+        })}
+      </BottomSheetScrollView>
+    </BottomSheetModal>
   );
 });
 
 WatchSelectorSheet.displayName = 'WatchSelectorSheet';
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, maxHeight: '82%', paddingHorizontal: 20 },
   indicatorWrap: { alignItems: 'center', paddingVertical: 12 },
   indicator: { width: 44, height: 5, borderRadius: 3 },
   closeBtn: { position: 'absolute', top: 16, right: 20, zIndex: 10, padding: 6 },

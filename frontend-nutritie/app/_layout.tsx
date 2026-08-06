@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { View, ActivityIndicator, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import * as Sentry from '@sentry/react-native';
 import { AppThemeProvider, useTheme } from '../context/ThemeContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
@@ -28,26 +29,73 @@ import '../i18n';
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
 const isSentryDsnValid = !!SENTRY_DSN && /^https:\/\/[^@\s]+@.+/.test(SENTRY_DSN);
 
+// --- Redactie PII pentru evenimentele/breadcrumbs Sentry (frontend) ---
+const JWT_RE = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g;
+const BEARER_RE = /Bearer\s+[A-Za-z0-9._~+/=-]+/gi;
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+const PHONE_RE = /(\+?\d[\d\s().-]{7,}\d)/g;
+
+/** Înlocuiește tokenuri, emaile și telefoane dintr-un text cu placeholdere. */
+function redactText(text: unknown): string {
+  if (typeof text !== 'string') return text == null ? '' : String(text);
+  return text
+    .replace(JWT_RE, '[JWT]')
+    .replace(BEARER_RE, '[BEARER]')
+    .replace(EMAIL_RE, '[EMAIL]')
+    .replace(PHONE_RE, '[PHONE]');
+}
+
+/** Scrubează recursiv un obiect: chei senzitive setate la marcator, string-uri redactate. */
+function scrubObject(input: unknown): unknown {
+  if (input === null || typeof input !== 'object') return input;
+  if (Array.isArray(input)) return input.map(scrubObject);
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+    const key = k.toLowerCase();
+    if (['password', 'token', 'authorization', 'cookie', 'email', 'phone', 'imagine_base64', 'user_prompt', 'user_explanation'].includes(key)) {
+      out[k] = '[SCRUBBED_PII]';
+    } else if (v !== null && typeof v === 'object') {
+      out[k] = scrubObject(v);
+    } else if (typeof v === 'string') {
+      out[k] = redactText(v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 if (isSentryDsnValid) {
   Sentry.init({
     dsn: SENTRY_DSN,
     debug: false,
+    sendDefaultPii: false,
+    beforeBreadcrumb(breadcrumb) {
+      const b = { ...breadcrumb };
+      if (typeof b.message === 'string') b.message = redactText(b.message);
+      if (b.data && typeof b.data === 'object') b.data = scrubObject(b.data) as Record<string, unknown>;
+      return b;
+    },
     beforeSend(event) {
       const req = event.request;
-      if (req && req.data && typeof req.data === 'object') {
-        ['password', 'email', 'mesaj', 'userExplanation', 'user_prompt', 'imagine_base64', 'authorization'].forEach(key => {
-          if ((req.data as any)[key]) {
-            (req.data as any)[key] = '[SCRUBBED_PII]';
-          }
-        });
+      // Stripe headere/cookies si normalizam URL-ul (fara query/hash, care pot
+      // contine PII). Nu trimitem identitatea userului la Sentry.
+      if (req) {
+        delete req.headers;
+        delete req.cookies;
+        if (req.url) req.url = String(req.url).split(/[?#]/, 1)[0];
+        if (req.data) req.data = scrubObject(req.data);
       }
+      event.user = undefined;
+      if (event.message) event.message = redactText(event.message);
       // B-11: datele de alimentatie sunt date de sanatate. Scrubeaza si
       // breadcrumbs-urile (mesajul de utilizator poate duce in contextul unui
       // crash) si pune un loc unde sa nu apara corpuri de cerere.
       if (Array.isArray(event.breadcrumbs)) {
         event.breadcrumbs = event.breadcrumbs.map((crumb: any) => {
           const c = { ...crumb };
-          if (c.data && typeof c.data === 'object') c.data = '[SCRUBBED_PII]';
+          if (typeof c.message === 'string') c.message = redactText(c.message);
+          if (c.data && typeof c.data === 'object') c.data = scrubObject(c.data);
           return c;
         });
       }
@@ -198,7 +246,8 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider style={{ flex: 1 }}>
-        <AppThemeProvider>
+        <BottomSheetModalProvider>
+          <AppThemeProvider>
           <AuthProvider>
             <OnboardingProvider>
               <NotificationBannerProvider>
@@ -211,6 +260,7 @@ export default function RootLayout() {
             </OnboardingProvider>
           </AuthProvider>
         </AppThemeProvider>
+        </BottomSheetModalProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
