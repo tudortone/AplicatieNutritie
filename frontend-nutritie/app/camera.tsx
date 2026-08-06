@@ -30,7 +30,7 @@ import FoodScanSuccessModal, {
 } from '@/components/food/FoodScanSuccessModal';
 import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInput';
 import { uploadImageToImageKit } from '@/lib/imagekit';
-import { optimizeImageBeforeUpload } from '@/lib/imageOptimizer';
+import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft } from '@/lib/imageOptimizer';
 
 export default function CameraScreen() {
   const { colors } = useTheme();
@@ -141,6 +141,8 @@ export default function CameraScreen() {
         // heap dubleaza varful de memorie fara castig. Reducerea reala de payload
         // (si de cost AI) vine de aici: de la ~15MB la <200KB.
         const imagineOptimizata = await optimizeImageBeforeUpload(imageUri);
+        // U-03: Salvează poza în stocarea persistentă locală înainte de upload ca să nu fie pierdută la căderea rețelei
+        const draftPersistentUri = await saveLocalImageDraft(imagineOptimizata.uri);
 
         const formData = new FormData();
 
@@ -186,6 +188,9 @@ export default function CameraScreen() {
           }
           throw new Error(message);
         }
+
+        // Analiza a reușit → ștergem draftul local persistent
+        await discardLocalImageDraft(draftPersistentUri).catch(() => {});
 
         const normalized = payload
           .map((item) => ({

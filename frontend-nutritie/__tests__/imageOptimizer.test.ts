@@ -1,5 +1,19 @@
 import * as ImageManipulator from 'expo-image-manipulator';
-import { optimizeImageBeforeUpload } from '../lib/imageOptimizer';
+import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts } from '../lib/imageOptimizer';
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(async () => null),
+  setItem: jest.fn(async () => {}),
+  removeItem: jest.fn(async () => {}),
+}));
+
+jest.mock('expo-file-system', () => ({
+  documentDirectory: 'file:///documentDirectory/',
+  getInfoAsync: jest.fn(async () => ({ exists: true })),
+  makeDirectoryAsync: jest.fn(async () => {}),
+  copyAsync: jest.fn(async () => {}),
+  deleteAsync: jest.fn(async () => {}),
+}));
 
 jest.mock('react-native', () => ({
   Image: {
@@ -23,7 +37,7 @@ jest.mock('expo-image-manipulator', () => ({
   SaveFormat: { JPEG: 'jpeg' },
 }));
 
-describe('lib/imageOptimizer — test optimizare dimensiuni', () => {
+describe('lib/imageOptimizer — test optimizare dimensiuni si persistență draft (U-03)', () => {
   it('o imagine de 2000x1000 este redimensionată la bounding box de 800px', async () => {
     const result = await optimizeImageBeforeUpload('file://large-image.jpg');
     expect(ImageManipulator.manipulateAsync).toHaveBeenCalledWith(
@@ -44,5 +58,14 @@ describe('lib/imageOptimizer — test optimizare dimensiuni', () => {
     );
     expect(result.width).toBe(400);
     expect(result.height).toBe(300);
+  });
+
+  it('saveLocalImageDraft salvează poza în documentDirectory/drafts/', async () => {
+    const draftPath = await saveLocalImageDraft('file://test.jpg');
+    expect(draftPath).toContain('file:///documentDirectory/drafts/');
+  });
+
+  it('discardLocalImageDraft elimină draftul', async () => {
+    await expect(discardLocalImageDraft('file:///documentDirectory/drafts/123.jpg')).resolves.toBeUndefined();
   });
 });

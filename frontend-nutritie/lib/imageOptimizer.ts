@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Image } from 'react-native';
 
@@ -11,11 +13,9 @@ export interface OptimizedImage {
 /** Dimensiunea maximă a laturii lungi a imaginii optimizate (bounding box 800×800). */
 const MAX_DIMENSION = 800;
 
-/**
- * Citește dimensiunile reale ale imaginii prin `Image.getSize` (API callback,
- * învelit într-o Promise). Necesar pentru a decide dacă redimensionăm și pe ce
- * axă (bounding box), fără a scala imaginile deja mici.
- */
+const DRAFT_DIR = `${FileSystem.documentDirectory}drafts/`;
+const INDEX_KEY = 'nutriai:image-drafts';
+
 function getImageSize(uri: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     Image.getSize(
@@ -26,14 +26,6 @@ function getImageSize(uri: string): Promise<{ width: number; height: number }> {
   });
 }
 
-/**
- * Redimensionează și comprimă obligatoriu imaginile înainte de upload.
- * Eșuează închis dacă transformarea nu reușește: încărcarea originalului mare ar
- * consuma trafic și memorie și ar încălca limita de payload a backendului.
- *
- * Redimensionarea e bounding de 800×800 (doar latura cea mai mare e limitată,
- * proporțiile se păstrează). Imaginile deja ≤800 px rămân neredimensionate.
- */
 export async function optimizeImageBeforeUpload(uri: string): Promise<OptimizedImage> {
   if (typeof uri !== 'string' || !uri.trim()) {
     throw new TypeError('URI-ul imaginii este invalid.');
@@ -44,8 +36,6 @@ export async function optimizeImageBeforeUpload(uri: string): Promise<OptimizedI
   const resize = largest <= MAX_DIMENSION
     ? []
     : [{
-        // Bounding box: latura lungă e redusă la 800, latura scurtă se scalează
-        // proporțional (ImageManipulator o ajustează automat).
         resize: original.width >= original.height
           ? { width: MAX_DIMENSION }
           : { height: MAX_DIMENSION },
@@ -61,7 +51,7 @@ export async function optimizeImageBeforeUpload(uri: string): Promise<OptimizedI
   );
 
   if (!result.uri) throw new Error('Optimizarea imaginii nu a produs un fișier valid.');
-  
+
   return {
     uri: result.uri,
     width: result.width,
@@ -71,11 +61,35 @@ export async function optimizeImageBeforeUpload(uri: string): Promise<OptimizedI
 }
 
 /**
- * U-03: Salvează o copie a imaginii optimizate în cache-ul local persistent (AsyncStorage / local URI)
- * astfel încât poza să nu fie pierdută dacă rețeaua eșuează în timpul analizei AI.
+ * U-03: Salvează o copie a imaginii în documentDirectory/drafts/ persistentă
+ * care supraviețuiește curățării de cache de către sistemul de operare.
  */
 export async function saveLocalImageDraft(uri: string): Promise<string> {
-  // uri-ul returnat de manipulateAsync este deja salvat în cache-ul local al aplicației.
-  // Păstrăm uri-ul ca backup persistent.
-  return uri;
+  const dir = await FileSystem.getInfoAsync(DRAFT_DIR);
+  if (!dir.exists) {
+    await FileSystem.makeDirectoryAsync(DRAFT_DIR, { intermediates: true });
+  }
+  const dest = `${DRAFT_DIR}${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  await FileSystem.copyAsync({ from: uri, to: dest });
+
+  const raw = await AsyncStorage.getItem(INDEX_KEY);
+  const index: string[] = raw ? JSON.parse(raw) : [];
+  index.push(dest);
+  await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(index));
+  return dest;
+}
+
+export async function discardLocalImageDraft(path: string): Promise<void> {
+  await FileSystem.deleteAsync(path, { idempotent: true });
+  const raw = await AsyncStorage.getItem(INDEX_KEY);
+  const index: string[] = raw ? JSON.parse(raw) : [];
+  await AsyncStorage.setItem(
+    INDEX_KEY,
+    JSON.stringify(index.filter((p) => p !== path)),
+  );
+}
+
+export async function listPendingDrafts(): Promise<string[]> {
+  const raw = await AsyncStorage.getItem(INDEX_KEY);
+  return raw ? JSON.parse(raw) : [];
 }
