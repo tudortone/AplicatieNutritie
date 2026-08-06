@@ -90,23 +90,39 @@ function curataMinim(input, maxLength = 2000) {
 	return input.replace(CONTROL_CHARS, '').substring(0, maxLength);
 }
 
+const FEREASTRA_MS = 60_000;
+let ultimaAlerta = 0;
+let suprimate = 0;
+
 function detectPromptInjection(text) {
 	if (typeof text !== 'string' || !text.trim()) return false;
-	const detectat = PROMPT_INJECTION_PATTERNS.some((sablon) => sablon.test(text));
-	if (detectat) {
-		try {
-			const Sentry = require('@sentry/node');
-			Sentry.withScope((scope) => {
-				scope.setLevel('warning');
-				scope.setTag('security.event', 'prompt_injection_detected');
-				scope.setExtra('sample_text', text.substring(0, 100));
-				Sentry.captureMessage('[Denylist] Detecție tentativă prompt injection.');
-			});
-		} catch {
-			// Sentry indisponibil sau neconfigurat
-		}
+	const idx = PROMPT_INJECTION_PATTERNS.findIndex((sablon) => sablon.test(text));
+	if (idx === -1) return false;
+
+	const acum = Date.now();
+	if (acum - ultimaAlerta < FEREASTRA_MS) {
+		suprimate++;
+		return true;
 	}
-	return detectat;
+	ultimaAlerta = acum;
+	const nSuprimate = suprimate;
+	suprimate = 0;
+
+	try {
+		const Sentry = require('@sentry/node');
+		Sentry.withScope((scope) => {
+			scope.setLevel('warning');
+			scope.setTag('security.event', 'prompt_injection_detected');
+			scope.setTag('security.pattern_index', String(idx));
+			scope.setTag('security.suppressed', String(nSuprimate));
+			scope.setFingerprint(['prompt-injection', String(idx)]);
+			Sentry.captureMessage(`[Denylist] Prompt injection, șablon #${idx}`);
+		});
+	} catch {
+		// Sentry indisponibil sau neconfigurat
+	}
+
+	return true;
 }
 
 /**
