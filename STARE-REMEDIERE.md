@@ -38,7 +38,7 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 
 | ID | Verdict | Status | Commit | Cum s-a rezolvat | Ce a rămas |
 | --- | --- | --- | --- | --- | --- |
-| P-10 | Idempotență fail-open | 🔴 activ | ✅ | În lucru pe `main` | Middleware `idempotencyMiddlewareCritic` cu `rutaCritica: true` (503 la cădere Redis) | — |
+| P-10 | Idempotență fail-open | 🔴 activ | ✅ | `fix(P-10)` | Montat `idempotencyMiddlewareCritic` în `server.js` pe rutele de AI și plăți | — |
 | P-11 | Fallback per-proc fără strângere de praguri / Sentry | ⚠️ parțial | ✅ | În lucru pe `main` | Adăugată alertă Sentry pe fallback MemoryStore la căderea Redis | — |
 | P-12 | Cache premium per-instanță | 🔴 activ | ✅ | În lucru pe `main` | Cache premium mutat din Map per-proces în registrul K/V partajat Redis | — |
 | P-19 | Versionare fictivă (2× mount, regex) | ⚠️ parțial | ✅ | În lucru pe `main` | Antete `Sunset`, `Deprecation`, `Link` montate pe `/api` | — |
