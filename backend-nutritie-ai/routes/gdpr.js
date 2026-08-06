@@ -4,6 +4,7 @@ const express = require('express');
 const { tabelUtilizator } = require('../utils/clientUtilizator');
 
 const IMAGEKIT_API = ['https:', '', 'api.imagekit.io', 'v1'].join('/');
+const CLERK_USERS_API = ['https:', '', 'api.clerk.com', 'v1', 'users'].join('/');
 const MAX_ADANCIME_JSON = 8;
 
 function codEroare(err) {
@@ -99,11 +100,20 @@ async function stergeIdentitateClerk({ clerkUserId, secretKey }) {
     throw error;
   }
 
-  const response = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(clerkUserId)}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${secretKey}` },
-    signal: AbortSignal.timeout(10000),
-  });
+  const response = await fetch(
+    `${CLERK_USERS_API}/${encodeURIComponent(clerkUserId)}`,
+    {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(10000),
+      // B-12: `redirect:'error'` — un server nu poate balansa cererea către un
+      // URL care ar putea prelua `CLERK_SECRET_KEY` din antetul Authorization.
+      redirect: 'error',
+    },
+  );
 
   // DELETE idempotent: un 404 înseamnă că utilizatorul a fost deja șters.
   if (response.status === 404) return;
