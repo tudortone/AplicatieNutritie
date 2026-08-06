@@ -267,6 +267,38 @@ describe('Semafor', () => {
     await expect(semafor.ruleaza(async () => { throw new Error('boom'); })).rejects.toThrow('boom');
     await expect(semafor.ruleaza(async () => 'ok')).resolves.toBe('ok');
   });
+
+  it('scoate din coada o cerere anulata si ii respinge promisiunea', async () => {
+    const semafor = new Semafor({ max: 1, maxCoada: 5 });
+    const controller = new AbortController();
+    const ocupat = semafor.ruleaza(() => new Promise((r) => setTimeout(r, 40)));
+
+    const inCoada = semafor.ruleaza(() => 'nu ar trebui sa ruleze', controller.signal);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(semafor.inAsteptare).toBe(1);
+
+    controller.abort();
+    await expect(inCoada).rejects.toMatchObject({ cod: 'REQUEST_ABORTED' });
+    expect(semafor.inAsteptare).toBe(0);
+
+    // Slotul ramane functional pentru o cerere noua imediat dupa ce primul termina.
+    await ocupat;
+    await expect(semafor.ruleaza(async () => 'ok')).resolves.toBe('ok');
+  });
+
+  it('respinge o cerere ale carei semnal este deja anulat', async () => {
+    const semafor = new Semafor({ max: 1, maxCoada: 5 });
+    const controller = new AbortController();
+    controller.abort();
+    await expect(semafor.ruleaza(async () => 'nu', controller.signal))
+      .rejects.toMatchObject({ cod: 'REQUEST_ABORTED' });
+  });
+
+  it('refuza max sau maxCoada neintregi', () => {
+    expect(() => new Semafor({ max: 2.5 })).toThrow(TypeError);
+    expect(() => new Semafor({ maxCoada: -1 })).toThrow(TypeError);
+    expect(() => new Semafor({ maxCoada: 1.5 })).toThrow(TypeError);
+  });
 });
 
 describe('httpTimeout', () => {

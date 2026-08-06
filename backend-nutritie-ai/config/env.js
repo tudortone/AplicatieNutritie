@@ -50,6 +50,12 @@ function numarDinEnv(valoare, implicit) {
 	return Number.isFinite(numar) && numar > 0 ? numar : implicit;
 }
 
+function intregDinEnv(valoare, implicit, { minimZero = false } = {}) {
+	const numar = Number(valoare);
+	const admisibil = minimZero ? numar >= 0 : numar > 0;
+	return Number.isInteger(numar) && admisibil ? numar : implicit;
+}
+
 let configCache = null;
 
 function incarcaConfig() {
@@ -122,8 +128,8 @@ function incarcaConfig() {
 			// Plafon de cereri AI simultane pe instanta. Fara el, 20 de utilizatori
 			// paraleli inseamna 20 de imagini base64 de pana la 6,7 MB tinute in heap
 			// pe toata durata cascadei de furnizori.
-			maxConcurenta: numarDinEnv(process.env.AI_MAX_CONCURENTA, 4),
-			maxCoada: numarDinEnv(process.env.AI_MAX_COADA, 12),
+			maxConcurenta: intregDinEnv(process.env.AI_MAX_CONCURENTA, 4),
+			maxCoada: intregDinEnv(process.env.AI_MAX_COADA, 12, { minimZero: true }),
 			// Plafon de apeluri de furnizori per cerere AI (anti-cost). Peste el,
 			// cascada inceteaza sa mai incerce alti provideri la acelasi upload.
 			// 8 = intregul lant de fallback cu cate o cheie (1 OpenAI + 2 Groq + 3

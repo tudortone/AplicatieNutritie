@@ -17,6 +17,9 @@ class Semafor {
 		if (!Number.isInteger(max) || max < 1) {
 			throw new TypeError('max trebuie sa fie un intreg pozitiv.');
 		}
+		if (!Number.isInteger(maxCoada) || maxCoada < 0) {
+			throw new TypeError('maxCoada trebuie sa fie un intreg pozitiv.');
+		}
 		this.max = max;
 		this.maxCoada = maxCoada;
 		this.activi = 0;
@@ -27,7 +30,14 @@ class Semafor {
 		return this._coada.length;
 	}
 
-	async ruleaza(functie) {
+	async ruleaza(functie, signal = null) {
+		if (!functie || typeof functie !== 'function') {
+			throw new TypeError('ruleaza necesita o functie.');
+		}
+		if (signal?.aborted) {
+			throw this.eroareAnulare();
+		}
+
 		if (this.activi >= this.max) {
 			if (this._coada.length >= this.maxCoada) {
 				const eroare = new Error(
@@ -37,7 +47,21 @@ class Semafor {
 				eroare.status = 503;
 				throw eroare;
 			}
-			await new Promise((rezolva) => this._coada.push(rezolva));
+
+			// Coada retine promisiuni renuntabile: daca clientul se deconecteaza
+			// (signal aborted) inainte ca un slot sa fie liber, intrarea se scoate
+			// din coada si nu blocheaza locul celorlalti asteptatori.
+			await new Promise((rezolva, respinge) => {
+				const intrare = { rezolva, respinge, curatat: false, peAbort: null };
+				intrare.peAbort = () => {
+					intrare.curatat = true;
+					const index = this._coada.indexOf(intrare);
+					if (index !== -1) this._coada.splice(index, 1);
+					respinge(this.eroareAnulare());
+				};
+				if (signal) signal.addEventListener('abort', intrare.peAbort, { once: true });
+				this._coada.push(intrare);
+			});
 		}
 
 		this.activi += 1;
@@ -46,8 +70,18 @@ class Semafor {
 		} finally {
 			this.activi -= 1;
 			const urmatorul = this._coada.shift();
-			if (urmatorul) urmatorul();
+			if (urmatorul) {
+				if (urmatorul.peAbort) signal?.removeEventListener('abort', urmatorul.peAbort);
+				if (!urmatorul.curatat) urmatorul.rezolva();
+			}
 		}
+	}
+
+	eroareAnulare() {
+		const eroare = new Error('Cererea a fost anulată înainte de procesarea AI.');
+		eroare.cod = 'REQUEST_ABORTED';
+		eroare.status = 499;
+		return eroare;
 	}
 }
 
