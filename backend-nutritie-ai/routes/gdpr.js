@@ -207,17 +207,16 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
   });
 
   /**
-   * P-05: Ștergere cont atomică cu outbox pattern.
+   * P-05: Ștergere cont atomică cu outbox pattern (`gdpr_deletions`).
    *
    * Ordinea pașilor: REVERSIBIL → IREVERSIBIL
-   *   1. Înregistrare outbox (atomic, fail-closed)
+   *   1. Înregistrare outbox în tabela `gdpr_deletions`
    *   2. DB rows (reversibil prin restaurare backup)
    *   3. auth.deleteUser Supabase (semi-reversibil prin admin API)
    *   4. Clerk (ireversibil)
    *   5. ImageKit (ireversibil)
    *
-   * Utilizatorul percepe ștergerea ca instantanee (status 'pending' blochează
-   * login-ul în middleware). Execuția reală e asincronă și reluabilă.
+   * Fiecare pas își înregistrează starea în outbox (`db_done`, `auth_done`, `clerk_done`, `completed`).
    */
   router.delete('/delete-account', requireAuth, generalLimiter, async (req, res) => {
     try {

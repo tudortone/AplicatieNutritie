@@ -30,7 +30,7 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 
 | ID | Verdict | Status | Commit | Cum s-a rezolvat | Ce a rămas |
 | --- | --- | --- | --- | --- | --- |
-| P-05 | Ordinea ștergerii „ireversibil primul" | 🔴 activ | ✅ | În lucru pe `main` | Outbox pattern cu tabel `gdpr_deletions` și ordine corectă reversibil → ireversibil (DB -> Auth -> Clerk -> ImageKit) | — |
+| P-05 | Ordinea ștergerii „ireversibil primul" | 🔴 activ | ✅ | `fix(P-05)` | Outbox pattern (`gdpr_deletions`) cu ordine reversibil -> ireversibil + docstring corectat | — |
 | P-06 | `extrageFileIds`/`stergeActiveImageKit` cod mort | 🔴 activ | ✅ | În lucru pe `main` | Extragere fileIds din JSONB `alimente` și ștergere individuală pe fileId + foldere | — |
 | P-07 | Mesaj supra-promite | ⚠️ parțial | ✅ | În lucru pe `main` | Mesaj fail honest și gestionare atomică prin outbox | — |
 
