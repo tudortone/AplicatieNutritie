@@ -32,9 +32,8 @@ import { WatchSelectorSheet, WatchSelectorSheetRef } from '../../components/ui/W
 import { API_URL } from '../../constants/config';
 import { API_PREFIX } from '../../lib/api';
 
-// TODO: completează aici adresa reală de e-mail pentru suport înainte de lansare.
-// Cât rămâne gol, rândul „Contactează-ne" afișează o alertă în loc de un mailto.
-const EMAIL_SUPORT = '';
+// Adresa oficiala de suport pentru sesizari si suport utilizatori.
+const EMAIL_SUPORT = 'suport@nutriai.app';
 
 export default function ProfilScreen() {
   const router = useRouter();
