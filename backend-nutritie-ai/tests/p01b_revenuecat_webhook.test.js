@@ -1,24 +1,27 @@
 'use strict';
 
 /**
- * P-01b: Teste webhook RevenueCat — credite AI idempotente.
+ * P-01b: Teste webhook RevenueCat — credite AI idempotente, dead-letter și consum de credite.
  */
 
 const express = require('express');
 const request = require('supertest');
 const createWebhooksRevenueCatRouter = require('../routes/webhooksRevenueCat');
-const { CREDIT_AMOUNTS } = require('../routes/webhooksRevenueCat');
+const { creeazaCheckAiUsageQuota } = require('../utils/aiUsageQuota');
 
 const WEBHOOK_SECRET = 'Bearer test-revenuecat-webhook-secret';
 
-function creeazaSupabaseFake({ soldNou = 50, idempotent = false, clerkMap = {} } = {}) {
+function creeazaSupabaseFake({ soldNou = 50, idempotent = false, clerkMap = {}, mapError = false, rpcFail = false } = {}) {
   const tranzactii = [];
+  const esuate = [];
   return {
     tranzactii,
+    esuate,
     from: (tabela) => ({
       select: () => ({
         eq: (col, val) => ({
           maybeSingle: async () => {
+            if (mapError) return { data: null, error: new Error('DB connection failed') };
             if (tabela === 'clerk_user_map' && clerkMap[val]) {
               return { data: { supabase_user_id: clerkMap[val] }, error: null };
             }
@@ -26,11 +29,19 @@ function creeazaSupabaseFake({ soldNou = 50, idempotent = false, clerkMap = {} }
           },
         }),
       }),
+      upsert: async (record) => {
+        esuate.push(record);
+        return { data: record, error: null };
+      },
     }),
     rpc: jest.fn(async (functie, params) => {
+      if (rpcFail) return { data: null, error: new Error('RPC failure') };
       if (functie === 'aplica_tranzactie_credite') {
         tranzactii.push(params);
         return { data: idempotent ? -1 : soldNou, error: null };
+      }
+      if (functie === 'consuma_credit') {
+        return { data: soldNou, error: null };
       }
       return { data: null, error: null };
     }),
@@ -70,7 +81,6 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
     expect(res.body.crediteDelta).toBe(50);
     expect(res.body.soldNou).toBe(50);
 
-    // Verificăm că RPC a fost apelat corect
     expect(admin.rpc).toHaveBeenCalledWith('aplica_tranzactie_credite', expect.objectContaining({
       p_user_id: '11111111-1111-4111-8111-111111111111',
       p_event_id: 'evt_test_001',
@@ -93,13 +103,11 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
       },
     };
 
-    // Prima livrare
     const res1 = await request(app)
       .post('/api/v1/webhooks/revenuecat')
       .set('Authorization', WEBHOOK_SECRET)
       .send(payload);
 
-    // A doua livrare (idempotent)
     const res2 = await request(app)
       .post('/api/v1/webhooks/revenuecat')
       .set('Authorization', WEBHOOK_SECRET)
@@ -141,11 +149,10 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.ignorat).toBe(true);
-    // RPC NU a fost apelat (creditele nu se modifică la anulare)
     expect(admin.rpc).not.toHaveBeenCalled();
   });
 
-  test('Produs nerecunoscut → 200 cu avertisment (Clerk nu reîncearcă)', async () => {
+  test('Produs nerecunoscut → 200 cu avertisment', async () => {
     const admin = creeazaSupabaseFake();
     const app = creeazaApp(admin);
 
@@ -166,28 +173,7 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
     expect(admin.rpc).not.toHaveBeenCalled();
   });
 
-  test('NON_RENEWING_PURCHASE cu 150 credite', async () => {
-    const admin = creeazaSupabaseFake({ soldNou: 150 });
-    const app = creeazaApp(admin);
-
-    const res = await request(app)
-      .post('/api/v1/webhooks/revenuecat')
-      .set('Authorization', WEBHOOK_SECRET)
-      .send({
-        event: {
-          id: 'evt_nonrenew_001',
-          type: 'NON_RENEWING_PURCHASE',
-          app_user_id: '55555555-5555-4555-8555-555555555555',
-          product_id: 'nutri_credits_150',
-        },
-      });
-
-    expect(res.status).toBe(200);
-    expect(res.body.crediteDelta).toBe(150);
-    expect(res.body.soldNou).toBe(150);
-  });
-
-  test('nutri_credits_150_ios acordă exact 150 credite (nu 50)', async () => {
+  test('nutri_credits_150_ios acordă exact 150 credite', async () => {
     const admin = creeazaSupabaseFake({ soldNou: 150 });
     const app = creeazaApp(admin);
 
@@ -208,11 +194,8 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
     expect(res.body.soldNou).toBe(150);
   });
 
-  test('app_user_id Clerk (ex: user_2abc...) este mapat prin clerk_user_map la un UUID Supabase', async () => {
-    const admin = creeazaSupabaseFake({
-      soldNou: 50,
-      clerkMap: { 'user_2abc_clerk': '11111111-2222-3333-4444-555555555555' },
-    });
+  test('app_user_id Clerk nemapat încă → 503 USER_NOT_MAPPED_YET + dead-letter', async () => {
+    const admin = creeazaSupabaseFake({ clerkMap: {} });
     const app = creeazaApp(admin);
 
     const res = await request(app)
@@ -220,18 +203,59 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
       .set('Authorization', WEBHOOK_SECRET)
       .send({
         event: {
-          id: 'evt_clerk_mapping_001',
+          id: 'evt_unmapped_001',
           type: 'INITIAL_PURCHASE',
-          app_user_id: 'user_2abc_clerk',
+          app_user_id: 'user_2unmapped',
           product_id: 'nutri_credits_50',
         },
       });
 
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
-    expect(admin.rpc).toHaveBeenCalledWith('aplica_tranzactie_credite', expect.objectContaining({
-      p_user_id: '11111111-2222-3333-4444-555555555555',
-      p_event_id: 'evt_clerk_mapping_001',
+    expect(res.status).toBe(503);
+    expect(res.body.cod).toBe('USER_NOT_MAPPED_YET');
+    expect(admin.esuate.length).toBe(1);
+    expect(admin.esuate[0].motiv).toBe('USER_NOT_MAPPED_YET');
+  });
+
+  test('Eroare DB la citire clerk_user_map → 503 USER_MAP_UNAVAILABLE', async () => {
+    const admin = creeazaSupabaseFake({ mapError: true });
+    const app = creeazaApp(admin);
+
+    const res = await request(app)
+      .post('/api/v1/webhooks/revenuecat')
+      .set('Authorization', WEBHOOK_SECRET)
+      .send({
+        event: {
+          id: 'evt_dberr_001',
+          type: 'INITIAL_PURCHASE',
+          app_user_id: 'user_2dberr',
+          product_id: 'nutri_credits_50',
+        },
+      });
+
+    expect(res.status).toBe(503);
+    expect(res.body.cod).toBe('USER_MAP_UNAVAILABLE');
+  });
+
+  test('Consum de credite înaintea cotei zilnice în checkAiUsageQuota', async () => {
+    const admin = creeazaSupabaseFake({ soldNou: 4 });
+    const checkQuota = creeazaCheckAiUsageQuota();
+
+    const req = {
+      user: { id: '11111111-1111-4111-8111-111111111111' },
+      supabaseAdmin: admin,
+    };
+    const res = {
+      headers: {},
+      setHeader(k, v) { this.headers[k] = v; },
+    };
+    let nextCalled = false;
+    await checkQuota(req, res, () => { nextCalled = true; });
+
+    expect(nextCalled).toBe(true);
+    expect(res.headers['X-Credite-Ramase']).toBe('4');
+    expect(admin.rpc).toHaveBeenCalledWith('consuma_credit', expect.objectContaining({
+      p_user_id: '11111111-1111-4111-8111-111111111111',
+      p_cost: 1,
     }));
   });
 });

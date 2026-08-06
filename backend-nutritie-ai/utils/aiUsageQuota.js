@@ -32,26 +32,21 @@ function creeazaCheckAiUsageQuota({ contor, limitaZi = DAILY_LIMIT, fereastraMs 
       return next();
     }
 
-    // Pas 1: Încercăm debit din creditele plătite ale utilizatorului prin Supabase RPC
+    // Pas 1: Consumă ÎNTÂI creditele plătite ale utilizatorului prin RPC consuma_credit
     if (req.supabaseAdmin) {
       try {
-        const eventId = `consume_${userId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-        const { data: soldNou, error } = await req.supabaseAdmin.rpc('aplica_tranzactie_credite', {
+        const { data: soldRamas, error } = await req.supabaseAdmin.rpc('consuma_credit', {
           p_user_id: userId,
-          p_event_id: eventId,
-          p_event_type: 'USAGE_DEBIT',
-          p_delta: -1,
-          p_produs_id: 'ai_analysis',
-          p_metadata: { endpoint: req.originalUrl || req.path },
+          p_cost: 1,
         });
 
-        if (!error && typeof soldNou === 'number' && soldNou >= 0) {
-          res.setHeader('X-AI-Quota-Remaining', soldNou);
-          res.setHeader('X-AI-Credit-Used', 'true');
+        if (!error && typeof soldRamas === 'number' && soldRamas >= 0) {
+          res.setHeader('X-Credite-Ramase', String(soldRamas));
+          res.setHeader('X-AI-Quota-Remaining', String(soldRamas));
           return next();
         }
       } catch {
-        // Dacă debitul din credite eșuează (sold 0 sau eroare), continuăm pe cota zilnică gratuită
+        // Fără credite plătite disponibile → continuăm pe cota zilnică gratuită
       }
     }
 

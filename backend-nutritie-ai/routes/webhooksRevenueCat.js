@@ -2,21 +2,10 @@
 
 /**
  * P-01b: Webhook RevenueCat — credite AI cu idempotență pe event_id.
- *
- * Tratează evenimentele:
- *   INITIAL_PURCHASE, NON_RENEWING_PURCHASE, RENEWAL → creditare
- *   CANCELLATION, EXPIRATION → nu modificăm creditele (se epuizează natural)
- *
- * Securitate:
- *   - Antetul `Authorization` cu secretul configurat în RevenueCat
- *   - Fiecare event_id e unic (UNIQUE constraint în DB) → idempotent
- *
- * Creditare:
- *   - Consumă ÎNTÂI creditele plătite, APOI cota gratuită — nu invers.
- *   - Suma de credite per produs e configurată în CREDIT_AMOUNTS.
  */
 
 const express = require('express');
+const crypto = require('crypto');
 
 // Credite acordate per produs (configurat pentru fiecare pachet din App Store / Play Store)
 const CREDIT_AMOUNTS = {
@@ -24,7 +13,6 @@ const CREDIT_AMOUNTS = {
   'nutri_credits_150': 150,
   'nutri_credits_50_ios': 50,
   'nutri_credits_150_ios': 150,
-  // Adaugă alte ID-uri de produs după caz
 };
 
 const TIPURI_CREDITARE = new Set([
@@ -32,6 +20,29 @@ const TIPURI_CREDITARE = new Set([
   'NON_RENEWING_PURCHASE',
   'RENEWAL',
 ]);
+
+function egalSigur(a, b) {
+  const bufA = Buffer.from(String(a ?? ''), 'utf8');
+  const bufB = Buffer.from(String(b ?? ''), 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+async function inregistreazaCreditEsuat({ supabaseAdmin, eventId, appUserId, productId, credite, motiv, payload }) {
+  try {
+    if (!supabaseAdmin) return;
+    await supabaseAdmin.from('credite_esuate').upsert({
+      event_id: eventId,
+      app_user_id: appUserId,
+      product_id: productId,
+      credite,
+      motiv,
+      payload,
+    }, { onConflict: 'event_id' });
+  } catch (e) {
+    console.error('[RevenueCat] Nu am putut scrie în credite_esuate:', e.message);
+  }
+}
 
 function createWebhooksRevenueCatRouter({ supabaseAdmin, config }) {
   const router = express.Router();
@@ -44,14 +55,6 @@ function createWebhooksRevenueCatRouter({ supabaseAdmin, config }) {
     if (!expectedSecret) {
       console.error('[RevenueCat Webhook] REVENUECAT_WEBHOOK_SECRET neconfigurat.');
       return res.status(500).json({ eroare: 'Webhook RevenueCat neconfigurat.' });
-    }
-
-    const crypto = require('crypto');
-    function egalSigur(a, b) {
-      const ba = Buffer.from(String(a));
-      const bb = Buffer.from(String(b));
-      if (ba.length !== bb.length) return false;
-      return crypto.timingSafeEqual(ba, bb);
     }
 
     if (!egalSigur(authHeader, expectedSecret)) {
@@ -83,30 +86,45 @@ function createWebhooksRevenueCatRouter({ supabaseAdmin, config }) {
 
         if (crediteDelta === 0) {
           console.warn(`[RevenueCat] Produs nerecunoscut: ${productId}. Creditele nu au fost acordate.`);
-          // Returnăm 200 ca RevenueCat să nu reintre în retry
           return res.json({ ok: true, avertisment: `Produs ${productId} neconfigurat în CREDIT_AMOUNTS.` });
         }
 
-        // Mapează app_user_id prin clerk_user_map dacă nu este deja UUID
         let targetSupabaseUserId = userId;
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-        if (!isUuid) {
-          const { data: mapare } = await supabaseAdmin
+        if (!UUID_RE.test(userId)) {
+          const { data: mapare, error: eroareMapare } = await supabaseAdmin
             .from('clerk_user_map')
             .select('supabase_user_id')
             .eq('clerk_user_id', userId)
             .maybeSingle();
 
-          if (mapare?.supabase_user_id) {
-            targetSupabaseUserId = mapare.supabase_user_id;
-          } else {
-            console.error(`[RevenueCat] Utilizatorul Clerk ${userId} nu este mapat la un UUID Supabase.`);
-            return res.status(200).json({
-              ok: false,
-              avertisment: `Utilizatorul ${userId} nu a fost găsit în clerk_user_map.`,
+          if (eroareMapare) {
+            console.error('[RevenueCat] Citire clerk_user_map eșuată:', eroareMapare.message);
+            return res.status(503).json({
+              eroare: 'Maparea utilizatorului este temporar indisponibilă.',
+              cod: 'USER_MAP_UNAVAILABLE',
             });
           }
+
+          if (!mapare?.supabase_user_id) {
+            await inregistreazaCreditEsuat({
+              supabaseAdmin,
+              eventId,
+              appUserId: userId,
+              productId,
+              credite: crediteDelta,
+              motiv: 'USER_NOT_MAPPED_YET',
+              payload: event,
+            });
+            console.error(`[RevenueCat] Clerk ${userId} nemapat — cer retry.`);
+            return res.status(503).json({
+              eroare: 'Utilizator nemapat încă — reîncercați.',
+              cod: 'USER_NOT_MAPPED_YET',
+            });
+          }
+
+          targetSupabaseUserId = mapare.supabase_user_id;
         }
 
         // P-01b: funcție atomică cu UNIQUE pe event_id — idempotent
@@ -124,6 +142,15 @@ function createWebhooksRevenueCatRouter({ supabaseAdmin, config }) {
 
         if (rpcError) {
           console.error('[RevenueCat] Eroare RPC aplica_tranzactie_credite:', rpcError.message);
+          await inregistreazaCreditEsuat({
+            supabaseAdmin,
+            eventId,
+            appUserId: userId,
+            productId,
+            credite: crediteDelta,
+            motiv: `RPC_ERROR: ${rpcError.message}`,
+            payload: event,
+          });
           return res.status(500).json({ eroare: 'Nu s-au putut actualiza creditele.' });
         }
 
@@ -137,7 +164,6 @@ function createWebhooksRevenueCatRouter({ supabaseAdmin, config }) {
         return res.json({ ok: true, soldNou, crediteDelta });
       }
 
-      // CANCELLATION / EXPIRATION / alte tipuri → nu modificăm creditele
       console.log(`[RevenueCat] Eveniment ${eventType} primit pentru ${userId} — fără modificare credite.`);
       return res.json({ ok: true, ignorat: true, eventType });
     } catch (err) {
@@ -150,5 +176,3 @@ function createWebhooksRevenueCatRouter({ supabaseAdmin, config }) {
 }
 
 module.exports = createWebhooksRevenueCatRouter;
-module.exports.CREDIT_AMOUNTS = CREDIT_AMOUNTS;
-module.exports.TIPURI_CREDITARE = TIPURI_CREDITARE;
