@@ -78,8 +78,9 @@ function codEroareSigur(err) {
 exports.analizaMancareTask = task({
   id: 'analiza-mancare-ai',
   run: async (payload) => {
+    const lipsesteCheiaPrincipalaGemini = !process.env.GEMINI_API_KEY;
     const lipsa = VARIABILE_OBLIGATORII.filter((cheie) => !process.env[cheie]?.trim());
-    if (lipsa.length > 0) {
+    if (lipsesteCheiaPrincipalaGemini || lipsa.length > 0) {
       return {
         success: false,
         status: 'needs_config',
