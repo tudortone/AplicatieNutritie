@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, Pressable } from 'react-native';
 import Animated, { Layout } from 'react-native-reanimated';
 import { Clock, Pencil, Trash2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,6 +33,7 @@ export const MasaCard = React.memo(function MasaCard({
 }: MasaCardProps) {
   const { colors } = useTheme();
   const alimenteSubList = useMemo(() => parseAlimente(masa), [masa.alimente]);
+  const [fotoVisible, setFotoVisible] = useState(false);
 
   return (
     <Animated.View layout={Layout.springify()} style={styles.cardContainer}>
@@ -53,16 +54,6 @@ export const MasaCard = React.memo(function MasaCard({
             { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder },
           ]}
         >
-          {masa.imagine_url ? (
-            <View style={styles.imageBannerContainer}>
-              <Image
-                source={{ uri: masa.imagine_url }}
-                style={styles.imageBanner}
-                resizeMode="cover"
-              />
-            </View>
-          ) : null}
-
           <View style={styles.cardGrad}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleRow}>
@@ -214,9 +205,49 @@ export const MasaCard = React.memo(function MasaCard({
                 </LinearGradient>
               </View>
             </View>
+
+            {masa.imagine_url ? (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setFotoVisible(true);
+                }}
+                style={styles.imageBottomContainer}
+                accessibilityRole="imagebutton"
+                accessibilityLabel="Vezi poza mesei mărită"
+              >
+                <Image
+                  source={{ uri: masa.imagine_url }}
+                  style={styles.imageBottom}
+                  resizeMode="cover"
+                />
+              </Pressable>
+            ) : null}
           </View>
         </View>
       </TouchableOpacity>
+
+      {/* Viewer poza masa: apasă pe poza din jurnal ca să o vezi exact */}
+      <Modal
+        visible={fotoVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFotoVisible(false)}
+      >
+        <Pressable
+          style={styles.viewerBackdrop}
+          onPress={() => setFotoVisible(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Închide poza mesei"
+        >
+          <Image
+            source={{ uri: masa.imagine_url }}
+            style={styles.viewerImage}
+            resizeMode="contain"
+          />
+          <Text style={styles.viewerHint}>Apasă oriunde pentru a închide</Text>
+        </Pressable>
+      </Modal>
     </Animated.View>
   );
 }, (prev, next) => {
@@ -241,15 +272,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
   },
-  imageBannerContainer: {
-    height: 140,
-    width: '100%',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+  imageBottomContainer: {
+    marginTop: 12,
+    borderRadius: 16,
     overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  imageBanner: {
+  imageBottom: {
     width: '100%',
-    height: '100%',
+    height: 160,
+  },
+  viewerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  viewerImage: {
+    width: '100%',
+    height: '78%',
+    borderRadius: 12,
+  },
+  viewerHint: {
+    marginTop: 18,
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontWeight: '600',
   },
   cardGrad: {
     padding: 16,

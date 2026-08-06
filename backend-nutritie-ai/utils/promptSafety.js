@@ -36,7 +36,10 @@ function construiesteIstoricSigur(istoric, { maxMesaje = MAX_MESAJE } = {}) {
 			continue;
 		}
 
-		const rolBrut = brut.role === 'assistant' || brut.isUser === false ? 'assistant' : 'user';
+		// Frontend-ul trimite istoricul cu `role: 'ai'` pentru mesajele modelului;
+		// fara maparea asta, intregul istoric devenea `user` si conversatia isi
+		// pierdea contextul asistentului in prompt.
+		const rolBrut = brut.role === 'assistant' || brut.role === 'ai' || brut.isUser === false ? 'assistant' : 'user';
 		if (!ROLURI_PERMISE.has(rolBrut)) {
 			respinse += 1;
 			continue;

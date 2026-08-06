@@ -48,6 +48,10 @@ interface MealProposal {
 // Generator de id stabil pentru mesajele de chat (folosit ca `key` in lista).
 const newMsgId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+// Timeout-ul clientului pentru cererile AI. Fara el, un raspuns server lent
+// (ex. tot lantul de fallback Gemini) tinea butonul de trimitere blocat la nesfarsit.
+const AI_REQUEST_TIMEOUT_MS = 90000;
+
 interface ChatMessage {
   // FIX UI: fara id stabil, key={index} facea Reanimated sa reutilizeze bula
   // gresita la inserarea unui mesaj (animatii care sar, text amestecat).
@@ -249,15 +253,19 @@ export default function ChatScreen() {
       return;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+
     try {
       const istoricActivat = [...mesajeRef.current, { role: 'user' as const, text: mesajText }];
       const raspuns = await fetch(buildApiUrl('/chat'), {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ 
+        signal: controller.signal,
+        body: JSON.stringify({
           mesaj: mesajText,
           mesaje: istoricActivat,
           caloriiConsumate: totalCalorii,
@@ -298,10 +306,11 @@ export default function ChatScreen() {
         try {
           const logResp = await fetch(buildApiUrl('/log-food-from-chat'), {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${session.access_token}`
             },
+            signal: controller.signal,
             body: JSON.stringify({ mesaj: mesajText, mesaje: istoricActivat }),
           });
           if (logResp.ok) {
@@ -324,6 +333,7 @@ export default function ChatScreen() {
     } catch {
       setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: "Eroare de conexiune cu serverul AI. Te rog încearcă din nou mai târziu." }]);
     } finally {
+      clearTimeout(timeoutId);
       setLoadingChat(false);
       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     }

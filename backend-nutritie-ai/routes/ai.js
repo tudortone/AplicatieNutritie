@@ -12,6 +12,7 @@ const { curataMinim, detectPromptInjection, citesteQuery } = require('../utils/s
 const { valideazaIngrediente } = require('../utils/promptSafety');
 const { numarModel, NUME_FURNIZORI_AI } = require('../services/ai/vision');
 const { EroareAiClient } = require('../services/ai/chat');
+const { construiesteGazdePermise, creeazaValideazaUrlImagine } = require('../utils/valideazaUrlImagine');
 
 /**
  * Rute AI (analiza foto, chat, estimare text, corectie vizual+text) + orfanele
@@ -39,6 +40,13 @@ function createAiRouter({
   // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
   const router = express.Router();
 
+  const valideazaUrlImagine = creeazaValideazaUrlImagine({
+    gazdePermise: construiesteGazdePermise({
+      imagekitUrlEndpoint: config?.imagekit?.urlEndpoint,
+      supabaseUrl: config?.supabase?.url,
+    }),
+  });
+
   // ==========================================
   // IMAGEKIT AUTHENTICATION ENDPOINT
   // ==========================================
@@ -60,48 +68,6 @@ function createAiRouter({
       return res.status(500).json({ eroare: 'Eroare la generarea parametrilor ImageKit.' });
     }
   });
-
-  // ==========================================
-  // TRIGGER.DEV ASYNC AI FOOD ANALYSIS ENDPOINT
-  // ==========================================
-
-  // Gazde permise pentru imaginile trimise catre task-ul din fundal.
-  // Fara aceasta lista, `imageUrl` era acceptat ca text liber, deci un utilizator
-  // autentificat putea pune serverul sa descarce orice adresa (SSRF).
-  const GAZDE_IMAGINI_PERMISE = (() => {
-    const gazde = new Set();
-    if (config.imagekit.urlEndpoint) {
-      try {
-        gazde.add(new URL(config.imagekit.urlEndpoint).hostname.toLowerCase());
-      } catch { /* endpoint malformat: ramane fail-closed */ }
-    }
-    try {
-      gazde.add(new URL(config.supabase.url).hostname.toLowerCase());
-    } catch { /* idem */ }
-    return gazde;
-  })();
-
-  function valideazaUrlImagine(valoare) {
-    if (typeof valoare !== 'string' || !valoare.trim()) {
-      return { ok: false, eroare: 'URL-ul imaginii este obligatoriu.' };
-    }
-    let adresa;
-    try {
-      adresa = new URL(valoare.trim());
-    } catch {
-      return { ok: false, eroare: 'URL-ul imaginii este invalid.' };
-    }
-    if (adresa.protocol !== 'https:') {
-      return { ok: false, eroare: 'URL-ul imaginii trebuie sa foloseasca https.' };
-    }
-    if (!GAZDE_IMAGINI_PERMISE.has(adresa.hostname.toLowerCase())) {
-      return {
-        ok: false,
-        eroare: 'Imaginea trebuie incarcata pe stocarea aplicatiei inainte de analiza.',
-      };
-    }
-    return { ok: true, url: adresa.toString() };
-  }
 
   router.post('/trigger-analiza-mancare', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res) => {
     if (!config.triggerSecretKey) {

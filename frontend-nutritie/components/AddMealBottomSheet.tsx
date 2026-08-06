@@ -28,7 +28,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFavorite } from '../hooks/useFavorite';
 import { useGamificareContext } from '../context/GamificareContext';
 import { Masa, TipMasa, AlimentDetaliat } from '../types';
-import { getTipMasaDupaOra, MEAL_CATEGORIES } from '../lib/mealUtils';
+import { getTipMasaDupaOra, MEAL_CATEGORIES, insereazaMasaCuPoza, actualizeazaMasaCuPoza } from '../lib/mealUtils';
 import { foodPresets, categories, FoodPreset } from '../constants/foodPresets';
 import { ProductSearch } from './food/ProductSearch';
 
@@ -354,10 +354,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
         let err = null;
         if (editingMasaId) {
-          const { error } = await supabase.from('mese').update(payload).eq('id', editingMasaId);
+          const { error } = await actualizeazaMasaCuPoza(supabase, editingMasaId, payload);
           err = error;
         } else {
-          const { error } = await supabase.from('mese').insert(payload);
+          const { error } = await insereazaMasaCuPoza(supabase, payload);
           err = error;
         }
 

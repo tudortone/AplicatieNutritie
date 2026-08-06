@@ -203,7 +203,7 @@ export default function ScannerBarcodeScreen() {
       return;
     }
     const ingredienteList = produse.map(p => `${p.nume} (${p.cantitate || 1}x${p.is_congelat ? ' - la congelator ❄️' : ''})`).join(', ');
-    const promptGrok = `Salut Grok! Am în Cămara Mea următoarele ingrediente: ${ingredienteList}. Ce rețete sănătoase, bogate în proteine și rapide pot găti astăzi folosind aceste alimente? Ține cont și de cele la congelator sau care expiră curând.`;
+    const promptGrok = `Am în Cămara Mea următoarele ingrediente: ${ingredienteList}. Ce rețete sănătoase, bogate în proteine și rapide pot găti astăzi folosind aceste alimente? Ține cont și de cele la congelator sau care expiră curând.`;
     router.push({
       pathname: '/(tabs)/chat',
       params: { prompt: promptGrok }
@@ -569,7 +569,7 @@ export default function ScannerBarcodeScreen() {
             >
               <ChefHat size={18} color={colors.accentTertiary} />
               <Text style={{ fontSize: 13.5, fontWeight: '900', color: colors.accentTertiary }}>
-                Rețete AI Grok cu ingredientele din Cămară
+                Rețete AI cu ingredientele din Cămară
               </Text>
             </TouchableOpacity>
 
