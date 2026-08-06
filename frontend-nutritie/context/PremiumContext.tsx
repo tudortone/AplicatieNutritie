@@ -206,15 +206,12 @@ export function PremiumProvider({ children, appUserId, isAdmin = false }: { chil
     [hasPremium, verificaServerPremium, appUserId],
   );
 
-  const purchaseCredits = useCallback(async (product: PurchasesStoreProduct): Promise<boolean> => {
-    if (!PurchasesApi) return false;
-    try {
-      const result = await PurchasesApi.purchaseStoreProduct(product);
-      // Creditele se acordă server-side (webhook RevenueCat → Supabase) în Faza 2.
-      return Boolean(result.customerInfo);
-    } catch {
-      return false;
-    }
+  // P-01: creditele sunt DEZACTIVATE pana cand webhook-ul RevenueCat → Supabase
+  // (granta-credite) este construit (Faza 2). Nu apelam niciodata store-ul:
+  // altfel s-ar tramite bani reali fara livrare de credite. Se re-activeaza in Val 2.
+  const purchaseCredits = useCallback(async (_product: PurchasesStoreProduct): Promise<boolean> => {
+    console.warn('purchaseCredits disabled: grant-credits webhook not built (Phase 2)');
+    return false;
   }, []);
 
   const restore = useCallback(async (): Promise<boolean> => {

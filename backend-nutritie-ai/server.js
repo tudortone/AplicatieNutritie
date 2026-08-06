@@ -14,7 +14,8 @@ const ImageKit = require('imagekit');
 const { tasks } = require('@trigger.dev/sdk/v3');
 
 const { incarcaConfig } = require('./config/env');
-const { creeazaLimitatoare } = require('./utils/rateLimit');
+const { creeazaLimitatoare, ipFallbackKey } = require('./utils/rateLimit');
+const rateLimit = require('express-rate-limit');
 const { TokenCache } = require('./utils/tokenCache');
 const { rezolvaIdentitate, EroareIdentitate } = require('./utils/identitate');
 const { callWithTimeout } = require('./utils/httpTimeout');
@@ -130,10 +131,26 @@ app.use(cors({
 }));
 const supabase = createClient(config.supabase.url, config.supabase.anonKey);
 const supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey);
+// P-012: limitator dedicat webhook-urilor (Clerk/Svix). Se monteaza pe calea
+// webhook-urilor INAINTE de router (si INAINTE de preAuthLimiter, care altfel nu
+// se aplica), ca burst-urile legitime Clerk sa treaca dar traficul evadat sa fie
+// blocat (600 req/min/IP, MemoryStore per proces).
+const webhooksLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 600,
+  keyGenerator: ipFallbackKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === 'OPTIONS',
+  message: { eroare: 'Prea multe cereri webhook. Incearca mai tarziu.' },
+});
+
 // PR1-backend: webhook-urile (Clerk/Svix) sunt montate ÎNAINTE de body-parse,
-// ca Svix sa primeasca bytes-ii bruti netransformati. O singura periere webhooksR.
+// ca Svix sa prime bytes-urile brute netransformate. O singura periere webhooksR.
 const webhooksR = createWebhooksRouter({ supabaseAdmin, config });
+app.use('/api/v1/webhooks', webhooksLimiter);
 app.use('/api/v1/webhooks', webhooksR);
+app.use('/api/webhooks', webhooksLimiter);
 app.use('/api/webhooks', webhooksR);
 
 app.use(express.json({ limit: '1mb' }));

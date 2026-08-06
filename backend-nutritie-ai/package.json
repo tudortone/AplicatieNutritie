@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "server.js",
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "test": "node tests/runJestWithAnnotations.js",
     "test:integration": "node tests/runJestWithAnnotations.js tests/rls_integration.test.js",

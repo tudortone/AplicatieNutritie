@@ -230,7 +230,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       console.error('[GDPR] Stergere cont esuata:', cod);
       const status = cod === 'IMAGEKIT_NOT_CONFIGURED' || cod === 'CLERK_NOT_CONFIGURED' ? 503 : 500;
       return res.status(status).json({
-        eroare: 'Ștergerea contului a eșuat. Poți încerca din nou în siguranță — orice eșec este în întregime acoperit și nu se raportează succes parțial.',
+        eroare: 'Ștergerea contului a eșuat. Este posibil ca unele date să fi fost deja șterse, iar o nouă încercare poate să nu restabilească resursele externe (ImageKit/Clerk). Poți încerca din nou în siguranță — operația poate fi reluată, dar succesul ei nu e garantat complet.',
       });
     }
   });

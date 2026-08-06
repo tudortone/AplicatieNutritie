@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Check, Crown, X, Sparkles, ScanLine, MessageSquareText, SlidersHorizontal, BarChart3, RefreshCcw } from 'lucide-react-native';
+import { Check, Crown, X, ScanLine, MessageSquareText, SlidersHorizontal, BarChart3, RefreshCcw } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
-import { usePremium, PREMIUM_PACKAGE_IDS, CREDIT_PRODUCT_IDS } from '../context/PremiumContext';
+import { usePremium, PREMIUM_PACKAGE_IDS } from '../context/PremiumContext';
 import { useNotify } from '../hooks/useNotify';
-import type { PurchasesPackage, PurchasesStoreProduct } from 'react-native-purchases';
+import { getLegalUrls } from '../lib/legalUrls';
+import type { PurchasesPackage } from 'react-native-purchases';
 
 const FEATURES = [
   { icon: ScanLine, title: 'Scanări AI nelimitate', desc: 'Fotografiază farfuria fără limite' },
@@ -25,9 +26,8 @@ export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const notify = useNotify();
-  const { isPremium, loading, subscriptionPackages, creditProducts, purchasesAvailable, purchaseSubscription, purchaseCredits, restore } = usePremium();
+  const { isPremium, loading, subscriptionPackages, purchasesAvailable, purchaseSubscription, restore } = usePremium();
   const [buying, setBuying] = useState<string | null>(null);
-  const [showCredits, setShowCredits] = useState(false);
 
   const monthly = subscriptionPackages.find((p) => p.identifier === PREMIUM_PACKAGE_IDS[0]);
   const annual = subscriptionPackages.find((p) => p.identifier === PREMIUM_PACKAGE_IDS[1]);
@@ -48,14 +48,13 @@ export default function PaywallScreen() {
     }
   };
 
-  const buyCredits = async (product: PurchasesStoreProduct) => {
-    setBuying(product.identifier);
-    const ok = await purchaseCredits(product);
-    setBuying(null);
-    if (ok) {
-      notify.success('Credite adăugate', 'Pachetul de credite AI a fost achiziționat.');
-    } else {
-      notify.warning('Achiziție anulată', 'Nu s-a finalizat plata.');
+  // P-02: deschide documentele legale în browser extern; fail-closed cu Alert pe eșec.
+  const openLegal = (key: 'termsUrl' | 'privacyUrl') => {
+    try {
+      const { termsUrl, privacyUrl } = getLegalUrls();
+      Linking.openURL(key === 'termsUrl' ? termsUrl : privacyUrl);
+    } catch {
+      Alert.alert('Document indisponibil', 'Documentul legal nu e momentan disponibil. Încearcă din nou mai târziu.');
     }
   };
 
@@ -177,58 +176,14 @@ export default function PaywallScreen() {
             </>
           )}
 
-          <Pressable onPress={() => setShowCredits(true)} style={styles.creditsLink} accessibilityRole="button">
-            <Sparkles size={15} color={colors.accent} />
-            <Text style={[styles.creditsLinkText, { color: colors.accent }]}>Vrei doar credite AI? Cumpără pachete de scanări</Text>
-          </Pressable>
-
           <Text style={[styles.legal, { color: colors.textTertiary }]}>
             Plata se procesează prin Google Play. Abonamentul se reînnoiește automat până la anulare.{'\n'}
-            <Text style={{ textDecorationLine: 'underline' }} onPress={() => {}}>{'Termeni'}</Text> · <Text style={{ textDecorationLine: 'underline' }} onPress={() => {}}>{'Confidențialitate'}</Text>
+            <Text style={{ textDecorationLine: 'underline' }} onPress={() => openLegal('termsUrl')}>{'Termeni'}</Text> · <Text style={{ textDecorationLine: 'underline' }} onPress={() => openLegal('privacyUrl')}>{'Confidențialitate'}</Text>
           </Text>
         </ScrollView>
       )}
 
-      {/* Credit shop */}
-      <Modal visible={showCredits} transparent animationType="slide" onRequestClose={() => setShowCredits(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Pachete de credite AI</Text>
-              <Pressable onPress={() => setShowCredits(false)} hitSlop={8}>
-                <X size={20} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-            <Text style={[styles.modalDesc, { color: colors.textSecondary }]}>
-              1 scanare = 1 credit. Creditele nu expiră.
-            </Text>
-            {creditProducts.map((product) => {
-              const label = product.identifier === CREDIT_PRODUCT_IDS[0] ? '50 scanări AI' : '150 scanări AI';
-              return (
-                <Pressable
-                  key={product.identifier}
-                  onPress={() => buyCredits(product)}
-                  disabled={buying != null}
-                  style={({ pressed }) => [styles.creditRow, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg, opacity: pressed ? 0.85 : 1 }]}
-                >
-                  <View style={[styles.creditIcon, { backgroundColor: `${colors.accent}1A` }]}>
-                    <Sparkles size={18} color={colors.accent} />
-                  </View>
-                  <Text style={[styles.creditLabel, { color: colors.textPrimary }]}>{label}</Text>
-                  <Text style={[styles.creditPrice, { color: colors.accent }]}>{product.priceString ?? '—'}</Text>
-                  {buying === product.identifier ? <ActivityIndicator color={colors.accent} /> : null}
-                </Pressable>
-              );
-            })}
-            {!purchasesAvailable ? (
-              <Text style={[styles.modalDesc, { color: colors.textTertiary, marginTop: 12 }]}>
-                Disponibil în versiunea instalată (build de producție), nu în Expo Go.
-              </Text>
-            ) : null}
-          </View>
-        </View>
-      </Modal>
-    </View>
+      </View>
   );
 }
 
@@ -261,21 +216,10 @@ const styles = StyleSheet.create({
   trialNote: { fontSize: 11, textAlign: 'center', marginTop: 14, lineHeight: 16 },
   restoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14 },
   restoreText: { fontSize: 12, fontWeight: '700' },
-  creditsLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 18 },
-  creditsLinkText: { fontSize: 13, fontWeight: '800' },
   legal: { fontSize: 10, textAlign: 'center', marginTop: 18, lineHeight: 15 },
   premiumActive: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30, gap: 10 },
   premiumActiveTitle: { fontSize: 22, fontWeight: '900', marginTop: 6 },
   premiumActiveDesc: { fontSize: 14, textAlign: 'center' },
   primaryBtn: { marginTop: 18, borderRadius: 16, paddingHorizontal: 28, paddingVertical: 14 },
   primaryBtnText: { fontSize: 15, fontWeight: '900' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  modalCard: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, padding: 20, paddingBottom: 36 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  modalTitle: { fontSize: 17, fontWeight: '900' },
-  modalDesc: { fontSize: 12, marginTop: 6, marginBottom: 14 },
-  creditRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, borderWidth: 1, padding: 14, marginTop: 10 },
-  creditIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  creditLabel: { flex: 1, fontSize: 14, fontWeight: '800' },
-  creditPrice: { fontSize: 15, fontWeight: '900' },
 });
