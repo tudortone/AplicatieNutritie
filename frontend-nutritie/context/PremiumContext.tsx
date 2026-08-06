@@ -1,15 +1,18 @@
 /**
  * PremiumContext.tsx — monetizare NutriAI (RevenueCat).
- *
- * Abonament Premium (entitlement `premium`) + pachete de credite AI (consumabile).
- *
- * IMPORTANT: SDK-ul rulează nativ doar în development/production build (EAS).
- * În Expo Go se încarcă în „Browser Mode" (fără store nativ), iar `configure()`
- * eșuează — nu-l mai apelăm deloc, iar `purchasesAvailable` devine false,
- * ca aplicația să nu crape și să nu lase utilizatorul să intre în paywall.
+ * Entitlement-ul local este doar un semnal; privilegiul devine activ exclusiv
+ * după un verdict pozitiv al backendului.
  */
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { API_PREFIX } from '../lib/api';
@@ -17,6 +20,7 @@ import { PRODUCT_CATEGORY } from 'react-native-purchases';
 import { supabase } from '../supabase';
 import type {
   CustomerInfo,
+  CustomerInfoUpdateListener,
   PurchasesPackage,
   PurchasesStoreProduct,
 } from 'react-native-purchases';
@@ -24,27 +28,18 @@ import type {
 type RC = typeof import('react-native-purchases');
 type PurchasesApiType = RC['default'];
 
-/** Încercăm încărcarea modulului nativ; în Expo Go e absent și nu vrem crash. */
 let PurchasesApi: PurchasesApiType | null = null;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const mod = require('react-native-purchases') as RC;
   PurchasesApi = mod.default ?? (mod as unknown as PurchasesApiType);
 } catch {
   PurchasesApi = null;
 }
 
-/** În Expo Go SDK-ul se încarcă (Browser Mode) dar store-ul nativ lipsește — achizițiile nu pot funcționa. */
 const isExpoGo = Constants.appOwnership === 'expo';
+let purchasesConfigured = false;
 
-/**
- * Cheia API publică RevenueCat, citită din env (EXPO_PUBLIC_REVENUECAT_*_KEY) și
- * inline-uită la build. NU se hardcodează în sursă: un placeholder în git ar duce
- * fie la chei reale comise, fie la un build care pare configurat dar nu e.
- * Cheile RevenueCat sunt publicabile (verificarea reală e server-side, prin
- * revenuecat-secret), deci inlinierea în bundle la build e comportamentul
- * standard al SDK-ului.
- */
 function cheieApiRevenueCat(): string | null {
   const cheie = Platform.OS === 'ios'
     ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY
@@ -52,23 +47,15 @@ function cheieApiRevenueCat(): string | null {
   return cheie?.trim() || null;
 }
 
-/** Entitlement-ul abonamentului Premium (definit în dashboard-ul RevenueCat). */
 const PREMIUM_ENTITLEMENT = 'premium';
-
-/** Identificatorii produselor (trebuie să existe în RevenueCat + Play Console). */
 export const PREMIUM_PACKAGE_IDS = ['premium_monthly', 'premium_annual'] as const;
 export const CREDIT_PRODUCT_IDS = ['credits_50', 'credits_150'] as const;
 
 export type PremiumStatus = {
-  /** SDK-ul nativ e disponibil (build real, nu Expo Go) */
   purchasesAvailable: boolean;
-  /** abonamentul Premium e activ */
   isPremium: boolean;
-  /** încărcare inițială / refresh */
   loading: boolean;
-  /** pachetele de abonament din offering-uri (ex. monthly + annual) */
   subscriptionPackages: PurchasesPackage[];
-  /** produsele consumabile pentru credite AI */
   creditProducts: PurchasesStoreProduct[];
   refresh: () => Promise<void>;
   purchaseSubscription: (pkg: PurchasesPackage) => Promise<boolean>;
@@ -92,144 +79,191 @@ export function usePremium(): PremiumStatus {
   return useContext(PremiumContext);
 }
 
-export function PremiumProvider({ children, appUserId, isAdmin = false }: { children: React.ReactNode; appUserId: string | null; isAdmin?: boolean }) {
+export function PremiumProvider({
+  children,
+  appUserId,
+  isAdmin = false,
+}: {
+  children: React.ReactNode;
+  appUserId: string | null;
+  isAdmin?: boolean;
+}) {
   const [loading, setLoading] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [subscriptionPackages, setSubscriptionPackages] = useState<PurchasesPackage[]>([]);
   const [creditProducts, setCreditProducts] = useState<PurchasesStoreProduct[]>([]);
-  // Fail-closed: fără cheie de platformă sau în Expo Go, achizițiile sunt
-  // indisponibile (SDK-ul nu se configurează niciodată cu o cheie goală).
-  const purchasesAvailable = PurchasesApi != null && !isExpoGo && cheieApiRevenueCat() != null;
+  const generatieRef = useRef(0);
+  const mountedRef = useRef(true);
+  const appUserIdRef = useRef(appUserId);
+  appUserIdRef.current = appUserId;
 
-  const hasPremium = useCallback((info?: CustomerInfo | null) => {
+  const apiKey = cheieApiRevenueCat();
+  const purchasesAvailable = PurchasesApi !== null && !isExpoGo && apiKey !== null;
+
+  const hasPremiumLocal = useCallback((info?: CustomerInfo | null) =>
+    Boolean(info?.entitlements?.active?.[PREMIUM_ENTITLEMENT]), []);
+
+  const verificaServerPremium = useCallback(async (forAppUserId: string | null): Promise<boolean> => {
+    if (!forAppUserId) return false;
     try {
-      return Boolean(info?.entitlements?.active?.[PREMIUM_ENTITLEMENT]);
+      const { data, error } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, '');
+      if (error || !token || !apiUrl) return false;
+
+      const resp = await fetch(`${apiUrl}${API_PREFIX}/user/premium-status`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      if (!resp.ok) return false;
+      const payload: unknown = await resp.json();
+      return Boolean(
+        payload && typeof payload === 'object' &&
+        'premium' in payload && payload.premium === true,
+      );
     } catch {
       return false;
     }
   }, []);
 
-  // B-09: entitlement-ul este verificat si pe server (revenuecat-secret), nu doar
-  // local. Fail-open la eroare de retea/indisponibilitate; downgrade DOAR la un
-  // verdict explicit `premium:false` din partea serverului. Astfel un eventual
-  // flag local fals nu poate acorda singur privilegii de premium.
-  const verificaServerPremium = useCallback(async (forAppUserId: string | null) => {
-    try {
-      const { data } = await supabase.auth.getSession();
-      const token = data?.session?.access_token;
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL;
-      if (!token || !apiUrl || !forAppUserId) return null;
-      const resp = await fetch(`${apiUrl.replace(/\/+$/, '')}${API_PREFIX}/user/premium-status`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!resp.ok) return null;
-      return await resp.json() as { premium?: boolean };
-    } catch {
-      return null;
+  const aplicaCustomerInfo = useCallback(async (info: CustomerInfo): Promise<boolean> => {
+    const generatie = ++generatieRef.current;
+    if (!hasPremiumLocal(info)) {
+      if (mountedRef.current && generatieRef.current === generatie) setIsPremium(false);
+      return false;
     }
-  }, []);
+
+    const validat = await verificaServerPremium(appUserIdRef.current);
+    if (mountedRef.current && generatieRef.current === generatie) setIsPremium(validat);
+    return validat;
+  }, [hasPremiumLocal, verificaServerPremium]);
 
   const refresh = useCallback(async () => {
-    if (!PurchasesApi) return;
+    if (!PurchasesApi || !purchasesAvailable || !appUserIdRef.current) {
+      setIsPremium(false);
+      return;
+    }
     try {
       setLoading(true);
-      const customer = await PurchasesApi.getCustomerInfo();
-      const premiumLocal = hasPremium(customer);
-      setIsPremium(premiumLocal);
-
-      const offerings = await PurchasesApi.getOfferings();
+      const [customer, offerings, products] = await Promise.all([
+        PurchasesApi.getCustomerInfo(),
+        PurchasesApi.getOfferings(),
+        PurchasesApi.getProducts([...CREDIT_PRODUCT_IDS], PRODUCT_CATEGORY.NON_SUBSCRIPTION),
+      ]);
+      if (!mountedRef.current) return;
       setSubscriptionPackages(offerings.current?.availablePackages ?? []);
-      setCreditProducts(await PurchasesApi.getProducts([...CREDIT_PRODUCT_IDS], PRODUCT_CATEGORY.NON_SUBSCRIPTION));
-
-      if (premiumLocal) {
-        const server = await verificaServerPremium(appUserId);
-        if (server && server.premium !== true) {
-          setIsPremium(false);
-          console.warn('[Premium] SDK local raporteaza premium, dar serverul revendica premium=false — downgrade server-side.');
-        }
-      }
+      setCreditProducts(products);
+      await aplicaCustomerInfo(customer);
     } catch {
-      // offline / configure eșuat — starea rămâne cea anterioară
+      if (mountedRef.current) setIsPremium(false);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
-  }, [hasPremium, verificaServerPremium, appUserId]);
+  }, [aplicaCustomerInfo, purchasesAvailable]);
 
-  // Configurare + sincronizare cu userul Supabase
   useEffect(() => {
-    const cheie = cheieApiRevenueCat();
-    if (!PurchasesApi || isExpoGo || !cheie) return;
-    try {
-      PurchasesApi.configure({ apiKey: cheie });
-    } catch {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      generatieRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!PurchasesApi || !purchasesAvailable || !apiKey) {
+      setIsPremium(false);
       return;
     }
 
-    PurchasesApi.addCustomerInfoUpdateListener((info) => {
-      setIsPremium(hasPremium(info));
-    });
-
-    if (appUserId) {
-      PurchasesApi.logIn(appUserId).catch(() => {});
+    try {
+      if (!purchasesConfigured) {
+        PurchasesApi.configure({ apiKey });
+        purchasesConfigured = true;
+      }
+    } catch {
+      setIsPremium(false);
+      return;
     }
 
-    refresh();
-  }, [appUserId, hasPremium, refresh]);
+    const listener: CustomerInfoUpdateListener = (info) => {
+      void aplicaCustomerInfo(info);
+    };
+    PurchasesApi.addCustomerInfoUpdateListener(listener);
+    return () => PurchasesApi?.removeCustomerInfoUpdateListener(listener);
+  }, [apiKey, aplicaCustomerInfo, purchasesAvailable]);
 
-  const purchaseSubscription = useCallback(
-    async (pkg: PurchasesPackage): Promise<boolean> => {
-      if (!PurchasesApi) return false;
-      try {
-        const result = await PurchasesApi.purchasePackage(pkg);
-        setIsPremium(hasPremium(result.customerInfo));
-        return hasPremium(result.customerInfo);
-      } catch {
-        return false;
-      }
-    },
-    [hasPremium],
-  );
+  useEffect(() => {
+    if (!PurchasesApi || !purchasesAvailable) {
+      setIsPremium(false);
+      return;
+    }
+
+    const generatie = ++generatieRef.current;
+    setIsPremium(false);
+    if (!appUserId) return;
+
+    PurchasesApi.logIn(appUserId)
+      .then(() => {
+        if (mountedRef.current && generatieRef.current === generatie) return refresh();
+        return undefined;
+      })
+      .catch(() => {
+        if (mountedRef.current && generatieRef.current === generatie) setIsPremium(false);
+      });
+  }, [appUserId, purchasesAvailable, refresh]);
+
+  const purchaseSubscription = useCallback(async (pkg: PurchasesPackage): Promise<boolean> => {
+    if (!PurchasesApi || !purchasesAvailable) return false;
+    try {
+      const result = await PurchasesApi.purchasePackage(pkg);
+      return await aplicaCustomerInfo(result.customerInfo);
+    } catch {
+      setIsPremium(false);
+      return false;
+    }
+  }, [aplicaCustomerInfo, purchasesAvailable]);
 
   const purchaseCredits = useCallback(async (product: PurchasesStoreProduct): Promise<boolean> => {
-    if (!PurchasesApi) return false;
+    if (!PurchasesApi || !purchasesAvailable) return false;
     try {
       const result = await PurchasesApi.purchaseStoreProduct(product);
-      // Creditele se acordă server-side (webhook RevenueCat → Supabase) în Faza 2.
       return Boolean(result.customerInfo);
     } catch {
       return false;
     }
-  }, []);
+  }, [purchasesAvailable]);
 
   const restore = useCallback(async (): Promise<boolean> => {
-    if (!PurchasesApi) return false;
+    if (!PurchasesApi || !purchasesAvailable) return false;
     try {
-      const customer = await PurchasesApi.restorePurchases();
-      const premium = hasPremium(customer);
-      setIsPremium(premium);
-      return premium;
+      return await aplicaCustomerInfo(await PurchasesApi.restorePurchases());
     } catch {
+      setIsPremium(false);
       return false;
     }
-  }, [hasPremium]);
+  }, [aplicaCustomerInfo, purchasesAvailable]);
 
-  const value = useMemo<PremiumStatus>(
-    () => ({
-      purchasesAvailable,
-      // Contul de admin are Premium permanent, independent de RevenueCat:
-      // flag-ul vine din app_metadata.rol (server-controlled), deci nu poate fi
-      // auto-acordat de un utilizator.
-      isPremium: isAdmin ? true : isPremium,
-      loading,
-      subscriptionPackages,
-      creditProducts,
-      refresh,
-      purchaseSubscription,
-      purchaseCredits,
-      restore,
-    }),
-    [purchasesAvailable, isPremium, isAdmin, loading, subscriptionPackages, creditProducts, refresh, purchaseSubscription, purchaseCredits, restore],
-  );
+  const value = useMemo<PremiumStatus>(() => ({
+    purchasesAvailable,
+    isPremium: isAdmin ? true : isPremium,
+    loading,
+    subscriptionPackages,
+    creditProducts,
+    refresh,
+    purchaseSubscription,
+    purchaseCredits,
+    restore,
+  }), [
+    purchasesAvailable,
+    isPremium,
+    isAdmin,
+    loading,
+    subscriptionPackages,
+    creditProducts,
+    refresh,
+    purchaseSubscription,
+    purchaseCredits,
+    restore,
+  ]);
 
   return <PremiumContext.Provider value={value}>{children}</PremiumContext.Provider>;
 }

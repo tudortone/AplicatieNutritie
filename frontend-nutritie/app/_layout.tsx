@@ -21,61 +21,68 @@ import OfflineBanner from '../components/OfflineBanner';
 import { GlobalErrorBoundary } from '../components/GlobalErrorBoundary';
 import '../i18n';
 
-// DSN-ul Sentry are forma https://<cheiePublica>@o<org>.ingest.<regiune>.sentry.io/<proiect>.
-// Fara segmentul `@` (cheia publica), SDK-ul arunca "Invalid Sentry Dsn" la fiecare boot.
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
-const isSentryDsnValid = !!SENTRY_DSN && /^https:\/\/[^@\s]+@.+/.test(SENTRY_DSN);
+const isSentryDsnValid = Boolean(SENTRY_DSN && /^https:\/\/[^@\s]+@.+/.test(SENTRY_DSN));
+const CHEIE_SENSIBILA = /authorization|cookie|token|jwt|password|parola|secret|api[-_]?key|email|phone|mesaj|user_prompt|userexplanation|image|imagine|alimente/i;
+const VALOARE_SENSIBILA = /bearer\s+[a-z0-9._~-]+|eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+|[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}/i;
+
+type JsonRecord = Record<string, unknown>;
+
+function esteObiect(value: unknown): value is JsonRecord {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function scrubValue(value: unknown, depth = 0): unknown {
+  if (depth > 5) return '[SCRUBBED_DEPTH]';
+  if (typeof value === 'string') {
+    if (VALOARE_SENSIBILA.test(value)) return '[SCRUBBED_PII]';
+    return value.length > 500 ? `${value.slice(0, 500)}...[truncated]` : value;
+  }
+  if (Array.isArray(value)) return value.slice(0, 50).map((item) => scrubValue(item, depth + 1));
+  if (esteObiect(value)) {
+    const output: JsonRecord = {};
+    for (const [key, item] of Object.entries(value)) {
+      output[key] = CHEIE_SENSIBILA.test(key) ? '[SCRUBBED_PII]' : scrubValue(item, depth + 1);
+    }
+    return output;
+  }
+  return value;
+}
 
 if (isSentryDsnValid) {
   Sentry.init({
     dsn: SENTRY_DSN,
     debug: false,
+    sendDefaultPii: false,
     beforeSend(event) {
-      const req = event.request;
-      if (req && req.data && typeof req.data === 'object') {
-        ['password', 'email', 'mesaj', 'userExplanation', 'user_prompt', 'imagine_base64', 'authorization'].forEach(key => {
-          if ((req.data as any)[key]) {
-            (req.data as any)[key] = '[SCRUBBED_PII]';
-          }
-        });
+      if (event.request) {
+        event.request.data = '[SCRUBBED_PII]';
+        event.request.headers = {};
+        if (event.request.url) event.request.url = event.request.url.split('?')[0];
       }
-      // B-11: datele de alimentatie sunt date de sanatate. Scrubeaza si
-      // breadcrumbs-urile (mesajul de utilizator poate duce in contextul unui
-      // crash) si pune un loc unde sa nu apara corpuri de cerere.
+      event.user = undefined;
+      if (event.extra) event.extra = scrubValue(event.extra) as JsonRecord;
+      if (event.contexts) event.contexts = scrubValue(event.contexts) as typeof event.contexts;
       if (Array.isArray(event.breadcrumbs)) {
-        event.breadcrumbs = event.breadcrumbs.map((crumb: any) => {
-          const c = { ...crumb };
-          if (c.data && typeof c.data === 'object') c.data = '[SCRUBBED_PII]';
-          return c;
-        });
+        event.breadcrumbs = event.breadcrumbs.slice(-50).map((crumb) => ({
+          ...crumb,
+          data: crumb.data ? { redacted: true } : undefined,
+          message: typeof crumb.message === 'string'
+            ? String(scrubValue(crumb.message)).slice(0, 200)
+            : crumb.message,
+        }));
       }
       return event;
-    }
+    },
   });
-
-  // Prinde crash-urile JS neprinse (ErrorUtils) si promisiunile respinse neprinse,
-  // ca erorile sa ajunga in Sentry, nu doar in consola.
-  const ErrorUtils = (global as any).ErrorUtils;
-  if (ErrorUtils?.getGlobalHandler) {
-    const originalHandler = ErrorUtils.getGlobalHandler();
-    ErrorUtils.setGlobalHandler((error: unknown, isFatal?: boolean) => {
-      Sentry.captureException(error, { extra: { isFatal: !!isFatal } });
-      originalHandler?.(error, isFatal);
-    });
-  }
-  try {
-    global.addEventListener?.('unhandledrejection', (event: any) => {
-      Sentry.captureException(event?.reason ?? event);
-    });
-  } catch {
-    // 'unhandledrejection' nu e suportat pe toate runtime-urile RN — il ignoram.
-  }
 } else if (SENTRY_DSN) {
-  console.warn('[Sentry] DSN invalid in .env — lipseste cheia publica (`@`). Copiaza DSN-ul complet din Sentry → Settings → Projects → Client Keys (DSN).');
+  console.warn('[Sentry] DSN invalid; telemetria a fost dezactivată.');
 }
 
-
-LogBox.ignoreLogs(['expo-notifications: Android Push notifications', '`expo-notifications` functionality is not fully supported in Expo Go']);
+LogBox.ignoreLogs([
+  'expo-notifications: Android Push notifications',
+  '`expo-notifications` functionality is not fully supported in Expo Go',
+]);
 export const unstable_settings = { anchor: '(tabs)' };
 const PUSH_ANIMATION = 'slide_from_right' as const;
 const PUSH_DURATION = 260;
@@ -91,16 +98,18 @@ function RootNavigator() {
   const router = useRouter();
   const segments = useSegments();
 
-  useEffect(() => { syncFromAsyncStorage(); }, [syncFromAsyncStorage]);
-  const appDarkTheme = useMemo(() => ({ ...DarkTheme, colors: { ...DarkTheme.colors, background: colors.background } }), [colors.background]);
+  useEffect(() => {
+    void syncFromAsyncStorage();
+  }, [syncFromAsyncStorage]);
+  const appDarkTheme = useMemo(
+    () => ({ ...DarkTheme, colors: { ...DarkTheme.colors, background: colors.background } }),
+    [colors.background],
+  );
 
   useEffect(() => {
     if (loadingAuth) return;
     const inAuth = segments[0] === 'auth';
     const inOnboarding = segments[0] === 'onboarding';
-    // Ordinea ceruta: intai chestionarul, apoi planul, apoi contul.
-    // Cine nu a terminat onboarding-ul nu ajunge la ecranul de autentificare,
-    // ca sa nu i se ceara cont inainte sa vada ce primeste.
     if (!isOnboardingDone) {
       if (!inOnboarding) router.replace('/onboarding');
       return;
@@ -112,30 +121,56 @@ function RootNavigator() {
     if (inAuth || inOnboarding) router.replace('/(tabs)');
   }, [session, loadingAuth, isOnboardingDone, segments, router]);
 
-  if (loadingAuth) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}><ActivityIndicator size="large" color={colors.accent} /></View>;
-  const push = { animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, gestureEnabled: true } as const;
+  if (loadingAuth) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    );
+  }
+  const push = {
+    animation: PUSH_ANIMATION,
+    animationDuration: PUSH_DURATION,
+    gestureEnabled: true,
+  } as const;
 
-  return <ThemeProvider value={appDarkTheme}>
-    <OfflineBanner />
-    <PremiumProvider appUserId={session?.user.id ?? null} isAdmin={session?.user?.app_metadata?.rol === 'admin'}>
-      <Stack screenOptions={{ headerShown: false, gestureEnabled: true, animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, fullScreenGestureEnabled: true, contentStyle: { backgroundColor: colors.background } }}>
-        <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
-        <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
-        <Stack.Screen name="onboarding" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
-        <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
-        <Stack.Screen name="scanner-barcode" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
-        <Stack.Screen name="adauga-manual" options={push} />
-        <Stack.Screen name="calculator-ai" options={push} />
-        <Stack.Screen name="legal" options={push} />
-        <Stack.Screen name="jurnal-antrenamente" options={push} />
-        <Stack.Screen name="notificari" options={push} />
-        <Stack.Screen name="paywall" options={push} />
-        <Stack.Screen name="progres-antrenamente" options={push} />
-      </Stack>
-    </PremiumProvider>
-    {session && isLocked ? <LockScreen biometricType={biometricType} onUnlock={unlockApp} /> : null}
-    <StatusBar style="light" />
-  </ThemeProvider>;
+  return (
+    <ThemeProvider value={appDarkTheme}>
+      <OfflineBanner />
+      <PremiumProvider
+        appUserId={session?.user.id ?? null}
+        isAdmin={session?.user?.app_metadata?.rol === 'admin'}
+      >
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            gestureEnabled: true,
+            animation: PUSH_ANIMATION,
+            animationDuration: PUSH_DURATION,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: colors.background },
+          }}
+        >
+          <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
+          <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
+          <Stack.Screen name="onboarding" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
+          <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
+          <Stack.Screen name="scanner-barcode" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
+          <Stack.Screen name="adauga-manual" options={push} />
+          <Stack.Screen name="calculator-ai" options={push} />
+          <Stack.Screen name="legal" options={push} />
+          <Stack.Screen name="jurnal-antrenamente" options={push} />
+          <Stack.Screen name="notificari" options={push} />
+          <Stack.Screen name="paywall" options={push} />
+          <Stack.Screen name="progres-antrenamente" options={push} />
+        </Stack>
+      </PremiumProvider>
+      {session && isLocked ? (
+        <LockScreen biometricType={biometricType} onUnlock={unlockApp} />
+      ) : null}
+      <StatusBar style="light" />
+    </ThemeProvider>
+  );
 }
 
 export default function RootLayout() {
