@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nutriai.app",
+      "buildNumber": "1",
       "infoPlist": {
         "NSMotionUsageDescription": "NutriAI utilizează senzorul de mișcare pentru a contoriza pașii zilnici și caloriile arse.",
         "NSCameraUsageDescription": "NutriAI are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.",
@@ -19,6 +20,7 @@
     },
     "android": {
       "package": "com.nutriai.app",
+      "versionCode": 1,
       "icon": "./assets/images/icon.png",
       "allowBackup": false,
       "permissions": [

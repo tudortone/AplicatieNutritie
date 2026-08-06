@@ -92,7 +92,21 @@ function curataMinim(input, maxLength = 2000) {
 
 function detectPromptInjection(text) {
 	if (typeof text !== 'string' || !text.trim()) return false;
-	return PROMPT_INJECTION_PATTERNS.some((sablon) => sablon.test(text));
+	const detectat = PROMPT_INJECTION_PATTERNS.some((sablon) => sablon.test(text));
+	if (detectat) {
+		try {
+			const Sentry = require('@sentry/node');
+			Sentry.withScope((scope) => {
+				scope.setLevel('warning');
+				scope.setTag('security.event', 'prompt_injection_detected');
+				scope.setExtra('sample_text', text.substring(0, 100));
+				Sentry.captureMessage('[Denylist] Detecție tentativă prompt injection.');
+			});
+		} catch {
+			// Sentry indisponibil sau neconfigurat
+		}
+	}
+	return detectat;
 }
 
 /**

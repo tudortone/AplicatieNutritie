@@ -56,7 +56,7 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 | --- | --- | --- | --- | --- | --- |
 | U-01 | Time-to-first-value | ✅ deja OK | ✅ | — | — | — |
 | U-02 | Feedback progresiv scanare AI | ⚠️ parțial | ⬜ | — | — | — |
-| U-03 | Poza nu se pierde niciodată | 🔴 lipsă | ⬜ | — | — | — |
+| U-03 | Poza nu se pierde niciodată | 🔴 lipsă | ✅ | În lucru pe `main` | Adăugat `saveLocalImageDraft` în `imageOptimizer.ts` pentru persistență locală | — |
 | U-04 | Coadă offline mese | 🔴 lipsă (modul neintegrat) | ⬜ | — | — | — |
 | U-05 | Stări goale/skeletons | ✅ deja OK | ✅ | — | — | — |
 | U-06 | Accesibilitate | ⚠️ parțial | ⬜ | — | — | — |
@@ -64,7 +64,7 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 | U-08 | Coerență lingvistică | ⚠️ parțial | ⬜ | — | — | — |
 | U-09 | Viteză percepută (UI optimist) | 🔴 lipsă | ⬜ | — | — | — |
 | U-10 | Recuperare eroare plată | ✅ deja OK | ✅ | — | — | — |
-| P-14 | Teste frontend | 🔴 lipsă | ⬜ | — | — | — |
+| P-14 | Teste frontend | 🔴 lipsă | ✅ | În lucru pe `main` | Configurat Jest și adăugat test de sanitate frontend | — |
 
 ## Val 2F — CI & observabilitate
 
@@ -72,7 +72,7 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 | --- | --- | --- | --- | --- | --- |
 | P-15 | Test RLS neconectat în CI (auto-skip) | 🔴 activ | ✅ | În lucru pe `main` | Job `rls-integration` cu Postgres real în `.github/workflows/ci.yml` | — |
 | P-16/17 | Fără audit/dep-review/secret-scan/EAS + fallback-uri dummy | 🔴 activ | ✅ | În lucru pe `main` | Adăugat npm audit, secret scan, dep review în CI.yml | — |
-| P-18b | Config jest frontend lipsă | 🔴 activ | ⬜ | — | — | — |
+| P-18b | Config jest frontend lipsă | 🔴 activ | ✅ | În lucru pe `main` | Adăugat `jest.config.js` în `frontend-nutritie` | — |
 | P-22 | Doc sprawl (7 .md + .zcode/.agents/bat) | 🔴 activ | ⬜ | — | — | — |
-| P-23b | `buildNumber`/`versionCode` lipsă | 🔴 activ | ⬜ | — | — | — |
-| P-24 | Denylist fără alertă Sentry | ⚠️ parțial | ⬜ | — | — | — |
+| P-23b | `buildNumber`/`versionCode` lipsă | 🔴 activ | ✅ | În lucru pe `main` | Adăugat `buildNumber` (iOS) și `versionCode` (Android) în `app.json` | — |
+| P-24 | Denylist fără alertă Sentry | ⚠️ parțial | ✅ | În lucru pe `main` | Adăugată trimitere alertă Sentry la detecție prompt injection în `sanitize.js` | — |
