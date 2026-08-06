@@ -22,7 +22,7 @@ const { callWithTimeout } = require('./utils/httpTimeout');
 const { Semafor } = require('./utils/semafor');
 const { creeazaContextDate, EroareContextDate } = require('./utils/clientUtilizator');
 const { idempotencyMiddleware, idempotencyMiddlewareCritic } = require('./utils/idempotency');
-const { checkAiUsageQuota } = require('./utils/aiUsageQuota');
+const { creeazaCheckAiUsageQuota } = require('./utils/aiUsageQuota');
 const createGdprRouter = require('./routes/gdpr');
 const createStatusRouter = require('./routes/status');
 const createAiRouter = require('./routes/ai');
@@ -128,10 +128,11 @@ app.use(cors({
   origin: config.cors.permiteOrice ? true : config.cors.origini,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
-  exposedHeaders: ['Idempotency-Status', 'Retry-After', 'X-AI-Quota-Remaining', 'X-Protectie-RLS'],
+  exposedHeaders: ['Idempotency-Status', 'Retry-After', 'X-AI-Quota-Remaining', 'X-Protectie-RLS', 'X-Credite-Ramase'],
 }));
 const supabase = createClient(config.supabase.url, config.supabase.anonKey);
 const supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey);
+const checkAiUsageQuota = creeazaCheckAiUsageQuota({ supabaseAdmin });
 // P-012: limitator dedicat webhook-urilor (Clerk/Svix). Se monteaza pe calea
 // webhook-urilor INAINTE de router (si INAINTE de preAuthLimiter, care altfel nu
 // se aplica), ca burst-urile legitime Clerk sa treaca dar traficul evadat sa fie
@@ -312,6 +313,7 @@ const aiR = createAiRouter({
   serviciuChat,
   semaforAi,
   idempotencyCritic: idempotencyMiddlewareCritic,
+  supabaseAdmin,
 });
 const barcodeR = createBarcodeRouter({
   requireAuth,
