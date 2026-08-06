@@ -41,11 +41,21 @@ async function inregistreazaWebhookEsuat({ supabaseAdmin, clerkUserId, type, mot
       motiv,
       payload: payload ? (typeof payload === 'object' ? payload : { data: payload }) : null,
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }, { onConflict: 'clerk_user_id,event_type' });
 
     return !error;
   } catch (e) {
-    console.error('[Webhook Clerk] Nu am putut scrie în clerk_webhook_esuate:', e.message);
+    console.error('[Webhook Clerk] DEAD_LETTER_WRITE_FAILED: Nu am putut scrie în clerk_webhook_esuate:', e.message);
+    try {
+      Sentry.withScope((scope) => {
+        scope.setLevel('error');
+        scope.setTag('webhook.dead_letter_failed', 'true');
+        Sentry.captureException(e);
+      });
+    } catch {
+      // Sentry indisponibil
+    }
     return false;
   }
 }
@@ -204,7 +214,8 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
                 avertisment: 'userId Supabase nedeterminat — înregistrat pentru intervenție manuală.',
               });
             }
-            return res.status(500).json({ eroare: 'Nu s-a putut scrie în dead-letter.' });
+            console.error('[Webhook Clerk] DEAD_LETTER_WRITE_FAILED: eșec scriere în clerk_webhook_esuate');
+            return res.status(500).json({ eroare: 'Nu s-a putut scrie în dead-letter.', cod: 'DEAD_LETTER_WRITE_FAILED' });
           }
 
           await supabaseAdmin.from('clerk_user_map').upsert({

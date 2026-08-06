@@ -242,7 +242,8 @@ describe('P-08 — Webhook Clerk rezistent la >1000 utilizatori', () => {
   });
 
   test('Scriere rând în clerk_webhook_esuate (dead-letter) când userId este nedeterminat', async () => {
-    let dlScris = false;
+    let dlTabela = null;
+    let dlPayload = null;
     const admin = {
       auth: {
         admin: {
@@ -260,7 +261,10 @@ describe('P-08 — Webhook Clerk rezistent la >1000 utilizatori', () => {
             }),
           }),
           upsert: async (record) => {
-            if (tabela === 'clerk_webhook_esuate') dlScris = true;
+            if (tabela === 'clerk_webhook_esuate') {
+              dlTabela = tabela;
+              dlPayload = record;
+            }
             return { error: null };
           },
         };
@@ -288,7 +292,62 @@ describe('P-08 — Webhook Clerk rezistent la >1000 utilizatori', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.avertisment).toContain('intervenție manuală');
-    expect(dlScris).toBe(true);
+    expect(dlTabela).toBe('clerk_webhook_esuate');
+    expect(dlPayload).toHaveProperty('clerk_user_id', 'user_no_id_determined');
+    expect(dlPayload).toHaveProperty('event_type', 'user.created');
+    expect(dlPayload).toHaveProperty('motiv', 'USER_ID_NEDETERMINAT');
+    expect(dlPayload).toHaveProperty('created_at');
+    expect(dlPayload).toHaveProperty('updated_at');
+  });
+
+  test('Când scrierea în clerk_webhook_esuate eșuează → 500 cu cod DEAD_LETTER_WRITE_FAILED', async () => {
+    const admin = {
+      auth: {
+        admin: {
+          getUserById: async () => ({ data: null, error: null }),
+          listUsers: async () => ({ data: { users: [] }, error: null }),
+          createUser: async () => ({ data: null, error: null }),
+        },
+      },
+      rpc: async () => ({ data: [], error: null }),
+      from(tabela) {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: null, error: null }),
+            }),
+          }),
+          upsert: async () => {
+            if (tabela === 'clerk_webhook_esuate') {
+              return { error: new Error('DB write failed') };
+            }
+            return { error: null };
+          },
+        };
+      },
+    };
+
+    const app = express();
+    app.use('/api/v1/webhooks', createWebhooksRouter({
+      supabaseAdmin: admin,
+      config: { clerkWebhookSecret: TEST_SECRET, triggerSecretKey: null },
+    }));
+
+    const payload = JSON.stringify({
+      type: 'user.created',
+      data: {
+        id: 'user_no_id_determined_fail',
+      },
+    });
+
+    const res = await request(app)
+      .post('/api/v1/webhooks/clerk')
+      .set(semneaza(payload, 'msg_noid_fail'))
+      .set('content-type', 'application/json')
+      .send(payload);
+
+    expect(res.status).toBe(500);
+    expect(res.body.cod).toBe('DEAD_LETTER_WRITE_FAILED');
   });
 
   test('P-21 — webhooks.js importă crypto explicit', () => {
