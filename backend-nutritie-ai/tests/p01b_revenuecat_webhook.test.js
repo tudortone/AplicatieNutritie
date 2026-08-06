@@ -174,4 +174,25 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
     expect(res.body.crediteDelta).toBe(150);
     expect(res.body.soldNou).toBe(150);
   });
+
+  test('nutri_credits_150_ios acordă exact 150 credite (nu 50)', async () => {
+    const admin = creeazaSupabaseFake({ soldNou: 150 });
+    const app = creeazaApp(admin);
+
+    const res = await request(app)
+      .post('/api/v1/webhooks/revenuecat')
+      .set('Authorization', WEBHOOK_SECRET)
+      .send({
+        event: {
+          id: 'evt_ios_150_001',
+          type: 'INITIAL_PURCHASE',
+          app_user_id: 'user-uuid-ios-150',
+          product_id: 'nutri_credits_150_ios',
+        },
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.crediteDelta).toBe(150);
+    expect(res.body.soldNou).toBe(150);
+  });
 });

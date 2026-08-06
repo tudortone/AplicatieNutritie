@@ -23,7 +23,7 @@ const CREDIT_AMOUNTS = {
   'nutri_credits_50': 50,
   'nutri_credits_150': 150,
   'nutri_credits_50_ios': 50,
-  'nutri_credits_150_ios': 50,
+  'nutri_credits_150_ios': 150,
   // Adaugă alte ID-uri de produs după caz
 };
 

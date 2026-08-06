@@ -47,7 +47,7 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 
 | ID | Verdict | Status | Commit | Cum s-a rezolvat | Ce a rămas |
 | --- | --- | --- | --- | --- | --- |
-| P-01b | Credite AI corect (migrare + webhook + ledger) | 🔴 activ | ✅ | În lucru pe `main` | Migrare `credite_ai` + `credite_tranzactii` + RPC `aplica_tranzactie_credite` + router `webhooksRevenueCat.js` | — |
+| P-01b | Credite AI corect (migrare + webhook + ledger) | 🔴 activ | ✅ | `fix(P-01b)` | Corectat `nutri_credits_150_ios` la 150 credite (era 50) + webhook + ledger | — |
 | P-13 | Race post-achiziție fără retry/UI | 🔴 activ | ✅ | În lucru pe `main` | Adăugat retry cu backoff în `verificaPremiumCuRetry` (RevenueCat) | — |
 
 ## Val 2E — Experiență
