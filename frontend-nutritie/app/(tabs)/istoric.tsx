@@ -1,34 +1,33 @@
 
 import React, { useCallback, useState, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  RefreshControl, 
-  Platform, 
-  TouchableOpacity, 
-  Alert 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+  Alert
 } from 'react-native';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInUp, FadeInDown, Layout } from 'react-native-reanimated';
-import { Flame, Activity, Clock, Trash2, Pencil, PlusCircle } from 'lucide-react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Flame, Activity, PlusCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useZileCuMese } from '../../hooks/useZileCuMese';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../supabase';
-import { Masa, TipMasa, AlimentDetaliat } from '../../types';
+import { Masa } from '../../types';
 import { SkeletonLoader } from '../../components/SkeletonLoader';
 import { MacroRing } from '../../components/MacroRing';
 import { AddMealBottomSheet, AddMealBottomSheetRef } from '../../components/AddMealBottomSheet';
 import { MonthCalendar } from '../../components/MonthCalendar';
 import { MealDetailsModal } from '../../components/MealDetailsModal';
 import { MasaCard } from '../../components/MasaCard';
-import KeyboardAwareScreen, { CONTENT_BOTTOM_PADDING } from '@/components/ui/KeyboardAwareScreen';
+import KeyboardAwareScreen from '@/components/ui/KeyboardAwareScreen';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 export default function HistoryScreen() {

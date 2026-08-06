@@ -13,7 +13,6 @@ import {
   KeyboardAvoidingView 
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { localDayKey } from '../lib/dateUtils';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -63,7 +62,6 @@ export default function AdaugaManualScreen() {
       try {
         const parsed = JSON.parse(params.alimente);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const first = parsed[0];
           const numeCompus = parsed.map((a: any) => a.nume).join(', ');
           const totalCal = parsed.reduce((s: number, a: any) => s + Math.round((a.calorii_per_100g * a.estimare_grame) / 100), 0);
           const totalProt = parsed.reduce((s: number, a: any) => s + Math.round((a.proteine_per_100g * a.estimare_grame) / 100 * 10) / 10, 0);

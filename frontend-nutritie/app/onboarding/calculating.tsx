@@ -8,7 +8,6 @@ import { Activity, CheckCircle2, Sparkles } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 
 import { useTheme } from '../../context/ThemeContext'
-import { useOnboarding } from '../../context/OnboardingContext'
 
 const ETAPE_CALCUL = [
   'Analizăm parametrii biometrici și genul...',
@@ -20,7 +19,6 @@ const ETAPE_CALCUL = [
 
 export default function PasCalculare() {
   const { colors } = useTheme()
-  const { plan } = useOnboarding()
   const router = useRouter()
   const [pasCurent, setPasCurent] = useState(0)
 

@@ -11,6 +11,7 @@ Patru servicii externe + un strat de observabilitate. Fail-closed este regula im
 - Retry 3 / 1000ms / 5000ms / factor 2; `fail-closed` pe env lipsă → răspunde `{ status: 'needs_config' }` (nu `500`).
 - Coduri de eșec stabile (ex: `INDIRECT_INTERZIS`).
 - **Fără fallback sincron sync**: analiza/pozele nu au variantă sincronă; background-ul e vectorul unic.
+- **AI job queue**: tabela `public.ai_jobs` (schema `public`) urmărește ciclul de viață la `analiza-mancare-ai` (queued→processing→completed/failed); backendul scrie via service_role, clientul vede doar propriile rânduri (RLS select-own), realtime activ.
 
 ### 1.2 Groq — chat (services/ai/chat.js)
 - Doar chat general.
@@ -27,6 +28,7 @@ Patru servicii externe + un strat de observabilitate. Fail-closed este regula im
 - Harta în JSONB `alimente` (bază audit + compat fixes): extrage `imageKitFileId` / `imageUrl`.
 - Transformări thumbnails (frontend `imagekit.ts`).
 - GDPR `routes/gdpr.js`: ștergere folder `/mancare/<userId>/` + `fileId` din JSONB (`extrageFileIds` traversează `fileId`/`imageKitFileId`/`imagekit_file_id`) + legacy `/meals/`. Fail-closed.
+- GDPR delete-account șterge și identitatea Clerk cu `redirect:'error'` (împiedică scurgerea de `CLERK_SECRET_KEY` la redirect); idempotent (404 = deja șters) și fail-closed. Sentry redaction §1.5.
 - Migrarea `mese.imagine_url` NU se aplică (vezi decizia 2).
 
 ### 1.5 Sentry — observabilitate (Redaction PII)

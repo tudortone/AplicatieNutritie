@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator, Pressable, Text, View, StyleSheet, TouchableOpacity,
-  TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform, Modal,
+  ScrollView, Alert, KeyboardAvoidingView, Platform, Modal,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,17 +15,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../supabase';
 import { API_URL } from '@/constants/config';
 import { API_PREFIX } from '@/lib/api';
-import Animated, { FadeIn, FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
-import { X, Scan, Zap, ChevronDown, Plus, Heart, Image as ImageIcon, Send, Sparkles } from 'lucide-react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
+import { Scan, Zap, ChevronDown, Plus, Image as ImageIcon } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { useNotify } from '../hooks/useNotify';
 import { localDayKey } from '../lib/dateUtils';
 import { getTipMasaDupaOra } from '../lib/mealUtils';
 import { GramInput } from '../components/ui/GramInput';
-import { useFavorite } from '../hooks/useFavorite';
 import { ProductSearch } from '../components/food/ProductSearch';
 import { foodProductToAlimentAI } from '../components/food/types';
 import FoodScanSuccessModal, {
@@ -44,7 +41,6 @@ export default function CameraScreen() {
   const { t } = useTranslation();
   const { session } = useAuth();
   const insets = useSafeAreaInsets();
-  const { addFavorite, isFavorite } = useFavorite();
   const [permission, requestPermission] = useCameraPermissions();
   
   const [rezultat, setRezultat] = useState<AlimentScanat[]>([]);

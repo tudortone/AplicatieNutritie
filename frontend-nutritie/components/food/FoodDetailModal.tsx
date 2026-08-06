@@ -29,7 +29,7 @@ const AMINO_LABELS: Record<keyof AminoaciziEsentiali, string> = {
   istidina: 'Istidină',
 };
 
-const VITAMIN_LABELS: Array<{ key: keyof Micronutrienti; label: string; unit: string }> = [
+const VITAMIN_LABELS: { key: keyof Micronutrienti; label: string; unit: string }[] = [
   { key: 'vitamina_a', label: 'Vitamina A', unit: 'µg' },
   { key: 'vitamina_c', label: 'Vitamina C', unit: 'mg' },
   { key: 'vitamina_d', label: 'Vitamina D', unit: 'µg' },
@@ -43,7 +43,7 @@ const VITAMIN_LABELS: Array<{ key: keyof Micronutrienti; label: string; unit: st
   { key: 'vitamina_b12', label: 'Vitamina B12', unit: 'µg' },
 ];
 
-const MINERAL_LABELS: Array<{ key: keyof Micronutrienti; label: string; unit: string }> = [
+const MINERAL_LABELS: { key: keyof Micronutrienti; label: string; unit: string }[] = [
   { key: 'calciu', label: 'Calciu', unit: 'mg' },
   { key: 'fier', label: 'Fier', unit: 'mg' },
   { key: 'magneziu', label: 'Magneziu', unit: 'mg' },
@@ -57,7 +57,7 @@ const MINERAL_LABELS: Array<{ key: keyof Micronutrienti; label: string; unit: st
   { key: 'iod', label: 'Iod', unit: 'µg' },
 ];
 
-const OTHER_LABELS: Array<{ key: keyof Micronutrienti; label: string; unit: string }> = [
+const OTHER_LABELS: { key: keyof Micronutrienti; label: string; unit: string }[] = [
   { key: 'zaharuri', label: 'Zaharuri', unit: 'g' },
   { key: 'grasimi_saturate', label: 'Grăsimi Saturate', unit: 'g' },
   { key: 'grasimi_trans', label: 'Grăsimi Trans', unit: 'g' },

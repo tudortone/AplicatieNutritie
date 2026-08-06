@@ -24,6 +24,7 @@ import { useAntrenamente, SetExercitiu } from '../hooks/useAntrenamente';
 import { useGamificare } from '../hooks/useGamificare';
 import { useNotify } from '../hooks/useNotify';
 import { EquipmentIcon } from './fitness/EquipmentIcon';
+import { Holographic3DAnatomyBody } from '../app/exercitiu/[id]';
 
 const ECHIPAMENTE_OPTIONS = [
   { id: 'all', nume: '🏋️ Toate' },
@@ -34,7 +35,6 @@ const ECHIPAMENTE_OPTIONS = [
   { id: 'aparat', nume: 'Aparat' },
   { id: 'greutate_corp', nume: 'Greutatea corpului' },
 ];
-import { Holographic3DAnatomyBody } from '../app/exercitiu/[id]';
 
 export interface AddWorkoutBottomSheetRef {
   open: () => void;

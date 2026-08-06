@@ -185,13 +185,25 @@ export function PremiumProvider({ children, appUserId, isAdmin = false }: { chil
       if (!PurchasesApi) return false;
       try {
         const result = await PurchasesApi.purchasePackage(pkg);
-        setIsPremium(hasPremium(result.customerInfo));
-        return hasPremium(result.customerInfo);
+        if (!hasPremium(result.customerInfo)) {
+          // Fara entitlement local — nu e premium.
+          setIsPremium(false);
+          return false;
+        }
+        // B-09 fail-closed: achizitia locala e confirmata doar daca si serverul
+        // (revenuecat-secret) raspunde afirmativ `premium:true`. Server
+        // indisponibil/eroare (`null`) => nu se acorda premium.
+        const server = await verificaServerPremium(appUserId);
+        const premium = server?.premium === true;
+        setIsPremium(premium);
+        return premium;
       } catch {
+        // eroare — fail-closed: nu acordam premium pe verdictul local
+        setIsPremium(false);
         return false;
       }
     },
-    [hasPremium],
+    [hasPremium, verificaServerPremium, appUserId],
   );
 
   const purchaseCredits = useCallback(async (product: PurchasesStoreProduct): Promise<boolean> => {
@@ -209,13 +221,24 @@ export function PremiumProvider({ children, appUserId, isAdmin = false }: { chil
     if (!PurchasesApi) return false;
     try {
       const customer = await PurchasesApi.restorePurchases();
-      const premium = hasPremium(customer);
+      if (!hasPremium(customer)) {
+        // Fara entitlement local — nu e premium.
+        setIsPremium(false);
+        return false;
+      }
+      // B-09 fail-closed: restaurarea e confirmata doar daca si serverul
+      // (revenuecat-secret) raspunde afirmativ `premium:true`. Server
+      // indisponibil/eroare (`null`) => nu se acorda premium.
+      const server = await verificaServerPremium(appUserId);
+      const premium = server?.premium === true;
       setIsPremium(premium);
       return premium;
     } catch {
+      // eroare — fail-closed: nu acordam premium pe verdictul local
+      setIsPremium(false);
       return false;
     }
-  }, [hasPremium]);
+  }, [hasPremium, verificaServerPremium, appUserId]);
 
   const value = useMemo<PremiumStatus>(
     () => ({

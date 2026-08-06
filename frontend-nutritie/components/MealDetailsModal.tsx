@@ -7,11 +7,9 @@ import {
   TouchableOpacity,
   ScrollView,
   Pressable,
-  Platform,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { X, Pencil, Trash2, Dumbbell, Flame, Sparkles, CheckCircle2, ShieldCheck, Info } from 'lucide-react-native';
+import { X, Pencil, Trash2, Dumbbell, Flame, Info } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import { Masa, AminoaciziEsentiali } from '../types';

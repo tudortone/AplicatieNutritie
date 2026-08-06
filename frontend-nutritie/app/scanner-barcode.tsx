@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { ScanLine, X, Plus, Package, Trash2, ArrowLeft, CheckCircle2, Sparkles, ShoppingBag, Snowflake, ChefHat, Clock, Layers, Check, Wand2 } from 'lucide-react-native';
+import { ScanLine, X, Plus, Package, Trash2, ArrowLeft, CheckCircle2, ShoppingBag, Snowflake, ChefHat, Clock, Check, Wand2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { useTranslation } from 'react-i18next';

@@ -35,7 +35,7 @@ export function ManualProductForm({
   const [fat100Str, setFat100Str] = useState('');
   const [fibre100Str, setFibre100Str] = useState('');
   const [zahar100Str, setZahar100Str] = useState('');
-  const [sare100Str, setSare100Str] = useState('');
+  const [sare100Str] = useState('');
   const [portieLabel] = useState('');
   const [portieGrameStr] = useState('');
   const [salveazaInCatalog, setSalveazaInCatalog] = useState(true);

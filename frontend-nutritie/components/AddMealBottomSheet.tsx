@@ -17,7 +17,6 @@ import BottomSheet, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Check, X, Heart, Trash2, Scale, Search } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 
 import { API_URL } from '../constants/config';
@@ -323,10 +322,6 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
       setLoading(true);
       try {
-        const now = new Date();
-        const todayStr = now.toISOString().split('T')[0];
-        const oraStr = now.toTimeString().split(' ')[0].substring(0, 5);
-
         const alimentePayload: AlimentDetaliat[] = [
           {
             nume: nume.trim(),

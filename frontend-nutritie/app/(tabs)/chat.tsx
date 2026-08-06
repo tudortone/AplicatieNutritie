@@ -2,16 +2,15 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, KeyboardAvoidingView, Platform, Keyboard, Alert, Modal
+  ScrollView, Platform, Keyboard, Alert, Modal
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL } from '@/constants/config';
-import { API_PREFIX, buildApiUrl } from '@/lib/api';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { buildApiUrl } from '@/lib/api';
+import { useLocalSearchParams } from 'expo-router';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut } from 'react-native-reanimated';
-import { Send, Sparkles, RotateCcw, MessageSquarePlus, CheckCircle2 } from 'lucide-react-native';
+import { Send, Sparkles, RotateCcw } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTranslation } from 'react-i18next';

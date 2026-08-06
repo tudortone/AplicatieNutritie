@@ -24,7 +24,7 @@ import { useAntrenamente } from '../../hooks/useAntrenamente';
 import { useNotify } from '../../hooks/useNotify';
 import { useExercitii } from '../../hooks/useExercitii';
 import {
-  describeSet, formatSeconds, formatWeight, getSetFields, summarizeSets, summaryLabel,
+  describeSet, getSetFields, summarizeSets, summaryLabel,
   validateLoggedSet, type LoggedSet, type SetFields,
 } from '../../lib/workoutSets';
 
@@ -91,7 +91,7 @@ function baseIntensityFor(ex?: Exercitiu): IntensityMap {
   if (!ex) return out;
   const tinta = (ex.muschiTinta ?? {}) as Record<string, number>;
   const keys = Object.keys(tinta);
-  let entries: Array<readonly [string, number]>;
+  let entries: readonly [string, number][];
   if (keys.length > 0) {
     const maxVal = Math.max(...keys.map((k) => Number(tinta[k]) || 0));
     const divisor = maxVal > 1 ? 100 : 1;

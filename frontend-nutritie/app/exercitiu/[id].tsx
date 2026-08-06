@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ArrowLeft, Dumbbell, AlertTriangle, Flame, Clock, PlusCircle,
-  Zap, TrendingUp, Activity, Layers, Award, RotateCcw, ShieldCheck, Sparkles
+  ShieldCheck, Sparkles
 } from 'lucide-react-native';
 
 import { useTheme } from '../../context/ThemeContext';
@@ -15,11 +15,10 @@ import { Radius, Spacing } from '../../constants/theme';
 import { useExercitii } from '../../hooks/useExercitii';
 import { calculeazaCaloriiEx } from '../../lib/exercitiu';
 import { SetLogger } from '../../components/fitness/SetLogger';
-import { useAntrenamente, Antrenament, SetExercitiu } from '../../hooks/useAntrenamente';
+import { useAntrenamente, SetExercitiu } from '../../hooks/useAntrenamente';
 import { useNotify } from '../../hooks/useNotify';
 import BodyMap from '../../components/fitness/BodyMap';
 import type { MuscleId } from '../../components/fitness/heatColor';
-import { SeriesConfigurator, type SeriesValue } from '../../components/fitness/SeriesConfigurator';
 import { classifyMeasurement, computeSessionLoad, type MeasurementSpec } from '../../lib/measurement';
 import { mapToCanonicalMuscleIds } from '../../lib/fitnessEngine';
 
@@ -55,7 +54,6 @@ export function Holographic3DAnatomyBody({
   const isPiept = activeGroups.some(g => /piept|pectorali/i.test(g));
   const isUmeri = activeGroups.some(g => /umeri|deltoid/i.test(g));
   const isBrate = activeGroups.some(g => /brațe|brate|biceps|triceps|brahial/i.test(g));
-  const isAbdomen = activeGroups.some(g => /abdomen|core|oblici/i.test(g));
   const isPicioare = activeGroups.some(g => /picioare|cvadriceps|fesieri|gambe|ischiogambieri|femurali/i.test(g));
 
   const initialSide = useMemo(() => {
@@ -75,24 +73,6 @@ export function Holographic3DAnatomyBody({
   const COLOR_SECONDARY = '#FF7B00'; // 🟠 Portocaliu intens (75% Sinergici)
   const COLOR_STAB = '#FACC15';      // 🟡 Galben mediu (40% Stabilizare)
   const COLOR_REST = '#38BDF8';      // 🔵 Albastru (0% Repaus)
-
-  // Determinăm culoarea fiecărei grupe musculare bazat pe ierarhia exercițiului
-  const getGroupColor = (groupType: 'piept' | 'umeri' | 'brate' | 'spate' | 'picioare' | 'abdomen') => {
-    if (groupType === 'piept' && isPiept) return COLOR_PRIMARY;
-    if (groupType === 'spate' && isSpate) return COLOR_PRIMARY;
-    if (groupType === 'picioare' && isPicioare) return COLOR_PRIMARY;
-    if (groupType === 'umeri' && isUmeri) return isPiept || isSpate ? COLOR_SECONDARY : COLOR_PRIMARY;
-    if (groupType === 'brate' && isBrate) return isPiept || isSpate ? COLOR_SECONDARY : COLOR_PRIMARY;
-    if (groupType === 'abdomen' && isAbdomen) return COLOR_STAB;
-    return COLOR_REST;
-  };
-
-  const pieptColor = getGroupColor('piept');
-  const umeriColor = getGroupColor('umeri');
-  const brateColor = getGroupColor('brate');
-  const spateColor = getGroupColor('spate');
-  const picioareColor = getGroupColor('picioare');
-  const absColor = getGroupColor('abdomen');
 
   const mainActiveColor = isPiept || isSpate || isPicioare ? COLOR_PRIMARY : isUmeri || isBrate ? COLOR_SECONDARY : COLOR_STAB;
 
@@ -287,7 +267,7 @@ export default function ExercitiuDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const notify = useNotify();
-  const { adaugaAntrenament, adaugaExercitiu } = useAntrenamente();
+  const { adaugaAntrenament } = useAntrenamente();
   const { colors } = useTheme();
   const { exercitii } = useExercitii();
 
@@ -428,7 +408,7 @@ export default function ExercitiuDetailScreen() {
         `${exercitiu.nume} a fost înregistrat cu succes!`
       );
       router.back();
-    } catch (err: any) {
+    } catch {
       notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
     }
   };

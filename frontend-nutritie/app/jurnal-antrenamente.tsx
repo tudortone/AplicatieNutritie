@@ -6,8 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  ActivityIndicator,
-  Alert
+  ActivityIndicator
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Dumbbell, Flame, Clock, Calendar, Trash2, ChevronDown, ChevronUp, Award } from 'lucide-react-native';
@@ -273,7 +272,7 @@ export default function JurnalAntrenamenteScreen() {
             await stergeAntrenament(item.id);
             notify.info('Antrenament șters', item.nume);
             await incarcaJurnal();
-          } catch (error) {
+          } catch {
             notify.error('Eroare', 'Nu s-a putut șterge antrenamentul.');
           }
         }}

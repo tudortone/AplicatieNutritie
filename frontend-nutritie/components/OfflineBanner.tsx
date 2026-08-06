@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View, StyleSheet, Animated } from 'react-native';
+import { Text, View, StyleSheet } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { useTheme } from '../context/ThemeContext';

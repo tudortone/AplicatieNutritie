@@ -16,9 +16,6 @@ const FEATURES = [
   { icon: BarChart3, title: 'Statistici avansate', desc: 'Evoluție completă pe săptămâni și luni' },
 ];
 
-const TERMS_URL = 'https://nutriai.app/termeni';
-const PRIVACY_URL = 'https://nutriai.app/confidentialitate';
-
 function formatPrice(pkg: PurchasesPackage): string {
   return pkg.product?.priceString ?? '—';
 }

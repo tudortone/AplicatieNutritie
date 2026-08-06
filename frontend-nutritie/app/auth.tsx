@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Platform, Alert, ActivityIndicator
+  ScrollView, Alert, ActivityIndicator
 } from 'react-native';
 import KeyboardAwareScreen from '../components/ui/KeyboardAwareScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -47,7 +47,7 @@ const getFriendlyErrorMessage = (rawMsg: string): string => {
 export default function AuthScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const { contentMaxWidth, horizontalPadding, fontScale, isTablet } = useResponsiveLayout();
+  const { contentMaxWidth } = useResponsiveLayout();
   const router = useRouter();
   const { setOnboardingDone } = useAppStore();
   const [planCalculat, setPlanCalculat] = useState<PlanNutritional | null>(null);

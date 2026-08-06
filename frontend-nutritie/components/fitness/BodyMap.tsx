@@ -25,9 +25,6 @@ const MAX_HEAT_OPACITY = 0.82
  */
 const UNHEATED_OPACITY = 0.5
 
-/** Sub acest prag nu desenam deloc stratul de caldura. */
-const MIN_VISIBLE = 0.02
-
 function clamp01(n: number): number {
 	if (!Number.isFinite(n)) return 0
 	return n < 0 ? 0 : n > 1 ? 1 : n

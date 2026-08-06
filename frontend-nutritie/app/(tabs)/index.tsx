@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, RefreshControl } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, FadeInDown, useAnimatedProps, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
@@ -99,14 +99,13 @@ export default function HomeScreen() {
   const { streak } = useGamificareContext();
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
   const streakSheetRef = useRef<StreakBottomSheetRef>(null);
-  const [dataSelectata, setDataSelectata] = useState<Date>(new Date());
+  const [dataSelectata] = useState<Date>(new Date());
 
   const { 
     totalCalorii, 
     totalProteine, 
     totalGrasimi, 
-    totalCarbohidrati, 
-    numarMese, 
+    totalCarbohidrati,
     caloriiTinta, 
     proteineTinta, 
     carbiTinta,
@@ -120,7 +119,6 @@ export default function HomeScreen() {
   const { steps, activeCalories, stepGoal, isEnabled, platformName, providerInfo, refreshSteps } = useHealthSync();
   const { totalCaloriiArse, antrenamente, refresh: refreshAntrenamente } = useAntrenamente();
   const { exercitii } = useExercitii();
-  const [ascundeCardHealth, setAscundeCardHealth] = useState(false);
   const [viewSideHome, setViewSideHome] = useState<'front' | 'back'>('front');
   const [isTipVisible, setIsTipVisible] = useState(true);
   const { topInset, scrollPaddingBottom, scrollPaddingTop } = useResponsiveLayout();

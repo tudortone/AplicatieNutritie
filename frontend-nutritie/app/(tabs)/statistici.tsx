@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Platform, TouchableOpacity } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';

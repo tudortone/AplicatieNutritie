@@ -105,7 +105,7 @@ frontend-nutritie/
 | Metodă | Rută | Auth | Scop |
 |--------|------|------|------|
 | GET | `/health` | — | health check |
-| GET | `/api/v1/ai-status` | — | status modele AI |
+| GET | `/api/v1/ai-status` | JWT | status modele AI |
 | GET | `/api/v1/imagekit-auth` | JWT | token upload ImageKit |
 | POST | `/api/v1/trigger-analiza-mancare` | JWT | analiză AI în fundal (Trigger.dev) |
 | POST | `/api/v1/analiza-foto` | JWT | analiză fotografie AI |
