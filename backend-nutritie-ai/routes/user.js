@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-
 const Sentry = require('@sentry/node');
 const { callWithTimeout } = require('../utils/httpTimeout');
 
@@ -11,6 +10,25 @@ const premiumCache = new Map();
 
 function curataPremiumCache() {
   premiumCache.clear();
+}
+
+function dataLaMs(valoare) {
+  if (typeof valoare !== 'string' || !valoare.trim()) return null;
+  const ms = Date.parse(valoare);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function entitlementEsteActiv(entitlement, acumMs = Date.now()) {
+  if (!entitlement || typeof entitlement !== 'object' || Array.isArray(entitlement)) return false;
+  if (entitlement.active === false) return false;
+
+  const expiraLaMs = dataLaMs(entitlement.expires_date);
+  if (expiraLaMs !== null) return expiraLaMs > acumMs;
+
+  return entitlement.expires_date === null &&
+    typeof entitlement.product_identifier === 'string' &&
+    entitlement.product_identifier.length > 0 &&
+    dataLaMs(entitlement.purchase_date) !== null;
 }
 
 function puneInPremiumCache(userId, payload) {
@@ -24,14 +42,14 @@ function puneInPremiumCache(userId, payload) {
       if (ceaMaiVeche !== undefined) premiumCache.delete(ceaMaiVeche);
     }
   }
-  premiumCache.set(userId, { cachedAt: acum, payload });
+
+  const expirareAbonament = payload.premium ? dataLaMs(payload.expiresDate) : null;
+  const expiraCacheLa = expirareAbonament === null
+    ? acum + PREMIUM_CACHE_TTL_MS
+    : Math.min(acum + PREMIUM_CACHE_TTL_MS, expirareAbonament);
+  premiumCache.set(userId, { cachedAt: acum, expiraCacheLa, payload });
 }
 
-/**
- * Rute de utilizator (GET /api/user/premium-status).
- * Validarea premium ramane fail-closed: erorile RevenueCat nu sunt servite din
- * cache si nu pot acorda privilegii. Cache-ul reduce doar apelurile reusite.
- */
 function createUserRouter({ requireAuth, generalLimiter, config, contextDate, profilRepo }) {
   const router = express.Router();
 
@@ -74,8 +92,6 @@ function createUserRouter({ requireAuth, generalLimiter, config, contextDate, pr
   });
 
   router.get('/premium-status', requireAuth, generalLimiter, async (req, res) => {
-    // Contul de admin (app_metadata.rol === 'admin') are Premium permanent,
-    // fara a depinde de RevenueCat sau de o cheie configurata.
     if (req.user?.esteAdmin) {
       return res.json({ premium: true, entitlement: null, expiresDate: null, validatServer: true });
     }
@@ -90,16 +106,25 @@ function createUserRouter({ requireAuth, generalLimiter, config, contextDate, pr
     const userId = req.user.id;
     const cached = premiumCache.get(userId);
     if (cached) {
-      if (Date.now() - cached.cachedAt < PREMIUM_CACHE_TTL_MS) {
-        return res.json(cached.payload);
-      }
+      if (Date.now() < cached.expiraCacheLa) return res.json(cached.payload);
       premiumCache.delete(userId);
     }
 
     try {
+      const revenueCatUrl = [
+        'https:',
+        '',
+        'api.revenuecat.com',
+        'v1',
+        'subscribers',
+        encodeURIComponent(userId),
+      ].join('/');
       const rcResp = await callWithTimeout((signal) => fetch(
-        `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`,
-        { headers: { Authorization: `Bearer ${config.revenuecat.secretApiKey}` }, signal },
+        revenueCatUrl,
+        {
+          headers: { Authorization: `Bearer ${config.revenuecat.secretApiKey}` },
+          signal,
+        },
       ), 8000);
 
       if (!rcResp.ok) {
@@ -107,13 +132,20 @@ function createUserRouter({ requireAuth, generalLimiter, config, contextDate, pr
         return res.status(502).json({ eroare: `RevenueCat a raspuns cu ${rcResp.status}.` });
       }
 
-      const data = await rcResp.json();
+      let data;
+      try {
+        data = await rcResp.json();
+      } catch {
+        premiumCache.delete(userId);
+        return res.status(502).json({ eroare: 'RevenueCat a returnat un raspuns invalid.' });
+      }
+
       const entitlement = data?.subscriber?.entitlements?.premium;
-      const premium = entitlement?.active === true;
+      const premium = entitlementEsteActiv(entitlement);
       const payload = {
         premium,
         entitlement: premium ? entitlement : null,
-        expiresDate: entitlement?.expires_date || null,
+        expiresDate: premium ? (entitlement.expires_date ?? null) : null,
         validatServer: true,
       };
       puneInPremiumCache(userId, payload);
@@ -130,6 +162,7 @@ function createUserRouter({ requireAuth, generalLimiter, config, contextDate, pr
 }
 
 createUserRouter.curataPremiumCache = curataPremiumCache;
+createUserRouter.entitlementEsteActiv = entitlementEsteActiv;
 createUserRouter._premiumCache = premiumCache;
 
 module.exports = createUserRouter;

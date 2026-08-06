@@ -1,6 +1,10 @@
+'use strict';
+
 const { task } = require('@trigger.dev/sdk/v3');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { PROMPT_ANALIZA_FOTO } = require('../../services/ai/vision');
+const { PROMPT_ANALIZA_FOTO, numarModel } = require('../../services/ai/vision');
+const { parseJsonFromLlm } = require('../../utils/llmJson');
+const { callWithSoftTimeout } = require('../../utils/httpTimeout');
 const {
   construiesteGazdePermise,
   creeazaValideazaUrlImagine,
@@ -8,23 +12,67 @@ const {
 
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
 const MAX_IMAGINE_BYTES = 5 * 1024 * 1024;
+const MAX_ALIMENTE = 50;
 const MIME_PERMISE = new Set(['image/jpeg', 'image/png', 'image/webp']);
-
-function detectaMagicBytes(buffer) {
-  if (!buffer || buffer.length < 12) return null;
-  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
-  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return 'image/png';
-  if (
-    buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
-    buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
-  ) return 'image/webp';
-  return null;
-}
+const VARIABILE_OBLIGATORII = Object.freeze([
+  'IMAGEKIT_URL_ENDPOINT',
+  'SUPABASE_URL',
+  'GEMINI_API_KEY',
+]);
+const REGEX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const TIPURI_MASA = new Set(['mic_dejun', 'pranz', 'cina', 'gustare', 'Mic dejun', 'Pranz', 'Cina', 'Gustare']);
 
 function modelsDeIncercat() {
   const preferat = (process.env.GEMINI_MODEL || '').trim();
   if (!preferat) return [...GEMINI_MODELS];
-  return [preferat, ...GEMINI_MODELS.filter((m) => m !== preferat)];
+  return [preferat, ...GEMINI_MODELS.filter((model) => model !== preferat)];
+}
+
+function detecteazaMime(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 4) return null;
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return 'image/png';
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+  ) return 'image/webp';
+  return null;
+}
+
+async function citesteCorpLimitat(resp, limita) {
+  if (!resp.body?.getReader) {
+    const buffer = Buffer.from(await resp.arrayBuffer());
+    if (buffer.length > limita) throw new Error('IMAGINE_PREA_MARE');
+    return buffer;
+  }
+
+  const reader = resp.body.getReader();
+  const bucati = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limita) {
+        await reader.cancel('limita depasita');
+        throw new Error('IMAGINE_PREA_MARE');
+      }
+      bucati.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(bucati, total);
+}
+
+function codEroareSigur(err) {
+  if (err?.name === 'TimeoutAiError' || err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+    return 'TIMEOUT';
+  }
+  if (err?.message === 'IMAGINE_PREA_MARE') return 'IMAGINE_PREA_MARE';
+  return err?.code || err?.name || 'ANALIZA_ESUATA';
 }
 
 exports.analizaMancareTask = task({
@@ -36,21 +84,22 @@ exports.analizaMancareTask = task({
     factor: 2,
   },
   run: async (payload) => {
-    const { imageUrl, tipMasa, userId } = payload || {};
-    if (!imageUrl) {
-      return { success: false, eroare: 'imageUrl lipsește din payload.' };
-    }
-
-    if (!process.env.GEMINI_API_KEY) {
+    const lipsesteCheiaPrincipalaGemini = !process.env.GEMINI_API_KEY;
+    const lipsa = VARIABILE_OBLIGATORII.filter((cheie) => !process.env[cheie]?.trim());
+    if (lipsesteCheiaPrincipalaGemini || lipsa.length > 0) {
       return {
         success: false,
         status: 'needs_config',
-        eroare: 'GEMINI_API_KEY lipsește din variabilele de mediu ale proiectului Trigger.dev.',
+        eroare: 'Task-ul de analiza nu este configurat complet.',
+        variabileLipsa: lipsa,
       };
     }
 
-    // Validarea se repeta in task, nu doar in API. Trigger.dev poate primi un
-    // payload separat, iar fetch-ul este punctul la care SSRF trebuie blocat.
+    const { imageUrl, tipMasa, userId } = payload || {};
+    if (typeof imageUrl !== 'string' || !imageUrl.trim() || !REGEX_UUID.test(String(userId || ''))) {
+      return { success: false, eroare: 'Payload invalid pentru analiza imaginii.' };
+    }
+
     const valideazaImagine = creeazaValideazaUrlImagine({
       gazdePermise: construiesteGazdePermise({
         imagekitUrlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
@@ -61,102 +110,77 @@ exports.analizaMancareTask = task({
     if (!verificare.ok) return { success: false, eroare: verificare.eroare };
 
     try {
-      // Redirect-urile sunt refuzate: o gazda permisa nu poate redirectiona
-      // fetch-ul catre localhost sau catre o adresa privata.
       const resp = await fetch(verificare.url, {
         signal: AbortSignal.timeout(20000),
         redirect: 'manual',
       });
-      if (resp.status >= 300 && resp.status < 400) {
-        throw new Error('Stocarea imaginii a raspuns cu redirect nepermis.');
-      }
-      if (!resp.ok) throw new Error(`Descărcarea imaginii a eșuat (${resp.status}).`);
+      if (resp.status >= 300 && resp.status < 400) throw new Error('REDIRECT_INTERZIS');
+      if (!resp.ok) throw new Error('DESCARCARE_ESUATA');
 
-      const mimeType = String(resp.headers.get('content-type') || '')
+      const mimeDeclarat = String(resp.headers.get('content-type') || '')
         .split(';')[0]
         .trim()
         .toLowerCase();
-      if (!MIME_PERMISE.has(mimeType)) {
-        throw new Error('Fisierul descarcat nu este o imagine JPEG, PNG sau WEBP.');
-      }
+      if (!MIME_PERMISE.has(mimeDeclarat)) throw new Error('MIME_INTERZIS');
 
       const lungime = Number(resp.headers.get('content-length'));
       if (Number.isFinite(lungime) && lungime > MAX_IMAGINE_BYTES) {
-        throw new Error('Imaginea depaseste limita de 5 MB.');
-      }
-      const buffer = Buffer.from(await resp.arrayBuffer());
-      if (buffer.length > MAX_IMAGINE_BYTES) {
-        throw new Error('Imaginea depaseste limita de 5 MB.');
+        throw new Error('IMAGINE_PREA_MARE');
       }
 
-      const magicMime = detectaMagicBytes(buffer);
-      if (!magicMime || !MIME_PERMISE.has(magicMime)) {
-        throw new Error('Fisierul descarcat nu este o imagine JPEG, PNG sau WEBP (magic bytes nevalide).');
-      }
+      const buffer = await citesteCorpLimitat(resp, MAX_IMAGINE_BYTES);
+      const mimeDetectat = detecteazaMime(buffer);
+      if (!mimeDetectat || mimeDetectat !== mimeDeclarat) throw new Error('SEMNATURA_IMAGINE_INVALIDA');
 
-      const imagePart = { inlineData: { data: buffer.toString('base64'), mimeType: magicMime } };
+      const imagePart = { inlineData: { data: buffer.toString('base64'), mimeType: mimeDetectat } };
       let text = null;
-      let lastError = null;
+      let ultimaEroare = null;
       const chei = [
         process.env.GEMINI_API_KEY,
         process.env.GEMINI_API_KEY_2,
         process.env.GEMINI_API_KEY_3,
         process.env.GEMINI_API_KEY_4,
-      ].filter(Boolean);
+      ].map((cheie) => cheie?.trim()).filter(Boolean);
 
       for (const key of chei) {
         const client = new GoogleGenerativeAI(key);
         for (const modelName of modelsDeIncercat()) {
           try {
             const model = client.getGenerativeModel({ model: modelName });
-            const result = await model.generateContent({
+            const result = await callWithSoftTimeout(model.generateContent({
               contents: [{ role: 'user', parts: [{ text: PROMPT_ANALIZA_FOTO }, imagePart] }],
-            });
-            text = result.response.text();
+              generationConfig: { responseMimeType: 'application/json' },
+            }), 30000);
+            text = result?.response?.text();
             if (text) break;
           } catch (err) {
-            lastError = err;
+            ultimaEroare = err;
           }
         }
         if (text) break;
       }
-      if (!text) throw new Error(lastError?.message || 'Niciun model Gemini nu a răspuns.');
+      if (!text) throw ultimaEroare || new Error('NICIUN_MODEL_DISPONIBIL');
 
-      const curatat = text.replace(/```[a-z]*\s*/gi, '').replace(/```/g, '').trim();
-      const firstBracket = curatat.indexOf('[');
-      const lastBracket = curatat.lastIndexOf(']');
-      let items = null;
-      if (firstBracket !== -1 && lastBracket > firstBracket) {
-        try {
-          items = JSON.parse(curatat.substring(firstBracket, lastBracket + 1));
-        } catch {
-          items = null;
-        }
-      }
-      if (!items) {
-        try {
-          items = JSON.parse(curatat);
-        } catch {
-          items = null;
-        }
-      }
-      if (!Array.isArray(items)) {
-        throw new Error('Răspunsul AI nu conține un array JSON de alimente.');
-      }
+      const items = parseJsonFromLlm(text, { asteapta: 'array' });
+      if (!Array.isArray(items)) throw new Error('JSON_AI_INVALID');
 
-      const normalizate = items
-        .map((i) => ({
-          nume: String(i.nume || 'Aliment identificat').substring(0, 150),
-          estimare_grame: Math.min(5000, Math.max(1, Number(i.estimare_grame) || 100)),
-          calorii_per_100g: Math.min(1000, Math.max(0, Number(i.calorii_per_100g) || 0)),
-          proteine_per_100g: Math.min(100, Math.max(0, Number(i.proteine_per_100g) || 0)),
-          grasimi_per_100g: Math.min(100, Math.max(0, Number(i.grasimi_per_100g) || 0)),
-          carbohidrati_per_100g: Math.min(100, Math.max(0, Number(i.carbohidrati_per_100g) || 0)),
-          incredere: String(i.incredere || 'mediu').substring(0, 20),
+      const normalizate = items.slice(0, MAX_ALIMENTE)
+        .map((item) => ({
+          nume: String(item?.nume || 'Aliment identificat').trim().substring(0, 150),
+          estimare_grame: numarModel(item?.estimare_grame, { min: 1, max: 5000, implicit: 100 }),
+          calorii_per_100g: numarModel(item?.calorii_per_100g, { max: 1000 }),
+          proteine_per_100g: numarModel(item?.proteine_per_100g, { max: 100 }),
+          grasimi_per_100g: numarModel(item?.grasimi_per_100g, { max: 100 }),
+          carbohidrati_per_100g: numarModel(item?.carbohidrati_per_100g, { max: 100 }),
+          incredere: String(item?.incredere || 'mediu').substring(0, 20),
         }))
-        .filter((i) => i.nume.trim().length > 0);
+        .filter((item) => item.nume.length > 0);
+      if (normalizate.length === 0) throw new Error('LISTA_AI_GOALA');
 
-      if (normalizate.length === 0 || normalizate.some(i => /nu.*mancare|non-food|nu s-a detectat|nu contine/i.test(i.nume))) {
+      // Ramura isNotFood: imaginea nu contine alimente (modelul a raspuns cu
+      // alimente filtrate sau nume care semnaleaza non-food). Raspuns explicit
+      // pentru frontend, distinct de o eroare tehnica.
+      if (normalizate.some((item) => /nu.*mancare|non-food|nu s-a detectat|nu contine/i.test(item.nume))) {
         return {
           success: false,
           isNotFood: true,
@@ -166,7 +190,7 @@ exports.analizaMancareTask = task({
       }
 
       const totalKcal = normalizate.reduce(
-        (s, i) => s + (i.calorii_per_100g * i.estimare_grame) / 100,
+        (suma, item) => suma + (item.calorii_per_100g * item.estimare_grame) / 100,
         0,
       );
 
@@ -174,7 +198,7 @@ exports.analizaMancareTask = task({
         success: true,
         items: normalizate,
         totals: { kcal: Math.round(totalKcal) },
-        tipMasa: tipMasa || 'Pranz',
+        tipMasa: TIPURI_MASA.has(tipMasa) ? tipMasa : 'Pranz',
         userId,
         processedAt: new Date().toISOString(),
       };
@@ -183,14 +207,19 @@ exports.analizaMancareTask = task({
         try {
           require('@sentry/node').captureException(err);
         } catch {
-          // Sentry este optional in task.
+          // Telemetria optionala nu schimba rezultatul task-ului.
         }
       }
+      const cod = codEroareSigur(err);
+      console.error('[Trigger analiza-mancare-ai] Esuare:', cod);
       return {
         success: false,
-        eroare: err?.message || 'Eroare necunoscută în task-ul de analiză.',
+        cod,
+        eroare: 'Analiza imaginii nu a putut fi finalizata.',
         processedAt: new Date().toISOString(),
       };
     }
   },
 });
+
+exports._test = { citesteCorpLimitat, detecteazaMime, codEroareSigur };

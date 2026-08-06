@@ -1,54 +1,94 @@
 'use strict';
 
 const express = require('express');
-
 const { tabelUtilizator } = require('../utils/clientUtilizator');
 
-/**
- * Rute GDPR (Export date & Ștergere cont).
- *
- * B-12: exportul citește datele utilizatorului prin `ctx.db` (clientul legat de
- * JWT-ul utilizatorului, cu RLS activ pe auth.uid() = user_id), nu prin clientul
- * admin. Astfel izolarea e aplicată de baza de date, nu doar de un filtru în cod.
- *
- * Ștergerea contului folosește `auth.admin.deleteUser`, care șterge rândul din
- * `auth.users`. Toate tabelele cu date de utilizator au FK `ON DELETE CASCADE`
- * către `auth.users(id)` (migrările 001/002 + 20260805000001_gdpr_complete), deci
- * o singură ștergere curăță totul în cascadă, fără rânduri orfane.
- */
+const IMAGEKIT_API = ['https:', '', 'api.imagekit.io', 'v1'].join('/');
+const MAX_ADANCIME_JSON = 8;
+
+function codEroare(err) {
+  return err?.code || err?.name || 'NECUNOSCUT';
+}
+
+function extrageFileIds(value, rezultat = new Set(), adancime = 0) {
+  if (adancime > MAX_ADANCIME_JSON || value === null || value === undefined) return rezultat;
+  if (Array.isArray(value)) {
+    for (const element of value) extrageFileIds(element, rezultat, adancime + 1);
+    return rezultat;
+  }
+  if (typeof value !== 'object') return rezultat;
+
+  for (const [key, element] of Object.entries(value)) {
+    if (
+      (key === 'fileId' || key === 'imageKitFileId' || key === 'imagekit_file_id') &&
+      typeof element === 'string' &&
+      /^[A-Za-z0-9_-]{6,200}$/.test(element)
+    ) {
+      rezultat.add(element);
+    } else {
+      extrageFileIds(element, rezultat, adancime + 1);
+    }
+  }
+  return rezultat;
+}
+
+async function imageKitRequest(cale, { privateKey, method = 'DELETE', body } = {}) {
+  const authorization = Buffer.from(`${privateKey}:`, 'utf8').toString('base64');
+  const response = await fetch(`${IMAGEKIT_API}${cale}`, {
+    method,
+    headers: {
+      Authorization: `Basic ${authorization}`,
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(10000),
+    redirect: 'error',
+  });
+  if (!response.ok && response.status !== 404) {
+    const error = new Error('IMAGEKIT_DELETE_FAILED');
+    error.code = `IMAGEKIT_${response.status}`;
+    throw error;
+  }
+}
+
+async function stergeActiveImageKit({ userId, fileIds, privateKey }) {
+  if (!privateKey) {
+    const error = new Error('IMAGEKIT_NOT_CONFIGURED');
+    error.code = 'IMAGEKIT_NOT_CONFIGURED';
+    throw error;
+  }
+
+  await imageKitRequest('/folder/', {
+    privateKey,
+    body: { folderPath: `/mancare/${userId}/` },
+  });
+
+  const ids = [...fileIds];
+  for (let index = 0; index < ids.length; index += 5) {
+    const lot = ids.slice(index, index + 5);
+    await Promise.all(lot.map((fileId) => imageKitRequest(
+      `/files/${encodeURIComponent(fileId)}`,
+      { privateKey },
+    )));
+  }
+}
+
 function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate, profilRepo }) {
-  // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
   const router = express.Router();
 
-  // GET /api/user/export-data
   router.get('/export-data', requireAuth, generalLimiter, async (req, res) => {
     try {
       const ctx = contextDate(req, res);
       const userId = ctx.userId;
-
-      // Citim fiecare tabelă separat și tolerăm erorile per-tabelă: un tabel lipsă
-      // sau indisponibil nu trebuie să doboare tot exportul.
       const citeste = async (tabela) => {
-        try {
-          const { data, error } = await tabelUtilizator(ctx, tabela).select('*').eq('user_id', userId);
-          if (error) {
-            console.warn(`[GDPR] Export ${tabela} esuat:`, error.message);
-            return null;
-          }
-          return data ?? [];
-        } catch (err) {
-          console.warn(`[GDPR] Export ${tabela} exceptie:`, err.message);
-          return null;
-        }
+        const { data, error } = await tabelUtilizator(ctx, tabela).select('*').eq('user_id', userId);
+        if (error) throw error;
+        return data ?? [];
       };
 
-      // C3 (decizie): audit_log (action + details JSONB) e telemetrie interna de
-      // actiuni, nu date cu care subiectul isi exercita portabilitatea. Il excludem
-      // din export (confidentialitate minima, Art. 25), dar il STERGEM totusi la
-      // delete-account (Art. 17 — dreptul la stergere acopera si logurile).
       const [mese, profil, antrenamente, estimariBarcode] = await Promise.all([
         citeste('mese'),
-        profilRepo.getProfil(ctx).catch(() => null),
+        profilRepo.getProfil(ctx),
         citeste('antrenamente'),
         citeste('barcode_estimari_utilizator'),
       ]);
@@ -58,31 +98,70 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         user_id: userId,
         user: req.user,
         profil: profil || null,
-        mese: mese || [],
-        antrenamente: antrenamente || [],
-        estimari_barcode: estimariBarcode || [],
+        mese,
+        antrenamente,
+        estimari_barcode: estimariBarcode,
       });
     } catch (err) {
-      console.error('Eroare export date GDPR:', err);
-      return res.status(500).json({ eroare: 'Nu s-au putut meșteri datele pentru export.' });
+      console.error('[GDPR] Export esuat:', codEroare(err));
+      return res.status(500).json({ eroare: 'Nu s-au putut pregăti datele pentru export.' });
     }
   });
 
-  // DELETE /api/user/delete-account
   router.delete('/delete-account', requireAuth, generalLimiter, async (req, res) => {
     try {
       const ctx = contextDate(req, res);
       const userId = ctx.userId;
 
-      // În plus față de cascada FK (acoperită de deleteUser), ștergem explicit
-      // tabelele reale cu date de utilizator — apărare în adâncime, iar la unele
-      // identități (mapate Clerk) rândul din auth.users poate lipsi.
-      const sterge = async (tabela) => {
+      const { data: mese, error: eroareMese } = await tabelUtilizator(ctx, 'mese')
+        .select('alimente')
+        .eq('user_id', userId);
+      if (eroareMese) throw eroareMese;
+
+      const fileIds = extrageFileIds(mese || []);
+      await stergeActiveImageKit({
+        userId,
+        fileIds,
+        privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim(),
+      });
+
+      // Curățare legacy: fișierele vechi de dinainte de folderul unic
+      // `/mancare/<userId>/` locuiau în `/meals/<userId>/`. Ștergem acest
+      // folder vechi ca best-effort (nu doboară ștergerea contului), ca nici un
+      // activ media abandonat să nu rămână pe CDN după Art. 17.
+      if (process.env.IMAGEKIT_PRIVATE_KEY && process.env.IMAGEKIT_PUBLIC_KEY) {
         try {
-          await tabelUtilizator(ctx, tabela).delete().eq('user_id', userId);
-        } catch (err) {
-          console.warn(`[GDPR] Stergere ${tabela} esuata:`, err.message);
+          const ImageKit = require('imagekit');
+          const ik = new ImageKit({
+            publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+            privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+            urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/nutriai',
+          });
+          const fileList = await new Promise((rezolve) => {
+            ik.listFiles({
+              searchQuery: `folderPath : "/meals/${userId}/*" OR name : "*${userId}*"`,
+            }, (err, raspuns) => {
+              if (err || !Array.isArray(raspuns)) rezolve([]);
+              else rezolve(raspuns);
+            });
+          });
+          const idsLegacy = (fileList || []).map((f) => f?.fileId).filter(Boolean);
+          if (idsLegacy.length > 0) {
+            await new Promise((rezolve) => {
+              ik.bulkDeleteFiles(idsLegacy, (delErr) => {
+                if (delErr) console.warn('[GDPR] Ștergere fișiere ImageKit vechi eșuată:', delErr.message);
+                rezolve();
+              });
+            });
+          }
+        } catch (ikErr) {
+          console.warn('[GDPR] Curățare ImageKit legacy omisă:', ikErr.message);
         }
+      }
+
+      const sterge = async (tabela) => {
+        const { error } = await tabelUtilizator(ctx, tabela).delete().eq('user_id', userId);
+        if (error) throw error;
       };
 
       await Promise.all([
@@ -93,79 +172,35 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         sterge('audit_log'),
       ]);
 
-      // Curățare fișiere imagine utilizator din ImageKit CDN
-      if (process.env.IMAGEKIT_PRIVATE_KEY && process.env.IMAGEKIT_PUBLIC_KEY) {
-        try {
-          const ImageKit = require('imagekit');
-          const ik = new ImageKit({
-            publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-            privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
-            urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/nutriai',
-          });
+      const { error: eroareMapare } = await supabaseAdmin
+        .from('clerk_user_map')
+        .delete()
+        .eq('supabase_user_id', userId);
+      if (eroareMapare) throw eroareMapare;
 
-          // Fișierele sunt încărcate în folderul per-utilizator `/meals/<userId>/`
-          // (frontend-nutritie/lib/imagekit.ts), cu nume unic generat de CDN care
-          // NU conține userId. Căutarea după `name` nu găsea nimic; `folderPath`
-          // e câmpul corect. Păstrăm și căutarea veche după nume, ca fallback
-          // pentru eventuale fișiere legacy.
-          const fileList = await new Promise((resolve) => {
-            ik.listFiles({
-              searchQuery: `folderPath : "/meals/${userId}/*" OR name : "*${userId}*"`,
-            }, (err, res) => {
-              if (err || !Array.isArray(res)) resolve([]);
-              else resolve(res);
-            });
-          });
-
-          if (fileList.length > 0) {
-            const fileIds = fileList.map((f) => f.fileId).filter(Boolean);
-            if (fileIds.length > 0) {
-              await new Promise((resolve) => {
-                ik.bulkDeleteFiles(fileIds, (delErr) => {
-                  if (delErr) console.warn('[GDPR] Ștergere fișiere ImageKit eșuată:', delErr.message);
-                  resolve();
-                });
-              });
-            }
-          }
-        } catch (ikErr) {
-          console.warn('[GDPR] Curățare ImageKit CDN omisă sau neconfigurată:', ikErr.message);
-        }
-      }
-
-      // C1: curatam explicit maparea Clerk -> Supabase.
-      try {
-        await supabaseAdmin.from('clerk_user_map').delete().eq('supabase_user_id', userId);
-      } catch (err) {
-        console.warn('[GDPR] Stergere clerk_user_map esuata:', err.message);
-      }
-
-      // Sursele reale de adevăr: șterge contul Supabase. FK ON DELETE CASCADE pe
-      // toate tabelele care referențiază auth.users idempotent curăță restul.
       if (!supabaseAdmin.auth?.admin?.deleteUser) {
-        // Garda anti-mintire (C2): fara capacitatea de a sterge identitatea auth,
-        // nu putem garanta Art. 17 (GDPR). Nu raportam succes fals.
         return res.status(500).json({ eroare: 'Nu s-a putut șterge contul.' });
       }
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-      if (error) {
-        // C2: daca stergerea identitatii auth esueaza, stergerea e incompleta.
-        // Datele curatate + randul auth ramas = contul inca exista. 500, nu succes.
-        console.error('[GDPR] Eroare auth.admin.deleteUser:', error.message);
-        return res.status(500).json({ eroare: 'Nu s-a putut șterge contul.' });
-      }
+      const { error: eroareAuth } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (eroareAuth) throw eroareAuth;
 
       return res.json({
         succes: true,
-        mesaj: 'Contul și toate datele asociate au fost șterse definitiv (GDPR Right to be Forgotten).'
+        mesaj: 'Contul, datele și activele media asociate au fost șterse definitiv.',
       });
     } catch (err) {
-      console.error('Eroare ștergere cont GDPR:', err);
-      return res.status(500).json({ eroare: 'Nu s-a putut șterge contul.' });
+      const cod = codEroare(err);
+      console.error('[GDPR] Stergere cont esuata:', cod);
+      const status = cod === 'IMAGEKIT_NOT_CONFIGURED' ? 503 : 500;
+      return res.status(status).json({
+        eroare: 'Ștergerea completă a contului nu a putut fi finalizată. Niciun succes parțial nu a fost raportat.',
+      });
     }
   });
 
   return router;
 }
 
+createGdprRouter.extrageFileIds = extrageFileIds;
+createGdprRouter.stergeActiveImageKit = stergeActiveImageKit;
 module.exports = createGdprRouter;

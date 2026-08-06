@@ -10,9 +10,9 @@ const { parseJsonFromLlm } = require('../utils/llmJson');
 const { inregistreazaAi } = require('../utils/metrics');
 const { curataMinim, detectPromptInjection, citesteQuery } = require('../utils/sanitize');
 const { valideazaIngrediente } = require('../utils/promptSafety');
+const { construiesteGazdePermise, creeazaValideazaUrlImagine } = require('../utils/valideazaUrlImagine');
 const { numarModel, NUME_FURNIZORI_AI } = require('../services/ai/vision');
 const { EroareAiClient } = require('../services/ai/chat');
-const { construiesteGazdePermise, creeazaValideazaUrlImagine } = require('../utils/valideazaUrlImagine');
 
 /**
  * Rute AI (analiza foto, chat, estimare text, corectie vizual+text) + orfanele
@@ -40,13 +40,6 @@ function createAiRouter({
   // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
   const router = express.Router();
 
-  const valideazaUrlImagine = creeazaValideazaUrlImagine({
-    gazdePermise: construiesteGazdePermise({
-      imagekitUrlEndpoint: config?.imagekit?.urlEndpoint,
-      supabaseUrl: config?.supabase?.url,
-    }),
-  });
-
   // ==========================================
   // IMAGEKIT AUTHENTICATION ENDPOINT
   // ==========================================
@@ -67,6 +60,21 @@ function createAiRouter({
       if (config.sentryDsn) Sentry.captureException(err);
       return res.status(500).json({ eroare: 'Eroare la generarea parametrilor ImageKit.' });
     }
+  });
+
+  // ==========================================
+  // TRIGGER.DEV ASYNC AI FOOD ANALYSIS ENDPOINT
+  // ==========================================
+
+  // Validator SSRF partajat (utils/valideazaUrlImagine.js), aceeasi regula ca in
+  // task-ul Trigger analiza-mancare-ai: https standard, fara credentiale in URL,
+  // porturi custom ori traversari de cale, si gazda in lista permisa (ImageKit +
+  // Supabase). Lista vida refuza totul; configuratie malformata ramane fail-closed.
+  const valideazaUrlImagine = creeazaValideazaUrlImagine({
+    gazdePermise: construiesteGazdePermise({
+      imagekitUrlEndpoint: config.imagekit.urlEndpoint,
+      supabaseUrl: config.supabase.url,
+    }),
   });
 
   router.post('/trigger-analiza-mancare', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res) => {
@@ -130,10 +138,21 @@ function createAiRouter({
         }
       }
 
+      // Semnal comun de anulare: daca clientul se deconecteaza inca din coada,
+      // intrarea se scoate din semafor si slotul ramane liber pentru ceilalti.
+      const controllerAbord = new AbortController();
+      const peDeconectare = (event) => {
+        // 'close' se declanseaza si la finalizarea normala; anulam doar cand
+        // raspunsul nu a fost inca terminat (deconectare reala a clientului).
+        if (event?.target?.writableEnded) return;
+        controllerAbord.abort();
+      };
+      res.on('close', peDeconectare);
+
       let rezultatCascada;
       try {
         // Citirea fișierului și encodarea Base64 au loc ÎN INTERIORUL semaforului.
-        // Înainte rulau înainte de plafonare: N cereri concurente își duplicau
+        // Înainte rulau înainte de plafonare: o cereri concurente își duplicau
         // imaginea în heap, iar semaforul nu proteja vârful de memorie.
         rezultatCascada = await semaforAi.ruleaza(async () => {
           let fileBuffer = await fs.promises.readFile(req.file.path);
@@ -144,24 +163,32 @@ function createAiRouter({
             throw eroare400;
           }
           const imageBase64 = fileBuffer.toString('base64');
+          // B-20: eliberam Buffer-ul brut dupa encodare. Base64-ul ramane necesar
+          // pe toata cascada, dar tinand ambele copii in heap dublam varful de
+          // memorie fara castig. Reducerea reala de payload vine din redimensionarea
+          // pe client (camera.tsx), inainte de upload.
           fileBuffer = null;
           return serviciuCascada.ruleazaCascadaVision({
             imageBase64,
             imageMime,
             requestedProvider,
           });
-        }, req.signal);
+        }, controllerAbord.signal);
       } catch (errSemafor) {
         if (errSemafor?.cod === 'AI_SUPRAINCARCAT') {
           return res.status(503).json({ eroare: errSemafor.message });
         }
+        if (errSemafor?.cod === 'REQUEST_ABORTED') {
+          // Clientul s-a deconectat; nu mai are cine citi raspunsul. Nu trasam
+          // eroarea ca 500 — asteptarea in coada a fost renuntata, atat.
+          return res.status(499).end();
+        }
         if (errSemafor?.status === 400) {
           return res.status(400).json({ eroare: errSemafor.message });
         }
-        if (errSemafor?.status === 499 || req.signal?.aborted) {
-          return res.status(499).json({ eroare: 'Cererea a fost anulată de client.' });
-        }
         throw errSemafor;
+      } finally {
+        res.removeListener('close', peDeconectare);
       }
 
       const text = rezultatCascada.text;
@@ -232,7 +259,7 @@ function createAiRouter({
       return res.json(await serviciuChat.logFoodDinChat(req.body));
     } catch (err) {
       if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
-      console.error('Eroare in log food from chat:', err.message);
+      console.error('Eroare in /api/log-food-from-chat:', err.message);
       return res.status(500).json({ eroare: 'Nu s-a putut genera propunerea de masa.' });
     }
   };
