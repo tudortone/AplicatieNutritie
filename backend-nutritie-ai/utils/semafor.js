@@ -27,7 +27,13 @@ class Semafor {
 		return this._coada.length;
 	}
 
-	async ruleaza(functie) {
+	async ruleaza(functie, signal = null) {
+		if (signal?.aborted) {
+			const eroare = new Error('Cererea a fost anulată înainte de procesarea AI.');
+			eroare.status = 499;
+			throw eroare;
+		}
+
 		if (this.activi >= this.max) {
 			if (this._coada.length >= this.maxCoada) {
 				const eroare = new Error(
@@ -37,16 +43,50 @@ class Semafor {
 				eroare.status = 503;
 				throw eroare;
 			}
-			await new Promise((rezolva) => this._coada.push(rezolva));
+			await new Promise((rezolva, respinge) => {
+				const peAbort = () => {
+					const idx = this._coada.findIndex((item) => item.rezolva === rezolva);
+					if (idx !== -1) {
+						this._coada.splice(idx, 1);
+					}
+					const err = new Error('Cererea a fost anulată.');
+					err.status = 499;
+					respinge(err);
+				};
+
+				if (signal) {
+					signal.addEventListener('abort', peAbort, { once: true });
+				}
+
+				const cb = () => {
+					if (signal) signal.removeEventListener('abort', peAbort);
+					if (signal?.aborted) {
+						const err = new Error('Cererea a fost anulată.');
+						err.status = 499;
+						respinge(err);
+					} else {
+						rezolva();
+					}
+				};
+				cb.rezolva = rezolva;
+				this._coada.push(cb);
+			});
 		}
 
 		this.activi += 1;
 		try {
+			if (signal?.aborted) {
+				const eroare = new Error('Cererea a fost anulată.');
+				eroare.status = 499;
+				throw eroare;
+			}
 			return await functie();
 		} finally {
 			this.activi -= 1;
 			const urmatorul = this._coada.shift();
-			if (urmatorul) urmatorul();
+			if (urmatorul) {
+				urmatorul();
+			}
 		}
 	}
 }

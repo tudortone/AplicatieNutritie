@@ -178,23 +178,22 @@ function createAiRouter({
             throw eroare400;
           }
           const imageBase64 = fileBuffer.toString('base64');
-          // B-20: eliberam Buffer-ul brut dupa encodare. Base64-ul ramane necesar
-          // pe toata cascada, dar tinand ambele copii in heap dublam varful de
-          // memorie fara castig. Reducerea reala de payload vine din redimensionarea
-          // pe client (camera.tsx), inainte de upload.
           fileBuffer = null;
           return serviciuCascada.ruleazaCascadaVision({
             imageBase64,
             imageMime,
             requestedProvider,
           });
-        });
+        }, req.signal);
       } catch (errSemafor) {
         if (errSemafor?.cod === 'AI_SUPRAINCARCAT') {
           return res.status(503).json({ eroare: errSemafor.message });
         }
         if (errSemafor?.status === 400) {
           return res.status(400).json({ eroare: errSemafor.message });
+        }
+        if (errSemafor?.status === 499 || req.signal?.aborted) {
+          return res.status(499).json({ eroare: 'Cererea a fost anulată de client.' });
         }
         throw errSemafor;
       }

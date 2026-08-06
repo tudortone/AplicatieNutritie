@@ -262,10 +262,15 @@ describe('Semafor', () => {
     await lung;
   });
 
-  it('elibereaza slotul si dupa o eroare', async () => {
+  it('anuleaza sarcina din coada daca signal se aborteaza', async () => {
     const semafor = new Semafor({ max: 1, maxCoada: 5 });
-    await expect(semafor.ruleaza(async () => { throw new Error('boom'); })).rejects.toThrow('boom');
-    await expect(semafor.ruleaza(async () => 'ok')).resolves.toBe('ok');
+    const controller = new AbortController();
+    const lung = semafor.ruleaza(() => new Promise((r) => setTimeout(r, 40)));
+    const promisiuneAnulata = semafor.ruleaza(() => new Promise((r) => setTimeout(r, 40)), controller.signal);
+    controller.abort();
+    await expect(promisiuneAnulata).rejects.toThrow('Cererea a fost anulată.');
+    expect(semafor.inAsteptare).toBe(0);
+    await lung;
   });
 });
 

@@ -242,6 +242,26 @@ RETURNEAZA STRICT UN OBIECT JSON valid in acest format:
       if (!['mic_dejun', 'pranz', 'cina', 'gustare'].includes(parsed.meal_type)) {
         parsed.meal_type = 'gustare';
       }
+      parsed.items = parsed.items.map((item) => ({
+        name: String(item?.name || 'Aliment').substring(0, 150),
+        qty: numarModel(item?.qty, { min: 1, max: 5000, implicit: 100 }),
+        unit: String(item?.unit || 'g').substring(0, 20),
+        protein_g: numarModel(item?.protein_g, { max: 1000 }),
+        carbs_g: numarModel(item?.carbs_g, { max: 1000 }),
+        fat_g: numarModel(item?.fat_g, { max: 1000 }),
+        kcal: numarModel(item?.kcal, { max: 10000 }),
+        fiber_g: numarModel(item?.fiber_g, { max: 500 }),
+      }));
+
+      const calcTotals = { protein_g: 0, carbs_g: 0, fat_g: 0, kcal: 0, fiber_g: 0 };
+      parsed.items.forEach((item) => {
+        calcTotals.protein_g += item.protein_g;
+        calcTotals.carbs_g += item.carbs_g;
+        calcTotals.fat_g += item.fat_g;
+        calcTotals.kcal += item.kcal;
+        calcTotals.fiber_g += item.fiber_g;
+      });
+      parsed.totals = calcTotals;
     }
 
     return parsed;

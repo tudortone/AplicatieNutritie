@@ -66,3 +66,39 @@ export function getMealCategoryIcon(tip?: TipMasa): string {
       return '🍽️';
   }
 }
+
+// Erorile PostgREST cand o coloana lipsește din schema (PGRST204 / 42703).
+const SEMNALE_COLOANA_LIPSA = /imagine_url|does not exist|could not find the/i;
+
+/**
+ * Inserare masa cu fallback la lipsa coloanei `imagine_url`: daca schema nu are
+ * inca migrarea 20260806000001 aplicata, retry fara coloana, ca salvarea mesei
+ * sa nu fie blocata. Odata coloana adaugata, fallback-ul nu se mai declanseaza.
+ */
+export async function insereazaMasaCuPoza(
+  client: any,
+  payload: Record<string, unknown>,
+): Promise<{ error: any }> {
+  const prima = await client.from('mese').insert(payload);
+  if (prima.error && SEMNALE_COLOANA_LIPSA.test(String(prima.error.message))) {
+    const faraPoza = { ...payload };
+    delete faraPoza.imagine_url;
+    return client.from('mese').insert(faraPoza);
+  }
+  return prima;
+}
+
+/** La fel ca `insereazaMasaCuPoza`, pentru editarea unei mese existente. */
+export async function actualizeazaMasaCuPoza(
+  client: any,
+  id: string,
+  valori: Record<string, unknown>,
+): Promise<{ error: any }> {
+  const prima = await client.from('mese').update(valori).eq('id', id);
+  if (prima.error && SEMNALE_COLOANA_LIPSA.test(String(prima.error.message))) {
+    const faraPoza = { ...valori };
+    delete faraPoza.imagine_url;
+    return client.from('mese').update(faraPoza).eq('id', id);
+  }
+  return prima;
+}
