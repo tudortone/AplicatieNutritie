@@ -140,6 +140,9 @@ jobs:
       - name: Run Lint
         run: npm run lint
 
+      - name: Audit npm dependencies (high severity)
+        run: npm audit --audit-level=high
+
       - name: Run Frontend Tests (P-14)
         run: npm run test:ci
 
