@@ -10,6 +10,7 @@ const { parseJsonFromLlm } = require('../utils/llmJson');
 const { inregistreazaAi } = require('../utils/metrics');
 const { curataMinim, detectPromptInjection, citesteQuery } = require('../utils/sanitize');
 const { valideazaIngrediente } = require('../utils/promptSafety');
+const { construiesteGazdePermise, creeazaValideazaUrlImagine } = require('../utils/valideazaUrlImagine');
 const { numarModel, NUME_FURNIZORI_AI } = require('../services/ai/vision');
 const { EroareAiClient } = require('../services/ai/chat');
 
@@ -65,43 +66,16 @@ function createAiRouter({
   // TRIGGER.DEV ASYNC AI FOOD ANALYSIS ENDPOINT
   // ==========================================
 
-  // Gazde permise pentru imaginile trimise catre task-ul din fundal.
-  // Fara aceasta lista, `imageUrl` era acceptat ca text liber, deci un utilizator
-  // autentificat putea pune serverul sa descarce orice adresa (SSRF).
-  const GAZDE_IMAGINI_PERMISE = (() => {
-    const gazde = new Set();
-    if (config.imagekit.urlEndpoint) {
-      try {
-        gazde.add(new URL(config.imagekit.urlEndpoint).hostname.toLowerCase());
-      } catch { /* endpoint malformat: ramane fail-closed */ }
-    }
-    try {
-      gazde.add(new URL(config.supabase.url).hostname.toLowerCase());
-    } catch { /* idem */ }
-    return gazde;
-  })();
-
-  function valideazaUrlImagine(valoare) {
-    if (typeof valoare !== 'string' || !valoare.trim()) {
-      return { ok: false, eroare: 'URL-ul imaginii este obligatoriu.' };
-    }
-    let adresa;
-    try {
-      adresa = new URL(valoare.trim());
-    } catch {
-      return { ok: false, eroare: 'URL-ul imaginii este invalid.' };
-    }
-    if (adresa.protocol !== 'https:') {
-      return { ok: false, eroare: 'URL-ul imaginii trebuie sa foloseasca https.' };
-    }
-    if (!GAZDE_IMAGINI_PERMISE.has(adresa.hostname.toLowerCase())) {
-      return {
-        ok: false,
-        eroare: 'Imaginea trebuie incarcata pe stocarea aplicatiei inainte de analiza.',
-      };
-    }
-    return { ok: true, url: adresa.toString() };
-  }
+  // Validator SSRF partajat (utils/valideazaUrlImagine.js), aceeasi regula ca in
+  // task-ul Trigger analiza-mancare-ai: https standard, fara credentiale in URL,
+  // porturi custom ori traversari de cale, si gazda in lista permisa (ImageKit +
+  // Supabase). Lista vida refuza totul; configuratie malformata ramane fail-closed.
+  const valideazaUrlImagine = creeazaValideazaUrlImagine({
+    gazdePermise: construiesteGazdePermise({
+      imagekitUrlEndpoint: config.imagekit.urlEndpoint,
+      supabaseUrl: config.supabase.url,
+    }),
+  });
 
   router.post('/trigger-analiza-mancare', requireAuth, aiLimiter, checkAiUsageQuota, async (req, res) => {
     if (!config.triggerSecretKey) {
@@ -164,10 +138,21 @@ function createAiRouter({
         }
       }
 
+      // Semnal comun de anulare: daca clientul se deconecteaza inca din coada,
+      // intrarea se scoate din semafor si slotul ramane liber pentru ceilalti.
+      const controllerAbord = new AbortController();
+      const peDeconectare = (event) => {
+        // 'close' se declanseaza si la finalizarea normala; anulam doar cand
+        // raspunsul nu a fost inca terminat (deconectare reala a clientului).
+        if (event?.target?.writableEnded) return;
+        controllerAbord.abort();
+      };
+      res.on('close', peDeconectare);
+
       let rezultatCascada;
       try {
         // Citirea fișierului și encodarea Base64 au loc ÎN INTERIORUL semaforului.
-        // Înainte rulau înainte de plafonare: N cereri concurente își duplicau
+        // Înainte rulau înainte de plafonare: o cereri concurente își duplicau
         // imaginea în heap, iar semaforul nu proteja vârful de memorie.
         rezultatCascada = await semaforAi.ruleaza(async () => {
           let fileBuffer = await fs.promises.readFile(req.file.path);
@@ -188,15 +173,22 @@ function createAiRouter({
             imageMime,
             requestedProvider,
           });
-        });
+        }, controllerAbord.signal);
       } catch (errSemafor) {
         if (errSemafor?.cod === 'AI_SUPRAINCARCAT') {
           return res.status(503).json({ eroare: errSemafor.message });
+        }
+        if (errSemafor?.cod === 'REQUEST_ABORTED') {
+          // Clientul s-a deconectat; nu mai are cine citi raspunsul. Nu trasam
+          // eroarea ca 500 — asteptarea in coada a fost renuntata, atat.
+          return res.status(499).end();
         }
         if (errSemafor?.status === 400) {
           return res.status(400).json({ eroare: errSemafor.message });
         }
         throw errSemafor;
+      } finally {
+        res.removeListener('close', peDeconectare);
       }
 
       const text = rezultatCascada.text;
