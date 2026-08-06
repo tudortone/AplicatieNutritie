@@ -16,10 +16,9 @@ function escapeazaComanda(text) {
     .replace(/\n/g, '%0A');
 }
 
-const jestBin = require.resolve('jest/bin/jest');
 const result = spawnSync(
-  process.execPath,
-  [jestBin, '--forceExit', ...process.argv.slice(2)],
+  'jest',
+  ['--forceExit', ...process.argv.slice(2)],
   {
     cwd: process.cwd(),
     env: process.env,
