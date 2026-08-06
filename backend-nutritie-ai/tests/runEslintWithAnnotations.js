@@ -1,6 +1,9 @@
 'use strict';
 
 const { spawnSync } = require('child_process');
+const path = require('path');
+
+const binEslint = path.join(__dirname, '..', 'node_modules', 'eslint', 'bin', 'eslint.js');
 
 function sanitizeaza(text) {
   return String(text || '')
@@ -16,7 +19,7 @@ function escapeazaComanda(text) {
     .replace(/\n/g, '%0A');
 }
 
-const result = spawnSync('eslint', ['.'], {
+const result = spawnSync(process.execPath, [binEslint, '.'], {
   cwd: process.cwd(),
   env: process.env,
   encoding: 'utf8',

@@ -1,6 +1,15 @@
 'use strict';
 
 const { spawnSync } = require('child_process');
+const path = require('path');
+
+function binJest() {
+  try {
+    return require.resolve('jest/bin/jest');
+  } catch {
+    return path.join(__dirname, '..', 'node_modules', 'jest', 'bin', 'jest.js');
+  }
+}
 
 function sanitizeaza(text) {
   return String(text || '')
@@ -16,16 +25,12 @@ function escapeazaComanda(text) {
     .replace(/\n/g, '%0A');
 }
 
-const result = spawnSync(
-  'jest',
-  ['--forceExit', ...process.argv.slice(2)],
-  {
-    cwd: process.cwd(),
-    env: process.env,
-    encoding: 'utf8',
-    maxBuffer: 50 * 1024 * 1024,
-  },
-);
+const result = spawnSync(process.execPath, [binJest(), '--forceExit', ...process.argv.slice(2)], {
+  cwd: process.cwd(),
+  env: process.env,
+  encoding: 'utf8',
+  maxBuffer: 50 * 1024 * 1024,
+});
 
 if (result.stdout) process.stdout.write(result.stdout);
 if (result.stderr) process.stderr.write(result.stderr);
