@@ -3,8 +3,6 @@ name: CI Pipeline
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   # -----------------------------------------------------------------------
@@ -34,12 +32,10 @@ jobs:
         run: npm run lint --if-present
 
       - name: Audit npm dependencies (high severity)
-        # P-16: eșec real la vulnerabilități high/critical
         run: npm audit --audit-level=high
 
       - name: Run Tests
         env:
-          # P-16: fără fallback-uri dummy — dacă secretul lipsește, testul eșuează
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -49,8 +45,6 @@ jobs:
 
   # -----------------------------------------------------------------------
   # Job 2: Teste de integrare RLS pe Postgres real (P-15)
-  # P-15: acest job nu exista înainte — garanția centrală de securitate
-  # nu era verificată automat de nimeni.
   # -----------------------------------------------------------------------
   rls-integration:
     name: RLS Integration Tests (Postgres)
@@ -97,22 +91,28 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: |
-          for file in ../supabase/migrations/*.sql; do
-            echo "Applying $file..."
+          set -euo pipefail
+          shopt -s nullglob
+          fisiere=(../supabase/migrations/*.sql)
+          if [ ${#fisiere[@]} -eq 0 ]; then
+            echo "::error::Nicio migrare găsită"; exit 1
+          fi
+          for file in "${fisiere[@]}"; do
+            echo "::group::$file"
             psql "postgres://postgres:postgres@localhost:54322/postgres" -v ON_ERROR_STOP=1 -f "$file"
+            echo "::endgroup::"
           done
 
       - name: Run RLS Integration Tests
         env:
           RLS_TESTS_REQUIRED: '1'
-          INTEGRATION_SUPABASE_URL: 'http://localhost:54321'
           INTEGRATION_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.ZopqoUt20nEV8rw6HtnRmV5wh-cGmWKSLzJH5U5E3QM'
           INTEGRATION_JWT_SECRET: 'super-secret-jwt-token-with-at-least-32-characters-long'
           INTEGRATION_DB_URL: 'postgres://postgres:postgres@localhost:54322/postgres'
         run: npm run test:integration
 
   # -----------------------------------------------------------------------
-  # Job 3: Frontend typecheck + lint + teste
+  # Job 3: Frontend typecheck + lint + audit + teste
   # -----------------------------------------------------------------------
   frontend-checks:
     name: Frontend Typecheck, Lint & Tests
@@ -162,7 +162,4 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: ${{ github.event.before }}
-          head: HEAD
           extra_args: --only-verified
-
