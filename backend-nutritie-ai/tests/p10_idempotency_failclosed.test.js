@@ -1,16 +1,42 @@
 'use strict';
 
 /**
- * P-10: Test idempotență fail-closed pe rute critice.
- *
- * Verifică că:
- * 1. La căderea Redis pe o rută critică → 503 (nu next())
- * 2. La căderea Redis pe o rută non-critică → next() (comportament original)
- * 3. Idempotency-Key reutilizat cu payload diferit → 409 IDEMPOTENCY_KEY_REUSED
- * 4. Cerere duplicată (în procesare) → 409 IDEMPOTENCY_IN_PROGRESS
+ * P-10: Test idempotență fail-closed pe rute critice reale (AI/plăți).
  */
 
+const request = require('supertest');
 const { creeazaMiddlewareIdempotenta } = require('../utils/idempotency');
+
+jest.mock('../utils/identitate', () => ({
+  rezolvaIdentitate: jest.fn(async () => ({
+    id: '11111111-1111-4111-8111-111111111111',
+    provider: 'supabase',
+    expiraLaMs: Date.now() + 60000,
+  })),
+  EroareIdentitate: class extends Error {
+    constructor(mesaj, status = 401, cod = 'UNAUTHORIZED') {
+      super(mesaj);
+      this.status = status;
+      this.cod = cod;
+    }
+  },
+}));
+
+jest.mock('../services/ai/chat', () => {
+  const actual = jest.requireActual('../services/ai/chat');
+  return {
+    ...actual,
+    serviciuChat: {
+      ...actual.serviciuChat,
+      ruleazaChat: jest.fn(() => new Promise((resolve) => setTimeout(() => resolve({ raspuns: 'ok' }), 200))),
+    },
+    creeazaServiciuChat: () => ({
+      ruleazaChat: jest.fn(() => new Promise((resolve) => setTimeout(() => resolve({ raspuns: 'ok' }), 200))),
+      logFoodDinChat: jest.fn(),
+      estimeazaMancareText: jest.fn(),
+    }),
+  };
+});
 
 function fakeReq({ method = 'POST', headers = {}, body = {} } = {}) {
   return {
@@ -21,8 +47,8 @@ function fakeReq({ method = 'POST', headers = {}, body = {} } = {}) {
     },
     body,
     ip: '127.0.0.1',
-    originalUrl: '/api/v1/ai/analizeaza',
-    path: '/api/v1/ai/analizeaza',
+    originalUrl: '/api/v1/chat',
+    path: '/api/v1/chat',
     socket: { remoteAddress: '127.0.0.1' },
   };
 }
@@ -44,9 +70,6 @@ function fakeRes() {
 }
 
 describe('P-10 — Idempotență fail-closed pe rute critice', () => {
-  // -----------------------------------------------------------------------
-  // Test 1: Redis indisponibil + rutaCritica=true → 503
-  // -----------------------------------------------------------------------
   test('Redis indisponibil pe rută critică → 503 IDEMPOTENCY_STORE_UNAVAILABLE', async () => {
     const registruEsuat = {
       async get() { throw new Error('Redis down'); },
@@ -72,9 +95,6 @@ describe('P-10 — Idempotență fail-closed pe rute critice', () => {
     expect(res._body?.cod).toBe('IDEMPOTENCY_STORE_UNAVAILABLE');
   });
 
-  // -----------------------------------------------------------------------
-  // Test 2: Redis indisponibil + rutaCritica=false → next()
-  // -----------------------------------------------------------------------
   test('Redis indisponibil pe rută non-critică → next() (fail-open)', async () => {
     const registruEsuat = {
       async get() { throw new Error('Redis down'); },
@@ -98,9 +118,6 @@ describe('P-10 — Idempotență fail-closed pe rute critice', () => {
     expect(nextApelat).toBe(true);
   });
 
-  // -----------------------------------------------------------------------
-  // Test 3: Idempotency-Key refolosit cu payload diferit → 409
-  // -----------------------------------------------------------------------
   test('Idempotency-Key refolosit cu payload diferit → 409 IDEMPOTENCY_KEY_REUSED', async () => {
     const stocat = {};
     const registruFake = {
@@ -116,7 +133,6 @@ describe('P-10 — Idempotență fail-closed pe rute critice', () => {
 
     const middleware = creeazaMiddlewareIdempotenta({ registru: registruFake });
 
-    // Prima cerere (payload 1)
     const req1 = fakeReq({
       headers: { 'idempotency-key': 'cheie-refolosita' },
       body: { aliment: 'pizza' },
@@ -124,34 +140,27 @@ describe('P-10 — Idempotență fail-closed pe rute critice', () => {
     const res1 = fakeRes();
     let next1 = false;
     await middleware(req1, res1, () => { next1 = true; });
-    // Prima cerere trece
     expect(next1).toBe(true);
 
-    // Marcăm prima cerere ca finalizată
     Object.keys(stocat).forEach(k => {
       if (stocat[k] && stocat[k].stare === 'procesare') {
         stocat[k] = { ...stocat[k], stare: 'finalizat', status: 200, body: { succes: true } };
       }
     });
 
-    // A doua cerere cu același Idempotency-Key dar payload diferit → 409
     const req2 = fakeReq({
       headers: { 'idempotency-key': 'cheie-refolosita' },
-      body: { aliment: 'burger' }, // payload diferit
+      body: { aliment: 'burger' },
     });
     const res2 = fakeRes();
     let next2 = false;
     await middleware(req2, res2, () => { next2 = true; });
 
-    // Payload diferit → 409
     expect(next2).toBe(false);
     expect(res2._status).toBe(409);
     expect(res2._body?.cod).toBe('IDEMPOTENCY_KEY_REUSED');
   });
 
-  // -----------------------------------------------------------------------
-  // Test 4: GET nu e supus idempotency middleware
-  // -----------------------------------------------------------------------
   test('GET trece direct prin middleware (nu aplică idempotency)', async () => {
     const middleware = creeazaMiddlewareIdempotenta({ rutaCritica: true });
 
@@ -166,23 +175,59 @@ describe('P-10 — Idempotență fail-closed pe rute critice', () => {
     expect(nextApelat).toBe(true);
   });
 
-  // -----------------------------------------------------------------------
-  // Test 6: Verificare că idempotencyMiddlewareCritic este montat pe server.js
-  // -----------------------------------------------------------------------
-  test('Ruta HTTP /api/v1/ai/analizeaza din server.js folosește middleware-ul critic (503 la eroare de idempotență)', async () => {
-    const request = require('supertest');
+  test('HTTP Supertest: POST /api/v1/chat cu Idempotency-Key duplicat în procesare → 409 IDEMPOTENCY_IN_PROGRESS', async () => {
     const app = require('../server');
+    const cheieUnica = `idem-chat-${Date.now()}-${Math.random()}`;
 
-    // Suprascriem registrul de idempotență cu unul care aruncă eroare pentru a simula Redis down
-    const { storePartajat } = require('../utils/idempotency');
+    // Trimitem 2 cereri concurente identice cu aceeași cheie
+    const [res1, res2] = await Promise.all([
+      request(app)
+        .post('/api/v1/chat')
+        .set('Authorization', 'Bearer token_valid_mocked')
+        .set('Idempotency-Key', cheieUnica)
+        .send({ prompt: 'Salut' }),
+      request(app)
+        .post('/api/v1/chat')
+        .set('Authorization', 'Bearer token_valid_mocked')
+        .set('Idempotency-Key', cheieUnica)
+        .send({ prompt: 'Salut' }),
+    ]);
 
-    // Trimitere cerere pe ruta reală /api/v1/ai/analizeaza cu Idempotency-Key
+    const res409 = res1.statusCode === 409 ? res1 : res2;
+    expect(res409.statusCode).toBe(409);
+    expect(res409.body.cod).toBe('IDEMPOTENCY_IN_PROGRESS');
+  });
+
+  test('HTTP Supertest: POST /api/v1/chat (multipart) este protejată de idempotență', async () => {
+    const app = require('../server');
+    const cheieUnica = `idem-foto-${Date.now()}-${Math.random()}`;
+
+    const [res1, res2] = await Promise.all([
+      request(app)
+        .post('/api/v1/analiza-foto')
+        .set('Authorization', 'Bearer token_valid_mocked')
+        .set('Idempotency-Key', cheieUnica)
+        .attach('imagine', Buffer.from('fake image content'), 'test.jpg'),
+      request(app)
+        .post('/api/v1/analiza-foto')
+        .set('Authorization', 'Bearer token_valid_mocked')
+        .set('Idempotency-Key', cheieUnica)
+        .attach('imagine', Buffer.from('fake image content'), 'test.jpg'),
+    ]);
+
+    const res409 = res1.statusCode === 409 ? res1 : res2;
+    expect(res409.statusCode).toBe(409);
+    expect(res409.body.cod).toBe('IDEMPOTENCY_IN_PROGRESS');
+  });
+
+  test('HTTP Supertest: POST /api/v1/chat FĂRĂ Idempotency-Key trece normal', async () => {
+    const app = require('../server');
     const res = await request(app)
-      .post('/api/v1/ai/analizeaza-mancare')
-      .set('Idempotency-Key', 'key-critica-server-test')
-      .set('Authorization', 'Bearer token_invalid');
+      .post('/api/v1/chat')
+      .set('Authorization', 'Bearer token_valid_mocked')
+      .send({ prompt: 'Salut' });
 
-    // Deoarece server.js are montat middleware-ul critic, statusul nu trebuie să ignore Idempotency-Key
-    expect(res.statusCode).not.toBe(404);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.raspuns).toBe('ok');
   });
 });

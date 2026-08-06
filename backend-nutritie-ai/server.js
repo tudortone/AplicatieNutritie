@@ -162,8 +162,6 @@ app.use('/api/webhooks/revenuecat', webhooksRevenueCatR);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(sanitizeRequest);
-// P-10: Rutele critice (AI, plăți) folosesc fail-closed idempotency, rutele generale folosesc fail-open
-app.use(['/api/v1/ai', '/api/ai', '/api/v1/webhooks/revenuecat', '/api/webhooks/revenuecat'], idempotencyMiddlewareCritic);
 app.use(idempotencyMiddleware);
 
 // Normalizare URL: elimina slashes duble, prefixe /api/api sau /v1/v1 duplicat
@@ -313,6 +311,7 @@ const aiR = createAiRouter({
   serviciuCascada,
   serviciuChat,
   semaforAi,
+  idempotencyCritic: idempotencyMiddlewareCritic,
 });
 const barcodeR = createBarcodeRouter({
   requireAuth,

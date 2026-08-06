@@ -113,11 +113,22 @@ async function revendicaAtomic(registru, key, valoare, ttlMs) {
  * @param {boolean} [optiuni.rutaCritica] Dacă true, store indisponibil → 503.
  *   Pe GET-uri sau rute idempotente prin natura lor, lasă false (comportament original).
  */
-function creeazaMiddlewareIdempotenta({ registru = registruImplicit, ttlMs = TTL_MS, rutaCritica = false } = {}) {
+function creeazaMiddlewareIdempotenta({
+  registru = registruImplicit,
+  ttlMs = TTL_MS,
+  rutaCritica = false,
+  permiteMultipart = false,
+} = {}) {
   return async function idempotencyMiddleware(req, res, next) {
     if (req.method !== 'POST') return next();
+
+    // P-10: o singură aplicare per cerere. Fără asta, middleware-ul global
+    // rulează după cel critic pe aceeași cerere și returnează 409 fals.
+    if (req._idempotentaAplicata) return next();
+
     const contentType = String(req.headers['content-type'] || '').toLowerCase();
-    if (contentType.startsWith('multipart/form-data')) return next();
+    const esteMultipart = contentType.startsWith('multipart/form-data');
+    if (esteMultipart && !permiteMultipart) return next();
 
     const idempotencyKey = req.headers['idempotency-key'];
     if (typeof idempotencyKey !== 'string' || !idempotencyKey.trim()) return next();
@@ -127,11 +138,18 @@ function creeazaMiddlewareIdempotenta({ registru = registruImplicit, ttlMs = TTL
     }
 
     let amprenta;
-    try {
-      amprenta = amprentaCerere(req);
-    } catch {
-      return res.status(400).json({ eroare: 'Corpul cererii nu poate fi serializat.' });
+    if (esteMultipart) {
+      // Corpul nu e parsat încă (multer rulează după). Amprenta pe rută + cheie.
+      amprenta = hash(`multipart:${req.method}:${String(req.originalUrl || req.path || '').split('?')[0]}`);
+    } else {
+      try {
+        amprenta = amprentaCerere(req);
+      } catch {
+        return res.status(400).json({ eroare: 'Corpul cererii nu poate fi serializat.' });
+      }
     }
+
+    req._idempotentaAplicata = true;
 
     const cacheKey = construiesteCheie(req, keyCurata);
     try {
@@ -191,7 +209,10 @@ function creeazaMiddlewareIdempotenta({ registru = registruImplicit, ttlMs = TTL
 }
 
 const idempotencyMiddleware = creeazaMiddlewareIdempotenta();
-const idempotencyMiddlewareCritic = creeazaMiddlewareIdempotenta({ rutaCritica: true });
+const idempotencyMiddlewareCritic = creeazaMiddlewareIdempotenta({
+  rutaCritica: true,
+  permiteMultipart: true,
+});
 
 module.exports = {
   idempotencyMiddleware,
