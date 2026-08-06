@@ -85,12 +85,9 @@ function createUserRouter({ requireAuth, generalLimiter, config }) {
 
     try {
       const rcResp = await callWithTimeout((signal) => fetch(
-        `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`,
+        `{{https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId}})}`,
         {
-          headers: {
-            Authorization: `Bearer ${config.revenuecat.secretApiKey}`,
-            Accept: 'application/json',
-          },
+          headers: { Authorization: `Bearer ${config.revenuecat.secretApiKey}` },
           signal,
         },
       ), 8000);
