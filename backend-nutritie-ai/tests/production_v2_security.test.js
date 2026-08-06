@@ -8,7 +8,7 @@
  *   2. Fail-Closed Environment Validation (missing SUPABASE_URL / IMAGEKIT_URL_ENDPOINT)
  *   3. Storage Security (SecureStore not AsyncStorage for tokens)
  *   4. Gamification Idempotency (duplicate event handling)
- *   5. AI Status Public Endpoint (no internal data leakage)
+ *   5. AI Status Protected Endpoint (JWT + no internal data leakage)
  */
 
 const request = require('supertest');
@@ -59,18 +59,18 @@ const app = require('../server');
 // ── 1. Auth Guard Verification ────────────────────────────────────────────
 
 describe('Auth Guard Verification', () => {
-  describe('GET /api/v1/ai-status (public endpoint)', () => {
-    it('returns 200 without any authentication', async () => {
+  describe('GET /api/v1/ai-status (protected endpoint)', () => {
+    it('returns 401 without authentication', async () => {
       const res = await request(app).get('/api/v1/ai-status');
-      expect(res.statusCode).toBe(200);
-      expect(res.body).toHaveProperty('gemini');
-      expect(res.body).toHaveProperty('openai');
-      expect(res.body).toHaveProperty('groq');
-      expect(res.body).toHaveProperty('openrouter');
+      expect(res.statusCode).toBe(401);
+      expect(res.body).toHaveProperty('eroare');
     });
 
-    it('does not expose internal model names, costs, or error messages', async () => {
-      const res = await request(app).get('/api/v1/ai-status');
+    it('returns sanitized status with a valid token', async () => {
+      const res = await request(app)
+        .get('/api/v1/ai-status')
+        .set('Authorization', 'Bearer token_valid');
+      expect(res.statusCode).toBe(200);
       const providers = ['gemini', 'openai', 'groq', 'openrouter'];
       for (const p of providers) {
         const entry = res.body[p];
