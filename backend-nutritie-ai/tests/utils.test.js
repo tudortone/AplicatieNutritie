@@ -15,6 +15,7 @@ const { Semafor } = require('../utils/semafor');
 const { callWithTimeout, callWithSoftTimeout, TimeoutAiError } = require('../utils/httpTimeout');
 const { StoreCuRezerva } = require('../utils/storePartajat');
 const { creeazaContextDate, EroareContextDate } = require('../utils/clientUtilizator');
+const { creeazaServiciuChat, EroareAiClient } = require('../services/ai/chat');
 
 describe('parseJsonFromLlm', () => {
   it('parseaza JSON simplu', () => {
@@ -262,15 +263,42 @@ describe('Semafor', () => {
     await lung;
   });
 
-  it('anuleaza sarcina din coada daca signal se aborteaza', async () => {
+  it('elibereaza slotul si dupa o eroare', async () => {
+    const semafor = new Semafor({ max: 1, maxCoada: 5 });
+    await expect(semafor.ruleaza(async () => { throw new Error('boom'); })).rejects.toThrow('boom');
+    await expect(semafor.ruleaza(async () => 'ok')).resolves.toBe('ok');
+  });
+
+  it('scoate din coada o cerere anulata si ii respinge promisiunea', async () => {
     const semafor = new Semafor({ max: 1, maxCoada: 5 });
     const controller = new AbortController();
-    const lung = semafor.ruleaza(() => new Promise((r) => setTimeout(r, 40)));
-    const promisiuneAnulata = semafor.ruleaza(() => new Promise((r) => setTimeout(r, 40)), controller.signal);
+    const ocupat = semafor.ruleaza(() => new Promise((r) => setTimeout(r, 40)));
+
+    const inCoada = semafor.ruleaza(() => 'nu ar trebui sa ruleze', controller.signal);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(semafor.inAsteptare).toBe(1);
+
     controller.abort();
-    await expect(promisiuneAnulata).rejects.toThrow('Cererea a fost anulată.');
+    await expect(inCoada).rejects.toMatchObject({ cod: 'REQUEST_ABORTED' });
     expect(semafor.inAsteptare).toBe(0);
-    await lung;
+
+    // Slotul ramane functional pentru o cerere noua imediat dupa ce primul termina.
+    await ocupat;
+    await expect(semafor.ruleaza(async () => 'ok')).resolves.toBe('ok');
+  });
+
+  it('respinge o cerere ale carei semnal este deja anulat', async () => {
+    const semafor = new Semafor({ max: 1, maxCoada: 5 });
+    const controller = new AbortController();
+    controller.abort();
+    await expect(semafor.ruleaza(async () => 'nu', controller.signal))
+      .rejects.toMatchObject({ cod: 'REQUEST_ABORTED' });
+  });
+
+  it('refuza max sau maxCoada neintregi', () => {
+    expect(() => new Semafor({ max: 2.5 })).toThrow(TypeError);
+    expect(() => new Semafor({ maxCoada: -1 })).toThrow(TypeError);
+    expect(() => new Semafor({ maxCoada: 1.5 })).toThrow(TypeError);
   });
 });
 
@@ -293,5 +321,54 @@ describe('httpTimeout', () => {
 
   it('soft timeout lasa sa treaca raspunsul rapid', async () => {
     await expect(callWithSoftTimeout(Promise.resolve('rapid'), 1000)).resolves.toBe('rapid');
+  });
+});
+
+describe('chat (Groq fara cheie, #21)', () => {
+  const cheieOriginala = process.env.GROQ_API_KEY;
+
+  afterEach(() => {
+    process.env.GROQ_API_KEY = cheieOriginala;
+  });
+
+  // Serviciu creat cu GROQ_API_KEY gol: `groqApiKey` devine null la fabricare,
+  // exact ca intr-un deploy fara cheia Groq. Stub-ul de Gemini e de aici doar ca
+  // fallback-ul sa fie atins (si sa esueze controlat), fara nicio retea.
+  function serviciuFaraGroq() {
+    process.env.GROQ_API_KEY = '';
+    const genAIStub = {
+      getGenerativeModel: () => ({
+        generateContent: async () => { throw new Error('gemini-fallback-esuat'); },
+      }),
+    };
+    return creeazaServiciuChat({
+      config: { ai: { geminiModel: 'gemini-2.5-flash' } },
+      genAI: genAIStub,
+    });
+  }
+
+  it('#21: ruleazaChat sare pe fallback, nu trimite "Bearer undefined"', async () => {
+    const serviciu = serviciuFaraGroq();
+    await expect(serviciu.ruleazaChat({ mesaj: 'salut' }))
+      .rejects.toThrow('Groq nu este configurat (lipseste GROQ_API_KEY)');
+  });
+
+  it('#21: logFoodDinChat returneaza 503 fara cheie Groq', async () => {
+    const serviciu = serviciuFaraGroq();
+    await expect(serviciu.logFoodDinChat({ mesaj: 'am mancat 200g pui' }))
+      .rejects.toMatchObject({ status: 503 });
+  });
+
+  it('#21: estimeazaMancareText returneaza 503 fara cheie Groq', async () => {
+    const serviciu = serviciuFaraGroq();
+    await expect(serviciu.estimeazaMancareText({ text: 'pui cu orez' }))
+      .rejects.toMatchObject({ status: 503 });
+  });
+
+  it('#21: EroareAiClient transporta status si mesaj separat', () => {
+    const eroare = new EroareAiClient(503, 'test');
+    expect(eroare.status).toBe(503);
+    expect(eroare.mesaj).toBe('test');
+    expect(eroare).toBeInstanceOf(Error);
   });
 });

@@ -4,9 +4,9 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "test": "jest --forceExit",
-    "test:integration": "jest --forceExit tests/rls_integration.test.js",
-    "lint": "eslint .",
+    "test": "node tests/runJestWithAnnotations.js",
+    "test:integration": "node tests/runJestWithAnnotations.js tests/rls_integration.test.js",
+    "lint": "node tests/runEslintWithAnnotations.js",
     "start": "node server.js"
   },
   "keywords": [],
