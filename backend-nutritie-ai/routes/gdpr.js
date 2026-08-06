@@ -51,6 +51,11 @@ async function imageKitRequest(cale, { privateKey, method = 'DELETE', body } = {
   }
 }
 
+/**
+ * Sterge atat structura curenta, cat si folderul legacy. Operatiile sunt
+ * idempotente: un 404 inseamna ca activul fusese deja sters intr-o incercare
+ * anterioara. File IDs acopera si active istorice salvate in afara folderelor.
+ */
 async function stergeActiveImageKit({ userId, fileIds, privateKey }) {
   if (!privateKey) {
     const error = new Error('IMAGEKIT_NOT_CONFIGURED');
@@ -58,10 +63,13 @@ async function stergeActiveImageKit({ userId, fileIds, privateKey }) {
     throw error;
   }
 
-  await imageKitRequest('/folder/', {
+  await Promise.all([
+    `/mancare/${userId}/`,
+    `/meals/${userId}/`,
+  ].map((folderPath) => imageKitRequest('/folder/', {
     privateKey,
-    body: { folderPath: `/mancare/${userId}/` },
-  });
+    body: { folderPath },
+  })));
 
   const ids = [...fileIds];
   for (let index = 0; index < ids.length; index += 5) {
@@ -70,6 +78,34 @@ async function stergeActiveImageKit({ userId, fileIds, privateKey }) {
       `/files/${encodeURIComponent(fileId)}`,
       { privateKey },
     )));
+  }
+}
+
+async function stergeIdentitateClerk({ clerkUserId, secretKey }) {
+  if (!clerkUserId) return;
+  if (!secretKey) {
+    const error = new Error('CLERK_NOT_CONFIGURED');
+    error.code = 'CLERK_NOT_CONFIGURED';
+    throw error;
+  }
+
+  const response = await fetch(
+    `https://api.clerk.com/v1/users/${encodeURIComponent(clerkUserId)}`,
+    {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(10000),
+      redirect: 'error',
+    },
+  );
+
+  if (!response.ok && response.status !== 404) {
+    const error = new Error('CLERK_DELETE_FAILED');
+    error.code = `CLERK_${response.status}`;
+    throw error;
   }
 }
 
@@ -113,73 +149,47 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       const ctx = contextDate(req, res);
       const userId = ctx.userId;
 
-      const { data: mese, error: eroareMese } = await tabelUtilizator(ctx, 'mese')
-        .select('alimente')
-        .eq('user_id', userId);
+      // Colectam toate datele necesare inainte de primul pas distructiv.
+      const [{ data: mese, error: eroareMese }, { data: mapare, error: eroareMapare }] =
+        await Promise.all([
+          tabelUtilizator(ctx, 'mese').select('alimente').eq('user_id', userId),
+          supabaseAdmin
+            .from('clerk_user_map')
+            .select('clerk_user_id')
+            .eq('supabase_user_id', userId)
+            .maybeSingle(),
+        ]);
       if (eroareMese) throw eroareMese;
-
-      const fileIds = extrageFileIds(mese || []);
-      await stergeActiveImageKit({
-        userId,
-        fileIds,
-        privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim(),
-      });
-
-      // Curățare legacy: fișierele vechi de dinainte de folderul unic
-      // `/mancare/<userId>/` locuiau în `/meals/<userId>/`. Ștergem acest
-      // folder vechi ca best-effort (nu doboară ștergerea contului), ca nici un
-      // activ media abandonat să nu rămână pe CDN după Art. 17.
-      if (process.env.IMAGEKIT_PRIVATE_KEY && process.env.IMAGEKIT_PUBLIC_KEY) {
-        try {
-          const ImageKit = require('imagekit');
-          const ik = new ImageKit({
-            publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-            privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
-            urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/nutriai',
-          });
-          const fileList = await new Promise((rezolve) => {
-            ik.listFiles({
-              searchQuery: `folderPath : "/meals/${userId}/*" OR name : "*${userId}*"`,
-            }, (err, raspuns) => {
-              if (err || !Array.isArray(raspuns)) rezolve([]);
-              else rezolve(raspuns);
-            });
-          });
-          const idsLegacy = (fileList || []).map((f) => f?.fileId).filter(Boolean);
-          if (idsLegacy.length > 0) {
-            await new Promise((rezolve) => {
-              ik.bulkDeleteFiles(idsLegacy, (delErr) => {
-                if (delErr) console.warn('[GDPR] Ștergere fișiere ImageKit vechi eșuată:', delErr.message);
-                rezolve();
-              });
-            });
-          }
-        } catch (ikErr) {
-          console.warn('[GDPR] Curățare ImageKit legacy omisă:', ikErr.message);
-        }
-      }
-
-      const sterge = async (tabela) => {
-        const { error } = await tabelUtilizator(ctx, tabela).delete().eq('user_id', userId);
-        if (error) throw error;
-      };
-
-      await Promise.all([
-        sterge('mese'),
-        sterge('profil'),
-        sterge('antrenamente'),
-        sterge('barcode_estimari_utilizator'),
-        sterge('audit_log'),
-      ]);
-
-      const { error: eroareMapare } = await supabaseAdmin
-        .from('clerk_user_map')
-        .delete()
-        .eq('supabase_user_id', userId);
       if (eroareMapare) throw eroareMapare;
 
+      const imageKitPrivateKey = process.env.IMAGEKIT_PRIVATE_KEY?.trim();
+      const clerkSecretKey = process.env.CLERK_SECRET_KEY?.trim();
+      if (!imageKitPrivateKey) {
+        const error = new Error('IMAGEKIT_NOT_CONFIGURED');
+        error.code = 'IMAGEKIT_NOT_CONFIGURED';
+        throw error;
+      }
+      if (mapare?.clerk_user_id && !clerkSecretKey) {
+        const error = new Error('CLERK_NOT_CONFIGURED');
+        error.code = 'CLERK_NOT_CONFIGURED';
+        throw error;
+      }
+
+      // Saga idempotenta: fiecare pas poate fi repetat in siguranta. Stergerea
+      // Auth ramane ultima; FK-urile ON DELETE CASCADE curata atomic toate
+      // randurile Supabase, inclusiv clerk_user_map si audit_log.
+      await stergeActiveImageKit({
+        userId,
+        fileIds: extrageFileIds(mese || []),
+        privateKey: imageKitPrivateKey,
+      });
+      await stergeIdentitateClerk({
+        clerkUserId: mapare?.clerk_user_id ?? null,
+        secretKey: clerkSecretKey,
+      });
+
       if (!supabaseAdmin.auth?.admin?.deleteUser) {
-        return res.status(500).json({ eroare: 'Nu s-a putut șterge contul.' });
+        throw new Error('SUPABASE_ADMIN_UNAVAILABLE');
       }
       const { error: eroareAuth } = await supabaseAdmin.auth.admin.deleteUser(userId);
       if (eroareAuth) throw eroareAuth;
@@ -191,9 +201,9 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
     } catch (err) {
       const cod = codEroare(err);
       console.error('[GDPR] Stergere cont esuata:', cod);
-      const status = cod === 'IMAGEKIT_NOT_CONFIGURED' ? 503 : 500;
-      return res.status(status).json({
-        eroare: 'Ștergerea completă a contului nu a putut fi finalizată. Niciun succes parțial nu a fost raportat.',
+      const indisponibil = cod === 'IMAGEKIT_NOT_CONFIGURED' || cod === 'CLERK_NOT_CONFIGURED';
+      return res.status(indisponibil ? 503 : 500).json({
+        eroare: 'Ștergerea completă nu a putut fi finalizată. Operația poate fi reîncercată în siguranță.',
       });
     }
   });
@@ -203,4 +213,5 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
 
 createGdprRouter.extrageFileIds = extrageFileIds;
 createGdprRouter.stergeActiveImageKit = stergeActiveImageKit;
+createGdprRouter.stergeIdentitateClerk = stergeIdentitateClerk;
 module.exports = createGdprRouter;
