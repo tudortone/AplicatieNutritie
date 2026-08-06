@@ -47,7 +47,7 @@ describe('P-10 — Idempotență fail-closed pe rute critice', () => {
   // -----------------------------------------------------------------------
   // Test 1: Redis indisponibil + rutaCritica=true → 503
   // -----------------------------------------------------------------------
-  test('Redis indisponibil pe rută critică → 503 AI_QUOTA_STORE_UNAVAILABLE', async () => {
+  test('Redis indisponibil pe rută critică → 503 IDEMPOTENCY_STORE_UNAVAILABLE', async () => {
     const registruEsuat = {
       async get() { throw new Error('Redis down'); },
       async set() { throw new Error('Redis down'); },
@@ -69,7 +69,7 @@ describe('P-10 — Idempotență fail-closed pe rute critice', () => {
 
     expect(nextApelat).toBe(false);
     expect(res._status).toBe(503);
-    expect(res._body?.cod).toBe('AI_QUOTA_STORE_UNAVAILABLE');
+    expect(res._body?.cod).toBe('IDEMPOTENCY_STORE_UNAVAILABLE');
   });
 
   // -----------------------------------------------------------------------

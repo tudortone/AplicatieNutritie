@@ -155,8 +155,8 @@ function creeazaMiddlewareIdempotenta({ registru = registruImplicit, ttlMs = TTL
       // P-10: fail-closed pe rute critice (AI, plăți)
       if (rutaCritica) {
         return res.status(503).json({
-          eroare: 'Contorul de analize AI este temporar indisponibil.',
-          cod: 'AI_QUOTA_STORE_UNAVAILABLE',
+          eroare: 'Serviciul de verificare a idempotenței este temporar indisponibil.',
+          cod: 'IDEMPOTENCY_STORE_UNAVAILABLE',
         });
       }
       // Fail-open pe rute idempotente prin natura lor
