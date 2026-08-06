@@ -188,7 +188,9 @@ export function PremiumProvider({
       void aplicaCustomerInfo(info);
     };
     PurchasesApi.addCustomerInfoUpdateListener(listener);
-    return () => PurchasesApi?.removeCustomerInfoUpdateListener(listener);
+    return () => {
+      PurchasesApi?.removeCustomerInfoUpdateListener(listener);
+    };
   }, [apiKey, aplicaCustomerInfo, purchasesAvailable]);
 
   useEffect(() => {

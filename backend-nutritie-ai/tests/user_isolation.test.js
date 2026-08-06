@@ -1,7 +1,5 @@
 const request = require('supertest');
 
-const mockUserAId = '11111111-1111-4111-8111-111111111111';
-const mockUserBId = '22222222-2222-4222-8222-222222222222';
 const mockMasaUserBId = '33333333-3333-4333-8333-333333333333';
 
 jest.mock('@supabase/supabase-js', () => {
@@ -44,7 +42,7 @@ jest.mock('@supabase/supabase-js', () => {
           // Daca l-am face la delete()/update(), filtrele inca lipsesc si am sterge
           // sau edita tot tabelul. Asa reproduce comportamentul Supabase: filtrul
           // face parte din aceeasi interogare ca mutatia.
-          let operatie = null;        // 'delete' | 'update' | null
+          let operatie = null;
           let payloadOperatie = null;
 
           const filtreaza = () => db.filter(m => {
@@ -100,14 +98,9 @@ jest.mock('@supabase/supabase-js', () => {
 });
 
 const app = require('../server');
-
-// E-2: reset expus de mock — reface tabelul la starea inițială (seed) între teste.
 const { __resetDbMock } = require('@supabase/supabase-js');
 
 describe('VALUL 0 — Test de Integrare Izolare Utilizatori (User Isolation)', () => {
-  // E-2: fără reset, testele 4-5 mută `db`-ul mock partajat, iar suita ar depinde
-  // de ordinea de execuție (--runInBand sau paralel). Resetul face fiecare test
-  // independent: se pornește mereu de la cele două mese de seed.
   beforeEach(() => {
     __resetDbMock();
   });
@@ -116,7 +109,7 @@ describe('VALUL 0 — Test de Integrare Izolare Utilizatori (User Isolation)', (
     const res = await request(app)
       .delete(`/api/mese/${mockMasaUserBId}`)
       .set('Authorization', 'Bearer token_user_a');
-    
+
     expect(res.statusCode).toBe(404);
     expect(res.body.eroare).toBe('Masa nu a fost găsită.');
   });
@@ -133,7 +126,7 @@ describe('VALUL 0 — Test de Integrare Izolare Utilizatori (User Isolation)', (
         carbohidrati: 50,
         fibre: 5
       });
-    
+
     expect(res.statusCode).toBe(404);
     expect(res.body.eroare).toBe('Masa nu a fost găsită.');
   });
@@ -146,11 +139,6 @@ describe('VALUL 0 — Test de Integrare Izolare Utilizatori (User Isolation)', (
     expect(res.body.eroare).toContain('Token lipsă');
   });
 
-  // 4 & 5 — CONTROL POZITIV (B-04). Cele 3 de mai sus prind doar esecuri; fara
-  // acestea, un server care raspunde 404 la orice ar trece toata suita. Aici A
-  // trebuie sa REUSESTA pe propria masa, ca suita sa nu fie orbit de eforturi
-  // esuate. Negativele probeaza izolarea; aici randul exista, apartine lui A si
-  // inlaturarea filtrului de user pe handler ar fi vizibila imediat.
   it('4. User A editează CU SUCCES propria masă (10000000-...) → 200', async () => {
     const res = await request(app)
       .put(`/api/mese/10000000-0000-4000-8000-000000000000`)
