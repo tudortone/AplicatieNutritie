@@ -99,7 +99,7 @@ jobs:
         run: |
           for file in ../supabase/migrations/*.sql; do
             echo "Applying $file..."
-            psql -h localhost -p 54322 -U postgres -d postgres -f "$file"
+            psql "postgres://postgres:postgres@localhost:54322/postgres" -v ON_ERROR_STOP=1 -f "$file"
           done
 
       - name: Run RLS Integration Tests
@@ -141,7 +141,7 @@ jobs:
         run: npm run lint
 
       - name: Run Frontend Tests (P-14)
-        run: npm test --if-present
+        run: npm run test:ci
 
   # -----------------------------------------------------------------------
   # Job 4: Secret scanning (P-16)
@@ -152,10 +152,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Scan for secrets with truffleHog
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
+          base: ${{ github.event.before }}
+          head: HEAD
           extra_args: --only-verified
 
