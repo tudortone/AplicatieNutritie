@@ -13,7 +13,11 @@ export interface OptimizedImage {
 /** Dimensiunea maximă a laturii lungi a imaginii optimizate (bounding box 800×800). */
 const MAX_DIMENSION = 800;
 
-const DRAFT_DIR = `${FileSystem.documentDirectory || ''}drafts/`;
+export const DRAFT_DIR = `${FileSystem.documentDirectory}drafts/`;
+
+if (typeof DRAFT_DIR !== 'string' || !DRAFT_DIR.startsWith('file:')) {
+  throw new Error(`DRAFT_DIR invalid: ${DRAFT_DIR}`);
+}
 const INDEX_KEY = 'nutriai:image-drafts';
 
 function getImageSize(uri: string): Promise<{ width: number; height: number }> {
