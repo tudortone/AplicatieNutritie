@@ -62,10 +62,7 @@ export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
-  // URL-ul pozei incarcate pe ImageKit CDN dupa un scan reusit (salvat in alimente JSONB).
   const imageKitUrlRef = useRef<string | null>(null);
-  // fileId-ul ImageKit al pozei scanate: persistat in alimente JSONB ca stergearea
-  // GDPR sa poata identifica si sterge assetul media de pe CDN (nu doar URL-ul).
   const imageKitFileIdRef = useRef<string | null>(null);
   const router = useRouter();
 
@@ -80,28 +77,30 @@ export default function CameraScreen() {
     useCallback(() => {
       let active = true;
       const fetchStatus = async () => {
+        const token = session?.access_token;
+        if (!token) return;
         try {
-          const res = await fetch(`${API_URL}${API_PREFIX}/ai-status`);
+          const res = await fetch(`${API_URL}${API_PREFIX}/ai-status`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/json',
+            },
+          });
           if (res.ok) {
             const data = await res.json();
             if (active) setAiStatus(data);
           }
         } catch {
-          // Polling necritic - erorile sunt normale in dev
-          // nu trebuie sa blocheze UI-ul, dar e util in development.
           if (__DEV__) console.debug('[Camera] Status AI indisponibil (posibil offline).');
         }
       };
-      fetchStatus();
-      // Polling la 30s (evita 429 rate-limit)
-      // /api/ai-status este acum exclus din rate-limiter \u00een backend, dar men\u021binem intervalul mare
-      // pentru a nu consuma inutil resurse de re\u021bea \u0219i baterie.
+      void fetchStatus();
       const timer = setInterval(fetchStatus, 30000);
       return () => {
         active = false;
         clearInterval(timer);
       };
-    }, [])
+    }, [session?.access_token])
   );
 
   const updateIngredient = useCallback(
@@ -132,10 +131,6 @@ export default function CameraScreen() {
       setSeIncarca(true);
 
       try {
-        // B-20: redimensionam pe client inainte de upload. Serverul pastreaza
-        // base64-ul necesar pe toata cascada AI, dar un Buffer brut in plus in
-        // heap dubleaza varful de memorie fara castig. Reducerea reala de payload
-        // (si de cost AI) vine de aici: de la ~15MB la <200KB.
         const imagineOptimizata = await optimizeImageBeforeUpload(imageUri);
 
         const formData = new FormData();
@@ -199,9 +194,6 @@ export default function CameraScreen() {
 
         setRezultat(normalized);
         setSuccessVisible(true);
-        // Dupa un scan REUSIT, incarcam poza pe ImageKit CDN (nu aruncam gunoi pe CDN
-        // pentru poze esuate). URL-ul + fileId-ul ajung in masa salvata (campul
-        // alimente, JSONB) ca stergearea GDPR sa cunoasca assetul.
         imageKitUrlRef.current = null;
         imageKitFileIdRef.current = null;
         uploadImageToImageKit(imageUri)
@@ -253,33 +245,27 @@ export default function CameraScreen() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`
         },
-        // Backend-ul are nevoie exact de acești parametri
         body: JSON.stringify({ 
           current_ingredients: ingredienteIdentificate, 
           user_prompt: textCorectie 
         })
       });
 
-      // 1. Citim răspunsul serverului INDIFERENT dacă a crăpat sau nu, ca să vedem mesajul real
       const data = await response.json(); 
       if (__DEV__) console.log('[Camera] Răspuns corecție backend primit.');
 
-      // 2. Dacă a crăpat (400, 401, 500 etc), afișăm motivul exact pe ecran
       if (!response.ok) {
          Alert.alert(t('alerts.titluri.eroareServerAI'), data.eroare || t('alerts.mesaje.problemaNecunoscutaConectare'));
          throw new Error(data.eroare || "Eroare de la server");
       }
 
-      // 3. Dacă e totul în regulă, actualizăm datele pe ecran
       if (data.ingredients) {
         setIngredienteIdentificate(data.ingredients);
-        // Depinde de cum ai denumit starea pentru totaluri, asigură-te că numele funcției e corect (ex: setTotaluri)
         if (data.new_totals) {
             setTotaluri(data.new_totals); 
         }
       }
     } catch (error) {
-      // Afisam eroarea si pentru utilizator
       console.error('❌ Eroare fallback detaliată:', error);
       Alert.alert(
         t('alerts.titluri.eroareConexiune'),
@@ -353,7 +339,6 @@ export default function CameraScreen() {
   const adaugaInJurnal = async () => {
     if (!rezultat || rezultat.length === 0 || !session || isSavingDiary) return;
 
-    // Validare gramaj minim înainte de submit
     const invalide = rezultat.filter((r) => !r.estimare_grame || r.estimare_grame < 1);
     if (invalide.length > 0) {
       Alert.alert(
@@ -367,7 +352,6 @@ export default function CameraScreen() {
     try {
       const now = new Date();
 
-      // FIX 2.5: convertim din per-100g în AlimentDetaliat cu valori absolute
       const alimente = rezultat.map((r) => {
         const f = r.estimare_grame / 100;
         return {
@@ -378,8 +362,6 @@ export default function CameraScreen() {
           carbohidrati: Math.round((r.carbohidrati_per_100g ?? 0) * f),
           grasimi: Math.round((r.grasimi_per_100g ?? 0) * f),
           fibre: 0,
-          // Poza scanului, incarcata pe ImageKit CDN (camp JSONB flexibil, fara migrare).
-          // Persistam si fileId-ul ca stergearea GDPR sa poata sterge assetul de pe CDN.
           ...(imageKitUrlRef.current ? { imageUrl: imageKitUrlRef.current } : {}),
           ...(imageKitFileIdRef.current ? { imageKitFileId: imageKitFileIdRef.current } : {}),
         };
@@ -390,7 +372,6 @@ export default function CameraScreen() {
       const totalGrasimi = alimente.reduce((s, a) => s + a.grasimi, 0);
       const totalCarbohidrati = alimente.reduce((s, a) => s + a.carbohidrati, 0);
 
-      // FIX 2.1 + 2.4: scriem DIRECT în Supabase, cu data/ora locale
       const { error } = await supabase.from('mese').insert({
         user_id: session.user.id,
         nume: rezultat.map((r) => `${r.nume} (${Math.round(r.estimare_grame)}g)`).join(', '),
@@ -399,7 +380,7 @@ export default function CameraScreen() {
         grasimi: totalGrasimi,
         carbohidrati: totalCarbohidrati,
         fibre: 0,
-        tip_masa: getTipMasaDupaOra(now), // FIX: nu mai hardcoda 'gustare'
+        tip_masa: getTipMasaDupaOra(now),
         alimente,
         data: localDayKey(now),
       });
@@ -453,7 +434,6 @@ export default function CameraScreen() {
   return (
     <View style={styles.container}>
       <View style={[styles.topHeader, { top: insets.top + 10 }]}>
-        {/* Selector AI în Stânga */}
         <View style={styles.aiSelectorContainer}>
           <TouchableOpacity
             style={[styles.topBadge, { backgroundColor: 'transparent', borderWidth: 0, zIndex: 9999 }]}
@@ -474,7 +454,6 @@ export default function CameraScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Buton X în Dreapta (Fără să se suprapună) */}
         <TouchableOpacity style={styles.closeButton} onPress={() => { anuleazaScanarea(); router.back(); }} accessibilityRole="button" accessibilityLabel="Închide camera">
           <Text style={styles.closeButtonText}>X</Text>
         </TouchableOpacity>
@@ -486,7 +465,6 @@ export default function CameraScreen() {
           pointerEvents="none"
         />
 
-        {/* Meniu alegere AI */}
         {aiMenuVisible && (
           <Animated.View entering={FadeIn.duration(200)} style={[styles.aiDropdownMenu, { top: insets.top + 74, backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
             <BlurView intensity={80} tint="dark" style={styles.aiDropdownBlur}>
@@ -529,7 +507,6 @@ export default function CameraScreen() {
           </Animated.View>
         )}
 
-        {/* Box Scanare */}
         <View style={styles.scanArea}>
           <View style={[styles.scanBox, { borderColor: colors.cardBorder }]}>
             <View style={[styles.corner, styles.cornerTL, { borderColor: colors.accent }]} />
@@ -550,7 +527,6 @@ export default function CameraScreen() {
         </View>
       </CameraView>
 
-      {/* Result section & sheet */}
       {rezultat.length > 0 && (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <Animated.View entering={FadeInUp.duration(500).springify()} style={[styles.resultSheet, { borderColor: colors.accent + '26' }]}>
@@ -664,7 +640,6 @@ export default function CameraScreen() {
         </View>
       )}
 
-      {/* Modal Căutare Produs Extra */}
       <Modal
         visible={cautareProdusVisible}
         animationType="slide"
@@ -690,7 +665,6 @@ export default function CameraScreen() {
         </View>
       </Modal>
 
-      {/* Shutter & Gallery button */}
       {rezultat.length === 0 && (
         <Animated.View entering={FadeInUp.duration(600).delay(200)} style={[styles.shutterArea, { bottom: Math.max(insets.bottom, 16) + 20 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 28 }}>
@@ -750,7 +724,6 @@ const styles = StyleSheet.create({
 
   topHeader: {
     position: 'absolute',
-    // top: suprascris inline cu insets.top + 10
     left: 20,
     right: 20,
     flexDirection: 'row',
@@ -759,7 +732,6 @@ const styles = StyleSheet.create({
     zIndex: 9999,
   },
   aiSelectorContainer: {
-    // Asigură-te că AiSelector are fundal opac
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: 20,
     paddingHorizontal: 10,
