@@ -13,7 +13,12 @@ const { creeazaContorPartajat } = require('./contorPartajat');
 const DAILY_LIMIT = 50;
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
-function creeazaCheckAiUsageQuota({ contor, limitaZi = DAILY_LIMIT, fereastraMs = WINDOW_MS } = {}) {
+function creeazaCheckAiUsageQuota({
+  contor,
+  supabaseAdmin = null,
+  limitaZi = DAILY_LIMIT,
+  fereastraMs = WINDOW_MS,
+} = {}) {
   const sursa = contor || creeazaContorPartajat({
     url: process.env.REDIS_URL,
     prefix: 'nutri:quota-ai',
@@ -33,9 +38,10 @@ function creeazaCheckAiUsageQuota({ contor, limitaZi = DAILY_LIMIT, fereastraMs 
     }
 
     // Pas 1: Consumă ÎNTÂI creditele plătite ale utilizatorului prin RPC consuma_credit
-    if (req.supabaseAdmin) {
+    const clientSupabase = supabaseAdmin || req.supabaseAdmin;
+    if (clientSupabase) {
       try {
-        const { data: soldRamas, error } = await req.supabaseAdmin.rpc('consuma_credit', {
+        const { data: soldRamas, error } = await clientSupabase.rpc('consuma_credit', {
           p_user_id: userId,
           p_cost: 1,
         });
