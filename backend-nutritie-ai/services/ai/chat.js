@@ -23,6 +23,7 @@ class EroareAiClient extends Error {
 
 function creeazaServiciuChat({ config, genAI }) {
   const serviciuVision = creeazaServiciuVision({ config });
+  const groqApiKey = process.env.GROQ_API_KEY || null;
 
   const getGeminiModelsList = () => serviciuVision.getGeminiModelsList();
 
@@ -121,11 +122,18 @@ Sarcina ta: Raspunde prietenos, tinand cont de istoricul discutiei si de calorii
         groqBody.response_format = { type: 'json_object' };
       }
 
+      if (!groqApiKey) {
+        // Groq nu e configurat: nu trimitem 'Bearer undefined'. /api/chat are un
+        // fallback Gemini real mai jos, deci nu 503 — sarim doar peste Groq si
+        // cererea ramane deservita de al doilea furnizor.
+        throw new Error('Groq nu este configurat (lipseste GROQ_API_KEY); se trece pe fallback.');
+      }
+
       const response = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          Authorization: `Bearer ${groqApiKey}`,
         },
         body: JSON.stringify(groqBody),
         signal,
@@ -177,6 +185,12 @@ Sarcina ta: Raspunde prietenos, tinand cont de istoricul discutiei si de calorii
       throw new EroareAiClient(400, 'Mesajul contine instructiuni interzise.');
     }
 
+    if (!groqApiKey) {
+      // /log-food-from-chat depinde exclusiv de Groq (fara fallback). Fara cheie,
+      // requestul nu poate fi servit: 503 onest, nu 'Bearer undefined' catre Groq.
+      throw new EroareAiClient(503, 'Serviciul de planificare a mesei nu este disponibil momentan.');
+    }
+
     // Istoricul trece prin aceeasi validare ca in /api/chat. Inainte era
     // concatenat brut in prompt, deci ocolea complet verificarea.
     const { mesaje: istoricSigur } = construiesteIstoricSigur(mesaje, { maxMesaje: 6 });
@@ -213,7 +227,7 @@ RETURNEAZA STRICT UN OBIECT JSON valid in acest format:
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        Authorization: `Bearer ${groqApiKey}`,
       },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
@@ -257,6 +271,11 @@ RETURNEAZA STRICT UN OBIECT JSON valid in acest format:
       throw new EroareAiClient(400, 'Textul contine instructiuni interzise.');
     }
 
+    if (!groqApiKey) {
+      // /estimeaza-mancare-text depinde exclusiv de Groq. Fara cheie, 503 onest.
+      throw new EroareAiClient(503, 'Serviciul de estimare AI nu este disponibil momentan.');
+    }
+
     // Textul utilizatorului este inserat ca literal JSON (nu direct intre ghilimele),
     // ca sa nu poata inchide sirul si continua promptul cu instructiuni proprii.
     const prompt = `Estimeaza valorile nutritionale pentru 1 portie standard din alimentul descris mai jos.
@@ -265,7 +284,7 @@ RETURNEAZA STRICT UN OBIECT JSON in formatul: {"nume": ${JSON.stringify(curatat)
 
     const groqResponse = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${groqApiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
         messages: [{ role: 'user', content: prompt }],

@@ -15,6 +15,7 @@ const { Semafor } = require('../utils/semafor');
 const { callWithTimeout, callWithSoftTimeout, TimeoutAiError } = require('../utils/httpTimeout');
 const { StoreCuRezerva } = require('../utils/storePartajat');
 const { creeazaContextDate, EroareContextDate } = require('../utils/clientUtilizator');
+const { creeazaServiciuChat, EroareAiClient } = require('../services/ai/chat');
 
 describe('parseJsonFromLlm', () => {
   it('parseaza JSON simplu', () => {
@@ -320,5 +321,54 @@ describe('httpTimeout', () => {
 
   it('soft timeout lasa sa treaca raspunsul rapid', async () => {
     await expect(callWithSoftTimeout(Promise.resolve('rapid'), 1000)).resolves.toBe('rapid');
+  });
+});
+
+describe('chat (Groq fara cheie, #21)', () => {
+  const cheieOriginala = process.env.GROQ_API_KEY;
+
+  afterEach(() => {
+    process.env.GROQ_API_KEY = cheieOriginala;
+  });
+
+  // Serviciu creat cu GROQ_API_KEY gol: `groqApiKey` devine null la fabricare,
+  // exact ca intr-un deploy fara cheia Groq. Stub-ul de Gemini e de aici doar ca
+  // fallback-ul sa fie atins (si sa esueze controlat), fara nicio retea.
+  function serviciuFaraGroq() {
+    process.env.GROQ_API_KEY = '';
+    const genAIStub = {
+      getGenerativeModel: () => ({
+        generateContent: async () => { throw new Error('gemini-fallback-esuat'); },
+      }),
+    };
+    return creeazaServiciuChat({
+      config: { ai: { geminiModel: 'gemini-2.5-flash' } },
+      genAI: genAIStub,
+    });
+  }
+
+  it('#21: ruleazaChat sare pe fallback, nu trimite "Bearer undefined"', async () => {
+    const serviciu = serviciuFaraGroq();
+    await expect(serviciu.ruleazaChat({ mesaj: 'salut' }))
+      .rejects.toThrow('Groq nu este configurat (lipseste GROQ_API_KEY)');
+  });
+
+  it('#21: logFoodDinChat returneaza 503 fara cheie Groq', async () => {
+    const serviciu = serviciuFaraGroq();
+    await expect(serviciu.logFoodDinChat({ mesaj: 'am mancat 200g pui' }))
+      .rejects.toMatchObject({ status: 503 });
+  });
+
+  it('#21: estimeazaMancareText returneaza 503 fara cheie Groq', async () => {
+    const serviciu = serviciuFaraGroq();
+    await expect(serviciu.estimeazaMancareText({ text: 'pui cu orez' }))
+      .rejects.toMatchObject({ status: 503 });
+  });
+
+  it('#21: EroareAiClient transporta status si mesaj separat', () => {
+    const eroare = new EroareAiClient(503, 'test');
+    expect(eroare.status).toBe(503);
+    expect(eroare.mesaj).toBe('test');
+    expect(eroare).toBeInstanceOf(Error);
   });
 });
