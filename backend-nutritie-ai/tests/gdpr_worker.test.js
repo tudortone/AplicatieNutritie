@@ -11,7 +11,7 @@ const { reiaStergerileBlocate } = require('../utils/gdprWorker');
 
 function creeazaApp(supabaseAdmin, profilRepoFake) {
   const app = express();
-  const contextDateMock = (req) => ({
+  const contextDateMock = (_req) => ({
     userId: '11111111-1111-4111-8111-111111111111',
     modAdmin: false,
   });
@@ -20,8 +20,8 @@ function creeazaApp(supabaseAdmin, profilRepoFake) {
     next();
   });
   app.use('/api/v1/user', createGdprRouter({
-    requireAuth: (req, res, next) => next(),
-    generalLimiter: (req, res, next) => next(),
+    requireAuth: (_req, _res, next) => next(),
+    generalLimiter: (_req, _res, next) => next(),
     supabaseAdmin,
     contextDate: contextDateMock,
     profilRepo: profilRepoFake || { getProfil: async () => ({}) },
@@ -59,16 +59,18 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
     expect(res.body.eroare).toContain('Ștergerea nu poate fi inițiată în siguranță');
   });
 
-  test('reiaStergerileBlocate reia un rând din starea db_done până la completed', async () => {
+  test('reiaStergerileBlocate reia un rând din starea pending până la completed', async () => {
     const randStocat = {
-      id: 'outbox-123',
+      id: 'outbox-pending-123',
       user_id: 'user-456',
       clerk_user_id: 'clerk-789',
-      status: 'db_done',
+      status: 'pending',
+      retry_count: 0,
       created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     };
 
     const updateCalls = [];
+    const deleteCalls = [];
 
     const adminFake = {
       auth: {
@@ -81,14 +83,67 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
           return {
             select: () => ({
               neq: () => ({
-                lt: () => ({
-                  limit: async () => ({ data: [randStocat], error: null }),
+                neq: () => ({
+                  lt: () => ({
+                    limit: async () => ({ data: [randStocat], error: null }),
+                  }),
                 }),
               }),
             }),
             update: (payload) => ({
-              eq: async (col, val) => {
+              eq: async (_col, _val) => {
                 updateCalls.push(payload);
+                return { error: null };
+              },
+            }),
+          };
+        }
+        return {
+          delete: () => ({
+            eq: async (col, val) => {
+              deleteCalls.push({ tabela, col, val });
+              return { error: null };
+            },
+          }),
+        };
+      },
+    };
+
+    const rez = await reiaStergerileBlocate({ supabaseAdmin: adminFake, config: {} });
+    expect(rez.reluate).toBe(1);
+    expect(deleteCalls.length).toBeGreaterThan(0);
+    expect(adminFake.auth.admin.deleteUser).toHaveBeenCalledWith('user-456');
+    expect(updateCalls.some((u) => u.status === 'db_done')).toBe(true);
+    expect(updateCalls.some((u) => u.status === 'completed')).toBe(true);
+  });
+
+  test('al 5-lea eșec → status = failed cu retry_count actualizat pe coloana reală', async () => {
+    const randEsuat = {
+      id: 'outbox-failed-999',
+      user_id: 'user-toxic',
+      status: 'pending',
+      retry_count: 4,
+      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    };
+
+    let updatePayload = null;
+
+    const adminFake = {
+      from: (tabela) => {
+        if (tabela === 'gdpr_deletions') {
+          return {
+            select: () => ({
+              neq: () => ({
+                neq: () => ({
+                  lt: () => ({
+                    limit: async () => ({ data: [randEsuat], error: null }),
+                  }),
+                }),
+              }),
+            }),
+            update: (payload) => ({
+              eq: async () => {
+                updatePayload = payload;
                 return { error: null };
               },
             }),
@@ -99,8 +154,12 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
     };
 
     const rez = await reiaStergerileBlocate({ supabaseAdmin: adminFake, config: {} });
-    expect(rez.reluate).toBe(1);
-    expect(adminFake.auth.admin.deleteUser).toHaveBeenCalledWith('user-456');
-    expect(updateCalls.some((u) => u.status === 'completed')).toBe(true);
+    expect(rez.reluate).toBe(0);
+    expect(updatePayload).toEqual({
+      status: 'failed',
+      last_error: 'Număr maxim de încercări atins (5).',
+      retry_count: 5,
+    });
+    expect(updatePayload).not.toHaveProperty('incercari');
   });
 });

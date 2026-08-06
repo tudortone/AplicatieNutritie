@@ -4,7 +4,20 @@
  * P-05: Worker GDPR pentru reluarea automată a ștergerilor întrerupte din outbox.
  */
 
+const Sentry = require('@sentry/node');
 const { stergeIdentitateClerk, stergeActiveImageKit } = require('../routes/gdpr');
+
+async function stergeRanduriDbUtilizator(supabaseAdmin, userId) {
+  if (!userId || !supabaseAdmin) return;
+  const tabele = ['mese', 'profil', 'antrenamente', 'barcode_estimari_utilizator', 'audit_log', 'credite_ai'];
+  for (const tabela of tabele) {
+    try {
+      await supabaseAdmin.from(tabela).delete().eq('user_id', userId);
+    } catch {
+      // Ignorăm tabele opționale care nu există pe schema curentă
+    }
+  }
+}
 
 async function reiaStergerileBlocate({ supabaseAdmin, config }) {
   if (!supabaseAdmin) return { reluate: 0 };
@@ -14,6 +27,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
     .from('gdpr_deletions')
     .select('*')
     .neq('status', 'completed')
+    .neq('status', 'failed')
     .lt('created_at', prag)
     .limit(20);
 
@@ -23,8 +37,44 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
 
   let reluate = 0;
   for (const rand of randuri) {
+    const numariIncercare = (rand.retry_count ?? 0) + 1;
+    if (numariIncercare >= 5) {
+      try {
+        Sentry.withScope((scope) => {
+          scope.setLevel('error');
+          scope.setTag('gdpr.max_retries_exceeded', 'true');
+          scope.setTag('gdpr.user_id', String(rand.user_id || ''));
+          Sentry.captureMessage(`[GDPR] Ștergerea outbox ${rand.id} a atins numărul maxim de încercări.`);
+        });
+      } catch {
+        // Sentry indisponibil
+      }
+
+      await supabaseAdmin
+        .from('gdpr_deletions')
+        .update({
+          status: 'failed',
+          last_error: 'Număr maxim de încercări atins (5).',
+          retry_count: numariIncercare,
+        })
+        .eq('id', rand.id);
+      continue;
+    }
+
     try {
       let statusCurent = rand.status;
+
+      // Pasul 1 (dacă s-a oprit la pending): DB rows delete
+      if (statusCurent === 'pending') {
+        if (rand.user_id) {
+          await stergeRanduriDbUtilizator(supabaseAdmin, rand.user_id);
+        }
+        statusCurent = 'db_done';
+        await supabaseAdmin
+          .from('gdpr_deletions')
+          .update({ status: 'db_done' })
+          .eq('id', rand.id);
+      }
 
       // Pasul 2 (dacă s-a oprit după db_done): Auth delete
       if (statusCurent === 'db_done') {
@@ -51,7 +101,6 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
               secretKey: process.env.CLERK_SECRET_KEY?.trim(),
             });
           } catch (e) {
-            // 404 sau servicii neconfigurate în mediul de dezvoltare/test = ignorat
             const msg = String(e.message);
             if (!msg.includes('404') && !msg.includes('CLERK_NOT_CONFIGURED')) throw e;
           }
@@ -89,7 +138,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
         .from('gdpr_deletions')
         .update({
           last_error: String(e?.message || e).slice(0, 300),
-          incercari: (rand.incercari ?? 0) + 1,
+          retry_count: numariIncercare,
         })
         .eq('id', rand.id);
     }

@@ -417,6 +417,13 @@ function startKeepAliveTicker() {
 }
 
 if (require.main === module) {
+  const { reiaStergerileBlocate } = require('./utils/gdprWorker');
+  const tickerGdpr = setInterval(() => {
+    reiaStergerileBlocate({ supabaseAdmin, config }).catch((e) =>
+      console.error('[GDPR worker]', e.message));
+  }, 5 * 60 * 1000);
+  if (tickerGdpr.unref) tickerGdpr.unref();
+
   const server = app.listen(config.port, config.host, () => {
     console.log(`Serverul securizat ruleaza pe ${config.host}:${config.port}`);
     startKeepAliveTicker();
