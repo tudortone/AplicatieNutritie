@@ -46,7 +46,15 @@ function createWebhooksRevenueCatRouter({ supabaseAdmin, config }) {
       return res.status(500).json({ eroare: 'Webhook RevenueCat neconfigurat.' });
     }
 
-    if (authHeader !== expectedSecret) {
+    const crypto = require('crypto');
+    function egalSigur(a, b) {
+      const ba = Buffer.from(String(a));
+      const bb = Buffer.from(String(b));
+      if (ba.length !== bb.length) return false;
+      return crypto.timingSafeEqual(ba, bb);
+    }
+
+    if (!egalSigur(authHeader, expectedSecret)) {
       console.warn('[RevenueCat Webhook] Autorizare invalidă.');
       return res.status(401).json({ eroare: 'Autorizare invalidă.' });
     }

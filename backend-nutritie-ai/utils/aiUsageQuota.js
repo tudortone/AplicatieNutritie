@@ -27,11 +27,35 @@ function creeazaCheckAiUsageQuota({ contor, limitaZi = DAILY_LIMIT, fereastraMs 
       });
     }
 
-    // Contul de admin are analize AI nelimitate — nu consuma din plafonul zilnic.
+    // Contul de admin are analize AI nelimitate — nu consuma din plafonul zilnic sau credite.
     if (req.user?.esteAdmin) {
       return next();
     }
 
+    // Pas 1: Încercăm debit din creditele plătite ale utilizatorului prin Supabase RPC
+    if (req.supabaseAdmin) {
+      try {
+        const eventId = `consume_${userId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const { data: soldNou, error } = await req.supabaseAdmin.rpc('aplica_tranzactie_credite', {
+          p_user_id: userId,
+          p_event_id: eventId,
+          p_event_type: 'USAGE_DEBIT',
+          p_delta: -1,
+          p_produs_id: 'ai_analysis',
+          p_metadata: { endpoint: req.originalUrl || req.path },
+        });
+
+        if (!error && typeof soldNou === 'number' && soldNou >= 0) {
+          res.setHeader('X-AI-Quota-Remaining', soldNou);
+          res.setHeader('X-AI-Credit-Used', 'true');
+          return next();
+        }
+      } catch {
+        // Dacă debitul din credite eșuează (sold 0 sau eroare), continuăm pe cota zilnică gratuită
+      }
+    }
+
+    // Pas 2: Dacă soldul de credite plătite este 0, utilizatorul consumă din cota zilnică gratuită
     const count = await sursa.increment(userId, fereastraMs);
     if (!Number.isFinite(count)) {
       return res.status(503).json({
@@ -44,7 +68,7 @@ function creeazaCheckAiUsageQuota({ contor, limitaZi = DAILY_LIMIT, fereastraMs 
       const secundeRamase = await sursa.ttl(userId);
       const oreRamase = secundeRamase > 0 ? Math.ceil(secundeRamase / 3600) : 24;
       return res.status(429).json({
-        eroare: `Ai atins plafonul zilnic de ${limitaZi} de analize AI. Limita se resetează în aproximativ ${oreRamase} ore.`,
+        eroare: `Ai atins plafonul zilnic gratuit de ${limitaZi} de analize AI. Limita se resetează în aproximativ ${oreRamase} ore. Puteți achiziționa credite suplimentare.`,
         cod: 'AI_QUOTA_EXCEEDED',
       });
     }

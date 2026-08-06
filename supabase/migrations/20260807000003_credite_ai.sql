@@ -62,6 +62,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
+  v_sold_curent int := 0;
   v_sold_nou int;
 BEGIN
   -- Idempotent: dacă event_id deja există, returnăm -1 (deja procesat)
@@ -69,15 +70,24 @@ BEGIN
     RETURN -1;
   END IF;
 
+  SELECT sold INTO v_sold_curent FROM credite_ai WHERE user_id = p_user_id;
+  IF v_sold_curent IS NULL THEN
+    v_sold_curent := 0;
+  END IF;
+
+  IF p_delta < 0 AND (v_sold_curent + p_delta) < 0 THEN
+    RAISE EXCEPTION 'SOLD_INSUFICIENT: sold curent % inapoiat de p_delta %', v_sold_curent, p_delta;
+  END IF;
+
   -- Inserăm tranzacția
   INSERT INTO credite_tranzactii (user_id, event_id, event_type, credite_delta, produs_id, metadata)
   VALUES (p_user_id, p_event_id, p_event_type, p_delta, p_produs_id, p_metadata);
 
-  -- Upsert sold (nu permitem sold negativ)
+  -- Upsert sold
   INSERT INTO credite_ai (user_id, sold)
-  VALUES (p_user_id, GREATEST(0, p_delta))
+  VALUES (p_user_id, p_delta)
   ON CONFLICT (user_id) DO UPDATE
-    SET sold = GREATEST(0, credite_ai.sold + p_delta),
+    SET sold = credite_ai.sold + p_delta,
         updated_at = NOW()
   RETURNING sold INTO v_sold_nou;
 
