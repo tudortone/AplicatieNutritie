@@ -29,6 +29,12 @@ export async function getImageKitAuthParams(): Promise<{ token: string; expire: 
   return await res.json();
 }
 
+interface FormDataFile {
+  uri: string;
+  type: string;
+  name: string;
+}
+
 /**
  * Încarcă o imagine pe ImageKit CDN folosind multipart/form-data.
  */
@@ -40,14 +46,24 @@ export async function uploadImageToImageKit(
   const authParams = await getImageKitAuthParams();
   const urlEndpoint = authParams.urlEndpoint || 'https://ik.imagekit.io/nutriai';
 
-  const folderPath = userId ? `/meals/${userId}` : '/mancare';
+  let currentUserId = userId;
+  if (!currentUserId) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      currentUserId = data.session?.user?.id;
+    } catch {}
+  }
 
-  const formData = new FormData();
-  formData.append('file', {
+  const folderPath = currentUserId ? `/meals/${currentUserId}` : '/mancare';
+
+  const formDataFile: FormDataFile = {
     uri: fileUri,
     type: 'image/jpeg',
-    name: fileName
-  } as any);
+    name: fileName,
+  };
+
+  const formData = new FormData();
+  formData.append('file', formDataFile as unknown as Blob);
   formData.append('fileName', fileName);
   formData.append('token', authParams.token);
   formData.append('expire', authParams.expire.toString());
@@ -73,10 +89,13 @@ export async function uploadImageToImageKit(
   }
 
   const result = await uploadRes.json();
+  const finalUrl = String(result.url || '');
+  const secureUrl = finalUrl.startsWith('http://') ? finalUrl.replace('http://', 'https://') : finalUrl;
+
   return {
-    fileId: result.fileId,
-    url: result.url,
-    thumbnailUrl: result.thumbnailUrl || result.url,
-    name: result.name
+    fileId: String(result.fileId || `ik-${Date.now()}`),
+    url: secureUrl || fileUri,
+    thumbnailUrl: String(result.thumbnailUrl || secureUrl || fileUri),
+    name: String(result.name || fileName)
   };
 }

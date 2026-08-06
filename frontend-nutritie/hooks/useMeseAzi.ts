@@ -161,11 +161,16 @@ export function useMeseAzi(dataSelectata?: Date) {
           totalCarbs += m.carbohidrati || 0;
         });
 
+        const safeTotalC = Math.min(100000, Math.max(0, Math.round(totalC)));
+        const safeTotalP = Math.min(5000, Math.max(0, Math.round(totalP * 10) / 10));
+        const safeTotalG = Math.min(5000, Math.max(0, Math.round(totalG * 10) / 10));
+        const safeTotalCarbs = Math.min(5000, Math.max(0, Math.round(totalCarbs * 10) / 10));
+
         setMese(parsedMese);
-        setTotalCalorii(totalC);
-        setTotalProteine(totalP);
-        setTotalGrasimi(totalG);
-        setTotalCarbohidrati(totalCarbs);
+        setTotalCalorii(safeTotalC);
+        setTotalProteine(safeTotalP);
+        setTotalGrasimi(safeTotalG);
+        setTotalCarbohidrati(safeTotalCarbs);
         setNumarMese(parsedMese.length);
       }
     } catch (e) {
