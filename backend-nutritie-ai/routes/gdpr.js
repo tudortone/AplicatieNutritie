@@ -4,6 +4,7 @@ const express = require('express');
 const { tabelUtilizator } = require('../utils/clientUtilizator');
 
 const IMAGEKIT_API = ['https:', '', 'api.imagekit.io', 'v1'].join('/');
+const CLERK_USERS_API = ['https:', '', 'api.clerk.com', 'v1', 'users'].join('/');
 const MAX_ADANCIME_JSON = 8;
 
 function codEroare(err) {
@@ -90,7 +91,7 @@ async function stergeIdentitateClerk({ clerkUserId, secretKey }) {
   }
 
   const response = await fetch(
-    `https://api.clerk.com/v1/users/${encodeURIComponent(clerkUserId)}`,
+    `${CLERK_USERS_API}/${encodeURIComponent(clerkUserId)}`,
     {
       method: 'DELETE',
       headers: {
