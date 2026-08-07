@@ -152,12 +152,11 @@ function creeazaMiddlewareIdempotenta({
     }
 
     const cacheKey = construiesteCheie(req, keyCurata);
-    let revendicat;
     try {
       const existent = await registru.get(cacheKey);
       if (raspundeDinRegistru(res, existent, amprenta)) return undefined;
 
-      revendicat = await revendicaAtomic(registru, cacheKey, {
+      const revendicat = await revendicaAtomic(registru, cacheKey, {
         stare: 'procesare',
         amprenta,
         inceputLa: Date.now(),
@@ -170,11 +169,10 @@ function creeazaMiddlewareIdempotenta({
           cod: 'IDEMPOTENCY_IN_PROGRESS',
         });
       }
-      // P-10b: se marchează DOAR după o revendicare reușită. Dacă s-ar marca
-      // înainte de citirea din registru, middleware-ul global (fail-open) ar
-      // seta flagul, ar înghiți eroarea de store și ar scurtcircuita
-      // middleware-ul critic montat mai jos pe rută — iar 503-ul fail-closed
-      // nu s-ar mai produce niciodată.
+      // P-10: flagul se marchează DOAR după o revendicare atomică reușită.
+      // Marcat mai devreme, middleware-ul global (fail-open) l-ar seta, ar
+      // înghiți eroarea de store și ar scurtcircuita middleware-ul critic
+      // montat mai jos pe rută — iar 503-ul fail-closed nu s-ar mai produce.
       req._idempotentaAplicata = true;
     } catch {
       // P-10: fail-closed pe rute critice (AI, plăți)
@@ -184,18 +182,11 @@ function creeazaMiddlewareIdempotenta({
           cod: 'IDEMPOTENCY_STORE_UNAVAILABLE',
         });
       }
-      // Fail-open pe rute idempotente prin natura lor
-      // P-10 (C1-S1): NU marcam _idempotentaAplicata aici. Daca marcam flag-ul
-      // înainte de orice interactiune cu store-ul (fail-open), un middleware
-      // critic aflat mai jos pe aceeasi cerere e sarita de garda si ruta mergea
-      // mai departe la 200 in loc de 503 — fail-closed-ul nu mai putea trage.
+      // Fail-open pe rute idempotente prin natura lor. Flagul rămâne nesetat
+      // intenționat, ca middleware-ul critic montat mai jos pe aceeași cerere
+      // să își poată aplica propriul fail-closed (503).
       return next();
     }
-
-    // Doar o revendicare reusita da dreptul la flag: middleware-ul urmator
-    // trebuie sa stie ca idempotenta a fost deja aplicata. Pe fail-open, flag-ul
-    // ramane neset diverga, ca garda critica de jos sa mai aiba o sansa.
-    req._idempotentaAplicata = true;
 
     let finalizat = false;
     const originalJson = res.json.bind(res);
