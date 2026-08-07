@@ -4,7 +4,17 @@ Sursa unică de adevăr pentru ce e rezolvat, cum și ce a rămas. Se actualizea
 
 Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PARȚIAL` · `❌ BLOCAT`.
 
-> Baza: verificare pe `main` (HEAD `7829588`, 2026-08-07). Commit-uri peste baza anterioară `f9729b3c`: `a1d86ab` (P-23b eas.json), `a219c6e` (P-16 dep-scan), `656435f` (P-08c trigger created_at), `7829588` (actualizare registru). Verdicturile din coloana „Verdict verificare" provin din lectura codului real și executarea suitei de poartă.
+> Baza: verificare pe `main` (HEAD `dd4d2bd`, 2026-08-07). Valul C1 (RLS activ + CI) în curs la această actualizare: `15d5130` (C1-S2+S4), `0ce98c1` (C1-S3), `b76e3e0` (C1-S1 teste), `dd4d2bd` (P-10 fail-closed). Ridică-ți înainte: remote `0714f05` (P-08d search_path), `2ee9fd3` (P-05c gardă GDPR worker). Verdicturile din coloana „Verdict verificare" provin din lectura codului real și executarea suitei de poartă.
+
+## Val C1 — RLS activ pentru toate căile
+
+| ID | Verdict | Status | Commit | Cum s-a rezolvat | Ce a rămas |
+| --- | --- | --- | --- | --- | --- |
+| C1-S1 | Identitate supabase-first (calea RLS) | 🟢 rezolvat | `b76e3e0` | Teste regresie pe `rezolvaIdentitate`: token Supabase valid → `provider:'supabase'` (RLS activ), admin doar din `app_metadata.rol`, până GoTrue 5xx/0 → 503 (nu deconectare), 4xx → 401. Frontend e 100% Supabase Auth (zero Clerk în app/lib) → trafic real deja pe RLS. | Pas extern (Clerk Dashboard + GoTrue): JWT Template Clerk pentru a activa calea Clerk pe viitor, dacă apare vreodată un client Clerk. Documentat, nu blocant pentru traficul real. |
+| C1-S2 | Politici `ai_jobs`/`credite_ai` + înregistrare RLS | ✅ rezolvat | `15d5130` | `ai_jobs` + `credite_ai` adăugate în `TABELE_CU_RLS_UTILIZATOR` (clientUtilizator.js) + teste. Politici `auth.uid()=user_id` confirmate pe toate tabelele; `barcode_cache`/`clerk_user_map` corect admin-only. | — |
+| C1-S3 | Eliminare by-pass RLS prin ESLint | ✅ rezolvat | `0ce98c1` | Regulă `no-restricted-syntax` care interzice `supabaseAdmin.from('<tabel-utilizator>')` în `routes/**`+`utils/**`, cu excepții documentate (webhooks, gdpr, ai.js joburi service-only, gdprWorker). | — |
+| C1-S4 | Observabilitate RLS | ✅ rezolvat | `15d5130` | `getStatisticiClientDate()` (cereri RLS vs modAdmin) expus pe `/api/ai-status`; `X-Protectie-RLS` deja setat active/inactiv. | Target: cereriModAdmin → 0 (vezi C1-S1). |
+| P-10 | Idempotență fail-open | ✅ rezolvat (fix C1) | `dd4d2bd` | `req._idempotentaAplicata = true` mutat după revendicare reușită: globalul fail-open nu mai bloca garda critică, rutele critice cu store căzut raspund acum 503. | — |
 
 ## Val 0 — HOTFIX (bani + legal)
 
@@ -20,8 +30,8 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 
 | ID | Verdict | Status | Commit | Cum s-a rezolvat | Ce a rămas |
 | --- | --- | --- | --- | --- | --- |
-| P-03 | RLS inactiv pentru Clerk (fallback service_role) | 🔴 activ | ⬜ NEÎNCEPUT | — | Trecere la JWT Template Clerk / Strat repositories | Trecere la JWT Template Clerk / Strat repositories |
-| P-04 | Policy `ai_jobs` `auth.uid()=user_id` (NULL pt Clerk) | 🔴 activ | ⬜ NEÎNCEPUT | — | Politică RLS compatibilă cu JWT Template Clerk | Politică RLS compatibilă cu JWT Template Clerk |
+| P-03 | RLS inactiv pentru Clerk (fallback service_role) | 🟢 rezolvat (vezi C1-S1) | ⚠️ PARȚIAL | `b76e3e0` | Frontend real e 100% Supabase Auth → traficul RLS activ. Calea Clerk rămâne dar fără client în repo; teste blochează regresia supabase-first. | Dacă apare un client Clerk, activare JWT Template (pas Clerk Dashboard, extern) |
+| P-04 | Policy `ai_jobs` `auth.uid()=user_id` (pt Clerk mapping) | ✅ rezolvat (vezi C1-S2) | ✅ | `15d5130` | Politicile confirmate pe toate tabelele; `ai_jobs`+`credite_ai` înregistrate în clientul RLS | — |
 | P-08 | Webhook Clerk rupere >1000 useri | 🟢 rezolvat | ✅ | `9a7aadef` | RPC `get_auth_user_by_email` fără paginare + clasificare erori permanente, `EroareTranzitorie` → 500, dead-letter | — |
 
 ## Val 1B — GDPR atomic
