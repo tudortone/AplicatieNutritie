@@ -235,6 +235,18 @@ export function useMeseAzi(dataSelectata?: Date) {
     });
   }, []);
 
+  // S10 (U-09): adăugare optimistă — reflectă instant o masă tocmai salvată, înainte
+  // ca reîmprospătarea server-side să reconcilieze lista. Oglinda lui optimisticDeleteMeal.
+  // Plafoanele totalurilor → aceleași ca în fetchData (safeTotalC/P/G/Carbi).
+  const optimisticAddMeal = useCallback((masa: Masa) => {
+    setMese((prev) => [masa, ...prev]);
+    setTotalCalorii((c) => Math.min(100000, Math.max(0, c + (masa.calorii || 0))));
+    setTotalProteine((p) => Math.min(5000, Math.max(0, p + (masa.proteine || 0))));
+    setTotalGrasimi((g) => Math.min(5000, Math.max(0, g + (masa.grasimi || 0))));
+    setTotalCarbohidrati((cb) => Math.min(5000, Math.max(0, cb + (masa.carbohidrati || 0))));
+    setNumarMese((n) => (n ?? 0) + 1);
+  }, []);
+
   return {
     mese,
     meseGrupate,
@@ -253,6 +265,7 @@ export function useMeseAzi(dataSelectata?: Date) {
     loading,
     refresh: fetchData,
     optimisticDeleteMeal,
+    optimisticAddMeal,
   };
 }
 

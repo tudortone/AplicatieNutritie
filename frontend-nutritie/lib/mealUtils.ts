@@ -78,12 +78,14 @@ const SEMNALE_COLOANA_LIPSA = /imagine_url|does not exist|could not find the/i;
 export async function insereazaMasaCuPoza(
   client: any,
   payload: Record<string, unknown>,
-): Promise<{ error: any }> {
-  const prima = await client.from('mese').insert(payload);
+): Promise<{ data: any; error: any }> {
+  // .select() face ca PostgREST să răspundă cu rândul creat (cu id real și
+  // created_at), nu doar ok — necesar pentru adăugarea optimistă în jurnal (S10).
+  const prima = await client.from('mese').insert(payload).select();
   if (prima.error && SEMNALE_COLOANA_LIPSA.test(String(prima.error.message))) {
     const faraPoza = { ...payload };
     delete faraPoza.imagine_url;
-    return client.from('mese').insert(faraPoza);
+    return client.from('mese').insert(faraPoza).select();
   }
   return prima;
 }

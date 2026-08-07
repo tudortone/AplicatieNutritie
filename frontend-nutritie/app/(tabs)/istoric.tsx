@@ -46,7 +46,8 @@ export default function HistoryScreen() {
     caloriiTinta,
     loading,
     refresh,
-    optimisticDeleteMeal
+    optimisticDeleteMeal,
+    optimisticAddMeal
   } = useMeseAzi(dataSelectata);
   const { zileCuMese, refreshZileCuMese } = useZileCuMese();
 
@@ -325,7 +326,9 @@ export default function HistoryScreen() {
       </ScrollView>
 
       {/* Reusable Gorhom Bottom Sheet pentru Adăugare / Editare masă */}
-      <AddMealBottomSheet ref={mealSheetRef} onSuccess={refresh} />
+      {/* S10: adăugare optimistă DOAR în ziua curentă — masa nouă are created_at = acum,
+          deci aparține zilei de azi; pe alte zile ar apărea și ar dispărea la reconciliere. */}
+      <AddMealBottomSheet ref={mealSheetRef} onSuccess={refresh} onMasaCreata={esteAzi ? optimisticAddMeal : undefined} />
 
       <MealDetailsModal
         visible={!!selectedMasaDetail}

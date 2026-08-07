@@ -49,6 +49,10 @@ export interface AddMealBottomSheetRef {
 
 interface AddMealBottomSheetProps {
   onSuccess?: () => void;
+  // S10 (U-09): apelat DUPĂ ce insertul a reușit, cu rândul creat (id real).
+  // Permite jurnalului să facă o adăugare optimistă instant + reconciliere,
+  // fără un refetch prelungit în așteptare.
+  onMasaCreata?: (masa: Masa) => void;
   /** Callback apelat după salvarea unei mese provenite din cămară */
   onPantryUsed?: (productName: string) => void;
 }
@@ -62,7 +66,7 @@ interface BaseNutrition {
 }
 
 export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBottomSheetProps>(
-  ({ onSuccess, onPantryUsed }, ref) => {
+  ({ onSuccess, onMasaCreata, onPantryUsed }, ref) => {
     const { colors } = useTheme();
     const { t } = useTranslation();
     const { user } = useAuth();
@@ -348,12 +352,14 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         };
 
         let err = null;
+        let masaCreata: Masa | null = null;
         if (editingMasaId) {
           const { error } = await actualizeazaMasaCuPoza(supabase, editingMasaId, payload);
           err = error;
         } else {
-          const { error } = await insereazaMasaCuPoza(supabase, payload);
+          const { data, error } = await insereazaMasaCuPoza(supabase, payload);
           err = error;
+          if (!error && data && data[0]) masaCreata = data[0] as Masa;
         }
 
         if (err) {
@@ -365,6 +371,8 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
           adaugaProgres('proteine', payload.proteine);
           bottomSheetRef.current?.close();
+          // S10: informează jurnalul despre rândul creat (DOAR la insert, nu la edit)
+          if (masaCreata) onMasaCreata?.(masaCreata);
           onSuccess?.();
           // Deducere automată din cămară
           if (pantryProductNameRef.current && onPantryUsed) {
