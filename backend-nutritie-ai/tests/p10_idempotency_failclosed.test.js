@@ -65,7 +65,11 @@ describe('P-10 — Idempotență Critică reală pe rute AI', () => {
     // rutei critice — cazul "registru căzut" (test 3) nu mai ajunge la ruta critica si
     // testul trece ca 200 in loc de 503. Cu un singur registru injectabil, unicul
     // semnal (erupe/store invert cutiar) afecteaza si globalul, ca in productie.
-    const middlewareGlobal = creeazaMiddlewareIdempotenta({ registru: registruFake });
+    const middlewareGlobal = creeazaMiddlewareIdempotenta({
+      registru: registruFake,
+      rutaCritica: false,
+      permiteMultipart: false,
+    });
     app.use(middlewareGlobal);
 
     const aiRouter = createAiRouter({
@@ -160,4 +164,18 @@ describe('P-10 — Idempotență Critică reală pe rute AI', () => {
     expect(res.status).toBe(200);
     expect(res.body.raspuns).toBe('OK Chat');
   });
+
+  test('5. Registru căzut pe /api/v1/chat cu globalul montat → tot 503', async () => {
+    registruFake.get.mockRejectedValue(new Error('Redis connection down'));
+    registruFake.setIfAbsent.mockRejectedValue(new Error('Redis connection down'));
+
+    const res = await request(app)
+      .post('/api/v1/chat')
+      .set('Idempotency-Key', 'key_redis_down_global')
+      .send({ mesaj: 'Test global down' });
+
+    expect(res.status).toBe(503);
+    expect(res.body.cod).toBe('IDEMPOTENCY_STORE_UNAVAILABLE');
+  });
 });
+
