@@ -163,3 +163,20 @@ jobs:
         with:
           path: ./
           extra_args: --only-verified
+
+  # -----------------------------------------------------------------------
+  # Job 5: Scanare vulnerabilitati dependente (P-16)
+  # -----------------------------------------------------------------------
+  dep-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scan lockfiles with osv-scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2
+        with:
+          scan-args: |-
+            --lockfile=./backend-nutritie-ai/package-lock.json
+            --lockfile=./frontend-nutritie/package-lock.json
