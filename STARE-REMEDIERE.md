@@ -4,7 +4,7 @@ Sursa unică de adevăr pentru ce e rezolvat, cum și ce a rămas. Se actualizea
 
 Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PARȚIAL` · `❌ BLOCAT`.
 
-> Baza: verificare pe `main` (HEAD `87be5c4`, 2026-08-07). Verdicturile din coloana „Verdict verificare" provin din lectura codului real și executarea suitei de poartă.
+> Baza: verificare pe `main` (HEAD `f9729b3c`, 2026-08-07). Commit-uri mai noi peste baza: `cc21127` (P-23b eas.json), `48f2d16` (P-16 dep-scan), `3e30854` (P-08b trigger created_at). Verdicturile din coloana „Verdict verificare" provin din lectura codului real și executarea suitei de poartă.
 
 ## Val 0 — HOTFIX (bani + legal)
 
@@ -22,13 +22,14 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 | --- | --- | --- | --- | --- | --- |
 | P-03 | RLS inactiv pentru Clerk (fallback service_role) | 🔴 activ | ⬜ NEÎNCEPUT | — | Trecere la JWT Template Clerk / Strat repositories | Trecere la JWT Template Clerk / Strat repositories |
 | P-04 | Policy `ai_jobs` `auth.uid()=user_id` (NULL pt Clerk) | 🔴 activ | ⬜ NEÎNCEPUT | — | Politică RLS compatibilă cu JWT Template Clerk | Politică RLS compatibilă cu JWT Template Clerk |
-| P-08 | Webhook Clerk rupere >1000 useri | 🟢 rezolvat | ✅ | `f5db73c` | RPC `get_auth_user_by_email` fără paginare + clasificare erori permanente, `EroareTranzitorie` → 500, dead-letter | — |
+| P-08 | Webhook Clerk rupere >1000 useri | 🟢 rezolvat | ✅ | `9a7aadef` | RPC `get_auth_user_by_email` fără paginare + clasificare erori permanente, `EroareTranzitorie` → 500, dead-letter | — |
 
 ## Val 1B — GDPR atomic
 
 | ID | Verdict | Status | Commit | Cum s-a rezolvat | Ce a rămas |
 | --- | --- | --- | --- | --- | --- |
-| P-05 | Ordinea ștergerii „ireversibil primul" | 🟢 rezolvat | ✅ | `de66c10` | Outbox mecanică atomica, 503 fail-closed pe erori outbox și worker de reluare dintr-un proces dedicat | — |
+| P-05 | Ordinea ștergerii „ireversibil primul" | 🟢 rezolvat | ✅ | `cfe15a60` + `353f9a64` | Outbox mecanică atomica, 503 fail-closed pe erori outbox și worker de reluare dintr-un proces dedicat | — |
+| P-05b | Erori de ștergere GDPR înghițite de catch {} | 🟢 rezolvat | ✅ | `353f9a64` | Erori PostgREST tratate explicit în gdprWorker.js și webhooks.js | — |
 | P-06 | `extrageFileIds`/`stergeActiveImageKit` cod mort | 🟢 rezolvat | ✅ | `1e75b60` | Extragere fileIds din JSONB `alimente` și ștergere individuală pe fileId + foldere | — |
 
 ## Val 1C — Reziliență & cost
@@ -53,7 +54,7 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 | --- | --- | --- | --- | --- | --- |
 | U-01 | Time-to-first-value | ✅ deja OK | ✅ | — | — | — |
 | U-02 | Feedback progresiv scanare AI | ⚠️ parțial | ⬜ NEÎNCEPUT | — | — | Skeleton AI scan |
-| U-03 | Poza nu se pierde niciodată | 🟢 rezolvat | ✅ | `a38cddc` | Stocare persistentă pe disc, recuperare draft neanalizat prin dialog Alert la pornirea `camera.tsx` și eliberare draft pe `anuleazaScanarea` | — |
+| U-03 | Poza nu se pierde niciodată | 🟢 rezolvat | ✅ | `a38cddc` + `67d61b32` + `f9729b3c` | Stocare persistentă pe disc, recuperare draft neanalizat prin dialog Alert la pornirea `camera.tsx` și eliberare draft pe `anuleazaScanarea` | — |
 | U-04 | Coadă offline mese | 🔴 lipsă | ⬜ NEÎNCEPUT | — | — | Coadă offline FIFO |
 | U-05 | Stări goale/skeletons | ✅ deja OK | ✅ | — | — | — |
 | U-06 | Accesibilitate | ⚠️ parțial | ⬜ NEÎNCEPUT | — | — | Etichete accessibility |
@@ -61,15 +62,16 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 | U-08 | Coerență lingvistică | ⚠️ parțial | ⬜ NEÎNCEPUT | — | — | Uniformizare traduceri |
 | U-09 | Viteză percepută (UI optimist) | 🔴 lipsă | ⬜ NEÎNCEPUT | — | — | Optimistic updates |
 | U-10 | Recuperare eroare plată | ✅ deja OK | ✅ | — | — | — |
-| P-14 | Teste frontend | 🟢 rezolvat | ✅ | `a38cddc` | Migrare `FileSystem` pe `expo-file-system/legacy` pentru SDK 54, teste de unitate 2 suites / 6 passed | — |
+| P-14 | Teste frontend | 🟢 rezolvat | ✅ | `7e1f68b9` | Migrare `FileSystem` pe `expo-file-system/legacy` pentru SDK 54, teste de unitate 2 suites / 6 passed | — |
 
 ## Val 2F — CI & observabilitate
 
 | ID | Verdict | Status | Commit | Cum s-a rezolvat | Ce a rămas |
 | --- | --- | --- | --- | --- | --- |
-| P-15 | Test RLS neconectat în CI (auto-skip) | 🟢 rezolvat | ✅ | `87be5c4` | `set -euo pipefail` în pasul de migrări SQL | — |
-| P-16/17 | Fără audit/dep-review/secret-scan/EAS + fallback-uri dummy | 🟢 rezolvat | ✅ | `87be5c4` | Trufflehog filesystem scan pe repository, npm audit pe frontend-checks | — |
+| P-15 | Test RLS neconectat în CI (auto-skip) | 🔴 activ | ❌ BLOCAT | `87be5c4` | `set -euo pipefail` în pasul de migrări SQL | `INTEGRATION_SUPABASE_URL` lipsă din ci.yml + `RLS_TESTS_REQUIRED=1` + fără PostgREST în CI → testele nu pot trece prin design |
+| P-16/17 | Fără audit/dep-review/secret-scan/EAS + fallback-uri dummy | ⚠️ parțial | ⚠️ PARȚIAL | `87be5c4` + `48f2d16` | Trufflehog filesystem scan, npm audit pe frontend-checks, osv-scanner dep-scan adăugat | Rămâne: verificare efectivă EAS channel |
+| P-08b | Alertă dead-letter doar pe calea de excepție | 🟢 rezolvat | ✅ | `353f9a64` | Erori PostgREST tratate explicit și alertă Sentry pe DEAD_LETTER_WRITE_FAILED | — |
 | P-18b | Config jest frontend lipsă | 🟢 rezolvat | ✅ | `94be926` | Adăugat `jest.config.js` în `frontend-nutritie`, configurat `@types/jest` și script-uri CI | — |
 | P-22 | Doc sprawl (7 .md + .zcode/.agents/bat) | 🔴 activ | ⬜ NEÎNCEPUT | — | — | Comasare documentație |
-| P-23b | `buildNumber`/`versionCode` lipsă | 🟢 rezolvat | ✅ | `a4e59b8` | Adăugat `buildNumber` (iOS) și `versionCode` (Android) în `app.json` | — |
+| P-23b | `buildNumber`/`versionCode` lipsă + `appVersionSource` + `autoIncrement` | ⚠️ parțial | ⚠️ PARȚIAL | `cc21127` | `appVersionSource: remote` și `autoIncrement: true` în eas.json pentru preview și production | Rămâne: validare EAS CLI că numerele sunt cu adevărat incrementate |
 | P-24 | Denylist fără alertă Sentry | 🟢 rezolvat | ✅ | `6fd851c` | Adăugat Sentry alert pe pattern_index și suppressed count fără scurgere de PII sample_text | — |
