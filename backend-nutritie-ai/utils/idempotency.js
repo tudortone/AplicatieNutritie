@@ -122,8 +122,10 @@ function creeazaMiddlewareIdempotenta({
   return async function idempotencyMiddleware(req, res, next) {
     if (req.method !== 'POST') return next();
 
-    // P-10: o singură aplicare per cerere. Fără asta, middleware-ul global
-    // rulează după cel critic pe aceeași cerere și returnează 409 fals.
+    // P-10: o singură aplicare per cerere. Middleware-ul global e montat în
+    // server.js înaintea routerelor, deci rulează PRIMUL; cel critic, montat
+    // per-rută, rulează după. Fără gardă, cel critic ar revendica a doua oară
+    // aceeași cheie deja revendicată de cel global și ar returna un 409 fals.
     if (req._idempotentaAplicata) return next();
 
     const contentType = String(req.headers['content-type'] || '').toLowerCase();
@@ -149,8 +151,6 @@ function creeazaMiddlewareIdempotenta({
       }
     }
 
-    req._idempotentaAplicata = true;
-
     const cacheKey = construiesteCheie(req, keyCurata);
     try {
       const existent = await registru.get(cacheKey);
@@ -169,6 +169,12 @@ function creeazaMiddlewareIdempotenta({
           cod: 'IDEMPOTENCY_IN_PROGRESS',
         });
       }
+      // P-10b: se marchează DOAR după o revendicare reușită. Dacă s-ar marca
+      // înainte de citirea din registru, middleware-ul global (fail-open) ar
+      // seta flagul, ar înghiți eroarea de store și ar scurtcircuita
+      // middleware-ul critic montat mai jos pe rută — iar 503-ul fail-closed
+      // nu s-ar mai produce niciodată.
+      req._idempotentaAplicata = true;
     } catch {
       // P-10: fail-closed pe rute critice (AI, plăți)
       if (rutaCritica) {
