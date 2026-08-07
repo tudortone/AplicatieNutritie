@@ -418,12 +418,17 @@ function startKeepAliveTicker() {
 }
 
 if (require.main === module) {
-  const { reiaStergerileBlocate } = require('./utils/gdprWorker');
-  const tickerGdpr = setInterval(() => {
-    reiaStergerileBlocate({ supabaseAdmin, config }).catch((e) =>
-      console.error('[GDPR worker]', e.message));
-  }, 5 * 60 * 1000);
-  if (tickerGdpr.unref) tickerGdpr.unref();
+  if (process.env.GDPR_WORKER_ACTIV === '1') {
+    const { reiaStergerileBlocate } = require('./utils/gdprWorker');
+    const tickerGdpr = setInterval(() => {
+      reiaStergerileBlocate({ supabaseAdmin, config }).catch((e) =>
+        console.error('[GDPR worker]', e.message));
+    }, 5 * 60 * 1000);
+    if (tickerGdpr.unref) tickerGdpr.unref();
+    console.log('[GDPR] Worker de reluare activ, interval 5 minute.');
+  } else {
+    console.log('[GDPR] Worker de reluare inactiv (GDPR_WORKER_ACTIV != 1).');
+  }
 
   const server = app.listen(config.port, config.host, () => {
     console.log(`Serverul securizat ruleaza pe ${config.host}:${config.port}`);
