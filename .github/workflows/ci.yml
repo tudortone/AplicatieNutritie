@@ -103,6 +103,27 @@ jobs:
             echo "::endgroup::"
           done
 
+      # P-15: imaginile supabase/postgres pot varia în implementarea auth.uid().
+      # O redefinim explicit în pasul de setup SQL (NU într-o migrare) ca testele
+      # RLS să fie deterministe: auth.uid() = claim-ul 'sub' din request.jwt.
+      # CREATE OR REPLACE e idempotent — acoperă și imaginea care o are deja.
+      - name: Asigură auth.uid() (setup SQL, verificat de testele RLS)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql "postgres://postgres:postgres@localhost:54322/postgres" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE SCHEMA IF NOT EXISTS auth;
+          CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
+            LANGUAGE sql STABLE
+            AS $$
+              SELECT COALESCE(
+                NULLIF(current_setting('request.jwt.claim.sub', true), ''),
+                (NULLIF(current_setting('request.jwt.claims', true), ''))::jsonb ->> 'sub'
+              )::uuid;
+            $$;
+          SQL
+
       - name: Run RLS Integration Tests
         env:
           RLS_TESTS_REQUIRED: '1'
