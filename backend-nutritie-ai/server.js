@@ -63,18 +63,13 @@ process.on('uncaughtException', (eroare) => {
   if (config.esteProductie) setTimeout(() => process.exit(1), 1000).unref();
 });
 
-const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
-const BEARER_RE = /Bearer\s+\S+/gi;
-const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
-const PHONE_RE = /(?:\+?\d[\s().-]*){9,15}/g;
-function redacteazaPii(text) {
-  if (typeof text !== 'string') return text;
-  return text
-    .replace(JWT_RE, '[REDACTED_JWT]')
-    .replace(BEARER_RE, '[REDACTED_BEARER]')
-    .replace(EMAIL_RE, '[REDACTED_EMAIL]')
-    .replace(PHONE_RE, '[REDACTED_PHONE]');
-}
+// Sanitizare PII centralizată (TASK-11): regulile trăiesc într-un singur loc
+// (utils/sentrySanitize.js) ca toate fluxurile de capturare (webhook, GDPR,
+// rate-limit) să moștenească aceleași garzi fără duplicare.
+const {
+  redacteazaPii,
+  scrubbedBreadcrumb,
+} = require('./utils/sentrySanitize');
 
 if (config.sentryDsn) {
   Sentry.init({
@@ -93,18 +88,12 @@ if (config.sentryDsn) {
       if (event.extra) event.extra = { redacted: true };
       if (event.contexts) event.contexts = {};
       if (Array.isArray(event.breadcrumbs)) {
-        event.breadcrumbs = event.breadcrumbs.slice(-50).map((crumb) => {
-          const message = typeof crumb.message === 'string'
-            ? redacteazaPii(crumb.message).slice(0, 200)
-            : crumb.message;
-          return {
-            ...crumb,
-            data: crumb.data ? { redacted: true } : undefined,
-            message,
-          };
-        });
+        event.breadcrumbs = event.breadcrumbs.slice(-50).map(scrubbedBreadcrumb);
       }
       return event;
+    },
+    beforeBreadcrumb(crumb) {
+      return scrubbedBreadcrumb(crumb);
     },
   });
   console.log('Sentry Node.js configurat cu succes');

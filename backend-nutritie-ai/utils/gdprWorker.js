@@ -7,6 +7,10 @@
 const Sentry = require('@sentry/node');
 const { stergeIdentitateClerk, stergeActiveImageKit } = require('../routes/gdpr');
 const { inregistreazaUtilizareAdmin } = require('./clientUtilizator');
+// TASK-11: tag-urile Sentry nu pot conține identificatori bruti (PII). Folosim
+// pseudonimizatorul central ca să păstrăm corelarea unui anumit cont fără a
+// expune user_id/sesiunea în telemetrie.
+const { pseudonimizeaza } = require('./sentrySanitize');
 
 /**
  * Singurele coduri care înseamnă „tabela nu există pe schema curentă" și pe care
@@ -59,7 +63,10 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
         Sentry.withScope((scope) => {
           scope.setLevel('error');
           scope.setTag('gdpr.max_retries_exceeded', 'true');
-          scope.setTag('gdpr.user_id', String(rand.user_id || ''));
+          // PII pe tag → pseudonimizat (TASK-11): corelabil dar nu reversibil
+          // fără saltul secret. Randul `rand.id` e un ID intern de outbox, nu
+          // identificator de utilizator.
+          scope.setTag('gdpr.user_pseudonym', pseudonimizeaza(rand.user_id));
           Sentry.captureMessage(`[GDPR] Ștergerea outbox ${rand.id} a atins numărul maxim de încercări.`);
         });
       } catch {
