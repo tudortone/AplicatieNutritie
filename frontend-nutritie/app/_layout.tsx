@@ -22,7 +22,11 @@ import OfflineBanner from '../components/OfflineBanner';
 import { GlobalErrorBoundary } from '../components/GlobalErrorBoundary';
 import { buildApiUrl } from '../lib/api';
 import { restaureazaProfilLocal, type ProfilRestaurare } from '../lib/onboarding';
+import { scheduleDailyMealReminders } from '../lib/notifications';
+import { processOfflineQueue, type SupabaseMinimalClient } from '../lib/offlineQueue';
+import { supabase } from '../supabase';
 import '../i18n';
+
 
 // DSN-ul Sentry are forma https://<cheiePublica>@o<org>.ingest.<regiune>.sentry.io/<proiect>.
 // Fara segmentul `@` (cheia publica), SDK-ul arunca "Invalid Sentry Dsn" la fiecare boot.
@@ -148,6 +152,13 @@ function RootNavigator() {
   const [profilServerDate, setProfilServerDate] = useState<ProfilRestaurare | null>(null);
 
   useEffect(() => { syncFromAsyncStorage(); }, [syncFromAsyncStorage]);
+
+  useEffect(() => {
+    if (session) {
+      scheduleDailyMealReminders().catch(() => {});
+      processOfflineQueue(supabase as unknown as SupabaseMinimalClient).catch(() => {});
+    }
+  }, [session]);
 
   useEffect(() => {
     if (loadingAuth) return;

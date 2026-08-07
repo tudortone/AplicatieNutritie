@@ -34,13 +34,6 @@ import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft,
 import { pushOfflineMeal, processOfflineQueue, MasaOfflinePayload } from '@/lib/offlineQueue';
 
 
-const SCAN_STEPS = [
-  'Optimizare imagine & pregătire...',
-  'Se trimite la modelul vizual AI...',
-  'Se identifică ingredientele și alimentele...',
-  'Se calculează gramajele și valorile nutriționale...',
-];
-
 export default function CameraScreen() {
   const { colors } = useTheme();
   const { width, height } = useWindowDimensions();
@@ -48,6 +41,14 @@ export default function CameraScreen() {
   // din inaltime sau 360px ca sa nu depaseasca ecranul pe telefoane mici/landscape.
   const scanBoxSize = Math.round(Math.min(width * 0.78, height * 0.48, 360));
   const { t } = useTranslation();
+  
+  const scanSteps = useMemo(() => [
+    t('camera.steps.optimizing'),
+    t('camera.steps.sending'),
+    t('camera.steps.identifying'),
+    t('camera.steps.calculating'),
+  ], [t]);
+
   const { session } = useAuth();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
@@ -95,8 +96,9 @@ export default function CameraScreen() {
       return;
     }
     const interval = setInterval(() => {
-      setScanStepIndex((prev) => (prev < SCAN_STEPS.length - 1 ? prev + 1 : prev));
+      setScanStepIndex((prev) => (prev < scanSteps.length - 1 ? prev + 1 : prev));
     }, 1800);
+
     return () => clearInterval(interval);
   }, [seIncarca]);
 
@@ -656,10 +658,10 @@ export default function CameraScreen() {
                 <BlurView intensity={60} tint="dark" style={styles.scanningBlur}>
                   <ActivityIndicator size="large" color={colors.accent} />
                   <Animated.Text key={scanStepIndex} entering={FadeInUp.duration(250)} style={[styles.scanningText, { color: colors.accent }]}>
-                    {SCAN_STEPS[scanStepIndex]}
+                    {scanSteps[scanStepIndex]}
                   </Animated.Text>
                   <View style={styles.stepProgressDots}>
-                    {SCAN_STEPS.map((_, idx) => (
+                    {scanSteps.map((_: string, idx: number) => (
                       <View
                         key={idx}
                         style={[
@@ -669,6 +671,7 @@ export default function CameraScreen() {
                       />
                     ))}
                   </View>
+
                 </BlurView>
               </Animated.View>
             )}

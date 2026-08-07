@@ -12,12 +12,21 @@ export interface MasaOfflinePayload {
   carbohidrati: number;
   fibre: number;
   tip_masa: string;
-  alimente: any[];
+  alimente: unknown[];
   data: string;
   created_at: string;
 }
 
+export interface SupabaseMinimalClient {
+  from: (table: string) => {
+    insert: (payload: any) => PromiseLike<{ error: { message: string } | null }> | Promise<{ error: { message: string } | null }>;
+  };
+}
+
+
+
 let inMemoryFallbackQueue: MasaOfflinePayload[] = [];
+
 
 export async function getOfflineQueue(): Promise<MasaOfflinePayload[]> {
   try {
@@ -67,7 +76,7 @@ export async function clearOfflineQueue(): Promise<void> {
   }
 }
 
-export async function processOfflineQueue(supabaseClient: any): Promise<{ procesate: number; esuate: number }> {
+export async function processOfflineQueue(supabaseClient: SupabaseMinimalClient): Promise<{ procesate: number; esuate: number }> {
   let queue = await getOfflineQueue();
   if (queue.length === 0 || !supabaseClient) {
     return { procesate: 0, esuate: 0 };
