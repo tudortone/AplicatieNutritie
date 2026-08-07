@@ -13,11 +13,24 @@ export interface OptimizedImage {
 /** Dimensiunea maximă a laturii lungi a imaginii optimizate (bounding box 800×800). */
 const MAX_DIMENSION = 800;
 
-export const DRAFT_DIR = `${FileSystem.documentDirectory}drafts/`;
+export const DRAFT_DIR = `${FileSystem.documentDirectory ?? ''}drafts/`;
 
-if (typeof DRAFT_DIR !== 'string' || !DRAFT_DIR.startsWith('file:')) {
-  throw new Error(`DRAFT_DIR invalid: ${DRAFT_DIR}`);
+/**
+ * Validare LAZY, intenționat NU la nivel de modul.
+ *
+ * Un `throw` executat la import ar doborî tot fișierul pentru orice consumator,
+ * inclusiv `optimizeImageBeforeUpload` și, prin el, întregul flux de analiză
+ * foto din `camera.tsx`. Salvarea draft-ului e o funcție secundară: dacă
+ * platforma nu oferă `documentDirectory`, trebuie să pice doar ea, nu tot.
+ */
+function verificaDraftDir(): void {
+  if (!DRAFT_DIR.startsWith('file:')) {
+    throw new Error(
+      `Stocarea locală a draft-urilor nu este disponibilă pe această platformă (DRAFT_DIR="${DRAFT_DIR}").`,
+    );
+  }
 }
+
 const INDEX_KEY = 'nutriai:image-drafts';
 
 function getImageSize(uri: string): Promise<{ width: number; height: number }> {
@@ -69,6 +82,8 @@ export async function optimizeImageBeforeUpload(uri: string): Promise<OptimizedI
  * care supraviețuiește curățării de cache de către sistemul de operare.
  */
 export async function saveLocalImageDraft(uri: string): Promise<string> {
+  verificaDraftDir();
+
   const dir = await FileSystem.getInfoAsync(DRAFT_DIR);
   if (!dir.exists) {
     await FileSystem.makeDirectoryAsync(DRAFT_DIR, { intermediates: true });
