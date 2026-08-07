@@ -87,7 +87,7 @@ $$;
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_cron') THEN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
     PERFORM cron.schedule(
       'nutriai-curata-audit-log',
       '0 3 * * *',          -- zilnic la 03:00 (ora bazei de date)

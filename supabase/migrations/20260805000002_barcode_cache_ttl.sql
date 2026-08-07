@@ -55,7 +55,7 @@ $$;
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_cron') THEN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
     PERFORM cron.schedule(
       'nutriai-curata-barcode-cache',
       '0 4 * * *',          -- zilnic la 04:00 (ora bazei de date)

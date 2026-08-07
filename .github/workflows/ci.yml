@@ -99,7 +99,16 @@ jobs:
           fi
           for file in "${fisiere[@]}"; do
             echo "::group::$file"
-            psql "postgres://postgres:postgres@localhost:54322/postgres" -v ON_ERROR_STOP=1 -f "$file"
+            if ! out=$(psql "postgres://postgres:postgres@localhost:54322/postgres" -v ON_ERROR_STOP=1 -f "$file" 2>&1); then
+              # C2-diagnostic: ongreesc eroarea exactă de SQL ca ANNOTATION GitHub,
+              # citibilă prin API public fără token (logurile brute necesită auth).
+              first_line=$(printf '%s\n' "$out" | grep -m1 -E 'ERROR|FATAL|psql:' || printf '%s\n' "$out" | head -1)
+              echo "::error file=$file::MIGRARE ESCAPATA: $first_line"
+              echo "$out"
+              echo "::endgroup::"
+              exit 1
+            fi
+            echo "$out"
             echo "::endgroup::"
           done
 
