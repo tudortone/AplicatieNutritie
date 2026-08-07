@@ -4,7 +4,7 @@ Sursa unică de adevăr pentru ce e rezolvat, cum și ce a rămas. Se actualizea
 
 Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PARȚIAL` · `❌ BLOCAT`.
 
-> Baza: verificare pe `main` (HEAD `f9729b3c`, 2026-08-07). Commit-uri mai noi peste baza: `cc21127` (P-23b eas.json), `48f2d16` (P-16 dep-scan), `3e30854` (P-08b trigger created_at). Verdicturile din coloana „Verdict verificare" provin din lectura codului real și executarea suitei de poartă.
+> Baza: verificare pe `main` (HEAD `7829588`, 2026-08-07). Commit-uri peste baza anterioară `f9729b3c`: `a1d86ab` (P-23b eas.json), `a219c6e` (P-16 dep-scan), `656435f` (P-08c trigger created_at), `7829588` (actualizare registru). Verdicturile din coloana „Verdict verificare" provin din lectura codului real și executarea suitei de poartă.
 
 ## Val 0 — HOTFIX (bani + legal)
 
@@ -69,9 +69,10 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 | ID | Verdict | Status | Commit | Cum s-a rezolvat | Ce a rămas |
 | --- | --- | --- | --- | --- | --- |
 | P-15 | Test RLS neconectat în CI (auto-skip) | 🔴 activ | ❌ BLOCAT | `87be5c4` | `set -euo pipefail` în pasul de migrări SQL | `INTEGRATION_SUPABASE_URL` lipsă din ci.yml + `RLS_TESTS_REQUIRED=1` + fără PostgREST în CI → testele nu pot trece prin design |
-| P-16/17 | Fără audit/dep-review/secret-scan/EAS + fallback-uri dummy | ⚠️ parțial | ⚠️ PARȚIAL | `87be5c4` + `48f2d16` | Trufflehog filesystem scan, npm audit pe frontend-checks, osv-scanner dep-scan adăugat | Rămâne: verificare efectivă EAS channel |
+| P-16/17 | Fără audit/dep-review/secret-scan/EAS + fallback-uri dummy | ⚠️ parțial | ⚠️ PARȚIAL | `87be5c4` + `a219c6e` | Trufflehog filesystem scan, npm audit pe frontend-checks, osv-scanner dep-scan adăugat | Rămâne: verificare efectivă EAS channel |
 | P-08b | Alertă dead-letter doar pe calea de excepție | 🟢 rezolvat | ✅ | `353f9a64` | Erori PostgREST tratate explicit și alertă Sentry pe DEAD_LETTER_WRITE_FAILED | — |
+| P-08c | `created_at` se rescria la conflict în dead-letter | 🟢 rezolvat | ✅ | `656435f` | Migrare `20260810000001_dead_letter_created_at.sql`: trigger `BEFORE UPDATE` care forțează `NEW.created_at := OLD.created_at` | Fără test pe trigger (suita p08 mockuiește Supabase, nu execută SQL); `incercari` tot nu se incrementează la conflict |
 | P-18b | Config jest frontend lipsă | 🟢 rezolvat | ✅ | `94be926` | Adăugat `jest.config.js` în `frontend-nutritie`, configurat `@types/jest` și script-uri CI | — |
 | P-22 | Doc sprawl (7 .md + .zcode/.agents/bat) | 🔴 activ | ⬜ NEÎNCEPUT | — | — | Comasare documentație |
-| P-23b | `buildNumber`/`versionCode` lipsă + `appVersionSource` + `autoIncrement` | ⚠️ parțial | ⚠️ PARȚIAL | `cc21127` | `appVersionSource: remote` și `autoIncrement: true` în eas.json pentru preview și production | Rămâne: validare EAS CLI că numerele sunt cu adevărat incrementate |
+| P-23b | `buildNumber`/`versionCode` lipsă + `appVersionSource` + `autoIncrement` | 🟢 rezolvat | ✅ | `a1d86ab` | `appVersionSource: remote` și `autoIncrement: true` în eas.json pentru preview și production | De confirmat la primul build EAS real că numerele se incrementează; nu e lipsă de cod |
 | P-24 | Denylist fără alertă Sentry | 🟢 rezolvat | ✅ | `6fd851c` | Adăugat Sentry alert pe pattern_index și suppressed count fără scurgere de PII sample_text | — |
