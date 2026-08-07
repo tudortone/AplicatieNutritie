@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { themes, themeDisplayNames, ThemeName } from '../../constants/theme';
 import { useNotifications } from '../../hooks/useNotifications';
+import { getConsent, cancelManagedReminders } from '../../lib/notificationConsent';
 import { useAuth } from '../../context/AuthContext';
 import { useBiometrics } from '../../hooks/useBiometrics';
 import { useHealthSync } from '../../hooks/useHealthSync';
@@ -248,10 +249,40 @@ export default function ProfilScreen() {
           if (userKeys.length > 0) {
             await AsyncStorage.multiRemove(userKeys);
           }
+          // TASK-16: la logout anulăm reminderele contului anterior, ca să nu
+          // se mai declanșeze sub contul următor. Consimțământul rămâne persistat
+          // la nivel de dispozitiv (nu e legat de cont).
+          await cancelManagedReminders();
           await supabase.auth.signOut();
         } 
       }
     ]);
+  };
+
+  // TASK-16: comutarea reminderelor e un consimțământ explicit. Prima activare
+  // solicită confirmarea înainte de a programa notificări; togeurile ulterioare
+  // (după un accept cu grantedAt setat) doar comută starea, fără re-prompt OS.
+  const schimbaRemindere = async (val: boolean) => {
+    if (val) {
+      const stare = await getConsent();
+      if (!stare.grantedAt) {
+        Alert.alert(
+          'Consimțământ pentru notificări',
+          'Prin activarea reminderelor ești de acord ca NutriAI să programeze notificări locale pe acest dispozitiv (3 pe zi, la orele precizate). Poți anula această permisiune oricând din Profil.',
+          [
+            { text: 'Anulează', style: 'cancel' },
+            {
+              text: 'Acceptă',
+              onPress: async () => {
+                await toggleReminders(true);
+              },
+            },
+          ]
+        );
+        return;
+      }
+    }
+    await toggleReminders(val);
   };
 
   const abreSuport = async () => {
@@ -430,7 +461,7 @@ export default function ProfilScreen() {
                 </View>
                 <Switch
                   value={notificationsEnabled}
-                  onValueChange={(val) => { toggleReminders(val); }}
+                  onValueChange={(val) => { schimbaRemindere(val); }}
                   trackColor={{ false: '#3f3f3f', true: colors.accent + '80' }}
                   thumbColor={notificationsEnabled ? colors.accent : '#f4f3f4'}
                 />

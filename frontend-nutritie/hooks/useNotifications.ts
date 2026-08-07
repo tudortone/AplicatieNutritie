@@ -1,9 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useNotificationBanner } from '../context/NotificationBannerContext';
+import {
+  getConsent,
+  grantConsent,
+  revokeConsent,
+  cancelManagedReminders,
+} from '../lib/notificationConsent';
+import { scheduleDailyMealReminders, DEFAULT_MEAL_REMINDERS } from '../lib/notifications';
 
 export const isExpoGo = Constants.appOwnership === 'expo';
 
@@ -23,21 +29,20 @@ if (!isExpoGo) {
   }
 }
 
-const STORAGE_KEY = 'notifications_enabled';
-
 export function useNotifications() {
   const [enabled, setEnabledState] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const { showBanner } = useNotificationBanner();
 
+  // Starea se citește din consimțământul persistat, nu dintr-un boolean local:
+  // supraviețuiește restartului și re-loginului.
   useEffect(() => {
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        const isEnabled = stored === 'true';
-        setEnabledState(isEnabled);
+        const stare = await getConsent();
+        setEnabledState(stare.accepted);
       } catch (e) {
-        console.error('Eroare la citirea stării notificărilor:', e);
+        console.error('Eroare la citirea consimțământului notificărilor:', e);
       } finally {
         setLoading(false);
       }
@@ -46,8 +51,6 @@ export function useNotifications() {
 
   const registerForPushNotificationsAsync = async () => {
     try {
-      let permissionGranted = false;
-
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('meal-reminders', {
           name: 'Remindere Mese NutriAI',
@@ -65,79 +68,48 @@ export function useNotifications() {
       }
 
       if (finalStatus === 'granted') {
-        permissionGranted = true;
-      } else {
-        showBanner({
-          title: 'Permisiune necesară',
-          message: 'Activează notificările din setările telefonului pentru a primi remindere.',
-          type: 'warning',
-        });
+        return true;
       }
-
-      return permissionGranted;
+      showBanner({
+        title: 'Permisiune necesară',
+        message: 'Activează notificările din setările telefonului pentru a primi remindere.',
+        type: 'warning',
+      });
+      return false;
     } catch {
-      return true;
+      // TASK-16: o eroare la permisiune NU înseamnă „acordat”. Altfel un catch
+      // ar face aplicația să programeze remindere fără consimțământ real.
+      return false;
     }
   };
 
-  const scheduleMealReminders = useCallback(async (enable: boolean) => {
+  const scheduleMealReminders = useCallback(async (enable: boolean, accountId?: string) => {
     try {
       if (enable) {
         const hasPerm = await registerForPushNotificationsAsync();
         if (!hasPerm) {
-          await AsyncStorage.setItem(STORAGE_KEY, 'false');
+          await revokeConsent();
           setEnabledState(false);
           return false;
         }
 
-        await Notifications.cancelAllScheduledNotificationsAsync();
+        // Consimțământ explicit, persistat înainte de orice programare.
+        await grantConsent();
 
-        // 1. Mic dejun (08:00)
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'NutriAI • 🍳 Bună dimineața!',
-            body: 'Timpul pentru micul dejun. Scanează sau înregistrează masa în NutriAI!',
-            sound: true,
-            color: '#CCFF00',
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DAILY,
-            hour: 8,
-            minute: 0,
-          },
-        });
+        // Delegația programării către lib/notifications (sursa unică), cu
+        // înregistrarea id-urilor create (cancel = doar al nostru).
+        const ids = await scheduleDailyMealReminders(DEFAULT_MEAL_REMINDERS, accountId);
+        if (ids.length === 0) {
+          await revokeConsent();
+          setEnabledState(false);
+          showBanner({
+            title: 'Eroare',
+            message: 'Nu s-au putut programa notificările.',
+            type: 'warning',
+          });
+          return false;
+        }
 
-        // 2. Prânz (13:00)
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'NutriAI • 🥗 Poftă bună la prânz!',
-            body: 'Adaugă prânzul în jurnal pentru a rămâne în obiectivul caloric și de proteine.',
-            sound: true,
-            color: '#CCFF00',
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DAILY,
-            hour: 13,
-            minute: 0,
-          },
-        });
-
-        // 3. Cină (19:30)
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'NutriAI • 🍽️ Jurnalul de seară',
-            body: 'Loghează cina și verifică dacă ți-ai atins țintele macro pentru azi!',
-            sound: true,
-            color: '#CCFF00',
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DAILY,
-            hour: 19,
-            minute: 30,
-          },
-        });
-
-        await AsyncStorage.setItem(STORAGE_KEY, 'true');
         setEnabledState(true);
         showBanner({
           title: 'Remindere Activate',
@@ -146,8 +118,9 @@ export function useNotifications() {
         });
         return true;
       } else {
-        await Notifications.cancelAllScheduledNotificationsAsync();
-        await AsyncStorage.setItem(STORAGE_KEY, 'false');
+        // Opt-out persistat + anulare DOAR a remindere-lor create de aplicație.
+        await revokeConsent();
+        await cancelManagedReminders();
         setEnabledState(false);
         showBanner({
           title: 'Remindere Dezactivate',

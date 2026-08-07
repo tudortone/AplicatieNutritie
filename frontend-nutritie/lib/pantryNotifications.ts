@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ProdusCamara } from '../hooks/useCamara';
+import { getConsent } from './notificationConsent';
 
 const PANTRY_NOTIF_KEY = 'nutriai_pantry_expiry_notif_enabled';
 
@@ -15,7 +16,15 @@ const PANTRY_NOTIF_KEY = 'nutriai_pantry_expiry_notif_enabled';
  * Verifică produsele din cămară și programează sau anulează notificarea locală de expirare (ora 10:00 zilnic).
  */
 export async function checkAndSchedulePantryExpiryNotification(produse: ProdusCamara[]): Promise<void> {
-  // Dacă rulăm în Expo Go (pe Android în mod special din SDK 51+ nu suportă push pe cloud, dar local schedule funcționează)
+  // TASK-16: notificările de cămară respectă același consimțământ explicit ca
+  // mementourile de masă. Fără consimțământ NU cerem permisiunea OS și NU
+  // programăm nimic (evităm auto-activarea la fiecare deschidere a ecranului).
+  const consent = await getConsent();
+  if (!consent.accepted) {
+    return;
+  }
+
+  // Dacă rulăm în Expo Go (pe Android în mod special Sdk 51+ nu suportă push pe cloud, dar local schedule funcționează)
   // Încercăm să obținem permisiunile
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();

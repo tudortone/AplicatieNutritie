@@ -22,7 +22,12 @@ import OfflineBanner from '../components/OfflineBanner';
 import { GlobalErrorBoundary } from '../components/GlobalErrorBoundary';
 import { buildApiUrl } from '../lib/api';
 import { restaureazaProfilLocal, type ProfilRestaurare } from '../lib/onboarding';
-import { scheduleDailyMealReminders } from '../lib/notifications';
+import { scheduleDailyMealReminders, DEFAULT_MEAL_REMINDERS } from '../lib/notifications';
+import {
+  getConsent,
+  getManagedReminders,
+  cancelManagedReminders,
+} from '../lib/notificationConsent';
 import { processOfflineQueue, type SupabaseMinimalClient } from '../lib/offlineQueue';
 import { supabase } from '../supabase';
 import '../i18n';
@@ -154,10 +159,32 @@ function RootNavigator() {
   useEffect(() => { syncFromAsyncStorage(); }, [syncFromAsyncStorage]);
 
   useEffect(() => {
-    if (session) {
-      scheduleDailyMealReminders().catch(() => {});
-      processOfflineQueue(supabase as unknown as SupabaseMinimalClient).catch(() => {});
+    // TASK-16: fără auto-programare la login. Doar aducem notificările în
+    // acord cu consimțământul PERSISTAT: dacă utilizatorul a fost de acord dar nu
+    // mai are remindere programate (restart) sau contul s-a schimbat, reprogramăm;
+    // dacă n-a fost de acord dar există remindere vechi, le anulăm. Fără prompt OS.
+    if (!session) {
+      cancelManagedReminders().catch(() => {});
+      return;
     }
+    const accountId = session.user?.id;
+    (async () => {
+      try {
+        const consent = await getConsent();
+        const managed = await getManagedReminders();
+        const needsReschedule =
+          consent.accepted &&
+          (managed.ids.length === 0 || managed.accountId !== accountId);
+        if (needsReschedule) {
+          await scheduleDailyMealReminders(DEFAULT_MEAL_REMINDERS, accountId);
+        } else if (!consent.accepted && managed.ids.length > 0) {
+          await cancelManagedReminders();
+        }
+      } catch (e) {
+        if (__DEV__) console.warn('[Reminders] Reconciliere eșuată:', e);
+      }
+    })();
+    processOfflineQueue(supabase as unknown as SupabaseMinimalClient).catch(() => {});
   }, [session]);
 
   useEffect(() => {

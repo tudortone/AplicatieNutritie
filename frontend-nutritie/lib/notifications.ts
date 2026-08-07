@@ -1,5 +1,9 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import {
+  getConsent,
+  cancelManagedReminders,
+  setManagedReminders,
+} from './notificationConsent';
 
 export interface NotificationScheduleConfig {
   id: string;
@@ -20,7 +24,7 @@ export const DEFAULT_MEAL_REMINDERS: NotificationScheduleConfig[] = [
   {
     id: 'reminder_pranz',
     title: '🥗 Ora prânzului!',
-    body: 'Scanează mâncarea pentru a-ți urmări macronuțrienții.',
+    body: 'Scanează mâncarea pentru a-ți urmări macronutrienții.',
     hour: 13,
     minute: 0,
   },
@@ -47,16 +51,32 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   }
 }
 
+/**
+ * Programează mementurile zilnice de masă.
+ *
+ * TASK-16: gated pe consimțământ — fără consimțământ explicit (getConsent) NU
+ * programează și NU cere permisiunea OS. Anulează DOAR mementurile create de
+ * aplicație (cancelManagedReminders), nu cancel-all. Trigger-ul DailyTriggerInput
+ * este ora locală a dispozitivului (fără câmp de fusi orar; OS-ul gestionează
+ * ora de vară/iernă) — nu adăuga aici un câmp timezone.
+ */
 export async function scheduleDailyMealReminders(
-  reminders: NotificationScheduleConfig[] = DEFAULT_MEAL_REMINDERS
+  reminders: NotificationScheduleConfig[] = DEFAULT_MEAL_REMINDERS,
+  accountId?: string
 ): Promise<string[]> {
+  const consent = await getConsent();
+  if (!consent.accepted) {
+    return [];
+  }
+
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) {
     return [];
   }
 
-  // Curățăm mementourile anterioare pentru a evita duplicatele
-  await cancelAllMealReminders();
+  // Anulăm DOAR mementurile create anterior de aplicație, apoi le reprogramăm —
+  // evităm duplicatele fără a atinge notificări străine.
+  await cancelManagedReminders();
 
   const scheduledIds: string[] = [];
 
@@ -82,13 +102,10 @@ export async function scheduleDailyMealReminders(
     }
   }
 
+  await setManagedReminders(accountId, scheduledIds);
   return scheduledIds;
 }
 
 export async function cancelAllMealReminders(): Promise<void> {
-  try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
-  } catch {
-    // Ignoră erorile la anulare
-  }
+  await cancelManagedReminders();
 }
