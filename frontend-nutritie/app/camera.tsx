@@ -32,6 +32,13 @@ import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInp
 import { uploadImageToImageKit } from '@/lib/imagekit';
 import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts } from '@/lib/imageOptimizer';
 
+const SCAN_STEPS = [
+  'Optimizare imagine & pregătire...',
+  'Se trimite la modelul vizual AI...',
+  'Se identifică ingredientele și alimentele...',
+  'Se calculează gramajele și valorile nutriționale...',
+];
+
 export default function CameraScreen() {
   const { colors } = useTheme();
   const { width, height } = useWindowDimensions();
@@ -52,7 +59,9 @@ export default function CameraScreen() {
   const [scanError, setScanError] = useState<string | null>(null);
 
   const [seIncarca, setSeIncarca] = useState(false);
+  const [scanStepIndex, setScanStepIndex] = useState(0);
   const [selectedAI, setSelectedAI] = useState<'auto' | 'gemini' | 'openai' | 'groq'>('auto');
+
   const [aiMenuVisible, setAiMenuVisible] = useState(false);
   const [cautareProdusVisible, setCautareProdusVisible] = useState(false);
   const [aiStatus, setAiStatus] = useState<Record<string, { nume: string; status: string; secundeRamase: number; mesaj: string }>>({});
@@ -77,6 +86,17 @@ export default function CameraScreen() {
       isMountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!seIncarca) {
+      setScanStepIndex(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setScanStepIndex((prev) => (prev < SCAN_STEPS.length - 1 ? prev + 1 : prev));
+    }, 1800);
+    return () => clearInterval(interval);
+  }, [seIncarca]);
 
   useFocusEffect(
     useCallback(() => {
@@ -607,10 +627,24 @@ export default function CameraScreen() {
               <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay} accessibilityLiveRegion="polite">
                 <BlurView intensity={60} tint="dark" style={styles.scanningBlur}>
                   <ActivityIndicator size="large" color={colors.accent} />
-                  <Text style={[styles.scanningText, { color: colors.accent }]}>Analizez farfuria...</Text>
+                  <Animated.Text key={scanStepIndex} entering={FadeInUp.duration(250)} style={[styles.scanningText, { color: colors.accent }]}>
+                    {SCAN_STEPS[scanStepIndex]}
+                  </Animated.Text>
+                  <View style={styles.stepProgressDots}>
+                    {SCAN_STEPS.map((_, idx) => (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.stepDot,
+                          { backgroundColor: idx <= scanStepIndex ? colors.accent : 'rgba(255,255,255,0.2)' }
+                        ]}
+                      />
+                    ))}
+                  </View>
                 </BlurView>
               </Animated.View>
             )}
+
           </View>
           <Text style={styles.scanHint}>Încadrează farfuria clar și luminos</Text>
         </View>
@@ -879,8 +913,11 @@ const styles = StyleSheet.create({
   cornerBL: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 16 },
   cornerBR: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 16 },
   scanningOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 24, overflow: 'hidden' },
-  scanningBlur: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scanningText: { fontWeight: '700', fontSize: 16, marginTop: 16 },
+  scanningBlur: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
+  scanningText: { fontWeight: '700', fontSize: 15, marginTop: 16, textAlign: 'center' },
+  stepProgressDots: { flexDirection: 'row', gap: 6, marginTop: 14, alignItems: 'center' },
+  stepDot: { width: 8, height: 8, borderRadius: 4 },
+
   scanHint: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '500', marginTop: 24, letterSpacing: 0.5 },
 
   resultSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 40, borderTopRightRadius: 40, overflow: 'hidden', borderWidth: 1 },
