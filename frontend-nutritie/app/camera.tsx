@@ -66,31 +66,13 @@ export default function CameraScreen() {
   // GDPR sa poata identifica si sterge assetul media de pe CDN (nu doar URL-ul).
   const imageKitFileIdRef = useRef<string | null>(null);
   const draftCurrentUriRef = useRef<string | null>(null);
+  // U-03: garanteaza ca dialogul de recuperare a draft-ului apare o singura data
+  // pe sesiunea ecranului, chiar daca efectul se re-executa la schimbarea tokenului.
+  const draftPromptAfisatRef = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
     isMountedRef.current = true;
-    listPendingDrafts().then((pending) => {
-      if (pending.length > 0 && isMountedRef.current) {
-        const ultimulDraft = pending[pending.length - 1];
-        Alert.alert(
-          'Imagine neanalizată',
-          'Există o poză neanalizată din sesiunea anterioară. Dorești să reiei analiza?',
-          [
-            {
-              text: 'Renunță',
-              style: 'destructive',
-              onPress: () => discardLocalImageDraft(ultimulDraft).catch(() => {}),
-            },
-            {
-              text: 'Reia analiza',
-              onPress: () => analizeazaImaginea(ultimulDraft),
-            },
-          ],
-        );
-      }
-    }).catch(() => {});
-
     return () => {
       isMountedRef.current = false;
     };
@@ -212,7 +194,7 @@ export default function CameraScreen() {
           throw new Error(message);
         }
 
-        // Analiza a reușit → ștergem draftul local persistent
+        // Analiza a reșit → ștergem draftul local persistent
         await discardLocalImageDraft(draftPersistentUri).catch(() => {});
 
         const normalized = payload
@@ -264,6 +246,46 @@ export default function CameraScreen() {
     },
     [session?.access_token, selectedAI],
   );
+
+  // U-03: recuperarea draft-urilor neanalizate.
+  //
+  // Efectul stă DUPĂ `analizeazaImaginea` intenționat: referirea ei în dep array
+  // înaintea declarației `const` ar arunca ReferenceError (temporal dead zone).
+  //
+  // Depinde de `session?.access_token` pentru că la montare AuthContext încă se
+  // încarcă și sesiunea e null. Pornit cu `[]`, dialogul ar fi apărut cu un
+  // closure învechit, iar "Reia analiza" ar fi eșuat cu "Sesiunea a expirat".
+  useEffect(() => {
+    if (draftPromptAfisatRef.current) return;
+    if (!session?.access_token) return;
+    draftPromptAfisatRef.current = true;
+
+    listPendingDrafts()
+      .then((pending) => {
+        if (pending.length === 0 || !isMountedRef.current) return;
+        const ultimulDraft = pending[pending.length - 1];
+        Alert.alert(
+          'Imagine neanalizată',
+          'Există o poză neanalizată din sesiunea anterioară. Dorești să reiei analiza?',
+          [
+            {
+              text: 'Renunță',
+              style: 'destructive',
+              onPress: () => {
+                discardLocalImageDraft(ultimulDraft).catch(() => {});
+              },
+            },
+            {
+              text: 'Reia analiza',
+              onPress: () => {
+                analizeazaImaginea(ultimulDraft);
+              },
+            },
+          ],
+        );
+      })
+      .catch(() => {});
+  }, [session?.access_token, analizeazaImaginea]);
 
   const anuleazaScanarea = useCallback(() => {
     if (draftCurrentUriRef.current) {
