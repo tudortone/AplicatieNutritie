@@ -59,6 +59,14 @@ describe('P-10 — Idempotență Critică reală pe rute AI', () => {
     const createAiRouter = require('../routes/ai');
     app = express();
     app.use(express.json());
+    // P-10: globalul (fail-open) trebuie sa impartaseasca ACELASI registru ca ruta
+    // critica. Altfel, atunci cand REDIS_URL e absent, globalul foloseste
+    // `registruImplicit` (fallback local că funcționează) și revendica cheia inaintea
+    // rutei critice — cazul "registru căzut" (test 3) nu mai ajunge la ruta critica si
+    // testul trece ca 200 in loc de 503. Cu un singur registru injectabil, unicul
+    // semnal (erupe/store invert cutiar) afecteaza si globalul, ca in productie.
+    const middlewareGlobal = creeazaMiddlewareIdempotenta({ registru: registruFake });
+    app.use(middlewareGlobal);
 
     const aiRouter = createAiRouter({
       requireAuth: (req, res, next) => {

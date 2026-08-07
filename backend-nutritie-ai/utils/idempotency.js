@@ -152,11 +152,12 @@ function creeazaMiddlewareIdempotenta({
     }
 
     const cacheKey = construiesteCheie(req, keyCurata);
+    let revendicat;
     try {
       const existent = await registru.get(cacheKey);
       if (raspundeDinRegistru(res, existent, amprenta)) return undefined;
 
-      const revendicat = await revendicaAtomic(registru, cacheKey, {
+      revendicat = await revendicaAtomic(registru, cacheKey, {
         stare: 'procesare',
         amprenta,
         inceputLa: Date.now(),
@@ -184,8 +185,17 @@ function creeazaMiddlewareIdempotenta({
         });
       }
       // Fail-open pe rute idempotente prin natura lor
+      // P-10 (C1-S1): NU marcam _idempotentaAplicata aici. Daca marcam flag-ul
+      // înainte de orice interactiune cu store-ul (fail-open), un middleware
+      // critic aflat mai jos pe aceeasi cerere e sarita de garda si ruta mergea
+      // mai departe la 200 in loc de 503 — fail-closed-ul nu mai putea trage.
       return next();
     }
+
+    // Doar o revendicare reusita da dreptul la flag: middleware-ul urmator
+    // trebuie sa stie ca idempotenta a fost deja aplicata. Pe fail-open, flag-ul
+    // ramane neset diverga, ca garda critica de jos sa mai aiba o sansa.
+    req._idempotentaAplicata = true;
 
     let finalizat = false;
     const originalJson = res.json.bind(res);
