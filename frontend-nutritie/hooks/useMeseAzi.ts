@@ -222,6 +222,19 @@ export function useMeseAzi(dataSelectata?: Date) {
     return { meseGrupate: grupuri, categoriiMeseList: listaOrd };
   }, [mese]);
 
+  const optimisticDeleteMeal = useCallback((id: string) => {
+    setMese((prev) => {
+      const deSters = prev.find((m) => m.id === id);
+      if (!deSters) return prev;
+      setTotalCalorii((c) => Math.max(0, c - (deSters.calorii || 0)));
+      setTotalProteine((p) => Math.max(0, p - (deSters.proteine || 0)));
+      setTotalGrasimi((g) => Math.max(0, g - (deSters.grasimi || 0)));
+      setTotalCarbohidrati((cb) => Math.max(0, cb - (deSters.carbohidrati || 0)));
+      setNumarMese((n) => Math.max(0, n - 1));
+      return prev.filter((m) => m.id !== id);
+    });
+  }, []);
+
   return {
     mese,
     meseGrupate,
@@ -239,5 +252,7 @@ export function useMeseAzi(dataSelectata?: Date) {
     user,
     loading,
     refresh: fetchData,
+    optimisticDeleteMeal,
   };
 }
+

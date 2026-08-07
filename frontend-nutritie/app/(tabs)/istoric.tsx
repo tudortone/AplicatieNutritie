@@ -45,7 +45,8 @@ export default function HistoryScreen() {
     totalProteine,
     caloriiTinta,
     loading,
-    refresh
+    refresh,
+    optimisticDeleteMeal
   } = useMeseAzi(dataSelectata);
   const { zileCuMese, refreshZileCuMese } = useZileCuMese();
 
@@ -75,7 +76,7 @@ export default function HistoryScreen() {
     await Promise.all([refresh(false, true), refreshZileCuMese()]);
   }, [refresh, refreshZileCuMese]);
 
-  // 1. Ștergere masă cu confirmare
+  // 1. Ștergere masă cu confirmare și UI optimist (U-09)
   const handleDelete = (masa: Masa) => {
     Alert.alert(
       t('alerts.titluri.stergereMasa'),
@@ -86,16 +87,21 @@ export default function HistoryScreen() {
           text: t('alerts.butoane.sterge'),
           style: "destructive",
           onPress: async () => {
+            // UI Optimist: eliminare instantanee din starea locală
+            optimisticDeleteMeal(masa.id);
             try {
               const { error } = await supabase.from('mese').delete().eq('id', masa.id).eq('user_id', masa.user_id);
               if (error) {
                 console.error("[Istoric] Stergere masa esuata:", error.message);
-                // FIX UI: utilizatorul vedea mesajul brut de la Postgres.
+                // Rollback optimist la eroare
+                refresh();
                 Alert.alert(t('alerts.titluri.nuAmPututStergeMasa'), t('alerts.mesaje.incearcaDinNou'));
               } else {
-                refresh();
+                refreshZileCuMese();
               }
             } catch {
+              // Rollback optimist
+              refresh();
               Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.problemaConexiune'));
             }
           }
@@ -103,6 +109,7 @@ export default function HistoryScreen() {
       ]
     );
   };
+
 
   // 2. Deschidere Bottom Sheet pentru editare masă
   const openEditModal = useCallback((masa: Masa) => {
