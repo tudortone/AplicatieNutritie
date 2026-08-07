@@ -6,6 +6,7 @@
 
 const Sentry = require('@sentry/node');
 const { stergeIdentitateClerk, stergeActiveImageKit } = require('../routes/gdpr');
+const { inregistreazaUtilizareAdmin } = require('./clientUtilizator');
 
 /**
  * Singurele coduri care înseamnă „tabela nu există pe schema curentă" și pe care
@@ -16,6 +17,9 @@ const CODURI_TABELA_INEXISTENTA = new Set(['42P01', 'PGRST205', 'PGRST106']);
 
 async function stergeRanduriDbUtilizator(supabaseAdmin, userId) {
   if (!userId || !supabaseAdmin) return;
+  // C1-S4: stergere admin (service_role) pe tabele de utilizator, fara context —
+  // calea GDPR worker (reluarea stergerilor intrerupte din outbox).
+  inregistreazaUtilizareAdmin();
   const tabele = ['mese', 'profil', 'antrenamente', 'barcode_estimari_utilizator', 'audit_log', 'credite_ai'];
   for (const tabela of tabele) {
     // supabase-js NU aruncă pentru erori de bază de date: le întoarce în `error`.

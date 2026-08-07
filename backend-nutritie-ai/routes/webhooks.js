@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const { Webhook } = require('svix');
 const { tasks } = require('@trigger.dev/sdk/v3');
 const Sentry = require('@sentry/node');
+const { inregistreazaUtilizareAdmin } = require('../utils/clientUtilizator');
 
 class EroareTranzitorie extends Error {
   constructor(mesaj, cauza) {
@@ -255,6 +256,8 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
           grasimi_tinta: Number(meta.grasimi_tinta) || 70,
           updated_at: new Date().toISOString(),
         });
+        // C1-S4: upsert admin pe `profil` (service_role, fara JWT Supabase — webhook Clerk).
+        inregistreazaUtilizareAdmin();
 
         if (config.triggerSecretKey) {
           try {
@@ -275,6 +278,8 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
             nume: `${data.first_name || ''} ${data.last_name || ''}`.trim() || null,
             updated_at: new Date().toISOString(),
           }).eq('user_id', mapare.supabase_user_id);
+          // C1-S4: update admin pe `profil` (service_role, fara JWT Supabase — webhook Clerk).
+          inregistreazaUtilizareAdmin();
         }
 
         if (config.triggerSecretKey) {
@@ -298,6 +303,8 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
           await supabaseAdmin.from('antrenamente').delete().eq('user_id', supabaseUserId);
           await supabaseAdmin.from('profil').delete().eq('user_id', supabaseUserId);
           await supabaseAdmin.from('clerk_user_map').delete().eq('clerk_user_id', clerkUserId);
+          // C1-S4: stergere admin pe tabele de utilizator (service_role, fara JWT Supabase — webhook Clerk).
+          inregistreazaUtilizareAdmin();
         }
 
         if (config.triggerSecretKey) {

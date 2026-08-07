@@ -1,38 +1,47 @@
 const globals = require("globals");
 
 // C1-S3: tabele cu politici RLS pe `auth.uid() = user_id`. Un acces direct prin
-// `supabaseAdmin.from(...)` (service_role) ar ocoli RLS prin definitie.
-// Acestea trebuie servite DOAR prin `tabelUtilizator(ctx, ...)`, care construieste
-// clientul legat de JWT si refuza omisiunea filtrului. Rule-listeaza tabelele
-// inregistrate in `utils/clientUtilizator.js` (TABELE_CU_RLS_UTILIZATOR).
-const TABELE_RLS_UTILIZATOR = [
-  "mese",
-  "profil",
-  "antrenamente",
-  "produse_camara",
-  "gamificare",
-  "workout_logs",
-  "audit_log",
-  "barcode_estimari_utilizator",
-  "ai_jobs",
-  "credite_ai",
-];
+// clientul service_role (`supabaseAdmin`) ar ocoli RLS prin definitie; aceste
+// tabele trebuie servite DOAR prin `tabelUtilizator(ctx, ...)` pe clientul legat
+// de JWT. Sursa unica de adevar a listei e `utils/clientUtilizator.js`
+// (TABELE_CU_RLS_UTILIZATOR) — importata aici, nu copiata, ca un tabel adaugat
+// acolo sa intre automat sub regula, fara drift intre cele doua locuri.
+const { TABELE_CU_RLS_UTILIZATOR } = require("./utils/clientUtilizator");
 
-// Selector ac: orice `supabaseAdmin.from('<tabela>')` unde `<tabela>` e una din
-// cu RLS. Interzice pe volume de route-uri (fișierele care scriu date de
-// utilizator pe provider Clerk/webhook user.created sunt exceptionare explicit,
-// jos, in blocul de overrides).
+// Interzice `.*from('<tabela-RLS>')` indiferent de numele variabilei care tine
+// clientul service_role. Prinde atat forma directa cat si aliasurile pe care
+// codul le foloseste efectiv:
+//   - supabaseAdmin.from('mese')      (identificator direct)
+//   - ctx.admin.from('mese')          (alias expus de creeazaContextDate)
+//   - req.supabaseAdmin.from('mese')  (client atasat cererii)
+//   - clientAdmin.from('mese')        (variabila redenumita)
+// Omiterea filtrului devine o eroare la lint in loc de o scurgere silentioasa.
+// Scrierile backend-legitime (webhook/GDPR/AI, fara JWT Supabase valid) fac
+// exceptie, listate explicit jos, in blocul de overrides.
 const SELECTOR_SUPABASE_ADMIN_USER_TABLE = {
   selector:
-    "CallExpression[callee.object.name='supabaseAdmin'][callee.property.name='from']" +
+    "CallExpression[callee.object.name=/admin/i][callee.property.name='from']" +
     "[arguments.0.type='Literal'][arguments.0.value=/^(" +
-    TABELE_RLS_UTILIZATOR.join("|") +
+    TABELE_CU_RLS_UTILIZATOR.join("|") +
     ")$/]",
   message:
-    "C1-S3: nu accesa tabela de utilizator prin supabaseAdmin (ocoleste RLS). " +
+    "C1-S3: nu accesa tabela de utilizator prin clientul service_role (ocoleste RLS). " +
     "Foloseste tabelUtilizator(ctx, ...) pe clientul legat al JWT-ului. " +
-    "Doar apeluri inamic/scriere pe baza de webhook confirm fara JWT Supabase " +
-    "fac exceptie, listate explicit in eslint.config.js overrides.",
+    "Doar scrierile pe baza de webhook/GDPR/AI (fara JWT Supabase valid) fac exceptie, " +
+    "listate explicit in eslint.config.js overrides.",
+};
+
+// A doua forma: clientul service_role ca PROPRIETATE a unui obiect
+// (req.supabaseAdmin, this.supabaseAdmin, ctx.clientSupabase). Acolo callee.object
+// e un MemberExpression, deci selectorul de mai sus (care citeste
+// callee.object.name) nu l-ar prinde.
+const SELECTOR_SUPABASE_ADMIN_USER_TABLE_PROPRIETATE = {
+  selector:
+    "CallExpression[callee.object.property.name=/admin/i][callee.property.name='from']" +
+    "[arguments.0.type='Literal'][arguments.0.value=/^(" +
+    TABELE_CU_RLS_UTILIZATOR.join("|") +
+    ")$/]",
+  message: SELECTOR_SUPABASE_ADMIN_USER_TABLE.message,
 };
 
 module.exports = [
@@ -60,7 +69,11 @@ module.exports = [
     // se interzice direct supabaseAdmin pe tabeleul de utilizator. restul trece.
     files: ["routes/**/*.js", "utils/**/*.js"],
     rules: {
-      "no-restricted-syntax": ["error", SELECTOR_SUPABASE_ADMIN_USER_TABLE],
+      "no-restricted-syntax": [
+        "error",
+        SELECTOR_SUPABASE_ADMIN_USER_TABLE,
+        SELECTOR_SUPABASE_ADMIN_USER_TABLE_PROPRIETATE,
+      ],
     },
   },
   {

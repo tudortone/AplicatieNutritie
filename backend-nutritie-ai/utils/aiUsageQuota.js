@@ -9,6 +9,7 @@
  */
 
 const { creeazaContorPartajat } = require('./contorPartajat');
+const { inregistreazaUtilizareAdmin } = require('./clientUtilizator');
 
 const DAILY_LIMIT = 50;
 const WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -47,6 +48,9 @@ function creeazaCheckAiUsageQuota({
         });
 
         if (!error && typeof soldRamas === 'number' && soldRamas >= 0) {
+          // C1-S4: RPC consuma_credit executat prin client admin (service_role),
+          // fara context per-cerere — quota AI.
+          inregistreazaUtilizareAdmin();
           res.setHeader('X-Credite-Ramase', String(soldRamas));
           res.setHeader('X-AI-Quota-Remaining', String(soldRamas));
           return next();

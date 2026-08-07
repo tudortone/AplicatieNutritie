@@ -24,7 +24,7 @@
  */
 
 const express = require('express');
-const { tabelUtilizator } = require('../utils/clientUtilizator');
+const { tabelUtilizator, inregistreazaUtilizareAdmin } = require('../utils/clientUtilizator');
 
 const IMAGEKIT_API = ['https:', '', 'api.imagekit.io', 'v1'].join('/');
 const CLERK_USERS_API = ['https:', '', 'api.clerk.com', 'v1', 'users'].join('/');
@@ -267,6 +267,10 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         const { error } = await tabelUtilizator(ctx, tabela).delete().eq('user_id', userId);
         if (error) throw error;
       };
+
+      // C1-S4: stergere admin (service_role) pe tabele de utilizator, fara
+      // context — calea GDPR (utilizatorul s-a autentificat si a confirmat).
+      inregistreazaUtilizareAdmin();
 
       await Promise.all([
         sterge('mese'),

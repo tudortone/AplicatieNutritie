@@ -14,6 +14,7 @@ const { construiesteGazdePermise, creeazaValideazaUrlImagine } = require('../uti
 const { numarModel, NUME_FURNIZORI_AI } = require('../services/ai/vision');
 const { EroareAiClient } = require('../services/ai/chat');
 const { createClient } = require('@supabase/supabase-js');
+const { inregistreazaUtilizareAdmin } = require('../utils/clientUtilizator');
 
 /**
  * Rute AI (analiza foto, chat, estimare text, corectie vizual+text) + orfanele
@@ -109,7 +110,12 @@ function createAiRouter({
           .insert({ user_id: req.user.id, status: 'queued' })
           .select('id')
           .single();
-        if (!insertErr) jobId = rand?.id || null;
+        if (!insertErr) {
+          jobId = rand?.id || null;
+          // C1-S4: scriere admin (service_role) pe `ai_jobs` — crearea job-ului,
+          // prin clientul admin, fara context (calea Trigger.dev).
+          inregistreazaUtilizareAdmin();
+        }
       }
 
       const handle = await tasks.trigger('analiza-mancare-ai', {
@@ -125,6 +131,9 @@ function createAiRouter({
           .from('ai_jobs')
           .update({ trigger_run_id: handle.id })
           .eq('id', jobId);
+        // C1-S4: actualizare admin pe `ai_jobs` — confirmarea trigger_run_id,
+        // prin clientul admin, fara context (calea Trigger.dev).
+        inregistreazaUtilizareAdmin();
       }
 
       return res.status(202).json({

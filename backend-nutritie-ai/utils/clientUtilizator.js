@@ -82,6 +82,11 @@ const TABELE_DOAR_ADMIN = Object.freeze([
 let cereriCuRls = 0;
 let cereriModAdmin = 0;
 let esecuriClientRls = 0;
+// C1-S4: contor pentru accesele de tip admin (service_role) pe tabele de
+// utilizator care NU trec prin creeazaContextDate (suprafețe care folosesc
+// supabaseAdmin direct, fara context per-cerere). Fara el, acele scrieri/ștergeri
+// raman invizibile in metrica — un contor orb.
+let accesModAdmin = 0;
 
 /**
  * Eroare aruncata cand clientul legat de JWT nu poate fi construit pe calea
@@ -100,7 +105,16 @@ class EroareContextDate extends Error {
 
 /** Expune contoarele interne pentru observabilitate (A-3). */
 function getStatisticiClientDate() {
-	return { cereriCuRls, cereriModAdmin, esecuriClientRls };
+	return { cereriCuRls, cereriModAdmin, esecuriClientRls, accesModAdmin };
+}
+
+/**
+ * C1-S4: contorizeaza un acces de tip admin (service_role) pe tabele de
+ * utilizator care NU trec prin creeazaContextDate — suprafețele care folosesc
+ * supabaseAdmin direct (webhook Clerk, GDPR, AI/cota). Apelat o data per acces.
+ */
+function inregistreazaUtilizareAdmin() {
+	accesModAdmin++;
 }
 
 /**
@@ -224,4 +238,5 @@ module.exports = {
 	tabelUtilizator,
 	EroareContextDate,
 	getStatisticiClientDate,
+	inregistreazaUtilizareAdmin,
 };
