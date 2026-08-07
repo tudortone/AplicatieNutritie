@@ -1,7 +1,8 @@
 # INSTRUCȚIUNI PENTRU AI — NutriAI
 
 **Acesta este documentul canonic unic de instrucțiuni pentru asistenții AI care lucrează în acest repo.**
-Versiunile anterioare (`INSTRUCTIUNI_AI_v5.md`, `INSTRUCTIUNI_GEMINI_v6.md`) au fost contopite aici și șterse — nu există altă sursă de instrucțiuni. Dacă o informație din trecut contrazice acest document, acest document are prioritate.
+Versiunile anterioare (`INSTRUCTIUNI_AI_v5.md`, `INSTRUCTIUNI_GEMINI_v6.md`) au fost contopite aici și șterse — nu există altă sursă de instrucțiuni. Dacă o informație din trecut contrazice acest document, acest document are prioritate. Registrul de stare a remedierilor este în **`STARE-REMEDIERE.md`** (vezi P-22).
+
 
 Proiectul are două aplicații:
 - `frontend-nutritie/` — aplicație **Expo (React Native + TypeScript, SDK 54)** cu Expo Router (file-based routing).
