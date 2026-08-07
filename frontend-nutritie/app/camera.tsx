@@ -31,6 +31,8 @@ import FoodScanSuccessModal, {
 import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInput';
 import { uploadImageToImageKit } from '@/lib/imagekit';
 import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts } from '@/lib/imageOptimizer';
+import { pushOfflineMeal, processOfflineQueue, MasaOfflinePayload } from '@/lib/offlineQueue';
+
 
 const SCAN_STEPS = [
   'Optimizare imagine & pregătire...',
@@ -97,6 +99,13 @@ export default function CameraScreen() {
     }, 1800);
     return () => clearInterval(interval);
   }, [seIncarca]);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      processOfflineQueue(supabase).catch(() => {});
+    }
+  }, [session?.user?.id]);
+
 
   useFocusEffect(
     useCallback(() => {
@@ -442,47 +451,48 @@ export default function CameraScreen() {
     }
 
     setIsSavingDiary(true);
-    try {
-      const now = new Date();
+    const now = new Date();
 
-      // FIX 2.5: convertim din per-100g în AlimentDetaliat cu valori absolute
-      const alimente = rezultat.map((r) => {
-        const f = r.estimare_grame / 100;
-        return {
-          nume: r.nume,
-          grame: Math.round(r.estimare_grame),
-          calorii: Math.round((r.calorii_per_100g ?? 0) * f),
-          proteine: Math.round((r.proteine_per_100g ?? 0) * f),
-          carbohidrati: Math.round((r.carbohidrati_per_100g ?? 0) * f),
-          grasimi: Math.round((r.grasimi_per_100g ?? 0) * f),
-          fibre: 0,
-          // Poza scanului, incarcata pe ImageKit CDN (camp JSONB flexibil, fara migrare).
-          // Persistam si fileId-ul ca stergearea GDPR sa poata sterge assetul de pe CDN.
-          ...(imageKitUrlRef.current ? { imageUrl: imageKitUrlRef.current } : {}),
-          ...(imageKitFileIdRef.current ? { imageKitFileId: imageKitFileIdRef.current } : {}),
-        };
-      });
-
-      const totalCalorii = alimente.reduce((s, a) => s + a.calorii, 0);
-      const totalProteine = alimente.reduce((s, a) => s + a.proteine, 0);
-      const totalGrasimi = alimente.reduce((s, a) => s + a.grasimi, 0);
-      const totalCarbohidrati = alimente.reduce((s, a) => s + a.carbohidrati, 0);
-
-      // FIX 2.1 + 2.4: scriem DIRECT în Supabase, cu data/ora locale
-      const { error } = await supabase.from('mese').insert({
-        user_id: session.user.id,
-        nume: rezultat.map((r) => `${r.nume} (${Math.round(r.estimare_grame)}g)`).join(', '),
-        calorii: totalCalorii,
-        proteine: totalProteine,
-        grasimi: totalGrasimi,
-        carbohidrati: totalCarbohidrati,
+    // FIX 2.5: convertim din per-100g în AlimentDetaliat cu valori absolute
+    const alimente = rezultat.map((r) => {
+      const f = r.estimare_grame / 100;
+      return {
+        nume: r.nume,
+        grame: Math.round(r.estimare_grame),
+        calorii: Math.round((r.calorii_per_100g ?? 0) * f),
+        proteine: Math.round((r.proteine_per_100g ?? 0) * f),
+        carbohidrati: Math.round((r.carbohidrati_per_100g ?? 0) * f),
+        grasimi: Math.round((r.grasimi_per_100g ?? 0) * f),
         fibre: 0,
-        tip_masa: getTipMasaDupaOra(now), // FIX: nu mai hardcoda 'gustare'
-        alimente,
-        data: localDayKey(now),
-      });
+        ...(imageKitUrlRef.current ? { imageUrl: imageKitUrlRef.current } : {}),
+        ...(imageKitFileIdRef.current ? { imageKitFileId: imageKitFileIdRef.current } : {}),
+      };
+    });
 
-      if (error) throw error;
+    const totalCalorii = alimente.reduce((s, a) => s + a.calorii, 0);
+    const totalProteine = alimente.reduce((s, a) => s + a.proteine, 0);
+    const totalGrasimi = alimente.reduce((s, a) => s + a.grasimi, 0);
+    const totalCarbohidrati = alimente.reduce((s, a) => s + a.carbohidrati, 0);
+
+    const payloadMasa = {
+      user_id: session.user.id,
+      nume: rezultat.map((r) => `${r.nume} (${Math.round(r.estimare_grame)}g)`).join(', '),
+      calorii: totalCalorii,
+      proteine: totalProteine,
+      grasimi: totalGrasimi,
+      carbohidrati: totalCarbohidrati,
+      fibre: 0,
+      tip_masa: getTipMasaDupaOra(now),
+      alimente,
+      data: localDayKey(now),
+    };
+
+    try {
+      const { error } = await supabase.from('mese').insert(payloadMasa);
+
+      if (error) {
+        throw error;
+      }
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(t('alerts.titluri.succes'), t('alerts.mesaje.masaAdaugataJurnal'), [
@@ -490,11 +500,29 @@ export default function CameraScreen() {
       ]);
     } catch (e: any) {
       console.error('[adaugaInJurnal]', e);
-      Alert.alert(t('alerts.titluri.eroareSalvare'), e?.message ?? t('alerts.mesaje.eroareNecunoscutaSalvareMasa'));
+      // U-04: salvare în coada offline FIFO pe eroare de conexiune/rețea
+      try {
+        const payloadOffline: MasaOfflinePayload = {
+          id: `offline-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+          ...payloadMasa,
+          created_at: now.toISOString(),
+        };
+        await pushOfflineMeal(payloadOffline);
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(
+          'Salvat offline',
+          'Masa a fost salvată local în coada offline și va fi sincronizată automat la reconectarea la rețea.',
+          [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+        );
+      } catch (errOffline) {
+        Alert.alert(t('alerts.titluri.eroareSalvare'), e?.message ?? t('alerts.mesaje.eroareNecunoscutaSalvareMasa'));
+      }
     } finally {
       setIsSavingDiary(false);
     }
   };
+
+
 
   if (!permission) {
     return <View style={[styles.container, { backgroundColor: colors.background }]} />;
