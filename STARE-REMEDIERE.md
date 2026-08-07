@@ -82,7 +82,7 @@ Statusuri: `⬜ NEÎNCEPUT` · `🔄 ÎN LUCRU` · `✅ REZOLVAT` · `⚠️ PAR
 
 | ID | Verdict | Status | Commit | Cum s-a rezolvat | Ce a rămas |
 | --- | --- | --- | --- | --- | --- |
-| P-15 | Test RLS neconectat în CI (auto-skip) | 🔴 activ | ❌ BLOCAT | `87be5c4` | `set -euo pipefail` în pasul de migrări SQL | `INTEGRATION_SUPABASE_URL` lipsă din ci.yml + `RLS_TESTS_REQUIRED=1` + fără PostgREST în CI → testele nu pot trece prin design |
+| P-15 | Test RLS neconectat în CI (auto-skip) | 🟢 rezolvat | ✅ | `87be5c4` + fix C2 | `set -euo pipefail` în pasul de migrări SQL; testul împărțit în (a) probă directă pe Postgres via `SET LOCAL role` + `set_config('request.jwt.claims', …, true)` — rulează mereu în CI, și (b) PostgREST end-to-end opțional care se sare când `INTEGRATION_SUPABASE_URL` lipsește. `request.jwt` claims se setează prin `set_config`, nu `SET ... = $1` | — |
 | P-16/17 | Fără audit/dep-review/secret-scan/EAS + fallback-uri dummy | ⚠️ parțial | ⚠️ PARȚIAL | `87be5c4` + `a219c6e` | Trufflehog filesystem scan, npm audit pe frontend-checks, osv-scanner dep-scan adăugat | Rămâne: verificare efectivă EAS channel |
 | P-08b | Alertă dead-letter doar pe calea de excepție | 🟢 rezolvat | ✅ | `353f9a64` | Erori PostgREST tratate explicit și alertă Sentry pe DEAD_LETTER_WRITE_FAILED | — |
 | P-08c | `created_at` se rescria la conflict în dead-letter | 🟢 rezolvat | ✅ | `656435f` | Migrare `20260810000001_dead_letter_created_at.sql`: trigger `BEFORE UPDATE` care forțează `NEW.created_at := OLD.created_at` | Fără test pe trigger (suita p08 mockuiește Supabase, nu execută SQL); `incercari` tot nu se incrementează la conflict |
