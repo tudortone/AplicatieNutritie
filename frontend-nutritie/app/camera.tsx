@@ -493,14 +493,14 @@ export default function CameraScreen() {
           <Text style={[styles.permissionSub, { color: colors.textSecondary }]}>NutriAI are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.</Text>
           
           <Animated.View entering={FadeInUp.duration(600).delay(200)} style={[styles.permissionBtn, { shadowColor: colors.accent }]}>
-            <TouchableOpacity onPress={requestPermission} accessibilityRole="button" accessibilityLabel="Acordă permisiunea camerei">
+            <TouchableOpacity onPress={requestPermission} accessibilityRole="button" accessibilityLabel="Permite accesul la cameră">
               <LinearGradient colors={colors.accentGradient} style={styles.permissionBtnGrad}>
                 <Text style={[styles.permissionBtnText, { color: colors.background }]}>Permite accesul</Text>
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
 
-          <TouchableOpacity style={styles.cancelLink} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12}>
+          <TouchableOpacity style={styles.cancelLink} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi la ecranul anterior" hitSlop={12}>
             <Text style={[styles.cancelLinkText, { color: colors.textSecondary }]}>Înapoi</Text>
           </TouchableOpacity>
         </View>
@@ -520,7 +520,8 @@ export default function CameraScreen() {
               setAiMenuVisible(prev => !prev);
             }}
             accessibilityRole="button"
-            accessibilityLabel="Alege furnizorul AI pentru analiza imaginii"
+            accessibilityLabel="Selectează furnizorul AI"
+            accessibilityHint="Deschide meniul pentru alegerea modelului AI"
           >
             <View style={[styles.topBadgeBlur, { paddingVertical: 8 }]}>
               <Zap size={14} color={colors.accent} fill={colors.accent} />
@@ -533,7 +534,13 @@ export default function CameraScreen() {
         </View>
 
         {/* Buton X în Dreapta (Fără să se suprapună) */}
-        <TouchableOpacity style={styles.closeButton} onPress={() => { anuleazaScanarea(); router.back(); }} accessibilityRole="button" accessibilityLabel="Închide camera">
+        <TouchableOpacity
+          style={styles.closeButton}
+          onPress={() => { anuleazaScanarea(); router.back(); }}
+          accessibilityRole="button"
+          accessibilityLabel="Închide camera"
+          accessibilityHint="Renunță la scanare și revino la ecranul anterior"
+        >
           <Text style={styles.closeButtonText}>X</Text>
         </TouchableOpacity>
       </View>
@@ -568,7 +575,8 @@ export default function CameraScreen() {
                       setAiMenuVisible(false);
                     }}
                     accessibilityRole="button"
-                    accessibilityLabel={`Selectează AI ${aiKey}`}
+                    accessibilityLabel={`Selectează furnizorul ${aiKey === 'auto' ? 'NutriAI Auto' : aiKey}`}
+                    accessibilityState={{ selected: isSelected }}
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.aiDropdownTitle, isSelected && { color: colors.accent }]}>
@@ -596,7 +604,7 @@ export default function CameraScreen() {
             <View style={[styles.corner, styles.cornerBR, { borderColor: colors.accent }]} />
 
             {seIncarca && (
-              <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay}>
+              <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay} accessibilityLiveRegion="polite">
                 <BlurView intensity={60} tint="dark" style={styles.scanningBlur}>
                   <ActivityIndicator size="large" color={colors.accent} />
                   <Text style={[styles.scanningText, { color: colors.accent }]}>Analizez farfuria...</Text>
@@ -641,7 +649,8 @@ export default function CameraScreen() {
                         setCautareProdusVisible(true);
                       }}
                       accessibilityRole="button"
-                      accessibilityLabel="Adaugă alt produs la masă"
+                      accessibilityLabel="Adaugă alt produs"
+                      accessibilityHint="Deschide căutarea pentru a adăuga un aliment suplimentar"
                     >
                       <Plus size={16} color={colors.accent} />
                       <Text style={[styles.addExtraText, { color: colors.accent, fontWeight: '700' }]}>
@@ -681,13 +690,24 @@ export default function CameraScreen() {
                   </View>
                 </View>
 
-                <TouchableOpacity style={[styles.addBtn, { shadowColor: colors.accent }]} onPress={adaugaInJurnal} accessibilityRole="button" accessibilityLabel="Adaugă masa în jurnal">
+                <TouchableOpacity
+                  style={[styles.addBtn, { shadowColor: colors.accent }]}
+                  onPress={adaugaInJurnal}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Adaugă cele ${Math.round(totalCalculat.calorii)} kilocalorii în jurnal`}
+                  accessibilityState={{ disabled: isSavingDiary, busy: isSavingDiary }}
+                >
                   <LinearGradient colors={colors.accentGradient} style={styles.addBtnGrad}>
                     <Text style={[styles.addBtnText, { color: colors.background }]}>+ Adaugă {Math.round(totalCalculat.calorii)} kcal în Jurnal</Text>
                   </LinearGradient>
                 </TouchableOpacity>
                 
-                <TouchableOpacity style={styles.retryBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); anuleazaScanarea(); }} accessibilityRole="button" accessibilityLabel="Anulează și scanează din nou">
+                <TouchableOpacity
+                  style={styles.retryBtn}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); anuleazaScanarea(); }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Anulează rezultatul și scanează din nou"
+                >
                   <Text style={styles.retryBtnText}>🔄 Anulează & Scanează din nou</Text>
                 </TouchableOpacity>
               </LinearGradient>
@@ -697,7 +717,7 @@ export default function CameraScreen() {
       )}
 
       {scanError && (
-        <View style={[styles.errorCard, { top: insets.top + 78 }]}>
+        <View style={[styles.errorCard, { top: insets.top + 78 }]} accessibilityRole="alert" accessibilityLiveRegion="assertive">
           <Text style={styles.errorText}>{scanError}</Text>
           <Pressable onPress={() => setScanError(null)} accessibilityRole="button" accessibilityLabel="Închide mesajul de eroare">
             <Text style={styles.retryText}>Închide</Text>
@@ -716,7 +736,7 @@ export default function CameraScreen() {
       />
 
       {isSavingDiary && (
-        <View style={styles.savingOverlay}>
+        <View style={styles.savingOverlay} accessibilityLiveRegion="polite">
           <ActivityIndicator size="large" color={colors.accent} />
           <Text style={[styles.savingText, { color: colors.accent }]}>Salvez în jurnal...</Text>
         </View>
@@ -756,6 +776,8 @@ export default function CameraScreen() {
               testID="gallery-button"
               accessibilityRole="button"
               accessibilityLabel="Alege o poză din galerie"
+              accessibilityHint="Deschide galeria foto pentru a selecta o imagine"
+              accessibilityState={{ disabled: seIncarca, busy: seIncarca }}
               style={[styles.galleryBtn, { borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.5)' }]}
               onPress={alegeDinGalerie}
               disabled={seIncarca}
@@ -767,7 +789,9 @@ export default function CameraScreen() {
             <TouchableOpacity
               testID="shutter-button"
               accessibilityRole="button"
-              accessibilityLabel="Scanează mâncarea cu aparatul foto"
+              accessibilityLabel="Fotografiază mâncarea"
+              accessibilityHint="Realizează o poză farfuriei și pornește analiza AI"
+              accessibilityState={{ disabled: seIncarca, busy: seIncarca }}
               style={[styles.shutterBtn, { shadowColor: colors.accent, borderColor: colors.accent + '4D' }]}
               onPress={analizeazaFoto}
               disabled={seIncarca}
@@ -788,6 +812,7 @@ export default function CameraScreen() {
           <Text style={styles.shutterLabel}>Apasă pe buton sau alege o poză din galerie</Text>
         </Animated.View>
       )}
+
     </View>
   );
 }
