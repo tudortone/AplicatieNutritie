@@ -92,5 +92,26 @@
       "sterge": "Șterge",
       "deconecteaza": "Deconectează"
     }
+  },
+  "offline": {
+    "salvatOffline": "Salvat offline",
+    "masaSalvataOffline": "Masa a fost salvată local în coada offline și va fi sincronizată automat la reconectarea la rețea."
+  },
+  "notifications": {
+    "breakfastTitle": "☀️ Bună dimineața!",
+    "breakfastBody": "Nu uita să îți înregistrezi micul dejun în NutriAI.",
+    "lunchTitle": "🥗 Ora prânzului!",
+    "lunchBody": "Scanează mâncarea pentru a-ți urmări macronuțrienții.",
+    "dinnerTitle": "🌙 Bună seara!",
+    "dinnerBody": "Adaugă cina pentru a-ți completa jurnalul alimentar de azi."
+  },
+  "camera": {
+    "steps": {
+      "optimizing": "Optimizare imagine & pregătire...",
+      "sending": "Se trimite la modelul vizual AI...",
+      "identifying": "Se identifică ingredientele și alimentele...",
+      "calculating": "Se calculează gramajele și valorile nutriționale..."
+    }
   }
 }
+

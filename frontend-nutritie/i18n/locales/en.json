@@ -92,5 +92,26 @@
       "sterge": "Delete",
       "deconecteaza": "Log out"
     }
+  },
+  "offline": {
+    "salvatOffline": "Saved Offline",
+    "masaSalvataOffline": "Meal saved locally in offline queue and will auto-sync when network reconnects."
+  },
+  "notifications": {
+    "breakfastTitle": "☀️ Good morning!",
+    "breakfastBody": "Don't forget to log your breakfast in NutriAI.",
+    "lunchTitle": "🥗 Lunch time!",
+    "lunchBody": "Scan your food to track your macros.",
+    "dinnerTitle": "🌙 Good evening!",
+    "dinnerBody": "Add your dinner to complete today's food log."
+  },
+  "camera": {
+    "steps": {
+      "optimizing": "Optimizing image & preparing...",
+      "sending": "Sending to AI vision model...",
+      "identifying": "Identifying ingredients and food...",
+      "calculating": "Calculating grams and nutrition values..."
+    }
   }
 }
+
