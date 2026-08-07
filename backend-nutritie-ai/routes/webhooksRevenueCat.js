@@ -86,6 +86,15 @@ function createWebhooksRevenueCatRouter({ supabaseAdmin, config }) {
 
         if (crediteDelta === 0) {
           console.warn(`[RevenueCat] Produs nerecunoscut: ${productId}. Creditele nu au fost acordate.`);
+          await inregistreazaCreditEsuat({
+            supabaseAdmin,
+            eventId,
+            appUserId: userId,
+            productId,
+            credite: 0,
+            motiv: 'PRODUCT_NOT_IN_CREDIT_AMOUNTS',
+            payload: event,
+          });
           return res.json({ ok: true, avertisment: `Produs ${productId} neconfigurat în CREDIT_AMOUNTS.` });
         }
 

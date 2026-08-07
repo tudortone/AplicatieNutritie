@@ -171,6 +171,8 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
     expect(res.status).toBe(200);
     expect(res.body.avertisment).toContain('neconfigurat');
     expect(admin.rpc).not.toHaveBeenCalled();
+    expect(admin.esuate.length).toBe(1);
+    expect(admin.esuate[0].motiv).toBe('PRODUCT_NOT_IN_CREDIT_AMOUNTS');
   });
 
   test('nutri_credits_150_ios acordă exact 150 credite', async () => {
