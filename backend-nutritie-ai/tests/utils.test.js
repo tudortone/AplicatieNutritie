@@ -14,7 +14,7 @@ const { construiesteIstoricSigur, valideazaIngrediente } = require('../utils/pro
 const { Semafor } = require('../utils/semafor');
 const { callWithTimeout, callWithSoftTimeout, TimeoutAiError } = require('../utils/httpTimeout');
 const { StoreCuRezerva } = require('../utils/storePartajat');
-const { creeazaContextDate, EroareContextDate } = require('../utils/clientUtilizator');
+const { creeazaContextDate, EroareContextDate, TABELE_CU_RLS_UTILIZATOR, tabelUtilizator } = require('../utils/clientUtilizator');
 const { creeazaServiciuChat, EroareAiClient } = require('../services/ai/chat');
 
 describe('parseJsonFromLlm', () => {
@@ -199,6 +199,23 @@ describe('clientUtilizator (A-3)', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  it('C1-S2: ai_jobs si credite_ai sunt tabele utilizator cu politici RLS (nu mai respinse)', () => {
+    expect(TABELE_CU_RLS_UTILIZATOR).toContain('ai_jobs');
+    expect(TABELE_CU_RLS_UTILIZATOR).toContain('credite_ai');
+  });
+
+  it('C1-S2: tabelUtilizator accepta ai_jobs pe clientul cu RLS (ctx cu token valid)', () => {
+    const dbFake = { from: jest.fn((t) => ({ _tabel: t })) };
+    const ctx = { db: dbFake, userId: 'u1' };
+    const q = tabelUtilizator(ctx, 'ai_jobs');
+    expect(dbFake.from).toHaveBeenCalledWith('ai_jobs');
+    expect(q._tabel).toBe('ai_jobs');
+  });
+
+  it('C1-S2: barcode_cache ramane backend-only (nu poate fi accesat prin tabelUtilizator)', () => {
+    expect(() => tabelUtilizator({ db: {}, userId: 'u1' }, 'barcode_cache')).toThrow();
   });
 });
 

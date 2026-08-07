@@ -20,7 +20,7 @@ const { TokenCache } = require('./utils/tokenCache');
 const { rezolvaIdentitate, EroareIdentitate } = require('./utils/identitate');
 const { callWithTimeout } = require('./utils/httpTimeout');
 const { Semafor } = require('./utils/semafor');
-const { creeazaContextDate, EroareContextDate } = require('./utils/clientUtilizator');
+const { creeazaContextDate, EroareContextDate, getStatisticiClientDate } = require('./utils/clientUtilizator');
 const { idempotencyMiddleware, idempotencyMiddlewareCritic } = require('./utils/idempotency');
 const { creeazaCheckAiUsageQuota } = require('./utils/aiUsageQuota');
 const createGdprRouter = require('./routes/gdpr');
@@ -338,6 +338,7 @@ const userR = createUserRouter({
 const statusR = createStatusRouter({
   getProviderStatus: serviciuCascada.getProviderStatus,
   getAiStatistici,
+  getStatisticiClientDate,
   requireAuth,
   statusLimiter,
 });

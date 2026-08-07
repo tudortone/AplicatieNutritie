@@ -64,6 +64,12 @@ const TABELE_CU_RLS_UTILIZATOR = Object.freeze([
 	'workout_logs',
 	'audit_log',
 	'barcode_estimari_utilizator',
+	// C1-S2: `ai_jobs` (20260806000001 + 20260807000001) și `credite_ai`
+	// (20260807000003) au politici `auth.uid()=user_id` pentru select-own;
+	// le înregistrăm ca atare, ca `tabelUtilizator()` să poate servidate
+	// utilizatorului doar prin clientul cu RLS, nu prin service_role.
+	'ai_jobs',
+	'credite_ai',
 ]);
 
 /** Tabele accesibile exclusiv backendului. Aici clientul admin este corect. */

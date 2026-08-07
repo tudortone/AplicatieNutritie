@@ -28,7 +28,7 @@ function statusPublic(detalii) {
  * PR1-backend: /ai-status este acum protejat cu JWT (requireAuth) + un limiter
  * dedicat (statusLimiter), nu mai este public.
  */
-function createStatusRouter({ getProviderStatus, requireAuth, statusLimiter }) {
+function createStatusRouter({ getProviderStatus, getStatisticiClientDate, requireAuth, statusLimiter }) {
   const router = express.Router();
 
   router.get('/ai-status', statusLimiter, requireAuth, async (req, res, next) => {
@@ -44,6 +44,9 @@ function createStatusRouter({ getProviderStatus, requireAuth, statusLimiter }) {
         openai: statusPublic(openai),
         groq: statusPublic(groq),
         openrouter: statusPublic(openrouter),
+        // C1-S4: observabilitate RLS — câte cereri au rulat prin clientul cu RLS
+        // vs. câte au căzut pe clientul admin (modAdmin). Target: cereriModAdmin -> 0.
+        rls: getStatisticiClientDate ? getStatisticiClientDate() : undefined,
       });
     } catch (err) {
       return next(err);
