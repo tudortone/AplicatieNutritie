@@ -3,6 +3,17 @@ name: CI Pipeline
 on:
   push:
     branches: [ main ]
+  # PR-uri pe main: rulează aceleași verificări (audit, scan-uri, RLS) înainte de merge,
+  # astfel încât un review să poată vedea gate-urile verzi/roșii fără să fie nevoie de merge.
+  pull_request:
+    branches: [ main ]
+  # Scan periodic de securitate (vulnerabilități de dependențe + secret scanning) pe main,
+  # independent de activitatea de push. Cron "17 4 * * 1,4" = luni și joi, 04:17 UTC.
+  # Minute/ore alese în afara celor rotunde (00/30) ca să evităm suprapunerea cu fluxurile
+  # existente. Într-o rulare scheduled github.ref = refs/heads/main, iar niciun job nu citește
+  # context de pull_request, deci contextul gol nu poate strica workflow-ul.
+  schedule:
+    - cron: '17 4 * * 1,4'
 
 # Least-privilege: niciun job nu are nevoie de token cu drepturi de scriere
 # (workflow-ul doar rulează verificări read-only pe cod). Dacă în viitor un job
@@ -43,8 +54,8 @@ jobs:
       - name: Run ESLint
         run: npm run lint --if-present
 
-      - name: Audit npm dependencies (high severity)
-        run: npm audit --audit-level=high
+      - name: Audit npm dependencies (moderate severity)
+        run: npm audit --audit-level=moderate
 
       - name: Run Tests
         env:
@@ -98,6 +109,9 @@ jobs:
             echo "Waiting for Postgres... attempt $i"
             sleep 2
           done
+          # Dacă niciuna din cele 15 încercări nu a reușit, eșuăm aici, rapid și clar,
+          # în loc să lăsăm pașii următori (migrări / teste RLS) să dea erori confuze.
+          pg_isready -h localhost -p 54322 -U postgres || exit 1
 
       - name: Apply Supabase Migrations
         env:
@@ -182,8 +196,8 @@ jobs:
       - name: Run Lint
         run: npm run lint
 
-      - name: Audit npm dependencies (high severity)
-        run: npm audit --audit-level=high
+      - name: Audit npm dependencies (moderate severity)
+        run: npm audit --audit-level=moderate
 
       - name: Run Frontend Tests (P-14)
         run: npm run test:ci
@@ -222,3 +236,4 @@ jobs:
           scan-args: |-
             --lockfile=./backend-nutritie-ai/package-lock.json
             --lockfile=./frontend-nutritie/package-lock.json
+            --lockfile=./tools/scratch_anatomy_svg/package-lock.json

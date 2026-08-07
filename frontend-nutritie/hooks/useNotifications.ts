@@ -113,7 +113,7 @@ export function useNotifications() {
         setEnabledState(true);
         showBanner({
           title: 'Remindere Activate',
-          message: 'Vei primi 3 notificări zilnice (08:00, 13:00 și 19:30) pentru jurnalul tău alimentar.',
+          message: 'Vei primi 3 notificări zilnice (08:30, 13:00 și 19:30) pentru jurnalul tău alimentar.',
           type: 'success',
         });
         return true;

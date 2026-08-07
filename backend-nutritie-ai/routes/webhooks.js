@@ -10,6 +10,7 @@ const { Webhook } = require('svix');
 const { tasks } = require('@trigger.dev/sdk/v3');
 const Sentry = require('@sentry/node');
 const { inregistreazaUtilizareAdmin } = require('../utils/clientUtilizator');
+const { pseudonimizeaza } = require('../utils/sentrySanitize');
 
 class EroareTranzitorie extends Error {
   constructor(mesaj, cauza) {
@@ -230,7 +231,7 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
               payload: data,
             });
             if (scrisDl) {
-              console.warn('[Webhook Clerk] userId Supabase nedeterminat, salvat în dead-letter:', clerkUserId);
+              console.warn('[Webhook Clerk] userId Supabase nedeterminat, salvat în dead-letter:', pseudonimizeaza(clerkUserId));
               return res.status(200).json({
                 ok: false,
                 type,

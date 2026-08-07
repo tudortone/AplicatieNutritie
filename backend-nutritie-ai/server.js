@@ -79,6 +79,30 @@ if (config.sentryDsn) {
     sendDefaultPii: false,
     beforeSend(event) {
       if (event.message) event.message = redacteazaPii(event.message);
+      // TASK-11: exceptiile brute (value + stacktrace) pot incastra PII — mesaje
+      // Supabase/Redis cu date de utilizator sau URL-uri cu parola. Se aplica
+      // aceeasi garda ca pe message, defensiv la forme lipsa/atipice.
+      if (event.exception && Array.isArray(event.exception.values)) {
+        for (const exceptie of event.exception.values) {
+          if (exceptie && typeof exceptie.value === 'string') {
+            exceptie.value = redacteazaPii(exceptie.value);
+          }
+          if (exceptie && exceptie.stacktrace && Array.isArray(exceptie.stacktrace.frames)) {
+            for (const cadru of exceptie.stacktrace.frames) {
+              if (!cadru || typeof cadru !== 'object') continue;
+              for (const camp of ['filename', 'context_line', 'pre_context', 'post_context']) {
+                const valoare = cadru[camp];
+                if (typeof valoare === 'string') {
+                  cadru[camp] = redacteazaPii(valoare);
+                } else if (Array.isArray(valoare)) {
+                  cadru[camp] = valoare.map((linie) =>
+                    typeof linie === 'string' ? redacteazaPii(linie) : linie);
+                }
+              }
+            }
+          }
+        }
+      }
       if (event.request) {
         event.request.data = '[SCRUBBED_PII]';
         event.request.headers = {};
@@ -142,19 +166,20 @@ const webhooksR = createWebhooksRouter({ supabaseAdmin, config });
 const webhooksRevenueCatR = createWebhooksRevenueCatRouter({ supabaseAdmin, config });
 app.use('/api/v1/webhooks', webhooksLimiter);
 app.use('/api/v1/webhooks', webhooksR);
-app.use('/api/v1/webhooks/revenuecat', webhooksLimiter);
 app.use('/api/v1/webhooks/revenuecat', webhooksRevenueCatR);
 app.use('/api/webhooks', webhooksLimiter);
 app.use('/api/webhooks', webhooksR);
-app.use('/api/webhooks/revenuecat', webhooksLimiter);
 app.use('/api/webhooks/revenuecat', webhooksRevenueCatR);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(sanitizeRequest);
-app.use(idempotencyMiddleware);
 
-// Normalizare URL: elimina slashes duble, prefixe /api/api sau /v1/v1 duplicat
+// Normalizare URL: elimina slashes duble, prefixe /api/api sau /v1/v1 duplicat.
+// P-10: trebuie sa ruleze INAINTE de idempotency — cheia de idempotenta se
+// construieste din req.originalUrl, iar o cale bruta (//api/v1/... sau
+// /api/api/...) ar crea un namespace divergent si ar eluda dedup-ul pe aceeasi
+// Idempotency-Key. originalUrl se sincronizeaza cu url-ul normalizat.
 app.use((req, res, next) => {
   if (req.url) {
     let cleanUrl = req.url.replace(/\/{2,}/g, '/');
@@ -163,10 +188,13 @@ app.use((req, res, next) => {
     cleanUrl = cleanUrl.replace(/^\/api\/v1\/api\//i, '/api/v1/');
     if (cleanUrl !== req.url) {
       req.url = cleanUrl;
+      req.originalUrl = cleanUrl;
     }
   }
   next();
 });
+
+app.use(idempotencyMiddleware);
 
 const storePartajat = creeazaStoreRateLimit({ url: config.redisUrl });
 const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter } = creeazaLimitatoare({
@@ -351,6 +379,9 @@ app.use('/api/v1/user', userR);
 // Clientul (lib/api.ts) construiește deja URL-uri cu /api/v1.
 // Prefixul /api rămâne activ până la 2026-09-30 pentru compatibilitate.
 app.use('/api', (req, res, next) => {
+  // M-20: /api/v1 e calea canonica — nu i se aplica antetele de deprecation.
+  // Altfel un 404 pe /api/v1/... ar capata Sunset+Deprecation+Link-catre-sine.
+  if (req.path === '/v1' || req.path.startsWith('/v1/')) return next();
   res.setHeader('Sunset', 'Wed, 30 Sep 2026 00:00:00 GMT');
   res.setHeader('Deprecation', 'true');
   res.setHeader('Link', '</api/v1>; rel="successor-version"');

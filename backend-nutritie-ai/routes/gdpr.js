@@ -11,7 +11,7 @@
  * FIX: Outbox pattern cu tabelul `gdpr_deletions`:
  *   1. Marchează contul ca `deletion_pending` (atomic, instantaneu)
  *   2. Execută pașii în ordinea REVERSIBIL → IREVERSIBIL:
- *      DB rows → auth.deleteUser → Clerk → ImageKit
+ *      DB rows → Clerk → ImageKit → auth.deleteUser
  *   3. Fiecare pas e idempotent și reluabil
  *   4. Confirmarea finală doar când toate statusurile sunt `completed`
  *
@@ -209,14 +209,18 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
   /**
    * P-05: Ștergere cont atomică cu outbox pattern (`gdpr_deletions`).
    *
-   * Ordinea pașilor: REVERSIBIL → IREVERSIBIL
+   * Ordinea pașilor: REVERSIBIL → IREVERSIBIL (M-06)
    *   1. Înregistrare outbox în tabela `gdpr_deletions`
    *   2. DB rows (reversibil prin restaurare backup)
-   *   3. auth.deleteUser Supabase (semi-reversibil prin admin API)
-   *   4. Clerk (ireversibil)
-   *   5. ImageKit (ireversibil)
+   *   3. Clerk (reversibil — reluabil: eșecul lasă contul intact)
+   *   4. ImageKit (reversibil — reluabil: eșecul lasă contul intact)
+   *   5. auth.deleteUser Supabase (IREVERSIBIL — ULTIMUL pas, după ce
+   *      curățarea Clerk/ImageKit a reușit)
    *
-   * Fiecare pas își înregistrează starea în outbox (`db_done`, `auth_done`, `clerk_done`, `completed`).
+   * Statusurile outbox: `db_done` (după rândurile DB), `auth_done` (după
+   * deleteUser), `completed`. Nu înregistrăm `clerk_done`/`imagekit_done`
+   * înainte de auth: workerul tratează `clerk_done` drept „auth deja șters" și
+   * ar finaliza cu `completed` fără ștergerea identității (M-06).
    */
   router.delete('/delete-account', requireAuth, generalLimiter, async (req, res) => {
     try {
@@ -281,25 +285,29 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       ]);
       await actualizezaStatus('db_done');
 
-      // PASUL 2 (semi-reversibil): Ștergere identitate Supabase
-      const { error: eroareAuth } = await supabaseAdmin.auth.admin.deleteUser(userId);
-      if (eroareAuth) throw eroareAuth;
-      await actualizezaStatus('auth_done');
-
-      // PASUL 3 (ireversibil): Ștergere identitate Clerk
+      // PASUL 2 (reversibil — reluabil): Ștergere identitate Clerk
+      // M-06: se execută ÎNAINTE de auth.deleteUser. Un eșec aici lasă contul
+      // intact — utilizatorul se poate încă autentifica și reîncerca.
       await stergeIdentitateClerk({
         clerkUserId,
         secretKey: process.env.CLERK_SECRET_KEY?.trim(),
       });
-      await actualizezaStatus('clerk_done');
 
-      // PASUL 4 (ireversibil): Ștergere media ImageKit
+      // PASUL 3 (reversibil — reluabil): Ștergere media ImageKit
       // P-06: stergeActiveImageKit + foldere + fileIds individuale
       await stergeActiveImageKit({
         userId,
         fileIds,
         privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim(),
       });
+
+      // PASUL 4 (IREVERSIBIL — ULTIMUL pas): Ștergere identitate Supabase
+      // M-06: auth.deleteUser rulează doar după ce curățarea Clerk/ImageKit a
+      // reușit, ca un eșec la un pas reversibil să lase contul intact și reluabil.
+      const { error: eroareAuth } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (eroareAuth) throw eroareAuth;
+      await actualizezaStatus('auth_done');
+
       await actualizezaStatus('completed');
 
       return res.json({

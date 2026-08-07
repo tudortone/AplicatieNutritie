@@ -1012,7 +1012,11 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                 setProteine(String(Math.round(al.proteinPer100g * factor * 10) / 10));
                 setCarbohidrati(String(Math.round(al.carbsPer100g * factor * 10) / 10));
                 setGrasimi(String(Math.round(al.fatPer100g * factor * 10) / 10));
-                handleGramajChange(String(gr));
+                // Product path: macro-urile vin din produs (per 100g); nu mai
+                // recalcula din baseNutrition expirat (preset/AI) si il curatam
+                // ca o editare ulterioara a gramajului sa nu rescrie valorile.
+                setGrame(String(gr));
+                setBaseNutrition(null);
                 setProductSearchModalVisible(false);
               }}
               onClose={() => setProductSearchModalVisible(false)}

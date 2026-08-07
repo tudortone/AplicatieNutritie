@@ -207,6 +207,19 @@ function createUserRouter({ requireAuth, generalLimiter, config, contextDate, pr
         return res.status(503).json({ eroare: 'Nu s-a putut valida abonamentul.' });
       }
 
+      // 404 = subscriberul nu exista inca in RevenueCat (utilizator neplătitor).
+      // Nu e o eroare: intoarcem premium:false, nu 502.
+      if (rcResp.status === 404) {
+        const faraAbonament = {
+          premium: false,
+          entitlement: null,
+          expiresDate: null,
+          validatServer: true,
+        };
+        await puneInPremiumCache(userId, faraAbonament);
+        return res.json(faraAbonament);
+      }
+
       if (!rcResp.ok) {
         await stergedinPremiumCache(userId);
         return res.status(502).json({ eroare: `RevenueCat a raspuns cu ${rcResp.status}.` });

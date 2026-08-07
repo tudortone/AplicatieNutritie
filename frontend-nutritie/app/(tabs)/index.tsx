@@ -546,7 +546,7 @@ export default function HomeScreen() {
                   colors={['#00e5ff', '#0088ff']} 
                   start={{ x: 0, y: 0 }} 
                   end={{ x: 1, y: 0 }} 
-                  style={[s.waterProgressFill, { width: `${Math.min((pahare / tintaPahare) * 100, 100)}%` }]} 
+                  style={[s.waterProgressFill, { width: `${Math.min((pahare / (tintaPahare > 0 ? tintaPahare : 1)) * 100, 100)}%` }]}
                 />
               </View>
 
@@ -596,7 +596,7 @@ export default function HomeScreen() {
                           colors={colors.accentGradient} 
                           start={{ x: 0, y: 0 }} 
                           end={{ x: 1, y: 0 }} 
-                          style={[s.healthProgressFill, { width: `${Math.min((steps / stepGoal) * 100, 100)}%` }]} 
+                          style={[s.healthProgressFill, { width: `${Math.min((steps / (stepGoal > 0 ? stepGoal : 1)) * 100, 100)}%` }]}
                         />
                       </View>
                       <View style={s.healthFooter}>

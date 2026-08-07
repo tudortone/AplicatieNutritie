@@ -54,11 +54,18 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 		standardHeaders: true,
 		legacyHeaders: false,
 		skip: sarePreflight,
-		...(store ? { store } : {}),
 	};
+
+	// `store` poate fi un fabricant (funcție) care întoarce o instanță NOUĂ de
+	// store per limiter, cu prefix unic. Un singur store partajat între 4
+	// limitatoare ar fi interzis de express-rate-limit v8 (ERR_ERL_STORE_REUSE),
+	// iar ultimul init() ar suprascrie windowMs-ul celorlalte limitatoare.
+	const cuStorePropriu = (prefix) =>
+		typeof store === 'function' ? { store: store({ prefix }) } : { ...(store ? { store } : {}) };
 
 	const preAuthLimiter = rateLimit({
 		...comun,
+		...cuStorePropriu('rl:preauth:'),
 		windowMs: 15 * 60 * 1000,
 		max: 300,
 		keyGenerator: ipFallbackKey,
@@ -67,6 +74,7 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 
 	const generalLimiter = rateLimit({
 		...comun,
+		...cuStorePropriu('rl:general:'),
 		windowMs: 15 * 60 * 1000,
 		max: 100,
 		keyGenerator: cheieIdentitateVerificata,
@@ -75,6 +83,7 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 
 	const statusLimiter = rateLimit({
 		...comun,
+		...cuStorePropriu('rl:status:'),
 		windowMs: 60 * 1000,
 		max: 120,
 		keyGenerator: ipFallbackKey,
@@ -83,6 +92,7 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 
 	const aiLimiter = rateLimit({
 		...comun,
+		...cuStorePropriu('rl:ai:'),
 		windowMs: 60 * 1000,
 		max: 15,
 		keyGenerator: cheieIdentitateVerificata,

@@ -106,6 +106,11 @@ function incarcaConfig() {
 			'REDIS_URL lipseste: rate-limiting-ul e per-proces. Acceptabil doar pe o singura instanta.',
 		);
 	}
+	// P-01b: fara secretul webhook-ului RevenueCat, fiecare achizitie ar raspunde
+	// 500 si s-ar pierde tacut. Fail-fast la boot, nu la prima cerere reala.
+	if (esteProductie && !process.env.REVENUECAT_WEBHOOK_SECRET) {
+		opreste('REVENUECAT_WEBHOOK_SECRET este obligatoriu in productie (webhook-uri RevenueCat).');
+	}
 
 	const config = Object.freeze({
 		NODE_ENV,
@@ -148,6 +153,8 @@ function incarcaConfig() {
 		// Validare premium server-side (B-09). Lipsește => 503 pe /premium-status.
 		revenuecat: Object.freeze({
 			secretApiKey: process.env.REVENUECAT_SECRET_API_KEY || null,
+			// P-01b: secretul semnaturii webhook-ului. Obligatoriu in productie (fail-fast mai sus).
+			webhookSecret: process.env.REVENUECAT_WEBHOOK_SECRET || null,
 		}),
 		imagekit: Object.freeze({
 			publicKey: process.env.IMAGEKIT_PUBLIC_KEY || null,

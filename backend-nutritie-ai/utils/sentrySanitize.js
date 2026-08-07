@@ -18,7 +18,11 @@ const crypto = require('crypto');
 const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
 const BEARER_RE = /Bearer\s+\S+/gi;
 const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
-const PHONE_RE = /(?:\+?\d[\s().-]*){9,15}/g;
+// Telefoane: doar forme plauzibile — "+" international, prefix intre paranteze
+// sau cifre grupate cu separatori (0722 123 456, 555-123-4567). O secventa lunga
+// de cifre fara separatori (timestamp unix, dimensiune, ID numeric) nu e telefon
+// si nu trebuie redactata.
+const PHONE_RE = /(?:\+(?:\d[\s().-]*){7,15}|\(\d{2,4}\)[\s().-]?\d{3}[\s().-]?\d{3,4}|\d{2,4}[\s().-]\d{3}[\s().-]\d{3,4})/g;
 
 /**
  * Chei considerate PII în obiectele structurale (payloaduri webhook, corpuri
@@ -92,6 +96,10 @@ function scrubObjectForTelemetry(obj, maxDepth = 6, maxStr = 200) {
       } else if (typeof valoare === 'number' || typeof valoare === 'boolean') {
         if (CHEI_PERMISE_DIAGNOSTIC.has(cheieLc) || typeof valoare === 'boolean') {
           rezultat[cheie] = valoare;
+        } else {
+          // M-20: numerele non-permise nu se sterg silențios — se marcheaza,
+          // la fel ca stringurile, ca sa nu dispara campuri de diagnostic.
+          rezultat[cheie] = '[REDACTED_NUMBER]';
         }
       }
     }

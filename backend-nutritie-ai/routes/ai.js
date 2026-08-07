@@ -80,14 +80,15 @@ function createAiRouter({
   // task-ul Trigger analiza-mancare-ai: https standard, fara credentiale in URL,
   // porturi custom ori traversari de cale, si gazda in lista permisa (ImageKit +
   // Supabase). Lista vida refuza totul; configuratie malformata ramane fail-closed.
-  const valideazaUrlImagine = creeazaValideazaUrlImagine({
-    gazdePermise: construiesteGazdePermise({
-      imagekitUrlEndpoint: config.imagekit.urlEndpoint,
-      supabaseUrl: config.supabase.url,
-    }),
+  // Lista de gazde permise se pregateste o singura data; validatorul efectiv se
+  // construieste in rută, cu folderPrefix-ul per-utilizator (anti-IDOR), pentru ca
+  // req.user nu este disponibil la momentul crearii router-ului.
+  const gazdePermise = construiesteGazdePermise({
+    imagekitUrlEndpoint: config.imagekit.urlEndpoint,
+    supabaseUrl: config.supabase.url,
   });
 
-  router.post('/trigger-analiza-mancare', requireAuth, aiLimiter, checkAiUsageQuota, idempotencyCritic, async (req, res) => {
+  router.post('/trigger-analiza-mancare', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, async (req, res) => {
     if (!config.triggerSecretKey) {
       return res.status(503).json({
         eroare: 'Trigger.dev nu este activat (lipseste TRIGGER_SECRET_KEY in variabilele de mediu backend).',
@@ -96,7 +97,14 @@ function createAiRouter({
     }
     try {
       const { imageUrl, tipMasa } = req.body;
-      const verificare = valideazaUrlImagine(imageUrl);
+      // folderPrefix per-utilizator: analiza trebuie sa accepte doar imagini din
+      // folderul propriu `/mancare/<userId>/` — altfel oricine ar putea trimite
+      // URL-ul imaginii altui utilizator (IDOR).
+      const valideazaUrlUtilizator = creeazaValideazaUrlImagine({
+        gazdePermise,
+        folderPrefix: `/mancare/${req.user.id}/`,
+      });
+      const verificare = valideazaUrlUtilizator(imageUrl);
       if (!verificare.ok) {
         return res.status(400).json({ eroare: verificare.eroare });
       }
@@ -181,10 +189,11 @@ function createAiRouter({
       // Semnal comun de anulare: daca clientul se deconecteaza inca din coada,
       // intrarea se scoate din semafor si slotul ramane liber pentru ceilalti.
       const controllerAbord = new AbortController();
-      const peDeconectare = (event) => {
+      const peDeconectare = () => {
         // 'close' se declanseaza si la finalizarea normala; anulam doar cand
         // raspunsul nu a fost inca terminat (deconectare reala a clientului).
-        if (event?.target?.writableEnded) return;
+        // Node emite 'close' fara argument, deci garda verifica chiar res.writableEnded.
+        if (res.writableEnded) return;
         controllerAbord.abort();
       };
       res.on('close', peDeconectare);
@@ -275,13 +284,13 @@ function createAiRouter({
     }
   };
 
-  router.post('/analiza-foto', requireAuth, aiLimiter, checkAiUsageQuota, idempotencyCritic, upload.single('imagine'), handleAnalizaFoto);
-  router.post('/analizeaza-mancare-structurat', requireAuth, aiLimiter, checkAiUsageQuota, idempotencyCritic, upload.single('imagine'), handleAnalizaFoto);
+  router.post('/analiza-foto', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, upload.single('imagine'), handleAnalizaFoto);
+  router.post('/analizeaza-mancare-structurat', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, upload.single('imagine'), handleAnalizaFoto);
 
   // ==========================================
   // RUTA 2: CHAT CONVERSATIONAL (GROQ / LLAMA 3.3)
   // ==========================================
-  router.post('/chat', requireAuth, aiLimiter, checkAiUsageQuota, idempotencyCritic, async (req, res) => {
+  router.post('/chat', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, async (req, res) => {
     try {
       return res.json(await serviciuChat.ruleazaChat(req.body));
     } catch (err) {
@@ -304,14 +313,14 @@ function createAiRouter({
     }
   };
 
-  router.post('/log-food-from-chat', requireAuth, aiLimiter, checkAiUsageQuota, idempotencyCritic, handleLogFoodChat);
-  router.post('/log-food', requireAuth, aiLimiter, checkAiUsageQuota, idempotencyCritic, handleLogFoodChat);
-  router.post('/log-food-chat', requireAuth, aiLimiter, checkAiUsageQuota, idempotencyCritic, handleLogFoodChat);
+  router.post('/log-food-from-chat', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, handleLogFoodChat);
+  router.post('/log-food', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, handleLogFoodChat);
+  router.post('/log-food-chat', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, handleLogFoodChat);
 
   // ==========================================
   // RUTA: ESTIMARE RAPIDA TEXT ALIMENT (GROQ/LLM)
   // ==========================================
-  router.post('/estimeaza-mancare-text', requireAuth, aiLimiter, checkAiUsageQuota, idempotencyCritic, async (req, res) => {
+  router.post('/estimeaza-mancare-text', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, async (req, res) => {
     try {
       return res.json(await serviciuChat.estimeazaMancareText(req.body));
     } catch (err) {
@@ -522,8 +531,8 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
     }
   };
 
-  router.post('/vision-fallback', requireAuth, aiLimiter, checkAiUsageQuota, idempotencyCritic, handleVisionFallbackOrCorrection);
-  router.post('/corecteaza-mancare-vizual-text', requireAuth, aiLimiter, checkAiUsageQuota, idempotencyCritic, handleVisionFallbackOrCorrection);
+  router.post('/vision-fallback', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, handleVisionFallbackOrCorrection);
+  router.post('/corecteaza-mancare-vizual-text', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, handleVisionFallbackOrCorrection);
 
   return router;
 }

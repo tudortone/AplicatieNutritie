@@ -222,28 +222,27 @@ describe('GDPR ImageKit', () => {
       expect(sterse.sort()).toEqual([
         'antrenamente', 'audit_log', 'barcode_estimari_utilizator', 'mese', 'profil',
       ]);
-      // la final: deleteUser (P-05: DB first, auth second, Clerk third, ImageKit last)
+      // la final: deleteUser (ordinea corecta — DB -> Clerk -> ImageKit -> auth.ireversibil)
       expect(admin.apeluri.some((a) => a.tip === 'deleteUser' && a.userId === 'supabase-id')).toBe(true);
     });
 
-    test('fara IMAGEKIT_PRIVATE_KEY -> 500 (ImageKit esuaza dupa deleteUser, ordinea P-05)', async () => {
+    test('fara IMAGEKIT_PRIVATE_KEY -> 500 (ImageKit esuaza INAINTE de deleteUser, ordinea corecta)', async () => {
       process.env.IMAGEKIT_PRIVATE_KEY = '';
       const res = await request(app).delete('/delete-account');
-      // P-05: ordinea e DB -> deleteUser -> Clerk -> ImageKit
-      // ImageKit esuaza DUPA deleteUser (e ultimul pas)
-      // Codul de eroare e 500 (IMAGEKIT_NOT_CONFIGURED -> cod != CLERK_NOT_CONFIGURED)
+      // Ordinea corecta (ireversibil la sfarsit): DB -> Clerk -> ImageKit -> deleteUser.
+      // ImageKit esuaza INAINTE de auth.deleteUser, deci identitatea Supabase ramane
+      // intacta si utilizatorul poate reincerca. Codul de eroare e 500.
       expect([500, 503]).toContain(res.status);
       expect(res.body.eroare).toBeTruthy();
-      // deleteUser A FOST apelat (ImageKit e ultimul, dupa auth)
-      expect(admin.apeluri.some((a) => a.tip === 'deleteUser')).toBe(true);
+      // deleteUser NU e apelat (auth e ultimul pas; nu se atinge cand ImageKit esueaza)
+      expect(admin.apeluri.some((a) => a.tip === 'deleteUser')).toBe(false);
     });
 
     test('CLERK_SECRET_KEY lipsa si clerk_user_id prezent -> eroare 500/503 asteptata', async () => {
       process.env.CLERK_SECRET_KEY = '';
       const res = await request(app).delete('/delete-account');
-      // P-05: ordinea e DB → deleteUser → Clerk → ImageKit
-      // Clerk eșuează DUPĂ deleteUser, deci deleteUser a fost apelat (P-05 corect)
-      // Testul verifică că eroarea e 500 (Clerk a eșuat)
+      // Ordinea corecta: DB -> Clerk (reversibil) -> ImageKit -> deleteUser (ireversibil, ultimul).
+      // Clerk eșuează INAINTE de deleteUser, deci identitatea Supabase ramane intacta.
       expect([500, 503]).toContain(res.status);
       expect(res.body.eroare).toBeTruthy();
     });
@@ -254,9 +253,9 @@ describe('GDPR ImageKit', () => {
       const res1 = await request(app).delete('/delete-account');
       expect(res1.status).toBe(500);
 
-      // P-05: DB a fost șters deja (ordinea reversibil→ireversibil)
-      // Clerk este ireversibil, deci a eșuat DUPĂ DB + auth.deleteUser
-      // La retry, rândurile DB sunt deja șterse (dar auth.deleteUser poate fi reîncercat idempotent)
+      // Ordinea corecta: DB -> Clerk (reversibil) -> ImageKit -> deleteUser (ireversibil, ultimul).
+      // Clerk a eșuat INAINTE de deleteUser, deci identitatea Supabase ramane intacta.
+      // La retry, rândurile DB sunt deja șterse, cleanup-ul se reia idempotent, iar deleteUser se face ultimul.
 
       // retry: Clerk disponibil -> reușește
       stub.clerk = 200;

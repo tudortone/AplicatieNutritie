@@ -5,6 +5,23 @@ const { creeazaClientRedis, codEroare } = require('./storePartajat');
 const PLAFON_INTRARI = 5000;
 const SALT_LOG_MS = 30 * 1000;
 
+// INCR + PEXPIRE atomice intr-un singur script: un crash intre incr si pExpire
+// ar lasa cheia fara TTL, blocand utilizatorul peste plafonul AI. Semantica
+// pastrata: cheie existenta -> doar INCR (TTL-ul existent nu se reseteaza);
+// cheie noua -> SET 1 + PEXPIRE (daca ttlMs > 0), in milisecunde.
+const INCR_CU_TTL_LUA = `
+if redis.call('EXISTS', KEYS[1]) == 1 then
+  return redis.call('INCR', KEYS[1])
+end
+local ttl = tonumber(ARGV[1])
+if ttl > 0 then
+  redis.call('SET', KEYS[1], 1, 'PX', ttl)
+else
+  redis.call('SET', KEYS[1], 1)
+end
+return 1
+`;
+
 let ultimulAvertisment = 0;
 
 function avertizeaza(mesaj) {
@@ -76,9 +93,10 @@ function creeazaContorPartajat({ url, prefix = 'nutri:contor', plafon } = {}) {
       if (!client?.isReady) return localCount;
 
       try {
-        const count = await client.incr(finala);
-        if (count === 1 && ttlMs > 0) await client.pExpire(finala, ttlMs);
-        return count;
+        return await client.eval(INCR_CU_TTL_LUA, {
+          keys: [finala],
+          arguments: [String(ttlMs || 0)],
+        });
       } catch (err) {
         avertizeaza(`[Contor] Redis indisponibil (${codEroare(err)}); folosesc rezerva locala.`);
         return localCount;

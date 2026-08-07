@@ -18,6 +18,11 @@ const crypto = require('crypto');
 const { creeazaRegistruCheiValori } = require('./storePartajat');
 
 const TTL_MS = 15 * 60 * 1000;
+// P-10: zălogul 'procesare' ține mult mai scurt decât rezultatul finalizat. Un crash
+// la mijlocul analizei AI nu trebuie să țină clientul blocat pe 409 IDEMPOTENCY_IN_PROGRESS
+// timp de 15 minute; la expirare, o reluare poate revendica din nou cheia. TTL-ul
+// rezultatului finalizat (TTL_MS) rămâne neschimbat.
+const TTL_PROCESSARE_MS = 2 * 60 * 1000;
 const registruImplicit = creeazaRegistruCheiValori({
   url: process.env.REDIS_URL,
   prefix: 'nutri:idem',
@@ -58,7 +63,11 @@ function serializeazaStabil(value, seen = new WeakSet()) {
 }
 
 function amprentaCerere(req) {
-  const cale = String(req.originalUrl || req.path || '');
+  // Amprenta ignore query-ul, la fel ca construiesteCheie: parametrii de query
+  // (paginare/filtre) nu schimba identitatea operatiei, iar cheia si amprenta
+  // trebuie sa fie consistente — altfel aceeasi cheie pe aceeasi ruta cu query
+  // diferit ar produce un fals 409 IDEMPOTENCY_KEY_REUSED.
+  const cale = String(req.originalUrl || req.path || '').split('?')[0];
   return hash(serializeazaStabil({ method: req.method, cale, body: req.body ?? null }));
 }
 
@@ -160,7 +169,7 @@ function creeazaMiddlewareIdempotenta({
         stare: 'procesare',
         amprenta,
         inceputLa: Date.now(),
-      }, ttlMs);
+      }, TTL_PROCESSARE_MS);
       if (!revendicat) {
         const castigatoare = await registru.get(cacheKey);
         if (raspundeDinRegistru(res, castigatoare, amprenta)) return undefined;
@@ -230,4 +239,5 @@ module.exports = {
   amprentaCerere,
   serializeazaStabil,
   TTL_MS,
+  TTL_PROCESSARE_MS,
 };

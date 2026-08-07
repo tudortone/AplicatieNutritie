@@ -21,10 +21,10 @@ const PLAFON_INTRARI = 5000;
 const CURATARE_INTERVAL_MS = 5 * 60 * 1000;
 const SALTIRE_LOGGING_MS = 30 * 1000;
 
-let storeRateLimitCache = null;
 let clientRedisCache = null;
-let ultimulAvertisment = 0;
 let sentriAlertaTrimisa = false; // evităm flooding Sentry
+// throttle independent per mesaj, nu un singur timestamp global (P-11)
+const ultimulAvertismentPeMesaj = new Map();
 
 function codEroare(err) {
   if (!err) return 'NECUNOSCUT';
@@ -33,8 +33,9 @@ function codEroare(err) {
 
 function logWarnThrottled(mesaj) {
   const acum = Date.now();
-  if (acum - ultimulAvertisment < SALTIRE_LOGGING_MS) return;
-  ultimulAvertisment = acum;
+  const ultimul = ultimulAvertismentPeMesaj.get(mesaj) || 0;
+  if (acum - ultimul < SALTIRE_LOGGING_MS) return;
+  ultimulAvertismentPeMesaj.set(mesaj, acum);
   console.warn(mesaj);
 }
 
@@ -105,6 +106,8 @@ class StoreCuRezerva {
     this.storeRedis = storeRedis;
     this.storeRezerva = new MemoryStore();
     this.localKeys = false;
+    this.optiuniInitRedis = null;
+    this.initListenerAtasat = false;
   }
 
   init(options) {
@@ -115,10 +118,20 @@ class StoreCuRezerva {
         logWarnThrottled(`[RateLimit] init rezerva esuat (${codEroare(err)}).`);
       }
     }
-    if (this.client.isReady && this.storeRedis.init) {
-      Promise.resolve(this.storeRedis.init(options)).catch((err) => {
+    if (!this.storeRedis.init) return;
+    // client.connect() este asincron: la primul init clientul nu este inca 'ready',
+    // asa ca init-ul RedisStore-ului se amana pana la evenimentul 'ready'. Altfel
+    // RedisStore ramane fara windowMs si cade permanent pe rezerva (MemoryStore).
+    this.optiuniInitRedis = options;
+    const initializeazaRedis = () =>
+      Promise.resolve(this.storeRedis.init(this.optiuniInitRedis)).catch((err) => {
         logWarnThrottled(`[RateLimit] init Redis esuat (${codEroare(err)}); ramane rezerva.`);
       });
+    if (this.client.isReady) {
+      initializeazaRedis();
+    } else if (!this.initListenerAtasat && typeof this.client.on === 'function') {
+      this.initListenerAtasat = true;
+      this.client.on('ready', initializeazaRedis);
     }
   }
 
@@ -177,18 +190,20 @@ class StoreCuRezerva {
 
 function creeazaStoreRateLimit({ url }) {
   if (!url) return null;
-  if (storeRateLimitCache) return storeRateLimitCache;
   const { RedisStore } = require('rate-limit-redis');
   const client = creeazaClientRedis({ url });
-  storeRateLimitCache = {
-    store: new StoreCuRezerva({
+  // Fabricant: instanță NOUĂ de store per limiter, cu prefix unic. Un singur
+  // store partajat între 4 limitatoare ar fi interzis de express-rate-limit v8
+  // (ERR_ERL_STORE_REUSE), iar ultimul init() ar suprascrie windowMs-ul.
+  const creeaza = ({ prefix } = {}) =>
+    new StoreCuRezerva({
       client,
       storeRedis: new RedisStore({
+        prefix,
         sendCommand: (...args) => client.sendCommand(args),
       }),
-    }),
-  };
-  return storeRateLimitCache;
+    });
+  return { store: creeaza };
 }
 
 class MapCuExpirare {

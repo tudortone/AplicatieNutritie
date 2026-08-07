@@ -6,6 +6,7 @@
 
 const express = require('express');
 const crypto = require('crypto');
+const { pseudonimizeaza } = require('../utils/sentrySanitize');
 
 // Credite acordate per produs (configurat pentru fiecare pachet din App Store / Play Store)
 const CREDIT_AMOUNTS = {
@@ -50,7 +51,7 @@ function createWebhooksRevenueCatRouter({ supabaseAdmin, config }) {
   router.post('/', express.json({ limit: '512kb' }), async (req, res) => {
     // Verificare antet Authorization (secretul configurat în RevenueCat dashboard)
     const authHeader = req.headers.authorization || '';
-    const expectedSecret = config.revenuecat?.webhookSecret || process.env.REVENUECAT_WEBHOOK_SECRET;
+    const expectedSecret = config.revenuecat?.webhookSecret;
 
     if (!expectedSecret) {
       console.error('[RevenueCat Webhook] REVENUECAT_WEBHOOK_SECRET neconfigurat.');
@@ -126,7 +127,7 @@ function createWebhooksRevenueCatRouter({ supabaseAdmin, config }) {
               motiv: 'USER_NOT_MAPPED_YET',
               payload: event,
             });
-            console.error(`[RevenueCat] Clerk ${userId} nemapat — cer retry.`);
+            console.error(`[RevenueCat] Clerk ${pseudonimizeaza(userId)} nemapat — cer retry.`);
             return res.status(503).json({
               eroare: 'Utilizator nemapat încă — reîncercați.',
               cod: 'USER_NOT_MAPPED_YET',
@@ -169,11 +170,11 @@ function createWebhooksRevenueCatRouter({ supabaseAdmin, config }) {
           return res.json({ ok: true, idempotent: true });
         }
 
-        console.log(`[RevenueCat] ${eventType} pentru ${userId}: +${crediteDelta} credite. Sold nou: ${soldNou}`);
+        console.log(`[RevenueCat] ${eventType} pentru ${pseudonimizeaza(userId)}: +${crediteDelta} credite. Sold nou: ${soldNou}`);
         return res.json({ ok: true, soldNou, crediteDelta });
       }
 
-      console.log(`[RevenueCat] Eveniment ${eventType} primit pentru ${userId} — fără modificare credite.`);
+      console.log(`[RevenueCat] Eveniment ${eventType} primit pentru ${pseudonimizeaza(userId)} — fără modificare credite.`);
       return res.json({ ok: true, ignorat: true, eventType });
     } catch (err) {
       console.error('[RevenueCat] Eroare webhook:', err.message);
