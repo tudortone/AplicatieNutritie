@@ -1,0 +1,155 @@
+# osv-scanner — config de ignorare (https://google.github.io/osv-scanner/configuration/)
+#
+# Aplicatia e pe Expo SDK 54 (expo ~54.0.34, react-native 0.81.5). Toate advisory-urile
+# din 2026-08-08 pentru lantul Expo (`@expo/*`, `metro`, `expo-*`, `react-native` etc.)
+# au ca singura remediere un upgrade MAJOR la Expo SDK 57. Nu exista versiune "patched"
+# in SDK 54, iar un override pe un sub-pachet Expo rupe prebuild/bundler-ul.
+#
+# Acest backlog e urmarit ca upgrade separat (expo@57). Orice vulnerabilitate NOUA
+# intr-un pachet care NU e listat mai jos (sau un CRITICAL) ramane blocanta pentru CI.
+# Cand trecem la expo@57, se sterge intreaga lista de mai jos.
+
+[[PackageOverrides]]
+name = "@expo/cli"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "@expo/config"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "@expo/config-plugins"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "@expo/metro"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "@expo/metro-config"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "@expo/prebuild-config"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "@react-native/community-cli-plugin"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "@react-three/drei"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "@react-three/fiber"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "@testing-library/react-native"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "expo"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "expo-asset"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "expo-constants"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "expo-linking"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "expo-manifests"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "expo-notifications"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "expo-router"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "expo-splash-screen"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "expo-updates"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "image-size"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "metro"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "metro-config"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "metro-transform-worker"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "postcss"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "react-native"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "react-native-purchases"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "react-native-reanimated"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "uuid"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "xcode"
+vulnerability.ignore = true
+reason = "Backlog Expo SDK 54 -> upgrade expo@57"
