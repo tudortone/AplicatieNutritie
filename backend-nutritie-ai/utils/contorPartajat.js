@@ -22,12 +22,30 @@ end
 return 1
 `;
 
-let ultimulAvertisment = 0;
+const PLAFON_AVERTISMENTE = 200;
+
+// M-19: throttling-ul este PER-MESAJ, nu un contor global. Fiecare mesaj distinct
+// are propria fereastră SALT_LOG_MS; altfel o eroare frecventă (ex. Redis down)
+// ar sufoca avertismentele pentru orice alt mesaj.
+// N-06: mapa este plafonată (PLAFON_AVERTISMENTE) — se reia tiparul plafon +
+// curățare expirate + evicție FIFO din ContorLocalCuTtl, ca mesajele unice
+// (nelimitate ca formă) să nu crească fără limită.
+const ultimulAvertismentPeMesaj = new Map();
 
 function avertizeaza(mesaj) {
   const acum = Date.now();
-  if (acum - ultimulAvertisment < SALT_LOG_MS) return;
-  ultimulAvertisment = acum;
+  const ultimul = ultimulAvertismentPeMesaj.get(mesaj) || 0;
+  if (acum - ultimul < SALT_LOG_MS) return;
+  if (ultimulAvertismentPeMesaj.size >= PLAFON_AVERTISMENTE) {
+    for (const [cheie, moment] of ultimulAvertismentPeMesaj) {
+      if (acum - moment >= SALT_LOG_MS) ultimulAvertismentPeMesaj.delete(cheie);
+    }
+    if (ultimulAvertismentPeMesaj.size >= PLAFON_AVERTISMENTE) {
+      const ceaMaiVeche = ultimulAvertismentPeMesaj.keys().next().value;
+      if (ceaMaiVeche !== undefined) ultimulAvertismentPeMesaj.delete(ceaMaiVeche);
+    }
+  }
+  ultimulAvertismentPeMesaj.set(mesaj, acum);
   console.warn(mesaj);
 }
 

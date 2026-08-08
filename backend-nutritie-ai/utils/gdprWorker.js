@@ -6,7 +6,7 @@
 
 const Sentry = require('@sentry/node');
 const { stergeIdentitateClerk, stergeActiveImageKit } = require('../routes/gdpr');
-const { inregistreazaUtilizareAdmin } = require('./clientUtilizator');
+const { inregistreazaUtilizareAdmin, TABELE_CU_RLS_UTILIZATOR } = require('./clientUtilizator');
 // TASK-11: tag-urile Sentry nu pot conține identificatori bruti (PII). Folosim
 // pseudonimizatorul central ca să păstrăm corelarea unui anumit cont fără a
 // expune user_id/sesiunea în telemetrie.
@@ -24,7 +24,10 @@ async function stergeRanduriDbUtilizator(supabaseAdmin, userId) {
   // C1-S4: stergere admin (service_role) pe tabele de utilizator, fara context —
   // calea GDPR worker (reluarea stergerilor intrerupte din outbox).
   inregistreazaUtilizareAdmin();
-  const tabele = ['mese', 'profil', 'antrenamente', 'barcode_estimari_utilizator', 'audit_log', 'credite_ai'];
+  // N-03: aceeași listă unică de tabele user-scoped ca ruta — sursa de adevăr e
+  // TABELE_CU_RLS_UTILIZATOR din clientUtilizator.js. Un tabel inexistent pe un
+  // mediu nou e tolerat prin CODURI_TABELA_INEXISTENTA de mai jos.
+  const tabele = TABELE_CU_RLS_UTILIZATOR;
   for (const tabela of tabele) {
     // supabase-js NU aruncă pentru erori de bază de date: le întoarce în `error`.
     // Un `catch {}` aici nu s-ar executa niciodată pe calea reală și ar lăsa
@@ -99,24 +102,11 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
           .eq('id', rand.id);
       }
 
-      // Pasul 2 (dacă s-a oprit după db_done): Auth delete
+      // Pasul 2 (dacă s-a oprit după db_done): Clerk delete — REVERSIBIL
+      // N-02: aliniat la ordinea rutei (DB → Clerk → ImageKit → auth), nu la
+      // ordinea veche (auth înainte de Clerk/ImageKit). M-06: pașii reversibili
+      // se execută ÎNAINTE de auth.deleteUser, ca un eșec să lase contul intact.
       if (statusCurent === 'db_done') {
-        if (rand.user_id && supabaseAdmin.auth?.admin?.deleteUser) {
-          const { error: errAuth } = await supabaseAdmin.auth.admin.deleteUser(rand.user_id);
-          // 404 sau inexistent în auth.users = deja șters = succes
-          if (errAuth && !String(errAuth.message).toLowerCase().includes('not found')) {
-            throw errAuth;
-          }
-        }
-        statusCurent = 'auth_done';
-        await supabaseAdmin
-          .from('gdpr_deletions')
-          .update({ status: 'auth_done' })
-          .eq('id', rand.id);
-      }
-
-      // Pasul 3 (dacă s-a oprit după auth_done): Clerk delete
-      if (statusCurent === 'auth_done') {
         if (rand.clerk_user_id) {
           try {
             await stergeIdentitateClerk({
@@ -135,13 +125,18 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
           .eq('id', rand.id);
       }
 
-      // Pasul 4 (dacă s-a oprit după clerk_done): ImageKit media delete
+      // Pasul 3 (dacă s-a oprit după clerk_done): ImageKit media delete — REVERSIBIL
       if (statusCurent === 'clerk_done') {
         if (rand.user_id) {
           try {
+            // N-04: la reluare, fileIds-urile vin din outbox (ruta le-a persistat
+            // ÎNAINTE de ștergerea mesei); baza de date e deja ștearsă, deci o
+            // re-extragere ar fi goală. Rânduri vechi fără coloana file_ids →
+            // listă goală (comportamentul inițial).
+            const fileIds = Array.isArray(rand.file_ids) ? new Set(rand.file_ids) : new Set();
             await stergeActiveImageKit({
               userId: rand.user_id,
-              fileIds: new Set(),
+              fileIds,
               privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim() || config?.imagekit?.privateKey,
             });
           } catch (e) {
@@ -149,6 +144,35 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
             if (!msg.includes('404') && !msg.includes('IMAGEKIT_NOT_CONFIGURED')) throw e;
           }
         }
+        statusCurent = 'imagekit_done';
+        await supabaseAdmin
+          .from('gdpr_deletions')
+          .update({ status: 'imagekit_done' })
+          .eq('id', rand.id);
+      }
+
+      // Pasul 4 (dacă s-a oprit după imagekit_done): auth.deleteUser — IREVERSIBIL,
+      // ULTIMUL pas (M-06): rulează doar după ce curățarea Clerk/ImageKit a reușit.
+      // Statusul `imagekit_done` e scris înaintea operației ireversibile, ca o
+      // reluare după un crash în timpul lui deleteUser să reia doar acest pas
+      // (404 = deja șters = succes).
+      if (statusCurent === 'imagekit_done') {
+        if (rand.user_id && supabaseAdmin.auth?.admin?.deleteUser) {
+          const { error: errAuth } = await supabaseAdmin.auth.admin.deleteUser(rand.user_id);
+          // 404 sau inexistent în auth.users = deja șters = succes
+          if (errAuth && !String(errAuth.message).toLowerCase().includes('not found')) {
+            throw errAuth;
+          }
+        }
+        statusCurent = 'auth_done';
+        await supabaseAdmin
+          .from('gdpr_deletions')
+          .update({ status: 'auth_done' })
+          .eq('id', rand.id);
+      }
+
+      // Pasul 5 (dacă s-a oprit după auth_done): confirmare finală
+      if (statusCurent === 'auth_done') {
         await supabaseAdmin
           .from('gdpr_deletions')
           .update({ status: 'completed', completed_at: new Date().toISOString() })

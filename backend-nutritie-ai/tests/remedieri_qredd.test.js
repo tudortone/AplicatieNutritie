@@ -6,6 +6,7 @@ const {
   namespaceCerere,
 } = require('../utils/idempotency');
 const {
+  construiesteGazdePermise,
   creeazaValideazaUrlImagine,
 } = require('../utils/valideazaUrlImagine');
 
@@ -83,5 +84,23 @@ describe('Remedieri selective adaptate din ramura Qredd', () => {
     expect(valideaza('https://ik.imagekit.io:8443/mancare/user-1/a.jpg').ok).toBe(false);
     expect(valideaza('https://ik.imagekit.io/mancare/user-1/%2e%2e/alt/a.jpg').ok).toBe(false);
     expect(valideaza('https://ik.imagekit.io/mancare/user-1/a.jpg').ok).toBe(true);
+  });
+
+  test('N-01: accepta URL-urile ImageKit reale cu endpoint-id in cale, anti-IDOR pastrat', () => {
+    // Formula reala de productie: endpoint-ul este `https://ik.imagekit.io/abc123`,
+    // deci URL-urile intregi au `<endpoint-id>` ca segment de cale in pathname.
+    const gazdePermise = construiesteGazdePermise({
+      imagekitUrlEndpoint: 'https://ik.imagekit.io/abc123',
+      supabaseUrl: 'https://proiect.supabase.co',
+    });
+    const valideaza = creeazaValideazaUrlImagine({
+      gazdePermise,
+      folderPrefix: '/mancare/user-1/',
+    });
+
+    // Folderul propriu al utilizatorului, cu endpoint-id in cale -> acceptat.
+    expect(valideaza('https://ik.imagekit.io/abc123/mancare/user-1/x.jpg').ok).toBe(true);
+    // URL care pointeaza spre folderul altui utilizator -> refuzat (anti-IDOR).
+    expect(valideaza('https://ik.imagekit.io/abc123/mancare/user-2/x.jpg').ok).toBe(false);
   });
 });

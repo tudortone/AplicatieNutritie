@@ -96,4 +96,36 @@ describe('Idempotenta (C-01)', () => {
     await middleware(cerere({ contentType: 'multipart/form-data' }), rez, next);
     expect(next).toHaveBeenCalledTimes(1);
   });
+
+  test('#M-04: store degradat (ruta critica) => 503 IDEMPOTENCY_STORE_UNAVAILABLE fara claim', async () => {
+    const get = jest.fn(async () => null);
+    const setIfAbsent = jest.fn(async () => true);
+    const set = jest.fn(async () => {});
+    const del = jest.fn(async () => {});
+    const registru = { degradat: true, get, set, setIfAbsent, del };
+    const middleware = creeazaMiddlewareIdempotenta({ registru, rutaCritica: true });
+    const rez = raspunsFals();
+    const next = jest.fn();
+    await middleware(cerere({ body: { calorii: 100 } }), rez, next);
+    expect(rez.statusCode).toBe(503);
+    expect(rez.body.cod).toBe('IDEMPOTENCY_STORE_UNAVAILABLE');
+    // fail-closed: niciun apel pe stoc nu a fost incercat
+    expect(get).not.toHaveBeenCalled();
+    expect(setIfAbsent).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('#M-04: store degradat dar ruta NECRITICA => fail-open, claim inca are loc', async () => {
+    const get = jest.fn(async () => null);
+    const setIfAbsent = jest.fn(async () => true);
+    const set = jest.fn(async () => {});
+    const del = jest.fn(async () => {});
+    const registru = { degradat: true, get, set, setIfAbsent, del };
+    const middleware = creeazaMiddlewareIdempotenta({ registru, rutaCritica: false });
+    const rez = raspunsFals();
+    const next = jest.fn(() => rez.json({ ok: 1 }));
+    await middleware(cerere({ body: { calorii: 100 } }), rez, next);
+    expect(setIfAbsent).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
 });

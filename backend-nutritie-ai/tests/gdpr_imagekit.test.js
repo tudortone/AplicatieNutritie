@@ -3,6 +3,7 @@
 const express = require('express');
 const request = require('supertest');
 const createGdprRouter = require('../routes/gdpr');
+const { TABELE_CU_RLS_UTILIZATOR } = require('../utils/clientUtilizator');
 
 const fetchOriginal = global.fetch;
 
@@ -217,13 +218,107 @@ describe('GDPR ImageKit', () => {
       // AMBELE foldere ImageKit
       const foldere = stub.imaginiApeluri.map((a) => JSON.parse(a.opts.body).folderPath);
       expect(foldere.sort()).toEqual(['/mancare/supabase-id/', '/meals/supabase-id/']);
-      // Tabele știerse explicit (fail-closed)
+      // N-03: șterse EXACT toate tabelele user-scoped din lista unică
       const sterse = admin.apeluri.filter((a) => a.tip === 'delete').map((a) => a.tabela);
-      expect(sterse.sort()).toEqual([
-        'antrenamente', 'audit_log', 'barcode_estimari_utilizator', 'mese', 'profil',
-      ]);
+      expect(sterse.sort()).toEqual([...TABELE_CU_RLS_UTILIZATOR].sort());
       // la final: deleteUser (ordinea corecta — DB -> Clerk -> ImageKit -> auth.ireversibil)
       expect(admin.apeluri.some((a) => a.tip === 'deleteUser' && a.userId === 'supabase-id')).toBe(true);
+    });
+
+    test('N-04: persisteaza fileIds extrași din mese în outbox INAINTE de ștergerea mesei', async () => {
+      const evenimente = [];
+      const fetchSalvat = global.fetch;
+      global.fetch = jest.fn(async () => ({ ok: true, status: 200 }));
+
+      const admin = {
+        evenimente,
+        auth: {
+          admin: {
+            deleteUser: async () => {
+              evenimente.push({ tip: 'auth.deleteUser' });
+              return { error: null };
+            },
+          },
+        },
+        rpc: async (functie) => {
+          evenimente.push({ tip: 'rpc', functie });
+          return { data: 'outbox-n4-test', error: null };
+        },
+        from(tabela) {
+          return {
+            select(coloane) {
+              if (tabela === 'mese' && coloane === 'alimente') {
+                return {
+                  eq: async () => ({
+                    data: [
+                      { alimente: { fileId: 'fk_zeta' } },
+                      { alimente: { imageKitFileId: 'fk_theta' } },
+                    ],
+                    error: null,
+                  }),
+                };
+              }
+              return {
+                eq: (col, val) => ({
+                  maybeSingle: async () => {
+                    evenimente.push({ tip: 'select', tabela, coloane, col, val });
+                    if (tabela === 'gdpr_deletions' && coloane === 'file_ids') {
+                      return { data: {}, error: null };
+                    }
+                    return { data: null, error: null };
+                  },
+                }),
+              };
+            },
+            update: (payload) => ({
+              eq: async () => {
+                evenimente.push({ tabela, tip: 'update', payload });
+                return { error: null };
+              },
+            }),
+            delete: () => ({
+              eq: async () => {
+                evenimente.push({ tabela, tip: 'delete' });
+                return { error: null };
+              },
+            }),
+          };
+        },
+      };
+
+      const envIK = process.env.IMAGEKIT_PRIVATE_KEY;
+      const envClerk = process.env.CLERK_SECRET_KEY;
+      process.env.IMAGEKIT_PRIVATE_KEY = 'key-n4';
+      process.env.CLERK_SECRET_KEY = 'sk_n4';
+
+      try {
+        const ctx = { db: admin, admin, userId: 'u-n4', modAdmin: true };
+        const app = express();
+        app.use(createGdprRouter({
+          requireAuth: (req, res, next) => next(),
+          generalLimiter: (req, res, next) => next(),
+          supabaseAdmin: admin,
+          contextDate: () => ctx,
+          profilRepo: {},
+        }));
+
+        const res = await request(app).delete('/delete-account');
+        expect(res.status).toBe(200);
+      } finally {
+        global.fetch = fetchSalvat;
+        process.env.IMAGEKIT_PRIVATE_KEY = envIK;
+        process.env.CLERK_SECRET_KEY = envClerk;
+      }
+
+      const idxPersistare = evenimente.findIndex(
+        (e) => e.tip === 'update' && e.tabela === 'gdpr_deletions' && Array.isArray(e.payload.file_ids),
+      );
+      expect(idxPersistare).toBeGreaterThan(-1);
+      expect(evenimente[idxPersistare].payload.file_ids.slice().sort()).toEqual(['fk_theta', 'fk_zeta']);
+      // Persistarea se face INAINTE de stergerea randurilor mese (sursa fileIds)
+      const idxDeleteMese = evenimente.findIndex((e) => e.tip === 'delete' && e.tabela === 'mese');
+      expect(idxDeleteMese).toBeGreaterThan(-1);
+      expect(idxPersistare).toBeLessThan(idxDeleteMese);
     });
 
     test('fara IMAGEKIT_PRIVATE_KEY -> 500 (ImageKit esuaza INAINTE de deleteUser, ordinea corecta)', async () => {

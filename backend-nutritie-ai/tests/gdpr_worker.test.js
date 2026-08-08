@@ -8,6 +8,7 @@ const express = require('express');
 const request = require('supertest');
 const createGdprRouter = require('../routes/gdpr');
 const { reiaStergerileBlocate } = require('../utils/gdprWorker');
+const { TABELE_CU_RLS_UTILIZATOR } = require('../utils/clientUtilizator');
 
 function creeazaApp(supabaseAdmin, profilRepoFake) {
   const app = express();
@@ -111,10 +112,128 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
 
     const rez = await reiaStergerileBlocate({ supabaseAdmin: adminFake, config: {} });
     expect(rez.reluate).toBe(1);
-    expect(deleteCalls.length).toBeGreaterThan(0);
+    // N-03: worker-ul șterge EXACT toate tabelele user-scoped din lista unică
+    expect(deleteCalls.map((d) => d.tabela).sort()).toEqual([...TABELE_CU_RLS_UTILIZATOR].sort());
     expect(adminFake.auth.admin.deleteUser).toHaveBeenCalledWith('user-456');
-    expect(updateCalls.some((u) => u.status === 'db_done')).toBe(true);
-    expect(updateCalls.some((u) => u.status === 'completed')).toBe(true);
+    // N-02: ordinea statusurilor = ordinea rutei (DB → Clerk → ImageKit → auth)
+    const statusuri = updateCalls.map((u) => u.status);
+    expect(statusuri).toEqual(['db_done', 'clerk_done', 'imagekit_done', 'auth_done', 'completed']);
+  });
+
+  test('reluare de la clerk_done: ImageKit folosește fileIds persistate în outbox (N-04), apoi auth → completed', async () => {
+    const randClerk = {
+      id: 'outbox-clerk-404',
+      user_id: 'user-img',
+      clerk_user_id: 'clerk-404',
+      status: 'clerk_done',
+      file_ids: ['fk_alpha', 'fk_beta'],
+      retry_count: 0,
+      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    };
+
+    const updateCalls = [];
+    const apeluriImageKit = [];
+    const fetchSalvat = global.fetch;
+    global.fetch = jest.fn(async (url) => {
+      apeluriImageKit.push(String(url));
+      return { ok: true, status: 200 };
+    });
+
+    const envSalvat = {
+      IMAGEKIT_PRIVATE_KEY: process.env.IMAGEKIT_PRIVATE_KEY,
+      CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
+    };
+    process.env.IMAGEKIT_PRIVATE_KEY = 'key-test';
+    process.env.CLERK_SECRET_KEY = 'sk_test';
+
+    const adminFake = {
+      auth: {
+        admin: { deleteUser: jest.fn(async () => ({ error: null })) },
+      },
+      from: (tabela) => {
+        if (tabela === 'gdpr_deletions') {
+          return {
+            select: () => ({
+              neq: () => ({
+                neq: () => ({
+                  lt: () => ({
+                    limit: async () => ({ data: [randClerk], error: null }),
+                  }),
+                }),
+              }),
+            }),
+            update: (payload) => ({
+              eq: async () => {
+                updateCalls.push(payload);
+                return { error: null };
+              },
+            }),
+          };
+        }
+        return {
+          delete: () => ({
+            eq: async () => ({ error: null }),
+          }),
+        };
+      },
+    };
+
+    try {
+      const rez = await reiaStergerileBlocate({ supabaseAdmin: adminFake, config: {} });
+      expect(rez.reluate).toBe(1);
+      // fileIds din outbox ajung la ImageKit (N-04), NU o listă goală
+      expect(apeluriImageKit.some((u) => u.includes('/files/fk_alpha'))).toBe(true);
+      expect(apeluriImageKit.some((u) => u.includes('/files/fk_beta'))).toBe(true);
+      expect(updateCalls.map((u) => u.status)).toEqual(['imagekit_done', 'auth_done', 'completed']);
+      expect(adminFake.auth.admin.deleteUser).toHaveBeenCalledWith('user-img');
+    } finally {
+      global.fetch = fetchSalvat;
+      process.env.IMAGEKIT_PRIVATE_KEY = envSalvat.IMAGEKIT_PRIVATE_KEY;
+      process.env.CLERK_SECRET_KEY = envSalvat.CLERK_SECRET_KEY;
+    }
+  });
+
+  test('reluare de la imagekit_done: se reia doar auth.deleteUser (IREVERSIBIL) → auth_done → completed', async () => {
+    const randImgDone = {
+      id: 'outbox-img-7',
+      user_id: 'user-auth',
+      status: 'imagekit_done',
+      file_ids: ['fk_gamma'],
+      retry_count: 0,
+      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    };
+    const updateCalls = [];
+    const adminFake = {
+      auth: {
+        admin: { deleteUser: jest.fn(async () => ({ error: null })) },
+      },
+      from: (tabela) => {
+        if (tabela === 'gdpr_deletions') {
+          return {
+            select: () => ({
+              neq: () => ({
+                neq: () => ({
+                  lt: () => ({
+                    limit: async () => ({ data: [randImgDone], error: null }),
+                  }),
+                }),
+              }),
+            }),
+            update: (payload) => ({
+              eq: async () => {
+                updateCalls.push(payload);
+                return { error: null };
+              },
+            }),
+          };
+        }
+        return { delete: () => ({ eq: async () => ({ error: null }) }) };
+      },
+    };
+    const rez = await reiaStergerileBlocate({ supabaseAdmin: adminFake, config: {} });
+    expect(rez.reluate).toBe(1);
+    expect(updateCalls.map((u) => u.status)).toEqual(['auth_done', 'completed']);
+    expect(adminFake.auth.admin.deleteUser).toHaveBeenCalledWith('user-auth');
   });
 
   test('al 5-lea eșec → status = failed cu retry_count actualizat pe coloana reală', async () => {

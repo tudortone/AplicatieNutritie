@@ -180,15 +180,23 @@ app.use(sanitizeRequest);
 // construieste din req.originalUrl, iar o cale bruta (//api/v1/... sau
 // /api/api/...) ar crea un namespace divergent si ar eluda dedup-ul pe aceeasi
 // Idempotency-Key. originalUrl se sincronizeaza cu url-ul normalizat.
+// M-09: normalizarea se aplica DOAR pe pathname, query-ul ramane intact. Inainte,
+// `req.url.replace(/\/{2,}/g, '/')` se aplica pe tot URL-ul, inclusiv pe query
+// (?url=a//b devenea ?url=a/b) — strica parametrii. Se normalizeaza doar partea
+// dinaintea primului '?' si se reconstruieste cale + cautare.
 app.use((req, res, next) => {
   if (req.url) {
-    let cleanUrl = req.url.replace(/\/{2,}/g, '/');
-    cleanUrl = cleanUrl.replace(/^\/api\/api\//i, '/api/');
-    cleanUrl = cleanUrl.replace(/^\/api\/v1\/api\/v1\//i, '/api/v1/');
-    cleanUrl = cleanUrl.replace(/^\/api\/v1\/api\//i, '/api/v1/');
-    if (cleanUrl !== req.url) {
-      req.url = cleanUrl;
-      req.originalUrl = cleanUrl;
+    const indexSemnIntrebare = req.url.indexOf('?');
+    const cale = indexSemnIntrebare === -1 ? req.url : req.url.slice(0, indexSemnIntrebare);
+    const cautare = indexSemnIntrebare === -1 ? '' : req.url.slice(indexSemnIntrebare);
+    let caleCurata = cale.replace(/\/{2,}/g, '/');
+    caleCurata = caleCurata.replace(/^\/api\/api\//i, '/api/');
+    caleCurata = caleCurata.replace(/^\/api\/v1\/api\/v1\//i, '/api/v1/');
+    caleCurata = caleCurata.replace(/^\/api\/v1\/api\//i, '/api/v1/');
+    const curat = caleCurata + cautare;
+    if (curat !== req.url) {
+      req.url = curat;
+      req.originalUrl = curat;
     }
   }
   next();

@@ -56,12 +56,27 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 		skip: sarePreflight,
 	};
 
-	// `store` poate fi un fabricant (funcție) care întoarce o instanță NOUĂ de
-	// store per limiter, cu prefix unic. Un singur store partajat între 4
-	// limitatoare ar fi interzis de express-rate-limit v8 (ERR_ERL_STORE_REUSE),
-	// iar ultimul init() ar suprascrie windowMs-ul celorlalte limitatoare.
+	// `store` este un fabricant (funcție) care întoarce o instanță NOUĂ de store
+	// per limiter, cu prefix unic. Un singur store partajat între 4 limitatoare
+	// ar fi interzis de express-rate-limit v8 (ERR_ERL_STORE_REUSE), iar ultimul
+	// init() ar suprascrie windowMs-ul celorlalte limitatoare.
+	//
+	// N-05: ramura „store = obiect" a fost eliminată. Contractul real al registrului
+	// partajat (utils/storePartajat.js — creeazaStoreRateLimit) expune DOAR un
+	// fabricant: { store: creeaza }. Un obiect store împărțit direct între cele 4
+	// limitatoare ar fi respins la init() cu ERR_ERL_STORE_REUSE (v8), deci acea
+	// ramură nu putea fi atinsă corect niciodată.
 	const cuStorePropriu = (prefix) =>
-		typeof store === 'function' ? { store: store({ prefix }) } : { ...(store ? { store } : {}) };
+		typeof store === 'function' ? { store: store({ prefix }) } : {};
+
+	// N-05: dacă cineva trece un `store` nefuncțional, nu-l împărțim spre 4
+	// limitatoare (ar crăpa la init) — avertisment unic la boot + MemoryStore implicit.
+	if (store && typeof store !== 'function') {
+		console.warn(
+			'Rate limit: `store` nefuncțional ignorat (așteptat fabricant din ' +
+				'creeazaStoreRateLimit); se folosește MemoryStore implicit.',
+		);
+	}
 
 	const preAuthLimiter = rateLimit({
 		...comun,

@@ -24,11 +24,25 @@
  */
 
 const express = require('express');
-const { tabelUtilizator, inregistreazaUtilizareAdmin } = require('../utils/clientUtilizator');
+const {
+  tabelUtilizator,
+  inregistreazaUtilizareAdmin,
+  TABELE_CU_RLS_UTILIZATOR,
+} = require('../utils/clientUtilizator');
 
 const IMAGEKIT_API = ['https:', '', 'api.imagekit.io', 'v1'].join('/');
 const CLERK_USERS_API = ['https:', '', 'api.clerk.com', 'v1', 'users'].join('/');
 const MAX_ADANCIME_JSON = 8;
+
+/**
+ * N-03: codurile care înseamnă „tabela nu există pe schema curentă" și pe care
+ * avem voie să le ignorăm la ștergerea GDPR (try-per-table). Aceleași coduri ca
+ * în gdprWorker, păstrate aici ca ruta și workerul să evolueze independent, fără
+ * dependență circulară (workerul importă deja din routes/gdpr). Orice altă
+ * eroare oprește ștergerea — altfel am marca `completed` o ștergere care nu
+ * s-a întâmplat (P-05b).
+ */
+const CODURI_TABELA_INEXISTENTA = new Set(['42P01', 'PGRST205', 'PGRST106']);
 
 function codEroare(err) {
   return err?.code || err?.name || 'NECUNOSCUT';
@@ -218,9 +232,12 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
    *      curățarea Clerk/ImageKit a reușit)
    *
    * Statusurile outbox: `db_done` (după rândurile DB), `auth_done` (după
-   * deleteUser), `completed`. Nu înregistrăm `clerk_done`/`imagekit_done`
-   * înainte de auth: workerul tratează `clerk_done` drept „auth deja șters" și
-   * ar finaliza cu `completed` fără ștergerea identității (M-06).
+   * deleteUser), `completed`. Ruta scrie direct `db_done`/`auth_done`/`completed`;
+   * workerul (gdprWorker.js, N-02) folosește `clerk_done` și `imagekit_done`
+   * pentru reluarea granulară, urmând aceeași ordine a rutei:
+   * `db_done` → Clerk → `clerk_done` → ImageKit → `imagekit_done` →
+   * auth.deleteUser → `auth_done` → `completed`. Dacă ruta e întreruptă după
+   * `db_done`, workerul reia exact de la statusul persistat (M-06).
    */
   router.delete('/delete-account', requireAuth, generalLimiter, async (req, res) => {
     try {
@@ -264,25 +281,55 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       };
 
       // P-06: extrage fileId-urile ÎNAINTE de a șterge rândurile din DB
-      const fileIds = await extrageFileIdsUtilizator({ supabaseAdmin, userId });
+      let fileIds = await extrageFileIdsUtilizator({ supabaseAdmin, userId });
 
-      // PASUL 1 (reversibil): Ștergere rânduri DB
-      const sterge = async (tabela) => {
-        const { error } = await tabelUtilizator(ctx, tabela).delete().eq('user_id', userId);
-        if (error) throw error;
-      };
+      // N-04: persistenăm fileIds-urile în outbox ÎNAINTE de ștergerea rândurilor
+      // `mese` (sursa lor e JSONB-ul `alimente`, pe cale să dispară). Un retry după
+      // un eșec (rândurile deja șterse, extragere goală) reutilizează lista
+      // persistată; nu suprascriem o listă non-goală cu una goală.
+      if (outboxId) {
+        try {
+          const { data: randOutbox } = await supabaseAdmin
+            .from('gdpr_deletions')
+            .select('file_ids')
+            .eq('id', outboxId)
+            .maybeSingle();
+          const fileIdsPersistate = Array.isArray(randOutbox?.file_ids) ? randOutbox.file_ids : [];
+          if (fileIds.size === 0 && fileIdsPersistate.length > 0) {
+            fileIds = new Set(fileIdsPersistate);
+          }
+          if (fileIds.size > 0 || fileIdsPersistate.length === 0) {
+            await supabaseAdmin
+              .from('gdpr_deletions')
+              .update({ file_ids: [...fileIds] })
+              .eq('id', outboxId);
+          }
+        } catch {
+          // best-effort: ștergerea continuă și fără fileIds persistate
+        }
+      }
 
+      // PASUL 1 (reversibil): Ștergere rânduri DB din TOATE tabelele user-scoped.
+      // N-03: o singură listă — TABELE_CU_RLS_UTILIZATOR din clientUtilizator.js
+      // (sursa de adevăr) — acoperă exact toate tabelele, inclusiv cele rămase
+      // negate (produse_camara, gamificare, workout_logs, ai_jobs, credite_ai).
       // C1-S4: stergere admin (service_role) pe tabele de utilizator, fara
       // context — calea GDPR (utilizatorul s-a autentificat si a confirmat).
+      // routes/gdpr.js e scutit explicit de regula C1-S3 anti-by-pass RLS
+      // (eslint.config.js) exact pentru acest caz: unele dintre tabele
+      // (gamificare, audit_log, credite_ai) au DOAR politici SELECT-own, deci
+      // ștergerea prin clientul legat al utilizatorului ar eșua cu RLS.
       inregistreazaUtilizareAdmin();
 
-      await Promise.all([
-        sterge('mese'),
-        sterge('profil'),
-        sterge('antrenamente'),
-        sterge('barcode_estimari_utilizator'),
-        sterge('audit_log'),
-      ]);
+      const sterge = async (tabela) => {
+        const rezultat = await supabaseAdmin.from(tabela).delete().eq('user_id', userId);
+        const eroare = rezultat?.error;
+        // Try-per-table (P-05b): un tabel care nu există pe un anumit mediu
+        // (e.g. migrări neaplicate) e ignorat, ca și în gdprWorker; orice altă
+        // eroare oprește ștergerea ca să nu marchem `completed` cu date rămase.
+        if (eroare && !CODURI_TABELA_INEXISTENTA.has(eroare.code)) throw eroare;
+      };
+      await Promise.all(TABELE_CU_RLS_UTILIZATOR.map(tabela => sterge(tabela)));
       await actualizezaStatus('db_done');
 
       // PASUL 2 (reversibil — reluabil): Ștergere identitate Clerk
