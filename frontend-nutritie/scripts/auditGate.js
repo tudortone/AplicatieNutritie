@@ -25,6 +25,11 @@ const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 // Pachete blocate de SDK-ul Expo 54. Se goleste la upgrade-ul expo@57.
 // NU adauga pachete noi aici fara motiv: un pachet nou vulnerabil trebuie triat.
+//
+// @gorhom/bottom-sheet: advisory-ul propagat (via react-native-reanimated) nu are
+// versiune patched — npm sugereaza downgrade la 5.1.7 (major, rupe componenta pe
+// RN 0.81). Acelasi advisory apare si direct pe react-native-reanimated (allowlisted);
+// npm@10 din CI il expune si sub numele @gorhom/bottom-sheet. Backlog expo@57.
 const ALLOWLIST = new Set([
 	'@expo/cli',
 	'@expo/config',
@@ -32,6 +37,7 @@ const ALLOWLIST = new Set([
 	'@expo/metro',
 	'@expo/metro-config',
 	'@expo/prebuild-config',
+	'@gorhom/bottom-sheet',
 	'@react-native/community-cli-plugin',
 	'@react-three/drei',
 	'@react-three/fiber',
