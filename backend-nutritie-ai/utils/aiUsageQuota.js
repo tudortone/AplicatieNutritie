@@ -87,9 +87,11 @@ function creeazaCheckAiUsageQuota({
               });
             };
             res.once('finish', () => {
-              // DOAR erorile de server (5xx) arată că operația AI a eșuat — 4xx
-              // înseamnă cerere invalidă; acolo creditul nu se returnează.
-              if (!req._creditConsumat || !res.statusCode || res.statusCode < 500) return;
+              // Refundăm creditul plătit când operația AI a eșuat: 5xx (eroare de
+              // server) sau 429 (cooldown-ul furnizorului, idem cota gratuită de
+              // mai jos). 4xx înseamnă cerere invalidă — acolo creditul nu se returnează.
+              if (!req._creditConsumat || !res.statusCode) return;
+              if (res.statusCode !== 429 && res.statusCode < 500) return;
               restituiePlatit();
             });
             // G3: și la `close` fără răspuns 2xx complet (client deconectat / socket

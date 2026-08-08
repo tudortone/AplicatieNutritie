@@ -125,6 +125,42 @@ describe('Plafon cost AI per utilizator (H-06)', () => {
     expect(refund.params.p_delta).toBe(1);
   });
 
+  test('#H1: finish cu 429 (cooldown provider) => refund credit platit', async () => {
+    const apeluriRpc = [];
+    const admin = {
+      rpc: jest.fn(async (functie, params) => {
+        apeluriRpc.push({ functie, params });
+        if (functie === 'consuma_credit') return { data: 4, error: null };
+        if (functie === 'aplica_tranzactie_credite') return { data: 5, error: null };
+        return { data: null, error: null };
+      }),
+    };
+    const contor = contorCu(0);
+    const c = creeazaCheckAiUsageQuota({ contor, supabaseAdmin: admin, limitaZi: 5 });
+
+    let finishHandler = null;
+    const res = { statusCode: 200, headers: {} };
+    res.setHeader = (key, value) => { res.headers[key] = value; };
+    res.once = (evnt, handler) => { if (evnt === 'finish') finishHandler = handler; };
+
+    const req = { user: { id: 'u1' } };
+    const next = jest.fn();
+    await c(req, res, next);
+
+    // Cooldown-ul furnizorului răspunde 429: creditul plătit trebuie restituit,
+    // altfel o analiză refuzată arde un credit plătit fără rezultat.
+    res.statusCode = 429;
+    finishHandler();
+    await Promise.resolve();
+
+    const refund = apeluriRpc.find((a) => a.functie === 'aplica_tranzactie_credite');
+    expect(refund).toBeDefined();
+    expect(refund.params.p_user_id).toBe('u1');
+    expect(refund.params.p_event_id).toBe(req._creditEventId);
+    expect(refund.params.p_event_type).toBe('REFUND_AI_FAILURE');
+    expect(refund.params.p_delta).toBe(1);
+  });
+
   test('#M-05: finish cu 2xx => NU exista refund', async () => {
     const apeluriRpc = [];
     const admin = {
