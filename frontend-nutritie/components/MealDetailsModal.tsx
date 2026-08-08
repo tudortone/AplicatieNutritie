@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal,
   View,
@@ -7,13 +7,18 @@ import {
   TouchableOpacity,
   ScrollView,
   Pressable,
+  Image,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { X, Pencil, Trash2, Dumbbell, Flame, Info } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { X, Pencil, Trash2, Dumbbell, Flame, Info, Lock } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
-import { Masa, AminoaciziEsentiali } from '../types';
+import { usePremium } from '../context/PremiumContext';
+import { Masa, AlimentDetaliat, AminoaciziEsentiali } from '../types';
 import { FoodDetailModal } from './food/FoodDetailModal';
+import { EditAlimentModal } from './food/EditAlimentModal';
+import { obtinePozaMasa, recalculeazaTotaluri, parseAlimente } from '../lib/mealUtils';
 
 interface Props {
   visible: boolean;
@@ -21,6 +26,7 @@ interface Props {
   onClose: () => void;
   onEdit?: (masa: Masa) => void;
   onDelete?: (masa: Masa) => void;
+  onUpdateMasa?: (updated: Masa) => Promise<void> | void;
 }
 
 // Funcție pentru estimarea / calcularea profilului de aminoacizi esențiali pe baza cantității de proteine (dacă nu au fost furnizați manual)
@@ -55,19 +61,39 @@ function getAminoProfile(proteineTotal: number, customAmino?: AminoaciziEsential
   };
 }
 
-export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: Props) {
+export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete, onUpdateMasa }: Props) {
   const { colors } = useTheme();
+  const router = useRouter();
+  const { isPremium } = usePremium();
+  const [masaLocal, setMasaLocal] = useState<Masa | null>(null);
   const [detailAliment, setDetailAliment] = useState<any>(null);
   const [detailVisible, setDetailVisible] = useState(false);
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editAliment, setEditAliment] = useState<AlimentDetaliat | null>(null);
+  const [editVisible, setEditVisible] = useState(false);
 
-  if (!masa) return null;
+  // Sincronizare cu prop-ul: la fiecare deschidere (masa nouă) luăm copia locală.
+  // `masa` e stabil cât timp modalul e deschis (propagat din state), deci includerea
+  // lui nu resetează editările optimiste în curs.
+  useEffect(() => {
+    setMasaLocal(masa);
+    setEditIdx(null);
+    setEditAliment(null);
+    setEditVisible(false);
+    setDetailVisible(false);
+  }, [visible, masa]);
 
-  const alimenteList = masa.alimente && masa.alimente.length > 0
-    ? masa.alimente
-    : [{ nume: masa.nume, calorii: masa.calorii, proteine: masa.proteine, carbohidrati: masa.carbohidrati, grasimi: masa.grasimi, grame: 100 }];
+  if (!masa || !masaLocal) return null;
+
+  const pozaUrl = obtinePozaMasa(masaLocal);
+
+  const alimenteParsate = parseAlimente(masaLocal);
+  const alimenteList = alimenteParsate.length > 0
+    ? alimenteParsate
+    : [{ nume: masaLocal.nume, calorii: masaLocal.calorii, proteine: masaLocal.proteine, carbohidrati: masaLocal.carbohidrati, grasimi: masaLocal.grasimi, grame: 100 }];
 
   // Căutăm dacă vreun aliment are aminoacizi definiți, altfel calculăm totalul
-  const customAmino = masa.alimente?.reduce((acc, al) => {
+  const customAmino = parseAlimente(masaLocal).reduce((acc, al) => {
     if (al.aminoacizi) {
       return {
         leucina: (acc.leucina || 0) + (al.aminoacizi.leucina || 0),
@@ -84,8 +110,33 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
     return acc;
   }, {} as AminoaciziEsentiali);
 
-  const aminoProfile = getAminoProfile(masa.proteine, customAmino);
+  const aminoProfile = getAminoProfile(masaLocal.proteine, customAmino);
   const totalBcaa = aminoProfile.leucina + aminoProfile.izoleucina + aminoProfile.valina;
+
+  // Salvează ingredientul editat: înlocuiește elementul, recalculează totalurile
+  // din listă și actualizează — local (optimist) + upstream printr-onUpdateMasa.
+  const salveazaAliment = (idx: number, actualizat: AlimentDetaliat): void => {
+    const sursa = parseAlimente(masaLocal);
+    const alimente = sursa.length > 0
+      ? sursa.map((a, i) => (i === idx ? { ...a, ...actualizat } : a))
+      : [actualizat];
+    const totaluri = recalculeazaTotaluri(alimente);
+    const urmatoare: Masa = {
+      ...masaLocal,
+      alimente,
+      calorii: totaluri.calorii,
+      proteine: totaluri.proteine,
+      carbohidrati: totaluri.carbohidrati,
+      grasimi: totaluri.grasimi,
+      fibre: totaluri.fibre,
+    };
+    setMasaLocal(urmatoare);
+    setEditAliment(null);
+    setEditIdx(null);
+    if (onUpdateMasa) {
+      void Promise.resolve(onUpdateMasa(urmatoare)).catch(() => {});
+    }
+  };
 
   return (
     <Modal
@@ -104,10 +155,10 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
           <View style={styles.header}>
             <View style={{ flex: 1, marginRight: 12 }}>
               <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
-                {masa.nume}
+                {masaLocal.nume}
               </Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                {masa.tip_masa ? masa.tip_masa.toUpperCase().replace('_', ' ') : 'MASĂ INREGISTRATĂ'} • {masa.alimente?.length || 1} {masa.alimente?.length === 1 ? 'aliment' : 'alimente'}
+                {masaLocal.tip_masa ? masaLocal.tip_masa.toUpperCase().replace('_', ' ') : 'MASA ÎNREGISTRATĂ'} • {alimenteList.length} {alimenteList.length === 1 ? 'aliment' : 'alimente'}
               </Text>
             </View>
 
@@ -121,26 +172,63 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
           </View>
 
           <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Macro Summary Cards */}
-            <View style={styles.summaryGrid}>
+            {/* Poza mesei (premium) — sus, imediat deasupra totalurilor */}
+            {pozaUrl ? (
+              isPremium ? (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => {
+                    try {
+                      Haptics.selectionAsync();
+                    } catch {}
+                  }}
+                  style={styles.photoContainer}
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel="Poza mesei"
+                >
+                  <Image source={{ uri: pozaUrl }} style={styles.photo} resizeMode="cover" />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => router.push('/paywall' as never)}
+                  activeOpacity={0.95}
+                  style={styles.photoContainer}
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel="Deblochează pozele meselor cu Premium"
+                >
+                  <Image source={{ uri: pozaUrl }} style={styles.photo} resizeMode="cover" />
+                  <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
+                  <View style={styles.photoLockOverlay}>
+                    <View style={styles.photoLockBadge}>
+                      <Lock size={14} color="#FFFFFF" />
+                      <Text style={styles.photoLockBadgeText}>Pozele mesei sunt Premium</Text>
+                    </View>
+                    <Text style={styles.photoLockCta}>Deblochează cu Premium</Text>
+                  </View>
+                </TouchableOpacity>
+              )
+            ) : null}
+
+            {/* Macro Summary Cards — exact sub poza */}
+            <View style={[styles.summaryGrid, { marginTop: pozaUrl ? 16 : 0 }]}>
               <View style={[styles.macroBox, { backgroundColor: colors.accent + '15', borderColor: colors.accent + '40' }]}>
                 <Flame size={18} color={colors.accent} />
-                <Text style={[styles.macroVal, { color: colors.accent }]}>{masa.calorii}</Text>
+                <Text style={[styles.macroVal, { color: colors.accent }]}>{masaLocal.calorii}</Text>
                 <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>kcal</Text>
               </View>
 
               <View style={[styles.macroBox, { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: colors.cardBorder }]}>
-                <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masa.proteine}g</Text>
+                <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masaLocal.proteine}g</Text>
                 <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Proteine</Text>
               </View>
 
               <View style={[styles.macroBox, { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: colors.cardBorder }]}>
-                <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masa.carbohidrati}g</Text>
+                <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masaLocal.carbohidrati}g</Text>
                 <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Carbi</Text>
               </View>
 
               <View style={[styles.macroBox, { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: colors.cardBorder }]}>
-                <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masa.grasimi}g</Text>
+                <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masaLocal.grasimi}g</Text>
                 <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Grăsimi</Text>
               </View>
             </View>
@@ -156,6 +244,15 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
                     <Text style={[styles.ingredientName, { color: colors.textPrimary }]}>{al.nume}</Text>
                     {al.grame ? <Text style={[styles.ingredientGram, { color: colors.textTertiary }]}>{al.grame}g porție</Text> : null}
                   </View>
+                  <TouchableOpacity
+                    onPress={() => { setEditIdx(idx); setEditAliment(al); setEditVisible(true); }}
+                    style={styles.editBtn}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Corectează datele pentru ${al.nume}`}
+                  >
+                    <Pencil size={15} color={colors.accentSecondary} />
+                  </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => { setDetailAliment(al); setDetailVisible(true); }}
                     style={styles.detailBtn}
@@ -191,7 +288,7 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
 
               <Text style={[styles.aminoSub, { color: colors.textSecondary }]}>
                 {aminoProfile.isEstimated
-                  ? '⚡ Estimare profil complet pe baza celor ' + masa.proteine + 'g de proteine pure din această masă.'
+                  ? '⚡ Estimare profil complet pe baza celor ' + masaLocal.proteine + 'g de proteine pure din această masă.'
                   : '✅ Valori detaliate furnizate din catalog / analiză AI.'}
               </Text>
 
@@ -252,7 +349,7 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
                 onPress={() => {
                   Haptics.selectionAsync();
                   onClose();
-                  onEdit(masa);
+                  onEdit(masaLocal);
                 }}
               >
                 <Pencil size={16} color={colors.textPrimary} />
@@ -266,7 +363,7 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
                 onPress={() => {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                   onClose();
-                  onDelete(masa);
+                  onDelete(masaLocal);
                 }}
               >
                 <Trash2 size={16} color={colors.danger} />
@@ -288,6 +385,19 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete }: P
         visible={detailVisible}
         onClose={() => setDetailVisible(false)}
         aliment={detailAliment}
+      />
+      {/* Editare inline ingredient (corectare greșeli) */}
+      <EditAlimentModal
+        visible={editVisible}
+        aliment={editAliment}
+        onClose={() => {
+          setEditVisible(false);
+          setEditAliment(null);
+          setEditIdx(null);
+        }}
+        onSave={(actualizat) => {
+          if (editIdx != null) salveazaAliment(editIdx, actualizat);
+        }}
       />
     </Modal>
   );
@@ -343,6 +453,41 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 24,
+  },
+  photoContainer: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  photo: {
+    width: '100%',
+    height: 300,
+  },
+  photoLockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  photoLockBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  photoLockBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  photoLockCta: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -401,6 +546,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     marginTop: 2,
+  },
+  editBtn: {
+    padding: 6,
+    marginRight: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   detailBtn: {
     padding: 6,

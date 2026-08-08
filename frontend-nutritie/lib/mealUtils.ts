@@ -1,4 +1,4 @@
-import { TipMasa } from '../types';
+import { TipMasa, Masa, AlimentDetaliat } from '../types';
 
 export interface CategorieMasaMeta {
   id: TipMasa;
@@ -88,6 +88,72 @@ export async function insereazaMasaCuPoza(
     return client.from('mese').insert(faraPoza).select();
   }
   return prima;
+}
+
+/** Normalizeaza `alimente` (array sau string JSON) intr-un array. */
+export function parseAlimente(masa: Pick<Masa, 'alimente'>): AlimentDetaliat[] {
+  if (Array.isArray(masa.alimente)) return masa.alimente;
+  if (typeof masa.alimente === 'string') {
+    try {
+      const parsed = JSON.parse(masa.alimente);
+      if (Array.isArray(parsed)) return parsed as AlimentDetaliat[];
+    } catch {
+      // JSONB corupt — tratat ca list goala; macro-urile flat raman sursa.
+    }
+  }
+  return [];
+}
+
+/**
+ * Poza mesei = o singura sursa rezolvata: `masa.imagine_url` (coloana, optionala)
+ * ?? prima imagine din `alimente[].imageUrl` (JSONB, autoritara pentru mesele din
+ * camera). Gurdeaza ca mesele cu poza in JSONB sa afiseze si pe card, nu doar
+ * cele care au coloana `imagine_url` aplicata.
+ */
+export function obtinePozaMasa(masa: Pick<Masa, 'imagine_url' | 'alimente'>): string | null {
+  if (masa.imagine_url) return masa.imagine_url;
+  const alimente = parseAlimente(masa);
+  for (const al of alimente) {
+    if (al.imageUrl) return al.imageUrl;
+  }
+  return null;
+}
+
+export interface TotaluriMasa {
+  calorii: number;
+  proteine: number;
+  carbohidrati: number;
+  grasimi: number;
+  fibre: number;
+}
+
+/** Rotunjime iesipe 1 zecimala (kcal) / 2 (macro) — aliniat cu validatorul backend. */
+function rotunjeste(valoare: number, zecimale: number): number {
+  if (!Number.isFinite(valoare) || valoare < 0) return 0;
+  const factor = Math.pow(10, zecimale);
+  return Math.round(valoare * factor) / factor;
+}
+
+/** Recalculeaza totalurile mesei din ingredient (suma, clamp>=0). */
+export function recalculeazaTotaluri(alimente: AlimentDetaliat[]): TotaluriMasa {
+  const total = alimente.reduce(
+    (acc, al) => {
+      acc.calorii += Number(al.calorii) || 0;
+      acc.proteine += Number(al.proteine) || 0;
+      acc.carbohidrati += Number(al.carbohidrati) || 0;
+      acc.grasimi += Number(al.grasimi) || 0;
+      acc.fibre += Number(al.fibre) || 0;
+      return acc;
+    },
+    { calorii: 0, proteine: 0, carbohidrati: 0, grasimi: 0, fibre: 0 },
+  );
+  return {
+    calorii: rotunjeste(total.calorii, 1),
+    proteine: rotunjeste(total.proteine, 2),
+    carbohidrati: rotunjeste(total.carbohidrati, 2),
+    grasimi: rotunjeste(total.grasimi, 2),
+    fibre: rotunjeste(total.fibre, 2),
+  };
 }
 
 /** La fel ca `insereazaMasaCuPoza`, pentru editarea unei mese existente. */

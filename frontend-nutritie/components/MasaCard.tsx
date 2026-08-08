@@ -1,22 +1,15 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, Pressable } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import Animated, { Layout } from 'react-native-reanimated';
-import { Clock, Pencil, Trash2 } from 'lucide-react-native';
+import { Clock, Pencil, Trash2, Lock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Masa, AlimentDetaliat } from '../types';
+import { Masa } from '../types';
 import { useTheme } from '../context/ThemeContext';
-
-function parseAlimente(masa: Masa): AlimentDetaliat[] {
-  if (Array.isArray(masa.alimente)) return masa.alimente;
-  if (typeof masa.alimente === 'string') {
-    try {
-      const parsed = JSON.parse(masa.alimente);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {}
-  }
-  return [];
-}
+import { usePremium } from '../context/PremiumContext';
+import { obtinePozaMasa, parseAlimente } from '../lib/mealUtils';
 
 interface MasaCardProps {
   masa: Masa;
@@ -32,8 +25,10 @@ export const MasaCard = React.memo(function MasaCard({
   onDelete,
 }: MasaCardProps) {
   const { colors } = useTheme();
+  const router = useRouter();
+  const { isPremium } = usePremium();
   const alimenteSubList = useMemo(() => parseAlimente(masa), [masa.alimente]);
-  const [fotoVisible, setFotoVisible] = useState(false);
+  const pozaUrl = obtinePozaMasa(masa);
 
   return (
     <Animated.View layout={Layout.springify()} style={styles.cardContainer}>
@@ -206,48 +201,56 @@ export const MasaCard = React.memo(function MasaCard({
               </View>
             </View>
 
-            {masa.imagine_url ? (
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
-                  setFotoVisible(true);
-                }}
-                style={styles.imageBottomContainer}
-                accessibilityRole="imagebutton"
-                accessibilityLabel="Vezi poza mesei mărită"
-              >
-                <Image
-                  source={{ uri: masa.imagine_url }}
-                  style={styles.imageBottom}
-                  resizeMode="cover"
-                />
-              </Pressable>
+            {pozaUrl ? (
+              isPremium ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    try {
+                      Haptics.selectionAsync();
+                    } catch {}
+                    onPress(masa);
+                  }}
+                  activeOpacity={0.9}
+                  style={styles.imageBottomContainer}
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel="Vezi poza mesei și detaliile"
+                >
+                  <Image
+                    source={{ uri: pozaUrl }}
+                    style={styles.imageBottom}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    router.push('/paywall' as never);
+                  }}
+                  activeOpacity={0.95}
+                  style={styles.imageBottomContainer}
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel="Deblochează pozele meselor cu Premium"
+                >
+                  <Image
+                    source={{ uri: pozaUrl }}
+                    style={styles.imageBottom}
+                    resizeMode="cover"
+                  />
+                  <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
+                  <View style={styles.lockOverlay}>
+                    <View style={styles.lockBadge}>
+                      <Lock size={14} color={colors.textPrimary} />
+                      <Text style={styles.lockBadgeText}>Pozele mesei sunt Premium</Text>
+                    </View>
+                    <Text style={styles.lockCta}>Deblochează cu Premium</Text>
+                  </View>
+                </TouchableOpacity>
+              )
             ) : null}
           </View>
         </View>
       </TouchableOpacity>
-
-      {/* Viewer poza masa: apasă pe poza din jurnal ca să o vezi exact */}
-      <Modal
-        visible={fotoVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setFotoVisible(false)}
-      >
-        <Pressable
-          style={styles.viewerBackdrop}
-          onPress={() => setFotoVisible(false)}
-          accessibilityRole="button"
-          accessibilityLabel="Închide poza mesei"
-        >
-          <Image
-            source={{ uri: masa.imagine_url }}
-            style={styles.viewerImage}
-            resizeMode="contain"
-          />
-          <Text style={styles.viewerHint}>Apasă oriunde pentru a închide</Text>
-        </Pressable>
-      </Modal>
     </Animated.View>
   );
 }, (prev, next) => {
@@ -282,23 +285,31 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 160,
   },
-  viewerBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
-    justifyContent: 'center',
+  lockOverlay: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
-    padding: 16,
+    justifyContent: 'center',
+    gap: 8,
   },
-  viewerImage: {
-    width: '100%',
-    height: '78%',
-    borderRadius: 12,
+  lockBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  viewerHint: {
-    marginTop: 18,
-    color: 'rgba(255,255,255,0.7)',
+  lockBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  lockCta: {
+    color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '800',
+    textDecorationLine: 'underline',
   },
   cardGrad: {
     padding: 16,
