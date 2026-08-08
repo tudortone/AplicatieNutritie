@@ -264,6 +264,7 @@ export default function AuthScreen() {
 
         {/* Calculated Plan Banner */}
         {planCalculat ? (
+          <>
           <Animated.View entering={FadeInUp.duration(600).delay(280)} style={[styles.planCard, { maxWidth: contentMaxWidth }]}>
             <LinearGradient colors={colors.accentGradient} style={styles.planGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <View style={styles.planHeaderRow}>
@@ -287,6 +288,28 @@ export default function AuthScreen() {
               </Text>
             </LinearGradient>
           </Animated.View>
+          {/* Refă testele: chiar și cu un plan deja calculat, utilizatorul poate
+              relua chestionarul de la început — aceeași acțiune ca la cardul fără
+              plan (setOnboardingDone(false) + revenire la /onboarding). */}
+          <Animated.View entering={FadeInUp.duration(600).delay(280)} style={{ width: '100%', maxWidth: contentMaxWidth, marginBottom: 20, marginTop: 14 }}>
+            <TouchableOpacity
+              style={[styles.noPlanCard, { borderColor: colors.accent + '44', backgroundColor: colors.cardBg }]}
+              onPress={() => {
+                setOnboardingDone(false);
+                router.replace('/onboarding');
+              }}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Refă testele de calorié din chestionarul NutriAI"
+            >
+              <Sparkles size={20} color={colors.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.noPlanTitle, { color: colors.textPrimary }]}>Vrei să recalculezi planul?</Text>
+                <Text style={[styles.noPlanSub, { color: colors.accent }]}>Refă testele de calorié ➔</Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+          </>
         ) : (
           <Animated.View entering={FadeInUp.duration(600).delay(280)} style={{ width: '100%', maxWidth: contentMaxWidth, marginBottom: 20 }}>
             <TouchableOpacity
