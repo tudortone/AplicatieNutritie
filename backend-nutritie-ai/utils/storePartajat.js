@@ -16,6 +16,10 @@
  */
 
 const { MemoryStore } = require('express-rate-limit');
+// Task 1: codEroare mutat în utilitarul comun (utils/codEroare.js) — o singură
+// definiție pentru întregul backend. Re-exportat mai jos, la module.exports,
+// ca utils/contorPartajat.js (care îl destructure din acest modul) să rămână verde.
+const { codEroare } = require('./codEroare');
 
 const PLAFON_INTRARI = 5000;
 const CURATARE_INTERVAL_MS = 5 * 60 * 1000;
@@ -33,11 +37,6 @@ const ultimulAvertismentPeMesaj = new Map();
 // evictie FIFO (vezi MapCuExpirare / ContorLocalCuTtl) — throttling-ul ramane
 // neschimbat, doar cresterea memoriei e limitata.
 const PLAFON_AVERTISMENTE = 200;
-
-function codEroare(err) {
-  if (!err) return 'NECUNOSCUT';
-  return err?.code || err?.name || 'NECUNOSCUT';
-}
 
 function logWarnThrottled(mesaj) {
   const acum = Date.now();

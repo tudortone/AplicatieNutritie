@@ -5,19 +5,17 @@
  */
 
 const Sentry = require('@sentry/node');
-const { stergeIdentitateClerk, stergeActiveImageKit } = require('../routes/gdpr');
+const { stergeIdentitateClerk, stergeActiveImageKit, CODURI_TABELA_INEXISTENTA } = require('./gdprServices');
 const { inregistreazaUtilizareAdmin, TABELE_CU_RLS_UTILIZATOR } = require('./clientUtilizator');
 // TASK-11: tag-urile Sentry nu pot conține identificatori bruti (PII). Folosim
 // pseudonimizatorul central ca să păstrăm corelarea unui anumit cont fără a
 // expune user_id/sesiunea în telemetrie.
 const { pseudonimizeaza } = require('./sentrySanitize');
 
-/**
- * Singurele coduri care înseamnă „tabela nu există pe schema curentă" și pe care
- * avem voie să le ignorăm. Orice altă eroare trebuie să oprească avansarea
- * statusului: altfel marcăm `completed` o ștergere GDPR care nu s-a întâmplat.
- */
-const CODURI_TABELA_INEXISTENTA = new Set(['42P01', 'PGRST205', 'PGRST106']);
+// Codurile tolerate („tabela nu există") sunt definite o singură dată, în
+// utils/gdprServices.js — le importăm de acolo, ca ruta și workerul să
+// folosească aceeași listă. Orice altă eroare oprește avansarea statusului,
+// altfel am marca `completed` o ștergere care nu s-a întâmplat (P-05b).
 
 async function stergeRanduriDbUtilizator(supabaseAdmin, userId) {
   if (!userId || !supabaseAdmin) return;
@@ -26,7 +24,8 @@ async function stergeRanduriDbUtilizator(supabaseAdmin, userId) {
   inregistreazaUtilizareAdmin();
   // N-03: aceeași listă unică de tabele user-scoped ca ruta — sursa de adevăr e
   // TABELE_CU_RLS_UTILIZATOR din clientUtilizator.js. Un tabel inexistent pe un
-  // mediu nou e tolerat prin CODURI_TABELA_INEXISTENTA de mai jos.
+  // mediu nou e tolerat prin CODURI_TABELA_INEXISTENTA (importat mai
+  // sus din utils/gdprServices.js — definiția unică, nu mai e copiată local).
   const tabele = TABELE_CU_RLS_UTILIZATOR;
   for (const tabela of tabele) {
     // supabase-js NU aruncă pentru erori de bază de date: le întoarce în `error`.

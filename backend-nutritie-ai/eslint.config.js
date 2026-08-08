@@ -86,15 +86,16 @@ module.exports = [
     //     de orice stergere; cale de backend.
     //   - routes/ai.js: creaza/actualizeaza job-uri in ai_jobs (insert/update sunt
     //     revocate catre anon/authenticated, raman doar service_role).
-    //   - utils/gdprWorker.js + src/trigger/**: background workers fara JWT — scriu
-    //     pe tabele de utilizator doar dupa ce outbox-ul a marcat contul
-    //     deletion_pending.
+    //   - utils/gdprWorker.js + utils/gdprServices.js + src/trigger/**: background
+    //     workers fara JWT — scriu pe tabele de utilizator doar dupa ce
+    //     outbox-ul a marcat contul deletion_pending.
     files: [
       "routes/webhooks.js",
       "routes/webhooksRevenueCat.js",
       "routes/gdpr.js",
       "routes/ai.js",
       "utils/gdprWorker.js",
+      "utils/gdprServices.js",
       "src/trigger/**",
     ],
     rules: {

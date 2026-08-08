@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Masa, TipMasa, AlimentDetaliat } from '../types';
-import { getTipMasaDupaOra } from '../lib/mealUtils';
+import { Masa, TipMasa } from '../types';
+import { getTipMasaDupaOra, parseAlimente } from '../lib/mealUtils';
 import type { User } from '@supabase/supabase-js';
 
 export interface CategorieMasaGrupata {
@@ -126,15 +126,7 @@ export function useMeseAzi(dataSelectata?: Date) {
         
         let totalC = 0, totalP = 0, totalG = 0, totalCarbs = 0;
         parsedMese.forEach(m => {
-          let alimenteArr: AlimentDetaliat[] = [];
-          if (Array.isArray(m.alimente)) {
-            alimenteArr = m.alimente;
-          } else if (typeof m.alimente === 'string') {
-            try {
-              const parsed = JSON.parse(m.alimente);
-              if (Array.isArray(parsed)) alimenteArr = parsed;
-            } catch {}
-          }
+          let alimenteArr = parseAlimente(m);
           if (!alimenteArr || alimenteArr.length === 0) {
             alimenteArr = [
               {

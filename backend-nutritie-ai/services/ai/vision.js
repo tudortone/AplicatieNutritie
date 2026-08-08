@@ -1,5 +1,7 @@
 'use strict';
 
+const { detecteazaMime } = require('../../utils/detecteazaMime');
+
 /**
  * Numar venit din raspunsul unui model. Fara coercitie tacuta: `Number(x) || 0`
  * transforma NaN si valorile negative in 0, iar `estimare_grame || 100`
@@ -86,20 +88,11 @@ function creeazaServiciuVision({ config }) {
   // ==========================================
   // VALIDARE MAGIC BYTES IMAGINE
   // ==========================================
-  function detectImageMime(buffer) {
-    if (!buffer || buffer.length < 4) return null;
-    // JPEG: FF D8 FF
-    if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return 'image/jpeg';
-    // PNG: 89 50 4E 47
-    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return 'image/png';
-    // WEBP: RIFF....WEBP
-    if (
-      buffer.length >= 12 &&
-      buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
-      buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
-    ) return 'image/webp';
-    return null;
-  }
+  // Magic-bytes-urile MIME au sursa unica in utils/detecteazaMime.js
+  // (Task T2). Aici pastram doar interfata factoryului sub numele `detectImageMime`
+  // folosit de routes/ai.js:208, cu comportament identic pentru Buffer-uri reale
+  // (`fs.promises.readFile` livreaza intotdeauna Buffer).
+  const detectImageMime = detecteazaMime;
 
   return { corpVisionCompatibilOpenAi, getApiKeysList, getGeminiModelsList, detectImageMime };
 }

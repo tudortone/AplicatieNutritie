@@ -10,17 +10,17 @@ const {
   construiesteGazdePermise,
   creeazaValideazaUrlImagine,
 } = require('../../utils/valideazaUrlImagine');
+const { detecteazaMime, MIME_PERMISE } = require('../../utils/detecteazaMime');
+const { esteUuid } = require('../../utils/identitate');
 
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
 const MAX_IMAGINE_BYTES = 5 * 1024 * 1024;
 const MAX_ALIMENTE = 50;
-const MIME_PERMISE = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const VARIABILE_OBLIGATORII = Object.freeze([
   'IMAGEKIT_URL_ENDPOINT',
   'SUPABASE_URL',
   'GEMINI_API_KEY',
 ]);
-const REGEX_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TIPURI_MASA = new Set(['mic_dejun', 'pranz', 'cina', 'gustare', 'Mic dejun', 'Pranz', 'Cina', 'Gustare']);
 
 // Client admin (service_role) pentru tabela `ai_jobs` — nu are politici de
@@ -64,18 +64,6 @@ function modelsDeIncercat() {
   const preferat = (process.env.GEMINI_MODEL || '').trim();
   if (!preferat) return [...GEMINI_MODELS];
   return [preferat, ...GEMINI_MODELS.filter((model) => model !== preferat)];
-}
-
-function detecteazaMime(buffer) {
-  if (!Buffer.isBuffer(buffer) || buffer.length < 4) return null;
-  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
-  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return 'image/png';
-  if (
-    buffer.length >= 12 &&
-    buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
-    buffer.subarray(8, 12).toString('ascii') === 'WEBP'
-  ) return 'image/webp';
-  return null;
 }
 
 async function citesteCorpLimitat(resp, limita) {
@@ -140,7 +128,7 @@ exports.analizaMancareTask = task({
       };
     }
 
-    if (typeof imageUrl !== 'string' || !imageUrl.trim() || !REGEX_UUID.test(String(userId || ''))) {
+    if (typeof imageUrl !== 'string' || !imageUrl.trim() || !esteUuid(userId)) {
       if (jobId) await updateAiJob(jobId, { status: 'failed', error_code: 'PAYLOAD_INVALID' });
       return { success: false, eroare: 'Payload invalid pentru analiza imaginii.' };
     }

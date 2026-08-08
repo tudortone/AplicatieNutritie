@@ -6,12 +6,11 @@ const { callWithTimeout } = require('../utils/httpTimeout');
 const { parseJsonFromLlm } = require('../utils/llmJson');
 const { numarModel } = require('../services/ai/vision');
 const { construiesteUrlOpenFoodFacts, EroareProprietateProdus } = require('../utils/barcode');
+// Task 1: codEroare mutat în utilitarul comun (utils/codEroare.js) — aceeași
+// definiție ca în storePartajat/gdpr, ca tot backendul să logheze coduri identice.
+const { codEroare } = require('../utils/codEroare');
 
 const GROQ_CHAT_URL = ['https:', '', 'api.groq.com', 'openai', 'v1', 'chat', 'completions'].join('/');
-
-function codEroare(err) {
-  return err?.code || err?.name || 'NECUNOSCUT';
-}
 
 function numarIntrare(value, max) {
   if (value === undefined || value === null || value === '') return 0;
