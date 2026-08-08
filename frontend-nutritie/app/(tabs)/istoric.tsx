@@ -27,6 +27,7 @@ import { AddMealBottomSheet, AddMealBottomSheetRef } from '../../components/AddM
 import { MonthCalendar } from '../../components/MonthCalendar';
 import { MealDetailsModal } from '../../components/MealDetailsModal';
 import { MasaCard } from '../../components/MasaCard';
+import { actualizeazaMasaCuPoza } from '../../lib/mealUtils';
 import KeyboardAwareScreen from '@/components/ui/KeyboardAwareScreen';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
@@ -116,6 +117,29 @@ export default function HistoryScreen() {
   const openEditModal = useCallback((masa: Masa) => {
     mealSheetRef.current?.open(masa);
   }, []);
+
+  // 3. Actualizare masă (editare ingredient din detaliu) + reconciliere
+  const handleUpdateMasa = useCallback(
+    async (updated: Masa) => {
+      const payload = {
+        alimente: updated.alimente ?? [],
+        calorii: updated.calorii,
+        proteine: updated.proteine,
+        carbohidrati: updated.carbohidrati,
+        grasimi: updated.grasimi,
+        fibre: updated.fibre ?? 0,
+      };
+      const { error } = await actualizeazaMasaCuPoza(supabase, updated.id, payload);
+      if (error) {
+        console.error('[Istoric] Actualizare masa esuata:', error.message);
+      }
+      // Reconciliere optimistă: refresh-ul reapun starea server, guverdează
+      // divergențe dacă salvare a eșuat.
+      refresh();
+      refreshZileCuMese();
+    },
+    [refresh, refreshZileCuMese],
+  );
 
   const renderGroupedSections = () => {
     if (!categoriiMeseList) return null;
@@ -334,6 +358,7 @@ export default function HistoryScreen() {
         visible={!!selectedMasaDetail}
         masa={selectedMasaDetail}
         onClose={() => setSelectedMasaDetail(null)}
+        onUpdateMasa={handleUpdateMasa}
         onEdit={(m) => {
           setSelectedMasaDetail(null);
           openEditModal(m);
