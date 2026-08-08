@@ -296,7 +296,7 @@ export default function StatisticiScreen() {
         }
       >
         <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Evoluția Ta</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>Evoluția Ta</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             {activeTab === 'calorii' ? 'Analiza detaliată a aportului pe ultimele 7 zile' : 'Monitorizarea greutății și predicție AI'}
           </Text>

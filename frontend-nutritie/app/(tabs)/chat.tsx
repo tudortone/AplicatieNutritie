@@ -651,12 +651,12 @@ export default function ChatScreen() {
                   )}
                   {msg.role === 'user' ? (
                     <LinearGradient colors={colors.accentGradient} style={styles.bubbleContentUser}>
-                      <Text style={[styles.textUser, { color: colors.background }]}>{msg.text}</Text>
+                      <Text style={[styles.textUser, { color: colors.background }]} maxFontSizeMultiplier={1.4}>{msg.text}</Text>
                     </LinearGradient>
                   ) : (
                     <View style={[styles.bubbleContentAI, { borderColor: colors.accentSecondary + '40', backgroundColor: colors.surface }]}>
                       <LinearGradient colors={[colors.accentSecondary + '26', 'rgba(0,0,0,0.3)']} style={styles.bubbleContentAIGrad}>
-                        <Text style={[styles.textAI, { color: colors.textPrimary }]}>{msg.text}</Text>
+                        <Text style={[styles.textAI, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>{msg.text}</Text>
                       </LinearGradient>
                     </View>
                   )}

@@ -93,6 +93,7 @@ export function Stepper({
             returnKeyType="done"
             selectTextOnFocus
             accessibilityLabel={`${label}, ${text || 0} ${suffix}`}
+            maxFontSizeMultiplier={1.3}
             style={[styles.value, { color: colors.textPrimary }]}
           />
           <Text style={[styles.suffix, { color: colors.textTertiary }]}>{suffix}</Text>

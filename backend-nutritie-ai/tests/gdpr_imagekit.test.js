@@ -344,6 +344,82 @@ describe('GDPR ImageKit', () => {
       expect(idxPersistare).toBeLessThan(idxDeleteMese);
     });
 
+    test('M2: esec la persistarea file_ids => 500 fail-loud, stergerea mese NU porneste', async () => {
+      const evenimente = [];
+      const admin = {
+        evenimente,
+        auth: {
+          admin: {
+            deleteUser: async () => {
+              evenimente.push({ tip: 'auth.deleteUser' });
+              return { error: null };
+            },
+          },
+        },
+        rpc: async (functie) => {
+          evenimente.push({ tip: 'rpc', functie });
+          return { data: 'outbox-m2', error: null };
+        },
+        from(tabela) {
+          return {
+            select(coloane) {
+              if (tabela === 'mese' && coloane === 'alimente') {
+                return { eq: async () => ({ data: [], error: null }) };
+              }
+              return {
+                eq: (col, val) => ({
+                  maybeSingle: async () => {
+                    evenimente.push({ tip: 'select', tabela, coloane, col, val });
+                    return { data: {}, error: null };
+                  },
+                }),
+              };
+            },
+            update: (payload) => ({
+              eq: async () => {
+                evenimente.push({ tabela, tip: 'update', payload });
+                // M2: persistarea esueaza (e.g. eroare DB) -> ruta trebuie sa
+                // opreasca stergerea, nu sa continue best-effort cu orfani ImageKit.
+                throw new Error('DB_FAIL_UPDATE_FILE_IDS');
+              },
+            }),
+            delete: () => ({
+              eq: async () => {
+                evenimente.push({ tabela, tip: 'delete' });
+                return { error: null };
+              },
+            }),
+          };
+        },
+      };
+
+      const ctx = { db: admin, admin, userId: 'u-m2', modAdmin: true };
+      const appM2 = express();
+      appM2.use(createGdprRouter({
+        requireAuth: (req, res, next) => next(),
+        generalLimiter: (req, res, next) => next(),
+        supabaseAdmin: admin,
+        contextDate: () => ctx,
+        profilRepo: {},
+      }));
+
+      const res = await request(appM2).delete('/delete-account');
+      // Fail-loud: 500 (eroare generică, nu IMAGEKIT/CLERK_NOT_CONFIGURED) — nu
+      // se maschează eșecul persistării ca și cum ștergerea ar fi reușit.
+      expect(res.status).toBe(500);
+      expect(res.body.eroare).toBeTruthy();
+
+      // Persistarea a fost încercată (update cu file_ids pe gdpr_deletions)
+      const idxPersistare = evenimente.findIndex(
+        (e) => e.tip === 'update' && e.tabela === 'gdpr_deletions' && Array.isArray(e.payload.file_ids),
+      );
+      expect(idxPersistare).toBeGreaterThan(-1);
+      // DELETE-ul rândurilor (inclusiv `mese`) NU a pornit — activele ImageKit nu
+      // rămân orfane tăcut; utilizatorul poate reîncerca și lista e reluabilă.
+      expect(evenimente.filter((e) => e.tip === 'delete')).toHaveLength(0);
+      expect(evenimente.some((e) => e.tip === 'auth.deleteUser')).toBe(false);
+    });
+
     test('fara IMAGEKIT_PRIVATE_KEY -> 500 (ImageKit esuaza INAINTE de deleteUser, ordinea corecta)', async () => {
       process.env.IMAGEKIT_PRIVATE_KEY = '';
       const res = await request(app).delete('/delete-account');

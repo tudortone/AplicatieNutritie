@@ -344,7 +344,7 @@ export default function HomeScreen() {
                     {caloriiRamase < 0 ? 'CALORII DEPĂȘITE' : 'CALORII RĂMASE'}
                   </Text>
                   <View style={s.ringCardValueRow}>
-                    <Text style={[s.ringCardValue, { color: caloriiRamase < 0 ? colors.danger : colors.textPrimary }]}>
+                    <Text style={[s.ringCardValue, { color: caloriiRamase < 0 ? colors.danger : colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
                       {caloriiRamase < 0 ? Math.abs(caloriiRamase) : caloriiRamase}
                     </Text>
                     <Text style={[s.ringCardUnit, { color: caloriiRamase < 0 ? colors.danger : colors.accent }]}>kcal</Text>

@@ -41,7 +41,10 @@ function creeazaCheckAiUsageQuota({
     }
 
     // Pas 1: Consumă ÎNTÂI creditele plătite ale utilizatorului prin RPC consuma_credit
-    const clientSupabase = supabaseAdmin || req.supabaseAdmin;
+    // L2: clientul vine doar din `supabaseAdmin` injectat — `req.supabaseAdmin` nu
+    // este setat nicăieri în codebase, deci fallback-ul era cod mort și făcea
+    // creditarea plătită dependentă de o cale inexistentă.
+    const clientSupabase = supabaseAdmin;
     if (clientSupabase) {
       try {
         // M-05: generăm un event_id la debitare. Refund-ul (la eșec 5xx) folosește
@@ -114,6 +117,12 @@ function creeazaCheckAiUsageQuota({
 
     // Pas 2: Dacă soldul de credite plătite este 0, utilizatorul consumă din cota zilnică gratuită
     const count = await sursa.increment(userId, fereastraMs);
+    // M1: gardă defensivă, nu cale activă în producție. Contorul partajat
+    // (contorPartajat.js) degradează prin design la o rezervă locală mărginită
+    // când Redis cade (politica de disponibilitate din storePartajat.js:
+    // „degradează, nu eșua"), deci `increment` întoarce mereu un număr finit.
+    // Păstrăm fail-closed 503 doar ca plasă de siguranță pentru un contor
+    // injectat defectuos — contractul rămâne neschimbat.
     if (!Number.isFinite(count)) {
       return res.status(503).json({
         eroare: 'Contorul de analize AI este temporar indisponibil.',

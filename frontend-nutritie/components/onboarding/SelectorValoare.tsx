@@ -99,7 +99,7 @@ export default function SelectorValoare({
 	return (
 		<View>
 			<View style={styles.valoareWrap}>
-				<Text style={[styles.valoare, { color: colors.textPrimary }]}>
+				<Text style={[styles.valoare, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
 					{valoareAfisata}
 				</Text>
 				<Text style={[styles.unitate, { color: colors.textSecondary }]}>{unitate}</Text>

@@ -24,6 +24,7 @@
  */
 
 const express = require('express');
+const Sentry = require('@sentry/node');
 const {
   tabelUtilizator,
   inregistreazaUtilizareAdmin,
@@ -164,8 +165,22 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
               .update({ file_ids: [...fileIds] })
               .eq('id', outboxId);
           }
-        } catch {
-          // best-effort: ștergerea continuă și fără fileIds persistate
+        } catch (err) {
+          // M2: persistarea fileIds NU mai e best-effort. Dacă rândurile `mese` se
+          // șterg fără ca lista să fie persistată, activele ImageKit rămân orfane
+          // fără nicio alertă (workerul se reia cu o listă goală). Fail-loud:
+          // capturăm în Sentry și oprim ștergerea (500) ÎNAINTE de DELETE-ul `mese`.
+          try {
+            Sentry.withScope((scope) => {
+              scope.setLevel('error');
+              scope.setTag('gdpr.file_ids_persist_failed', 'true');
+              scope.setTag('gdpr.outbox_id', String(outboxId));
+              Sentry.captureException(err);
+            });
+          } catch {
+            // Sentry indisponibil — eroarea continuă spre fail-loud 500
+          }
+          throw err;
         }
       }
 

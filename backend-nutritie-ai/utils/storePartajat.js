@@ -9,9 +9,12 @@
  * de 50/zi devenea 200/zi. Degradarea era invizibilă.
  *
  * FIX P-11: la trecerea pe fallback, emite eveniment Sentry de severitate
- * `warning`. Pragurile rate-limit nu se pot strânge automat prin MemoryStore
- * (fiecare instanță nu știe de celelalte), dar alerta Sentry notifică echipa
- * că Redis a căzut și pragurile efective s-au multiplicat.
+ * `warning`, ca echipa să afle că Redis a căzut.
+ *
+ * FIX M-03: strângere proporțională a pragurilor — contorul rezervei locale
+ * (MemoryStore, per-proces) se înmulțește cu `INSTANTE_ASTEPTATE`, echivalent cu
+ * împărțirea bugetului global la numărul de instanțe. Pe 4 instanțe, limita
+ * efectivă rămâne aceeași (100/15min nu mai devine 400/15min).
  * Configurabil prin env `INSTANTE_ASTEPTATE` (default: 1).
  */
 
@@ -24,6 +27,13 @@ const { codEroare } = require('./codEroare');
 const PLAFON_INTRARI = 5000;
 const CURATARE_INTERVAL_MS = 5 * 60 * 1000;
 const SALTIRE_LOGGING_MS = 30 * 1000;
+
+// M-03: numărul de instanțe așteptate (env INSTANTE_ASTEPTATE), citit per apel.
+// Fallback sigur: lipsă, zero sau ne-numeric -> 1 — nu se împarte niciodată la 0.
+function numarInstanteAsteptate() {
+  const valoare = parseInt(process.env.INSTANTE_ASTEPTATE || '1', 10);
+  return Number.isInteger(valoare) && valoare > 0 ? valoare : 1;
+}
 
 // M-21: cache de clienți Redis CHEIE = URL. Un singleton global ignora `url` la
 // al doilea apel și intoarce clientul vechi chiar și pentru un URL diferit
@@ -65,7 +75,7 @@ function alertaSentryRedisCazut(codErorii) {
   if (sentriAlertaTrimisa) return;
   sentriAlertaTrimisa = true;
 
-  const instanteAsteptate = parseInt(process.env.INSTANTE_ASTEPTATE || '1', 10) || 1;
+  const instanteAsteptate = numarInstanteAsteptate();
   const mesaj = `[Redis CĂZUT] Rate limiting pe MemoryStore. Cu ${instanteAsteptate} instanțe, ` +
     `limitele efective sunt ${instanteAsteptate}× mai permisive. Cod: ${codErorii}`;
   console.error(mesaj);
@@ -157,6 +167,20 @@ class StoreCuRezerva {
     }
   }
 
+  // M-03: MemoryStore-ul de rezervă e per-proces — când Redis cade, fiecare
+  // instanță își numără doar traficul ei, iar limita efectivă s-ar multiplica
+  // cu numărul de instanțe (pe 4 instanțe, 100/15min ar deveni 400/15min).
+  // Înmulțim totalHits-ul local cu INSTANTE_ASTEPTATE, echivalent cu împărțirea
+  // bugetului global per instanță. Se întoarce o COPIE (resetTime păstrat), ca
+  // clientul intern al MemoryStore să rămână cu contorul local neschimbat.
+  scaleazaRezerva(info) {
+    if (!info || typeof info.totalHits !== 'number') return info;
+    return {
+      totalHits: info.totalHits * numarInstanteAsteptate(),
+      resetTime: info.resetTime,
+    };
+  }
+
   async increment(key) {
     if (this.client.isReady) {
       try {
@@ -172,7 +196,7 @@ class StoreCuRezerva {
       logWarnThrottled(`[RateLimit] Redis neconectat (${cod}); trec pe rezerva.`);
       alertaSentryRedisCazut(cod);
     }
-    return this.storeRezerva.increment(key);
+    return this.scaleazaRezerva(await this.storeRezerva.increment(key));
   }
 
   async decrement(key) {
@@ -374,4 +398,6 @@ module.exports = {
   MapCuExpirare,
   codEroare,
   resetAlertaSentry, // expus pentru teste
+  logWarnThrottled, // expus pentru contorPartajat (L-03) și teste
+  numarInstanteAsteptate, // expus pentru teste
 };

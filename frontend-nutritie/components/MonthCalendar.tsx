@@ -126,7 +126,7 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
   return (
     <View style={[styles.container, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={prevMonth} style={[styles.arrowBtn, { backgroundColor: colors.overlayLight }]} accessibilityRole="button" accessibilityLabel="Luna anterioară">
+        <TouchableOpacity onPress={prevMonth} style={[styles.arrowBtn, { backgroundColor: colors.overlayLight }]} hitSlop={4} accessibilityRole="button" accessibilityLabel="Luna anterioară">
           <ChevronLeft size={20} color={colors.accent} />
         </TouchableOpacity>
 
@@ -154,7 +154,7 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = ({
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity onPress={nextMonth} style={[styles.arrowBtn, { backgroundColor: colors.overlayLight }]} accessibilityRole="button" accessibilityLabel="Luna următoare">
+        <TouchableOpacity onPress={nextMonth} style={[styles.arrowBtn, { backgroundColor: colors.overlayLight }]} hitSlop={4} accessibilityRole="button" accessibilityLabel="Luna următoare">
           <ChevronRight size={20} color={colors.accent} />
         </TouchableOpacity>
       </View>
@@ -257,16 +257,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
   },
+  // FIX device: celule fixe de 40pt depășeau pe orizontală ecranele de 320pt
+  // (7×40 + margini > lățimea disponibilă) — le facem flexibile cu aspectRatio 1:1.
   weekDay: {
-    width: 40,
+    flex: 1,
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 8,
   },
   dayCell: {
-    width: 40,
-    height: 40,
+    flex: 1,
+    aspectRatio: 1,
+    maxWidth: 48,
     justifyContent: 'center',
     alignItems: 'center',
     margin: 2,

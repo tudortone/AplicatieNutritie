@@ -1,9 +1,16 @@
 'use strict';
 
-const { creeazaClientRedis, codEroare } = require('./storePartajat');
+// L-03: throttling-ul de loguri e partajat cu utils/storePartajat.js
+// (logWarnThrottled, alias `avertizeaza` aici) — o singură implementare.
+// M-19: throttling PER-MESAJ, nu un contor global. Fiecare mesaj distinct are
+// propria fereastră SALTIRE_LOGGING_MS; altfel o eroare frecventă (ex. Redis
+// down) ar sufoca avertismentele pentru orice alt mesaj.
+// N-06: mapa de mesaje e plafonată (PLAFON_AVERTISMENTE + evicție FIFO), ca
+// mesajele unice (nelimitate ca formă) să nu crească fără limită — implementarea
+// se află în storePartajat.js.
+const { creeazaClientRedis, codEroare, logWarnThrottled: avertizeaza } = require('./storePartajat');
 
 const PLAFON_INTRARI = 5000;
-const SALT_LOG_MS = 30 * 1000;
 
 // INCR + PEXPIRE atomice intr-un singur script: un crash intre incr si pExpire
 // ar lasa cheia fara TTL, blocand utilizatorul peste plafonul AI. Semantica
@@ -36,33 +43,6 @@ if val < 0 then
 end
 return val
 `;
-
-const PLAFON_AVERTISMENTE = 200;
-
-// M-19: throttling-ul este PER-MESAJ, nu un contor global. Fiecare mesaj distinct
-// are propria fereastră SALT_LOG_MS; altfel o eroare frecventă (ex. Redis down)
-// ar sufoca avertismentele pentru orice alt mesaj.
-// N-06: mapa este plafonată (PLAFON_AVERTISMENTE) — se reia tiparul plafon +
-// curățare expirate + evicție FIFO din ContorLocalCuTtl, ca mesajele unice
-// (nelimitate ca formă) să nu crească fără limită.
-const ultimulAvertismentPeMesaj = new Map();
-
-function avertizeaza(mesaj) {
-  const acum = Date.now();
-  const ultimul = ultimulAvertismentPeMesaj.get(mesaj) || 0;
-  if (acum - ultimul < SALT_LOG_MS) return;
-  if (ultimulAvertismentPeMesaj.size >= PLAFON_AVERTISMENTE) {
-    for (const [cheie, moment] of ultimulAvertismentPeMesaj) {
-      if (acum - moment >= SALT_LOG_MS) ultimulAvertismentPeMesaj.delete(cheie);
-    }
-    if (ultimulAvertismentPeMesaj.size >= PLAFON_AVERTISMENTE) {
-      const ceaMaiVeche = ultimulAvertismentPeMesaj.keys().next().value;
-      if (ceaMaiVeche !== undefined) ultimulAvertismentPeMesaj.delete(ceaMaiVeche);
-    }
-  }
-  ultimulAvertismentPeMesaj.set(mesaj, acum);
-  console.warn(mesaj);
-}
 
 class ContorLocalCuTtl {
   constructor({ plafon = PLAFON_INTRARI } = {}) {

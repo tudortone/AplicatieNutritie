@@ -26,6 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_gdpr_deletions_user ON gdpr_deletions (user_id);
 
 -- RLS: doar service_role poate citi/scrie (tabelul e backend-only)
 ALTER TABLE gdpr_deletions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS gdpr_deletions_deny_all ON gdpr_deletions;
 CREATE POLICY gdpr_deletions_deny_all ON gdpr_deletions USING (false);
 
 -- Funcție pentru inițierea atomică a ștergerii

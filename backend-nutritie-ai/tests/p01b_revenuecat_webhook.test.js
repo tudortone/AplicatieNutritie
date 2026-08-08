@@ -243,11 +243,13 @@ describe('P-01b — Webhook RevenueCat credite AI', () => {
 
   test('Consum de credite înaintea cotei zilnice în checkAiUsageQuota', async () => {
     const admin = creeazaSupabaseFake({ soldNou: 4 });
-    const checkQuota = creeazaCheckAiUsageQuota();
+    // Clientul admin se injectează prin constructor (ca în server.js:158) — `req.supabaseAdmin`
+    // a fost o ramură moartă, eliminată (L2). Testul verifică aceeași comportare: creditul
+    // plătit se consumă înaintea cotei zilnice gratuite.
+    const checkQuota = creeazaCheckAiUsageQuota({ supabaseAdmin: admin });
 
     const req = {
       user: { id: '11111111-1111-4111-8111-111111111111' },
-      supabaseAdmin: admin,
     };
     const res = {
       headers: {},

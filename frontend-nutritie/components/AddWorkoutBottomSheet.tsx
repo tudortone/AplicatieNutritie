@@ -432,6 +432,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
 
         <TouchableOpacity
           style={[styles.quickAddBtn, { backgroundColor: colors.accent }]}
+          hitSlop={{ top: 3, bottom: 3, left: 3, right: 3 }}
           onPress={(e) => {
             e.stopPropagation();
             handleQuickAdd(item);
@@ -551,7 +552,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                     <Text style={[styles.serieNr, { color: colors.accent }]}>#{item.serie}</Text>
 
                     <View style={styles.counterGroup}>
-                      <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'repetari', -1)} style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}>
+                      <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'repetari', -1)} style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]} hitSlop={4}>
                         <Text style={[styles.miniBtnText, { color: colors.textPrimary }]}>-</Text>
                       </TouchableOpacity>
                       <BottomSheetTextInput
@@ -563,13 +564,13 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                         placeholder="0"
                         placeholderTextColor={colors.textSecondary}
                       />
-                      <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'repetari', 1)} style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}>
+                      <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'repetari', 1)} style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]} hitSlop={4}>
                         <Text style={[styles.miniBtnText, { color: colors.textPrimary }]}>+</Text>
                       </TouchableOpacity>
                     </View>
 
                     <View style={styles.counterGroup}>
-                      <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'greutate', -2.5)} style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}>
+                      <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'greutate', -2.5)} style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]} hitSlop={4}>
                         <Text style={[styles.miniBtnText, { color: colors.textPrimary }]}>-</Text>
                       </TouchableOpacity>
                       <BottomSheetTextInput
@@ -581,12 +582,12 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                         placeholder="0"
                         placeholderTextColor={colors.textSecondary}
                       />
-                      <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'greutate', 2.5)} style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]}>
+                      <TouchableOpacity onPress={() => actualizeazaSerie(idx, 'greutate', 2.5)} style={[styles.miniBtn, { borderColor: colors.cardBorder, borderWidth: 1 }]} hitSlop={4}>
                         <Text style={[styles.miniBtnText, { color: colors.textPrimary }]}>+</Text>
                       </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity onPress={() => stergeSerie(idx)} style={styles.delBtn}>
+                    <TouchableOpacity onPress={() => stergeSerie(idx)} style={styles.delBtn} hitSlop={4}>
                       <Trash2 size={16} color={colors.danger} />
                     </TouchableOpacity>
                   </View>

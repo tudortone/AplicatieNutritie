@@ -88,7 +88,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
                 )}
               </View>
               <View>
-                <Text style={[styles.title, { color: colors.textPrimary }]}>
+                <Text style={[styles.title, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
                   {activeTab === 'curenta' ? 'Greutate Curentă' : 'Greutate Țintă'}
                 </Text>
                 <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
@@ -128,6 +128,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
             <View style={[styles.inputBox, { borderColor: (activeTab === 'curenta' ? colors.accentSecondary : colors.accent) + '50', backgroundColor: colors.surfaceBg }]}>
               <TextInput
                 style={[styles.input, { color: colors.textPrimary }]}
+                maxFontSizeMultiplier={1.3}
                 value={inputVal}
                 onChangeText={setInputVal}
                 keyboardType="decimal-pad"
@@ -141,16 +142,16 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
             {/* Quick +/- adjustment buttons */}
             <View style={styles.quickButtons}>
               <TouchableOpacity style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]} onPress={() => adaugaRaport(-0.5)}>
-                <Text style={[styles.quickBtnText, { color: colors.textSecondary }]}>−0.5</Text>
+                <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>−0.5</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]} onPress={() => adaugaRaport(-0.1)}>
-                <Text style={[styles.quickBtnText, { color: colors.textSecondary }]}>−0.1</Text>
+                <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>−0.1</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]} onPress={() => adaugaRaport(0.1)}>
-                <Text style={[styles.quickBtnText, { color: colors.textSecondary }]}>+0.1</Text>
+                <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>+0.1</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]} onPress={() => adaugaRaport(0.5)}>
-                <Text style={[styles.quickBtnText, { color: colors.textSecondary }]}>+0.5</Text>
+                <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>+0.5</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -11,9 +11,11 @@ CREATE TABLE IF NOT EXISTS credite_ai (
 
 ALTER TABLE credite_ai ENABLE ROW LEVEL SECURITY;
 -- Utilizatorul poate citi propriul sold (nu îl poate modifica direct)
+DROP POLICY IF EXISTS credite_ai_read_own ON credite_ai;
 CREATE POLICY credite_ai_read_own ON credite_ai
   FOR SELECT USING (auth.uid() = user_id);
 -- Scrierile vin exclusiv de la service_role (webhooks RevenueCat)
+DROP POLICY IF EXISTS credite_ai_service_write ON credite_ai;
 CREATE POLICY credite_ai_service_write ON credite_ai
   FOR ALL USING (current_setting('role') = 'service_role');
 
@@ -38,9 +40,11 @@ CREATE TABLE IF NOT EXISTS credite_tranzactii (
 
 ALTER TABLE credite_tranzactii ENABLE ROW LEVEL SECURITY;
 -- Utilizatorul poate citi propriul istoric
+DROP POLICY IF EXISTS credite_tranzactii_read_own ON credite_tranzactii;
 CREATE POLICY credite_tranzactii_read_own ON credite_tranzactii
   FOR SELECT USING (auth.uid() = user_id);
 -- Scrierile vin exclusiv de la service_role
+DROP POLICY IF EXISTS credite_tranzactii_service_write ON credite_tranzactii;
 CREATE POLICY credite_tranzactii_service_write ON credite_tranzactii
   FOR ALL USING (current_setting('role') = 'service_role');
 

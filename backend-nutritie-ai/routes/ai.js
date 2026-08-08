@@ -13,7 +13,6 @@ const { valideazaIngrediente } = require('../utils/promptSafety');
 const { construiesteGazdePermise, creeazaValideazaUrlImagine } = require('../utils/valideazaUrlImagine');
 const { numarModel, NUME_FURNIZORI_AI } = require('../services/ai/vision');
 const { EroareAiClient } = require('../services/ai/chat');
-const { createClient } = require('@supabase/supabase-js');
 const { inregistreazaUtilizareAdmin } = require('../utils/clientUtilizator');
 
 /**
@@ -39,16 +38,13 @@ function createAiRouter({
   serviciuChat,
   semaforAi,
   idempotencyCritic = (_req, _res, next) => next(),
+  // M-05: clientul admin (service_role) se injecteaza din server.js, creat cu
+  // fetch + timeout de 10s. Inainte se construia aici un client duplicat fara
+  // timeout. Absent => null: ruta merge, dar nu creeaza job.
+  supabaseAdmin = null,
 }) {
   // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
   const router = express.Router();
-
-  // Client admin (service_role) exclusiv pentru tabelele backend-only: `ai_jobs`
-  // nu are politici de insert/update (revoke pe anon/authenticated), deci singura
-  // cale corecta prin care backendul scrie job-uri e clientul privilegiat.
-  const supabaseAdmin = config?.supabase?.url && config?.supabase?.serviceRoleKey
-    ? createClient(config.supabase.url, config.supabase.serviceRoleKey)
-    : null;
 
   // ==========================================
   // IMAGEKIT AUTHENTICATION ENDPOINT
@@ -111,6 +107,11 @@ function createAiRouter({
 
       // JOB-UL se creeaza in `ai_jobs` (status `queued`) iar task-ul Trigger primeste
       // `jobId` in payload ca sa isi actualizeze propria stare (processing/completed/failed).
+      // Client admin (service_role) exclusiv pentru tabelele backend-only: `ai_jobs`
+      // nu are politici de insert/update (revoke pe anon/authenticated), deci singura
+      // cale corecta prin care backendul scrie job-uri e clientul privilegiat.
+      // M-05: clientul se injecteaza din server.js (cu timeout 10s) — nu se mai
+      // construieste aici un client duplicat fara timeout.
       let jobId = null;
       if (supabaseAdmin) {
         const { data: rand, error: insertErr } = await supabaseAdmin

@@ -274,6 +274,7 @@ export default function ScannerBarcodeScreen() {
             modificaCantitate(item.id, 1);
           }}
           style={[styles.stackBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
+          hitSlop={4}
           accessibilityRole="button"
           accessibilityLabel={`Crește cantitatea pentru ${item.nume}`}
         >
@@ -287,6 +288,7 @@ export default function ScannerBarcodeScreen() {
             toggleCongelator(item.id);
           }}
           style={[styles.stackBtn, { backgroundColor: item.is_congelat ? `${colors.accentTertiary}26` : 'rgba(255,255,255,0.06)' }]}
+          hitSlop={4}
           accessibilityRole="switch"
           accessibilityState={{ checked: item.is_congelat }}
           accessibilityLabel={`${item.is_congelat ? 'Scoate din congelator' : 'Pune la congelator'} ${item.nume}`}
