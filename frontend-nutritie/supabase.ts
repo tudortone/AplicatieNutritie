@@ -242,6 +242,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: adaptorStocareSesiune,
     autoRefreshToken: true,
     persistSession: true,
+    // PKCE: fluxul implicit nu e sigur pe mobil (token in fragment). Pe React Native
+    // `signInWithOAuth` nu navigheaza singur — deschidem URL-ul manual via
+    // expo-web-browser si schimbam `code` cu `exchangeCodeForSession`.
+    flowType: 'pkce',
     detectSessionInUrl: false,
   },
 });

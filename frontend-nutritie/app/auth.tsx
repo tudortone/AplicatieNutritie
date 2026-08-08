@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import * as WebBrowser from 'expo-web-browser';
 import Animated, { FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, Sparkles } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -18,6 +19,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAppStore } from '../hooks/useAppStore';
 import { incarcaDateOnboarding, calculeazaPlan, type PlanNutritional } from '../lib/onboarding';
+import { extrageCodDinUrl } from '../lib/oauth';
 
 // Contul de admin se logheaza cu username-ul „admin" (nu email). Supabase cere
 // email la autentificare, deci identificatorul se mapeaza intern la adresa contului.
@@ -54,6 +56,7 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [parola, setParola] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingOAuth, setLoadingOAuth] = useState<'google' | 'apple' | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -168,20 +171,44 @@ export default function AuthScreen() {
   };
 
   const signInWithOAuth = async (provider: 'google' | 'apple') => {
+    if (loadingOAuth) return;
+    setAuthError(null);
+    setLoadingOAuth(provider);
     try {
-      setLoading(true);
-      const { error } = await supabase.auth.signInWithOAuth({
+      // Pe React Native SDK-ul Supabase NU navigheaza singur: returneaza URL-ul
+      // in `data.url`, pe care trebuie sa-l deschidem noi (expo-web-browser).
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: 'nutriai://auth/callback',
         },
       });
-      if (error) Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.eroareDinamica', { eroare: error.message }));
+      if (error) {
+        Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.eroareDinamica', { eroare: error.message }));
+        return;
+      }
+      if (!data.url) {
+        Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.problemaConexiuneOAuth'));
+        return;
+      }
+      const rezultat = await WebBrowser.openAuthSessionAsync(data.url, 'nutriai://auth/callback');
+      if (rezultat.type === 'success' && rezultat.url) {
+        const cod = extrageCodDinUrl(rezultat.url);
+        if (!cod) {
+          Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.problemaConexiuneOAuth'));
+          return;
+        }
+        const { error: eroareSchimb } = await supabase.auth.exchangeCodeForSession(cod);
+        if (eroareSchimb) {
+          Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.eroareDinamica', { eroare: eroareSchimb.message }));
+        }
+      }
+      // rezultat.type 'cancel'/'dismiss' → utilizatorul a renuntat; fara eroare.
     } catch (e: any) {
       console.error("OAuth error:", e);
       Alert.alert(t('alerts.titluri.eroareOAuth'), e?.message || t('alerts.mesaje.problemaConexiuneOAuth'));
     } finally {
-      setLoading(false);
+      setLoadingOAuth(null);
     }
   };
 
@@ -412,11 +439,27 @@ export default function AuthScreen() {
               </View>
 
               <View style={styles.oauthWrap}>
-                <TouchableOpacity style={[styles.oauthBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]} onPress={() => signInWithOAuth('google')}>
-                  <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]}>🟢 Google</Text>
+                <TouchableOpacity
+                  style={[styles.oauthBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                  onPress={() => signInWithOAuth('google')}
+                  disabled={loadingOAuth !== null}
+                >
+                  {loadingOAuth === 'google' ? (
+                    <ActivityIndicator color={colors.accent} />
+                  ) : (
+                    <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]}>🟢 Google</Text>
+                  )}
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.oauthBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]} onPress={() => signInWithOAuth('apple')}>
-                  <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]}>🍎 Apple</Text>
+                <TouchableOpacity
+                  style={[styles.oauthBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                  onPress={() => signInWithOAuth('apple')}
+                  disabled={loadingOAuth !== null}
+                >
+                  {loadingOAuth === 'apple' ? (
+                    <ActivityIndicator color={colors.accent} />
+                  ) : (
+                    <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]}>🍎 Apple</Text>
+                  )}
                 </TouchableOpacity>
               </View>
 
