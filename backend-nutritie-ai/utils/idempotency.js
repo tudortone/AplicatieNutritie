@@ -162,6 +162,16 @@ function creeazaMiddlewareIdempotenta({
 
     const cacheKey = construiesteCheie(req, keyCurata);
     try {
+      // M-04: fail-closed ÎNAINTE de orice claim — dacă store-ul partajat e „degradat"
+      // (Redis neconectat), nu avem cum garanta idempotența. Un claim pe rezerva locală
+      // ar fi per-proces și, la failover/scalare, dubla execuția. Deci răspundem 503
+      // fără să atingem stocul. Fail-closed doar pe rutele critice; GET/necritic nu se aplicа.
+      if (rutaCritica && registru.degradat) {
+        return res.status(503).json({
+          eroare: 'Serviciul de verificare a idempotenței este temporar indisponibil.',
+          cod: 'IDEMPOTENCY_STORE_UNAVAILABLE',
+        });
+      }
       const existent = await registru.get(cacheKey);
       if (raspundeDinRegistru(res, existent, amprenta)) return undefined;
 

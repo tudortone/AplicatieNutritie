@@ -21,10 +21,18 @@ const PLAFON_INTRARI = 5000;
 const CURATARE_INTERVAL_MS = 5 * 60 * 1000;
 const SALTIRE_LOGGING_MS = 30 * 1000;
 
-let clientRedisCache = null;
+// M-21: cache de clienți Redis CHEIE = URL. Un singleton global ignora `url` la
+// al doilea apel și intoarce clientul vechi chiar și pentru un URL diferit
+// (ex. staging vs prod) — două URL-uri distincte trebuie să primească clienți distincti.
+const clientRedisCache = new Map();
 let sentriAlertaTrimisa = false; // evităm flooding Sentry
 // throttle independent per mesaj, nu un singur timestamp global (P-11)
 const ultimulAvertismentPeMesaj = new Map();
+// M-06: plafon pentru mapa de mai sus — mesajele unice sunt nelimitate ca formă,
+// fara plafon mapa ar creste fara limita. Tiparul plafon + curatare expirate +
+// evictie FIFO (vezi MapCuExpirare / ContorLocalCuTtl) — throttling-ul ramane
+// neschimbat, doar cresterea memoriei e limitata.
+const PLAFON_AVERTISMENTE = 200;
 
 function codEroare(err) {
   if (!err) return 'NECUNOSCUT';
@@ -35,6 +43,17 @@ function logWarnThrottled(mesaj) {
   const acum = Date.now();
   const ultimul = ultimulAvertismentPeMesaj.get(mesaj) || 0;
   if (acum - ultimul < SALTIRE_LOGGING_MS) return;
+  // M-06: plafon pe mapa de mai sus — curățăm mai întâi intrările expirate, apoi
+  // evicție FIFO (cea mai veche), ca o eroare abuzivă să nu umfle mapa nelimitat.
+  if (ultimulAvertismentPeMesaj.size >= PLAFON_AVERTISMENTE) {
+    for (const [cheie, moment] of ultimulAvertismentPeMesaj) {
+      if (acum - moment >= SALTIRE_LOGGING_MS) ultimulAvertismentPeMesaj.delete(cheie);
+    }
+    if (ultimulAvertismentPeMesaj.size >= PLAFON_AVERTISMENTE) {
+      const ceaMaiVeche = ultimulAvertismentPeMesaj.keys().next().value;
+      if (ceaMaiVeche !== undefined) ultimulAvertismentPeMesaj.delete(ceaMaiVeche);
+    }
+  }
   ultimulAvertismentPeMesaj.set(mesaj, acum);
   console.warn(mesaj);
 }
@@ -78,7 +97,11 @@ function eroareRedisNeconectat() {
 }
 
 function creeazaClientRedis({ url }) {
-  if (clientRedisCache) return clientRedisCache;
+  // M-21: cheia cache-ului include `url`, ca două URL-uri distincte să primească
+  // clienți distincti (înainte, un singur slot global ignora url după primul apel).
+  const cheieCache = url || 'default';
+  const existent = clientRedisCache.get(cheieCache);
+  if (existent) return existent;
   const redis = require('redis');
   const client = redis.createClient({ url });
   client.on('error', (err) => {
@@ -96,7 +119,7 @@ function creeazaClientRedis({ url }) {
     logWarnThrottled(`[Redis] Conectare esuata, se continua cu memorie locala: ${cod}`);
     alertaSentryRedisCazut(cod);
   });
-  clientRedisCache = client;
+  clientRedisCache.set(cheieCache, client);
   return client;
 }
 
@@ -264,6 +287,13 @@ function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
     const client = creeazaClientRedis({ url });
     return {
       redis: true,
+      // M-04: flag expus — store-ul partajat e „degradat" când clientul Redis nu e
+      // ready. Idempotency (rute critice) il consultă ca să închidă fail-closed (503)
+      // fără a mai încerca vreun claim pe un stoc indisponibil. Comportamentul
+      // de fallback (rezerva locală) rămâne neschimbat.
+      get degradat() {
+        return !client.isReady;
+      },
       async get(key) {
         if (!client.isReady) return rezerva.get(cheieFinala(key));
         try {
@@ -319,6 +349,9 @@ function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
 
   return {
     redis: false,
+    // M-04: fără Redis nu există „client căzut" — rezerva locală e sursa întreagă,
+    // deci nu e degradat (flag-ul reflectă doar stocul partajat).
+    degradat: false,
     async get(key) {
       return rezerva.get(cheieFinala(key));
     },

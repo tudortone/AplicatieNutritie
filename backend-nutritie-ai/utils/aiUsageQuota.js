@@ -8,6 +8,8 @@
  * acord cu politica de disponibilitate din storePartajat.js.
  */
 
+const crypto = require('crypto');
+
 const { creeazaContorPartajat } = require('./contorPartajat');
 const { inregistreazaUtilizareAdmin } = require('./clientUtilizator');
 
@@ -42,6 +44,11 @@ function creeazaCheckAiUsageQuota({
     const clientSupabase = supabaseAdmin || req.supabaseAdmin;
     if (clientSupabase) {
       try {
+        // M-05: generăm un event_id la debitare. Refund-ul (la eșec 5xx) folosește
+        // ACELAȘI event_id prin RPC-ul existent aplica_tranzactie_credite (delta +1),
+        // iar UNIQUE pe credite_tranzactii.event_id garantează idempotența: dubla
+        // debitare/refund pe același eveniment este anulată de DB.
+        req._creditEventId = crypto.randomUUID();
         const { data: soldRamas, error } = await clientSupabase.rpc('consuma_credit', {
           p_user_id: userId,
           p_cost: 1,
@@ -53,6 +60,35 @@ function creeazaCheckAiUsageQuota({
           inregistreazaUtilizareAdmin();
           res.setHeader('X-Credite-Ramase', String(soldRamas));
           res.setHeader('X-AI-Quota-Remaining', String(soldRamas));
+          // M-05: creditul a fost consumat înainte de a rula operațiunea AI.
+          req._creditConsumat = true;
+
+          // M-05: refund atomic și idempotent pe event_id. Dacă următoarea operație
+          // AI eșuează (status >= 500), restituim creditul prin RPC-ul existent
+          // aplica_tranzactie_credite, cu event_type REFUND_AI_FAILURE și delta +1.
+          // Reapelarea cu același event_id e respinsă de DB (UNIQUE pe event_id).
+          if (typeof res.once === 'function') {
+            res.once('finish', () => {
+              // DOAR erorile de server (5xx) arată că operația AI a eșuat — 4xx
+              // înseamnă cerere invalidă; acolo creditul nu se returnează.
+              if (!req._creditConsumat || !res.statusCode || res.statusCode < 500) return;
+              Promise.resolve(clientSupabase.rpc('aplica_tranzactie_credite', {
+                p_user_id: userId,
+                p_event_id: req._creditEventId,
+                p_event_type: 'REFUND_AI_FAILURE',
+                p_delta: 1,
+                p_produs_id: null,
+                p_metadata: { status: res.statusCode },
+              })).then(({ error: errRefund }) => {
+                if (errRefund) {
+                  console.error('[Quota AI] Refund esuat:', errRefund.message);
+                }
+              }).catch((err) => {
+                console.error('[Quota AI] Refund esuat:', err?.message || err);
+              });
+            });
+          }
+
           return next();
         }
       } catch {

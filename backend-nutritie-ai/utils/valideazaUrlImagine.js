@@ -3,11 +3,17 @@
 const path = require('path');
 
 function construiesteGazdePermise({ imagekitUrlEndpoint, supabaseUrl }) {
-  const gazde = new Set();
+  // Map<hostname, basePath>: pe langa gazda retinem si prefixul de cale al
+  // endpoint-ului (ex. ImageKit: `/abc123` dintr-un endpoint `https://ik.imagekit.io/abc123`),
+  // ca sa putem compara folderPrefix-ul per-utilizator cu pathname-ul relativa
+  // fata de endpoint — altfel validatorul refuza URL-urile reale cu 400 (N-01).
+  const gazde = new Map();
   for (const valoare of [imagekitUrlEndpoint, supabaseUrl]) {
     if (!valoare) continue;
     try {
-      gazde.add(new URL(valoare).hostname.toLowerCase());
+      const adresa = new URL(valoare);
+      const caleEndpoint = adresa.pathname.replace(/\/+$/, '');
+      gazde.set(adresa.hostname.toLowerCase(), caleEndpoint === '/' ? '' : caleEndpoint);
     } catch {
       // Configuratie malformata: gazda nu este adaugata; regula ramane fail-closed.
     }
@@ -21,7 +27,12 @@ function construiesteGazdePermise({ imagekitUrlEndpoint, supabaseUrl }) {
  * URL, porturi custom ori traversari de cale.
  */
 function creeazaValideazaUrlImagine({ gazdePermise, folderPrefix = null }) {
-  const gazde = gazdePermise instanceof Set ? gazdePermise : new Set();
+  // Primim Map<hostname, basePath> de la construiesteGazdePermise. Un Set simplu
+  // (doar gazde, fara basePath) ramane acceptat pentru backward-compat si se
+  // trateaza ca prefix de cale vid (toate pathname-urile raman relative).
+  const gazde = gazdePermise instanceof Map
+    ? gazdePermise
+    : new Map([...(gazdePermise instanceof Set ? gazdePermise : [])].map((gazda) => [gazda, '']));
 
   return function valideazaUrlImagine(valoare) {
     if (typeof valoare !== 'string' || !valoare.trim()) {
@@ -58,9 +69,17 @@ function creeazaValideazaUrlImagine({ gazdePermise, folderPrefix = null }) {
     if (caleNormalizata !== caleDecodata || caleDecodata.split('/').includes('..')) {
       return { ok: false, eroare: 'Calea imaginii este invalida.' };
     }
+    // Endpoint-ul ImageKit contribuie segmentul endpoint-id la pathname
+    // (ex. `/abc123/...`); scoatem basePath-ul gazdei si folosim calea relativa
+    // pentru verificarea folderului per-utilizator, ca formul reală de productie
+    // sa fie acceptata (N-01). Daca gazda nu are basePath, totul ramane relativ.
+    const basePathGazda = gazde.get(adresa.hostname.toLowerCase()) || '';
+    const caleRelativa = basePathGazda && caleDecodata.startsWith(basePathGazda)
+      ? caleDecodata.slice(basePathGazda.length)
+      : caleDecodata;
     if (
       folderPrefix &&
-      !caleDecodata.toLowerCase().startsWith(folderPrefix.toLowerCase())
+      !caleRelativa.toLowerCase().startsWith(folderPrefix.toLowerCase())
     ) {
       return { ok: false, eroare: 'Imaginea nu provine din folderul tau de incarcari.' };
     }
