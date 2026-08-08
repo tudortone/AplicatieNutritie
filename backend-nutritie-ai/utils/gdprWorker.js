@@ -50,7 +50,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
     .select('*')
     .neq('status', 'completed')
     .neq('status', 'failed')
-    .lt('created_at', prag)
+    .lt('initiated_at', prag)
     .limit(20);
 
   if (error || !Array.isArray(randuri) || randuri.length === 0) {

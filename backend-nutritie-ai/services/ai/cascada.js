@@ -62,7 +62,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
    * nu aveau niciun timeout, deci o singura conexiune blocata tinea cererea
    * utilizatorului deschisa la nesfarsit.
    */
-  async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider }) {
+  async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider, semnalAnulare }) {
     let text = null;
 
     // Anti-cost (B2): plafon de apeluri de furnizori per cerere. Inainte, un
@@ -92,7 +92,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
               max_tokens: 1500,
             })),
             signal,
-          }), 30000);
+          }), 30000, semnalAnulare);
 
           if (oaiRes.ok) {
             const oaiData = await oaiRes.json();
@@ -136,7 +136,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
                 max_tokens: 1000,
               })),
               signal,
-            }), 30000);
+            }), 30000, semnalAnulare);
 
             if (groqRes.ok) {
               const groqData = await groqRes.json();
@@ -206,7 +206,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
             headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
             body: JSON.stringify(serviciuVision.corpVisionCompatibilOpenAi('google/gemini-flash-1.5', PROMPT_ANALIZA_FOTO, imageMime, imageBase64)),
             signal,
-          }), 30000);
+          }), 30000, semnalAnulare);
 
           if (orRes.ok) {
             const orData = await orRes.json();

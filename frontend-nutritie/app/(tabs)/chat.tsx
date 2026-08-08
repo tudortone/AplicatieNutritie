@@ -444,12 +444,12 @@ export default function ChatScreen() {
       const rows = mealProposal.items.map((item: any) => ({
         user_id: session.user.id,
         nume: `${item.name} (${item.qty}${item.unit || 'g'})`,
-        calorii: clampVal(Math.round(parseStrictNumber(item.kcal)), 15000), // Caloriile rămân rotunjite
-        proteine: clampVal(parseStrictNumber(item.protein_g), 2000), // Păstrăm zecimalele
+        calorii: clampVal(Math.round(parseStrictNumber(item.kcal)), 10000), // Caloriile rămân rotunjite
+        proteine: clampVal(parseStrictNumber(item.protein_g), 1000), // Păstrăm zecimalele
         carbohidrati: clampVal(parseStrictNumber(item.carbs_g), 2000),
-        grasimi: clampVal(parseStrictNumber(item.fat_g), 2000),
+        grasimi: clampVal(parseStrictNumber(item.fat_g), 1000),
         // Salveaza si fibrele din propunerea AI în propunerea AI dar nu era salvat → câmpul rămânea 0
-        fibre: clampVal(Math.round(parseStrictNumber(item.fiber_g)), 2000),
+        fibre: clampVal(Math.round(parseStrictNumber(item.fiber_g)), 500),
         data: ziLocala,
         ora: oraLocala,
         tip_masa: tipMasa,

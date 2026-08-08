@@ -210,7 +210,11 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       // M-06: auth.deleteUser rulează doar după ce curățarea Clerk/ImageKit a
       // reușit, ca un eșec la un pas reversibil să lase contul intact și reluabil.
       const { error: eroareAuth } = await supabaseAdmin.auth.admin.deleteUser(userId);
-      if (eroareAuth) throw eroareAuth;
+      // S4-08: un utilizator deja șters (conflict pe DELETE concurent sau retry)
+      // e tratat ca succes, identic cu worker-ul (gdprWorker.js 404 = deja șters).
+      if (eroareAuth && !String(eroareAuth.message).toLowerCase().includes('not found')) {
+        throw eroareAuth;
+      }
       await actualizezaStatus('auth_done');
 
       await actualizezaStatus('completed');

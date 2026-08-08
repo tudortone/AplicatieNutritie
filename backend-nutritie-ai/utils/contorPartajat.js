@@ -22,6 +22,21 @@ end
 return 1
 `;
 
+// S4-03: DECR atomic fara sa atinga TTL-ul (DECR/INCR pastreaza TTL-ul existent).
+// Folosit la restituirea cotei gratuite AI la esec (5xx/429). Cheie inexistenta
+// -> 0; nu coboara sub 0 (reparat cu INCR, care pastreaza TTL-ul).
+const DECR_CU_FLOOR_LUA = `
+if redis.call('EXISTS', KEYS[1]) == 0 then
+  return 0
+end
+local val = redis.call('DECR', KEYS[1])
+if val < 0 then
+  redis.call('INCR', KEYS[1])
+  return 0
+end
+return val
+`;
+
 const PLAFON_AVERTISMENTE = 200;
 
 // M-19: throttling-ul este PER-MESAJ, nu un contor global. Fiecare mesaj distinct
@@ -81,6 +96,19 @@ class ContorLocalCuTtl {
     return intrare.valoare;
   }
 
+  // S4-03: restituire de 1 unitate (refund pe cota gratuita AI la esec 5xx/429).
+  // Nu coboara sub 0; respecta expirarea (intrare expirata = tratata ca absent).
+  decrement(cheie) {
+    const acum = Date.now();
+    const intrare = this.intrari.get(cheie);
+    if (!intrare || (intrare.expiraLa && intrare.expiraLa <= acum)) {
+      this.intrari.delete(cheie);
+      return 0;
+    }
+    intrare.valoare = Math.max(0, intrare.valoare - 1);
+    return intrare.valoare;
+  }
+
   ttl(cheie) {
     const intrare = this.intrari.get(cheie);
     if (!intrare) return -2;
@@ -131,6 +159,24 @@ function creeazaContorPartajat({ url, prefix = 'nutri:contor', plafon } = {}) {
         }
       }
       return local.ttl(finala);
+    },
+
+    // S4-03: restituire de 1 unitate (refund pe cota gratuita AI la esec 5xx/429).
+    // Local este actualizat in paralel, ca la increment; Redis primeste DECR atomic.
+    async decrement(cheie) {
+      const finala = cheieFinala(cheie);
+      const localCount = local.decrement(finala);
+      if (!client?.isReady) return localCount;
+
+      try {
+        return await client.eval(DECR_CU_FLOOR_LUA, {
+          keys: [finala],
+          arguments: [],
+        });
+      } catch (err) {
+        avertizeaza(`[Contor] Redis indisponibil (${codEroare(err)}); folosesc rezerva locala.`);
+        return localCount;
+      }
     },
   };
 }

@@ -115,6 +115,20 @@ function creeazaCheckAiUsageQuota({
     }
 
     res.setHeader('X-AI-Quota-Remaining', Math.max(0, limitaZi - count));
+    // S4-03: cota gratuită a fost deja debitată mai sus. Dacă operația AI eșuează
+    // (5xx) sau e respinsă de cooldown-ul furnizorului (429), restituim unitatea
+    // prin decrement — altfel un eșec arde o analiză gratuită fără rezultat.
+    // (Creditul plătit are propriul refund idempotent pe event_id, mai sus.)
+    req._quotaGratuitaConsumata = true;
+    if (typeof res.once === 'function' && typeof sursa.decrement === 'function') {
+      res.once('finish', () => {
+        if (!req._quotaGratuitaConsumata || !res.statusCode) return;
+        if (res.statusCode !== 429 && res.statusCode < 500) return;
+        Promise.resolve(sursa.decrement(userId)).catch((err) => {
+          console.error('[Quota AI] Refund cota gratuita esuat:', err?.message || err);
+        });
+      });
+    }
     return next();
   };
 }

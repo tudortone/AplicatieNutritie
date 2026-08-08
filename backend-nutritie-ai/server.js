@@ -143,8 +143,18 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
   exposedHeaders: ['Idempotency-Status', 'Retry-After', 'X-AI-Quota-Remaining', 'X-Protectie-RLS', 'X-Credite-Ramase'],
 }));
-const supabase = createClient(config.supabase.url, config.supabase.anonKey);
-const supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey);
+// S4-06: fara timeout pe apelurile Supabase, o partitie de retea sau GoTrue
+// agatat blocheaza cererea pana la default-ul Node (~300s). Wrapper global cu
+// AbortSignal.timeout(10000); daca supabase-js furnizeaza deja un signal, il
+// combina cu timeout-ul (AbortSignal.any, disponibil din Node 20.3).
+const fetchCuTimeoutSupabase = (input, init = {}) => {
+  const semnalCombinat = init.signal
+    ? AbortSignal.any([init.signal, AbortSignal.timeout(10000)])
+    : AbortSignal.timeout(10000);
+  return fetch(input, { ...init, signal: semnalCombinat });
+};
+const supabase = createClient(config.supabase.url, config.supabase.anonKey, { global: { fetch: fetchCuTimeoutSupabase } });
+const supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey, { global: { fetch: fetchCuTimeoutSupabase } });
 const checkAiUsageQuota = creeazaCheckAiUsageQuota({ supabaseAdmin });
 // P-012: limitator dedicat webhook-urilor (Clerk/Svix). Se monteaza pe calea
 // webhook-urilor INAINTE de router (si INAINTE de preAuthLimiter, care altfel nu
@@ -315,13 +325,28 @@ app.get('/', (_req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
-app.get('/health', (_req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    healthy: true,
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  });
+// S4-01: /health face acum un ping real catre Supabase (readiness), nu doar
+// versiunea statica. Daca PostgREST/Supabase sunt jos, fetch-ul prin wrapper-ul
+// fetchCuTimeoutSupabase (S4-06, 10s) arunca si raspundem 503. Runda de tabele
+// de sanatate este aleasa ca sa nu depinda de date: intereseaza doar ca reteaua
+// si PostgREST raspund; eroarea de tabel inexistent este ignorata.
+app.get('/health', async (_req, res) => {
+  try {
+    await supabase.from('health_check').select('*').maybeSingle();
+    res.status(200).json({
+      status: 'ok',
+      healthy: true,
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+    });
+  } catch {
+    res.status(503).json({
+      status: 'degradat',
+      healthy: false,
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 const aiR = createAiRouter({
@@ -462,6 +487,9 @@ if (require.main === module) {
     console.log(`Serverul securizat ruleaza pe ${config.host}:${config.port}`);
     startKeepAliveTicker();
   });
+  // S4-06: timeout la nivel de socket — o cerere ramasa in aer (provider AI
+  // care nu raspunde, DB agatat) nu tine conexiunea deschisa la nesfarsit.
+  server.timeout = 25000;
   const shutdown = (signal) => {
     console.log(`${signal} primit - inchid serverul elegant...`);
     server.close(() => process.exit(0));

@@ -111,6 +111,24 @@ function incarcaConfig() {
 	if (esteProductie && !process.env.REVENUECAT_WEBHOOK_SECRET) {
 		opreste('REVENUECAT_WEBHOOK_SECRET este obligatoriu in productie (webhook-uri RevenueCat).');
 	}
+	// S4-07: fara cheile Clerk, autentificarea raspunde 401 din identitate.js la
+	// prima cerere, iar fara ImageKit, pozele 500 in webhooks/ai. Fail-fast la
+	// boot, aliniat cu GEMINI/REDIS/REVENUECAT de mai sus.
+	if (esteProductie && (!process.env.CLERK_SECRET_KEY || !process.env.CLERK_WEBHOOK_SECRET)) {
+		opreste(
+			'CLERK_SECRET_KEY si CLERK_WEBHOOK_SECRET sunt obligatorii in productie ' +
+				'(autentificare + webhook-uri Clerk).',
+		);
+	}
+	if (
+		esteProductie &&
+		(!process.env.IMAGEKIT_PUBLIC_KEY || !process.env.IMAGEKIT_PRIVATE_KEY || !process.env.IMAGEKIT_URL_ENDPOINT)
+	) {
+		opreste(
+			'IMAGEKIT_PUBLIC_KEY, IMAGEKIT_PRIVATE_KEY si IMAGEKIT_URL_ENDPOINT sunt obligatorii in productie ' +
+				'(upload poze ImageKit).',
+		);
+	}
 
 	const config = Object.freeze({
 		NODE_ENV,

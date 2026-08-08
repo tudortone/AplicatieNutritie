@@ -24,14 +24,16 @@ class TimeoutAiError extends Error {
 }
 
 /**
- * Ruleaza o cerere anulabila cu deadline strict.
+ * Ruleaza o cerere cu deadline strict, optional anulabila si din exterior.
  *
  * @template T
  * @param {(signal: AbortSignal) => Promise<T>} factory
  * @param {number} [ms]
+ * @param {AbortSignal} [signalExtern] — aborteaza cererea la deconectarea
+ *   clientului (S4-04); combinat cu timeout-ul prin AbortSignal.any
  * @returns {Promise<T>}
  */
-async function callWithTimeout(factory, ms = 30000) {
+async function callWithTimeout(factory, ms = 30000, signalExtern) {
 	if (typeof factory !== 'function') {
 		throw new TypeError(
 			'callWithTimeout necesita o factory (signal) => Promise. O promisiune deja ' +
@@ -39,7 +41,7 @@ async function callWithTimeout(factory, ms = 30000) {
 		);
 	}
 
-	const signal = AbortSignal.timeout(ms);
+	const signal = signalExtern ? AbortSignal.any([AbortSignal.timeout(ms), signalExtern]) : AbortSignal.timeout(ms);
 
 	try {
 		return await factory(signal);

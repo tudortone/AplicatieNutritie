@@ -67,11 +67,12 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
       clerk_user_id: 'clerk-789',
       status: 'pending',
       retry_count: 0,
-      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      initiated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     };
 
     const updateCalls = [];
     const deleteCalls = [];
+    let ltColumn = null;
 
     const adminFake = {
       auth: {
@@ -85,9 +86,12 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
             select: () => ({
               neq: () => ({
                 neq: () => ({
-                  lt: () => ({
-                    limit: async () => ({ data: [randStocat], error: null }),
-                  }),
+                  lt: (col, val) => {
+                    ltColumn = col;
+                    return {
+                      limit: async () => ({ data: [randStocat], error: null }),
+                    };
+                  },
                 }),
               }),
             }),
@@ -112,7 +116,9 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
 
     const rez = await reiaStergerileBlocate({ supabaseAdmin: adminFake, config: {} });
     expect(rez.reluate).toBe(1);
-    // N-03: worker-ul șterge EXACT toate tabelele user-scoped din lista unică
+    // S3-01: worker-ul filtrează pe coloana reală (initiated_at), nu created_at
+    expect(ltColumn).toBe('initiated_at');
+    // N-03: worker-ul șterge exact toate tabelele user-scoped din lista unică
     expect(deleteCalls.map((d) => d.tabela).sort()).toEqual([...TABELE_CU_RLS_UTILIZATOR].sort());
     expect(adminFake.auth.admin.deleteUser).toHaveBeenCalledWith('user-456');
     // N-02: ordinea statusurilor = ordinea rutei (DB → Clerk → ImageKit → auth)
@@ -128,7 +134,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
       status: 'clerk_done',
       file_ids: ['fk_alpha', 'fk_beta'],
       retry_count: 0,
-      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      initiated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     };
 
     const updateCalls = [];
@@ -200,7 +206,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
       status: 'imagekit_done',
       file_ids: ['fk_gamma'],
       retry_count: 0,
-      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      initiated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     };
     const updateCalls = [];
     const adminFake = {
@@ -242,7 +248,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
       user_id: 'user-toxic',
       status: 'pending',
       retry_count: 4,
-      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      initiated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     };
 
     let updatePayload = null;

@@ -221,6 +221,10 @@ function createAiRouter({
             imageBase64,
             imageMime,
             requestedProvider,
+            // S4-04: semnalul de anulare ajunge si la fetch-urile din cascada, nu
+            // doar la coada semaforului. Un client deconectat intelege imediat
+            // providerii, fara sa se mai factureze generarea pana la deadline.
+            semnalAnulare: controllerAbord.signal,
           });
         }, controllerAbord.signal);
       } catch (errSemafor) {
