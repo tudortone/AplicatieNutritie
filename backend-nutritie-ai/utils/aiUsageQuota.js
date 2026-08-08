@@ -68,17 +68,16 @@ function creeazaCheckAiUsageQuota({
           // aplica_tranzactie_credite, cu event_type REFUND_AI_FAILURE și delta +1.
           // Reapelarea cu același event_id e respinsă de DB (UNIQUE pe event_id).
           if (typeof res.once === 'function') {
-            res.once('finish', () => {
-              // DOAR erorile de server (5xx) arată că operația AI a eșuat — 4xx
-              // înseamnă cerere invalidă; acolo creditul nu se returnează.
-              if (!req._creditConsumat || !res.statusCode || res.statusCode < 500) return;
+            const restituiePlatit = () => {
+              if (req._creditRestituit) return;
+              req._creditRestituit = true;
               Promise.resolve(clientSupabase.rpc('aplica_tranzactie_credite', {
                 p_user_id: userId,
                 p_event_id: req._creditEventId,
                 p_event_type: 'REFUND_AI_FAILURE',
                 p_delta: 1,
                 p_produs_id: null,
-                p_metadata: { status: res.statusCode },
+                p_metadata: { status: res.statusCode || 'close' },
               })).then(({ error: errRefund }) => {
                 if (errRefund) {
                   console.error('[Quota AI] Refund esuat:', errRefund.message);
@@ -86,6 +85,21 @@ function creeazaCheckAiUsageQuota({
               }).catch((err) => {
                 console.error('[Quota AI] Refund esuat:', err?.message || err);
               });
+            };
+            res.once('finish', () => {
+              // DOAR erorile de server (5xx) arată că operația AI a eșuat — 4xx
+              // înseamnă cerere invalidă; acolo creditul nu se returnează.
+              if (!req._creditConsumat || !res.statusCode || res.statusCode < 500) return;
+              restituiePlatit();
+            });
+            // G3: și la `close` fără răspuns 2xx complet (client deconectat / socket
+            // distrus / 499) restituim creditul. `finish` acoperă 5xx-urile livrate;
+            // `close` acoperă cererile abandonate înainte de finalizare. Idempotența
+            // rămâne garantată de UNIQUE pe credite_tranzactii.event_id.
+            res.once('close', () => {
+              if (!req._creditConsumat) return;
+              if (res.writableEnded) return;
+              restituiePlatit();
             });
           }
 
@@ -106,6 +120,14 @@ function creeazaCheckAiUsageQuota({
     }
 
     if (count > limitaZi) {
+      // B6: refuzul 429 nu trebuie să umfle contorul. Incrementul atomic de mai sus
+      // a debitat 1 unitate; o restituim aici ca refuzul să nu prelungească blocarea
+      // peste fereastra curentă. Răspunsul 429 rămâne identic (contract neschimbat).
+      if (typeof sursa.decrement === 'function') {
+        await sursa.decrement(userId).catch((err) => {
+          console.error('[Quota AI] Refund 429 cota gratuita esuat:', err?.message || err);
+        });
+      }
       const secundeRamase = await sursa.ttl(userId);
       const oreRamase = secundeRamase > 0 ? Math.ceil(secundeRamase / 3600) : 24;
       return res.status(429).json({
@@ -121,12 +143,25 @@ function creeazaCheckAiUsageQuota({
     // (Creditul plătit are propriul refund idempotent pe event_id, mai sus.)
     req._quotaGratuitaConsumata = true;
     if (typeof res.once === 'function' && typeof sursa.decrement === 'function') {
-      res.once('finish', () => {
-        if (!req._quotaGratuitaConsumata || !res.statusCode) return;
-        if (res.statusCode !== 429 && res.statusCode < 500) return;
+      const restituieGratuit = () => {
+        if (req._quotaGratuitaRestituita) return;
+        req._quotaGratuitaRestituita = true;
         Promise.resolve(sursa.decrement(userId)).catch((err) => {
           console.error('[Quota AI] Refund cota gratuita esuat:', err?.message || err);
         });
+      };
+      res.once('finish', () => {
+        if (!req._quotaGratuitaConsumata || !res.statusCode) return;
+        if (res.statusCode !== 429 && res.statusCode < 500) return;
+        restituieGratuit();
+      });
+      // G3: și la `close` fără răspuns complet (deconectare / socket distrus / 499)
+      // restituim cota gratuită. Flag-ul `_quotaGratuitaRestituita` previne dublul
+      // decrement când și `finish` (5xx/429) a restituit deja.
+      res.once('close', () => {
+        if (!req._quotaGratuitaConsumata) return;
+        if (res.writableEnded) return;
+        restituieGratuit();
       });
     }
     return next();

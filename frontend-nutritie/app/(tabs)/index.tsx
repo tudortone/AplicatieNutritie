@@ -285,6 +285,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/notificari' as any)}
               accessibilityRole="button"
               accessibilityLabel={`Notificări${unreadCount > 0 ? `, ${unreadCount} necitite` : ''}`}
+              hitSlop={6}
               style={{
                 width: 38,
                 height: 38,
@@ -523,6 +524,7 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     accessibilityRole="button"
                     accessibilityLabel="Scade un pahar de apă"
+                    hitSlop={6}
                     style={[s.waterBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                     onPress={scadePahar}
                   >
@@ -531,6 +533,7 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     accessibilityRole="button"
                     accessibilityLabel="Adaugă un pahar de apă"
+                    hitSlop={4}
                     style={[s.waterBtnAdd, { shadowColor: '#00e5ff' }]}
                     onPress={adaugaPahar}
                   >

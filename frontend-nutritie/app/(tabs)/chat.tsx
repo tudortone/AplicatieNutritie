@@ -10,7 +10,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut } from 'react-native-reanimated';
-import { Send, Sparkles, RotateCcw } from 'lucide-react-native';
+import { Send, Sparkles, RotateCcw, BarChart3, Dumbbell, ChefHat, Zap } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useTranslation } from 'react-i18next';
@@ -538,6 +538,7 @@ export default function ChatScreen() {
               onPress={handleResetChat}
               style={[styles.newChatPill, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
               activeOpacity={0.85}
+              hitSlop={{ top: 2, bottom: 2 }}
               accessibilityRole="button"
               accessibilityLabel="Începe o conversație nouă de chat"
             >
@@ -591,7 +592,7 @@ export default function ChatScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Analiza zilei: vezi unde ești cu kcal și proteine"
               >
-                <Text style={styles.quickActionEmoji}>📊</Text>
+                <BarChart3 size={24} color={colors.textPrimary} />
                 <View style={styles.quickActionBody}>
                   <Text style={[styles.quickActionTitle, { color: colors.textPrimary }]}>Analiza zilei</Text>
                   <Text style={[styles.quickActionText, { color: colors.textSecondary }]}>Vezi unde ești cu kcal și proteine</Text>
@@ -604,7 +605,7 @@ export default function ChatScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Sugerează o masă bogată în proteine, sub 600 kcal"
               >
-                <Text style={styles.quickActionEmoji}>💪</Text>
+                <Dumbbell size={24} color={colors.textPrimary} />
                 <View style={styles.quickActionBody}>
                   <Text style={[styles.quickActionTitle, { color: colors.textPrimary }]}>Masă bogată în proteine</Text>
                   <Text style={[styles.quickActionText, { color: colors.textSecondary }]}>Rapid, simplu, util</Text>
@@ -617,7 +618,7 @@ export default function ChatScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Deschide generatorul de rețete"
               >
-                <Text style={styles.quickActionEmoji}>🥗</Text>
+                <ChefHat size={24} color={colors.background} />
                 <View style={styles.quickActionBody}>
                   <Text style={[styles.quickActionTitle, { color: colors.background }]}>Generator rețete</Text>
                   <Text style={[styles.quickActionText, { color: colors.background }]}>Rețete după ce ți-a mai rămas azi</Text>
@@ -687,7 +688,7 @@ export default function ChatScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Generator de rețete"
                 >
-                  <Text style={{ fontSize: 14 }}>🥗</Text>
+                  <ChefHat size={14} color={colors.background} />
                   <Text style={[styles.actionChipText, { color: colors.background, fontWeight: '800' }]}>Generator Rețete</Text>
                 </TouchableOpacity>
 
@@ -697,7 +698,7 @@ export default function ChatScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Sugerează o cină rapidă, sub 15 minute"
                 >
-                  <Text style={{ fontSize: 14 }}>⚡</Text>
+                  <Zap size={14} color={colors.textPrimary} />
                   <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Cină rapidă (&lt;15 min)</Text>
                 </TouchableOpacity>
 
@@ -707,7 +708,7 @@ export default function ChatScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Cere o rețetă bogată în proteine"
                 >
-                  <Text style={{ fontSize: 14 }}>💪</Text>
+                  <Dumbbell size={14} color={colors.textPrimary} />
                   <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Bomba de proteine</Text>
                 </TouchableOpacity>
 
@@ -717,7 +718,7 @@ export default function ChatScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Analizează ziua curentă în chat"
                 >
-                  <Text style={{ fontSize: 14 }}>📊</Text>
+                  <BarChart3 size={14} color={colors.textPrimary} />
                   <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>Analiză zi curentă</Text>
                 </TouchableOpacity>
               </ScrollView>
@@ -750,6 +751,7 @@ export default function ChatScreen() {
                 testID="send-button"
                 accessibilityRole="button"
                 accessibilityLabel="Trimite mesajul"
+                hitSlop={4}
                 style={[styles.sendBtn, !chatInput.trim() && { opacity: 0.4 }]}
                 onPress={trimiteMesaj}
                 disabled={loadingChat || !chatInput.trim()}
@@ -1003,9 +1005,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  quickActionEmoji: {
-    fontSize: 24,
   },
   quickActionBody: {
     flex: 1,

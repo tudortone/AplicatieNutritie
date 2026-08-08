@@ -15,7 +15,7 @@ import BottomSheet, {
   BottomSheetTextInput 
 } from '@gorhom/bottom-sheet';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Check, X, Heart, Trash2, Scale, Search } from 'lucide-react-native';
+import { Check, X, Heart, Trash2, Scale, Search, UtensilsCrossed } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../supabase';
 
@@ -417,7 +417,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           {/* Favorite Foods Section */}
           {favorite.length > 0 && !editingMasaId && (
             <View style={{ marginBottom: 20 }}>
-              <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>❤️ ALIMENTE FAVORITE RAPIDE</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                <Heart size={14} color={colors.textSecondary} />
+                <Text style={[styles.favHeaderTitle, { color: colors.textSecondary, marginBottom: 0 }]}>ALIMENTE FAVORITE RAPIDE</Text>
+              </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
                 {favorite.map((fav) => (
                   <View
@@ -462,9 +465,12 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           {/* Preset Foods Section */}
           {!editingMasaId && (
             <View style={{ marginBottom: 20 }}>
-              <Text style={[styles.favHeaderTitle, { color: colors.textSecondary }]}>
-                🍽️ ALEGE DIN PRESETURI RAPIDE
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                <UtensilsCrossed size={14} color={colors.textSecondary} />
+                <Text style={[styles.favHeaderTitle, { color: colors.textSecondary, marginBottom: 0 }]}>
+                  ALEGE DIN PRESETURI RAPIDE
+                </Text>
+              </View>
 
               <TouchableOpacity
                 style={{
@@ -484,13 +490,14 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               >
                 <Search size={16} color={colors.accent} />
                 <Text style={{ fontSize: 13, fontWeight: '700', color: colors.accent }}>
-                  🔍 Caută Produs, Brand sau Introducere Complet Manuală
+                  Caută Produs, Brand sau Introducere Complet Manuală
                 </Text>
               </TouchableOpacity>
 
               {/* Search */}
               <BottomSheetTextInput
                 style={[styles.input, { marginBottom: 12, color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
+                accessibilityLabel="Caută aliment"
                 placeholder="Caută aliment..."
                 placeholderTextColor={colors.textTertiary}
                 value={searchQuery}
@@ -653,6 +660,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   backgroundColor: colors.surfaceBg 
                 }
               ]}
+              accessibilityLabel="Nume aliment / preparat"
               placeholder="Ex: Piept de pui la grătar cu orez"
               placeholderTextColor={colors.textTertiary}
               value={nume}

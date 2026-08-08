@@ -23,6 +23,9 @@ const TTL_MS = 15 * 60 * 1000;
 // timp de 15 minute; la expirare, o reluare poate revendica din nou cheia. TTL-ul
 // rezultatului finalizat (TTL_MS) rămâne neschimbat.
 const TTL_PROCESSARE_MS = 2 * 60 * 1000;
+// R2: un eșec de server (5xx) e păstrat ca 'failed' doar scurt, suficient cât un retry
+// cu aceeași cheie să primească replay, nu o re-executare (care ar debita din nou).
+const TTL_ESEC_MS = 2 * 60 * 1000;
 const registruImplicit = creeazaRegistruCheiValori({
   url: process.env.REDIS_URL,
   prefix: 'nutri:idem',
@@ -34,6 +37,10 @@ const hash = (valoare) => crypto
   .digest('hex');
 
 function namespaceCerere(req) {
+  // R2: identitatea utilizatorului e stabilă, token-ul Supabase se rotește (~1h).
+  // Un retry cu aceeași Idempotency-Key sub token rotit ar ajunge altfel într-un
+  // namespace diferit și ar re-executa operația (dublu debit consuma_credit).
+  if (req.user?.id) return `user:${hash(req.user.id)}`;
   const autorizare = req.headers.authorization;
   if (typeof autorizare === 'string' && autorizare.startsWith('Bearer ')) {
     return `token:${hash(autorizare.slice(7))}`;
@@ -91,11 +98,13 @@ function raspundeDinRegistru(res, existent, amprenta) {
     return true;
   }
 
+  const esteFinalizat = existent.stare === 'finalizat' || existent.stare === undefined;
+  const esteEsec = existent.stare === 'failed';
+  // R2: replay și pentru claim-urile 'failed' (5xx), ca un retry cu aceeași cheie
+  // să primească eșecul înregistrat, nu o re-executare (dublu debit consuma_credit).
   if (
-    (existent.stare === 'finalizat' || existent.stare === undefined) &&
     Number.isInteger(existent.status) &&
-    existent.status >= 200 &&
-    existent.status < 300
+    ((esteFinalizat && existent.status >= 200 && existent.status < 300) || esteEsec)
   ) {
     res.setHeader?.('Idempotency-Status', 'replayed');
     res.status(existent.status).json(existent.body);
@@ -135,7 +144,13 @@ function creeazaMiddlewareIdempotenta({
     // server.js înaintea routerelor, deci rulează PRIMUL; cel critic, montat
     // per-rută, rulează după. Fără gardă, cel critic ar revendica a doua oară
     // aceeași cheie deja revendicată de cel global și ar returna un 409 fals.
-    if (req._idempotentaAplicata) return next();
+    if (req._idempotentaAplicata) {
+      // R2: claim-ul global a rulat înainte de `requireAuth`, deci pe namespace-ul
+      // token-ului (care se rotește ~1h). Pe rutele critice re-cheiem pe identitatea
+      // utilizatorului, ca un retry cu aceeași cheie să găsească claim-ul inițial
+      // chiar și după rotirea token-ului — altfel ar re-executa (dublu debit).
+      if (!rutaCritica || !req.user?.id) return next();
+    }
 
     const contentType = String(req.headers['content-type'] || '').toLowerCase();
     const esteMultipart = contentType.startsWith('multipart/form-data');
@@ -220,6 +235,18 @@ function creeazaMiddlewareIdempotenta({
           body,
           finalizatLa: Date.now(),
         }, ttlMs)).catch(() => {});
+      } else if (status >= 500) {
+        // R2: eșec de server (5xx) → păstrăm claim-ul 'failed' cu TTL scurt, ca un
+        // retry cu aceeași cheie să primească replay 5xx, nu o re-executare (dublu
+        // debit consuma_credit / insert duplicat). Erorile de client (4xx) se șterg.
+        finalizat = true;
+        Promise.resolve(registru.set(cacheKey, {
+          stare: 'failed',
+          amprenta,
+          status,
+          body,
+          finalizatLa: Date.now(),
+        }, TTL_ESEC_MS)).catch(() => {});
       } else {
         Promise.resolve(registru.del?.(cacheKey)).catch(() => {});
       }
@@ -250,4 +277,5 @@ module.exports = {
   serializeazaStabil,
   TTL_MS,
   TTL_PROCESSARE_MS,
+  TTL_ESEC_MS,
 };

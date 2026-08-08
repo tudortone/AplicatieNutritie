@@ -7,7 +7,17 @@ export const extrageCodDinUrl = (url: string): string | null => {
   const query = url.slice(indexSemnal + 1);
   for (const pereche of query.split('&')) {
     const [cheie, valoare] = pereche.split('=');
-    if (cheie === 'code' && valoare) return decodeURIComponent(valoare);
+    if (cheie === 'code' && valoare) {
+      try {
+        return decodeURIComponent(valoare);
+      } catch {
+        // Valoare malformată (ex. `%` singur / secvență de escape invalidă):
+        // decodeURIComponent arunca URIError. Fallback-ul păstrează valoarea
+        // brută ca să nu prăbușească fluxul OAuth; schimbul de cod va eșua
+        // curat în handler, care arată eroarea `error_description` din URL.
+        return valoare;
+      }
+    }
   }
   return null;
 };

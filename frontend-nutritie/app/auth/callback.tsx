@@ -30,6 +30,17 @@ export default function AuthCallbackScreen() {
     procesat.current = true;
 
     const finalizeaza = async () => {
+      // G1: pe Android `openAuthSessionAsync` polifilizează prin
+      // Linking.addEventListener('url'), la care e abonat și expo-router. Ca
+      // urmare, auth.tsx ȘI callback.tsx pot primi același `code` PKCE de două
+      // ori. Dacă sesiunea există deja (auth.tsx a schimbat deja codul), nu mai
+      // schimbăm nimic — doar navigăm, ca să nu dăm „code already used".
+      const { data: sesiuneExistenta } = await supabase.auth.getSession();
+      if (sesiuneExistenta.session) {
+        router.replace('/(tabs)');
+        return;
+      }
+
       const code = unu(params.code);
       const accessToken = unu(params.access_token);
       const refreshToken = unu(params.refresh_token);

@@ -154,4 +154,72 @@ describe('Plafon cost AI per utilizator (H-06)', () => {
     const refund = apeluriRpc.filter((a) => a.functie === 'aplica_tranzactie_credite');
     expect(refund).toHaveLength(0);
   });
+
+  test('#G3: close fara raspuns complet (client deconectat) => refund pe event_id', async () => {
+    const apeluriRpc = [];
+    const admin = {
+      rpc: jest.fn(async (functie, params) => {
+        apeluriRpc.push({ functie, params });
+        if (functie === 'consuma_credit') return { data: 4, error: null };
+        if (functie === 'aplica_tranzactie_credite') return { data: 5, error: null };
+        return { data: null, error: null };
+      }),
+    };
+    const contor = contorCu(0);
+    const c = creeazaCheckAiUsageQuota({ contor, supabaseAdmin: admin, limitaZi: 5 });
+
+    let closeHandler = null;
+    const res = { statusCode: 200, headers: {}, writableEnded: false };
+    res.setHeader = (key, value) => { res.headers[key] = value; };
+    res.once = (evnt, handler) => { if (evnt === 'close') closeHandler = handler; };
+
+    const req = { user: { id: 'u1' } };
+    const next = jest.fn();
+    await c(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(req._creditConsumat).toBe(true);
+
+    // Clientul s-a deconectat înainte ca răspunsul să fie finalizat (writableEnded
+    // fals) → creditul se restituie, altfel s-ar arde o analiză plătită fără rezultat.
+    expect(typeof closeHandler).toBe('function');
+    closeHandler();
+    await Promise.resolve();
+
+    const refund = apeluriRpc.find((a) => a.functie === 'aplica_tranzactie_credite');
+    expect(refund).toBeDefined();
+    expect(refund.params.p_user_id).toBe('u1');
+    expect(refund.params.p_event_id).toBe(req._creditEventId);
+    expect(refund.params.p_event_type).toBe('REFUND_AI_FAILURE');
+    expect(refund.params.p_delta).toBe(1);
+  });
+
+  test('#G3: close cu raspuns 2xx complet => NU exista refund', async () => {
+    const apeluriRpc = [];
+    const admin = {
+      rpc: jest.fn(async (functie, params) => {
+        apeluriRpc.push({ functie, params });
+        if (functie === 'consuma_credit') return { data: 4, error: null };
+        if (functie === 'aplica_tranzactie_credite') return { data: 5, error: null };
+        return { data: null, error: null };
+      }),
+    };
+    const contor = contorCu(0);
+    const c = creeazaCheckAiUsageQuota({ contor, supabaseAdmin: admin, limitaZi: 5 });
+
+    let closeHandler = null;
+    const res = { statusCode: 200, headers: {}, writableEnded: true };
+    res.setHeader = (key, value) => { res.headers[key] = value; };
+    res.once = (evnt, handler) => { if (evnt === 'close') closeHandler = handler; };
+
+    const req = { user: { id: 'u1' } };
+    const next = jest.fn();
+    await c(req, res, next);
+
+    closeHandler();
+    await Promise.resolve();
+
+    const refund = apeluriRpc.filter((a) => a.functie === 'aplica_tranzactie_credite');
+    expect(refund).toHaveLength(0);
+  });
 });

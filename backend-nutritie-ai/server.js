@@ -489,7 +489,12 @@ if (require.main === module) {
   });
   // S4-06: timeout la nivel de socket — o cerere ramasa in aer (provider AI
   // care nu raspunde, DB agatat) nu tine conexiunea deschisa la nesfarsit.
-  server.timeout = 25000;
+  // G4: bugetul AI (cascada de furnizori, 30s per apel, plafonat la
+  // maxApeluriPerRequest=8) poate atinge ~4 min in cel mai rau caz legitim. La 25s
+  // se distrugea socket-ul pe o analiza lenta dar valida. Acoperim intregul buget;
+  // fiecare apel de furnizor se auto-intrerupe la 30s, deci cererea nu ramane
+  // blocata la nesfarsit.
+  server.timeout = 300000;
   const shutdown = (signal) => {
     console.log(`${signal} primit - inchid serverul elegant...`);
     server.close(() => process.exit(0));

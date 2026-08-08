@@ -41,7 +41,7 @@ function raspuns(status) {
 }
 
 /** Client admin Supabase controlabil pentru rute (fără apeluri reale). */
-function creeazaSupabaseAdminFake({ clerkUserId = 'clerk-123' } = {}) {
+function creeazaSupabaseAdminFake({ clerkUserId = 'clerk-123', outboxId = 'outbox-abc' } = {}) {
   const apeluri = [];
   const admin = {
     apeluri,
@@ -53,10 +53,12 @@ function creeazaSupabaseAdminFake({ clerkUserId = 'clerk-123' } = {}) {
         },
       },
     },
-    // P-05: outbox RPC — returnează null (nu blocant) dacă migrarea nu e aplicată
+    // P-05: outbox RPC — întoarce un ID valid (migrarea aplicată). N-OUTBOX:
+    // dacă întoarce null (fără rând outbox), ruta merge fail-closed cu 503 —
+    // vezi testul dedicat de mai jos.
     rpc: async (functie, params) => {
       apeluri.push({ tip: 'rpc', functie, params });
-      // Simulăm că RPC-ul outbox întoarce null (fără outbox ID)
+      if (functie === 'initiate_gdpr_deletion') return { data: outboxId, error: null };
       return { data: null, error: null };
     },
     from(tabela) {
@@ -223,6 +225,27 @@ describe('GDPR ImageKit', () => {
       expect(sterse.sort()).toEqual([...TABELE_CU_RLS_UTILIZATOR].sort());
       // la final: deleteUser (ordinea corecta — DB -> Clerk -> ImageKit -> auth.ireversibil)
       expect(admin.apeluri.some((a) => a.tip === 'deleteUser' && a.userId === 'supabase-id')).toBe(true);
+    });
+
+    test('N-OUTBOX: rpc outbox întoarce null (fără rând outbox) → 503 fail-closed, nimic nu se șterge', async () => {
+      const adminNull = creeazaSupabaseAdminFake({ outboxId: null });
+      const ctx = { db: adminNull, admin: adminNull, userId: 'supabase-id', modAdmin: true };
+      const appNull = express();
+      appNull.use(createGdprRouter({
+        requireAuth: (req, res, next) => next(),
+        generalLimiter: (req, res, next) => next(),
+        supabaseAdmin: adminNull,
+        contextDate: () => ctx,
+        profilRepo: {},
+      }));
+
+      const res = await request(appNull).delete('/delete-account');
+      expect(res.status).toBe(503);
+      expect(res.body.eroare).toContain('Ștergerea nu poate fi inițiată');
+      // Fail-closed: nu se șterge nimic (nici rânduri, nici identitate) și niciun
+      // apel extern (Clerk/ImageKit) nu pleacă fără rând de audit/resumare în outbox.
+      expect(adminNull.apeluri.filter((a) => a.tip === 'delete' || a.tip === 'deleteUser')).toHaveLength(0);
+      expect(stub.clerkApeluri).toHaveLength(0);
     });
 
     test('N-04: persisteaza fileIds extrași din mese în outbox INAINTE de ștergerea mesei', async () => {

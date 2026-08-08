@@ -128,4 +128,84 @@ describe('Idempotenta (C-01)', () => {
     expect(setIfAbsent).toHaveBeenCalledTimes(1);
     expect(next).toHaveBeenCalledTimes(1);
   });
+
+  test('#R2: aceeasi cheie + acelasi user, chiar cu token rotit => replay fara re-executare', async () => {
+    const middleware = creeazaMiddlewareIdempotenta({ registru: registruMemorie() });
+    const cerereUser = (token) => {
+      const c = cerere({ body: { calorii: 100 } });
+      return { ...c, user: { id: 'user-1' }, headers: { ...c.headers, authorization: `Bearer ${token}` } };
+    };
+
+    const prima = raspunsFals();
+    const primaNext = jest.fn(() => prima.json({ succes: true }));
+    await middleware(cerereUser('token-vechi'), prima, primaNext);
+
+    const aDoua = raspunsFals();
+    const aDouaNext = jest.fn();
+    await middleware(cerereUser('token-nou'), aDoua, aDouaNext);
+
+    // Chiar dacă token-ul s-a rotit, cheia stă pe identitatea utilizatorului,
+    // deci a doua cerere e un replay, nu o re-executare (altfel → dublu debit).
+    expect(aDoua.statusCode).toBe(200);
+    expect(aDoua.body).toEqual({ succes: true });
+    expect(aDoua.headers['Idempotency-Status']).toBe('replayed');
+    expect(aDouaNext).not.toHaveBeenCalled();
+    expect(primaNext).toHaveBeenCalledTimes(1);
+  });
+
+  test('#R2: raspuns 5xx pastreaza claim-ul failed; retry cu aceeasi cheie => replay 5xx', async () => {
+    const middleware = creeazaMiddlewareIdempotenta({ registru: registruMemorie() });
+
+    const prima = raspunsFals();
+    const primaNext = jest.fn(() => {
+      prima.statusCode = 503;
+      prima.json({ eroare: 'AI indisponibil' });
+    });
+    await middleware(cerere({ body: { calorii: 100 } }), prima, primaNext);
+
+    const aDoua = raspunsFals();
+    const aDouaNext = jest.fn();
+    await middleware(cerere({ body: { calorii: 100 } }), aDoua, aDouaNext);
+
+    // Eșecul de server se înregistrează ca 'failed' → retry-ul primește replay-ul
+    // 5xx, nu o re-executare a handler-ului (care ar debita din nou consuma_credit).
+    expect(aDoua.statusCode).toBe(503);
+    expect(aDoua.body).toEqual({ eroare: 'AI indisponibil' });
+    expect(aDoua.headers['Idempotency-Status']).toBe('replayed');
+    expect(aDouaNext).not.toHaveBeenCalled();
+    expect(primaNext).toHaveBeenCalledTimes(1);
+  });
+
+  test('#R2: global (pre-auth, token) + critic (post-auth, user) => re-cheiere pe user la retry cu token rotit', async () => {
+    const registru = registruMemorie();
+    const global = creeazaMiddlewareIdempotenta({ registru, rutaCritica: false });
+    const critic = creeazaMiddlewareIdempotenta({ registru, rutaCritica: true, permiteMultipart: true });
+
+    // Prima cerere: globalul revendică fără req.user (pre-auth), apoi "requireAuth"
+    // populează req.user, iar criticul re-cheie pe identitatea utilizatorului.
+    const prima = raspunsFals();
+    const primaNext = jest.fn(() => prima.json({ succes: true }));
+    const req1 = cerere({ body: { calorii: 100 } });
+    await global(req1, prima, () => {
+      req1.user = { id: 'user-1' };
+      return critic(req1, prima, primaNext);
+    });
+
+    // Retry cu token rotit: globalul revendică un namespace nou, dar criticul
+    // găsește claim-ul stabil pe user → replay, nu re-executare.
+    const aDoua = raspunsFals();
+    const aDouaNext = jest.fn();
+    const req2 = cerere({ body: { calorii: 100 } });
+    req2.headers.authorization = 'Bearer token-nou';
+    await global(req2, aDoua, () => {
+      req2.user = { id: 'user-1' };
+      return critic(req2, aDoua, aDouaNext);
+    });
+
+    expect(aDoua.statusCode).toBe(200);
+    expect(aDoua.body).toEqual({ succes: true });
+    expect(aDoua.headers['Idempotency-Status']).toBe('replayed');
+    expect(aDouaNext).not.toHaveBeenCalled();
+    expect(primaNext).toHaveBeenCalledTimes(1);
+  });
 });

@@ -12,6 +12,7 @@ import { BlurView } from 'expo-blur';
 import * as WebBrowser from 'expo-web-browser';
 import Animated, { FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, Sparkles } from 'lucide-react-native';
+import Svg, { Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
@@ -45,6 +46,28 @@ const getFriendlyErrorMessage = (rawMsg: string): string => {
   }
   return rawMsg || 'A apărut o problemă la autentificare.';
 };
+
+// Logo-urile brand OAuth nu există în lucide-react-native; SVG inline cu path-urile
+// oficiale. Culorile Google „G" sunt identitatea vizuală a brandului (fixe); Apple
+// folosește culoarea textului din temă pentru a rămâne vizibil pe fundal închis.
+function GoogleLogo({ size = 20 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48">
+      <Path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+      <Path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+      <Path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+      <Path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+    </Svg>
+  );
+}
+
+function AppleLogo({ size = 20, color }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path fill={color} d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+    </Svg>
+  );
+}
 
 export default function AuthScreen() {
   const { colors } = useTheme();
@@ -200,6 +223,14 @@ export default function AuthScreen() {
         }
         const { error: eroareSchimb } = await supabase.auth.exchangeCodeForSession(cod);
         if (eroareSchimb) {
+          // G1: pe Android callback.tsx poate fi declanșat în paralel cu acest
+          // handler și poate schimba deja codul. Dacă sesiunea există, login-ul
+          // chiar a reușit — nu arătăm o alertă falsă de „code already used".
+          const { data: sesiuneExistenta } = await supabase.auth.getSession();
+          if (sesiuneExistenta.session) {
+            router.replace('/(tabs)');
+            return;
+          }
           Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.eroareDinamica', { eroare: eroareSchimb.message }));
         }
       }
@@ -289,6 +320,7 @@ export default function AuthScreen() {
                 </View>
                 <TextInput
                   style={[styles.input, { color: colors.textPrimary }]}
+                  accessibilityLabel="Email sau utilizator"
                   placeholder="Email sau utilizator"
                   placeholderTextColor={colors.textSecondary}
                   value={email}
@@ -314,6 +346,7 @@ export default function AuthScreen() {
                 </View>
                 <TextInput
                   style={[styles.input, { color: colors.textPrimary }]}
+                  accessibilityLabel="Parolă"
                   placeholder="Parolă"
                   placeholderTextColor={colors.textSecondary}
                   value={parola}
@@ -443,22 +476,34 @@ export default function AuthScreen() {
                   style={[styles.oauthBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                   onPress={() => signInWithOAuth('google')}
                   disabled={loadingOAuth !== null}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continuă cu Google"
+                  accessibilityState={{ disabled: loadingOAuth !== null }}
                 >
                   {loadingOAuth === 'google' ? (
                     <ActivityIndicator color={colors.accent} />
                   ) : (
-                    <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]}>🟢 Google</Text>
+                    <View style={styles.oauthBtnContent}>
+                      <GoogleLogo size={20} />
+                      <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]}>Google</Text>
+                    </View>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.oauthBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                   onPress={() => signInWithOAuth('apple')}
                   disabled={loadingOAuth !== null}
+                  accessibilityRole="button"
+                  accessibilityLabel="Continuă cu Apple"
+                  accessibilityState={{ disabled: loadingOAuth !== null }}
                 >
                   {loadingOAuth === 'apple' ? (
                     <ActivityIndicator color={colors.accent} />
                   ) : (
-                    <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]}>🍎 Apple</Text>
+                    <View style={styles.oauthBtnContent}>
+                      <AppleLogo size={20} color={colors.textPrimary} />
+                      <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]}>Apple</Text>
+                    </View>
                   )}
                 </TouchableOpacity>
               </View>
@@ -511,6 +556,7 @@ const styles = StyleSheet.create({
   oauthWrap: { flexDirection: 'row', gap: 12 },
   oauthBtn: { flex: 1, height: 50, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
   oauthBtnText: { fontSize: 15, fontWeight: '700' },
+  oauthBtnContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   passwordRulesBox: { borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, gap: 8 },
   passwordRulesHeader: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

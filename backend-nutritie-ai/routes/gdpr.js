@@ -121,7 +121,9 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
           p_user_id: userId,
           p_clerk_user_id: clerkUserId,
         });
-      if (outboxErr) {
+      // N-OUTBOX: fail-closed dacă lipsește fie eroarea, fie rândul outbox (data
+      // null) — nu continuăm ștergerea ireversibilă fără rând de audit/resumare.
+      if (outboxErr || !outboxId) {
         console.error('[GDPR] Outbox indisponibil:', codEroare(outboxErr));
         return res.status(503).json({
           eroare: 'Ștergerea nu poate fi inițiată în siguranță acum. Reîncearcă în câteva minute.',

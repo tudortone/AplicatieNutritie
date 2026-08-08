@@ -587,6 +587,7 @@ export default function CameraScreen() {
         <TouchableOpacity
           style={styles.closeButton}
           onPress={() => { anuleazaScanarea(); router.back(); }}
+          hitSlop={4}
           accessibilityRole="button"
           accessibilityLabel="Închide camera"
           accessibilityHint="Renunță la scanare și revino la ecranul anterior"
