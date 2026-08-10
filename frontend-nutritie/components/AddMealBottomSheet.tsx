@@ -472,7 +472,13 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           width: 50,
         }}
       >
-        <BottomSheetScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent}>
+        {/* BUG-042: primul tap în timp ce tastatura e deschisă nu mai „înghite" apăsarea
+            (dismiss keyboard) — butonul Adaugă/Salvează se declanșează direct. */}
+        <BottomSheetScrollView
+          ref={scrollViewRef}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>
               {editingMasaId ? 'Editează Masa' : 'Adaugă Masă Nouă'}
