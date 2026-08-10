@@ -6,6 +6,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 interface Props {
   children: React.ReactNode;
@@ -32,16 +33,30 @@ export default function KeyboardAwareScreen({
   style,
   keyboardVerticalOffset = 0,
 }: Props) {
+  // BUG-010: pe Android fereastra se redimensionează deja la tastatură
+  // (edge-to-edge + softwareKeyboardLayoutMode:resize, app.json), deci KAV cu
+  // behavior:'height'/'padding' ar scădea încă o dată -> offset dublu. Doar iOS
+  // are nevoie de behavior:'padding'; pe Android behavior undefined = fără KAV.
   return (
     <KeyboardAvoidingView
       style={[styles.flex, style]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={keyboardVerticalOffset}
       enabled
     >
       {children}
     </KeyboardAvoidingView>
   );
+}
+
+/**
+ * Padding-ul din partea de jos pentru ecranele din tab-uri, derivat din
+ * înălțimea reală a tab-barului + inset-ul de jos (BUG-022), în loc de
+ * constanta fixă 120 care putea lăsa conținut sub navigation bar.
+ */
+export function useContentBottomPadding(): number {
+  const { tabBarHeight } = useResponsiveLayout();
+  return tabBarHeight + 24;
 }
 
 const styles = StyleSheet.create({

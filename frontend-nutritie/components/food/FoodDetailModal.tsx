@@ -8,6 +8,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView } from 'react-native';
 import { X, Beaker, Zap, Droplets, Pill } from 'lucide-react-native';
 import type { AlimentDetaliat, AminoaciziEsentiali, Micronutrienti } from '../../types';
+// BUG-021: modalul folosește colors.* (tema activă), nu hex fixe de altă aplicație.
+import { useTheme } from '../../context/ThemeContext';
 
 interface FoodDetailModalProps {
   visible: boolean;
@@ -65,11 +67,12 @@ const OTHER_LABELS: { key: keyof Micronutrienti; label: string; unit: string }[]
   { key: 'fibra', label: 'Fibre', unit: 'g' },
 ];
 
-function NutrientRow({ label, value, unit, color = '#94A3B8' }: { label: string; value: number; unit: string; color?: string }) {
+function NutrientRow({ label, value, unit, color }: { label: string; value: number; unit: string; color?: string }) {
+  const { colors } = useTheme();
   return (
     <View style={styles.nutrientRow}>
-      <Text style={styles.nutrientLabel}>{label}</Text>
-      <Text style={[styles.nutrientValue, { color }]}>
+      <Text style={[styles.nutrientLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.nutrientValue, { color: color ?? colors.textSecondary }]}>
         {value.toFixed(value < 1 ? 1 : 0)} {unit}
       </Text>
     </View>
@@ -86,6 +89,7 @@ function SectionHeader({ icon: Icon, title, color }: { icon: any; title: string;
 }
 
 export function FoodDetailModal({ visible, onClose, aliment, per100g }: FoodDetailModalProps) {
+  const { colors } = useTheme();
   if (!aliment) return null;
 
   const micronutrienti = aliment.micronutrienti;
@@ -102,22 +106,22 @@ export function FoodDetailModal({ visible, onClose, aliment, per100g }: FoodDeta
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.modal}>
+        <View style={[styles.modal, { backgroundColor: colors.surfaceBg }]}>
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, { borderBottomColor: colors.cardBorder }]}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>{aliment.nume}</Text>
-              <Text style={styles.subtitle}>Detalii nutriționale{prefix}</Text>
+              <Text style={[styles.title, { color: colors.textPrimary }]}>{aliment.nume}</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Detalii nutriționale{prefix}</Text>
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <X size={22} color="#94A3B8" />
+              <X size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
             {/* Macronutrienți */}
-            <SectionHeader icon={Zap} title="Macronutrienți" color="#38BDF8" />
-            <View style={styles.card}>
+            <SectionHeader icon={Zap} title="Macronutrienți" color={colors.accent} />
+            <View style={[styles.card, { backgroundColor: colors.surface }]}>
               <NutrientRow label="Calorii" value={aliment.calorii} unit="kcal" color="#F1F5F9" />
               <NutrientRow label="Proteine" value={aliment.proteine} unit="g" color="#34D399" />
               <NutrientRow label="Carbohidrați" value={aliment.carbohidrati} unit="g" color="#FBBF24" />
@@ -130,8 +134,8 @@ export function FoodDetailModal({ visible, onClose, aliment, per100g }: FoodDeta
             {/* Aminoacizi */}
             {hasAminoacizi && (
               <>
-                <SectionHeader icon={Beaker} title="Aminoacizi Esențiali" color="#C084FC" />
-                <View style={styles.card}>
+                <SectionHeader icon={Beaker} title="Aminoacizi Esențiali" color={colors.accentSecondary} />
+                <View style={[styles.card, { backgroundColor: colors.surface }]}>
                   {Object.entries(AMINO_LABELS).map(([key, label]) => {
                     const val = aminoacizi![key as keyof AminoaciziEsentiali];
                     if (!val || val <= 0) return null;
@@ -139,9 +143,9 @@ export function FoodDetailModal({ visible, onClose, aliment, per100g }: FoodDeta
                   })}
                   {/* Total BCAA */}
                   {((aminoacizi?.leucina ?? 0) + (aminoacizi?.izoleucina ?? 0) + (aminoacizi?.valina ?? 0)) > 0 && (
-                    <View style={styles.bcaaRow}>
-                      <Text style={styles.bcaaLabel}>Total BCAA</Text>
-                      <Text style={styles.bcaaValue}>
+                    <View style={[styles.bcaaRow, { borderTopColor: colors.accentSecondary + '30' }]}>
+                      <Text style={[styles.bcaaLabel, { color: colors.accentSecondary }]}>Total BCAA</Text>
+                      <Text style={[styles.bcaaValue, { color: colors.accentSecondary }]}>
                         {((aminoacizi?.leucina ?? 0) + (aminoacizi?.izoleucina ?? 0) + (aminoacizi?.valina ?? 0)).toFixed(0)} mg
                       </Text>
                     </View>
@@ -153,8 +157,8 @@ export function FoodDetailModal({ visible, onClose, aliment, per100g }: FoodDeta
             {/* Vitamine */}
             {hasVitamins && (
               <>
-                <SectionHeader icon={Pill} title="Vitamine" color="#34D399" />
-                <View style={styles.card}>
+                <SectionHeader icon={Pill} title="Vitamine" color={colors.success} />
+                <View style={[styles.card, { backgroundColor: colors.surface }]}>
                   {VITAMIN_LABELS.map(({ key, label, unit }) => {
                     const val = micronutrienti![key];
                     if (!val || val <= 0) return null;
@@ -167,8 +171,8 @@ export function FoodDetailModal({ visible, onClose, aliment, per100g }: FoodDeta
             {/* Minerale */}
             {hasMinerals && (
               <>
-                <SectionHeader icon={Droplets} title="Minerale" color="#F59E0B" />
-                <View style={styles.card}>
+                <SectionHeader icon={Droplets} title="Minerale" color={colors.warning} />
+                <View style={[styles.card, { backgroundColor: colors.surface }]}>
                   {MINERAL_LABELS.map(({ key, label, unit }) => {
                     const val = micronutrienti![key];
                     if (!val || val <= 0) return null;
@@ -181,8 +185,8 @@ export function FoodDetailModal({ visible, onClose, aliment, per100g }: FoodDeta
             {/* Alte detalii */}
             {hasOther && (
               <>
-                <SectionHeader icon={Zap} title="Alte Detalii" color="#94A3B8" />
-                <View style={styles.card}>
+                <SectionHeader icon={Zap} title="Alte Detalii" color={colors.textSecondary} />
+                <View style={[styles.card, { backgroundColor: colors.surface }]}>
                   {OTHER_LABELS.map(({ key, label, unit }) => {
                     const val = micronutrienti![key];
                     if (!val || val <= 0) return null;
@@ -195,11 +199,11 @@ export function FoodDetailModal({ visible, onClose, aliment, per100g }: FoodDeta
             {/* Fallback: nicio informație suplimentară */}
             {!hasAminoacizi && !hasVitamins && !hasMinerals && !hasOther && (
               <View style={styles.emptyCard}>
-                <Beaker size={32} color="#475569" />
-                <Text style={styles.emptyText}>
+                <Beaker size={32} color={colors.textTertiary} />
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                   Datele nutriționale detaliate (aminoacizi, vitamine, minerale) nu sunt disponibile pentru acest aliment.
                 </Text>
-                <Text style={styles.emptyHint}>
+                <Text style={[styles.emptyHint, { color: colors.textTertiary }]}>
                   Scanează codul de bare al produsului pentru a obține informații complete din baza de date OpenFoodFacts.
                 </Text>
               </View>
@@ -220,7 +224,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modal: {
-    backgroundColor: '#0F172A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '85%',
@@ -232,16 +235,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
   },
   title: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#F1F5F9',
   },
   subtitle: {
     fontSize: 13,
-    color: '#64748B',
     marginTop: 4,
   },
   scroll: {
@@ -262,7 +262,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   card: {
-    backgroundColor: '#1E293B',
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
@@ -278,7 +277,6 @@ const styles = StyleSheet.create({
   },
   nutrientLabel: {
     fontSize: 13,
-    color: '#94A3B8',
     fontWeight: '500',
   },
   nutrientValue: {
@@ -293,16 +291,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginTop: 4,
     borderTopWidth: 1,
-    borderTopColor: '#C084FC30',
   },
   bcaaLabel: {
     fontSize: 13,
-    color: '#C084FC',
     fontWeight: '800',
   },
   bcaaValue: {
     fontSize: 14,
-    color: '#C084FC',
     fontWeight: '900',
   },
   emptyCard: {
@@ -312,13 +307,11 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#64748B',
     textAlign: 'center',
     lineHeight: 20,
   },
   emptyHint: {
     fontSize: 12,
-    color: '#475569',
     textAlign: 'center',
     lineHeight: 18,
   },

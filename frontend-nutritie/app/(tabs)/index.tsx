@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Platform, type StyleProp, type ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Platform, TextInput, type StyleProp, type ViewStyle } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
@@ -7,9 +7,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, FadeInDown, useAnimatedProps, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell, Bell, RotateCcw, X } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { useNotificationBanner } from '../../context/NotificationBannerContext';
+import * as Haptics from 'expo-haptics';
+import { useNotificationBannerData } from '../../context/NotificationBannerContext';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
+import { useCurrentDayKey } from '../../hooks/useCurrentDayKey';
 import { useTheme } from '../../context/ThemeContext';
 import { useApa } from '../../hooks/useApa';
 import { AddMealBottomSheet, AddMealBottomSheetRef } from '../../components/AddMealBottomSheet';
@@ -21,8 +23,12 @@ import BodyMap from '../../components/fitness/BodyMap';
 import { computeDailyMuscleIntensity, normalizeMuscleLoadToIntensity } from '../../lib/fitnessEngine';
 import { useExercitii } from '../../hooks/useExercitii';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
-import { useGamificareContext } from '../../context/GamificareContext';
+import { useGamificareData } from '../../context/GamificareContext';
 import { StreakBottomSheet, StreakBottomSheetRef } from '../../components/gamification/StreakBottomSheet';
+import { AddWeightModal } from '../../components/AddWeightModal';
+import { supabase } from '../../supabase';
+import { localDayKey } from '../../lib/dateUtils';
+import { TARGETURI_PENDING_KEY } from '../../lib/sincronizeazaTargeturi';
 
 const AnimatedRingCircle = Animated.createAnimatedComponent(Circle);
 
@@ -105,11 +111,22 @@ function RingProgress({ procent, color, bgColor }: { procent: number; color: str
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { unreadCount } = useNotificationBanner();
-  const { streak } = useGamificareContext();
+  const { unreadCount } = useNotificationBannerData();
+  const { streak } = useGamificareData();
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
   const streakSheetRef = useRef<StreakBottomSheetRef>(null);
-  const [dataSelectata] = useState<Date>(new Date());
+  const [dataSelectata, setDataSelectata] = useState<Date>(() => new Date());
+  const [weightModalVisible, setWeightModalVisible] = useState(false);
+  const [greutateTinta, setGreutateTinta] = useState(70);
+  const [stepGoalEdit, setStepGoalEdit] = useState(false);
+  const [stepGoalInput, setStepGoalInput] = useState('');
+  // BUG-001: cursorul zilei nu mai e inghetat la mount. Cand ziua locala se
+  // schimba (miezul noptii, background peste miezul noptii, restart), sarim la
+  // azi, iar useMeseAzi re-fetch-este automat pentru ca `dateKey` s-a schimbat.
+  const currentDayKey = useCurrentDayKey();
+  useEffect(() => {
+    setDataSelectata(new Date());
+  }, [currentDayKey]);
 
   const { 
     totalCalorii, 
@@ -126,7 +143,7 @@ export default function HomeScreen() {
     refresh 
   } = useMeseAzi(dataSelectata);
   const { pahare, tinta: tintaPahare, adaugaPahar, scadePahar } = useApa();
-  const { steps, activeCalories, stepGoal, isEnabled, platformName, providerInfo, refreshSteps } = useHealthSync();
+  const { steps, activeCalories, stepGoal, isEnabled, isAvailable, setNewStepGoal, toggleSync, refreshSteps } = useHealthSync();
   const { totalCaloriiArse, antrenamente, refresh: refreshAntrenamente } = useAntrenamente();
   const { exercitii } = useExercitii();
   const [viewSideHome, setViewSideHome] = useState<'front' | 'back'>('front');
@@ -152,6 +169,96 @@ export default function HomeScreen() {
       const todayStr = new Date().toDateString();
       await AsyncStorage.setItem('nutriai_tip_closed_date', todayStr);
     } catch {}
+  };
+
+  // BUG-004: greutatea țintă se citește local + metadata (fără a naviga la Profil).
+  useEffect(() => {
+    let activ = true;
+    (async () => {
+      try {
+        const storedTinta = await AsyncStorage.getItem('greutateTinta');
+        let val: number | null = null;
+        if (storedTinta) {
+          const parsed = parseFloat(storedTinta);
+          if (Number.isFinite(parsed) && parsed > 0) val = parsed;
+        }
+        if (val === null && user?.user_metadata) {
+          const metaVal = (user.user_metadata as Record<string, unknown>).greutateTinta;
+          if (typeof metaVal === 'number' && Number.isFinite(metaVal) && metaVal > 0) val = metaVal;
+        }
+        if (activ && val !== null) setGreutateTinta(val);
+      } catch {}
+    })();
+    return () => { activ = false; };
+  }, [user]);
+
+  // BUG-004: salvare greutate curentă — oglindește statistici.tsx, dar deschide
+  // modalul pe Home; refresh() împrospătează cardul fără navigare.
+  const salveazaGreutate = async (nouaValoare: number) => {
+    try {
+      const aziStr = localDayKey(new Date());
+      const ziNume = new Date().toLocaleDateString('ro-RO', { weekday: 'short' }).slice(0, 3);
+      const storedIstoric = await AsyncStorage.getItem('greutate_istoric');
+      let istoric: { data: string; ziNume: string; greutate: number }[] = [];
+      if (storedIstoric) {
+        try { istoric = JSON.parse(storedIstoric); } catch {}
+      }
+      const restIstoric = istoric.filter((i) => i.data !== aziStr);
+      const nouIstoric = [...restIstoric, { data: aziStr, ziNume, greutate: nouaValoare }].sort((a, b) => a.data.localeCompare(b.data));
+
+      // Persistăm întâi (AsyncStorage + Supabase); doar pe succes actualizăm UI.
+      await AsyncStorage.setItem('greutate', nouaValoare.toString());
+      await AsyncStorage.setItem('greutate_istoric', JSON.stringify(nouIstoric));
+
+      const { data: { user: userCurent } } = await supabase.auth.getUser();
+      if (userCurent) {
+        await supabase.auth.updateUser({ data: { greutate: nouaValoare, greutate_istoric: nouIstoric } });
+      }
+      // Serverul a confirmat -> nicio modificare locală în așteptare (BUG-035).
+      await AsyncStorage.removeItem(TARGETURI_PENDING_KEY);
+
+      setWeightModalVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      refresh(true);
+    } catch (e) {
+      // BUG-035: server indisponibil -> marcăm targeturi locale nesincronizate,
+      // ca useMeseAzi să citească valoarea locală (nu metadata stale).
+      await AsyncStorage.setItem(TARGETURI_PENDING_KEY, '1').catch(() => {});
+      console.error('Eroare la salvarea greutății:', e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  };
+
+  const salveazaGreutateTinta = async (nouaValoare: number) => {
+    try {
+      await AsyncStorage.setItem('greutateTinta', nouaValoare.toString());
+
+      const { data: { user: userCurent } } = await supabase.auth.getUser();
+      if (userCurent) {
+        await supabase.auth.updateUser({ data: { greutateTinta: nouaValoare } });
+      }
+      await AsyncStorage.removeItem(TARGETURI_PENDING_KEY);
+
+      setGreutateTinta(nouaValoare);
+      setWeightModalVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      await AsyncStorage.setItem(TARGETURI_PENDING_KEY, '1').catch(() => {});
+      console.error('Eroare la salvarea greutății țintă:', e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  };
+
+  // BUG-005: editarea obiectivului de pași apelează setNewStepGoal (existent).
+  const handleSaveStepGoal = async () => {
+    const parsed = parseInt(stepGoalInput.replace(/[^\d]/g, ''), 10);
+    if (!Number.isFinite(parsed) || parsed < 500 || parsed > 100000) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+    await setNewStepGoal(parsed);
+    setStepGoalEdit(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const dailyIntensityHome = React.useMemo(() => {
@@ -503,7 +610,7 @@ export default function HomeScreen() {
         {/* Mini-Card separat: Greutate & Progres (B2) */}
         <Animated.View entering={FadeInDown.duration(700).delay(310)}>
           <TouchableOpacity
-            onPress={() => router.push('/profil')}
+            onPress={() => setWeightModalVisible(true)}
             accessibilityRole="button"
             accessibilityLabel="Greutate și progres. Modifică"
             style={[s.weightCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
@@ -522,13 +629,15 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* Water Hydration Card */}
-        <Animated.View entering={FadeInDown.duration(700).delay(320)} style={[s.waterCard, { borderColor: '#00e5ff33' }]}>
+        {/* BUG-028: culorile apei derivă din colors.accentTertiary (tinta cian a
+            temei), nu din hex hardcodate — pe Ocean/Sunset cardul se adaptează. */}
+        <Animated.View entering={FadeInDown.duration(700).delay(320)} style={[s.waterCard, { borderColor: colors.accentTertiary + '33' }]}>
           <CardBackdrop style={s.waterBlur}>
-            <LinearGradient colors={['#00e5ff15', 'rgba(0,0,0,0)']} style={s.waterGrad}>
+            <LinearGradient colors={[colors.accentTertiary + '15', 'rgba(0,0,0,0)']} style={s.waterGrad}>
               <View style={s.waterHeader}>
                 <View style={s.waterTitleRow}>
-                  <View style={[s.waterIconBg, { backgroundColor: '#00e5ff25' }]}>
-                    <Droplet size={20} color="#00e5ff" fill="#00e5ff" />
+                  <View style={[s.waterIconBg, { backgroundColor: colors.accentTertiary + '25' }]}>
+                    <Droplet size={20} color={colors.accentTertiary} fill={colors.accentTertiary} />
                   </View>
                   <View>
                     <Text style={[s.waterTitle, { color: colors.textPrimary }]}>Hidratare & Apă</Text>
@@ -550,10 +659,10 @@ export default function HomeScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Adaugă un pahar de apă"
                     hitSlop={4}
-                    style={[s.waterBtnAdd, { shadowColor: '#00e5ff' }]}
+                    style={[s.waterBtnAdd, { shadowColor: colors.accentTertiary }]}
                     onPress={adaugaPahar}
                   >
-                    <LinearGradient colors={['#00e5ff', '#0088ff']} style={s.waterBtnAddGrad}>
+                    <LinearGradient colors={[colors.accentTertiary, colors.accentTertiary + '66']} style={s.waterBtnAddGrad}>
                       <Text style={[s.waterBtnAddText, { color: '#000' }]}>+</Text>
                     </LinearGradient>
                   </TouchableOpacity>
@@ -562,7 +671,7 @@ export default function HomeScreen() {
 
               <View style={s.waterProgressBg}>
                 <LinearGradient 
-                  colors={['#00e5ff', '#0088ff']} 
+                  colors={[colors.accentTertiary, colors.accentTertiary + '66']} 
                   start={{ x: 0, y: 0 }} 
                   end={{ x: 1, y: 0 }} 
                   style={[s.waterProgressFill, { width: `${Math.min((pahare / (tintaPahare > 0 ? tintaPahare : 1)) * 100, 100)}%` }]}
@@ -571,7 +680,7 @@ export default function HomeScreen() {
 
               <View style={s.waterFooter}>
                 <Text style={[s.waterCount, { color: colors.textPrimary }]}>
-                  <Text style={{ fontSize: 22, fontWeight: '900', color: '#00e5ff' }}>{pahare}</Text> / {tintaPahare} pahare băute azi
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: colors.accentTertiary }}>{pahare}</Text> / {tintaPahare} pahare băute azi
                 </Text>
                 <Text style={[s.waterMl, { color: colors.textTertiary }]}>{pahare * 250} ml</Text>
               </View>
@@ -579,66 +688,108 @@ export default function HomeScreen() {
           </CardBackdrop>
         </Animated.View>
 
-        {/* Apple HealthKit / Google Fit & Pași Card */}
+        {/* Pași Card — BUG-005: copy corect despre sursă (doar senzorul telefonului,
+            fără integrare Garmin/Fitbit), obiectiv editabil prin setNewStepGoal,
+            permisiunea cerută la primul toggle explicit, nu la boot. */}
         <Animated.View entering={FadeInDown.duration(700).delay(335)} style={[s.healthCard, { borderColor: isEnabled ? colors.accent + '40' : 'rgba(255,255,255,0.08)' }]}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => {
-                router.push('/(tabs)/profil');
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Setări sănătate și pași"
-            >
-              <CardBackdrop style={s.healthBlur}>
-                <LinearGradient colors={[isEnabled ? colors.accent + '15' : 'rgba(255,255,255,0.03)', 'rgba(0,0,0,0)']} style={s.healthGrad}>
-                  <View style={s.healthHeader}>
-                    <View style={s.healthTitleRow}>
-                      <View style={[s.healthIconBg, { backgroundColor: isEnabled ? colors.accent + '25' : 'rgba(255,255,255,0.08)' }]}>
-                        <Footprints size={20} color={isEnabled ? colors.accent : colors.textSecondary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <Text style={[s.healthTitle, { color: colors.textPrimary }]}>{providerInfo?.icon || '📱'} {platformName} & Pași</Text>
-                        </View>
-                        <Text style={[s.healthSub, { color: colors.textSecondary }]}>
-                          {isEnabled ? `Ajustare calorică automată: +${activeCalories} kcal • Apasă pentru setări →` : 'Apasă oriunde pe card pentru a conecta în Profil →'}
-                        </Text>
-                      </View>
-                    </View>
-
+          <CardBackdrop style={s.healthBlur}>
+            <LinearGradient colors={[isEnabled ? colors.accent + '15' : 'rgba(255,255,255,0.03)', 'rgba(0,0,0,0)']} style={s.healthGrad}>
+              <View style={s.healthHeader}>
+                <View style={s.healthTitleRow}>
+                  <View style={[s.healthIconBg, { backgroundColor: isEnabled ? colors.accent + '25' : 'rgba(255,255,255,0.08)' }]}>
+                    <Footprints size={20} color={isEnabled ? colors.accent : colors.textSecondary} />
                   </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.healthTitle, { color: colors.textPrimary }]}>Pași & Calorii</Text>
+                    <Text style={[s.healthSub, { color: colors.textSecondary }]}>
+                      {isEnabled && isAvailable
+                        ? `Sursă: senzorul telefonului • +${activeCalories} kcal arse`
+                        : 'Sursă: senzorul telefonului (Pedometer). Atinge „Activează" pentru a cere permisiunea.'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
 
-                  {isEnabled ? (
-                    <>
-                      <View style={s.healthProgressBg}>
-                        <LinearGradient 
-                          colors={colors.accentGradient} 
-                          start={{ x: 0, y: 0 }} 
-                          end={{ x: 1, y: 0 }} 
-                          style={[s.healthProgressFill, { width: `${Math.min((steps / (stepGoal > 0 ? stepGoal : 1)) * 100, 100)}%` }]}
+              {isEnabled && isAvailable ? (
+                <>
+                  <View style={s.healthProgressBg}>
+                    <LinearGradient
+                      colors={colors.accentGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[s.healthProgressFill, { width: `${Math.min((steps / (stepGoal > 0 ? stepGoal : 1)) * 100, 100)}%` }]}
+                    />
+                  </View>
+                  <View style={s.healthFooter}>
+                    {stepGoalEdit ? (
+                      <View style={s.goalEditRow}>
+                        <TextInput
+                          style={[s.goalInput, { color: colors.textPrimary, borderColor: colors.cardBorder }]}
+                          value={stepGoalInput}
+                          onChangeText={setStepGoalInput}
+                          keyboardType="number-pad"
+                          maxLength={5}
+                          selectTextOnFocus
+                          autoFocus
+                          placeholder={String(stepGoal)}
+                          placeholderTextColor={colors.textTertiary}
                         />
+                        <TouchableOpacity
+                          onPress={handleSaveStepGoal}
+                          style={[s.goalBtn, { backgroundColor: colors.accent }]}
+                          accessibilityRole="button"
+                          accessibilityLabel="Salvează obiectivul de pași"
+                        >
+                          <Text style={[s.goalBtnText, { color: colors.background }]}>OK</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setStepGoalEdit(false)}
+                          style={[s.goalBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                          accessibilityRole="button"
+                          accessibilityLabel="Anulează editarea obiectivului"
+                          hitSlop={8}
+                        >
+                          <X size={16} color={colors.textSecondary} />
+                        </TouchableOpacity>
                       </View>
-                      <View style={s.healthFooter}>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() => { setStepGoalInput(String(stepGoal)); setStepGoalEdit(true); }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Modifică obiectivul de pași"
+                        hitSlop={8}
+                      >
                         <Text style={[s.healthCount, { color: colors.textPrimary }]}>
                           <Text style={{ fontSize: 22, fontWeight: '900', color: colors.accent }}>{steps.toLocaleString()}</Text> / {stepGoal.toLocaleString()} pași
                         </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Flame size={14} color={colors.warning} />
-                          <Text style={[s.healthCalories, { color: colors.warning }]}>+{activeCalories} kcal arse</Text>
-                        </View>
-                      </View>
-                    </>
-                  ) : (
-                    <View style={s.healthOfflineBox}>
-                      <Text style={[s.healthOfflineText, { color: colors.textTertiary }]}>
-                        Sincronizează brățara sau telefonul pentru a adăuga caloriile arse din mișcare direct în balanța ta de dietă!
-                      </Text>
+                      </TouchableOpacity>
+                    )}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Flame size={14} color={colors.warning} />
+                      <Text style={[s.healthCalories, { color: colors.warning }]}>+{activeCalories} kcal arse</Text>
                     </View>
-                  )}
-                </LinearGradient>
-              </CardBackdrop>
-            </TouchableOpacity>
-          </Animated.View>
+                  </View>
+                </>
+              ) : (
+                <View style={s.healthOfflineBox}>
+                  <Text style={[s.healthOfflineText, { color: colors.textTertiary }]}>
+                    {isEnabled
+                      ? 'Permisiunea pentru senzor nu a fost acordată încă.'
+                      : 'Activează pașii pentru a adăuga caloriile arse din mișcare în balanța ta de dietă.'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => toggleSync(true)}
+                    style={[s.connectBtn, { backgroundColor: colors.accent }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Activează senzorul de pași"
+                  >
+                    <Text style={[s.connectBtnText, { color: colors.background }]}>Activează</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </LinearGradient>
+          </CardBackdrop>
+        </Animated.View>
 
         {/* HARTĂ MUSCULARĂ LIVE Card pe ecranul Acasă (Secțiunea 4.4) */}
         <Animated.View entering={FadeInDown.duration(700).delay(345)}>
@@ -651,7 +802,7 @@ export default function HomeScreen() {
           >
             <View style={s.liveHeatmapHeader}>
               <View style={s.liveHeatmapTitleRow}>
-                <View style={[s.liveHeatmapDot, { backgroundColor: '#FF003C' }]} />
+                <View style={[s.liveHeatmapDot, { backgroundColor: colors.danger }]} />
                 <Text style={[s.liveHeatmapTitle, { color: colors.textPrimary }]}>HARTĂ MUSCULARĂ LIVE</Text>
               </View>
               <TouchableOpacity
@@ -715,6 +866,15 @@ export default function HomeScreen() {
       {/* Reusable Gorhom Bottom Sheet for adding meals */}
       <AddMealBottomSheet ref={addMealSheetRef} onSuccess={refresh} />
       <StreakBottomSheet ref={streakSheetRef} />
+      {/* BUG-004: greutatea se editează direct pe Home, fără navigare la Profil */}
+      <AddWeightModal
+        visible={weightModalVisible}
+        onClose={() => setWeightModalVisible(false)}
+        onSave={salveazaGreutate}
+        greutateCurenta={greutate}
+        greutateTinta={greutateTinta}
+        onSaveTinta={salveazaGreutateTinta}
+      />
     </View>
   );
 }
@@ -836,6 +996,12 @@ const s = StyleSheet.create({
   healthCalories: { fontSize: 13, fontWeight: '800' },
   healthOfflineBox: { backgroundColor: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)' },
   healthOfflineText: { fontSize: 13, lineHeight: 18, textAlign: 'center' },
+  goalEditRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  goalInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, minWidth: 84, fontSize: 15, fontWeight: '800' },
+  goalBtn: { minWidth: 44, height: 38, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 12, borderWidth: 1 },
+  goalBtnText: { fontSize: 14, fontWeight: '900' },
+  connectBtn: { marginTop: 10, alignSelf: 'center', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
+  connectBtnText: { fontSize: 13, fontWeight: '900' },
 
   secActionCard: { flex: 1, height: 48, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   secActionText: { fontSize: 14, fontWeight: '800' },

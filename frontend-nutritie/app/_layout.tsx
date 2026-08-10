@@ -29,6 +29,7 @@ import {
   cancelManagedReminders,
 } from '../lib/notificationConsent';
 import { processOfflineQueue, type SupabaseMinimalClient } from '../lib/offlineQueue';
+import { sincronizeazaTargeturiLocale } from '../lib/sincronizeazaTargeturi';
 import { supabase } from '../supabase';
 import '../i18n';
 
@@ -185,6 +186,9 @@ function RootNavigator() {
       }
     })();
     processOfflineQueue(supabase as unknown as SupabaseMinimalClient).catch(() => {});
+    // BUG-035: impingem inapoi la server targeturile salvate offline (updateUser
+    // esuata), la fel cum procesam coada de mese offline.
+    sincronizeazaTargeturiLocale().catch(() => {});
   }, [session]);
 
   useEffect(() => {

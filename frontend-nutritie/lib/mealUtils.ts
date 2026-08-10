@@ -1,5 +1,56 @@
 import { TipMasa, Masa, AlimentDetaliat } from '../types';
 
+/**
+ * Limitele CHECK-urilor din baza de date public.mese (migrări 003/004) și ale
+ * validatorului backend pentru gramaj. Protejăm insert-urile față de aceste
+ * limite ca AI-ul să nu poată arunca o masă întreagă cu CHECK violation.
+ */
+export const LIMITE_DB_MESE = {
+  calorii: 10000,
+  proteine: 1000,
+  grasimi: 1000,
+  carbohidrati: 2000,
+  fibre: 500,
+  gramaj: 5000,
+} as const;
+
+export function clampValoare(valoare: number, max: number, min = 0): number {
+  if (!Number.isFinite(valoare)) return min;
+  return Math.min(max, Math.max(min, valoare));
+}
+
+/**
+ * Normalizează tipul mesei (liber, venit din AI) la valorile acceptate de
+ * CHECK-ul `mese_tip_masa_check` ('mic_dejun'|'pranz'|'cina'|'gustare').
+ * Orice valoare necunoscută cade pe 'gustare' (același default ca chat).
+ */
+export function normalizeTipMasa(val?: string | null): TipMasa {
+  const v = String(val || '').toLowerCase().trim().replace(/[\s.,\-]/g, '');
+  const alias: Record<string, TipMasa> = {
+    mic_dejun: 'mic_dejun',
+    micdejun: 'mic_dejun',
+    micdejunul: 'mic_dejun',
+    mic: 'mic_dejun',
+    breakfast: 'mic_dejun',
+    pranz: 'pranz',
+    prânz: 'pranz',
+    pranzul: 'pranz',
+    pranzului: 'pranz',
+    lunch: 'pranz',
+    masadepranz: 'pranz',
+    cina: 'cina',
+    cină: 'cina',
+    dinner: 'cina',
+    supper: 'cina',
+    masa: 'cina',
+    gustare: 'gustare',
+    gustari: 'gustare',
+    gustări: 'gustare',
+    snack: 'gustare',
+  };
+  return alias[v] || 'gustare';
+}
+
 export interface CategorieMasaMeta {
   id: TipMasa;
   label: string;
@@ -154,6 +205,38 @@ export function recalculeazaTotaluri(alimente: AlimentDetaliat[]): TotaluriMasa 
     grasimi: rotunjeste(total.grasimi, 2),
     fibre: rotunjeste(total.fibre, 2),
   };
+}
+
+export interface ConstruireAlimenteParams {
+  /** Descompunerea originala a mesei editate (null daca masa nu avea alimente). */
+  original: AlimentDetaliat[] | null;
+  /** true daca utilizatorul a redefinit alimentul (a introdus gramaj/preset/AI). */
+  aRedefinitAlimentul: boolean;
+  /** Alimentul construit din formular (un singur element). */
+  alimentNou: AlimentDetaliat;
+}
+
+/**
+ * Decide ce `alimente` se scriu la salvare/update fara a pierde descompunerea
+ * originala (BUG-002):
+ * - masa fara descompunere sau redefinita complet -> `[alimentNou]`;
+ * - editare doar de nume/macro (gramaj gol) -> se pastreaza `original` intreg
+ *   (toate alimentele, gramajele, pozele, imageKitFileId, aminoacizi etc.);
+ * - editare gramaj pe o masa cu UN aliment -> se actualizeaza doar acel aliment,
+ *   pastrand id/poza/imageKitFileId prin spread peste original.
+ */
+export function construiesteAlimenteLaSalvare({
+  original,
+  aRedefinitAlimentul,
+  alimentNou,
+}: ConstruireAlimenteParams): AlimentDetaliat[] {
+  if (original && original.length > 0 && !aRedefinitAlimentul) {
+    return original;
+  }
+  if (original && original.length === 1 && aRedefinitAlimentul) {
+    return [{ ...original[0], ...alimentNou }];
+  }
+  return [alimentNou];
 }
 
 /** La fel ca `insereazaMasaCuPoza`, pentru editarea unei mese existente. */

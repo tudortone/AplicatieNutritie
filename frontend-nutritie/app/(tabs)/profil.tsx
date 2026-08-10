@@ -21,9 +21,9 @@ import { getConsent, cancelManagedReminders } from '../../lib/notificationConsen
 import { useAuth } from '../../context/AuthContext';
 import { useBiometrics } from '../../hooks/useBiometrics';
 import { useHealthSync } from '../../hooks/useHealthSync';
-import { useNotificationBanner } from '../../context/NotificationBannerContext';
+import { useNotificationBannerActions } from '../../context/NotificationBannerContext';
 import { useNotify } from '../../hooks/useNotify';
-import { useGamificare } from '../../hooks/useGamificare';
+import { useGamificareData } from '../../context/GamificareContext';
 // FIX UI: tastatura acoperea cele 7 input-uri din profil.
 import KeyboardAwareScreen from '../../components/ui/KeyboardAwareScreen';
 import { INSIGNE_LIST } from '../../constants/insigne';
@@ -33,6 +33,7 @@ import { WatchSelectorSheet, WatchSelectorSheetRef } from '../../components/ui/W
 import { API_URL } from '../../constants/config';
 import { API_PREFIX } from '../../lib/api';
 import { getLegalUrls } from '../../lib/legalUrls';
+import { TARGETURI_PENDING_KEY } from '../../lib/sincronizeazaTargeturi';
 
 // Adresa oficiala de suport pentru sesizari si suport utilizatori.
 const EMAIL_SUPORT = 'suport@nutriai.app';
@@ -46,9 +47,9 @@ export default function ProfilScreen() {
   const { isEnabled: healthSyncEnabled, platformName, toggleSync: toggleHealthSync, providerInfo } = useHealthSync();
   const watchSheetRef = React.useRef<WatchSelectorSheetRef>(null);
   const { session, user, loadingAuth } = useAuth();
-  const { showBanner } = useNotificationBanner();
+  const { showBanner } = useNotificationBannerActions();
   const notify = useNotify();
-  const { insigne } = useGamificare();
+  const { insigne } = useGamificareData();
   const { scrollPaddingTop, scrollPaddingBottom } = useResponsiveLayout();
   const [greutate, setGreutate] = useState('75');
   const [greutateTinta, setGreutateTinta] = useState('70');
@@ -216,6 +217,8 @@ export default function ProfilScreen() {
 
       // Apoi salvăm local (doar după ce Supabase a confirmat)
       await salveazaLocal();
+      // Serverul a confirmat -> nu mai avem modificari locale in asteptare (BUG-035).
+      await AsyncStorage.removeItem(TARGETURI_PENDING_KEY);
 
       notify.success('Profil actualizat', 'Modificările au fost salvate');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -227,6 +230,10 @@ export default function ProfilScreen() {
       let salvatLocal = true;
       try {
         await salveazaLocal();
+        // BUG-035: serverul e indisponibil -> marcăm că există targeturi locale
+        // nesincronizate, ca useMeseAzi să le citească pe acestea (nu metadata
+        // stale), până când sincronizeazaTargeturiLocale le împinge la server.
+        await AsyncStorage.setItem(TARGETURI_PENDING_KEY, '1');
       } catch {
         salvatLocal = false;
       }
@@ -254,7 +261,8 @@ export default function ProfilScreen() {
           const userKeys = allKeys.filter(k =>
             k.startsWith('chat_history_') ||
             ['greutate', 'greutateTinta', 'caloriiTinta', 'proteineTinta',
-             'carbiTinta', 'grasimiTinta', 'nume_profil', 'greutate_istoric',
+             'carbiTinta', 'grasimiTinta', 'targeturi_pending_sync',
+             'nume_profil', 'greutate_istoric',
              'sex', 'varsta', 'inaltime', 'nivel_activitate', 'obiectiv',
              'current_workout_session', 'nutriai_workouts', 'gamificare_v1',
              'notificari_v1', 'nutriai_theme', 'favorite_foods',

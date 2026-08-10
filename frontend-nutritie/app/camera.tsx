@@ -16,18 +16,16 @@ import { supabase } from '../supabase';
 import { API_URL } from '@/constants/config';
 import { API_PREFIX } from '@/lib/api';
 import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
-import { Scan, Zap, ChevronDown, Plus, Image as ImageIcon } from 'lucide-react-native';
+import { Scan, Zap, ChevronDown, Plus, Trash2, Image as ImageIcon } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { localDayKey } from '../lib/dateUtils';
-import { getTipMasaDupaOra } from '../lib/mealUtils';
+import { clampValoare, LIMITE_DB_MESE } from '../lib/mealUtils';
+import { construiestePayloadMasaCamera, esteEroareDuplicate, eliminaAlimentScanat } from '../lib/payloadMese';
 import { GramInput } from '../components/ui/GramInput';
 import { ProductSearch } from '../components/food/ProductSearch';
 import { foodProductToAlimentAI } from '../components/food/types';
-import FoodScanSuccessModal, {
-  type AlimentScanat,
-} from '@/components/food/FoodScanSuccessModal';
+import { type AlimentScanat } from '@/components/food/FoodScanSuccessModal';
 import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInput';
 import { uploadImageToImageKit } from '@/lib/imagekit';
 import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts } from '@/lib/imageOptimizer';
@@ -57,7 +55,6 @@ export default function CameraScreen() {
   const [totaluri, setTotaluri] = useState<{ kcal: number; proteine: number; grasimi: number; carbohidrati: number } | null>(null);
   const ingredienteIdentificate = rezultat;
   const setIngredienteIdentificate = setRezultat;
-  const [successVisible, setSuccessVisible] = useState(false);
   const [isSavingDiary, setIsSavingDiary] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
 
@@ -163,6 +160,13 @@ export default function CameraScreen() {
     [],
   );
 
+  // BUG-015: eliminarea unui singur aliment detectat greșit, fără să dispară restul.
+  const stergeIngredient = useCallback((index: number) => {
+    setTotaluri(null);
+    setRezultat((current) => eliminaAlimentScanat(current, index));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
   const analizeazaImaginea = useCallback(
     async (imageUri: string) => {
       if (!session?.access_token) {
@@ -253,8 +257,10 @@ export default function CameraScreen() {
         const normalized = payload
           .map((item) => ({
             nume: String(item.nume || 'Aliment identificat'),
-            estimare_grame: Math.max(1, Number(item.estimare_grame) || 100),
-            calorii_per_100g: Math.max(0, Number(item.calorii_per_100g) || 0),
+            // BUG-019: gramaj plafonat la 5000g (limita validatorului backend) ca
+            // un rând astronomic (5000g × kcal_per_100g) să nu umfle totalurile.
+            estimare_grame: clampValoare(Number(item.estimare_grame) || 100, LIMITE_DB_MESE.gramaj, 1),
+            calorii_per_100g: clampValoare(Number(item.calorii_per_100g) || 0, 1000, 0),
             proteine_per_100g: Math.max(0, Number(item.proteine_per_100g) || 0),
             grasimi_per_100g: Math.max(0, Number(item.grasimi_per_100g) || 0),
             carbohidrati_per_100g: Math.max(
@@ -271,7 +277,10 @@ export default function CameraScreen() {
         }
 
         setRezultat(normalized);
-        setSuccessVisible(true);
+        // BUG-019/014: nu mai afișăm modalul read-only peste foaia de rezultat
+        // editabilă — foaia de mai jos (gramaj inline + ștergere + adăugare) este
+        // singura suprafață de review, iar `rezultat` rămâne în stare până la
+        // confirmarea explicită „Adaugă în Jurnal" sau anulare.
         // Dupa un scan REUSIT, incarcam poza pe ImageKit CDN (nu aruncam gunoi pe CDN
         // pentru poze esuate). URL-ul + fileId-ul ajung in masa salvata (campul
         // alimente, JSONB) ca stergearea GDPR sa cunoasca assetul.
@@ -368,7 +377,6 @@ export default function CameraScreen() {
     abortControllerRef.current = null;
     setTotaluri(null);
     setRezultat([]);
-    setSuccessVisible(false);
     setScanError(null);
     setSeIncarca(false);
   }, []);
@@ -511,44 +519,30 @@ export default function CameraScreen() {
       } catch {}
     }
 
-    // FIX 2.5: convertim din per-100g în AlimentDetaliat cu valori absolute
-    const alimente = rezultat.map((r) => {
-      const f = r.estimare_grame / 100;
-      return {
-        nume: r.nume,
-        grame: Math.round(r.estimare_grame),
-        calorii: Math.round((r.calorii_per_100g ?? 0) * f),
-        proteine: Math.round((r.proteine_per_100g ?? 0) * f),
-        carbohidrati: Math.round((r.carbohidrati_per_100g ?? 0) * f),
-        grasimi: Math.round((r.grasimi_per_100g ?? 0) * f),
-        fibre: 0,
-        ...(imageKitUrlRef.current ? { imageUrl: imageKitUrlRef.current } : {}),
-        ...(imageKitFileIdRef.current ? { imageKitFileId: imageKitFileIdRef.current } : {}),
-      };
+    // FIX 2.5 + BUG-019: per-100g → valori absolute, normalizate și clampate la
+    // limitele CHECK-urilor din Postgres (calorii ≤10000, proteine/grasimi ≤1000,
+    // carbohidrati ≤2000, fibre ≤500). Id-ul UUID e determinist din conținutul
+    // scanului: reluarea aceleiași salvări (dublu-tap, retry) se ciocnește pe PK
+    // 23505 și e tratată ca „deja adăugată", nu ca rând duplicat.
+    const { payload } = construiestePayloadMasaCamera({
+      user_id: session.user.id,
+      rezultat,
+      now,
+      poza: { url: imageKitUrlRef.current, fileId: imageKitFileIdRef.current },
     });
 
-    const totalCalorii = alimente.reduce((s, a) => s + a.calorii, 0);
-    const totalProteine = alimente.reduce((s, a) => s + a.proteine, 0);
-    const totalGrasimi = alimente.reduce((s, a) => s + a.grasimi, 0);
-    const totalCarbohidrati = alimente.reduce((s, a) => s + a.carbohidrati, 0);
-
-    const payloadMasa = {
-      user_id: session.user.id,
-      nume: rezultat.map((r) => `${r.nume} (${Math.round(r.estimare_grame)}g)`).join(', '),
-      calorii: totalCalorii,
-      proteine: totalProteine,
-      grasimi: totalGrasimi,
-      carbohidrati: totalCarbohidrati,
-      fibre: 0,
-      tip_masa: getTipMasaDupaOra(now),
-      alimente,
-      data: localDayKey(now),
-    };
-
     try {
-      const { error } = await supabase.from('mese').insert(payloadMasa);
+      const { error } = await supabase.from('mese').insert(payload);
 
       if (error) {
+        if (esteEroareDuplicate(error)) {
+          // Idempotență: masa a fost deja adăugată (același id) — fără duplicat.
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert(t('alerts.titluri.succes'), t('alerts.mesaje.masaAdaugataJurnal'), [
+            { text: t('alerts.butoane.superPunct'), onPress: () => router.replace('/(tabs)') },
+          ]);
+          return;
+        }
         throw error;
       }
 
@@ -561,8 +555,7 @@ export default function CameraScreen() {
       // U-04: salvare în coada offline FIFO pe eroare de conexiune/rețea
       try {
         const payloadOffline: MasaOfflinePayload = {
-          id: `offline-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-          ...payloadMasa,
+          ...payload,
           created_at: now.toISOString(),
         };
         await pushOfflineMeal(payloadOffline);
@@ -658,7 +651,7 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={StyleSheet.absoluteFillObject}
         facing="back"
-        active={rezultat.length === 0 && !successVisible}
+        active={rezultat.length === 0}
       >
         <LinearGradient
           colors={['rgba(5,8,13,0.85)', 'rgba(5,8,13,0)', 'rgba(5,8,13,0.95)']}
@@ -748,7 +741,7 @@ export default function CameraScreen() {
 
       {/* Result section & sheet */}
       {rezultat.length > 0 && (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <Animated.View entering={FadeInUp.duration(500).springify()} style={[styles.resultSheet, { borderColor: colors.accent + '26' }]}>
             <BlurView intensity={50} tint="dark" style={[styles.resultBlur, { maxHeight: height * 0.8 }]}>
               <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={[styles.resultGrad, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
@@ -769,6 +762,16 @@ export default function CameraScreen() {
                             color={colors.accent}
                           />
                         </View>
+                        <Pressable
+                          onPress={() => stergeIngredient(index)}
+                          hitSlop={10}
+                          style={styles.deleteIngredientBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Șterge ${ingredient.nume} din rezultat`}
+                          accessibilityHint="Elimină doar acest aliment, restul rămân"
+                        >
+                          <Trash2 size={16} color={colors.danger} />
+                        </Pressable>
                       </View>
                     ))}
 
@@ -854,16 +857,6 @@ export default function CameraScreen() {
           </Pressable>
         </View>
       )}
-
-      <FoodScanSuccessModal
-        visible={successVisible}
-        alimente={rezultat}
-        onClose={() => setSuccessVisible(false)}
-        onAddToDiary={async () => {
-          setSuccessVisible(false);
-          await adaugaInJurnal();
-        }}
-      />
 
       {isSavingDiary && (
         <View style={styles.savingOverlay} accessibilityLiveRegion="polite">
@@ -980,8 +973,9 @@ const styles = StyleSheet.create({
   closeButton: {
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 20,
-    width: 40,
-    height: 40,
+    // BUG-030: țintă de atingere minimă 44×44 (era 40×40).
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1027,6 +1021,7 @@ const styles = StyleSheet.create({
   ingredientRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   ingredientName: { fontSize: 16, fontWeight: '600', flex: 1, marginRight: 12, paddingVertical: 4 },
   gramContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 12, paddingHorizontal: 12, borderWidth: 1 },
+  deleteIngredientBtn: { padding: 6, marginLeft: 6, alignItems: 'center', justifyContent: 'center' },
   gramInput: { fontSize: 16, fontWeight: '800', paddingVertical: 8, minWidth: 40, textAlign: 'center' },
   gramUnit: { fontSize: 14, fontWeight: '600', marginLeft: 4 },
   addExtraBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, marginTop: 4, gap: 6, borderWidth: 1, borderRadius: 14 },

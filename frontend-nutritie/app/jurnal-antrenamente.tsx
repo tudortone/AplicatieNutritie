@@ -16,7 +16,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAntrenamente, Antrenament } from '../hooks/useAntrenamente';
 import { useNotify } from '../hooks/useNotify';
 import { ConfirmSheet } from '../components/ui/ConfirmSheet';
-import KeyboardAwareScreen, { CONTENT_BOTTOM_PADDING } from '@/components/ui/KeyboardAwareScreen';
+import KeyboardAwareScreen, { useContentBottomPadding } from '@/components/ui/KeyboardAwareScreen';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ZiGrupata {
@@ -30,6 +30,7 @@ export default function JurnalAntrenamenteScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const notify = useNotify();
+  const contentBottomPadding = useContentBottomPadding();
   const { fetchIstoric, stergeAntrenament } = useAntrenamente();
 
   const [istoric, setIstoric] = useState<Antrenament[]>([]);
@@ -125,7 +126,7 @@ export default function JurnalAntrenamenteScreen() {
         <FlatList
           data={zileGrupate}
           keyExtractor={(item) => item.dataScurta}
-          contentContainerStyle={[styles.listContent, { width: '100%', maxWidth: 520, alignSelf: 'center', paddingBottom: CONTENT_BOTTOM_PADDING }]}
+          contentContainerStyle={[styles.listContent, { width: '100%', maxWidth: 520, alignSelf: 'center', paddingBottom: contentBottomPadding }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={

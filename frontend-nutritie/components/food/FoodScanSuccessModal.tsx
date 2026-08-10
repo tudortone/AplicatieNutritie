@@ -2,7 +2,6 @@ import React from 'react';
 import { Modal, View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { Check, Plus, X } from 'lucide-react-native';
-import { AminoaciziEsentiali } from '../../types';
 
 export interface AlimentScanat {
   nume: string;
@@ -11,7 +10,6 @@ export interface AlimentScanat {
   proteine_per_100g: number;
   grasimi_per_100g: number;
   carbohidrati_per_100g: number;
-  aminoacizi_per_100g?: AminoaciziEsentiali;
 }
 
 interface Props {

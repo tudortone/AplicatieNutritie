@@ -114,6 +114,33 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
     expect(finalQueue.length).toBe(0);
   });
 
+  test('BUG-018 — procesarea pastreaza created_at-ul consumului, nu server-now', async () => {
+    const createdAt = '2026-08-05T19:30:00.000Z';
+    const masaCuTimestamp = {
+      ...masaSample1,
+      id: 'off_018',
+      created_at: createdAt,
+      imagine_url: 'https://ik.imagekit.io/x/foto.jpg',
+    };
+    await pushOfflineMeal(masaCuTimestamp);
+
+    const inserari: any[] = [];
+    const supabaseFake = {
+      from: () => ({
+        insert: async (payload: any) => {
+          inserari.push(payload);
+          return { error: null };
+        },
+      }),
+    };
+
+    const rezultat = await processOfflineQueue(supabaseFake as any);
+    expect(rezultat.procesate).toBe(1);
+    expect(inserari[0].created_at).toBe(createdAt);
+    expect(inserari[0].imagine_url).toBe('https://ik.imagekit.io/x/foto.jpg');
+    expect(inserari[0].data).toBe(masaSample1.data);
+  });
+
   test('4. Când Supabase eșuează din nou, procesarea se oprește fără pierderea meselor rămas', async () => {
     await pushOfflineMeal(masaSample1);
     await pushOfflineMeal(masaSample2);

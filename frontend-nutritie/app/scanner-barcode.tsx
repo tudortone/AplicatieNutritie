@@ -21,7 +21,7 @@ import * as Haptics from 'expo-haptics';
 
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
-import { useNotificationBanner } from '../context/NotificationBannerContext';
+import { useNotificationBannerActions } from '../context/NotificationBannerContext';
 import { getProdusByBarcode, ProdusScanat } from '../lib/openfoodfacts';
 import { useCamara, ProdusCamara } from '../hooks/useCamara';
 import { AddMealBottomSheet, AddMealBottomSheetRef } from '../components/AddMealBottomSheet';
@@ -32,7 +32,7 @@ export default function ScannerBarcodeScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { showBanner } = useNotificationBanner();
+  const { showBanner } = useNotificationBannerActions();
   const { produse, adaugaProdus, modificaCantitate, toggleCongelator, stergeProdus } = useCamara();
 
   const [manualModalVisible, setManualModalVisible] = useState(false);

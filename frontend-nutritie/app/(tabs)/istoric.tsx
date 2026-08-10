@@ -1,22 +1,24 @@
 
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  RefreshControl,
   TouchableOpacity,
   Alert
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Flame, Activity, PlusCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { useMeseAzi } from '../../hooks/useMeseAzi';
+import { useMeseAzi, type CategorieMasaGrupata } from '../../hooks/useMeseAzi';
+import { useCurrentDayKey } from '../../hooks/useCurrentDayKey';
 import { useZileCuMese } from '../../hooks/useZileCuMese';
+import { localDayKey } from '../../lib/dateUtils';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../supabase';
@@ -31,6 +33,15 @@ import { actualizeazaMasaCuPoza } from '../../lib/mealUtils';
 import KeyboardAwareScreen from '@/components/ui/KeyboardAwareScreen';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
+// BUG-029: lista jurnalului e aplatizată pentru FlashList — fiecare item e un
+// antet de categorie, o masă sau butonul „+ adaugă încă o masă”. FlashList
+// virtualizează itemele, deci nu mai montează toate mesele zilei odată.
+type ItemJurnal =
+  | { tip: 'header'; cheie: string; cat: CategorieMasaGrupata; primul: boolean }
+  | { tip: 'masa'; cheie: string; masa: Masa }
+  | { tip: 'empty'; cheie: string; cat: CategorieMasaGrupata; primul: boolean }
+  | { tip: 'addMore'; cheie: string; cat: CategorieMasaGrupata };
+
 export default function HistoryScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -38,6 +49,21 @@ export default function HistoryScreen() {
   const [selectedMasaDetail, setSelectedMasaDetail] = useState<Masa | null>(null);
   const mealSheetRef = useRef<AddMealBottomSheetRef>(null);
   const { topInset, scrollPaddingTop, scrollPaddingBottom } = useResponsiveLayout();
+
+  // BUG-001: cand ziua locala se schimba, avansam la noua zi DOAR daca utilizatorul
+  // vizualiza fosta „azi" (ziua care tocmai a devenit ieri). Daca naviga in istoric
+  // pe o data mai veche, selectia ramane — calendarul nu e deranjat.
+  const currentDayKey = useCurrentDayKey();
+  const prevDayKeyRef = useRef(currentDayKey);
+  useEffect(() => {
+    if (prevDayKeyRef.current !== currentDayKey) {
+      setDataSelectata((prev) => {
+        if (localDayKey(prev) === prevDayKeyRef.current) return new Date();
+        return prev;
+      });
+      prevDayKeyRef.current = currentDayKey;
+    }
+  }, [currentDayKey]);
 
   const {
     mese,
@@ -141,91 +167,114 @@ export default function HistoryScreen() {
     [refresh, refreshZileCuMese],
   );
 
-  const renderGroupedSections = () => {
-    if (!categoriiMeseList) return null;
+  // BUG-029: listă aplatizată pentru FlashList — doar categoriile cu mese, în
+  // ordinea afișării (antet, mese, „+ adaugă încă o masă”). Antetul și cardul
+  // de rezumat păstrează animația de intrare (montează o singură dată).
+  const listaJurnal = useMemo<ItemJurnal[]>(() => {
+    if (!categoriiMeseList) return [];
+    const items: ItemJurnal[] = [];
+    let primul = true;
+    for (const cat of categoriiMeseList) {
+      if (cat.mese && cat.mese.length > 0) {
+        items.push({ tip: 'header', cheie: `h-${cat.id}`, cat, primul });
+        for (const m of cat.mese) items.push({ tip: 'masa', cheie: `m-${m.id}`, masa: m });
+        items.push({ tip: 'addMore', cheie: `a-${cat.id}`, cat });
+      } else {
+        // BUG-029: categoria goală rămâne vizibilă cu butonul ei „Adaugă" — fără
+        // regresie de UX pe o zi fără mese; doar aria de mese e virtualizată.
+        items.push({ tip: 'empty', cheie: `e-${cat.id}`, cat, primul });
+      }
+      primul = false;
+    }
+    return items;
+  }, [categoriiMeseList]);
 
-    return (
-      <View style={{ gap: 24, marginTop: 8 }}>
-        {categoriiMeseList.map((cat) => {
-          const hasMeals = cat.mese && cat.mese.length > 0;
-          if (!hasMeals) return null;
-
-          return (
-            // PERF-005: fără entering per categorie — animațiile în cascadă
-            // (catIndex * 80ms) re-porneau la fiecare re-render al listei și
-            // întârziau montarea categoriilor de la capăt. Antetul și cardul de
-            // rezumat păstrează animația de intrare (montează o singură dată).
-            <View key={cat.id} style={styles.sectionContainer}>
-              {/* Header Categorie */}
-              <View style={[styles.sectionHeader, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                  <Text style={{ fontSize: 26 }}>{cat.icon}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.sectionTitleText, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{cat.label}</Text>
-                    <Text style={[styles.sectionSubtitleText, { color: colors.textSecondary }]}>
-                      {hasMeals ? `${cat.mese.length} ${cat.mese.length === 1 ? 'masă înregistrată' : 'mese înregistrate'}` : 'Nicio masă adăugată'}
-                    </Text>
-                  </View>
-                </View>
-
-                {hasMeals ? (
-                  <View style={styles.sectionMacrosSummary}>
-                    <Text style={[styles.sectionTotalCal, { color: colors.accent }]}>{cat.totalCalorii} kcal</Text>
-                    <Text style={[styles.sectionTotalMacros, { color: colors.textTertiary }]}>
-                      P:{cat.totalProteine}g • C:{cat.totalCarbohidrati}g • G:{cat.totalGrasimi}g
-                    </Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.discreteAddBtn, { borderColor: colors.accent + '40', backgroundColor: colors.accent + '15' }]}
-                    onPress={() => {
-                      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
-                      mealSheetRef.current?.open(null, cat.id);
-                    }}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Adaugă ${cat.label}`}
-                  >
-                    <PlusCircle size={15} color={colors.accent} />
-                    <Text style={[styles.discreteAddBtnText, { color: colors.accent }]}>Adaugă {cat.label}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Lista mese din categorie sau buton adăugare suplimentar */}
-              {hasMeals ? (
-                <View style={{ marginTop: 12 }}>
-                  {cat.mese.map((m) => (
-                    <MasaCard
-                      key={m.id}
-                      masa={m}
-                      onPress={setSelectedMasaDetail}
-                      onEdit={openEditModal}
-                      onDelete={handleDelete}
-                    />
-                  ))}
-
-                  <TouchableOpacity
-                    style={[styles.addMoreCategoryBtn, { borderColor: colors.cardBorder }]}
-                    onPress={() => {
-                      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
-                      mealSheetRef.current?.open(null, cat.id);
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Adaugă încă o masă la ${cat.label}`}
-                  >
-                    <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>
-                      + Adaugă încă o masă la {cat.label}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-            </View>
-          );
-        })}
+  // PERF-005: fără entering per categorie — animațiile în cascadă re-porneau la
+  // fiecare re-render al listei; FlashList nu animă itemele, doar antetul.
+  const renderSectionHeader = (cat: CategorieMasaGrupata, primul: boolean) => (
+    <View style={[styles.sectionContainer, { marginTop: primul ? 8 : 24, marginBottom: 12 }]}>
+      <View style={[styles.sectionHeader, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+          <Text style={{ fontSize: 26 }}>{cat.icon}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.sectionTitleText, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{cat.label}</Text>
+            <Text style={[styles.sectionSubtitleText, { color: colors.textSecondary }]}>
+              {cat.mese.length === 1 ? `${cat.mese.length} masă înregistrată` : `${cat.mese.length} mese înregistrate`}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.sectionMacrosSummary}>
+          <Text style={[styles.sectionTotalCal, { color: colors.accent }]}>{cat.totalCalorii} kcal</Text>
+          <Text style={[styles.sectionTotalMacros, { color: colors.textTertiary }]}>
+            P:{cat.totalProteine}g • C:{cat.totalCarbohidrati}g • G:{cat.totalGrasimi}g
+          </Text>
+        </View>
       </View>
-    );
+    </View>
+  );
+
+  // BUG-029: categorie fără mese — păstrează antetul și butonul ei „Adaugă"
+  // (comportamentul de dinainte de FlashList, ca să nu regresăm o zi goală).
+  const renderCategorieGoala = (cat: CategorieMasaGrupata, primul: boolean) => (
+    <View style={[styles.sectionContainer, { marginTop: primul ? 8 : 24, marginBottom: 12 }]}>
+      <View style={[styles.sectionHeader, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+          <Text style={{ fontSize: 26 }}>{cat.icon}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.sectionTitleText, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{cat.label}</Text>
+            <Text style={[styles.sectionSubtitleText, { color: colors.textSecondary }]}>Nicio masă adăugată</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={[styles.discreteAddBtn, { borderColor: colors.accent + '40', backgroundColor: colors.accent + '15' }]}
+          onPress={() => {
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+            mealSheetRef.current?.open(null, cat.id);
+          }}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`Adaugă ${cat.label}`}
+        >
+          <PlusCircle size={15} color={colors.accent} />
+          <Text style={[styles.discreteAddBtnText, { color: colors.accent }]}>Adaugă {cat.label}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderAddMore = (cat: CategorieMasaGrupata) => (
+    <View style={{ marginBottom: 8 }}>
+      <TouchableOpacity
+        style={[styles.addMoreCategoryBtn, { borderColor: colors.cardBorder }]}
+        onPress={() => {
+          try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+          mealSheetRef.current?.open(null, cat.id);
+        }}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={`Adaugă încă o masă la ${cat.label}`}
+      >
+        <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>
+          + Adaugă încă o masă la {cat.label}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const redareItem = (item: ItemJurnal) => {
+    if (item.tip === 'header') return renderSectionHeader(item.cat, item.primul);
+    if (item.tip === 'masa') {
+      return (
+        <MasaCard
+          masa={item.masa}
+          onPress={setSelectedMasaDetail}
+          onEdit={openEditModal}
+          onDelete={handleDelete}
+        />
+      );
+    }
+    if (item.tip === 'empty') return renderCategorieGoala(item.cat, item.primul);
+    return renderAddMore(item.cat);
   };
 
   const renderHeader = () => (
@@ -338,16 +387,20 @@ export default function HistoryScreen() {
       <View style={[styles.glowTop, { backgroundColor: colors.accentTertiary }]} />
       <View style={[styles.glowBottom, { backgroundColor: colors.accent }]} />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}
-        refreshControl={
-          <RefreshControl refreshing={false} onRefresh={onRefresh} tintColor={colors.accent} colors={[colors.accent]} />
-        }
-      >
-        {renderHeader()}
-        {renderGroupedSections()}
-      </ScrollView>
+      {/* BUG-029: build-ul de FlashList 2.0.2 din acest repo are API redus —
+          nu suportă contentContainerStyle/refreshControl/estimatedItemSize, deci
+          padding-ul e mutat pe un View wrapper, iar refresh-ul folosește
+          onRefresh/refreshing built-in (indicatorul e cel de sistem). */}
+      <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }}>
+        <FlashList
+          data={listaJurnal}
+          keyExtractor={(item) => item.cheie}
+          renderItem={({ item }) => redareItem(item)}
+          onRefresh={onRefresh}
+          refreshing={false}
+          ListHeaderComponent={renderHeader()}
+        />
+      </View>
 
       {/* Reusable Gorhom Bottom Sheet pentru Adăugare / Editare masă */}
       {/* S10: adăugare optimistă DOAR în ziua curentă — masa nouă are created_at = acum,
@@ -376,8 +429,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   glowTop: { position: 'absolute', top: -150, right: -100, width: 350, height: 350, borderRadius: 175, opacity: 0.04 },
   glowBottom: { position: 'absolute', bottom: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.04 },
-
-  scroll: { paddingHorizontal: 20 },
 
   header: { marginBottom: 20 },
   title: { fontSize: 36, fontWeight: '900', letterSpacing: -0.5 },

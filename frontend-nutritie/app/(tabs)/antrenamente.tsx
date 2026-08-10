@@ -5,14 +5,16 @@ import {
   ActivityIndicator, RefreshControl, AppState, type AppStateStatus,
   type TextStyle, type ViewStyle, type StyleProp,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+// BUG-027: un singur set de iconițe (lucide) în tot ecranul — fără amestec
+// cu MaterialCommunityIcons. `HeartPulse` pentru cardio, `Save` pentru salvare.
 import {
   Play, Pause, RotateCcw, ChevronUp, Search, Dumbbell, PersonStanding, Activity,
-  MoveUp, Timer, Trash2, Plus,
+  MoveUp, Timer, Trash2, Plus, HeartPulse, Save, Flame,
 } from 'lucide-react-native';
+import type { ComponentType } from 'react';
 import * as Haptics from 'expo-haptics';
 
-import KeyboardAwareScreen, { CONTENT_BOTTOM_PADDING } from '../../components/ui/KeyboardAwareScreen';
+import KeyboardAwareScreen, { useContentBottomPadding } from '../../components/ui/KeyboardAwareScreen';
 import BodyMap from '../../components/fitness/BodyMap';
 import { mapToCanonicalMuscleIds } from '../../lib/fitnessEngine';
 import type { MuscleId } from '../../components/fitness/heatColor';
@@ -35,14 +37,14 @@ const SESSION_META_KEY = 'current_workout_session_meta';
 const REST_DEFAULT_SEC = 90;
 const ACTIVE_THRESHOLD = 0.05;
 
-// Pictograme per categorie de muschi. Toate numele exista in glyphmap-ul MaterialCommunityIcons
-// instalat — alese dupa semnificatie: halterofil pt piept, om intins pt spate, alergator pt picioare,
-// inima pt cardio, silueta plina pt full-body etc. (inainte: greutate pt spate, om aplecat pt picioare).
-const CATEGORY_ICON: Record<Categorie, keyof typeof MaterialCommunityIcons.glyphMap> = {
-  piept: 'weight-lifter', spate: 'human-handsup', picioare: 'run', umeri: 'arm-flex',
-  brate: 'dumbbell', abdomen: 'fire', cardio: 'heart-pulse', 'full-body': 'human-male',
-  mobilitate: 'yoga', superior: 'weight-lifter', inferior: 'run', core: 'fire',
-  corp_intreg: 'human-male',
+// Pictograme per categorie de muschi, din lucide (BUG-027): alese dupa
+// semnificatie — haltera pt piept/brate, silueta pt spate/picioare/full-body,
+// activitate pt umeri/mobilitate, flacara pt abdomen/core, puls cardiac pt cardio.
+const CATEGORY_ICON: Record<Categorie, ComponentType<{ size?: number; color?: string }>> = {
+  piept: Dumbbell, spate: PersonStanding, picioare: PersonStanding, umeri: Activity,
+  brate: Dumbbell, abdomen: Flame, cardio: HeartPulse, 'full-body': PersonStanding,
+  mobilitate: Activity, superior: Dumbbell, inferior: PersonStanding, core: Flame,
+  corp_intreg: PersonStanding,
 };
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
@@ -119,6 +121,7 @@ function unionInto(target: IntensityMap, source: IntensityMap, scale = 1) {
 export default function AntrenamenteScreen() {
   const { width: SCREEN_WIDTH } = useWindowDimensions();
   const { colors } = useTheme();
+  const contentBottomPadding = useContentBottomPadding();
   const { adaugaAntrenament } = useAntrenamente();
   const notify = useNotify();
   const { exercitii, loading, refresh } = useExercitii();
@@ -599,7 +602,7 @@ export default function AntrenamenteScreen() {
   return (
     <KeyboardAwareScreen style={{ backgroundColor: colors.background }}>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: CONTENT_BOTTOM_PADDING }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
         keyboardShouldPersistTaps='handled'
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -704,6 +707,7 @@ export default function AntrenamenteScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
           {CATEGORII.map((cat) => {
             const active = selectedCategory === cat.id && searchQuery.trim().length === 0;
+            const CatIcon = CATEGORY_ICON[cat.id];
             return (
               <Pressable
                 key={cat.id}
@@ -712,7 +716,7 @@ export default function AntrenamenteScreen() {
                 accessibilityLabel={`Categoria ${cat.nume}`}
                 style={[styles.pill, { backgroundColor: active ? colors.accent : colors.surfaceElevated, borderColor: active ? colors.accent : colors.cardBorder }]}
               >
-                <MaterialCommunityIcons name={CATEGORY_ICON[cat.id]} size={18} color={active ? '#0B0F14' : colors.textSecondary} />
+                <CatIcon size={18} color={active ? '#0B0F14' : colors.textSecondary} />
                 <Text style={[styles.pillText, { color: active ? '#0B0F14' : colors.textPrimary }]}>{cat.nume}</Text>
               </Pressable>
             );
@@ -794,7 +798,7 @@ export default function AntrenamenteScreen() {
               <ActivityIndicator color='#0B0F14' />
             ) : (
               <>
-                <MaterialCommunityIcons name='content-save' size={20} color='#0B0F14' />
+                <Save size={20} color='#0B0F14' />
                 <Text style={[styles.saveText, { color: '#0B0F14' }]}>Salvează antrenamentul</Text>
               </>
             )}

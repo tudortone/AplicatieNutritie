@@ -42,18 +42,40 @@ interface NotificationBannerContextType {
 const NOTIFICATIONS_STORAGE_KEY = 'notificari_v1';
 const MAX_NOTIFICATIONS = 50;
 
-const NotificationBannerContext = createContext<NotificationBannerContextType>({
+// BUG-024: contextul e împărțit pe două — acțiunile (stabile, useCallback) și
+// datele (notifications/unreadCount, volatile). Consumatorii care apelează doar
+// showNotification/showBanner nu mai re-renderizează la fiecare notificare nouă.
+export type NotificationBannerActions = Pick<
+  NotificationBannerContextType,
+  'showNotification' | 'showBanner' | 'hideBanner' | 'markAllRead' | 'clearAll'
+>;
+export type NotificationBannerData = Pick<NotificationBannerContextType, 'notifications' | 'unreadCount'>;
+
+const NotificationBannerActionsContext = createContext<NotificationBannerActions>({
   showNotification: () => {},
   showBanner: () => {},
   hideBanner: () => {},
-  notifications: [],
-  unreadCount: 0,
   markAllRead: async () => {},
   clearAll: async () => {},
 });
 
+const NotificationBannerDataContext = createContext<NotificationBannerData>({
+  notifications: [],
+  unreadCount: 0,
+});
+
+export function useNotificationBannerActions(): NotificationBannerActions {
+  return useContext(NotificationBannerActionsContext);
+}
+
+export function useNotificationBannerData(): NotificationBannerData {
+  return useContext(NotificationBannerDataContext);
+}
+
+// Hook combinat pentru compatibilitate: ecranele care citesc ȘI date ȘI acțiuni
+// (ex: ecranul de notificări) îl folosesc fără schimbare.
 export function useNotificationBanner(): NotificationBannerContextType {
-  return useContext(NotificationBannerContext);
+  return { ...useNotificationBannerActions(), ...useNotificationBannerData() };
 }
 
 export function NotificationBannerProvider({ children }: { children: React.ReactNode }) {
@@ -73,6 +95,13 @@ export function NotificationBannerProvider({ children }: { children: React.React
   });
 
   const timeoutRef = useRef<any>(null);
+  // BUG-008: oglinda sincronă a listei pentru updateri puri — calculele se fac
+  // din ref (mereu la zi, chiar între două render-uri), nu din closure învechit.
+  const notificationsRef = useRef(notifications);
+
+  useEffect(() => {
+    notificationsRef.current = notifications;
+  }, [notifications]);
 
   // Încarcă istoricul notificărilor din AsyncStorage
   useEffect(() => {
@@ -131,11 +160,10 @@ export function NotificationBannerProvider({ children }: { children: React.React
         actionRoute,
       };
 
-      setNotifications((prev) => {
-        const updated = [newNotif, ...prev].slice(0, MAX_NOTIFICATIONS);
-        saveNotifications(updated);
-        return updated;
-      });
+      const updated = [newNotif, ...notificationsRef.current].slice(0, MAX_NOTIFICATIONS);
+      setNotifications(updated);
+      notificationsRef.current = updated;
+      void saveNotifications(updated);
 
       setBannerState({
         visible: true,
@@ -167,11 +195,10 @@ export function NotificationBannerProvider({ children }: { children: React.React
   );
 
   const markAllRead = useCallback(async () => {
-    setNotifications((prev) => {
-      const updated = prev.map((item) => ({ ...item, read: true }));
-      saveNotifications(updated);
-      return updated;
-    });
+    const updated = notificationsRef.current.map((item) => ({ ...item, read: true }));
+    setNotifications(updated);
+    notificationsRef.current = updated;
+    await saveNotifications(updated);
   }, []);
 
   const clearAll = useCallback(async () => {
@@ -201,28 +228,33 @@ export function NotificationBannerProvider({ children }: { children: React.React
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const value = React.useMemo(() => ({
+  const actionsValue = React.useMemo<NotificationBannerActions>(() => ({
     showNotification,
     showBanner: showNotification,
     hideBanner,
-    notifications,
-    unreadCount,
     markAllRead,
     clearAll,
-  }), [showNotification, hideBanner, notifications, unreadCount, markAllRead, clearAll]);
+  }), [showNotification, hideBanner, markAllRead, clearAll]);
+
+  const dataValue = React.useMemo<NotificationBannerData>(() => ({
+    notifications,
+    unreadCount,
+  }), [notifications, unreadCount]);
 
   return (
-    <NotificationBannerContext.Provider value={value}>
-      {children}
-      <InAppNotification
-        visible={bannerState.visible}
-        title={bannerState.title}
-        message={bannerState.message}
-        type={bannerState.type}
-        actionLabel={bannerState.actionLabel}
-        actionRoute={bannerState.actionRoute}
-        onDismiss={hideBanner}
-      />
-    </NotificationBannerContext.Provider>
+    <NotificationBannerActionsContext.Provider value={actionsValue}>
+      <NotificationBannerDataContext.Provider value={dataValue}>
+        {children}
+        <InAppNotification
+          visible={bannerState.visible}
+          title={bannerState.title}
+          message={bannerState.message}
+          type={bannerState.type}
+          actionLabel={bannerState.actionLabel}
+          actionRoute={bannerState.actionRoute}
+          onDismiss={hideBanner}
+        />
+      </NotificationBannerDataContext.Provider>
+    </NotificationBannerActionsContext.Provider>
   );
 }

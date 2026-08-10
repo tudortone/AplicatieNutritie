@@ -21,7 +21,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { EXERCITII, CATEGORII, Exercitiu, calculeazaCaloriiArse } from '../constants/exercitii';
 import { useAntrenamente, SetExercitiu } from '../hooks/useAntrenamente';
-import { useGamificare } from '../hooks/useGamificare';
+import { useGamificareActions } from '../context/GamificareContext';
 import { useNotify } from '../hooks/useNotify';
 import { EquipmentIcon } from './fitness/EquipmentIcon';
 import { Holographic3DAnatomyBody } from './fitness/Holographic3DAnatomyBody';
@@ -51,7 +51,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
     const { colors } = useTheme();
     const { user } = useAuth();
     const notify = useNotify();
-    const { adaugaProgres } = useGamificare();
+    const { adaugaProgres } = useGamificareActions();
     const { adaugaAntrenament, adaugaExercitiu } = useAntrenamente();
 
     const bottomSheetRef = useRef<BottomSheet>(null);

@@ -25,9 +25,11 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useFavorite } from '../hooks/useFavorite';
-import { useGamificareContext } from '../context/GamificareContext';
+import { useGamificareActions } from '../context/GamificareContext';
 import { Masa, TipMasa, AlimentDetaliat } from '../types';
-import { getTipMasaDupaOra, MEAL_CATEGORIES, insereazaMasaCuPoza, actualizeazaMasaCuPoza } from '../lib/mealUtils';
+import { getTipMasaDupaOra, MEAL_CATEGORIES, insereazaMasaCuPoza, actualizeazaMasaCuPoza, parseAlimente, construiesteAlimenteLaSalvare } from '../lib/mealUtils';
+import { pushOfflineMeal, MasaOfflinePayload } from '../lib/offlineQueue';
+import { localDayKey } from '../lib/dateUtils';
 import { foodPresets, categories, FoodPreset } from '../constants/foodPresets';
 import { ProductSearch } from './food/ProductSearch';
 
@@ -71,13 +73,16 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const { t } = useTranslation();
     const { user } = useAuth();
     const { favorite, addFavorite, removeFavorite, isFavorite } = useFavorite();
-    const { adaugaProgres } = useGamificareContext();
+    const { adaugaProgres } = useGamificareActions();
     const bottomSheetRef = useRef<BottomSheet>(null);
     const scrollViewRef = useRef<any>(null);
     const [formSectionY, setFormSectionY] = useState<number>(0);
     const [gramajSectionY, setGramajSectionY] = useState<number>(0);
     const [highlightGramaj, setHighlightGramaj] = useState(false);
     const pantryProductNameRef = useRef<string | undefined>(undefined);
+    // BUG-041: guard sincron anti dublu-tap (ref, nu stare — răspunde în același
+    // tick), ca două atingeri rapide pe „Adaugă Masă" să nu creeze două insert-uri.
+    const savingRef = useRef(false);
 
     const snapPoints = useMemo(() => ['75%', '90%'], []);
 
@@ -92,6 +97,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const [fibre, setFibre] = useState('');
     const [imagineUrl, setImagineUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+
+    // BUG-002: descompunerea originala a mesei editate, pastrata la save cand
+    // utilizatorul modifica doar numele/macro-urile (nu redefineste alimentul).
+    const alimenteOriginaleRef = useRef<AlimentDetaliat[] | null>(null);
 
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -111,6 +120,14 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         return p.categorie === selectedCategory;
       });
     }, [selectedCategory, searchQuery]);
+
+    // BUG-025: sugestiile după nume se filtrează o singură dată pe render (useMemo
+    // pe `nume`), nu de 3 ori la fiecare keystroke peste 150+ presets. Rezultatul
+    // e folosit și pentru numărul afișat în antet și pentru lista de 10.
+    const presetsNume = useMemo(() => {
+      const q = nume.trim().toLowerCase();
+      return foodPresets.filter((p) => p.nume.toLowerCase().includes(q));
+    }, [nume]);
 
     const scrollToGramajSection = useCallback(() => {
       setHighlightGramaj(true);
@@ -241,7 +258,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           setImagineUrl(masaToEdit.imagine_url || fotoUrl || null);
           setGrame('');
           setBaseNutrition(null);
+          const alimenteOrig = parseAlimente(masaToEdit);
+          alimenteOriginaleRef.current = alimenteOrig.length > 0 ? alimenteOrig : null;
         } else {
+          alimenteOriginaleRef.current = null;
           setEditingMasaId(null);
           setTipMasa(defaultCategory || getTipMasaDupaOra());
           setNume('');
@@ -261,6 +281,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
       },
       openWithItem: (item) => {
         const defaultGr = item.gramajDefault || 100;
+        alimenteOriginaleRef.current = null;
         setEditingMasaId(null);
         setNume(item.nume);
         setGrame(String(defaultGr));
@@ -324,6 +345,9 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         return;
       }
 
+      if (savingRef.current) return;
+      savingRef.current = true;
+
       setLoading(true);
       try {
         const alimentePayload: AlimentDetaliat[] = [
@@ -338,6 +362,15 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           }
         ];
 
+        // BUG-002: pastram descompunerea originala a mesei editate cand nu se
+        // redefineste alimentul (gramaj gol), ca editarea numelui/macro sa nu
+        // transforme o masa cu 5 ingrediente intr-un array de un element.
+        const alimenteFinal = construiesteAlimenteLaSalvare({
+          original: editingMasaId ? alimenteOriginaleRef.current : null,
+          aRedefinitAlimentul: grame.trim() !== '',
+          alimentNou: alimentePayload[0],
+        });
+
         const payload: any = {
           user_id: user.id,
           nume: nume.trim(),
@@ -348,7 +381,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           fibre: parseMacro(fibre),
           tip_masa: tipMasa,
           imagine_url: imagineUrl || null,
-          alimente: alimentePayload,
+          alimente: alimenteFinal,
         };
 
         let err = null;
@@ -363,7 +396,41 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         }
 
         if (err) {
-          Alert.alert(t('alerts.titluri.eroareSalvare'), t('alerts.mesaje.eroareSalvareDinamica', { eroare: err.message }));
+          if (editingMasaId) {
+            // Eroare la EDITARE: coada offline e doar de insert, asa ca raportam
+            // eroarea ca inainte — nu putem pune o actualizare in coada.
+            Alert.alert(t('alerts.titluri.eroareSalvare'), t('alerts.mesaje.eroareSalvareDinamica', { eroare: err.message }));
+          } else {
+            // BUG-009: salvare manuala offline -> coada FIFO, exact ca scanul AI.
+            // Fara asta, masa manuala se pierdea cu un alert generic, in timp ce
+            // scanul era pastrat. Eroarea de retea nu mai inseamna pierdere.
+            try {
+              const payloadOffline: MasaOfflinePayload = {
+                id: `offline-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                user_id: user.id,
+                nume: payload.nume,
+                calorii: payload.calorii,
+                proteine: payload.proteine,
+                grasimi: payload.grasimi,
+                carbohidrati: payload.carbohidrati,
+                fibre: payload.fibre,
+                tip_masa: payload.tip_masa,
+                alimente: payload.alimente,
+                imagine_url: payload.imagine_url ?? null,
+                data: localDayKey(new Date()),
+                created_at: new Date().toISOString(),
+              };
+              await pushOfflineMeal(payloadOffline);
+              try {
+                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              } catch {}
+              bottomSheetRef.current?.close();
+              onSuccess?.();
+              Alert.alert('Salvat offline', 'Masa a fost salvată local în coada offline și va fi sincronizată automat la reconectarea la rețea.');
+            } catch {
+              Alert.alert(t('alerts.titluri.eroareSalvare'), t('alerts.mesaje.eroareSalvareDinamica', { eroare: err.message }));
+            }
+          }
         } else {
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -383,6 +450,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
       } catch {
         Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.problemaNeasteptataSalvare'));
       } finally {
+        savingRef.current = false;
         setLoading(false);
       }
     };
@@ -409,7 +477,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             <Text style={[styles.title, { color: colors.textPrimary }]}>
               {editingMasaId ? 'Editează Masa' : 'Adaugă Masă Nouă'}
             </Text>
-            <TouchableOpacity onPress={() => bottomSheetRef.current?.close()} style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+            <TouchableOpacity onPress={() => bottomSheetRef.current?.close()} style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} accessibilityRole="button" accessibilityLabel="Închide">
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -453,6 +521,8 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       onPress={() => removeFavorite(fav.id)}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       style={styles.favChipDelete}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Elimină ${fav.nume} din favorite`}
                     >
                       <Trash2 size={13} color={colors.textTertiary} />
                     </TouchableOpacity>
@@ -674,11 +744,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             {!editingMasaId && nume.trim().length >= 2 && (
               <View style={{ marginTop: 8, marginBottom: 12, backgroundColor: colors.surfaceBg, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder, overflow: 'hidden', maxHeight: 220 }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 4, textTransform: 'uppercase' }}>
-                  💡 Sugestii automate găsite ({foodPresets.filter(p => p.nume.toLowerCase().includes(nume.trim().toLowerCase())).length}):
+                  💡 Sugestii automate găsite ({presetsNume.length}):
                 </Text>
                 <ScrollView nestedScrollEnabled style={{ maxHeight: 180 }}>
-                  {foodPresets
-                    .filter(p => p.nume.toLowerCase().includes(nume.trim().toLowerCase()))
+                  {presetsNume
                     .slice(0, 10)
                     .map((preset, index) => (
                       <TouchableOpacity
@@ -693,7 +762,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                         </View>
                       </TouchableOpacity>
                     ))}
-                  {foodPresets.filter(p => p.nume.toLowerCase().includes(nume.trim().toLowerCase())).length === 0 && (
+                  {presetsNume.length === 0 && (
                     <View style={{ padding: 14, alignItems: 'center' }}>
                       <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginBottom: 10 }}>
                         Nu am găsit „{nume}” în lista de bază. Calculează valorile cu AI:

@@ -138,6 +138,29 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete, onU
     }
   };
 
+  // BUG-017: ștergere ingredient (per-component) — elimină din listă, recalculează
+  // totalurile din restul ingredientelor și actualizează optimist + upstream prin
+  // onUpdateMasa. La ultimul ingredient, păstrăm macro-urile plane ale mesei
+  // (alimente=[]), ca valorile să nu dispară cu lista de componente.
+  const stergeAliment = (idx: number): void => {
+    const sursa = parseAlimente(masaLocal);
+    const alimente = sursa.filter((_, i) => i !== idx);
+    const totaluri = recalculeazaTotaluri(alimente);
+    const urmatoare: Masa = {
+      ...masaLocal,
+      alimente,
+      calorii: alimente.length > 0 ? totaluri.calorii : masaLocal.calorii,
+      proteine: alimente.length > 0 ? totaluri.proteine : masaLocal.proteine,
+      carbohidrati: alimente.length > 0 ? totaluri.carbohidrati : masaLocal.carbohidrati,
+      grasimi: alimente.length > 0 ? totaluri.grasimi : masaLocal.grasimi,
+      fibre: alimente.length > 0 ? totaluri.fibre : masaLocal.fibre,
+    };
+    setMasaLocal(urmatoare);
+    if (onUpdateMasa) {
+      void Promise.resolve(onUpdateMasa(urmatoare)).catch(() => {});
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -247,7 +270,7 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete, onU
                   <TouchableOpacity
                     onPress={() => { setEditIdx(idx); setEditAliment(al); setEditVisible(true); }}
                     style={styles.editBtn}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     accessibilityRole="button"
                     accessibilityLabel={`Corectează datele pentru ${al.nume}`}
                   >
@@ -256,10 +279,23 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete, onU
                   <TouchableOpacity
                     onPress={() => { setDetailAliment(al); setDetailVisible(true); }}
                     style={styles.detailBtn}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Detalii pentru ${al.nume}`}
                   >
                     <Info size={15} color={colors.accent} />
                   </TouchableOpacity>
+                  {alimenteParsate.length > 0 ? (
+                    <TouchableOpacity
+                      onPress={() => stergeAliment(idx)}
+                      style={[styles.deleteBtn, { backgroundColor: colors.danger + '0F' }]}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Șterge ${al.nume} din masă`}
+                    >
+                      <Trash2 size={15} color={colors.danger} />
+                    </TouchableOpacity>
+                  ) : null}
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={[styles.ingredientKcal, { color: colors.accent }]}>{al.calorii} kcal</Text>
                     <Text style={[styles.ingredientMacros, { color: colors.textSecondary }]}>
@@ -274,13 +310,13 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete, onU
             <View style={[styles.aminoSection, { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: colors.cardBorder }]}>
               <View style={styles.aminoHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Dumbbell size={16} color="#00F0FF" />
+                  <Dumbbell size={16} color={colors.accentTertiary} />
                   <Text style={[styles.aminoTitle, { color: colors.textPrimary }]}>
                     Profil Aminoacizi Esențiali (EAA)
                   </Text>
                 </View>
-                <View style={[styles.bcaaBadge, { backgroundColor: '#00F0FF1F', borderColor: '#00F0FF55' }]}>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#00F0FF' }}>
+                <View style={[styles.bcaaBadge, { backgroundColor: colors.accentTertiary + '1F', borderColor: colors.accentTertiary + '55' }]}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: colors.accentTertiary }}>
                     BCAA: {totalBcaa} mg
                   </Text>
                 </View>
@@ -294,17 +330,17 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete, onU
 
               <View style={styles.aminoGrid}>
                 <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: '#00F0FF' }]}>Leucină (BCAA)</Text>
+                  <Text style={[styles.aminoName, { color: colors.accentTertiary }]}>Leucină (BCAA)</Text>
                   <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.leucina} mg</Text>
                 </View>
 
                 <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: '#00F0FF' }]}>Izoleucină (BCAA)</Text>
+                  <Text style={[styles.aminoName, { color: colors.accentTertiary }]}>Izoleucină (BCAA)</Text>
                   <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.izoleucina} mg</Text>
                 </View>
 
                 <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: '#00F0FF' }]}>Valină (BCAA)</Text>
+                  <Text style={[styles.aminoName, { color: colors.accentTertiary }]}>Valină (BCAA)</Text>
                   <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.valina} mg</Text>
                 </View>
 
@@ -554,6 +590,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
   detailBtn: {
+    padding: 6,
+    marginRight: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  deleteBtn: {
     padding: 6,
     marginRight: 8,
     borderRadius: 8,

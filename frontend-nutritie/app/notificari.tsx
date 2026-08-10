@@ -18,6 +18,7 @@ import { Radius, Spacing } from '../constants/theme';
 import { useNotificationBanner, type AppNotification } from '../context/NotificationBannerContext';
 import { useTheme } from '../context/ThemeContext';
 import { ConfirmSheet } from '../components/ui/ConfirmSheet';
+import { isValidActionRoute } from '../lib/actionRoutes';
 
 export default function NotificariScreen() {
   const insets = useSafeAreaInsets();
@@ -50,7 +51,7 @@ export default function NotificariScreen() {
     }
   };
 
-  const renderItem = ({ item, index }: { item: AppNotification; index: number }) => {
+  const renderItem = ({ item }: { item: AppNotification }) => {
     const timeFormatted = new Date(item.createdAt).toLocaleTimeString('ro-RO', {
       hour: '2-digit',
       minute: '2-digit',
@@ -58,11 +59,17 @@ export default function NotificariScreen() {
     const canOpen = Boolean(item.actionRoute);
 
     const handlePress = () => {
-      if (item.actionRoute) router.push(item.actionRoute as never);
+      // BUG-038: actionRoute e persistat — îl acceptăm DOAR dacă e o rută
+      // cunoscută din allowlist (lib/actionRoutes), nu un șir oarecare.
+      const ruta = item.actionRoute;
+      if (ruta && isValidActionRoute(ruta)) router.push(ruta as never);
     };
 
     return (
-      <Animated.View entering={FadeInDown.duration(400).delay(Math.min(index * 60, 360))}>
+      // BUG-012: fără animație per-rând — pe un FlatList virtualizat, orice
+      // schimbare de identitate (ex. markAllRead la mount) remonta rândurile și
+      // re-triggera stagger-ul „wave" pe scroll.
+      <View>
         <Pressable
           style={({ pressed }) => [
             styles.card,
@@ -95,7 +102,7 @@ export default function NotificariScreen() {
           </View>
           {!item.read ? <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} /> : null}
         </Pressable>
-      </Animated.View>
+      </View>
     );
   };
 
@@ -116,7 +123,12 @@ export default function NotificariScreen() {
         ]}
       >
         <Pressable
-          onPress={() => router.back()}
+          // BUG-013 (WS-2): dacă ConfirmSheet-ul (Modal transparent) e deschis,
+          // îl închidem întâi, ca pop-ul să nu lase fereastra modală goală.
+          onPress={() => {
+            if (showClearConfirm) setShowClearConfirm(false);
+            router.back();
+          }}
           accessibilityRole="button"
           accessibilityLabel="Înapoi"
           hitSlop={8}

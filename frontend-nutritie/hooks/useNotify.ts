@@ -1,7 +1,7 @@
-import { useNotificationBanner } from '../context/NotificationBannerContext';
+import { useNotificationBannerActions } from '../context/NotificationBannerContext';
 
 export function useNotify() {
-  const { showNotification } = useNotificationBanner();
+  const { showNotification } = useNotificationBannerActions();
 
   return {
     success: (title: string, message?: string, actionLabel?: string, actionRoute?: string) =>

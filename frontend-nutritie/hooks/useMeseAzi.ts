@@ -3,6 +3,8 @@ import { supabase } from '../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Masa, TipMasa } from '../types';
 import { getTipMasaDupaOra, parseAlimente } from '../lib/mealUtils';
+import { TARGETURI_PENDING_KEY } from '../lib/sincronizeazaTargeturi';
+import { startOfLocalDayISO, endOfLocalDayISO } from '../lib/dateUtils';
 import type { User } from '@supabase/supabase-js';
 
 export interface CategorieMasaGrupata {
@@ -64,57 +66,50 @@ export function useMeseAzi(dataSelectata?: Date) {
       }
       setUser(currentUser);
 
-      // 1. Încarcă profile targets din user_metadata
+      // 1. Încarcă profile targets. Sursa principala: user_metadata (server).
+      // Excepție BUG-035: dacă există targeturi locale NESINCRONIZATE (salvare
+      // offline), acele valori reprezintă intenția cea mai recentă a utilizatorului
+      // și nu trebuie suprascrise de metadata stale de pe server.
       const userMetadata = currentUser.user_metadata || {};
-      
-      let cTinta = userMetadata.caloriiTinta;
-      let pTinta = userMetadata.proteineTinta;
-      let cbTinta = userMetadata.carbiTinta;
-      let grTinta = userMetadata.grasimiTinta;
-      let g = userMetadata.greutate;
 
-      // Fallback la AsyncStorage paralelizat
-      const [storedC, storedP, storedCb, storedGr, storedG] = await Promise.all([
-        !cTinta ? AsyncStorage.getItem('caloriiTinta') : Promise.resolve(null),
-        !pTinta ? AsyncStorage.getItem('proteineTinta') : Promise.resolve(null),
-        !cbTinta ? AsyncStorage.getItem('carbiTinta') : Promise.resolve(null),
-        !grTinta ? AsyncStorage.getItem('grasimiTinta') : Promise.resolve(null),
-        !g ? AsyncStorage.getItem('greutate') : Promise.resolve(null)
+      const [storedC, storedP, storedCb, storedGr, storedG, pendingTargeturi] = await Promise.all([
+        AsyncStorage.getItem('caloriiTinta'),
+        AsyncStorage.getItem('proteineTinta'),
+        AsyncStorage.getItem('carbiTinta'),
+        AsyncStorage.getItem('grasimiTinta'),
+        AsyncStorage.getItem('greutate'),
+        AsyncStorage.getItem(TARGETURI_PENDING_KEY),
       ]);
-      
-      if (!cTinta) cTinta = storedC ? parseInt(storedC) : 2000;
-      if (!pTinta) pTinta = storedP ? parseInt(storedP) : 150;
-      if (!cbTinta) cbTinta = storedCb ? parseInt(storedCb) : 250;
-      if (!grTinta) grTinta = storedGr ? parseInt(storedGr) : 70;
-      if (!g) g = storedG ? parseInt(storedG) : 75;
+      const preferLocal = pendingTargeturi === '1';
+      const rezolva = (metadataVal: number | undefined, localStr: string | null, fallback: number): number => {
+        let localVal: number | undefined;
+        if (localStr) {
+          const v = parseInt(localStr, 10);
+          if (Number.isFinite(v)) localVal = v;
+        }
+        if (preferLocal && localVal !== undefined) return localVal;
+        const meta = typeof metadataVal === 'number' && Number.isFinite(metadataVal) ? metadataVal : undefined;
+        return meta ?? localVal ?? fallback;
+      };
 
-      setCaloriiTinta(Number(cTinta));
-      setProteineTinta(Number(pTinta));
-      setCarbiTinta(Number(cbTinta));
-      setGrasimiTinta(Number(grTinta));
-      setGreutate(Number(g));
+      setCaloriiTinta(rezolva(userMetadata.caloriiTinta, storedC, 2000));
+      setProteineTinta(rezolva(userMetadata.proteineTinta, storedP, 150));
+      setCarbiTinta(rezolva(userMetadata.carbiTinta, storedCb, 250));
+      setGrasimiTinta(rezolva(userMetadata.grasimiTinta, storedGr, 70));
+      setGreutate(rezolva(userMetadata.greutate, storedG, 75));
 
-      // 2. Încarcă mesele din ziua selectată sau curentă
-      let startOfDay: Date;
-      let endOfDay: Date;
-      if (dataSelectata) {
-        startOfDay = new Date(dataSelectata);
-        startOfDay.setHours(0, 0, 0, 0);
-        endOfDay = new Date(dataSelectata);
-        endOfDay.setHours(23, 59, 59, 999);
-      } else {
-        startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        endOfDay = new Date();
-        endOfDay.setHours(23, 59, 59, 999);
-      }
+      // 2. Încarcă mesele din ziua selectată sau curentă.
+      // Granița de zi e calculată în timezone-ul local (setHours), NU UTC — altfel
+      // mesele de seară/DST sar ziua. Helper-ele din dateUtils sunt sursa unică (BUG-031).
+      const startDayIso = startOfLocalDayISO(dataSelectata ?? new Date());
+      const endDayIso = endOfLocalDayISO(dataSelectata ?? new Date());
 
       const { data: meseData, error: meseError } = await supabase
         .from('mese')
         .select('*')
         .eq('user_id', currentUser.id)
-        .gte('created_at', startOfDay.toISOString())
-        .lte('created_at', endOfDay.toISOString())
+        .gte('created_at', startDayIso)
+        .lte('created_at', endDayIso)
         .order('created_at', { ascending: false });
 
       if (isStale()) return; // ❗ guard anti-race: nu suprascrie stare cu rezultat învechit

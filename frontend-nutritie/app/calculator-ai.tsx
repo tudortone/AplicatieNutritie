@@ -12,7 +12,7 @@ import { supabase } from '../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { useNotificationBanner } from '../context/NotificationBannerContext';
+import { useNotificationBannerActions } from '../context/NotificationBannerContext';
 // FIX UI: tastatura acoperea input-urile de varsta/greutate/inaltime.
 import KeyboardAwareScreen from '../components/ui/KeyboardAwareScreen';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -54,7 +54,7 @@ export default function CalculatorAI() {
   const router = useRouter();
   const { colors } = useTheme();
   const { session } = useAuth();
-  const { showBanner } = useNotificationBanner();
+  const { showBanner } = useNotificationBannerActions();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     varsta: '',
@@ -131,7 +131,12 @@ export default function CalculatorAI() {
           type: 'success',
           duration: 4500,
         });
-        router.back();
+        // BUG-033: back doar dacă există stack; altfel înapoi la tabs (nu rată moartă).
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/(tabs)');
+        }
       }
     } catch {
       showBanner({
@@ -150,7 +155,7 @@ export default function CalculatorAI() {
       <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
 
       <Animated.View entering={FadeInUp.duration(500)} style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={styles.backBtn}>
           <BlurView intensity={20} tint="dark" style={styles.backBtnBlur}>
             <ArrowLeft color="#fff" size={24} />
           </BlurView>

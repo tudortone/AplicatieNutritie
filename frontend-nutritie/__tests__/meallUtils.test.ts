@@ -1,4 +1,4 @@
-import { obtinePozaMasa, recalculeazaTotaluri, parseAlimente } from '../lib/mealUtils';
+import { obtinePozaMasa, recalculeazaTotaluri, parseAlimente, construiesteAlimenteLaSalvare } from '../lib/mealUtils';
 import { Masa, AlimentDetaliat } from '../types';
 
 function masa(overrides: Partial<Masa>): Masa {
@@ -43,6 +43,109 @@ describe('lib/mealUtils — poza mesei', () => {
   it('returneaza null cand nu exista nicio poza', () => {
     expect(obtinePozaMasa(masa({}))).toBeNull();
     expect(obtinePozaMasa(masa({ alimente: [] }))).toBeNull();
+  });
+});
+
+describe('lib/mealUtils — construiesteAlimenteLaSalvare (BUG-002)', () => {
+  const aliment = (overrides: Partial<AlimentDetaliat> = {}): AlimentDetaliat => ({
+    id: 'a1',
+    nume: 'Piept de pui',
+    grame: 150,
+    calorii: 247,
+    proteine: 46,
+    carbohidrati: 0,
+    grasimi: 5.3,
+    ...overrides,
+  });
+  const alimentNou = (overrides: Partial<AlimentDetaliat> = {}): AlimentDetaliat => ({
+    nume: 'Piept de pui',
+    grame: 200,
+    calorii: 330,
+    proteine: 62,
+    carbohidrati: 0,
+    grasimi: 7,
+    fibre: 0,
+    ...overrides,
+  });
+
+  it('1 ingredient + editare nume doar -> pastreaza alimentul original', () => {
+    const original = [aliment()];
+    const rezultat = construiesteAlimenteLaSalvare({
+      original,
+      aRedefinitAlimentul: false,
+      alimentNou: alimentNou({ nume: 'Piept de pui la gratar' }),
+    });
+    expect(rezultat).toHaveLength(1);
+    expect(rezultat[0]).toEqual(original[0]);
+  });
+
+  it('2 ingrediente + editare nume doar -> pastreaza ambele', () => {
+    const original = [aliment({ id: 'a1', nume: 'Pui' }), aliment({ id: 'a2', nume: 'Orez', calorii: 195 })];
+    const rezultat = construiesteAlimenteLaSalvare({ original, aRedefinitAlimentul: false, alimentNou: alimentNou() });
+    expect(rezultat).toHaveLength(2);
+    expect(rezultat.map((a) => a.id)).toEqual(['a1', 'a2']);
+  });
+
+  it('5+ ingrediente + editare nume doar -> pastreaza toate cele 5', () => {
+    const original = [1, 2, 3, 4, 5].map((i) => aliment({ id: `a${i}`, nume: `Aliment ${i}`, calorii: i * 100 }));
+    const rezultat = construiesteAlimenteLaSalvare({ original, aRedefinitAlimentul: false, alimentNou: alimentNou() });
+    expect(rezultat).toHaveLength(5);
+    expect(rezultat.map((a) => a.id)).toEqual(['a1', 'a2', 'a3', 'a4', 'a5']);
+  });
+
+  it('ingrediente cu poze + editare nume doar -> pastreaza imageUrl si imageKitFileId', () => {
+    const original = [
+      aliment({ imageUrl: 'https://ik.imagekit.io/x/a.jpg', imageKitFileId: 'file-a' }),
+      aliment({ nume: 'Orez', imageUrl: 'https://ik.imagekit.io/x/b.jpg', imageKitFileId: 'file-b' }),
+    ];
+    const rezultat = construiesteAlimenteLaSalvare({ original, aRedefinitAlimentul: false, alimentNou: alimentNou() });
+    expect(rezultat[0].imageUrl).toBe('https://ik.imagekit.io/x/a.jpg');
+    expect(rezultat[0].imageKitFileId).toBe('file-a');
+    expect(rezultat[1].imageUrl).toBe('https://ik.imagekit.io/x/b.jpg');
+  });
+
+  it('editare gramaj pe masa cu 1 aliment -> actualizeaza DOAR acel aliment, pastreaza id/poza', () => {
+    const original = [aliment({ imageUrl: 'https://ik.imagekit.io/x/a.jpg', imageKitFileId: 'file-a' })];
+    const rezultat = construiesteAlimenteLaSalvare({
+      original,
+      aRedefinitAlimentul: true,
+      alimentNou: alimentNou({ grame: 200, calorii: 330 }),
+    });
+    expect(rezultat).toHaveLength(1);
+    expect(rezultat[0].id).toBe('a1');
+    expect(rezultat[0].imageUrl).toBe('https://ik.imagekit.io/x/a.jpg');
+    expect(rezultat[0].imageKitFileId).toBe('file-a');
+    expect(rezultat[0].grame).toBe(200);
+    expect(rezultat[0].calorii).toBe(330);
+  });
+
+  it('editare macro fara gramaj pe masa cu 1 aliment -> pastreaza alimentul original', () => {
+    const original = [aliment()];
+    const rezultat = construiesteAlimenteLaSalvare({ original, aRedefinitAlimentul: false, alimentNou: alimentNou({ proteine: 50 }) });
+    expect(rezultat).toEqual(original);
+  });
+
+  it('masa noua (fara original) -> inlocuieste cu alimentNou', () => {
+    const nou = alimentNou({ nume: 'Salata' });
+    const rezultat = construiesteAlimenteLaSalvare({ original: null, aRedefinitAlimentul: false, alimentNou: nou });
+    expect(rezultat).toEqual([nou]);
+  });
+
+  it('save fara modificari pe masa multi-ingredient -> identic (deep equal)', () => {
+    const original = [
+      aliment({ id: 'a1', nume: 'Pui', grame: 200, calorii: 330 }),
+      aliment({ id: 'a2', nume: 'Orez', grame: 150, calorii: 195 }),
+      aliment({ id: 'a3', nume: 'Salata', grame: 80, calorii: 15 }),
+    ];
+    const rezultat = construiesteAlimenteLaSalvare({ original, aRedefinitAlimentul: false, alimentNou: alimentNou() });
+    expect(rezultat).toStrictEqual(original);
+  });
+
+  it('redefinire completa (gramaj) pe masa multi-ingredient -> inlocuieste explicit cu alimentNou', () => {
+    const original = [aliment({ id: 'a1' }), aliment({ id: 'a2' })];
+    const rezultat = construiesteAlimenteLaSalvare({ original, aRedefinitAlimentul: true, alimentNou: alimentNou() });
+    expect(rezultat).toHaveLength(1);
+    expect(rezultat[0].nume).toBe('Piept de pui');
   });
 });
 

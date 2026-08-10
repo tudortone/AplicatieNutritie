@@ -16,6 +16,7 @@ import { router } from 'expo-router';
 import { Radius, Spacing } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import type { NotificationType } from '../context/NotificationBannerContext';
+import { isValidActionRoute } from '../lib/actionRoutes';
 
 export interface InAppNotificationProps {
   visible: boolean;
@@ -67,7 +68,9 @@ export default function InAppNotification({
   const topPosition = Math.max(insets.top + Spacing.sm, Platform.OS === 'android' ? 24 : 8);
 
   const runAction = () => {
-    if (!actionRoute) return;
+    // BUG-038: ruta acțiunii trece prin allowlist — o rută străină/învechită
+    // nu se navighează (ar ajunge în +not-found).
+    if (!actionRoute || !isValidActionRoute(actionRoute)) return;
     onDismiss();
     router.push(actionRoute as never);
   };
@@ -106,7 +109,7 @@ export default function InAppNotification({
           ) : null}
         </View>
 
-        {actionLabel && actionRoute ? (
+        {actionLabel && actionRoute && isValidActionRoute(actionRoute) ? (
           <Pressable
             onPress={runAction}
             accessibilityRole="button"

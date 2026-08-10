@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useGamificare } from './useGamificare';
+import { useGamificareActions } from '../context/GamificareContext';
 import { localDayKey } from '../lib/dateUtils';
 
 const LAST_OPENED_DATE_KEY = 'nutriai_last_opened_date';
@@ -24,7 +24,7 @@ export interface DailySyncResult {
 export function useDailySync(onNewDayDetected?: (result: DailySyncResult) => void) {
   const appState = useRef(AppState.currentState);
   const isChecking = useRef(false);
-  const { refreshGamificare } = useGamificare();
+  const { refreshGamificare } = useGamificareActions();
 
   const checkDailySync = useCallback(async () => {
     if (isChecking.current) return;

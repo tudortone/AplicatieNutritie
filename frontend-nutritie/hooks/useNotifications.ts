@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { useNotificationBanner } from '../context/NotificationBannerContext';
+import { useNotificationBannerActions } from '../context/NotificationBannerContext';
 import {
   getConsent,
   grantConsent,
@@ -32,7 +32,7 @@ if (!isExpoGo) {
 export function useNotifications() {
   const [enabled, setEnabledState] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
-  const { showBanner } = useNotificationBanner();
+  const { showBanner } = useNotificationBannerActions();
 
   // Starea se citește din consimțământul persistat, nu dintr-un boolean local:
   // supraviețuiește restartului și re-loginului.
@@ -99,7 +99,13 @@ export function useNotifications() {
         // Delegația programării către lib/notifications (sursa unică), cu
         // înregistrarea id-urilor create (cancel = doar al nostru).
         const ids = await scheduleDailyMealReminders(DEFAULT_MEAL_REMINDERS, accountId);
-        if (ids.length === 0) {
+
+        // BUG-037: all-or-nothing — consimțământul rămâne acordat DOAR dacă
+        // TOATE reminder-ele s-au programat. O programare parțială (OS-ul a
+        // eșuat la un trigger) lasă altfel consimțământul „acordat" cu memento
+        // lipsă — stare deconectată de realitate, vizibilă după restart/login.
+        if (ids.length !== DEFAULT_MEAL_REMINDERS.length) {
+          await cancelManagedReminders();
           await revokeConsent();
           setEnabledState(false);
           showBanner({

@@ -15,6 +15,7 @@ export interface MasaOfflinePayload {
   alimente: unknown[];
   data: string;
   created_at: string;
+  imagine_url?: string | null;
 }
 
 export interface SupabaseMinimalClient {
@@ -99,6 +100,11 @@ export async function processOfflineQueue(supabaseClient: SupabaseMinimalClient)
         tip_masa: masa.tip_masa,
         alimente: masa.alimente,
         data: masa.data,
+        // BUG-018: fara created_at, DB pune server-now si masa offline ajunge in
+        // ziua sincronizarii, nu in ziua consumului (useMeseAzi filtreaza dupa
+        // created_at). Tinem timestamp-ul din momentul salvarii.
+        created_at: masa.created_at,
+        imagine_url: masa.imagine_url ?? null,
       });
 
       if (error) {

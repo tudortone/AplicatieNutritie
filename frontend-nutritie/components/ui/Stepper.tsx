@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+// BUG-027: folosim același set de iconițe ca restul aplicației (lucide),
+// nu un amestec de familii MaterialCommunityIcons + lucide.
+import { Minus, Plus } from 'lucide-react-native';
 
 type Props = {
   label: string;
@@ -78,7 +80,7 @@ export function Stepper({
             { backgroundColor: colors.surfaceElevated, opacity: pressed || readOnly ? 0.5 : 1 },
           ]}
         >
-          <MaterialCommunityIcons name="minus" size={22} color={colors.textPrimary} />
+          <Minus size={22} color={colors.textPrimary} />
         </Pressable>
 
         <View style={styles.valueWrap}>
@@ -111,7 +113,7 @@ export function Stepper({
             { backgroundColor: colors.surfaceElevated, opacity: pressed || readOnly ? 0.5 : 1 },
           ]}
         >
-          <MaterialCommunityIcons name="plus" size={22} color={colors.textPrimary} />
+          <Plus size={22} color={colors.textPrimary} />
         </Pressable>
       </View>
     </View>

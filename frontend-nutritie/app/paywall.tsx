@@ -42,7 +42,12 @@ export default function PaywallScreen() {
     setBuying(null);
     if (ok) {
       notify.success('Premium activat', 'Mulțumim! Ai acces la toate funcțiile.');
-      router.back();
+      // BUG-033: back doar dacă există stack; altfel înapoi la tabs (nu rată moartă).
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)');
+      }
     } else {
       notify.warning('Achiziție anulată', 'Nu s-a finalizat plata.');
     }
@@ -62,7 +67,12 @@ export default function PaywallScreen() {
     const ok = await restore();
     if (ok) {
       notify.success('Restaurat', 'Abonamentul tău Premium e activ.');
-      router.back();
+      // BUG-033: back doar dacă există stack; altfel înapoi la tabs (nu rată moartă).
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(tabs)');
+      }
     } else {
       notify.warning('Nimic de restaurat', 'Nu am găsit achiziții anterioare pe acest cont.');
     }
@@ -74,11 +84,12 @@ export default function PaywallScreen() {
       <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
 
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Închide">
+        {/* BUG-030: țintă de atingere minimă 44×44 pentru butonul X (doar icon). */}
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Închide">
           <X size={22} color={colors.textSecondary} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>NutriAI Premium</Text>
-        <View style={{ width: 22 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       {isPremium ? (
@@ -89,7 +100,7 @@ export default function PaywallScreen() {
             Toate funcțiile sunt active pe acest cont.
           </Text>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
             style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.8 : 1 }]}
           >
             <Text style={[styles.primaryBtnText, { color: colors.background }]}>Înapoi la aplicație</Text>
@@ -192,6 +203,7 @@ const styles = StyleSheet.create({
   glowTop: { position: 'absolute', top: -120, right: -120, width: 380, height: 380, borderRadius: 190, opacity: 0.1 },
   glowBottom: { position: 'absolute', bottom: -120, left: -120, width: 320, height: 320, borderRadius: 160, opacity: 0.08 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 12 },
+  closeBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 16, fontWeight: '900' },
   scroll: { paddingHorizontal: 20, paddingBottom: 40 },
   hero: { alignItems: 'center', marginTop: 8, marginBottom: 20 },

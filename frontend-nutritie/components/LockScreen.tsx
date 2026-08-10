@@ -6,6 +6,7 @@ import {
   Pressable,
   Platform,
   ActivityIndicator,
+  BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
@@ -42,6 +43,13 @@ export default function LockScreen({ biometricType, onUnlock }: LockScreenProps)
     if (reduceMotion) return;
     pulseScale.value = withRepeat(withTiming(1.07, { duration: 1300 }), -1, true);
   }, [pulseScale, reduceMotion]);
+
+  // BUG-034: ecranul e overlay (nu rută) — înghite back-ul hardware Android
+  // cât timp este montat, altfel back-ul pop-aria ecranul de dedesubt.
+  React.useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, []);
 
   const shieldAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],

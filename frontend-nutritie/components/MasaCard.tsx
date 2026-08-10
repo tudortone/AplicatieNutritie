@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, { Layout } from 'react-native-reanimated';
 import { Clock, Pencil, Trash2, Lock } from 'lucide-react-native';
@@ -30,8 +30,11 @@ export const MasaCard = React.memo(function MasaCard({
   const alimenteSubList = useMemo(() => parseAlimente(masa), [masa.alimente]);
   const pozaUrl = obtinePozaMasa(masa);
 
+  // BUG-023: layout spring doar pe iOS. Pe Android spring-ul pe orice schimbare
+  // de listă (add/delete/edit) e fragil și scump cu multe mese; sistemul deja
+  // animă adăugările, iar aici spring-ul repornea pe toate cardurile vizibile.
   return (
-    <Animated.View layout={Layout.springify()} style={styles.cardContainer}>
+    <Animated.View layout={Platform.OS === 'ios' ? Layout.springify() : undefined} style={styles.cardContainer}>
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={() => {

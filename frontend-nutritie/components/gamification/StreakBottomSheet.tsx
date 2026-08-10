@@ -5,7 +5,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Flame, Award, CheckCircle2, ShieldCheck, X } from 'lucide-react-native';
 
 import { useTheme } from '../../context/ThemeContext';
-import { useGamificareContext } from '../../context/GamificareContext';
+import { useGamificareData } from '../../context/GamificareContext';
 
 export interface StreakBottomSheetRef {
   open: () => void;
@@ -22,7 +22,7 @@ const MILESTONES = [
 
 export const StreakBottomSheet = forwardRef<StreakBottomSheetRef>((_, ref) => {
   const { colors } = useTheme();
-  const { streak, xpTotal, nivel, detaliiNivel } = useGamificareContext();
+  const { streak, xpTotal, nivel, detaliiNivel } = useGamificareData();
   const [visible, setVisible] = useState(false);
 
   useImperativeHandle(ref, () => ({

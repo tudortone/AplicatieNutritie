@@ -13,6 +13,7 @@ import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut } from 'react-native-re
 import { Send, Sparkles, RotateCcw, BarChart3, Dumbbell, ChefHat, Zap } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
+import { useCurrentDayKey } from '../../hooks/useCurrentDayKey';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -20,29 +21,11 @@ import BouncingDot from '../../components/BouncingDot';
 import { RecipeGeneratorModal } from '../../components/RecipeGeneratorModal';
 import { supabase } from '../../supabase';
 import { ConfirmSheet } from '../../components/ui/ConfirmSheet';
+import { construiesteRinduriMasaChat, esteEroareDuplicate } from '../../lib/payloadMese';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import KeyboardAwareScreen, { CONTENT_BOTTOM_PADDING } from '@/components/ui/KeyboardAwareScreen';
-
-interface MealProposalItem {
-  name: string;
-  qty: number;
-  unit: string;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-  kcal: number;
-}
-interface MealProposal {
-  type: string;
-  meal_type?: string;
-  items: MealProposalItem[];
-  totals: {
-    protein_g: number;
-    carbs_g: number;
-    fat_g: number;
-    kcal: number;
-  };
-}
+import KeyboardAwareScreen, { useContentBottomPadding } from '@/components/ui/KeyboardAwareScreen';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { parseMealProposal, type MealProposal } from '../../lib/parseMealProposal';
 
 // Generator de id stabil pentru mesajele de chat (folosit ca `key` in lista).
 const newMsgId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -84,58 +67,6 @@ function hashString(s: string): string {
 function cheieIdempotenta(mesaj: string, mesaje: ChatMessage[], userId?: string): string {
   const amprenta = mesaje.map(m => `${m.role}:${m.text}`).join('|');
   return hashString(`${userId || 'anon'}|${mesaj}|${amprenta}`);
-}
-
-function parseMealProposal(text: any): MealProposal | null {
-  if (!text) return null;
-  
-  let targetObj: any = null;
-  if (typeof text === 'object') {
-    targetObj = text;
-  } else {
-    try {
-      const stringToParse = String(text);
-      const startIndex = stringToParse.indexOf('{');
-      const endIndex = stringToParse.lastIndexOf('}');
-      if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-        targetObj = JSON.parse(stringToParse.substring(startIndex, endIndex + 1));
-      }
-    } catch (e) {
-      console.warn("Eroare parsare JSON meal proposal:", e);
-    }
-  }
-
-  if (targetObj && Array.isArray(targetObj.items) && targetObj.items.length > 0) {
-    let calcKcal = 0, calcP = 0, calcC = 0, calcF = 0;
-    targetObj.items.forEach((it: any) => {
-      calcKcal += Number(it.kcal || it.calorii || 0);
-      calcP += Number(it.protein_g || it.proteine || 0);
-      calcC += Number(it.carbs_g || it.carbohidrati || 0);
-      calcF += Number(it.fat_g || it.grasimi || 0);
-    });
-
-    const totals = (targetObj.totals && Number(targetObj.totals.kcal || 0) > 0)
-      ? targetObj.totals
-      : { kcal: calcKcal, protein_g: calcP, carbs_g: calcC, fat_g: calcF };
-
-    return {
-      type: "MEAL_PROPOSAL",
-      meal_type: targetObj.meal_type || "gustare",
-      items: targetObj.items.map((it: any) => ({
-        name: it.name || it.nume || "Aliment",
-        qty: Number(it.qty || it.grame || 100),
-        unit: it.unit || "g",
-        protein_g: Number(it.protein_g || it.proteine || 0),
-        carbs_g: Number(it.carbs_g || it.carbohidrati || 0),
-        fat_g: Number(it.fat_g || it.grasimi || 0),
-        // FIX: fiber_g era pierdut aici, deci la salvare câmpul rămânea mereu 0.
-        fiber_g: Number(it.fiber_g || it.fibre || 0),
-        kcal: Number(it.kcal || it.calorii || 0)
-      })),
-      totals
-    };
-  }
-  return null;
 }
 
 /**
@@ -197,7 +128,10 @@ export default function ChatScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { session } = useAuth();
+  const currentDayKey = useCurrentDayKey();
   const insets = useSafeAreaInsets();
+  const { tabBarHeight } = useResponsiveLayout();
+  const contentBottomPadding = useContentBottomPadding();
   const [chatInput, setChatInput] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
   const [recipeModalVisible, setRecipeModalVisible] = useState(false);
@@ -245,25 +179,75 @@ export default function ChatScreen() {
     }
   }, [params?.prompt]);
 
-  const getChatStorageKey = () => `chat_history_${session?.user?.id || 'anon'}`;
+  // BUG-006: istoricul chat-ului e separat per zi locala (chat_history_<uid>_<zi>).
+  // Fara granita de zi, conversatia de ieri aparea in fata utilizatorului azi, iar
+  // key-ul instabil fara data + deps [] creau un race care putea incarca istoricul
+  // gresit (anon vs user) si chiar sa-l suprascrie.
+  const getChatStorageKey = useCallback(() => {
+    const userId = session?.user?.id || 'anon';
+    return `chat_history_${userId}_${currentDayKey}`;
+  }, [session?.user?.id, currentDayKey]);
 
+  // Cheia zilei/sesiunii la care apartin mesajele afisate in prezent. La rotirea
+  // miezului noptii, mesajele vechi nu mai trebuie salvate sub cheia zilei noi.
+  const mesajeKeyRef = useRef<string | null>(null);
+
+  // Migrare unica + incarcare istoric. Deps pe [session, currentDayKey] repara
+  // race-ul de la deps []: istoricul se (re)incarca la login/logout si se roteste
+  // la o zi noua (zi noua fara istoric = mesaj de bun venit, nu istoricul vechi).
   useEffect(() => {
-    const loadHistory = async () => {
+    const userId = session?.user?.id || 'anon';
+    const storageKey = `chat_history_${userId}_${currentDayKey}`;
+    const legacyKey = `chat_history_${userId}`;
+    let activ = true;
+
+    (async () => {
+      // Migrare idempotenta: cheia veche fara zi (versiunile pre-update) se muta
+      // in cheia zilei curente o singura data, ca istoricul sa nu se piarda.
       try {
-        const storageKey = getChatStorageKey();
+        const [legacy, dayVal] = await Promise.all([
+          AsyncStorage.getItem(legacyKey),
+          AsyncStorage.getItem(storageKey),
+        ]);
+        if (legacy && !dayVal) {
+          await AsyncStorage.setItem(storageKey, legacy);
+        }
+        if (legacy) {
+          await AsyncStorage.removeItem(legacyKey);
+        }
+      } catch {
+        // migrare necritica; istoricul vechi ramane daca nu putem muta.
+      }
+
+      if (!activ) return;
+      try {
         const saved = await AsyncStorage.getItem(storageKey);
+        let parsed: ChatMessage[] | null = null;
         if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setMesaje(parsed);
+          try {
+            const p = JSON.parse(saved);
+            if (Array.isArray(p) && p.length > 0) parsed = p;
+          } catch {
+            parsed = null;
           }
+        }
+        if (parsed && parsed.length > 0) {
+          setMesaje(parsed);
+          mesajeKeyRef.current = storageKey;
+        } else if (mesajeKeyRef.current !== storageKey) {
+          // zi/sesiune noua fara istoric salvat -> pornim curat.
+          setMesaje([
+            { id: newMsgId(), role: 'ai', text: 'Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.' }
+          ]);
+          mesajeKeyRef.current = storageKey;
         }
       } catch (e) {
         console.error('Eroare la încărcarea istoricului chat:', e);
       }
-    };
-    loadHistory();
-  }, []);
+    })();
+
+    return () => { activ = false; };
+  }, [session?.user?.id, currentDayKey]);
 
   // Salvare istoric debounce-uită (800ms): la mesaje succesive rapide scriem o
   // singură dată în AsyncStorage, iar la unmount golitm orice salvare restantă.
@@ -273,25 +257,31 @@ export default function ChatScreen() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
-      AsyncStorage.setItem(getChatStorageKey(), JSON.stringify(mesaje.slice(-50))).catch((e) =>
+      const key = mesajeKeyRef.current ?? getChatStorageKey();
+      // BUG-039: istoricul zilei se salvează INTEGRAL (nu ultimele 50) — altfel
+      // conversațiile lungi pierdeau primele mesaje la reîncărcare. Contextul
+      // trimis către model rămâne limitat la ultimele (slice la trimitere).
+      AsyncStorage.setItem(key, JSON.stringify(mesaje)).catch((e) =>
         console.error('Eroare la salvarea istoricului chat:', e),
       );
     }, 800);
-  }, [mesaje]);
+  }, [mesaje, getChatStorageKey]);
 
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
-        const restant = mesajeRef.current.slice(-50);
+        const restant = mesajeRef.current;
         if (restant.length > 1) {
-          AsyncStorage.setItem(getChatStorageKey(), JSON.stringify(restant)).catch((e) =>
+          const key = mesajeKeyRef.current ?? getChatStorageKey();
+          AsyncStorage.setItem(key, JSON.stringify(restant)).catch((e) =>
             console.error('Eroare la salvarea istoricului chat:', e),
           );
         }
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // CHAT-002: la părăsirea ecranului anulăm cererea AI în zbor. Serverul vede
@@ -491,43 +481,29 @@ export default function ChatScreen() {
     setSavingProposal(true);
 
     try {
-      // 2. Extractor brutal de numere (scoate 'g', 'kcal', spații etc.)
-      const parseStrictNumber = (val: any) => {
-        if (val === undefined || val === null) return 0;
-        const numStr = String(val).replace(/[^0-9.-]+/g, "");
-        const parsed = Number(numStr);
-        return isNaN(parsed) ? 0 : parsed;
-      };
-
-      // 3. Inserarea batch a tuturor alimentelor o singură dată
-      const tipMasa = mealProposal.meal_type || 'gustare';
-      // FIX: coloanele `data` si `ora` ramaneau mereu NULL (doar created_at era populat),
-      // iar valorile halucinate de AI puteau depasi CHECK-urile din Postgres (calorii <= 15000,
-      // macro <= 2000) => insert respins cu eroare bruta afisata utilizatorului.
+      // 3. Inserarea batch a alimentelor o singură dată. Valorile AI sunt
+      // normalizate și clampate la limitele CHECK-urilor din Postgres (BUG-007),
+      // tip_masa e adus la valorile valide, iar fiecare rând primește un `id`
+      // UUID determinist — reluarea aceleiași propuneri se ciocnește pe PK
+      // (23505), fără rânduri duplicate.
       const acumMasa = new Date();
-      const ziLocala = `${acumMasa.getFullYear()}-${String(acumMasa.getMonth() + 1).padStart(2, '0')}-${String(acumMasa.getDate()).padStart(2, '0')}`;
-      const oraLocala = acumMasa.toTimeString().slice(0, 8);
-      const clampVal = (v: number, max: number) => Math.max(0, Math.min(max, Number.isFinite(v) ? v : 0));
-      const rows = mealProposal.items.map((item: any) => ({
+      const rows = construiesteRinduriMasaChat({
         user_id: session.user.id,
-        nume: `${item.name} (${item.qty}${item.unit || 'g'})`,
-        calorii: clampVal(Math.round(parseStrictNumber(item.kcal)), 10000), // Caloriile rămân rotunjite
-        proteine: clampVal(parseStrictNumber(item.protein_g), 1000), // Păstrăm zecimalele
-        carbohidrati: clampVal(parseStrictNumber(item.carbs_g), 2000),
-        grasimi: clampVal(parseStrictNumber(item.fat_g), 1000),
-        // Salveaza si fibrele din propunerea AI în propunerea AI dar nu era salvat → câmpul rămânea 0
-        fibre: clampVal(Math.round(parseStrictNumber(item.fiber_g)), 500),
-        data: ziLocala,
-        ora: oraLocala,
-        tip_masa: tipMasa,
-      }));
+        items: mealProposal.items,
+        now: acumMasa,
+        meal_type: mealProposal.meal_type,
+      });
 
       const { error } = await supabase.from('mese').insert(rows);
 
       if (error) {
-        console.error("Eroare Supabase:", error);
-        Alert.alert(t('alerts.titluri.eroareLaSalvare'), t('alerts.mesaje.bazaDateRefuza', { eroare: error.message }));
-        throw error;
+        // Idempotență: propunerea a fost deja adăugată (același id) — nu se
+        // creează duplicat; o tratăm ca succes.
+        if (!esteEroareDuplicate(error)) {
+          console.error("Eroare Supabase:", error);
+          Alert.alert(t('alerts.titluri.eroareLaSalvare'), t('alerts.mesaje.bazaDateRefuza', { eroare: error.message }));
+          throw error;
+        }
       }
 
       // 4. Finalizare cu succes
@@ -573,7 +549,9 @@ export default function ChatScreen() {
     setTimeout(() => setShowNewChatBanner(false), 3200);
   };
 
-  const inputBottomPadding = isKeyboardVisible ? 10 : insets.bottom + 60;
+  // BUG-010: paddingul de jos al inputului = înălțimea reală a tab-barului (nu
+  // constanta 60), cu spațiu de respirație când tastatura e ascunsă.
+  const inputBottomPadding = isKeyboardVisible ? 10 : tabBarHeight + 8;
 
   return (
     <View style={[styles.outerContainer, { backgroundColor: colors.background }]}>
@@ -636,7 +614,7 @@ export default function ChatScreen() {
         {mesaje.length <= 1 ? (
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={[styles.emptyChatContainer, { paddingBottom: CONTENT_BOTTOM_PADDING }]}
+            contentContainerStyle={[styles.emptyChatContainer, { paddingBottom: contentBottomPadding }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
@@ -702,7 +680,7 @@ export default function ChatScreen() {
               contentContainerStyle={{
                 paddingHorizontal: 20,
                 paddingTop: 18,
-                paddingBottom: CONTENT_BOTTOM_PADDING,
+                paddingBottom: contentBottomPadding,
               }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"

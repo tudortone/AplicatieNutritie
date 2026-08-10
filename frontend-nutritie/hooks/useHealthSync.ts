@@ -203,14 +203,17 @@ export function useHealthSync(): HealthSyncState {
   const initHealth = useCallback(async () => {
     setLoading(true);
     try {
-      // Solicităm și verificăm permisiunile pentru senzorul de pași
+      // BUG-005: nu mai cerem permisiunea OS la fiecare boot (prompt repetat).
+      // Verificăm doar hardware-ul și permisiunea DEJA acordată; promptul OS se
+      // afișează abia la primul toggle explicit (toggleSync). Ambele condiții:
+      // senzor prezent ȘI permisiune acordată — fără prompt, fără fals „activ".
       let available = false;
       try {
-        const permResult = await Pedometer.requestPermissionsAsync();
-        // Ambele condiții: hardware prezent ȘI permisiune acordată. Înainte,
-        // `||` raporta sincronizarea activă când senzorul exista chiar dacă
-        // permisiunea era refuzată.
-        available = permResult.granted && (await Pedometer.isAvailableAsync());
+        const [permResult, hardware] = await Promise.all([
+          Pedometer.getPermissionsAsync(),
+          Pedometer.isAvailableAsync(),
+        ]);
+        available = permResult.granted && hardware;
       } catch {
         // Nu putem confirma permisiunea — fail-safe: indisponibil.
         available = false;
@@ -234,7 +237,7 @@ export function useHealthSync(): HealthSyncState {
       const storedProvider = await AsyncStorage.getItem(HEALTH_PROVIDER_KEY);
       if (storedProvider) setSelectedProvider(storedProvider as HealthProvider);
 
-      if (enabled) {
+      if (enabled && available) {
         await fetchStepsToday(available, parseInt(storedWeight || '75', 10));
         startWatchingSteps();
       }

@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
-import { useNotificationBanner } from './NotificationBannerContext';
+import { useNotificationBannerActions } from './NotificationBannerContext';
 import { useDailyReset } from '../hooks/useDailyReset';
 
 export interface QuestZilnic {
@@ -95,22 +95,46 @@ interface GamificareContextType extends StareGamificare {
   detaliiNivel: ReturnType<typeof calculeazaNivel>;
 }
 
-const GamificareContext = createContext<GamificareContextType>({
-  ...STARE_INITIALA,
+// BUG-024: contextul e împărțit pe două — acțiunile (setQuesturiAzi, adaugaProgres,
+// etc., stabile prin useCallback) și datele (stare, detaliiNivel). Consumatorii care
+// doar înregistrează progres (ex: AddMealBottomSheet) nu mai re-renderizează la
+// fiecare schimbare de stare globală.
+export type GamificareActions = Pick<
+  GamificareContextType,
+  'setQuesturiAzi' | 'adaugaProgres' | 'revendicaRecompensaZilnica' | 'refreshGamificare'
+>;
+export type GamificareData = Omit<
+  GamificareContextType,
+  'setQuesturiAzi' | 'adaugaProgres' | 'revendicaRecompensaZilnica' | 'refreshGamificare'
+>;
+
+const GamificareActionsContext = createContext<GamificareActions>({
   setQuesturiAzi: () => {},
   adaugaProgres: () => {},
   revendicaRecompensaZilnica: () => {},
   refreshGamificare: async () => {},
+});
+
+const GamificareDataContext = createContext<GamificareData>({
+  ...STARE_INITIALA,
   toateQuesturileCompletate: false,
   detaliiNivel: calculeazaNivel(0),
 });
 
+export function useGamificareActions(): GamificareActions {
+  return useContext(GamificareActionsContext);
+}
+
+export function useGamificareData(): GamificareData {
+  return useContext(GamificareDataContext);
+}
+
 export function useGamificareContext() {
-  return useContext(GamificareContext);
+  return { ...useGamificareActions(), ...useGamificareData() };
 }
 
 export function GamificareProvider({ children }: { children: React.ReactNode }) {
-  const { showNotification } = useNotificationBanner();
+  const { showNotification } = useNotificationBannerActions();
   const [stare, setStare] = useState<StareGamificare>(STARE_INITIALA);
   const stareRef = useRef(stare);
 
@@ -183,14 +207,16 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
     void refreshGamificare();
   }, [refreshGamificare]);
 
+  // BUG-008: updaterul de setState trebuie sa fie PUR sub React Compiler — fara
+  // side effects (AsyncStorage) si fara mutarea ref-urilor in interior. Calculam
+  // `next` din stareRef.current (oglinda sincrona a ultimei stari) IN AFARA
+  // setState, apoi aplicam starea si persistam separat.
   const setQuesturiAzi = useCallback((updater: React.SetStateAction<QuestZilnic[]>) => {
-    setStare((prev) => {
-      const questuri = typeof updater === 'function' ? updater(prev.questuriAzi) : updater;
-      const next = { ...prev, questuriAzi: questuri };
-      stareRef.current = next;
-      AsyncStorage.setItem(GAMIFICARE_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
+    const questuri = typeof updater === 'function' ? updater(stareRef.current.questuriAzi) : updater;
+    const next = { ...stareRef.current, questuriAzi: questuri };
+    setStare(next);
+    stareRef.current = next;
+    AsyncStorage.setItem(GAMIFICARE_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
   }, []);
 
   useDailyReset({ questuriAzi: stare.questuriAzi, setQuesturiAzi });
@@ -223,23 +249,24 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
     [stare.questuriAzi],
   );
 
-  const value = useMemo(() => ({
-    ...stare,
+  const actionsValue = useMemo<GamificareActions>(() => ({
     setQuesturiAzi,
     adaugaProgres,
     revendicaRecompensaZilnica,
     refreshGamificare,
-    toateQuesturileCompletate,
-    detaliiNivel,
-  }), [
-    stare,
-    setQuesturiAzi,
-    adaugaProgres,
-    revendicaRecompensaZilnica,
-    refreshGamificare,
-    toateQuesturileCompletate,
-    detaliiNivel,
-  ]);
+  }), [setQuesturiAzi, adaugaProgres, revendicaRecompensaZilnica, refreshGamificare]);
 
-  return <GamificareContext.Provider value={value}>{children}</GamificareContext.Provider>;
+  const dataValue = useMemo<GamificareData>(() => ({
+    ...stare,
+    toateQuesturileCompletate,
+    detaliiNivel,
+  }), [stare, toateQuesturileCompletate, detaliiNivel]);
+
+  return (
+    <GamificareActionsContext.Provider value={actionsValue}>
+      <GamificareDataContext.Provider value={dataValue}>
+        {children}
+      </GamificareDataContext.Provider>
+    </GamificareActionsContext.Provider>
+  );
 }
