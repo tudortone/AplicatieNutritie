@@ -143,7 +143,7 @@ export default function HomeScreen() {
     refresh 
   } = useMeseAzi(dataSelectata);
   const { pahare, tinta: tintaPahare, adaugaPahar, scadePahar } = useApa();
-  const { steps, activeCalories, stepGoal, isEnabled, isAvailable, setNewStepGoal, toggleSync, refreshSteps } = useHealthSync();
+  const { steps, activeCalories, stepGoal, isEnabled, isAvailable, setNewStepGoal, toggleSync, refreshSteps, addManualSteps } = useHealthSync();
   const { totalCaloriiArse, antrenamente, refresh: refreshAntrenamente } = useAntrenamente();
   const { exercitii } = useExercitii();
   const [viewSideHome, setViewSideHome] = useState<'front' | 'back'>('front');
@@ -769,13 +769,22 @@ export default function HomeScreen() {
                       <Text style={[s.healthCalories, { color: colors.warning }]}>+{activeCalories} kcal arse</Text>
                     </View>
                   </View>
+                  <View style={[s.manualAddRow, { borderColor: colors.cardBorder }]}>
+                    <Text style={[s.manualAddHint, { color: colors.textTertiary }]}>Adaugă manual</Text>
+                    <TouchableOpacity onPress={() => addManualSteps(500)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel="Adaugă 500 de pași manual" hitSlop={6}>
+                      <Text style={[s.manualAddBtnText, { color: colors.accent }]}>+500</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => addManualSteps(1000)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel="Adaugă 1000 de pași manual" hitSlop={6}>
+                      <Text style={[s.manualAddBtnText, { color: colors.accent }]}>+1000</Text>
+                    </TouchableOpacity>
+                  </View>
                 </>
               ) : (
                 <View style={s.healthOfflineBox}>
                   <Text style={[s.healthOfflineText, { color: colors.textTertiary }]}>
                     {isEnabled
-                      ? 'Permisiunea pentru senzor nu a fost acordată încă.'
-                      : 'Activează pașii pentru a adăuga caloriile arse din mișcare în balanța ta de dietă.'}
+                      ? 'Senzorul nu e detectat sau permisiunea nu a fost acordată. Poți oricând adăuga pașii manual mai jos.'
+                      : 'Activează pașii pentru a adăuga caloriile arse din mișcare în balanța ta de dietă — sau adaugă-i manual.'}
                   </Text>
                   <TouchableOpacity
                     onPress={() => toggleSync(true)}
@@ -785,6 +794,15 @@ export default function HomeScreen() {
                   >
                     <Text style={[s.connectBtnText, { color: colors.background }]}>Activează</Text>
                   </TouchableOpacity>
+                  <View style={[s.manualAddRow, { borderColor: colors.cardBorder, marginTop: 10 }]}>
+                    <Text style={[s.manualAddHint, { color: colors.textTertiary }]}>Adaugă manual</Text>
+                    <TouchableOpacity onPress={() => addManualSteps(500)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel="Adaugă 500 de pași manual" hitSlop={6}>
+                      <Text style={[s.manualAddBtnText, { color: colors.accent }]}>+500</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => addManualSteps(1000)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel="Adaugă 1000 de pași manual" hitSlop={6}>
+                      <Text style={[s.manualAddBtnText, { color: colors.accent }]}>+1000</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
             </LinearGradient>
@@ -996,6 +1014,10 @@ const s = StyleSheet.create({
   healthCalories: { fontSize: 13, fontWeight: '800' },
   healthOfflineBox: { backgroundColor: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)' },
   healthOfflineText: { fontSize: 13, lineHeight: 18, textAlign: 'center' },
+  manualAddRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
+  manualAddHint: { fontSize: 12, fontWeight: '600', flex: 1 },
+  manualAddBtn: { minWidth: 56, height: 34, borderRadius: 10, borderWidth: 1, paddingHorizontal: 10, justifyContent: 'center', alignItems: 'center' },
+  manualAddBtnText: { fontSize: 13, fontWeight: '900' },
   goalEditRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   goalInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, minWidth: 84, fontSize: 15, fontWeight: '800' },
   goalBtn: { minWidth: 44, height: 38, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 12, borderWidth: 1 },

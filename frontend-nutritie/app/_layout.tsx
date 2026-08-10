@@ -2,7 +2,7 @@ import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, ActivityIndicator, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -18,6 +18,7 @@ import { NotificationBannerProvider } from '../context/NotificationBannerContext
 import { GamificareProvider } from '../context/GamificareContext';
 import { PremiumProvider } from '../context/PremiumContext';
 import { useDailySync } from '../hooks/useDailySync';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import OfflineBanner from '../components/OfflineBanner';
 import { GlobalErrorBoundary } from '../components/GlobalErrorBoundary';
 import { buildApiUrl } from '../lib/api';
@@ -148,6 +149,9 @@ function RootNavigator() {
   const { isOnboardingDone, syncFromAsyncStorage, setOnboardingDone } = useAppStore();
   const { isLocked, biometricType, unlockApp } = useBiometrics();
   useDailySync();
+  // BUG-043: monitorizăm starea de conectivitate ca să descărcăm coada de mese
+  // offline la tranzitia offline -> online (pe lângă descărcarea din start, mai jos).
+  const { isOffline } = useNetworkStatus();
   const router = useRouter();
   const segments = useSegments();
 
@@ -190,6 +194,25 @@ function RootNavigator() {
     // esuata), la fel cum procesam coada de mese offline.
     sincronizeazaTargeturiLocale().catch(() => {});
   }, [session]);
+
+  // BUG-043: la SINGURA tranzitie offline -> online descărcăm coada de mese
+  // offline (masa salvată manual/scan „Salvat offline" ajunge în jurnal fără ca
+  // utilizatorul să facă ceva). Nu reluăm în loop: doar pe muchie, doar autentificat,
+  // și nu reintrăm cât timp o descărcare e deja în curs. processOfflineQueue e
+  // idempotent — return early dacă coada e goală și FIFO la eroare.
+  const aFostOfflineRef = useRef<boolean | null>(null);
+  const descarcareInCursRef = useRef(false);
+  useEffect(() => {
+    const esteOfflineAcum = isOffline;
+    const aFostOffline = aFostOfflineRef.current;
+    aFostOfflineRef.current = esteOfflineAcum;
+    if (!session || aFostOffline !== true || esteOfflineAcum) return;
+    if (descarcareInCursRef.current) return;
+    descarcareInCursRef.current = true;
+    processOfflineQueue(supabase as unknown as SupabaseMinimalClient)
+      .catch(() => {})
+      .finally(() => { descarcareInCursRef.current = false; });
+  }, [isOffline, session]);
 
   useEffect(() => {
     if (loadingAuth) return;

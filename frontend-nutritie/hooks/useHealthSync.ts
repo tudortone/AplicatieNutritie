@@ -3,21 +3,15 @@ import { Platform, AppState, AppStateStatus } from 'react-native';
 import { Pedometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import { ziLocalDeAzi, mergePașiTotal, adaugaPașiManual } from '../lib/healthSteps';
 
 const HEALTH_SYNC_ENABLED_KEY = 'health_sync_enabled';
 const STEP_GOAL_KEY = 'health_step_goal';
 const MANUAL_STEPS_KEY_PREFIX = 'manual_steps_';
 const HEALTH_PROVIDER_KEY = 'health_sync_provider';
-
-// Cheia zilei se derivează din calendarul LOCAL, nu UTC — pașii manuali trebuie
-// să se alinieze la fereastra „de la miezul nopții local" din getStepCountAsync.
-function ziLocalDeAzi(): string {
-  const acum = new Date();
-  const an = acum.getFullYear();
-  const luna = String(acum.getMonth() + 1).padStart(2, '0');
-  const ziua = String(acum.getDate()).padStart(2, '0');
-  return `${an}-${luna}-${ziua}`;
-}
+// Totalul zilnic (senzor live + manual) persistat pe zi LOCALĂ, ca numărul să
+// supraviețuiască repornirilor aplicației — pe Android singura sursă disponibilă.
+const STEPS_TOTAL_KEY_PREFIX = 'steps_total_';
 
 export type HealthProvider =
   | 'google_fit'
@@ -62,7 +56,7 @@ export interface HealthSyncState {
   setProvider: (provider: HealthProvider) => Promise<void>;
   toggleSync: (enable: boolean) => Promise<boolean>;
   setNewStepGoal: (goal: number) => Promise<void>;
-  addSimulatedSteps: (amount: number) => Promise<void>;
+  addManualSteps: (amount: number) => Promise<void>;
   refreshSteps: () => Promise<void>;
 }
 
@@ -89,17 +83,29 @@ export function useHealthSync(): HealthSyncState {
   // valoare cumulativă ca să calculăm delta reală; `null` = următorul eveniment
   // re-stabilește linia de bază (după o citire autoritativă sau repornire watch).
   const lastWatchStepsRef = useRef<number | null>(null);
+  // Oglindă sincronă a totalului afișat, ca flushSteps/addManualSteps să persiste
+  // valoarea corectă fără a depinde de ordinea rulării efectelor React.
+  const stepsRef = useRef(0);
+  useEffect(() => {
+    stepsRef.current = steps;
+  }, [steps]);
+
+  const persistaTotalPași = useCallback(async (total: number, todayStr: string) => {
+    try {
+      await AsyncStorage.setItem(`${STEPS_TOTAL_KEY_PREFIX}${todayStr}`, String(total));
+    } catch {}
+  }, []);
 
   const flushSteps = useCallback(() => {
     const buffered = stepBufferRef.current;
     stepBufferRef.current = 0;
     if (buffered <= 0) return;
-    setSteps((prev) => {
-      const nextSteps = prev + buffered;
-      setActiveCalories(Math.round(nextSteps * 0.04 * (weightRef.current / 70)));
-      return nextSteps;
-    });
-  }, []);
+    const nextSteps = stepsRef.current + buffered;
+    stepsRef.current = nextSteps;
+    setSteps(nextSteps);
+    setActiveCalories(Math.round(nextSteps * 0.04 * (weightRef.current / 70)));
+    persistaTotalPași(nextSteps, ziLocalDeAzi());
+  }, [persistaTotalPași]);
 
   useEffect(() => {
     weightRef.current = weight;
@@ -115,10 +121,15 @@ export function useHealthSync(): HealthSyncState {
       const manualKey = `${MANUAL_STEPS_KEY_PREFIX}${todayStr}`;
       const manualStr = await AsyncStorage.getItem(manualKey);
       const manualSteps = manualStr ? parseInt(manualStr, 10) : 0;
+      const storedStr = await AsyncStorage.getItem(`${STEPS_TOTAL_KEY_PREFIX}${todayStr}`);
+      const storedTotal = storedStr ? parseInt(storedStr, 10) : 0;
 
       let sensorSteps = 0;
       let citireSenzorOk = false;
-      if (sensorAvailable) {
+      // Android: getStepCountAsync nu este suportat (NotSupportedException), deci
+      // citirea „de la miezul nopții" se face doar pe iOS. Pe Android restaurăm
+      // totalul persistat al zilei și continuăm acumularea din watch-ul live.
+      if (sensorAvailable && Platform.OS === 'ios') {
         const end = new Date();
         const start = new Date();
         start.setHours(0, 0, 0, 0);
@@ -142,9 +153,12 @@ export function useHealthSync(): HealthSyncState {
         lastStepFlushRef.current = 0;
       }
 
-      // Pașii totali sunt suma celor citiți din senzor și a celor adăugați/simulați pentru testare
-      const totalSteps = sensorSteps + manualSteps;
+      // Pașii totali: pe iOS senzorul + manualul; pe Android totalul persistat
+      // (senzor live + manual), restaurat la fiecare deschidere/revenire.
+      const totalSteps = mergePașiTotal({ storedTotal, manualSteps, sensorSteps, citireSenzorOk });
+      stepsRef.current = totalSteps;
       setSteps(totalSteps);
+      await persistaTotalPași(totalSteps, todayStr);
 
       // Calcul calorii arse: formula aproximativă ~0.04 kcal/pas pentru 70kg ajustat la greutatea reală
       const burned = Math.round(totalSteps * 0.04 * (currentWeight / 70));
@@ -152,7 +166,7 @@ export function useHealthSync(): HealthSyncState {
     } catch (e) {
       console.error('Eroare citire pași azi:', e);
     }
-  }, [isAvailable, weight]);
+  }, [isAvailable, weight, persistaTotalPași]);
 
   // 3. Monitorizare în timp real a pașilor (dacă aplicația este deschisă)
   const startWatchingSteps = useCallback(() => {
@@ -334,23 +348,26 @@ export function useHealthSync(): HealthSyncState {
     }
   };
 
-  // 6. Funcție de simulare/adăugare pași manual (utilă pentru testare în Expo Go sau antrenamente manuale)
-  const addSimulatedSteps = async (amount: number) => {
+  // 6. Adăugare pași manual — funcționează și fără senzor; persistă totalul zilei.
+  const addManualSteps = async (amount: number) => {
+    if (!Number.isFinite(amount) || amount <= 0) return;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const todayStr = ziLocalDeAzi();
       const manualKey = `${MANUAL_STEPS_KEY_PREFIX}${todayStr}`;
       const manualStr = await AsyncStorage.getItem(manualKey);
       const currentManual = manualStr ? parseInt(manualStr, 10) : 0;
-      const nextManual = currentManual + amount;
+      const nextManual = currentManual + Math.round(amount);
       await AsyncStorage.setItem(manualKey, String(nextManual));
-      
-      const nextTotal = steps + amount;
+
+      const nextTotal = adaugaPașiManual(stepsRef.current, amount);
+      stepsRef.current = nextTotal;
       setSteps(nextTotal);
       setActiveCalories(Math.round(nextTotal * 0.04 * (weightRef.current / 70)));
+      await persistaTotalPași(nextTotal, todayStr);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
-      console.error('Eroare simulare pași:', e);
+      console.error('Eroare adăugare pași manual:', e);
     }
   };
 
@@ -371,7 +388,7 @@ export function useHealthSync(): HealthSyncState {
     setProvider,
     toggleSync,
     setNewStepGoal,
-    addSimulatedSteps,
+    addManualSteps,
     refreshSteps,
   };
 }

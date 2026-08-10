@@ -13,7 +13,8 @@ import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Flame, Activity, PlusCircle } from 'lucide-react-native';
+import { Flame, Activity, PlusCircle, ChevronRight, Eye, EyeOff } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi, type CategorieMasaGrupata } from '../../hooks/useMeseAzi';
 import { useCurrentDayKey } from '../../hooks/useCurrentDayKey';
@@ -27,7 +28,8 @@ import { SkeletonLoader } from '../../components/SkeletonLoader';
 import { MacroRing } from '../../components/MacroRing';
 import { AddMealBottomSheet, AddMealBottomSheetRef } from '../../components/AddMealBottomSheet';
 import { MonthCalendar } from '../../components/MonthCalendar';
-import { MealDetailsModal } from '../../components/MealDetailsModal';
+import { MealDetailsSheet, MealDetailsSheetRef } from '../../components/MealDetailsModal';
+import { CategorieDetailSheet, CategorieDetailSheetRef } from '../../components/jurnal/CategorieDetailSheet';
 import { MasaCard } from '../../components/MasaCard';
 import { actualizeazaMasaCuPoza } from '../../lib/mealUtils';
 import KeyboardAwareScreen from '@/components/ui/KeyboardAwareScreen';
@@ -46,8 +48,10 @@ export default function HistoryScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const [dataSelectata, setDataSelectata] = useState(new Date());
-  const [selectedMasaDetail, setSelectedMasaDetail] = useState<Masa | null>(null);
+  const [afisarePoze, setAfisarePoze] = useState(true);
   const mealSheetRef = useRef<AddMealBottomSheetRef>(null);
+  const categorieSheetRef = useRef<CategorieDetailSheetRef>(null);
+  const mealDetailSheetRef = useRef<MealDetailsSheetRef>(null);
   const { topInset, scrollPaddingTop, scrollPaddingBottom } = useResponsiveLayout();
 
   // BUG-001: cand ziua locala se schimba, avansam la noua zi DOAR daca utilizatorul
@@ -64,6 +68,21 @@ export default function HistoryScreen() {
       prevDayKeyRef.current = currentDayKey;
     }
   }, [currentDayKey]);
+
+  // Comutator „afișare poze” pentru jurnal (journall-only, persistă în AsyncStorage).
+  useEffect(() => {
+    AsyncStorage.getItem('jurnal_poze_activate')
+      .then((v) => {
+        if (v !== null) setAfisarePoze(v === '1');
+      })
+      .catch(() => {});
+  }, []);
+
+  const toggleAfisarePoze = () => {
+    const val = !afisarePoze;
+    setAfisarePoze(val);
+    AsyncStorage.setItem('jurnal_poze_activate', val ? '1' : '0').catch(() => {});
+  };
 
   const {
     mese,
@@ -144,6 +163,11 @@ export default function HistoryScreen() {
     mealSheetRef.current?.open(masa);
   }, []);
 
+  // Detaliu masă — foaie Gorhom mereu montată, deschisă prin ref (fără flicker Modal).
+  const openMasaDetail = useCallback((masa: Masa) => {
+    mealDetailSheetRef.current?.open(masa);
+  }, []);
+
   // 3. Actualizare masă (editare ingredient din detaliu) + reconciliere
   const handleUpdateMasa = useCallback(
     async (updated: Masa) => {
@@ -191,9 +215,21 @@ export default function HistoryScreen() {
 
   // PERF-005: fără entering per categorie — animațiile în cascadă re-porneau la
   // fiecare re-render al listei; FlashList nu animă itemele, doar antetul.
+  // Atingerea antetului deschide CategorieDetailSheet (drill-down cu poze/detaliu).
   const renderSectionHeader = (cat: CategorieMasaGrupata, primul: boolean) => (
     <View style={[styles.sectionContainer, { marginTop: primul ? 8 : 24, marginBottom: 12 }]}>
-      <View style={[styles.sectionHeader, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
+      <TouchableOpacity
+        style={[styles.sectionHeader, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
+        onPress={() => {
+          try {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          } catch {}
+          categorieSheetRef.current?.open(cat);
+        }}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={`Vezi detaliile categoriei ${cat.label}`}
+      >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
           <Text style={{ fontSize: 26 }}>{cat.icon}</Text>
           <View style={{ flex: 1 }}>
@@ -204,12 +240,15 @@ export default function HistoryScreen() {
           </View>
         </View>
         <View style={styles.sectionMacrosSummary}>
-          <Text style={[styles.sectionTotalCal, { color: colors.accent }]}>{cat.totalCalorii} kcal</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[styles.sectionTotalCal, { color: colors.accent }]}>{cat.totalCalorii} kcal</Text>
+            <ChevronRight size={16} color={colors.textTertiary} />
+          </View>
           <Text style={[styles.sectionTotalMacros, { color: colors.textTertiary }]}>
-            P:{cat.totalProteine}g • C:{cat.totalCarbohidrati}g • G:{cat.totalGrasimi}g
+            P:{cat.totalProteine}g • C:{cat.totalCarbohidrati}g • G:{cat.totalGrasimi}g • F:{cat.totalFibre}g
           </Text>
         </View>
-      </View>
+      </TouchableOpacity>
     </View>
   );
 
@@ -267,7 +306,8 @@ export default function HistoryScreen() {
       return (
         <MasaCard
           masa={item.masa}
-          onPress={setSelectedMasaDetail}
+          afisarePoze={afisarePoze}
+          onPress={openMasaDetail}
           onEdit={openEditModal}
           onDelete={handleDelete}
         />
@@ -282,15 +322,25 @@ export default function HistoryScreen() {
       <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>Jurnalul tău</Text>
-          <TouchableOpacity
-            style={[styles.addBtnHeader, { backgroundColor: colors.accent + '20', borderColor: colors.accent + '40' }]}
-            onPress={() => mealSheetRef.current?.open()}
-            accessibilityRole="button"
-            accessibilityLabel="Adaugă o masă"
-          >
-            <PlusCircle size={18} color={colors.accent} />
-            <Text style={[styles.addBtnHeaderText, { color: colors.accent }]}>Adaugă</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              style={[styles.addBtnHeader, { backgroundColor: 'rgba(255,255,255,0.05)', borderColor: colors.cardBorder }]}
+              onPress={toggleAfisarePoze}
+              accessibilityRole="button"
+              accessibilityLabel={afisarePoze ? 'Ascunde pozele meselor' : 'Afișează pozele meselor'}
+            >
+              {afisarePoze ? <Eye size={18} color={colors.accent} /> : <EyeOff size={18} color={colors.textSecondary} />}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.addBtnHeader, { backgroundColor: colors.accent + '20', borderColor: colors.accent + '40' }]}
+              onPress={() => mealSheetRef.current?.open()}
+              accessibilityRole="button"
+              accessibilityLabel="Adaugă o masă"
+            >
+              <PlusCircle size={18} color={colors.accent} />
+              <Text style={[styles.addBtnHeaderText, { color: colors.accent }]}>Adaugă</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         
         {/* Calendar Lunar Interactiv */}
@@ -407,19 +457,27 @@ export default function HistoryScreen() {
           deci aparține zilei de azi; pe alte zile ar apărea și ar dispărea la reconciliere. */}
       <AddMealBottomSheet ref={mealSheetRef} onSuccess={refresh} onMasaCreata={esteAzi ? optimisticAddMeal : undefined} />
 
-      <MealDetailsModal
-        visible={!!selectedMasaDetail}
-        masa={selectedMasaDetail}
-        onClose={() => setSelectedMasaDetail(null)}
+      <MealDetailsSheet
+        ref={mealDetailSheetRef}
         onUpdateMasa={handleUpdateMasa}
         onEdit={(m) => {
-          setSelectedMasaDetail(null);
+          mealDetailSheetRef.current?.close();
           openEditModal(m);
         }}
         onDelete={(m) => {
-          setSelectedMasaDetail(null);
+          mealDetailSheetRef.current?.close();
           handleDelete(m);
         }}
+      />
+
+      {/* Drill-down pe categorie: poze + ingrediente + detalii nutriționale */}
+      <CategorieDetailSheet
+        ref={categorieSheetRef}
+        afisarePoze={afisarePoze}
+        onPressMasa={openMasaDetail}
+        onEditMasa={openEditModal}
+        onDeleteMasa={handleDelete}
+        onAddMasa={(tip) => mealSheetRef.current?.open(null, tip)}
       />
     </KeyboardAwareScreen>
   );

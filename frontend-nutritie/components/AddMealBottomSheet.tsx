@@ -386,13 +386,31 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
         let err = null;
         let masaCreata: Masa | null = null;
-        if (editingMasaId) {
-          const { error } = await actualizeazaMasaCuPoza(supabase, editingMasaId, payload);
-          err = error;
-        } else {
-          const { data, error } = await insereazaMasaCuPoza(supabase, payload);
-          err = error;
-          if (!error && data && data[0]) masaCreata = data[0] as Masa;
+        // BUG-043: pe „conectat dar fără internet efectiv" (captive portal / DNS
+        // blackhole), call-ul Supabase rămâne blocat fără timeout — masa nu era nici
+        // salvată, nici pusă în coada offline. Aici convertim ORICE rută de eșec
+        // (reject aruncat, {error} rezolvat SAU hang via salvareMasaCuTimeout) în
+        // `err`, ca branch-ul offline de mai jos să rețină masa în coadă, exact ca
+        // scanul din camera.tsx.
+        try {
+          if (editingMasaId) {
+            const { error } = await salvareMasaCuTimeout(
+              actualizeazaMasaCuPoza(supabase, editingMasaId, payload),
+              9000,
+            );
+            err = error;
+          } else {
+            const { data, error } = await salvareMasaCuTimeout(
+              insereazaMasaCuPoza(supabase, payload),
+              9000,
+            );
+            err = error;
+            if (!error && data && data[0]) masaCreata = data[0] as Masa;
+          }
+        } catch (e: any) {
+          // Respingere (timeout-ul nostru, db.timeout sau eroare de rețea) = `err`,
+          // ca masa să ajungă în coada offline (insert) / alert de eroare (edit).
+          err = e;
         }
 
         if (err) {
@@ -1110,6 +1128,33 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     );
   }
 );
+
+/**
+ * BUG-043: race cu timeout pentru call-urile Supabase din handleSave. Dacă
+ * promisiunea nu se rezolvă în `ms` (hang pe captive portal / DNS blackhole),
+ * respingem cu un Error. Promisiunea care „pierde" cursa rămâne handled de
+ * Promise.race, deci o respingere ulterioară a ei (ex: db.timeout) nu devine
+ * unhandled rejection. `finally` curăță timer-ul ori de câte ori cursa se
+ * stinge (câștigă una dintre părți).
+ */
+function salvareMasaCuTimeout<T>(promisiune: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const race = Promise.race([
+    promisiune,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('Salvarea a durat prea mult (fără conexiune)')),
+        ms,
+      );
+    }),
+  ]);
+  // Curățăm timer-ul DOAR când cursa s-a stins (a câștigat / respins o parte),
+  // nu înainte de construire — altfel timeout-ul era șters imediat și guard-ul
+  // de hang rămânea mort (doar db.timeout din supabase.ts acoperea cazul).
+  return race.finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
 
 const styles = StyleSheet.create({
   scrollContent: {

@@ -248,4 +248,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     flowType: 'pkce',
     detectSessionInUrl: false,
   },
+  // BUG-043: fără timeout, un request PostgREST pe „conectat dar fără internet
+  // efectiv" (captive portal / DNS blackhole) rămâne blocat la nesfârșit —
+  // salvarea mesei rămâne veșnic „Se salvează...". 10s = requestul se abandonează
+  // singur (abort) în loc de hang. Timeout-ul din handleSave (9s) e under-ul care
+  // respinge primul; acesta e backstop-ul de la nivel de client.
+  db: { timeout: 10000 },
 });

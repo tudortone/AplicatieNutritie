@@ -79,7 +79,7 @@ export const WatchSelectorSheet = forwardRef<WatchSelectorSheetRef>((_, ref) => 
             {t('profile.watch_selector_title', 'Selectează Ceasul / Dispozitivul')}
           </Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            {t('profile.watch_selector_sub', 'Alege furnizorul de fitness pentru sincronizarea datelor')}
+            {t('profile.watch_selector_sub', 'Alege eticheta pentru sursa ta de pași (sincronizare externă: în curând)')}
           </Text>
         </View>
       </View>
@@ -124,6 +124,11 @@ export const WatchSelectorSheet = forwardRef<WatchSelectorSheetRef>((_, ref) => 
             </Animated.View>
           );
         })}
+        <View style={{ paddingHorizontal: 4, paddingTop: 8 }}>
+          <Text style={{ fontSize: 12, lineHeight: 16, color: colors.textTertiary }}>
+            Integrarea reală cu Google Fit, Garmin, Fitbit etc. va veni într-o versiune viitoare. Până atunci, pașii provin din senzorul telefonului și din adăugarea manuală.
+          </Text>
+        </View>
       </BottomSheetScrollView>
     </BottomSheetModal>
   );

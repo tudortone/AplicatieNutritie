@@ -1,22 +1,24 @@
 /**
  * FoodDetailModal.tsx — Detaliu nutrițional complet pentru un aliment
- * Afișează: macronutrienți, aminoacizi, vitamine, minerale
- * Datele vin din AlimentDetaliat (per porție) sau AlimentAI (per 100g)
+ * Migrat la Gorhom BottomSheetModal (pattern WatchSelectorSheet.tsx): fără
+ * flicker/ecran alb de la RN Modal. Deschis prin ref, mereu montat.
+ * Afișează: macronutrienți, aminoacizi, vitamine, minerale.
+ * Datele vin din AlimentDetaliat (per porție) sau AlimentAI (per 100g).
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView } from 'react-native';
+import React, { forwardRef, useImperativeHandle, useRef, useMemo, useCallback, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { BottomSheetModal, BottomSheetScrollView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { X, Beaker, Zap, Droplets, Pill } from 'lucide-react-native';
 import type { AlimentDetaliat, AminoaciziEsentiali, Micronutrienti } from '../../types';
-// BUG-021: modalul folosește colors.* (tema activă), nu hex fixe de altă aplicație.
+// BUG-021: foaia folosește colors.* (tema activă), nu hex fixe de altă aplicație.
 import { useTheme } from '../../context/ThemeContext';
 
-interface FoodDetailModalProps {
-  visible: boolean;
-  onClose: () => void;
-  aliment: AlimentDetaliat | null;
-  /** Dacă datele sunt per 100g în loc de per porție */
-  per100g?: boolean;
+export interface FoodDetailSheetRef {
+  open: (aliment: AlimentDetaliat, per100g?: boolean) => void;
+  /** Actualizează alimentul afișat (detalii îmbogățite sosind async) fără re-prezentare. */
+  updateAliment: (aliment: AlimentDetaliat) => void;
+  close: () => void;
 }
 
 const AMINO_LABELS: Record<keyof AminoaciziEsentiali, string> = {
@@ -88,14 +90,40 @@ function SectionHeader({ icon: Icon, title, color }: { icon: any; title: string;
   );
 }
 
-export function FoodDetailModal({ visible, onClose, aliment, per100g }: FoodDetailModalProps) {
+export const FoodDetailSheet = forwardRef<FoodDetailSheetRef>((_, ref) => {
   const { colors } = useTheme();
-  if (!aliment) return null;
+  const bottomSheetRef = useRef<BottomSheetModal>(null);
+  const [aliment, setAliment] = useState<AlimentDetaliat | null>(null);
+  const [per100g, setPer100g] = useState(false);
+  const snapPoints = useMemo(() => ['72%'], []);
 
-  const micronutrienti = aliment.micronutrienti;
-  const aminoacizi = aliment.aminoacizi;
+  useImperativeHandle(ref, () => ({
+    open: (al: AlimentDetaliat, la100g = false) => {
+      setAliment(al);
+      setPer100g(la100g);
+      bottomSheetRef.current?.present();
+    },
+    updateAliment: (al: AlimentDetaliat) => setAliment(al),
+    close: () => bottomSheetRef.current?.dismiss(),
+  }));
 
-  const gramaj = aliment.grame || 100;
+  const renderBackdrop = useCallback(
+    (props: any) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        opacity={0.6}
+        pressBehavior="close"
+      />
+    ),
+    [],
+  );
+
+  const micronutrienti = aliment?.micronutrienti;
+  const aminoacizi = aliment?.aminoacizi;
+
+  const gramaj = aliment?.grame || 100;
   const prefix = per100g ? ' (per 100g)' : ` (${gramaj}g)`;
 
   const hasAminoacizi = aminoacizi && Object.values(aminoacizi).some(v => (v ?? 0) > 0);
@@ -104,21 +132,39 @@ export function FoodDetailModal({ visible, onClose, aliment, per100g }: FoodDeta
   const hasOther = micronutrienti && OTHER_LABELS.some(o => (micronutrienti[o.key] ?? 0) > 0);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={[styles.modal, { backgroundColor: colors.surfaceBg }]}>
+    <BottomSheetModal
+      ref={bottomSheetRef}
+      snapPoints={snapPoints}
+      stackBehavior="push"
+      enablePanDownToClose
+      enableDynamicSizing={false}
+      backdropComponent={renderBackdrop}
+      backgroundStyle={{ backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, borderWidth: 1 }}
+      handleIndicatorStyle={{ backgroundColor: colors.overlayStrong, width: 44 }}
+    >
+      {aliment ? (
+        <>
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={() => bottomSheetRef.current?.dismiss()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Închide detaliile nutriționale"
+          >
+            <X size={22} color={colors.textSecondary} />
+          </TouchableOpacity>
+
           {/* Header */}
-          <View style={[styles.header, { borderBottomColor: colors.cardBorder }]}>
+          <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.title, { color: colors.textPrimary }]}>{aliment.nume}</Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Detalii nutriționale{prefix}</Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                Detalii nutriționale{prefix}
+              </Text>
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <X size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+          <BottomSheetScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             {/* Macronutrienți */}
             <SectionHeader icon={Zap} title="Macronutrienți" color={colors.accent} />
             <View style={[styles.card, { backgroundColor: colors.surface }]}>
@@ -210,31 +256,25 @@ export function FoodDetailModal({ visible, onClose, aliment, per100g }: FoodDeta
             )}
 
             <View style={{ height: 30 }} />
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
+          </BottomSheetScrollView>
+        </>
+      ) : null}
+    </BottomSheetModal>
   );
-}
+});
+
+FoodDetailSheet.displayName = 'FoodDetailSheet';
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-end',
-  },
-  modal: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '85%',
-    paddingTop: 20,
-  },
+  closeBtn: { position: 'absolute', top: 16, right: 20, zIndex: 10, padding: 6 },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingHorizontal: 20,
     paddingBottom: 16,
+    paddingTop: 4,
     borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   title: {
     fontSize: 18,
@@ -247,6 +287,7 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: 20,
     paddingTop: 16,
+    paddingBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',

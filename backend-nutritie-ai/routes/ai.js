@@ -366,6 +366,28 @@ function createAiRouter({
   });
 
   // ==========================================
+  // RUTA: PROFIL NUTRITIV PER 100g (GROQ/LLM)
+  // ==========================================
+  router.post('/profil-nutritiv', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, async (req, res) => {
+    // M1: abortează fetch-ul Groq la deconectarea clientului (pattern comun vision).
+    const controllerAbord = new AbortController();
+    const peDeconectare = () => {
+      if (res.writableEnded) return;
+      controllerAbord.abort();
+    };
+    res.on('close', peDeconectare);
+    try {
+      return res.json(await serviciuChat.profilNutritiv(req.body, controllerAbord.signal));
+    } catch (err) {
+      if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
+      console.error('Eroare profil nutritiv AI:', err.message);
+      return res.status(500).json({ eroare: 'Nu s-a putut genera profilul nutritiv cu AI.' });
+    } finally {
+      res.removeListener('close', peDeconectare);
+    }
+  });
+
+  // ==========================================
   // RUTA 1.3: CORECTARE SI COMBINARE / VISION FALLBACK
   // ==========================================
   const handleVisionFallbackOrCorrection = async (req, res) => {

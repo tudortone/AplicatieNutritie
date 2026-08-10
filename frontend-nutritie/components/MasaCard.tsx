@@ -16,6 +16,8 @@ interface MasaCardProps {
   onPress: (masa: Masa) => void;
   onEdit: (masa: Masa) => void;
   onDelete: (masa: Masa) => void;
+  /** Când false, blocul foto e ascuns (comutatorul „afișare poze” din jurnal). */
+  afisarePoze?: boolean;
 }
 
 export const MasaCard = React.memo(function MasaCard({
@@ -23,6 +25,7 @@ export const MasaCard = React.memo(function MasaCard({
   onPress,
   onEdit,
   onDelete,
+  afisarePoze = true,
 }: MasaCardProps) {
   const { colors } = useTheme();
   const router = useRouter();
@@ -202,9 +205,21 @@ export const MasaCard = React.memo(function MasaCard({
                   </Text>
                 </LinearGradient>
               </View>
+              <View style={styles.cardStatItem}>
+                <LinearGradient
+                  colors={[colors.success + '1A', 'rgba(0,0,0,0)']}
+                  style={styles.cardStatBg}
+                >
+                  <Text style={[styles.cardStatValue, { color: colors.success }]}>
+                    {masa.fibre != null ? masa.fibre : '—'}
+                    {masa.fibre != null ? 'g' : ''}
+                  </Text>
+                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]}>fibre</Text>
+                </LinearGradient>
+              </View>
             </View>
 
-            {pozaUrl ? (
+            {afisarePoze && pozaUrl ? (
               isPremium ? (
                 <TouchableOpacity
                   onPress={() => {
@@ -270,9 +285,11 @@ export const MasaCard = React.memo(function MasaCard({
     prev.masa.proteine === next.masa.proteine &&
     prev.masa.carbohidrati === next.masa.carbohidrati &&
     prev.masa.grasimi === next.masa.grasimi &&
+    prev.masa.fibre === next.masa.fibre &&
     prev.masa.alimente === next.masa.alimente &&
     prev.masa.imagine_url === next.masa.imagine_url &&
-    prev.masa.nume === next.masa.nume
+    prev.masa.nume === next.masa.nume &&
+    prev.afisarePoze === next.afisarePoze
   );
 });
 

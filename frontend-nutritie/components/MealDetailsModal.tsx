@@ -1,14 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useMemo, useCallback, useState } from 'react';
 import {
-  Modal,
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
-  Pressable,
   Image,
 } from 'react-native';
+import { BottomSheetModal, BottomSheetScrollView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { X, Pencil, Trash2, Dumbbell, Flame, Info, Lock } from 'lucide-react-native';
@@ -16,14 +14,17 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import { usePremium } from '../context/PremiumContext';
 import { Masa, AlimentDetaliat, AminoaciziEsentiali } from '../types';
-import { FoodDetailModal } from './food/FoodDetailModal';
-import { EditAlimentModal } from './food/EditAlimentModal';
+import { FoodDetailSheet, FoodDetailSheetRef } from './food/FoodDetailModal';
+import { EditAlimentSheet, EditAlimentSheetRef } from './food/EditAlimentModal';
+import { imbogatesteAliment } from '../lib/imbogatesteAliment';
 import { obtinePozaMasa, recalculeazaTotaluri, parseAlimente } from '../lib/mealUtils';
 
+export interface MealDetailsSheetRef {
+  open: (masa: Masa) => void;
+  close: () => void;
+}
+
 interface Props {
-  visible: boolean;
-  masa: Masa | null;
-  onClose: () => void;
   onEdit?: (masa: Masa) => void;
   onDelete?: (masa: Masa) => void;
   onUpdateMasa?: (updated: Masa) => Promise<void> | void;
@@ -61,39 +62,56 @@ function getAminoProfile(proteineTotal: number, customAmino?: AminoaciziEsential
   };
 }
 
-export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete, onUpdateMasa }: Props) {
-  const { colors } = useTheme();
-  const router = useRouter();
-  const { isPremium } = usePremium();
-  const [masaLocal, setMasaLocal] = useState<Masa | null>(null);
-  const [detailAliment, setDetailAliment] = useState<any>(null);
-  const [detailVisible, setDetailVisible] = useState(false);
-  const [editIdx, setEditIdx] = useState<number | null>(null);
-  const [editAliment, setEditAliment] = useState<AlimentDetaliat | null>(null);
-  const [editVisible, setEditVisible] = useState(false);
+/**
+ * Detaliul unei mese — BottomSheetModal Gorhom (fără flicker RN Modal), mereu
+ * montat, deschis prin ref. Foile copil (detaliu aliment / corectare ingredient)
+ * se deschid cu stackBehavior="push" deasupra, fără să închidă această foie.
+ */
+export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
+  function MealDetailsSheet({ onEdit, onDelete, onUpdateMasa }, ref) {
+    const { colors } = useTheme();
+    const router = useRouter();
+    const { isPremium } = usePremium();
+    const bottomSheetRef = useRef<BottomSheetModal>(null);
+    const detailSheetRef = useRef<FoodDetailSheetRef>(null);
+    const editSheetRef = useRef<EditAlimentSheetRef>(null);
+    const [masaLocal, setMasaLocal] = useState<Masa | null>(null);
+    const [editIdx, setEditIdx] = useState<number | null>(null);
+    const snapPoints = useMemo(() => ['88%'], []);
 
-  // Sincronizare cu prop-ul: la fiecare deschidere (masa nouă) luăm copia locală.
-  // `masa` e stabil cât timp modalul e deschis (propagat din state), deci includerea
-  // lui nu resetează editările optimiste în curs.
-  useEffect(() => {
-    setMasaLocal(masa);
-    setEditIdx(null);
-    setEditAliment(null);
-    setEditVisible(false);
-    setDetailVisible(false);
-  }, [visible, masa]);
+    useImperativeHandle(ref, () => ({
+      open: (masa: Masa) => {
+        setMasaLocal(masa);
+        setEditIdx(null);
+        bottomSheetRef.current?.present();
+      },
+      close: () => bottomSheetRef.current?.dismiss(),
+    }));
 
-  if (!masa || !masaLocal) return null;
+    const renderBackdrop = useCallback(
+      (props: any) => (
+        <BottomSheetBackdrop
+          {...props}
+          disappearsOnIndex={-1}
+          appearsOnIndex={0}
+          opacity={0.6}
+          pressBehavior="close"
+        />
+      ),
+      [],
+    );
 
-  const pozaUrl = obtinePozaMasa(masaLocal);
+    const pozaUrl = masaLocal ? obtinePozaMasa(masaLocal) : null;
 
-  const alimenteParsate = parseAlimente(masaLocal);
-  const alimenteList = alimenteParsate.length > 0
-    ? alimenteParsate
-    : [{ nume: masaLocal.nume, calorii: masaLocal.calorii, proteine: masaLocal.proteine, carbohidrati: masaLocal.carbohidrati, grasimi: masaLocal.grasimi, grame: 100 }];
+    const alimenteParsate = masaLocal ? parseAlimente(masaLocal) : [];
+    const alimenteList = alimenteParsate.length > 0
+      ? alimenteParsate
+      : masaLocal
+        ? [{ nume: masaLocal.nume, calorii: masaLocal.calorii, proteine: masaLocal.proteine, carbohidrati: masaLocal.carbohidrati, grasimi: masaLocal.grasimi, grame: 100 }]
+        : [];
 
   // Căutăm dacă vreun aliment are aminoacizi definiți, altfel calculăm totalul
-  const customAmino = parseAlimente(masaLocal).reduce((acc, al) => {
+  const customAmino = alimenteParsate.reduce((acc, al) => {
     if (al.aminoacizi) {
       return {
         leucina: (acc.leucina || 0) + (al.aminoacizi.leucina || 0),
@@ -110,351 +128,361 @@ export function MealDetailsModal({ visible, masa, onClose, onEdit, onDelete, onU
     return acc;
   }, {} as AminoaciziEsentiali);
 
-  const aminoProfile = getAminoProfile(masaLocal.proteine, customAmino);
-  const totalBcaa = aminoProfile.leucina + aminoProfile.izoleucina + aminoProfile.valina;
+    const aminoProfile = getAminoProfile(masaLocal ? masaLocal.proteine : 0, customAmino);
+    const totalBcaa = aminoProfile.leucina + aminoProfile.izoleucina + aminoProfile.valina;
 
-  // Salvează ingredientul editat: înlocuiește elementul, recalculează totalurile
-  // din listă și actualizează — local (optimist) + upstream printr-onUpdateMasa.
-  const salveazaAliment = (idx: number, actualizat: AlimentDetaliat): void => {
-    const sursa = parseAlimente(masaLocal);
-    const alimente = sursa.length > 0
-      ? sursa.map((a, i) => (i === idx ? { ...a, ...actualizat } : a))
-      : [actualizat];
-    const totaluri = recalculeazaTotaluri(alimente);
-    const urmatoare: Masa = {
-      ...masaLocal,
-      alimente,
-      calorii: totaluri.calorii,
-      proteine: totaluri.proteine,
-      carbohidrati: totaluri.carbohidrati,
-      grasimi: totaluri.grasimi,
-      fibre: totaluri.fibre,
+    // Salvează ingredientul editat: înlocuiește elementul, recalculează totalurile
+    // din listă și actualizează — local (optimist) + upstream printr-onUpdateMasa.
+    const salveazaAliment = (idx: number, actualizat: AlimentDetaliat): void => {
+      if (!masaLocal) return;
+      const sursa = parseAlimente(masaLocal);
+      const alimente = sursa.length > 0
+        ? sursa.map((a, i) => (i === idx ? { ...a, ...actualizat } : a))
+        : [actualizat];
+      const totaluri = recalculeazaTotaluri(alimente);
+      const urmatoare: Masa = {
+        ...masaLocal,
+        alimente,
+        calorii: totaluri.calorii,
+        proteine: totaluri.proteine,
+        carbohidrati: totaluri.carbohidrati,
+        grasimi: totaluri.grasimi,
+        fibre: totaluri.fibre,
+      };
+      setMasaLocal(urmatoare);
+      setEditIdx(null);
+      if (onUpdateMasa) {
+        void Promise.resolve(onUpdateMasa(urmatoare)).catch(() => {});
+      }
     };
-    setMasaLocal(urmatoare);
-    setEditAliment(null);
-    setEditIdx(null);
-    if (onUpdateMasa) {
-      void Promise.resolve(onUpdateMasa(urmatoare)).catch(() => {});
-    }
-  };
 
-  // BUG-017: ștergere ingredient (per-component) — elimină din listă, recalculează
-  // totalurile din restul ingredientelor și actualizează optimist + upstream prin
-  // onUpdateMasa. La ultimul ingredient, păstrăm macro-urile plane ale mesei
-  // (alimente=[]), ca valorile să nu dispară cu lista de componente.
-  const stergeAliment = (idx: number): void => {
-    const sursa = parseAlimente(masaLocal);
-    const alimente = sursa.filter((_, i) => i !== idx);
-    const totaluri = recalculeazaTotaluri(alimente);
-    const urmatoare: Masa = {
-      ...masaLocal,
-      alimente,
-      calorii: alimente.length > 0 ? totaluri.calorii : masaLocal.calorii,
-      proteine: alimente.length > 0 ? totaluri.proteine : masaLocal.proteine,
-      carbohidrati: alimente.length > 0 ? totaluri.carbohidrati : masaLocal.carbohidrati,
-      grasimi: alimente.length > 0 ? totaluri.grasimi : masaLocal.grasimi,
-      fibre: alimente.length > 0 ? totaluri.fibre : masaLocal.fibre,
+    // BUG-017: ștergere ingredient (per-component) — elimină din listă, recalculează
+    // totalurile din restul ingredientelor și actualizează optimist + upstream prin
+    // onUpdateMasa. La ultimul ingredient, păstrăm macro-urile plane ale mesei
+    // (alimente=[]), ca valorile să nu dispară cu lista de componente.
+    const stergeAliment = (idx: number): void => {
+      if (!masaLocal) return;
+      const sursa = parseAlimente(masaLocal);
+      const alimente = sursa.filter((_, i) => i !== idx);
+      const totaluri = recalculeazaTotaluri(alimente);
+      const urmatoare: Masa = {
+        ...masaLocal,
+        alimente,
+        calorii: alimente.length > 0 ? totaluri.calorii : masaLocal.calorii,
+        proteine: alimente.length > 0 ? totaluri.proteine : masaLocal.proteine,
+        carbohidrati: alimente.length > 0 ? totaluri.carbohidrati : masaLocal.carbohidrati,
+        grasimi: alimente.length > 0 ? totaluri.grasimi : masaLocal.grasimi,
+        fibre: alimente.length > 0 ? totaluri.fibre : masaLocal.fibre,
+      };
+      setMasaLocal(urmatoare);
+      if (onUpdateMasa) {
+        void Promise.resolve(onUpdateMasa(urmatoare)).catch(() => {});
+      }
     };
-    setMasaLocal(urmatoare);
-    if (onUpdateMasa) {
-      void Promise.resolve(onUpdateMasa(urmatoare)).catch(() => {});
-    }
-  };
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        
-        <View style={[styles.modalContainer, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
-          <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
-          
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={{ flex: 1, marginRight: 12 }}>
-              <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
-                {masaLocal.nume}
-              </Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                {masaLocal.tip_masa ? masaLocal.tip_masa.toUpperCase().replace('_', ' ') : 'MASA ÎNREGISTRATĂ'} • {alimenteList.length} {alimenteList.length === 1 ? 'aliment' : 'alimente'}
-              </Text>
-            </View>
+    // Detaliu aliment: deschidem imediat cu datele existente, apoi îmbogățim
+    // async (tabel/cache/AI) și actualizăm foaia fără re-prezentare — niciodată
+    // nu blochează ecranul (imbogatesteAliment nu aruncă, are timeout AI 10s).
+    const deschideDetaliu = (al: AlimentDetaliat) => {
+      detailSheetRef.current?.open(al);
+      void imbogatesteAliment(al, { online: true }).then((imbogatit) => {
+        detailSheetRef.current?.updateAliment(imbogatit);
+      });
+    };
 
+    return (
+      <>
+        <BottomSheetModal
+          ref={bottomSheetRef}
+          snapPoints={snapPoints}
+          enablePanDownToClose
+          enableDynamicSizing={false}
+          backdropComponent={renderBackdrop}
+          backgroundStyle={{ backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, borderWidth: 1 }}
+          handleIndicatorStyle={{ backgroundColor: colors.overlayStrong, width: 44 }}
+          onDismiss={() => {
+            detailSheetRef.current?.close();
+            editSheetRef.current?.close();
+          }}
+        >
+          {masaLocal ? (<>
             <TouchableOpacity
-              onPress={onClose}
+              onPress={() => bottomSheetRef.current?.dismiss()}
               style={[styles.closeBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Închide detaliile mesei"
             >
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
-          </View>
 
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Poza mesei (premium) — sus, imediat deasupra totalurilor */}
-            {pozaUrl ? (
-              isPremium ? (
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={() => {
-                    try {
-                      Haptics.selectionAsync();
-                    } catch {}
-                  }}
-                  style={styles.photoContainer}
-                  accessibilityRole="imagebutton"
-                  accessibilityLabel="Poza mesei"
-                >
-                  <Image source={{ uri: pozaUrl }} style={styles.photo} resizeMode="cover" />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  onPress={() => router.push('/paywall' as never)}
-                  activeOpacity={0.95}
-                  style={styles.photoContainer}
-                  accessibilityRole="imagebutton"
-                  accessibilityLabel="Deblochează pozele meselor cu Premium"
-                >
-                  <Image source={{ uri: pozaUrl }} style={styles.photo} resizeMode="cover" />
-                  <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
-                  <View style={styles.photoLockOverlay}>
-                    <View style={styles.photoLockBadge}>
-                      <Lock size={14} color="#FFFFFF" />
-                      <Text style={styles.photoLockBadgeText}>Pozele mesei sunt Premium</Text>
-                    </View>
-                    <Text style={styles.photoLockCta}>Deblochează cu Premium</Text>
-                  </View>
-                </TouchableOpacity>
-              )
-            ) : null}
-
-            {/* Macro Summary Cards — exact sub poza */}
-            <View style={[styles.summaryGrid, { marginTop: pozaUrl ? 16 : 0 }]}>
-              <View style={[styles.macroBox, { backgroundColor: colors.accent + '15', borderColor: colors.accent + '40' }]}>
-                <Flame size={18} color={colors.accent} />
-                <Text style={[styles.macroVal, { color: colors.accent }]}>{masaLocal.calorii}</Text>
-                <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>kcal</Text>
-              </View>
-
-              <View style={[styles.macroBox, { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: colors.cardBorder }]}>
-                <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masaLocal.proteine}g</Text>
-                <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Proteine</Text>
-              </View>
-
-              <View style={[styles.macroBox, { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: colors.cardBorder }]}>
-                <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masaLocal.carbohidrati}g</Text>
-                <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Carbi</Text>
-              </View>
-
-              <View style={[styles.macroBox, { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: colors.cardBorder }]}>
-                <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masaLocal.grasimi}g</Text>
-                <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Grăsimi</Text>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
+                  {masaLocal.nume}
+                </Text>
+                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                  {masaLocal.tip_masa ? masaLocal.tip_masa.toUpperCase().replace('_', ' ') : 'MASA ÎNREGISTRATĂ'} • {alimenteList.length} {alimenteList.length === 1 ? 'aliment' : 'alimente'}
+                </Text>
               </View>
             </View>
 
-            {/* Secțiune Alimente Componente */}
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-              🥗 Alimente Componente ({alimenteList.length})
-            </Text>
-            <View style={styles.ingredientsSection}>
-              {alimenteList.map((al, idx) => (
-                <View key={idx} style={[styles.ingredientItem, { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.cardBorder }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.ingredientName, { color: colors.textPrimary }]}>{al.nume}</Text>
-                    {al.grame ? <Text style={[styles.ingredientGram, { color: colors.textTertiary }]}>{al.grame}g porție</Text> : null}
-                  </View>
+            <BottomSheetScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+              {/* Poza mesei (premium) — sus, imediat deasupra totalurilor */}
+              {pozaUrl ? (
+                isPremium ? (
                   <TouchableOpacity
-                    onPress={() => { setEditIdx(idx); setEditAliment(al); setEditVisible(true); }}
-                    style={styles.editBtn}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Corectează datele pentru ${al.nume}`}
+                    activeOpacity={0.9}
+                    onPress={() => {
+                      try {
+                        Haptics.selectionAsync();
+                      } catch {}
+                    }}
+                    style={styles.photoContainer}
+                    accessibilityRole="imagebutton"
+                    accessibilityLabel="Poza mesei"
                   >
-                    <Pencil size={15} color={colors.accentSecondary} />
+                    <Image source={{ uri: pozaUrl }} style={styles.photo} resizeMode="cover" />
                   </TouchableOpacity>
+                ) : (
                   <TouchableOpacity
-                    onPress={() => { setDetailAliment(al); setDetailVisible(true); }}
-                    style={styles.detailBtn}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Detalii pentru ${al.nume}`}
+                    onPress={() => router.push('/paywall' as never)}
+                    activeOpacity={0.95}
+                    style={styles.photoContainer}
+                    accessibilityRole="imagebutton"
+                    accessibilityLabel="Deblochează pozele meselor cu Premium"
                   >
-                    <Info size={15} color={colors.accent} />
+                    <Image source={{ uri: pozaUrl }} style={styles.photo} resizeMode="cover" />
+                    <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
+                    <View style={styles.photoLockOverlay}>
+                      <View style={styles.photoLockBadge}>
+                        <Lock size={14} color="#FFFFFF" />
+                        <Text style={styles.photoLockBadgeText}>Pozele mesei sunt Premium</Text>
+                      </View>
+                      <Text style={styles.photoLockCta}>Deblochează cu Premium</Text>
+                    </View>
                   </TouchableOpacity>
-                  {alimenteParsate.length > 0 ? (
+                )
+              ) : null}
+
+              {/* Macro Summary Cards — exact sub poza */}
+              <View style={[styles.summaryGrid, { marginTop: pozaUrl ? 16 : 0 }]}>
+                <View style={[styles.macroBox, { backgroundColor: colors.accent + '15', borderColor: colors.accent + '40' }]}>
+                  <Flame size={18} color={colors.accent} />
+                  <Text style={[styles.macroVal, { color: colors.accent }]}>{masaLocal.calorii}</Text>
+                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>kcal</Text>
+                </View>
+
+                <View style={[styles.macroBox, { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: colors.cardBorder }]}>
+                  <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masaLocal.proteine}g</Text>
+                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Proteine</Text>
+                </View>
+
+                <View style={[styles.macroBox, { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: colors.cardBorder }]}>
+                  <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masaLocal.carbohidrati}g</Text>
+                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Carbi</Text>
+                </View>
+
+                <View style={[styles.macroBox, { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: colors.cardBorder }]}>
+                  <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masaLocal.grasimi}g</Text>
+                  <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>Grăsimi</Text>
+                </View>
+              </View>
+
+              {/* Secțiune Alimente Componente */}
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                🥗 Alimente Componente ({alimenteList.length})
+              </Text>
+              <View style={styles.ingredientsSection}>
+                {alimenteList.map((al, idx) => (
+                  <View key={idx} style={[styles.ingredientItem, { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.cardBorder }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.ingredientName, { color: colors.textPrimary }]}>{al.nume}</Text>
+                      {al.grame ? <Text style={[styles.ingredientGram, { color: colors.textTertiary }]}>{al.grame}g porție</Text> : null}
+                    </View>
                     <TouchableOpacity
-                      onPress={() => stergeAliment(idx)}
-                      style={[styles.deleteBtn, { backgroundColor: colors.danger + '0F' }]}
+                      onPress={() => { setEditIdx(idx); editSheetRef.current?.open(al); }}
+                      style={styles.editBtn}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       accessibilityRole="button"
-                      accessibilityLabel={`Șterge ${al.nume} din masă`}
+                      accessibilityLabel={`Corectează datele pentru ${al.nume}`}
                     >
-                      <Trash2 size={15} color={colors.danger} />
+                      <Pencil size={15} color={colors.accentSecondary} />
                     </TouchableOpacity>
-                  ) : null}
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.ingredientKcal, { color: colors.accent }]}>{al.calorii} kcal</Text>
-                    <Text style={[styles.ingredientMacros, { color: colors.textSecondary }]}>
-                      P:{al.proteine}g • C:{al.carbohidrati}g • G:{al.grasimi}g
+                    <TouchableOpacity
+                      onPress={() => deschideDetaliu(al)}
+                      style={styles.detailBtn}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Detalii pentru ${al.nume}`}
+                    >
+                      <Info size={15} color={colors.accent} />
+                    </TouchableOpacity>
+                    {alimenteParsate.length > 0 ? (
+                      <TouchableOpacity
+                        onPress={() => stergeAliment(idx)}
+                        style={[styles.deleteBtn, { backgroundColor: colors.danger + '0F' }]}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Șterge ${al.nume} din masă`}
+                      >
+                        <Trash2 size={15} color={colors.danger} />
+                      </TouchableOpacity>
+                    ) : null}
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.ingredientKcal, { color: colors.accent }]}>{al.calorii} kcal</Text>
+                      <Text style={[styles.ingredientMacros, { color: colors.textSecondary }]}>
+                        P:{al.proteine}g • C:{al.carbohidrati}g • G:{al.grasimi}g
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              {/* Secțiune Aminoacizi Esențiali */}
+              <View style={[styles.aminoSection, { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: colors.cardBorder }]}>
+                <View style={styles.aminoHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Dumbbell size={16} color={colors.accentTertiary} />
+                    <Text style={[styles.aminoTitle, { color: colors.textPrimary }]}>
+                      Profil Aminoacizi Esențiali (EAA)
+                    </Text>
+                  </View>
+                  <View style={[styles.bcaaBadge, { backgroundColor: colors.accentTertiary + '1F', borderColor: colors.accentTertiary + '55' }]}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: colors.accentTertiary }}>
+                      BCAA: {totalBcaa} mg
                     </Text>
                   </View>
                 </View>
-              ))}
-            </View>
 
-            {/* Secțiune Aminoacizi Esențiali */}
-            <View style={[styles.aminoSection, { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: colors.cardBorder }]}>
-              <View style={styles.aminoHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Dumbbell size={16} color={colors.accentTertiary} />
-                  <Text style={[styles.aminoTitle, { color: colors.textPrimary }]}>
-                    Profil Aminoacizi Esențiali (EAA)
-                  </Text>
-                </View>
-                <View style={[styles.bcaaBadge, { backgroundColor: colors.accentTertiary + '1F', borderColor: colors.accentTertiary + '55' }]}>
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: colors.accentTertiary }}>
-                    BCAA: {totalBcaa} mg
-                  </Text>
-                </View>
-              </View>
+                <Text style={[styles.aminoSub, { color: colors.textSecondary }]}>
+                  {aminoProfile.isEstimated
+                    ? '⚡ Estimare profil complet pe baza celor ' + masaLocal.proteine + 'g de proteine pure din această masă.'
+                    : '✅ Valori detaliate furnizate din catalog / analiză AI.'}
+                </Text>
 
-              <Text style={[styles.aminoSub, { color: colors.textSecondary }]}>
-                {aminoProfile.isEstimated
-                  ? '⚡ Estimare profil complet pe baza celor ' + masaLocal.proteine + 'g de proteine pure din această masă.'
-                  : '✅ Valori detaliate furnizate din catalog / analiză AI.'}
-              </Text>
+                <View style={styles.aminoGrid}>
+                  <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.aminoName, { color: colors.accentTertiary }]}>Leucină (BCAA)</Text>
+                    <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.leucina} mg</Text>
+                  </View>
 
-              <View style={styles.aminoGrid}>
-                <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: colors.accentTertiary }]}>Leucină (BCAA)</Text>
-                  <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.leucina} mg</Text>
-                </View>
+                  <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.aminoName, { color: colors.accentTertiary }]}>Izoleucină (BCAA)</Text>
+                    <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.izoleucina} mg</Text>
+                  </View>
 
-                <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: colors.accentTertiary }]}>Izoleucină (BCAA)</Text>
-                  <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.izoleucina} mg</Text>
-                </View>
+                  <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.aminoName, { color: colors.accentTertiary }]}>Valină (BCAA)</Text>
+                    <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.valina} mg</Text>
+                  </View>
 
-                <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: colors.accentTertiary }]}>Valină (BCAA)</Text>
-                  <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.valina} mg</Text>
-                </View>
+                  <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.aminoName, { color: colors.textSecondary }]}>Lizină</Text>
+                    <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.lizina} mg</Text>
+                  </View>
 
-                <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: colors.textSecondary }]}>Lizină</Text>
-                  <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.lizina} mg</Text>
-                </View>
+                  <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.aminoName, { color: colors.textSecondary }]}>Metionină</Text>
+                    <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.metionina} mg</Text>
+                  </View>
 
-                <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: colors.textSecondary }]}>Metionină</Text>
-                  <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.metionina} mg</Text>
-                </View>
+                  <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.aminoName, { color: colors.textSecondary }]}>Treonină</Text>
+                    <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.treonina} mg</Text>
+                  </View>
 
-                <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: colors.textSecondary }]}>Treonină</Text>
-                  <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.treonina} mg</Text>
-                </View>
+                  <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.aminoName, { color: colors.textSecondary }]}>Fenilalanină</Text>
+                    <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.fenilalanina} mg</Text>
+                  </View>
 
-                <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: colors.textSecondary }]}>Fenilalanină</Text>
-                  <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.fenilalanina} mg</Text>
-                </View>
+                  <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.aminoName, { color: colors.textSecondary }]}>Istidină</Text>
+                    <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.istidina} mg</Text>
+                  </View>
 
-                <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: colors.textSecondary }]}>Istidină</Text>
-                  <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.istidina} mg</Text>
-                </View>
-
-                <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.aminoName, { color: colors.textSecondary }]}>Triptofan</Text>
-                  <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.triptofan} mg</Text>
+                  <View style={[styles.aminoCard, { borderColor: colors.cardBorder }]}>
+                    <Text style={[styles.aminoName, { color: colors.textSecondary }]}>Triptofan</Text>
+                    <Text style={[styles.aminoVal, { color: colors.textPrimary }]}>{aminoProfile.triptofan} mg</Text>
+                  </View>
                 </View>
               </View>
+            </BottomSheetScrollView>
+
+            {/* Actions Footer */}
+            <View style={[styles.footer, { borderTopColor: colors.cardBorder }]}>
+              {onEdit && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: colors.cardBorder }]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    bottomSheetRef.current?.dismiss();
+                    onEdit(masaLocal);
+                  }}
+                >
+                  <Pencil size={16} color={colors.textPrimary} />
+                  <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>Editează</Text>
+                </TouchableOpacity>
+              )}
+
+              {onDelete && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: colors.danger + '1F', borderColor: colors.danger + '55' }]}
+                  onPress={() => {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    bottomSheetRef.current?.dismiss();
+                    onDelete(masaLocal);
+                  }}
+                >
+                  <Trash2 size={16} color={colors.danger} />
+                  <Text style={[styles.actionBtnText, { color: colors.danger }]}>Șterge</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={[styles.confirmBtn, { backgroundColor: colors.accent }]}
+                onPress={() => bottomSheetRef.current?.dismiss()}
+              >
+                <Text style={styles.confirmBtnText}>Închide</Text>
+              </TouchableOpacity>
             </View>
-          </ScrollView>
+          </>)
+          : null}
+        </BottomSheetModal>
 
-          {/* Actions Footer */}
-          <View style={[styles.footer, { borderTopColor: colors.cardBorder }]}>
-            {onEdit && (
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: colors.cardBorder }]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  onClose();
-                  onEdit(masaLocal);
-                }}
-              >
-                <Pencil size={16} color={colors.textPrimary} />
-                <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>Editează</Text>
-              </TouchableOpacity>
-            )}
+        {/* Detaliu nutrițional complet (foie deasupra, stackBehavior='push') */}
+        <FoodDetailSheet ref={detailSheetRef} />
 
-            {onDelete && (
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.danger + '1F', borderColor: colors.danger + '55' }]}
-                onPress={() => {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                  onClose();
-                  onDelete(masaLocal);
-                }}
-              >
-                <Trash2 size={16} color={colors.danger} />
-                <Text style={[styles.actionBtnText, { color: colors.danger }]}>Șterge</Text>
-              </TouchableOpacity>
-            )}
+        {/* Editare inline ingredient (corectare greșeli) */}
+        <EditAlimentSheet
+          ref={editSheetRef}
+          onSave={(actualizat) => {
+            if (editIdx != null) {
+              salveazaAliment(editIdx, actualizat);
+              editSheetRef.current?.close();
+            }
+          }}
+        />
+      </>
+    );
+  },
+);
 
-            <TouchableOpacity
-              style={[styles.confirmBtn, { backgroundColor: colors.accent }]}
-              onPress={onClose}
-            >
-              <Text style={styles.confirmBtnText}>Închide</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-      {/* Detaliu nutrițional complet */}
-      <FoodDetailModal
-        visible={detailVisible}
-        onClose={() => setDetailVisible(false)}
-        aliment={detailAliment}
-      />
-      {/* Editare inline ingredient (corectare greșeli) */}
-      <EditAlimentModal
-        visible={editVisible}
-        aliment={editAliment}
-        onClose={() => {
-          setEditVisible(false);
-          setEditAliment(null);
-          setEditIdx(null);
-        }}
-        onSave={(actualizat) => {
-          if (editIdx != null) salveazaAliment(editIdx, actualizat);
-        }}
-      />
-    </Modal>
-  );
-}
+MealDetailsSheet.displayName = 'MealDetailsSheet';
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'center',
+  closeBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 20,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
-    padding: 16,
-  },
-  modalContainer: {
-    width: '100%',
-    maxHeight: '88%',
-    borderRadius: 28,
-    borderWidth: 1,
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column',
+    justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -462,6 +490,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     padding: 20,
     paddingBottom: 16,
+    paddingTop: 4,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
@@ -475,16 +504,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scroll: {
-    flex: 1,
   },
   scrollContent: {
     padding: 20,
