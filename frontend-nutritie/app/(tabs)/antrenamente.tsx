@@ -2,7 +2,8 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   useWindowDimensions, View, Text, StyleSheet, ScrollView, Pressable, TextInput,
-  ActivityIndicator, RefreshControl, type TextStyle, type ViewStyle, type StyleProp,
+  ActivityIndicator, RefreshControl, AppState, type AppStateStatus,
+  type TextStyle, type ViewStyle, type StyleProp,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
@@ -130,10 +131,17 @@ export default function AntrenamenteScreen() {
   const [warmupFor, setWarmupFor] = useState<string>('');
   const [session, setSession] = useState<Record<string, LoggedSet[]>>({});
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  // FIT-004: timpul ACTIV acumulat (fără background/ecran blocat). `startedAt`
+  // e ancorele rulării curente sau null când sesiunea e pauzată.
+  const [acumulatMs, setAcumulatMs] = useState(0);
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [timerExerciseId, setTimerExerciseId] = useState<string>('');
   const timerStartRef = useRef<number | null>(null);
+  const startedAtRef = useRef<number | null>(null);
+  const acumulatMsRef = useRef(0);
+  const hasSessionRef = useRef(false);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   useEffect(() => {
     if (!selectedExerciseId && exercitii.length > 0) {
@@ -152,19 +160,63 @@ export default function AntrenamenteScreen() {
           AsyncStorage.getItem(SESSION_META_KEY),
         ]);
         if (!active) return;
-        const parsedMeta = meta ? (JSON.parse(meta) as { startedAt?: number; day?: string }) : null;
+        const parsedMeta = meta ? (JSON.parse(meta) as { startedAt?: number; day?: string; acumulatMs?: number }) : null;
         if (parsedMeta?.day && parsedMeta.day !== localDayKey()) {
           await AsyncStorage.multiRemove([SESSION_KEY, SESSION_META_KEY]);
           return;
         }
         if (data) setSession(JSON.parse(data));
         if (parsedMeta?.startedAt) setStartedAt(parsedMeta.startedAt);
+        if (parsedMeta?.acumulatMs != null) setAcumulatMs(parsedMeta.acumulatMs);
       } catch {
         await AsyncStorage.multiRemove([SESSION_KEY, SESSION_META_KEY]).catch(() => {});
       }
     })();
     return () => { active = false; };
   }, []);
+
+  // Persistăm meta cu timpul activ acumulat, ca un background/foreground să nu
+  // piardă progresul cronometrului (FIT-004).
+  const persistMeta = useCallback((meta: { startedAt: number | null; acumulatMs: number; day: string }) => {
+    AsyncStorage.setItem(SESSION_META_KEY, JSON.stringify(meta)).catch(() => {});
+  }, []);
+
+  // FIT-004: durata antrenamentului = doar timp ACTIV. Când app-ul merge în
+  // background, înghețăm acumularea; la revenire, reluăm de la un nou anchor.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => {
+      const prev = appStateRef.current;
+      appStateRef.current = next;
+      if (prev === 'active' && next !== 'active') {
+        // În background: adunăm intervalul activ curent și pauzăm.
+        if (startedAtRef.current != null) {
+          const extra = Date.now() - startedAtRef.current;
+          const newAcumulat = acumulatMsRef.current + extra;
+          acumulatMsRef.current = newAcumulat;
+          startedAtRef.current = null;
+          setAcumulatMs(newAcumulat);
+          setStartedAt(null);
+          persistMeta({ startedAt: null, acumulatMs: newAcumulat, day: localDayKey() });
+        }
+      } else if (next === 'active' && prev !== 'active') {
+        // Revenire în foreground: reluăm doar dacă sesiunea e în curs.
+        if (hasSessionRef.current && startedAtRef.current == null) {
+          const now = Date.now();
+          startedAtRef.current = now;
+          setStartedAt(now);
+          persistMeta({ startedAt: now, acumulatMs: acumulatMsRef.current, day: localDayKey() });
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, [persistMeta]);
+
+  // Refs-mirror pentru valorile citite în listener-ul AppState.
+  useEffect(() => { startedAtRef.current = startedAt; }, [startedAt]);
+  useEffect(() => { acumulatMsRef.current = acumulatMs; }, [acumulatMs]);
+  useEffect(() => {
+    hasSessionRef.current = Object.values(session).some((list) => list.length > 0);
+  }, [session]);
 
   const persistSession = useCallback((next: Record<string, LoggedSet[]>) => {
     AsyncStorage.setItem(SESSION_KEY, JSON.stringify(next)).catch(() => {
@@ -331,8 +383,9 @@ export default function AntrenamenteScreen() {
 
     if (startedAt == null) {
       const now = Date.now();
+      startedAtRef.current = now;
       setStartedAt(now);
-      AsyncStorage.setItem(SESSION_META_KEY, JSON.stringify({ startedAt: now, day: localDayKey() })).catch(() => {});
+      persistMeta({ startedAt: now, acumulatMs: acumulatMs, day: localDayKey() });
     }
 
     setRestEndsAt(Date.now() + REST_DEFAULT_SEC * 1000);
@@ -364,7 +417,9 @@ export default function AntrenamenteScreen() {
     setSaving(true);
     try {
       const totalSets = entries.reduce((s, [, sets]) => s + sets.length, 0);
-      const elapsedMin = startedAt ? (Date.now() - startedAt) / 60000 : 0;
+      // FIT-004: durata = timp activ acumulat + intervalul curent (dacă nu e pauzat).
+      const elapsedMs = acumulatMs + (startedAt ? Date.now() - startedAt : 0);
+      const elapsedMin = elapsedMs / 60000;
       const durataMin = Math.max(1, Math.round(elapsedMin > 0 ? elapsedMin : totalSets * 1.5));
       const perExerciseMin = Math.max(1, Math.round(durataMin / entries.length));
 
@@ -407,6 +462,9 @@ export default function AntrenamenteScreen() {
       notify.success('Antrenament salvat', `${totalSets} seturi • ${Math.round(sessionStats.volume)} kg volum`);
       setSession({});
       setInputs({});
+      acumulatMsRef.current = 0;
+      startedAtRef.current = null;
+      setAcumulatMs(0);
       setStartedAt(null);
       setRestEndsAt(null);
       resetTimer();
@@ -440,7 +498,7 @@ export default function AntrenamenteScreen() {
             {s.set_type === 'warmup' && (
               <Text style={[styles.warmupTag, { color: colors.textTertiary, borderColor: colors.cardBorder }]}>încălzire</Text>
             )}
-            <Pressable onPress={() => removeSet(ex.id, idx)} accessibilityRole='button' accessibilityLabel={`Șterge setul ${idx + 1}`} hitSlop={8}>
+            <Pressable onPress={() => removeSet(ex.id, idx)} accessibilityRole='button' accessibilityLabel={`Șterge setul ${idx + 1}`} hitSlop={14}>
               <Trash2 size={16} color={colors.textTertiary} />
             </Pressable>
           </View>
@@ -803,7 +861,7 @@ const styles = StyleSheet.create({
   timerBtnText: { color: '#0B0F14', fontSize: 14, fontWeight: '900' } as TextStyle,
   timerGhost: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' } as ViewStyle,
   noWeightHint: { fontSize: 12, marginTop: Spacing.sm, lineHeight: 16 } as TextStyle,
-  warmupToggle: { borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginTop: Spacing.sm } as ViewStyle,
+  warmupToggle: { borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, minHeight: 48, marginTop: Spacing.sm } as ViewStyle,
   warmupToggleText: { fontSize: 12, fontWeight: '700' } as TextStyle,
   ctaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: Radius.pill, gap: Spacing.sm, marginTop: Spacing.md } as ViewStyle,
   ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' } as TextStyle,

@@ -146,16 +146,16 @@ export default function HistoryScreen() {
 
     return (
       <View style={{ gap: 24, marginTop: 8 }}>
-        {categoriiMeseList.map((cat, catIndex) => {
+        {categoriiMeseList.map((cat) => {
           const hasMeals = cat.mese && cat.mese.length > 0;
           if (!hasMeals) return null;
 
           return (
-            <Animated.View
-              key={cat.id}
-              entering={FadeInDown.duration(500).delay(catIndex * 80)}
-              style={styles.sectionContainer}
-            >
+            // PERF-005: fără entering per categorie — animațiile în cascadă
+            // (catIndex * 80ms) re-porneau la fiecare re-render al listei și
+            // întârziau montarea categoriilor de la capăt. Antetul și cardul de
+            // rezumat păstrează animația de intrare (montează o singură dată).
+            <View key={cat.id} style={styles.sectionContainer}>
               {/* Header Categorie */}
               <View style={[styles.sectionHeader, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
@@ -221,7 +221,7 @@ export default function HistoryScreen() {
                   </TouchableOpacity>
                 </View>
               ) : null}
-            </Animated.View>
+            </View>
           );
         })}
       </View>
@@ -257,7 +257,7 @@ export default function HistoryScreen() {
             📅 {formatDataTitlu()}
           </Text>
           {!esteAzi && (
-            <TouchableOpacity onPress={() => setDataSelectata(new Date())} style={{ backgroundColor: colors.accent, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }} accessibilityRole="button" accessibilityLabel="Revino la ziua de azi">
+            <TouchableOpacity onPress={() => setDataSelectata(new Date())} hitSlop={{ top: 6, bottom: 6 }} style={{ backgroundColor: colors.accent, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, minHeight: 44, alignItems: 'center', justifyContent: 'center' }} accessibilityRole="button" accessibilityLabel="Revino la ziua de azi">
               <Text style={{ color: '#000', fontWeight: '800', fontSize: 12 }}>Revino la azi</Text>
             </TouchableOpacity>
           )}

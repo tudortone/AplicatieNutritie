@@ -251,7 +251,13 @@ function RootNavigator() {
       if (!inAuth) router.replace('/auth');
       return;
     }
-    if (inAuth || inOnboarding) router.replace('/(tabs)');
+    // H1: pe /auth/noua-parola (finalizare resetare parolă) NU redirecționăm
+    // automat în (tabs) chiar dacă sesiunea există — utilizatorul a ajuns aici
+    // din callback-ul recovery și încă trebuie să-și seteze parola nouă.
+    // Fără excepția asta, guard-ul l-ar arunca în (tabs) și resetarea ar rămâne
+    // dead-end (parola veche neschimbată).
+    const esteRecuperareParola = inAuth && segments[1] === 'noua-parola';
+    if ((inAuth || inOnboarding) && !esteRecuperareParola) router.replace('/(tabs)');
   }, [session, loadingAuth, isOnboardingDone, setOnboardingDone, profilServer, profilServerDate, segments, router]);
 
   if (loadingAuth) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}><ActivityIndicator size="large" color={colors.accent} /></View>;
@@ -266,7 +272,6 @@ function RootNavigator() {
         <Stack.Screen name="onboarding" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
         <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
         <Stack.Screen name="scanner-barcode" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
-        <Stack.Screen name="adauga-manual" options={push} />
         <Stack.Screen name="calculator-ai" options={push} />
         <Stack.Screen name="legal" options={push} />
         <Stack.Screen name="jurnal-antrenamente" options={push} />

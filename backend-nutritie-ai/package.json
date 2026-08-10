@@ -19,7 +19,6 @@
   "dependencies": {
     "@clerk/express": "^2.1.49",
     "@google/generative-ai": "^0.24.1",
-    "@imagekit/nodejs": "^7.10.0",
     "@sentry/node": "^10.69.0",
     "@supabase/supabase-js": "^2.109.0",
     "@trigger.dev/sdk": "^4.5.9",

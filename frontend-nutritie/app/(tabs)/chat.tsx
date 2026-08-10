@@ -2,7 +2,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Platform, Keyboard, Alert, Modal
+  ScrollView, Keyboard, Alert, Modal
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildApiUrl } from '@/lib/api';
@@ -49,7 +49,9 @@ const newMsgId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
 // Timeout-ul clientului pentru cererile AI. Fara el, un raspuns server lent
 // (ex. tot lantul de fallback Gemini) tinea butonul de trimitere blocat la nesfarsit.
-const AI_REQUEST_TIMEOUT_MS = 90000;
+// CHAT-006: 160s — peste bugetul de procesare al serverului (~125-155s), ca un
+// raspuns AI lent legitim sa nu fie taiat de client inainte de timp.
+const AI_REQUEST_TIMEOUT_MS = 160000;
 
 interface ChatMessage {
   // FIX UI: fara id stabil, key={index} facea Reanimated sa reutilizeze bula
@@ -57,6 +59,31 @@ interface ChatMessage {
   id?: string;
   role: 'ai' | 'user' | string;
   text: string;
+  // CHAT-008b: bulele de eroare (mesaje-placeholder de tip AI) sunt marcate cu
+  // isError ca sa fie EXCLUSE din istoricul trimis catre model — altfel AI-ul
+  // „invata" textul propriilor mesaje de eroare ca si cum le-ar fi spus el.
+  isError?: boolean;
+}
+
+// Hash determinist FNV-1a 32-bit -> hex. Suficient pentru idempotență (cheia nu
+// trebuie să fie criptografică; trebuie doar să fie stabilă pentru același corp
+// de cerere și distinctă pentru corpuri diferite).
+function hashString(s: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+// CHAT-001: cheie de idempotență stabilă per „mesaj + istoric trimis". Backend-ul
+// (utils/idempotency.js) reia răspunsul anterior doar dacă amprenta corpului se
+// potrivește; de aceea hash-ul include și istoricul, nu doar mesajul — altfel un
+// retry după ce istoricul a crescut ar primi 409 IDEMPOTENCY_KEY_REUSED.
+function cheieIdempotenta(mesaj: string, mesaje: ChatMessage[], userId?: string): string {
+  const amprenta = mesaje.map(m => `${m.role}:${m.text}`).join('|');
+  return hashString(`${userId || 'anon'}|${mesaj}|${amprenta}`);
 }
 
 function parseMealProposal(text: any): MealProposal | null {
@@ -117,13 +144,17 @@ function parseMealProposal(text: any): MealProposal | null {
  * apoi parsează răspunsul server (format MEAL_PROPOSAL).
  * Aruncă la status != 2xx sau dacă răspunsul nu conține o propunere validă.
  */
-async function cerePropunereMasa(mesaj: string, accessToken: string): Promise<MealProposal> {
+async function cerePropunereMasa(mesaj: string, accessToken: string, signal?: AbortSignal): Promise<MealProposal> {
   const response = await fetch(buildApiUrl('/log-food-from-chat'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${accessToken}`,
+      // CHAT-001: același mesaj de masă retrimis = aceeași cheie => backend-ul
+      // reia propunerea anterioară, nu regenerează (fără dublă execuție/credit).
+      'Idempotency-Key': hashString(mesaj),
     },
+    signal,
     body: JSON.stringify({ mesaj }),
   });
 
@@ -181,6 +212,11 @@ export default function ChatScreen() {
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const mesajeRef = useRef(mesaje);
+  // CHAT-002: controller-ul cererii AI active — pentru abort la unmount.
+  const activeRequestRef = useRef<AbortController | null>(null);
+  // CHAT-003: oglinda sincronă a loadingChat, fiabilă chiar și între două
+  // render-uri (loadingChat din closure e învechit până la următorul render).
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     mesajeRef.current = mesaje;
@@ -258,7 +294,23 @@ export default function ChatScreen() {
     };
   }, []);
 
+  // CHAT-002: la părăsirea ecranului anulăm cererea AI în zbor. Serverul vede
+  // deconectarea (close) și nu mai continuă generarea/facturarea; pe client nu se
+  // mai încearcă setState pe o componentă demontată.
   useEffect(() => {
+    return () => {
+      activeRequestRef.current?.abort();
+    };
+  }, []);
+
+  // PERF-009: nu derulăm la fiecare re-render — doar când ultimul mesaj s-a
+  // schimbat efectiv (id nou). Toggle-ul de loadingChat fără mesaj nou nu mai
+  // provoacă scroll redundent; orice mesaj nou schimbă totuși ultimul id.
+  const lastScrolledMsgIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const lastId = mesaje[mesaje.length - 1]?.id ?? null;
+    if (lastId === lastScrolledMsgIdRef.current) return;
+    lastScrolledMsgIdRef.current = lastId;
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 200);
@@ -284,18 +336,26 @@ export default function ChatScreen() {
   }, []);
 
   const executaTrimitereMesaj = async (mesajText: string) => {
+    // CHAT-003: gardă anti-concurență la nivelul întregii funcții — acoperă
+    // trimitePromptDirect, chip-urile rapide, generatorul de rețete și input-ul.
+    // Fără ea se lansa o a doua cerere /chat în timp ce prima era în zbor
+    // (răspunsuri în ordine inversă, dublu credit).
+    if (loadingRef.current) return;
     if (!mesajText.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setMesaje(prev => [...prev, { id: newMsgId(), role: 'user', text: mesajText }]);
     setLoadingChat(true);
+    loadingRef.current = true;
 
     if (!session) {
-      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: "Nu ești autentificat. Te rog să te conectezi din nou." }]);
+      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', isError: true, text: "Nu ești autentificat. Te rog să te conectezi din nou." }]);
       setLoadingChat(false);
+      loadingRef.current = false;
       return;
     }
 
     const controller = new AbortController();
+    activeRequestRef.current = controller;
     const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
 
     try {
@@ -304,7 +364,7 @@ export default function ChatScreen() {
       // (confirmMealProposal); aici doar obtinem propunerea si o afisam.
       if (isMealLogIntent(mesajText)) {
         try {
-          const propunere = await cerePropunereMasa(mesajText, session.access_token);
+          const propunere = await cerePropunereMasa(mesajText, session.access_token, controller.signal);
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setMealProposal(propunere);
           setMealProposalVisible(true);
@@ -315,18 +375,30 @@ export default function ChatScreen() {
           setMesaje(prev => [...prev, {
             id: newMsgId(),
             role: 'ai',
+            isError: true,
             text: (errMeal as any)?.message || "Nu am putut pregăti propunerea de masă. Încearcă din nou, te rog.",
           }]);
           return;
         }
       }
 
-      const istoricActivat = [...mesajeRef.current, { role: 'user' as const, text: mesajText }];
+      // CHAT-007: istoricul trimis spre server se trunchiază la ultimele 20 de
+      // mesaje — fără cap, o conversație lungă depășea limita de corp a
+      // express.json. CHAT-008b: bulele de eroare (isError) nu intră în
+      // contextul AI — modelul nu trebuie să „învețe" textul propriilor erori.
+      const istoricActivat = [
+        ...mesajeRef.current.filter((m) => !m.isError),
+        { role: 'user' as const, text: mesajText },
+      ].slice(-20);
+      // CHAT-001: aceeași întrebare cu același istoric trimisă din nou (retry după
+      // timeout) primește răspunsul înregistrat, nu o a doua generare/facturare.
+      const cheieIdempotentaChat = cheieIdempotenta(mesajText, istoricActivat, session.user?.id);
       const raspuns = await fetch(buildApiUrl('/chat'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`,
+          'Idempotency-Key': cheieIdempotentaChat,
         },
         signal: controller.signal,
         body: JSON.stringify({
@@ -345,6 +417,13 @@ export default function ChatScreen() {
         date = null;
       }
 
+      // CHAT-008a: 2xx cu corp non-JSON — mesaj clar, nu „Eroare la procesarea
+      // răspunsului." (care sugera greșit o problemă internă a AI-ului).
+      if (raspuns.ok && date === null) {
+        setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', isError: true, text: "Răspuns invalid de la server. Te rog încearcă din nou." }]);
+        return;
+      }
+
       if (!raspuns.ok) {
         // Statusurile non-2xx se mapau pe mesaje clare; altfel un 401/429/500
         // apărea ca un răspuns AI normal ("Eroare la procesarea răspunsului.").
@@ -357,34 +436,20 @@ export default function ChatScreen() {
         } else {
           textEroare = mesajServer || "Serverul AI a întâmpinat o problemă. Încearcă din nou peste câteva momente.";
         }
-        setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: textEroare }]);
+        setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', isError: true, text: textEroare }]);
         return;
       }
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       let raspunsText = date?.raspuns || "Eroare la procesarea răspunsului.";
-      let parsed = parseMealProposal(date) || parseMealProposal(raspunsText);
+      // CHAT-009: `parsed` nu mai e reasignat după eliminarea fallback-ului mort.
+      const parsed = parseMealProposal(date) || parseMealProposal(raspunsText);
 
-      if (!parsed && isMealLogIntent(mesajText)) {
-        try {
-          const logResp = await fetch(buildApiUrl('/log-food-from-chat'), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`
-            },
-            signal: controller.signal,
-            body: JSON.stringify({ mesaj: mesajText, mesaje: istoricActivat }),
-          });
-          if (logResp.ok) {
-            const logDate = await logResp.json();
-            parsed = parseMealProposal(logDate) || parseMealProposal(logDate.raspuns);
-          }
-        } catch (errLog) {
-          console.warn('Eroare fallback /api/log-food-from-chat:', errLog);
-        }
-      }
+      // CHAT-009: fallback-ul catre /api/log-food-from-chat de aici era cod mort —
+      // daca isMealLogIntent(mesajText) e adevarat, ramura de meal-intent de mai
+      // sus iese mereu cu return (try SAU catch), deci nu se ajunge aici; daca e
+      // fals, conditia de aici nu putea fi adevarata. Blocul a fost eliminat.
 
       if (parsed && (parsed.type === 'MEAL_PROPOSAL' || Array.isArray(parsed.items))) {
         if (Array.isArray(parsed.items)) parsed.type = 'MEAL_PROPOSAL';
@@ -395,9 +460,11 @@ export default function ChatScreen() {
 
       setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: raspunsText }]);
     } catch {
-      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', text: "Eroare de conexiune cu serverul AI. Te rog încearcă din nou mai târziu." }]);
+      setMesaje(prev => [...prev, { id: newMsgId(), role: 'ai', isError: true, text: "Eroare de conexiune cu serverul AI. Te rog încearcă din nou mai târziu." }]);
     } finally {
       clearTimeout(timeoutId);
+      if (activeRequestRef.current === controller) activeRequestRef.current = null;
+      loadingRef.current = false;
       setLoadingChat(false);
       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     }
@@ -839,8 +906,9 @@ const styles = StyleSheet.create({
   glowTop: { position: 'absolute', top: -100, right: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.06 },
   glowBottom: { position: 'absolute', bottom: 100, left: -80, width: 280, height: 280, borderRadius: 140, opacity: 0.04 },
 
+  // UX-014: paddingTop e setat inline in JSX (paddingTop: insets.top + 10); o
+  // valoare fixa aici era mereu suprascrisa — cod mort scos.
   header: {
-    paddingTop: Platform.OS === 'ios' ? 44 : 24,
     paddingHorizontal: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,

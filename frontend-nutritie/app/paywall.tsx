@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
   planPrice: { fontSize: 22, fontWeight: '900', marginTop: 6 },
   planPer: { fontSize: 11, marginTop: 2 },
   trialNote: { fontSize: 11, textAlign: 'center', marginTop: 14, lineHeight: 16 },
-  restoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14 },
+  restoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, minHeight: 44, paddingHorizontal: 12, paddingVertical: 8 },
   restoreText: { fontSize: 12, fontWeight: '700' },
   legal: { fontSize: 10, textAlign: 'center', marginTop: 18, lineHeight: 15 },
   premiumActive: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30, gap: 10 },

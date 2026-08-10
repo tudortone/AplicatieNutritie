@@ -17,6 +17,7 @@ export default function AuthCallbackScreen() {
     code?: string | string[];
     access_token?: string | string[];
     refresh_token?: string | string[];
+    type?: string | string[];
     error?: string | string[];
     error_description?: string | string[];
   }>();
@@ -65,6 +66,14 @@ export default function AuthCallbackScreen() {
 
         const { data: sesiune } = await supabase.auth.getSession();
         if (!sesiune.session) throw new Error(t('alerts.mesaje.problemaConexiuneOAuth'));
+        // H1: emailul de resetare a parolei redirecționează aici cu `type=recovery`
+        // în hash-ul URL-ului. După ce sesiunea e stabilită, NU mergem direct în
+        // (tabs) — utilizatorul trebuie să-și seteze parola nouă pe ecranul dedicat.
+        // Altfel ar rămâne blocat cu parola veche (dead-end).
+        if (unu(params.type) === 'recovery') {
+          router.replace('/auth/noua-parola');
+          return;
+        }
         router.replace('/(tabs)');
       } catch (e: any) {
         router.replace('/auth');

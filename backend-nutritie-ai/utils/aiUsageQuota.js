@@ -16,6 +16,47 @@ const { inregistreazaUtilizareAdmin } = require('./clientUtilizator');
 const DAILY_LIMIT = 50;
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
+// M2: un defect real în consuma_credit (error truthy sau excepție) nu trebuie să
+// dispară silențios — un utilizator cu credite plătite ar trece pe cota gratuită
+// fără ca nimeni să observe. Emitem o alertă Sentry throttled (fail-loud), dar
+// continuăm pe cota gratuită (fail-open pe disponibilitate). Cazul NORMAL „fără
+// credite plătite" (soldRamas === -1, fără eroare) NU alertează.
+const SALTIRE_ALERTE_CREDITE_MS = 30 * 1000;
+const PLAFON_ALERTE_CREDITE = 100;
+const ultimaAlertaCredite = new Map();
+
+function alerteazaConsumCreditEsuat(eroare, userId) {
+  const acum = Date.now();
+  const ultimul = ultimaAlertaCredite.get(userId) || 0;
+  if (acum - ultimul < SALTIRE_ALERTE_CREDITE_MS) return;
+  // Plafon + curățare expirate + evicție FIFO (patternul din storePartajat.js),
+  // ca o eroare abuzivă să nu umfle mapa peste limită.
+  if (ultimaAlertaCredite.size >= PLAFON_ALERTE_CREDITE) {
+    for (const [cheie, moment] of ultimaAlertaCredite) {
+      if (acum - moment >= SALTIRE_ALERTE_CREDITE_MS) ultimaAlertaCredite.delete(cheie);
+    }
+    if (ultimaAlertaCredite.size >= PLAFON_ALERTE_CREDITE) {
+      const ceaMaiVeche = ultimaAlertaCredite.keys().next().value;
+      if (ceaMaiVeche !== undefined) ultimaAlertaCredite.delete(ceaMaiVeche);
+    }
+  }
+  ultimaAlertaCredite.set(userId, acum);
+  const mesaj = `[Quota AI] consuma_credit RPC esuat pentru ${userId}: ${eroare?.message || eroare}`;
+  console.warn(mesaj);
+  try {
+    const Sentry = require('@sentry/node');
+    Sentry.withScope((scope) => {
+      scope.setLevel('error');
+      scope.setTag('component', 'ai-usage-quota');
+      scope.setTag('rpc', 'consuma_credit');
+      scope.setExtra('user_id', userId);
+      Sentry.captureException(eroare instanceof Error ? eroare : new Error(String(eroare)));
+    });
+  } catch {
+    // Sentry indisponibil — mesajul a fost deja loggat
+  }
+}
+
 function creeazaCheckAiUsageQuota({
   contor,
   supabaseAdmin = null,
@@ -46,15 +87,24 @@ function creeazaCheckAiUsageQuota({
     // creditarea plătită dependentă de o cale inexistentă.
     const clientSupabase = supabaseAdmin;
     if (clientSupabase) {
+      // M2: distingem cazul NORMAL „utilizator fără credite plătite" (soldRamas === -1,
+      // fără eroare) de un defect real al RPC (error truthy sau excepție), care până
+      // acum se pierdea în catch-ul gol. Doar defectul real alertează (throttled).
+      let eroareConsumCredit = null;
       try {
-        // M-05: generăm un event_id la debitare. Refund-ul (la eșec 5xx) folosește
-        // ACELAȘI event_id prin RPC-ul existent aplica_tranzactie_credite (delta +1),
-        // iar UNIQUE pe credite_tranzactii.event_id garantează idempotența: dubla
-        // debitare/refund pe același eveniment este anulată de DB.
+        // M-05/H3: generăm un event_id la debitare. Debitul e înregistrat ATOMIC
+        // ca rând CONSUM_AI în credite_tranzactii (consuma_credit, p_event_id) —
+        // astfel un crash hard între debit și răspuns e detectabil de jobul de
+        // reconciliere (reconcileCredite.js), care restituie debitul orfan.
+        // Refund-ul (eșec 5xx) și confirmarea (succes 2xx) folosesc event_id-uri
+        // derivate `refund:<id>` / `ok:<id>` ca să NU colizeze cu rândul CONSUM_AI
+        // (UNIQUE pe credite_tranzactii.event_id): UNIQUE garantează că dubla
+        // refundare/confirmare pe același eveniment e anulată de DB.
         req._creditEventId = crypto.randomUUID();
         const { data: soldRamas, error } = await clientSupabase.rpc('consuma_credit', {
           p_user_id: userId,
           p_cost: 1,
+          p_event_id: req._creditEventId,
         });
 
         if (!error && typeof soldRamas === 'number' && soldRamas >= 0) {
@@ -72,11 +122,11 @@ function creeazaCheckAiUsageQuota({
           // Reapelarea cu același event_id e respinsă de DB (UNIQUE pe event_id).
           if (typeof res.once === 'function') {
             const restituiePlatit = () => {
-              if (req._creditRestituit) return;
+              if (req._creditRestituit || req._creditConfirmat) return;
               req._creditRestituit = true;
               Promise.resolve(clientSupabase.rpc('aplica_tranzactie_credite', {
                 p_user_id: userId,
-                p_event_id: req._creditEventId,
+                p_event_id: 'refund:' + req._creditEventId,
                 p_event_type: 'REFUND_AI_FAILURE',
                 p_delta: 1,
                 p_produs_id: null,
@@ -89,12 +139,40 @@ function creeazaCheckAiUsageQuota({
                 console.error('[Quota AI] Refund esuat:', err?.message || err);
               });
             };
+            // H3: confirmarea atomică a consumului pe succes 2xx. Fără acest marcaj
+            // `ok:<id>` jobul de reconciliere n-ar putea deosebi un consum legitim
+            // (răspuns 2xx livrat) de un crash între debit și răspuns și ar restitui
+            // în plus creditele câștigate corect. Dacă această scriere eșuează după
+            // ce răspunsul a fost livrat, reconcilierea restituie creditul (dezechilibru
+            // în favoarea utilizatorului) — acceptabil, direcția e sigură.
+            const confirmaConsumat = () => {
+              if (req._creditRestituit || req._creditConfirmat) return;
+              req._creditConfirmat = true;
+              Promise.resolve(clientSupabase.rpc('aplica_tranzactie_credite', {
+                p_user_id: userId,
+                p_event_id: 'ok:' + req._creditEventId,
+                p_event_type: 'CONSUM_AI_CONFIRM',
+                p_delta: 0,
+                p_produs_id: null,
+                p_metadata: { status: res.statusCode || 200 },
+              })).then(({ error: errConfirm }) => {
+                if (errConfirm) {
+                  console.error('[Quota AI] Confirmare consum esuata:', errConfirm.message);
+                }
+              }).catch((err) => {
+                console.error('[Quota AI] Confirmare consum esuata:', err?.message || err);
+              });
+            };
             res.once('finish', () => {
               // Refundăm creditul plătit când operația AI a eșuat: 5xx (eroare de
               // server) sau 429 (cooldown-ul furnizorului, idem cota gratuită de
               // mai jos). 4xx înseamnă cerere invalidă — acolo creditul nu se returnează.
+              // La 2xx confirmăm consumul (marcaj `ok:` pentru reconciliere).
               if (!req._creditConsumat || !res.statusCode) return;
-              if (res.statusCode !== 429 && res.statusCode < 500) return;
+              if (res.statusCode !== 429 && res.statusCode < 500) {
+                confirmaConsumat();
+                return;
+              }
               restituiePlatit();
             });
             // G3: și la `close` fără răspuns 2xx complet (client deconectat / socket
@@ -110,9 +188,19 @@ function creeazaCheckAiUsageQuota({
 
           return next();
         }
-      } catch {
-        // Fără credite plătite disponibile → continuăm pe cota zilnică gratuită
+        if (error) {
+          eroareConsumCredit = new Error(
+            `consuma_credit RPC esuat: ${error.message || 'eroare necunoscuta'}`,
+          );
+        }
+      } catch (e) {
+        eroareConsumCredit = e instanceof Error ? e : new Error(String(e));
       }
+      if (eroareConsumCredit) {
+        alerteazaConsumCreditEsuat(eroareConsumCredit, userId);
+      }
+      // Fără credite plătite disponibile (sau defect, alertat mai sus) → continuăm
+      // pe cota zilnică gratuită
     }
 
     // Pas 2: Dacă soldul de credite plătite este 0, utilizatorul consumă din cota zilnică gratuită

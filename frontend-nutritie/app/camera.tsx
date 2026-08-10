@@ -77,6 +77,10 @@ export default function CameraScreen() {
   // fileId-ul ImageKit al pozei scanate: persistat in alimente JSONB ca stergearea
   // GDPR sa poata identifica si sterge assetul media de pe CDN (nu doar URL-ul).
   const imageKitFileIdRef = useRef<string | null>(null);
+  // CAM-003: generația uploadului ImageKit curent + promisiunea lui. Un upload
+  // mai vechi care se termină târziu nu mai suprascrie refs-urile după un nou scan.
+  const uploadGenerationRef = useRef(0);
+  const imageKitUploadRef = useRef<{ generatie: number; promise: Promise<void> } | null>(null);
   const draftCurrentUriRef = useRef<string | null>(null);
   // U-03: garanteaza ca dialogul de recuperare a draft-ului apare o singura data
   // pe sesiunea ecranului, chiar daca efectul se re-executa la schimbarea tokenului.
@@ -87,6 +91,10 @@ export default function CameraScreen() {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      // CAM-007: la unmount anulăm analiza în zbor — fără fetch orfan după
+      // părăsirea ecranului (fără setState-after-unmount, fără rețea risipită).
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
     };
   }, []);
 
@@ -164,11 +172,25 @@ export default function CameraScreen() {
 
       abortControllerRef.current?.abort();
 
+      // CAM-003: un nou scan invalidează orice upload ImageKit încă în zbor din
+      // scanul anterior — rezultatul lui nu mai poate suprascrie refs-urile.
+      uploadGenerationRef.current += 1;
+      imageKitUploadRef.current = null;
+
       const controller = new AbortController();
       abortControllerRef.current = controller;
       setScanError(null);
       setRezultat([]);
       setSeIncarca(true);
+
+      // CAM-004: timeout pentru cererea de analiză AI — un răspuns care nu mai
+      // vine nu trebuie să țină ecranul în starea „Se încarcă" la nesfârșit
+      // (~75s = optimizare client + cascada AI pe server).
+      let timeoutDepasit = false;
+      const timeoutId = setTimeout(() => {
+        timeoutDepasit = true;
+        controller.abort();
+      }, 75000);
 
       try {
         // B-20: redimensionam pe client inainte de upload. Serverul pastreaza
@@ -242,6 +264,12 @@ export default function CameraScreen() {
           }))
           .filter((item) => item.nume.trim().length > 0);
 
+        // CAM-001: un array gol înseamnă că AI-ul n-a identificat niciun aliment.
+        // Îl tratăm ca eșec (fără succes fals, fără foaie/modal goale de salvat).
+        if (normalized.length === 0) {
+          throw new Error('Nu am putut identifica alimentele din imagine.');
+        }
+
         setRezultat(normalized);
         setSuccessVisible(true);
         // Dupa un scan REUSIT, incarcam poza pe ImageKit CDN (nu aruncam gunoi pe CDN
@@ -249,30 +277,43 @@ export default function CameraScreen() {
         // alimente, JSONB) ca stergearea GDPR sa cunoasca assetul.
         imageKitUrlRef.current = null;
         imageKitFileIdRef.current = null;
-        uploadImageToImageKit(imageUri)
-          .then((r) => {
-            imageKitUrlRef.current = r.url;
-            imageKitFileIdRef.current = r.fileId;
-          })
-          .catch((ikErr) => {
-            if (__DEV__) console.log('ImageKit upload notice:', ikErr.message);
-          });
+        const generatieUpload = uploadGenerationRef.current;
+        imageKitUploadRef.current = {
+          generatie: generatieUpload,
+          promise: uploadImageToImageKit(imageUri)
+            .then((r) => {
+              // CAM-003: dacă între timp a pornit un alt scan, acest upload e stale.
+              if (uploadGenerationRef.current !== generatieUpload) return;
+              imageKitUrlRef.current = r.url;
+              imageKitFileIdRef.current = r.fileId;
+            })
+            .catch((ikErr) => {
+              if (__DEV__) console.log('ImageKit upload notice:', ikErr.message);
+            }),
+        };
         await Haptics.notificationAsync(
           Haptics.NotificationFeedbackType.Success,
         );
       } catch (error) {
-        if (controller.signal.aborted) return;
+        // Un scan nou (sau unmount/anulare) a invalidat această cerere →
+        // nu mai atingem starea, nici măcar pentru mesajul de timeout.
+        if (abortControllerRef.current !== controller) return;
 
         setScanError(
-          error instanceof Error
-            ? error.message
-            : 'A apărut o eroare la analiza imaginii.',
+          timeoutDepasit
+            ? 'Analiza a durat prea mult. Încearcă din nou.'
+            : error instanceof Error
+              ? error.message
+              : 'A apărut o eroare la analiza imaginii.',
         );
       } finally {
+        clearTimeout(timeoutId);
+        // CAM-006: doar cererea CURENTĂ își poate reseta starea de încărcare —
+        // altfel un scan vechi care se termină târziu ar opri spinner-ul scanului nou.
         if (abortControllerRef.current === controller) {
           abortControllerRef.current = null;
+          if (isMountedRef.current) setSeIncarca(false);
         }
-        if (isMountedRef.current) setSeIncarca(false);
       }
     },
     [session?.access_token, selectedAI],
@@ -412,6 +453,9 @@ export default function CameraScreen() {
       }
     } catch (e) {
       console.error("Eroare captură foto:", e);
+      // CAM-005: captura eșuată nu rămâne mută — mesaj vizibil + stare curățată.
+      setSeIncarca(false);
+      setScanError('Nu am putut captura imaginea. Încearcă din nou.');
     }
   };
 
@@ -454,6 +498,18 @@ export default function CameraScreen() {
 
     setIsSavingDiary(true);
     const now = new Date();
+
+    // CAM-003: așteptăm (cu timeout) uploadul ImageKit al scanului curent ca poza
+    // să ajungă de obicei în masa salvată; un upload lent/eșuat nu blochează salvarea.
+    const uploadCurent = imageKitUploadRef.current;
+    if (uploadCurent) {
+      try {
+        await Promise.race([
+          uploadCurent.promise,
+          new Promise((resolve) => setTimeout(resolve, 3500)),
+        ]);
+      } catch {}
+    }
 
     // FIX 2.5: convertim din per-100g în AlimentDetaliat cu valori absolute
     const alimente = rezultat.map((r) => {
@@ -595,7 +651,15 @@ export default function CameraScreen() {
           <Text style={styles.closeButtonText}>X</Text>
         </TouchableOpacity>
       </View>
-      <CameraView ref={cameraRef} style={StyleSheet.absoluteFillObject} facing="back">
+      {/* CAM-002: pauză cameră în timpul flow-urilor post-captură (foaia de
+          rezultat și modalul de succes) — nu mai ținem senzorul activ în spatele
+          overlay-ului. Reluarea vine din anuleazaScanarea (rezultat → gol). */}
+      <CameraView
+        ref={cameraRef}
+        style={StyleSheet.absoluteFillObject}
+        facing="back"
+        active={rezultat.length === 0 && !successVisible}
+      >
         <LinearGradient
           colors={['rgba(5,8,13,0.85)', 'rgba(5,8,13,0)', 'rgba(5,8,13,0.95)']}
           style={StyleSheet.absoluteFillObject}

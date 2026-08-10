@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, { Layout } from 'react-native-reanimated';
 import { Clock, Pencil, Trash2, Lock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Masa } from '../types';
@@ -218,7 +218,8 @@ export const MasaCard = React.memo(function MasaCard({
                   <Image
                     source={{ uri: pozaUrl }}
                     style={styles.imageBottom}
-                    resizeMode="cover"
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
                   />
                 </TouchableOpacity>
               ) : (
@@ -235,9 +236,15 @@ export const MasaCard = React.memo(function MasaCard({
                   <Image
                     source={{ uri: pozaUrl }}
                     style={styles.imageBottom}
-                    resizeMode="cover"
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
                   />
-                  <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
+                  <View
+                    style={[
+                      StyleSheet.absoluteFill,
+                      { backgroundColor: 'rgba(9, 12, 14, 0.72)' },
+                    ]}
+                  />
                   <View style={styles.lockOverlay}>
                     <View style={styles.lockBadge}>
                       <Lock size={14} color={colors.textPrimary} />

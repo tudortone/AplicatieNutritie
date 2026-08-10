@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
+import { useFocusEffect } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, cancelAnimation } from 'react-native-reanimated';
 import { Flame, Activity, TrendingUp, Award, Scale, TrendingDown, Sparkles, Plus, Target } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
@@ -36,17 +37,26 @@ const AnimatedTrendArrow = ({ isLoss, color }: { isLoss: boolean; color: string 
   const translateY = useSharedValue(0);
   const reduceMotion = useReducedMotion();
 
-  useEffect(() => {
-    if (reduceMotion) return;
-    translateY.value = withRepeat(
-      withSequence(
-        withTiming(isLoss ? 3 : -3, { duration: 600 }),
-        withTiming(0, { duration: 600 })
-      ),
-      -1,
-      true
-    );
-  }, [isLoss, translateY, reduceMotion]);
+  // PERF-006: cu withRepeat(..., -1) work-loop-ul animației rulează la nesfârșit
+  // chiar și când ecranul nu e focusat. O pornim doar cât screen-ul e activ
+  // (useFocusEffect) și o oprim la blur/unmount cu cancelAnimation.
+  useFocusEffect(
+    useCallback(() => {
+      if (reduceMotion) return;
+      translateY.value = withRepeat(
+        withSequence(
+          withTiming(isLoss ? 3 : -3, { duration: 600 }),
+          withTiming(0, { duration: 600 })
+        ),
+        -1,
+        true
+      );
+      return () => {
+        cancelAnimation(translateY);
+        translateY.value = 0;
+      };
+    }, [isLoss, translateY, reduceMotion])
+  );
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -113,7 +123,10 @@ export default function StatisticiScreen() {
 
       const { data, error } = await supabase
         .from('mese')
-        .select('*')
+        // PERF-007: selectează doar coloanele folosite mai jos (created_at +
+        // macro-urile) — nu 'mese.*' cu alimente/imagine_url, de care statisticile
+        // nu au nevoie, pe ~7 zile de rânduri.
+        .select('created_at, calorii, proteine, carbohidrati, grasimi')
         .eq('user_id', user.id)
         // Aduce datele din ultimele 7 zile. Supabase va face query bazat pe UTC,
         // dar filtrarea funcționează deoarece toISOString() ține cont de timpul local.
@@ -213,42 +226,58 @@ export default function StatisticiScreen() {
   }, []);
 
   const salveazaGreutate = async (nouaValoare: number) => {
-    await AsyncStorage.setItem('greutate', nouaValoare.toString());
-    setGreutateCurenta(nouaValoare);
+    try {
+      const aziStr = localDayKey(new Date());
+      const ziNume = new Date().toLocaleDateString('ro-RO', { weekday: 'short' }).slice(0, 3);
+      const restIstoric = istoricGreutate.filter(i => i.data !== aziStr);
+      const nouIstoric = [...restIstoric, { data: aziStr, ziNume, greutate: nouaValoare }].sort((a, b) => a.data.localeCompare(b.data));
 
-    const aziStr = localDayKey(new Date());
-    const ziNume = new Date().toLocaleDateString('ro-RO', { weekday: 'short' }).slice(0, 3);
-    const restIstoric = istoricGreutate.filter(i => i.data !== aziStr);
-    const nouIstoric = [...restIstoric, { data: aziStr, ziNume, greutate: nouaValoare }].sort((a, b) => a.data.localeCompare(b.data));
+      // Persistăm întâi (AsyncStorage + Supabase); doar pe succes actualizăm starea UI.
+      await AsyncStorage.setItem('greutate', nouaValoare.toString());
+      await AsyncStorage.setItem('greutate_istoric', JSON.stringify(nouIstoric));
 
-    setIstoricGreutate(nouIstoric);
-    await AsyncStorage.setItem('greutate_istoric', JSON.stringify(nouIstoric));
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.auth.updateUser({ data: { greutate: nouaValoare, greutate_istoric: nouIstoric } });
+      }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.auth.updateUser({ data: { greutate: nouaValoare, greutate_istoric: nouIstoric } });
+      setGreutateCurenta(nouaValoare);
+      setIstoricGreutate(nouIstoric);
+      setModalGreutateVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      // FIT-007: la eșec nu actualizăm starea locală; modalul rămâne deschis pentru reîncercare.
+      console.error('Eroare la salvarea greutății:', e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
-
-    setModalGreutateVisible(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const salveazaGreutateTinta = async (nouaValoare: number) => {
-    await AsyncStorage.setItem('greutateTinta', nouaValoare.toString());
-    setGreutateTinta(nouaValoare);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.auth.updateUser({ data: { greutateTinta: nouaValoare } });
+    try {
+      await AsyncStorage.setItem('greutateTinta', nouaValoare.toString());
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.auth.updateUser({ data: { greutateTinta: nouaValoare } });
+      }
+
+      setGreutateTinta(nouaValoare);
+      setModalGreutateVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      // FIT-007: la eșec nu actualizăm starea locală; modalul rămâne deschis pentru reîncercare.
+      console.error('Eroare la salvarea greutății țintă:', e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
-    setModalGreutateVisible(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const calculPredicieAI = () => {
     const diferenta = greutateCurenta - greutateTinta;
     if (Math.abs(diferenta) < 0.2) return { text: "Felicitări! Ai atins deja sau ești extrem de aproape de greutatea țintă!", dataEst: "Azi", saptamani: 0 };
     
-    const deficit = caloriiTinta > medieCalorii && medieCalorii > 0 ? (caloriiTinta - medieCalorii) : 450;
+    // FIT-006: deficit REAL, pozitiv doar când media consumată e sub țintă
+    // (max(0, ...)); fără fallback-ul hardcodat de 450 kcal când nu există deficit.
+    const deficit = medieCalorii > 0 ? Math.max(0, caloriiTinta - medieCalorii) : 0;
     const kgPerSaptamana = Math.max(0.2, (deficit * 7) / 7700);
     const saptamaniNecesare = Math.max(1, Math.round(Math.abs(diferenta) / kgPerSaptamana));
     const zileNecesare = saptamaniNecesare * 7;
@@ -679,7 +708,7 @@ const styles = StyleSheet.create({
   recordSub: { fontSize: 12, fontWeight: '500', marginTop: 2 },
   
   chartSwitcher: { flexDirection: 'row', borderRadius: 12, borderWidth: 1, padding: 2 },
-  chartSwitchBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  chartSwitchBtn: { paddingHorizontal: 12, paddingVertical: 6, minHeight: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   chartSwitchText: { fontSize: 12, fontWeight: '800' },
 
   predictCard: { borderRadius: 28, overflow: 'hidden', borderWidth: 1, marginBottom: 24 },

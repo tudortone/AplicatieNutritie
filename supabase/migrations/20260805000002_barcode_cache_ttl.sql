@@ -56,6 +56,11 @@ $$;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    -- M7: cron.schedule re-rulat arunca „job already exists". Anulam job-ul
+    -- existent (daca exista) inainte de a-l re-programa, ca re-rularea migrarii
+    -- sa fie idempotenta.
+    PERFORM cron.unschedule('nutriai-curata-barcode-cache')
+      FROM cron.job WHERE jobname = 'nutriai-curata-barcode-cache';
     PERFORM cron.schedule(
       'nutriai-curata-barcode-cache',
       '0 4 * * *',          -- zilnic la 04:00 (ora bazei de date)

@@ -154,6 +154,51 @@ export function useHealthSync(): HealthSyncState {
     }
   }, [isAvailable, weight]);
 
+  // 3. Monitorizare în timp real a pașilor (dacă aplicația este deschisă)
+  const startWatchingSteps = useCallback(() => {
+    if (subscriptionRef.current) {
+      subscriptionRef.current.remove();
+      subscriptionRef.current = null;
+    }
+    // Un watch nou pornește un contor cumulativ de la zero; primul eveniment
+    // devine linia de bază, ca să nu numărăm pași deja acoperiți de citirea
+    // autoritativă din fetchStepsToday.
+    lastWatchStepsRef.current = null;
+    try {
+      subscriptionRef.current = Pedometer.watchStepCount((result) => {
+        const cumulative = result.steps;
+        const last = lastWatchStepsRef.current;
+        if (last === null) {
+          lastWatchStepsRef.current = cumulative;
+          return;
+        }
+        if (cumulative <= last) {
+          // Contorul s-a resetat (reboot / restart pedometru): re-bază, fără delta.
+          lastWatchStepsRef.current = cumulative;
+          return;
+        }
+        const delta = cumulative - last;
+        lastWatchStepsRef.current = cumulative;
+        stepBufferRef.current += delta;
+        const now = Date.now();
+        if (now - lastStepFlushRef.current >= 1000) {
+          lastStepFlushRef.current = now;
+          flushSteps();
+        }
+      });
+    } catch (e) {
+      if (__DEV__) console.debug('[useHealthSync] watchStepCount indisponibil pe acest mediu:', e);
+    }
+  }, [flushSteps]);
+
+  const stopWatchingSteps = useCallback(() => {
+    if (subscriptionRef.current) {
+      subscriptionRef.current.remove();
+      subscriptionRef.current = null;
+    }
+    flushSteps();
+  }, [flushSteps]);
+
   // 2. Verificăm disponibilitatea Pedometer pe dispozitiv și citim setările
   const initHealth = useCallback(async () => {
     setLoading(true);
@@ -198,73 +243,40 @@ export function useHealthSync(): HealthSyncState {
     } finally {
       setLoading(false);
     }
-  }, [fetchStepsToday]);
-
-  // 3. Monitorizare în timp real a pașilor (dacă aplicația este deschisă)
-  const startWatchingSteps = () => {
-    if (subscriptionRef.current) {
-      subscriptionRef.current.remove();
-      subscriptionRef.current = null;
-    }
-    // Un watch nou pornește un contor cumulativ de la zero; primul eveniment
-    // devine linia de bază, ca să nu numărăm pași deja acoperiți de citirea
-    // autoritativă din fetchStepsToday.
-    lastWatchStepsRef.current = null;
-    try {
-      subscriptionRef.current = Pedometer.watchStepCount((result) => {
-        const cumulative = result.steps;
-        const last = lastWatchStepsRef.current;
-        if (last === null) {
-          lastWatchStepsRef.current = cumulative;
-          return;
-        }
-        if (cumulative <= last) {
-          // Contorul s-a resetat (reboot / restart pedometru): re-bază, fără delta.
-          lastWatchStepsRef.current = cumulative;
-          return;
-        }
-        const delta = cumulative - last;
-        lastWatchStepsRef.current = cumulative;
-        stepBufferRef.current += delta;
-        const now = Date.now();
-        if (now - lastStepFlushRef.current >= 1000) {
-          lastStepFlushRef.current = now;
-          flushSteps();
-        }
-      });
-    } catch (e) {
-      if (__DEV__) console.debug('[useHealthSync] watchStepCount indisponibil pe acest mediu:', e);
-    }
-  };
-
-  const stopWatchingSteps = () => {
-    if (subscriptionRef.current) {
-      subscriptionRef.current.remove();
-      subscriptionRef.current = null;
-    }
-    flushSteps();
-  };
+  }, [fetchStepsToday, startWatchingSteps]);
 
   useEffect(() => {
     initHealth();
     return () => {
       stopWatchingSteps();
     };
-  }, [initHealth]);
+  }, [initHealth, stopWatchingSteps]);
 
-  // Monitorizare AppState pentru reîmprospătare la revenire în aplicație
+  // Monitorizare AppState: la fundal oprim watch-ul pedometrului (baterie),
+  // la revenire re-împrospătăm pașii și reluăm watch-ul dacă sync-ul e activ.
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      const anterior = String(appState.current);
+      const aIesitInFundal =
+        anterior === 'active' && nextAppState.match(/inactive|background/);
+      const aRevenitInAplicatie =
+        anterior.match(/inactive|background/) && nextAppState === 'active';
+
+      if (aIesitInFundal) {
+        // PERF-001: în fundal evenimentele watchStepCount nu mai au consumator
+        // vizibil și țin procesul treaz (CPU + setState fără render). Le oprim.
+        stopWatchingSteps();
+      } else if (aRevenitInAplicatie) {
         if (isEnabled) {
           fetchStepsToday();
+          startWatchingSteps();
         }
       }
       appState.current = nextAppState;
     };
     const sub = AppState.addEventListener('change', handleAppStateChange);
     return () => sub.remove();
-  }, [isEnabled, fetchStepsToday]);
+  }, [isEnabled, fetchStepsToday, startWatchingSteps, stopWatchingSteps]);
 
   // 4. Comutare activare sincronizare
   const toggleSync = async (enable: boolean): Promise<boolean> => {

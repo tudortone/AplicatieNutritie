@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Platform, type StyleProp, type ViewStyle } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
@@ -25,6 +25,16 @@ import { useGamificareContext } from '../../context/GamificareContext';
 import { StreakBottomSheet, StreakBottomSheetRef } from '../../components/gamification/StreakBottomSheet';
 
 const AnimatedRingCircle = Animated.createAnimatedComponent(Circle);
+
+// PERF-004: pe Android folosim un View simplu (gradientul din card poarta
+// aspectul) in loc de blur live — cele 4 BlurView mereu montate pe Home au cost
+// de compositing pe dispozitive mid/low-end. Pe iOS pastram BlurView (ieftin acolo).
+function CardBackdrop({ style, children }: { style?: StyleProp<ViewStyle>; children?: React.ReactNode }) {
+  if (Platform.OS === 'ios') {
+    return <BlurView intensity={20} tint="dark" style={style}>{children}</BlurView>;
+  }
+  return <View style={style}>{children}</View>;
+}
 
 function RingProgress({ procent, color, bgColor }: { procent: number; color: string; bgColor: string }) {
   const radius = 55;
@@ -195,14 +205,19 @@ export default function HomeScreen() {
   // Le adunăm pentru totalul ars. Dacă observi suprapuneri, dezactivează una din surse.
   const caloriiArseTotal = trackerCalories + totalCaloriiArse;
   const caloriiRamase = caloriiTinta - caloriiConsumate + caloriiArseTotal;
-  
+
+  // FIT-001: bugetul net (țintă + arse) este definiția unică folosită de headline,
+  // inel și stare. Fără asta, headline-ul arăta „mai am X kcal” în timp ce inelul
+  // afișa depășire pe aceeași valoare consumată — două adevăruri contradictorii.
+  const bugetCaloricNet = caloriiTinta + caloriiArseTotal;
+
   // Guard împotriva împărțirii la zero (NaN)
-  const safeCaloriiTinta = caloriiTinta > 0 ? caloriiTinta : 1;
+  const safeCaloriiTinta = bugetCaloricNet > 0 ? bugetCaloricNet : 1;
   const safeProteineTinta = proteineTinta > 0 ? proteineTinta : 1;
   const procentCalorii = Math.min((caloriiConsumate / safeCaloriiTinta) * 100, 100);
   const procentProteine = Math.min((proteineConsumate / safeProteineTinta) * 100, 100);
 
-  const calState = getCalorieState(caloriiConsumate, caloriiTinta, colors.accent, colors.accentSecondary);
+  const calState = getCalorieState(caloriiConsumate, bugetCaloricNet, colors.accent, colors.accentSecondary);
 
   const userName = user?.email ? user.email.split('@')[0] : 'Prieten';
   const capitalizedName = userName.charAt(0).toUpperCase() + userName.slice(1);
@@ -325,6 +340,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Seria de ${streak} zile`}
               style={s.streakBadge}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
               <LinearGradient colors={colors.accentGradient} style={s.streakGrad}>
                 <Flame size={14} color={colors.background} fill={colors.background} />
@@ -336,7 +352,7 @@ export default function HomeScreen() {
 
         {/* Main calorie ring card */}
         <Animated.View entering={FadeInDown.duration(700).delay(100)} style={[s.ringCard, { borderColor: colors.cardBorder }]}>
-          <BlurView intensity={20} tint="dark" style={s.ringCardBlur}>
+          <CardBackdrop style={s.ringCardBlur}>
             <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={s.ringCardGrad}>
               <View style={s.ringCardTop}>
                 <View style={s.ringCardInfo}>
@@ -434,7 +450,7 @@ export default function HomeScreen() {
                 </View>
               </View>
             </LinearGradient>
-          </BlurView>
+          </CardBackdrop>
         </Animated.View>
 
         {/* Camera scan CTA (Principal) */}
@@ -507,7 +523,7 @@ export default function HomeScreen() {
 
         {/* Water Hydration Card */}
         <Animated.View entering={FadeInDown.duration(700).delay(320)} style={[s.waterCard, { borderColor: '#00e5ff33' }]}>
-          <BlurView intensity={20} tint="dark" style={s.waterBlur}>
+          <CardBackdrop style={s.waterBlur}>
             <LinearGradient colors={['#00e5ff15', 'rgba(0,0,0,0)']} style={s.waterGrad}>
               <View style={s.waterHeader}>
                 <View style={s.waterTitleRow}>
@@ -560,7 +576,7 @@ export default function HomeScreen() {
                 <Text style={[s.waterMl, { color: colors.textTertiary }]}>{pahare * 250} ml</Text>
               </View>
             </LinearGradient>
-          </BlurView>
+          </CardBackdrop>
         </Animated.View>
 
         {/* Apple HealthKit / Google Fit & Pași Card */}
@@ -573,7 +589,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Setări sănătate și pași"
             >
-              <BlurView intensity={20} tint="dark" style={s.healthBlur}>
+              <CardBackdrop style={s.healthBlur}>
                 <LinearGradient colors={[isEnabled ? colors.accent + '15' : 'rgba(255,255,255,0.03)', 'rgba(0,0,0,0)']} style={s.healthGrad}>
                   <View style={s.healthHeader}>
                     <View style={s.healthTitleRow}>
@@ -620,7 +636,7 @@ export default function HomeScreen() {
                     </View>
                   )}
                 </LinearGradient>
-              </BlurView>
+              </CardBackdrop>
             </TouchableOpacity>
           </Animated.View>
 
@@ -674,7 +690,7 @@ export default function HomeScreen() {
         {/* Tips card */}
         {isTipVisible && (
           <Animated.View entering={FadeInDown.duration(700).delay(350)} style={[s.tipsCard, { borderColor: colors.accentSecondary + '25' }]}>
-            <BlurView intensity={20} tint="dark" style={s.tipsBlur}>
+            <CardBackdrop style={s.tipsBlur}>
               <LinearGradient colors={[colors.accentSecondary + '14', 'rgba(0,0,0,0)']} style={s.tipsGrad}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <Text style={[s.tipsTitle, { color: colors.textPrimary, marginBottom: 0 }]}>✨ Sfat NutriAI al Zilei</Text>
@@ -690,7 +706,7 @@ export default function HomeScreen() {
                 </View>
                 <Text style={[s.tipsText, { color: colors.textTertiary }]}>{sfatAles}</Text>
               </LinearGradient>
-            </BlurView>
+            </CardBackdrop>
           </Animated.View>
         )}
 
@@ -738,8 +754,6 @@ const s = StyleSheet.create({
   ringCardSubLabel: { fontSize: 12, fontWeight: '500' },
   ringCardSubValue: { fontSize: 12, fontWeight: '800' },
   ringCardSubSep: { fontSize: 12, fontWeight: '500' },
-  // Legacy (kept for safety)
-  ringCardSub: { fontSize: 14, fontWeight: '500', marginBottom: 24 },
   progressBarBg: { width: '100%', height: 8, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden', marginBottom: 8 },
   progressBarFill: { height: '100%', borderRadius: 4 },
   progressBarLabel: { fontSize: 12, fontWeight: '600', marginBottom: 28 },
@@ -837,7 +851,7 @@ const s = StyleSheet.create({
   liveHeatmapTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   liveHeatmapDot: { width: 8, height: 8, borderRadius: 4 },
   liveHeatmapTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 0.6 },
-  liveHeatmapToggle: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1 },
+  liveHeatmapToggle: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, minHeight: 44, borderRadius: 10, borderWidth: 1 },
   liveHeatmapToggleText: { fontSize: 11, fontWeight: '800' },
   liveHeatmapBodyWrap: { height: 245, alignItems: 'center', justifyContent: 'center' },
   liveHeatmapFooter: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' },

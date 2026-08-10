@@ -11,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Trophy, Camera, CheckCircle2, User, Pencil, Crown, Mail, FileText, Users } from 'lucide-react-native';
+import { Save, LogOut, Target, Scale, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Trophy, Camera, CheckCircle2, User, Pencil, Crown, Mail, FileText } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
@@ -183,6 +183,19 @@ export default function ProfilScreen() {
       return;
     }
     
+    // Persistare locală, folosită atât pe succes cât și pe eșec backend. Fără
+    // ea, o eroare Supabase sărea scrierile locale și afișa fals „Salvat local".
+    const salveazaLocal = async () => {
+      await AsyncStorage.setItem('greutate', greutate);
+      await AsyncStorage.setItem('greutateTinta', greutateTinta);
+      await AsyncStorage.setItem('caloriiTinta', caloriiTinta);
+      await AsyncStorage.setItem('proteineTinta', proteineTinta);
+      await AsyncStorage.setItem('carbiTinta', carbiTinta);
+      await AsyncStorage.setItem('grasimiTinta', grasimiTinta);
+      await AsyncStorage.setItem('nume_profil', nume);
+      if (avatarUrl) await AsyncStorage.setItem('avatar_url', avatarUrl);
+    };
+
     setLoading(true);
     try {
       // Salvăm întâi în Supabase
@@ -202,24 +215,27 @@ export default function ProfilScreen() {
       if (error) throw error;
 
       // Apoi salvăm local (doar după ce Supabase a confirmat)
-      await AsyncStorage.setItem('greutate', greutate);
-      await AsyncStorage.setItem('greutateTinta', greutateTinta);
-      await AsyncStorage.setItem('caloriiTinta', caloriiTinta);
-      await AsyncStorage.setItem('proteineTinta', proteineTinta);
-      await AsyncStorage.setItem('carbiTinta', carbiTinta);
-      await AsyncStorage.setItem('grasimiTinta', grasimiTinta);
-      await AsyncStorage.setItem('nume_profil', nume);
-      if (avatarUrl) await AsyncStorage.setItem('avatar_url', avatarUrl);
+      await salveazaLocal();
 
       notify.success('Profil actualizat', 'Modificările au fost salvate');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowSuccessAnim(true);
       setTimeout(() => setShowSuccessAnim(false), 2600);
     } catch {
+      // Backend indisponibil: persistăm totuși local, ca mesajul să fie adevărat
+      // (FIT-002). Dacă nici salvarea locală nu reușește, raportăm eșec.
+      let salvatLocal = true;
+      try {
+        await salveazaLocal();
+      } catch {
+        salvatLocal = false;
+      }
       showBanner({
-        title: "Salvat local",
-        message: "Conexiune indisponibilă. Datele au fost salvate local.",
-        type: 'info'
+        title: salvatLocal ? "Salvat local" : "Salvarea a eșuat",
+        message: salvatLocal
+          ? "Conexiune indisponibilă. Datele au fost salvate local."
+          : "Nu s-au putut salva datele. Verifică conexiunea și încearcă din nou.",
+        type: salvatLocal ? 'info' : 'error'
       });
     } finally {
       setLoading(false);
@@ -327,6 +343,18 @@ export default function ProfilScreen() {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Nu ești autentificat.</Text>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            router.push('/auth' as never);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Conectează-te"
+          style={[styles.loginButton, { backgroundColor: colors.accent }]}
+        >
+          <Text style={styles.loginButtonText}>Conectează-te</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -605,50 +633,6 @@ export default function ProfilScreen() {
               </Text>
               <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
                 Scanări AI nelimitate, chat fără restricții și macro-uri personalizate
-              </Text>
-            </View>
-            <ChevronRight size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* Upgrade Family Plan: nu există încă un produs de familie în RevenueCat,
-            deci duce la paywall-ul existent până apare planul real. */}
-        <Animated.View entering={FadeInDown.duration(600).delay(65)}>
-          <TouchableOpacity
-            onPress={() => router.push('/paywall' as never)}
-            activeOpacity={0.85}
-            style={{
-              backgroundColor: colors.accentSecondary + '12',
-              borderColor: colors.accentSecondary + '44',
-              borderWidth: 1,
-              borderRadius: 18,
-              padding: 16,
-              marginBottom: 24,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 14,
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Upgrade la planul Family"
-          >
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: colors.accentSecondary + '22',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Users size={22} color={colors.accentSecondary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: '900', color: colors.textPrimary }}>
-                Upgrade la Plan Family
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
-                Conturi pentru întreaga familie, cu un singur abonament
               </Text>
             </View>
             <ChevronRight size={18} color={colors.textSecondary} />
@@ -1037,6 +1021,8 @@ const styles = StyleSheet.create({
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 15, fontWeight: '500' },
+  loginButton: { marginTop: 24, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 999 },
+  loginButtonText: { fontSize: 15, fontWeight: '900', color: '#090C0E' },
 
   // Avatar section
   avatarSection: { alignItems: 'center', marginBottom: 30 },

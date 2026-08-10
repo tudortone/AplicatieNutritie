@@ -45,6 +45,18 @@ jest.mock('@google/generative-ai', () => {
   };
 });
 
+// M6: testul de chat era non-hermetic — cu GROQ_API_KEY truthy în test
+// (config/env.js), `/api/chat` făcea fetch real către api.groq.com (puteam să
+// agățăm 35s / flake în CI). Mockăm fetch-ul la un răspuns Groq valid.
+globalThis.fetch = jest.fn().mockResolvedValue({
+  ok: true,
+  status: 200,
+  json: jest.fn().mockResolvedValue({
+    choices: [{ message: { content: 'Bună ziua! Cu ce te pot ajuta legat de nutriție?' } }],
+    usage: {},
+  }),
+});
+
 describe('Backend API Tests', () => {
   describe('GET /health', () => {
     it('ar trebui să returneze status ok', async () => {

@@ -134,6 +134,11 @@ if (config.imagekit.publicKey && config.imagekit.privateKey && config.imagekit.u
 }
 
 const app = express();
+// trust proxy = 1: Render termina TLS/proxy in fata aplicatiei, deci req.ip citeste
+// adresa reala a clientului din X-Forwarded-For (necesar pentru rate-limiting pe IP).
+// ATENTIE: sigur DOAR in spatele unui proxy. Daca serverul ar fi expus direct la
+// internet (fara proxy), X-Forwarded-For ar fi spoofabil si limitele per-IP ar fi
+// ocolite prin rotirea unor IP-uri false — nu expune portul direct.
 app.set('trust proxy', 1);
 app.use(helmet());
 app.use(compression());
@@ -215,7 +220,7 @@ app.use((req, res, next) => {
 app.use(idempotencyMiddleware);
 
 const storePartajat = creeazaStoreRateLimit({ url: config.redisUrl });
-const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter } = creeazaLimitatoare({
+const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter } = creeazaLimitatoare({
   store: storePartajat?.store,
   avertizeazaFaraStore: config.esteProductie,
 });
@@ -330,7 +335,7 @@ app.get('/', (_req, res) => {
 // fetchCuTimeoutSupabase (S4-06, 10s) arunca si raspundem 503. Runda de tabele
 // de sanatate este aleasa ca sa nu depinda de date: intereseaza doar ca reteaua
 // si PostgREST raspund; eroarea de tabel inexistent este ignorata.
-app.get('/health', async (_req, res) => {
+app.get('/health', healthLimiter, async (_req, res) => {
   try {
     await supabase.from('health_check').select('*').maybeSingle();
     res.status(200).json({
@@ -439,6 +444,11 @@ app.use((err, _req, res, _next) => {
   if (err?.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ eroare: 'Fișierul este prea mare. Limita este 5MB.' });
   }
+  // CHAT-007: corp JSON/urlencoded peste limita express.json (1MB) arunca
+  // `entity.too.large`; fara aceasta ramura cadea pe 500 generic in loc de 413.
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({ eroare: 'Corpul cererii depășește limita (1MB).' });
+  }
   if (err instanceof multer.MulterError || message.includes('Tip fișier nepermis')) {
     return res.status(400).json({ eroare: message });
   }
@@ -481,6 +491,22 @@ if (require.main === module) {
     console.log('[GDPR] Worker de reluare activ, interval 5 minute.');
   } else {
     console.log('[GDPR] Worker de reluare inactiv (GDPR_WORKER_ACTIV != 1).');
+  }
+
+  // H3: reconcilierea creditelor e activă implicit (nu necesita flag), pentru ca
+  // lansarea backend-ului să protejeze automat banii. Poate fi dezactivată cu
+  // CREDIT_RECONCILE_ACTIV=0. Restituie doar debite orfane (crash-window) —
+  // mutare în favoarea utilizatorului, deci default-on e sigur.
+  if (process.env.CREDIT_RECONCILE_ACTIV !== '0') {
+    const { reconciliaCrediteConsumate } = require('./utils/reconcileCredite');
+    const tickerReconcile = setInterval(() => {
+      reconciliaCrediteConsumate({ supabaseAdmin }).catch((e) =>
+        console.error('[Reconciliere credite]', e.message));
+    }, 15 * 60 * 1000);
+    if (tickerReconcile.unref) tickerReconcile.unref();
+    console.log('[Credite] Worker reconciliere activ, interval 15 minute.');
+  } else {
+    console.log('[Credite] Worker reconciliere inactiv (CREDIT_RECONCILE_ACTIV=0).');
   }
 
   const server = app.listen(config.port, config.host, () => {

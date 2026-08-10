@@ -105,6 +105,18 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 		message: mesaj('Prea multe cereri de status. Incearca in cateva secunde.'),
 	});
 
+	// LOW: /health era public si neratelimitat, cu ping real catre PostgREST —
+	// un vector de hammering. Pragul e generos (300/min/IP): Render Health Check
+	// si keep-alive bat aici periodic dintr-un IP stabil.
+	const healthLimiter = rateLimit({
+		...comun,
+		...cuStorePropriu('rl:health:'),
+		windowMs: 60 * 1000,
+		max: 300,
+		keyGenerator: ipFallbackKey,
+		message: mesaj('Prea multe cereri de sanatate. Incearca mai tarziu.'),
+	});
+
 	const aiLimiter = rateLimit({
 		...comun,
 		...cuStorePropriu('rl:ai:'),
@@ -116,7 +128,7 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 		),
 	});
 
-	return { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter };
+	return { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter };
 }
 
 module.exports = {

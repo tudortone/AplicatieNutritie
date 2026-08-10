@@ -89,51 +89,58 @@ function BodyMapBase({
 		return out
 	}, [intensity])
 
-	const nodes: React.ReactNode[] = []
-	for (let i = 0; i < shapes.length; i++) {
-		const s = shapes[i]
+	// Memoizam nodurile: la re-randari care nu schimba intensitatea/selectia
+	// (ex. tastare intr-un Stepper, comutarea warmup) nu mai reconstruim ~1500
+	// de <Path> pe firul principal. `heat` e deja memoizat, deci identitatea lui
+	// se schimba doar cand se logheaza un set.
+	const nodes = useMemo(() => {
+		const out: React.ReactNode[] = []
+		for (let i = 0; i < shapes.length; i++) {
+			const s = shapes[i]
 
-		// 1. desenul original, mereu, in ordinea lui — semi-transparent, ca
-		//    muschii incalziti sa iasa in evidenta
-		nodes.push(<Path key={`b${i}`} d={s.d} fill={s.f} fillOpacity={UNHEATED_OPACITY} />)
+			// 1. desenul original, mereu, in ordinea lui — semi-transparent, ca
+			//    muschii incalziti sa iasa in evidenta
+			out.push(<Path key={`b${i}`} d={s.d} fill={s.f} fillOpacity={UNHEATED_OPACITY} />)
 
-		if (!s.m) continue
+			if (!s.m) continue
 
-		// 2. stratul de caldura, exact peste forma, ca sa ramana sub umbre
-		const h = heat.get(s.m)
-		if (h) {
-			nodes.push(
-				<Path key={`h${i}`} d={s.d} fill={h.color} fillOpacity={h.opacity} />,
-			)
+			// 2. stratul de caldura, exact peste forma, ca sa ramana sub umbre
+			const h = heat.get(s.m)
+			if (h) {
+				out.push(
+					<Path key={`h${i}`} d={s.d} fill={h.color} fillOpacity={h.opacity} />,
+				)
+			}
+
+			// 3. conturul muschiului selectat
+			if (selected && s.m === selected) {
+				out.push(
+					<Path
+						key={`s${i}`}
+						d={s.d}
+						fill="none"
+						stroke="#FFFFFF"
+						strokeOpacity={0.9}
+						strokeWidth={1.5}
+					/>,
+				)
+			}
+
+			// 4. zona de atingere, invizibila, peste forma
+			if (onMusclePress) {
+				const muscle = s.m
+				out.push(
+					<Path
+						key={`t${i}`}
+						d={s.d}
+						fill="transparent"
+						onPress={() => onMusclePress(muscle)}
+					/>,
+				)
+			}
 		}
-
-		// 3. conturul muschiului selectat
-		if (selected && s.m === selected) {
-			nodes.push(
-				<Path
-					key={`s${i}`}
-					d={s.d}
-					fill="none"
-					stroke="#FFFFFF"
-					strokeOpacity={0.9}
-					strokeWidth={1.5}
-				/>,
-			)
-		}
-
-		// 4. zona de atingere, invizibila, peste forma
-		if (onMusclePress) {
-			const muscle = s.m
-			nodes.push(
-				<Path
-					key={`t${i}`}
-					d={s.d}
-					fill="transparent"
-					onPress={() => onMusclePress(muscle)}
-				/>,
-			)
-		}
-	}
+		return out
+	}, [shapes, heat, selected, onMusclePress])
 
 	return (
 		<View style={style} testID={testID}>

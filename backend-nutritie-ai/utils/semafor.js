@@ -52,7 +52,7 @@ class Semafor {
 			// (signal aborted) inainte ca un slot sa fie liber, intrarea se scoate
 			// din coada si nu blocheaza locul celorlalti asteptatori.
 			await new Promise((rezolva, respinge) => {
-				const intrare = { rezolva, respinge, curatat: false, peAbort: null };
+				const intrare = { rezolva, respinge, curatat: false, peAbort: null, semnal: signal };
 				intrare.peAbort = () => {
 					intrare.curatat = true;
 					const index = this._coada.indexOf(intrare);
@@ -71,7 +71,12 @@ class Semafor {
 			this.activi -= 1;
 			const urmatorul = this._coada.shift();
 			if (urmatorul) {
-				if (urmatorul.peAbort) signal?.removeEventListener('abort', urmatorul.peAbort);
+				// CAM-009: listenerul de anulare a fost inregistrat pe SEMNALUL intrarii
+				// respective, nu pe al acestei cereri — fara referinta la el, removeEventListener
+				// era un no-op si listenerii ramaneau atasati (scurgeri) pana la fire-ul abort.
+				if (urmatorul.peAbort && urmatorul.semnal) {
+					urmatorul.semnal.removeEventListener('abort', urmatorul.peAbort);
+				}
 				if (!urmatorul.curatat) urmatorul.rezolva();
 			}
 		}

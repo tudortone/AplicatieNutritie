@@ -296,12 +296,23 @@ function createAiRouter({
   // RUTA 2: CHAT CONVERSATIONAL (GROQ / LLAMA 3.3)
   // ==========================================
   router.post('/chat', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, async (req, res) => {
+    // M1: propagăm AbortSignal-ul pe deconectarea clientului în tot fluxul chat
+    // (ruleazaChat → Groq fetch). Fără asta, un client deconectat lăsa generarea
+    // să continue 35s și să fie facturată degeaba — același pattern ca vision.
+    const controllerAbord = new AbortController();
+    const peDeconectare = () => {
+      if (res.writableEnded) return;
+      controllerAbord.abort();
+    };
+    res.on('close', peDeconectare);
     try {
-      return res.json(await serviciuChat.ruleazaChat(req.body));
+      return res.json(await serviciuChat.ruleazaChat(req.body, controllerAbord.signal));
     } catch (err) {
       if (err instanceof EroareAiClient) return res.status(err.status).json({ raspuns: err.mesaj });
       console.error('Eroare la generarea chat-ului AI:', err.message || err);
       return res.status(500).json({ raspuns: 'A aparut o problema de conexiune cu asistentul AI. Te rugam sa mai incerci peste cateva momente!' });
+    } finally {
+      res.removeListener('close', peDeconectare);
     }
   });
 
@@ -309,12 +320,22 @@ function createAiRouter({
   // RUTA DEDICATA: LOGARE MASA DIN CHAT (JSON STRICT MEAL_PROPOSAL)
   // ==========================================
   const handleLogFoodChat = async (req, res) => {
+    // M1: abortează fetch-ul Groq dacă clientul se deconectează (același pattern ca
+    // vision) — altfel generarea continuă și e facturată degeaba.
+    const controllerAbord = new AbortController();
+    const peDeconectare = () => {
+      if (res.writableEnded) return;
+      controllerAbord.abort();
+    };
+    res.on('close', peDeconectare);
     try {
-      return res.json(await serviciuChat.logFoodDinChat(req.body));
+      return res.json(await serviciuChat.logFoodDinChat(req.body, controllerAbord.signal));
     } catch (err) {
       if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
       console.error('Eroare in /api/log-food-from-chat:', err.message);
       return res.status(500).json({ eroare: 'Nu s-a putut genera propunerea de masa.' });
+    } finally {
+      res.removeListener('close', peDeconectare);
     }
   };
 
@@ -326,12 +347,21 @@ function createAiRouter({
   // RUTA: ESTIMARE RAPIDA TEXT ALIMENT (GROQ/LLM)
   // ==========================================
   router.post('/estimeaza-mancare-text', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, async (req, res) => {
+    // M1: abortează fetch-ul Groq la deconectarea clientului (pattern comun vision).
+    const controllerAbord = new AbortController();
+    const peDeconectare = () => {
+      if (res.writableEnded) return;
+      controllerAbord.abort();
+    };
+    res.on('close', peDeconectare);
     try {
-      return res.json(await serviciuChat.estimeazaMancareText(req.body));
+      return res.json(await serviciuChat.estimeazaMancareText(req.body, controllerAbord.signal));
     } catch (err) {
       if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
       console.error('Eroare estimare AI aliment:', err.message);
       return res.status(500).json({ eroare: 'Nu s-a putut estima alimentul cu AI.' });
+    } finally {
+      res.removeListener('close', peDeconectare);
     }
   });
 
@@ -339,6 +369,16 @@ function createAiRouter({
   // RUTA 1.3: CORECTARE SI COMBINARE / VISION FALLBACK
   // ==========================================
   const handleVisionFallbackOrCorrection = async (req, res) => {
+    // M1: abortează fetch-urile Groq/OpenAI din fallback la deconectarea clientului
+    // (același semnal de anulare ca analiza foto, S4-04). Gemini folosește
+    // callWithSoftTimeout, care nu acceptă AbortSignal, deci verificăm manual
+    // signal.aborted înainte de fiecare apel ca să nu pornim generare inutilă.
+    const controllerAbord = new AbortController();
+    const peDeconectare = () => {
+      if (res.writableEnded) return;
+      controllerAbord.abort();
+    };
+    res.on('close', peDeconectare);
     try {
       const userPrompt = req.body.user_prompt || req.body.userExplanation;
 
@@ -414,7 +454,7 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
             headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
             body: JSON.stringify(corpText('llama-3.3-70b-versatile')),
             signal,
-          }), 30000);
+          }), 30000, controllerAbord.signal);
 
           if (response.ok) {
             const data = await response.json();
@@ -444,7 +484,7 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
               headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(corpText('gpt-4o-mini')),
               signal,
-            }), 30000);
+            }), 30000, controllerAbord.signal);
 
             if (response.ok) {
               const data = await response.json();
@@ -472,6 +512,9 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
         for (const key of serviciuVision.getApiKeysList('GEMINI_API_KEY')) {
           const client = new GoogleGenerativeAI(key);
           for (const modelName of modelsToTry) {
+            // M1: callWithSoftTimeout nu acceptă AbortSignal — verificăm manual că
+            // clientul nu s-a deconectat între timp, ca să nu pornim o generare nouă.
+            if (controllerAbord.signal.aborted) break;
             try {
               const result = await callWithSoftTimeout(
                 client.getGenerativeModel({ model: modelName }).generateContent({
@@ -533,6 +576,8 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
     } catch (err) {
       console.error('Eroare corectare vizual+text / vision-fallback:', err.message);
       res.status(500).json({ eroare: 'Nu s-a putut procesa corectia cu AI.' });
+    } finally {
+      res.removeListener('close', peDeconectare);
     }
   };
 

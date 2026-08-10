@@ -24,7 +24,7 @@ import { useAntrenamente, SetExercitiu } from '../hooks/useAntrenamente';
 import { useGamificare } from '../hooks/useGamificare';
 import { useNotify } from '../hooks/useNotify';
 import { EquipmentIcon } from './fitness/EquipmentIcon';
-import { Holographic3DAnatomyBody } from '../app/exercitiu/[id]';
+import { Holographic3DAnatomyBody } from './fitness/Holographic3DAnatomyBody';
 
 const ECHIPAMENTE_OPTIONS = [
   { id: 'all', nume: '🏋️ Toate' },

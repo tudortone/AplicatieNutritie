@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../supabase';
+import { localDayKey } from '../lib/dateUtils';
 
 /**
  * Hook dedicat pentru zilele cu mese (calendar) — ultimele 90 zile.
@@ -34,7 +35,10 @@ export function useZileCuMese() {
       if (toateMesele) {
         const setZile = new Set<string>();
         toateMesele.forEach((m) => {
-          if (m.created_at) setZile.add(m.created_at.split('T')[0]);
+          // FIT-005: cheia zilei trebuie să fie în timezone-ul LOCAL (MonthCalendar
+          // marchează zilele local), nu UTC — altfel mesele adăugate seara cădeau în
+          // ziua greșită din calendar. Nu modificăm created_at, doar cheia derivată.
+          if (m.created_at) setZile.add(localDayKey(new Date(m.created_at)));
         });
         setZileCuMese(Array.from(setZile));
       }

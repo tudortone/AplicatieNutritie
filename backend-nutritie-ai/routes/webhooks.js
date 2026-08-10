@@ -9,7 +9,11 @@ const crypto = require('crypto');
 const { Webhook } = require('svix');
 const { tasks } = require('@trigger.dev/sdk/v3');
 const Sentry = require('@sentry/node');
-const { inregistreazaUtilizareAdmin } = require('../utils/clientUtilizator');
+const {
+  inregistreazaUtilizareAdmin,
+  TABELE_CU_RLS_UTILIZATOR,
+} = require('../utils/clientUtilizator');
+const { CODURI_TABELA_INEXISTENTA } = require('../utils/gdprServices');
 const { pseudonimizeaza } = require('../utils/sentrySanitize');
 
 class EroareTranzitorie extends Error {
@@ -32,6 +36,16 @@ const CODURI_PERMANENTE = new Set([
 
 function estePermanent(err) {
   return !!(err && err.code && CODURI_PERMANENTE.has(err.code));
+}
+
+// M4: unsafe_metadata vine din Clerk (setat de client, nesemnalizat) și ocolește
+// sanitizeRequest — valori absurde (negative, 1e15, NaN) ajungeau brute în `profil`.
+// Clampăm la intervalele plauzibile ale aplicației, aliniate cu validarea din
+// routes/profil.js:36-55 (greutate 30-300) și default-urile din frontend.
+function numarClampat(valoare, min, max, implicit) {
+  const numar = Number(valoare);
+  if (!Number.isFinite(numar)) return implicit;
+  return Math.min(Math.max(numar, min), max);
 }
 
 async function inregistreazaWebhookEsuat({ supabaseAdmin, clerkUserId, type, motiv, payload }) {
@@ -250,11 +264,11 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
         await supabaseAdmin.from('profil').upsert({
           user_id: supabaseUserId,
           nume: `${data.first_name || ''} ${data.last_name || ''}`.trim() || null,
-          greutate: Number(meta.greutate) || null,
-          calorii_tinta: Number(meta.calorii_tinta) || 2000,
-          proteine_tinta: Number(meta.proteine_tinta) || 150,
-          carbi_tinta: Number(meta.carbi_tinta) || 250,
-          grasimi_tinta: Number(meta.grasimi_tinta) || 70,
+          greutate: numarClampat(meta.greutate, 30, 300, null),
+          calorii_tinta: numarClampat(meta.calorii_tinta, 500, 10000, 2000),
+          proteine_tinta: numarClampat(meta.proteine_tinta, 20, 600, 150),
+          carbi_tinta: numarClampat(meta.carbi_tinta, 20, 1000, 250),
+          grasimi_tinta: numarClampat(meta.grasimi_tinta, 5, 300, 70),
           updated_at: new Date().toISOString(),
         });
         // C1-S4: upsert admin pe `profil` (service_role, fara JWT Supabase — webhook Clerk).
@@ -300,9 +314,17 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
         const supabaseUserId = mapare?.supabase_user_id;
 
         if (supabaseUserId) {
-          await supabaseAdmin.from('mese').delete().eq('user_id', supabaseUserId);
-          await supabaseAdmin.from('antrenamente').delete().eq('user_id', supabaseUserId);
-          await supabaseAdmin.from('profil').delete().eq('user_id', supabaseUserId);
+          // H4: ștergem TOATE tabelele user-scoped, nu doar mese/antrenamente/profil.
+          // Înainte, user.deleted lăsa PII orfan în produse_camara, gamificare,
+          // workout_logs, ai_jobs, credite_ai, audit_log, barcode_estimari_utilizator.
+          // Refolosim TABELE_CU_RLS_UTILIZATOR (sursa de adevăr, ca routes/gdpr.js),
+          // cu toleranță la tabele inexistente pe medii parțial migrate.
+          const sterge = async (tabela) => {
+            const rezultat = await supabaseAdmin.from(tabela).delete().eq('user_id', supabaseUserId);
+            const eroare = rezultat?.error;
+            if (eroare && !CODURI_TABELA_INEXISTENTA.has(eroare.code)) throw eroare;
+          };
+          await Promise.all(TABELE_CU_RLS_UTILIZATOR.map((tabela) => sterge(tabela)));
           await supabaseAdmin.from('clerk_user_map').delete().eq('clerk_user_id', clerkUserId);
           // C1-S4: stergere admin pe tabele de utilizator (service_role, fara JWT Supabase — webhook Clerk).
           inregistreazaUtilizareAdmin();

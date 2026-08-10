@@ -107,6 +107,8 @@ describe('Plafon cost AI per utilizator (H-06)', () => {
 
     const debit = apeluriRpc.find((a) => a.functie === 'consuma_credit');
     expect(debit).toBeDefined();
+    // H3: debitul e înregistrat atomic în ledger cu event_id generat la debitare.
+    expect(debit.params.p_event_id).toBe(req._creditEventId);
     expect(req._creditConsumat).toBe(true);
     expect(typeof req._creditEventId).toBe('string');
 
@@ -120,7 +122,9 @@ describe('Plafon cost AI per utilizator (H-06)', () => {
     const refund = apeluriRpc.find((a) => a.functie === 'aplica_tranzactie_credite');
     expect(refund).toBeDefined();
     expect(refund.params.p_user_id).toBe('u1');
-    expect(refund.params.p_event_id).toBe(req._creditEventId);
+    // H3: refund-ul foloseste namespace `refund:` ca sa NU colizeze cu rândul
+    // CONSUM_AI (UNIQUE pe credite_tranzactii.event_id).
+    expect(refund.params.p_event_id).toBe('refund:' + req._creditEventId);
     expect(refund.params.p_event_type).toBe('REFUND_AI_FAILURE');
     expect(refund.params.p_delta).toBe(1);
   });
@@ -156,12 +160,12 @@ describe('Plafon cost AI per utilizator (H-06)', () => {
     const refund = apeluriRpc.find((a) => a.functie === 'aplica_tranzactie_credite');
     expect(refund).toBeDefined();
     expect(refund.params.p_user_id).toBe('u1');
-    expect(refund.params.p_event_id).toBe(req._creditEventId);
+    expect(refund.params.p_event_id).toBe('refund:' + req._creditEventId);
     expect(refund.params.p_event_type).toBe('REFUND_AI_FAILURE');
     expect(refund.params.p_delta).toBe(1);
   });
 
-  test('#M-05: finish cu 2xx => NU exista refund', async () => {
+  test('#M-05/H3: finish cu 2xx => confirmare consum (ok), fara refund', async () => {
     const apeluriRpc = [];
     const admin = {
       rpc: jest.fn(async (functie, params) => {
@@ -187,7 +191,19 @@ describe('Plafon cost AI per utilizator (H-06)', () => {
     finishHandler();
     await Promise.resolve();
 
-    const refund = apeluriRpc.filter((a) => a.functie === 'aplica_tranzactie_credite');
+    // H3: la succes (2xx) confirmam consumul (marcaj `ok:`) ca reconcilierea sa
+    // nu restituie in plus un credit castigat corect. Nu exista REFUND.
+    const confirm = apeluriRpc.find(
+      (a) => a.functie === 'aplica_tranzactie_credite' && a.params.p_event_type === 'CONSUM_AI_CONFIRM'
+    );
+    expect(confirm).toBeDefined();
+    expect(confirm.params.p_user_id).toBe('u1');
+    expect(confirm.params.p_event_id).toBe('ok:' + req._creditEventId);
+    expect(confirm.params.p_delta).toBe(0);
+
+    const refund = apeluriRpc.filter(
+      (a) => a.functie === 'aplica_tranzactie_credite' && a.params.p_event_type === 'REFUND_AI_FAILURE'
+    );
     expect(refund).toHaveLength(0);
   });
 
@@ -225,7 +241,7 @@ describe('Plafon cost AI per utilizator (H-06)', () => {
     const refund = apeluriRpc.find((a) => a.functie === 'aplica_tranzactie_credite');
     expect(refund).toBeDefined();
     expect(refund.params.p_user_id).toBe('u1');
-    expect(refund.params.p_event_id).toBe(req._creditEventId);
+    expect(refund.params.p_event_id).toBe('refund:' + req._creditEventId);
     expect(refund.params.p_event_type).toBe('REFUND_AI_FAILURE');
     expect(refund.params.p_delta).toBe(1);
   });

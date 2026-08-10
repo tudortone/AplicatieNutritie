@@ -103,12 +103,20 @@ export async function getProdusByBarcode(barcode: string): Promise<ProdusScanat 
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (token && API_URL) {
-      const response = await fetch(`${API_URL}${API_PREFIX}/produs-barcode/${encodeURIComponent(code)}`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-      });
-      if (response.ok) {
-        const payload = await response.json();
-        if (payload?.produs) return normalizeProduct(code, payload.produs, payload.source || 'backend');
+      // CAM-008: timeout și pentru backend — un endpoint mort nu blochează scanner-ul.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch(`${API_URL}${API_PREFIX}/produs-barcode/${encodeURIComponent(code)}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+          signal: controller.signal,
+        });
+        if (response.ok) {
+          const payload = await response.json();
+          if (payload?.produs) return normalizeProduct(code, payload.produs, payload.source || 'backend');
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
   } catch (error) {
@@ -119,16 +127,25 @@ export async function getProdusByBarcode(barcode: string): Promise<ProdusScanat 
     // URL direct catre OpenFoodFacts
     //
     const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`;
-    const response = await fetch(url, {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'NutriAI/1.0 (contact: tudortone)',
-      },
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    if (data?.status !== 1 || !data.product) return null;
-    return normalizeProduct(code, data.product, 'openfoodfacts');
+    // CAM-008: timeout la lookup-ul public — un răspuns care nu mai vine nu
+    // trebuie să țină scanner-ul blocat la nesfârșit.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'NutriAI/1.0 (contact: tudortone)',
+        },
+        signal: controller.signal,
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (data?.status !== 1 || !data.product) return null;
+      return normalizeProduct(code, data.product, 'openfoodfacts');
+    } finally {
+      clearTimeout(timeoutId);
+    }
   } catch (error) {
     console.warn('[Barcode] OpenFoodFacts indisponibil:', error);
     return null;

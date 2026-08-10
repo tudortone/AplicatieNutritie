@@ -144,34 +144,6 @@ export function getThemeColors(name: ThemeName): ThemeColors {
   return themes[name] || midnight;
 }
 
-export const Colors = {
-  background: '#090C0E',
-  surface: '#12161A',
-  surfaceElevated: '#181D22',
-  accent: '#CCFF00',
-  accentSecondary: '#A855F7',
-  accentTertiary: '#00F0FF',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#8B93A0',
-  textTertiary: '#9AA0B0',
-  danger: '#F87171',
-  warning: '#FB923C',
-  success: '#4ADE80',
-  border: 'rgba(255,255,255,0.08)',
-  accentGradient: ['#CCFF00', '#A8FF3E'] as [string, string],
-  accentSecondaryGradient: ['#A855F7', '#7C3AED'] as [string, string],
-  cardBorder: 'rgba(255,255,255,0.08)',
-  cardBg: '#12161A',
-  surfaceBg: '#181D22',
-  inputBg: 'rgba(255,255,255,0.04)',
-  inputBorder: 'rgba(255,255,255,0.06)',
-  dangerBg: 'rgba(255,77,77,0.12)',
-  dangerBorder: 'rgba(255,77,77,0.3)',
-  shadow: '#000000',
-  overlayLight: 'rgba(255,255,255,0.04)',
-  overlayStrong: 'rgba(255,255,255,0.08)',
-} as const;
-
 export const Spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 export const Radius = { sm: 8, md: 12, lg: 16, xl: 24, pill: 999 } as const;
 

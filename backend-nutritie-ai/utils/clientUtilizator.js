@@ -54,7 +54,15 @@
 
 const { createClient } = require('@supabase/supabase-js');
 
-/** Tabele cu politici RLS pe `auth.uid() = user_id`. */
+/**
+ * Tabele cu politici RLS pe `auth.uid() = user_id`.
+ *
+ * F6: `workout_logs` și `audit_log` sunt păstrate INTENȚIONAT, deși nu au scriitori
+ * în codul aplicației: `audit_log` e placeholder-ul de audit GDPR (cu funcție de
+ * retenție + cron de curățare), iar lista GDPR tratează orice tabel utilizator ca
+ * scop-cascade. Nu le prunăm (decizie 2026-08-09): tabele goale, cost 0, iar DROP
+ * ar atinge cascadele + fixture-urile RLS fără beneficiu.
+ */
 const TABELE_CU_RLS_UTILIZATOR = Object.freeze([
 	'mese',
 	'profil',

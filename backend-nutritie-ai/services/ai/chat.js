@@ -27,7 +27,7 @@ function creeazaServiciuChat({ config, genAI }) {
 
   const getGeminiModelsList = () => serviciuVision.getGeminiModelsList();
 
-  async function ruleazaChat(corp) {
+  async function ruleazaChat(corp, semnalAnulare) {
     if (!corp || typeof corp !== 'object') {
       throw new EroareAiClient(400, 'Format cerere invalid. Se asteapta un obiect JSON.');
     }
@@ -137,7 +137,7 @@ Sarcina ta: Raspunde prietenos, tinand cont de istoricul discutiei si de calorii
         },
         body: JSON.stringify(groqBody),
         signal,
-      }), 35000);
+      }), 35000, semnalAnulare);
 
       if (!response.ok) {
         throw new Error(`Eroare Groq API (${response.status})`);
@@ -172,7 +172,7 @@ Sarcina ta: Raspunde prietenos, tinand cont de istoricul discutiei si de calorii
     }
   }
 
-  async function logFoodDinChat(corp) {
+  async function logFoodDinChat(corp, semnalAnulare) {
     const { mesaj, mesaje } = corp;
     if (!mesaj || typeof mesaj !== 'string') {
       throw new EroareAiClient(400, 'Mesaj invalid pentru logare.');
@@ -237,7 +237,7 @@ RETURNEAZA STRICT UN OBIECT JSON valid in acest format:
         response_format: { type: 'json_object' },
       }),
       signal,
-    }), 25000);
+    }), 25000, semnalAnulare);
 
     if (!response.ok) {
       throw new Error(`Eroare Groq /api/log-food-from-chat (${response.status})`);
@@ -261,7 +261,7 @@ RETURNEAZA STRICT UN OBIECT JSON valid in acest format:
     return parsed;
   }
 
-  async function estimeazaMancareText(corp) {
+  async function estimeazaMancareText(corp, semnalAnulare) {
     const { text } = corp;
     if (!text || typeof text !== 'string') throw new EroareAiClient(400, 'Text invalid.');
     const curatat = curataMinim(text, 200).trim();
@@ -292,7 +292,7 @@ RETURNEAZA STRICT UN OBIECT JSON in formatul: {"nume": ${JSON.stringify(curatat)
         response_format: { type: 'json_object' },
       }),
       signal,
-    }), 25000);
+    }), 25000, semnalAnulare);
 
     if (!groqResponse.ok) {
       throw new Error(`Eroare Groq API (${groqResponse.status})`);

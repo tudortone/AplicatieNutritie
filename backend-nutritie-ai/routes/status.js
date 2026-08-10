@@ -46,7 +46,11 @@ function createStatusRouter({ getProviderStatus, getStatisticiClientDate, requir
         openrouter: statusPublic(openrouter),
         // C1-S4: observabilitate RLS — câte cereri au rulat prin clientul cu RLS
         // vs. câte au căzut pe clientul admin (modAdmin). Target: cereriModAdmin -> 0.
-        rls: getStatisticiClientDate ? getStatisticiClientDate() : undefined,
+        // LOW: contoarele interne se expun DOAR adminilor, nu oricărui utilizator
+        // autentificat (frontendul consumă doar câmpurile de status).
+        ...(req.user?.esteAdmin && getStatisticiClientDate
+          ? { rls: getStatisticiClientDate() }
+          : {}),
       });
     } catch (err) {
       return next(err);
