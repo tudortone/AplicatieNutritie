@@ -1,13 +1,15 @@
-import React, { useCallback, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Alert, 
-  ActivityIndicator, 
+import React, { useCallback, useMemo, useRef, useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
   ScrollView,
-  Modal
+  Modal,
+  BackHandler,
+  Platform
 } from 'react-native';
 import BottomSheet, { 
   BottomSheetScrollView, 
@@ -27,7 +29,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFavorite } from '../hooks/useFavorite';
 import { useGamificareActions } from '../context/GamificareContext';
 import { Masa, TipMasa, AlimentDetaliat } from '../types';
-import { getTipMasaDupaOra, MEAL_CATEGORIES, insereazaMasaCuPoza, actualizeazaMasaCuPoza, parseAlimente, construiesteAlimenteLaSalvare } from '../lib/mealUtils';
+import { getTipMasaDupaOra, MEAL_CATEGORIES, CATEGORIE_ICONA, insereazaMasaCuPoza, actualizeazaMasaCuPoza, parseAlimente, construiesteAlimenteLaSalvare } from '../lib/mealUtils';
 import { pushOfflineMeal, MasaOfflinePayload } from '../lib/offlineQueue';
 import { localDayKey } from '../lib/dateUtils';
 import { foodPresets, categories, FoodPreset } from '../constants/foodPresets';
@@ -85,6 +87,23 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const savingRef = useRef(false);
 
     const snapPoints = useMemo(() => ['75%', '90%'], []);
+
+    // REMED-010: pe Android, butonul hardware de „înapoi" nu închide BottomSheet-ul
+    // (JS portal, nu modal nativ). Dacă foaia e deschisă (index >= 0), o închidem
+    // noi; altfel lăsăm evenimentul să ajungă la navigator. Handlerul se elimină
+    // la unmount (foaia e montată condiționat în istoric — REMED-029).
+    const [sheetIndex, setSheetIndex] = useState(-1);
+    useEffect(() => {
+      if (Platform.OS !== 'android') return;
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (sheetIndex >= 0) {
+          bottomSheetRef.current?.close();
+          return true;
+        }
+        return false;
+      });
+      return () => sub.remove();
+    }, [sheetIndex]);
 
     const [editingMasaId, setEditingMasaId] = useState<string | null>(null);
     const [tipMasa, setTipMasa] = useState<TipMasa>(() => getTipMasaDupaOra());
@@ -250,16 +269,40 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           setEditingMasaId(masaToEdit.id);
           setTipMasa(masaToEdit.tip_masa || defaultCategory || getTipMasaDupaOra());
           setNume(masaToEdit.nume || '');
-          setCalorii(String(masaToEdit.calorii || 0));
-          setProteine(String(masaToEdit.proteine || 0));
-          setCarbohidrati(String(masaToEdit.carbohidrati || 0));
-          setGrasimi(String(masaToEdit.grasimi || 0));
           setFibre(masaToEdit.fibre != null ? String(masaToEdit.fibre) : '');
           setImagineUrl(masaToEdit.imagine_url || fotoUrl || null);
-          setGrame('');
-          setBaseNutrition(null);
           const alimenteOrig = parseAlimente(masaToEdit);
           alimenteOriginaleRef.current = alimenteOrig.length > 0 ? alimenteOrig : null;
+          // REMED-001: o masă cu descompunere multi-component nu poate fi „redefinită"
+          // dintr-un formular plat (un singur câmp de gramaj/macro). Păstrăm
+          // descompunerea originală și blocăm redefinirea la save (aRedefinitAlimentul
+          // depinde acum și de numărul de componente) ca un gramaj tastat să nu
+          // prăbușească payload-ul în [alimentNou] (lost per-component BUG-002).
+          // Pentru o masă cu UN component derivăm baseNutrition din component, ca
+          // rescrierea gramajului să scaleze macros per porție fără a pierde poza/id.
+          if (alimenteOrig.length === 1 && alimenteOrig[0]) {
+            const comp = alimenteOrig[0];
+            const sursa: BaseNutrition = {
+              defaultGrame: comp.grame || 100,
+              calorii: comp.calorii ?? masaToEdit.calorii ?? 0,
+              proteine: comp.proteine ?? masaToEdit.proteine ?? 0,
+              carbohidrati: comp.carbohidrati ?? masaToEdit.carbohidrati ?? 0,
+              grasimi: comp.grasimi ?? masaToEdit.grasimi ?? 0,
+            };
+            setGrame(comp.grame != null ? String(comp.grame) : '');
+            setCalorii(String(sursa.calorii));
+            setProteine(String(sursa.proteine));
+            setCarbohidrati(String(sursa.carbohidrati));
+            setGrasimi(String(sursa.grasimi));
+            setBaseNutrition(sursa);
+          } else {
+            setCalorii(String(masaToEdit.calorii || 0));
+            setProteine(String(masaToEdit.proteine || 0));
+            setCarbohidrati(String(masaToEdit.carbohidrati || 0));
+            setGrasimi(String(masaToEdit.grasimi || 0));
+            setGrame('');
+            setBaseNutrition(null);
+          }
         } else {
           alimenteOriginaleRef.current = null;
           setEditingMasaId(null);
@@ -365,9 +408,17 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         // BUG-002: pastram descompunerea originala a mesei editate cand nu se
         // redefineste alimentul (gramaj gol), ca editarea numelui/macro sa nu
         // transforme o masa cu 5 ingrediente intr-un array de un element.
+        // REMED-001: „redefinirea" (gramaj tastat) are sens DOAR pentru mese fara
+        // descompunere sau cu UN component. O masa cu mai multe componente pastreaza
+        // intotdeauna descompunerea originala (fiecare component cu gramajul/nutritia
+        // lui) — altfel un gramaj tastat in formularul plat ar colapsa payload-ul la
+        // [alimentNou] si ar pierde per-component-urile.
+        const originalAlimente = editingMasaId ? alimenteOriginaleRef.current : null;
+        const aRedefinitAlimentul =
+          grame.trim() !== '' && !(originalAlimente && originalAlimente.length > 1);
         const alimenteFinal = construiesteAlimenteLaSalvare({
-          original: editingMasaId ? alimenteOriginaleRef.current : null,
-          aRedefinitAlimentul: grame.trim() !== '',
+          original: originalAlimente,
+          aRedefinitAlimentul,
           alimentNou: alimentePayload[0],
         });
 
@@ -444,7 +495,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               } catch {}
               bottomSheetRef.current?.close();
               onSuccess?.();
-              Alert.alert('Salvat offline', 'Masa a fost salvată local în coada offline și va fi sincronizată automat la reconectarea la rețea.');
+              Alert.alert(t('offline.salvatOffline'), t('offline.masaSalvataOffline'));
             } catch {
               Alert.alert(t('alerts.titluri.eroareSalvare'), t('alerts.mesaje.eroareSalvareDinamica', { eroare: err.message }));
             }
@@ -478,6 +529,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         ref={bottomSheetRef}
         index={-1}
         snapPoints={snapPoints}
+        onChange={setSheetIndex}
         enablePanDownToClose
         backdropComponent={renderBackdrop}
         backgroundStyle={{
@@ -499,9 +551,9 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         >
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>
-              {editingMasaId ? 'Editează Masa' : 'Adaugă Masă Nouă'}
+              {editingMasaId ? t('jurnal.editMealTitle') : t('jurnal.addMealTitle')}
             </Text>
-            <TouchableOpacity onPress={() => bottomSheetRef.current?.close()} style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} accessibilityRole="button" accessibilityLabel="Închide">
+            <TouchableOpacity onPress={() => bottomSheetRef.current?.close()} style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} accessibilityRole="button" accessibilityLabel={t('jurnal.close')}>
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -511,7 +563,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             <View style={{ marginBottom: 20 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                 <Heart size={14} color={colors.textSecondary} />
-                <Text style={[styles.favHeaderTitle, { color: colors.textSecondary, marginBottom: 0 }]}>ALIMENTE FAVORITE RAPIDE</Text>
+                <Text style={[styles.favHeaderTitle, { color: colors.textSecondary, marginBottom: 0 }]}>{t('jurnal.favoritesQuick')}</Text>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
                 {favorite.map((fav) => (
@@ -562,7 +614,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                 <UtensilsCrossed size={14} color={colors.textSecondary} />
                 <Text style={[styles.favHeaderTitle, { color: colors.textSecondary, marginBottom: 0 }]}>
-                  ALEGE DIN PRESETURI RAPIDE
+                  {t('jurnal.presetsQuick')}
                 </Text>
               </View>
 
@@ -584,15 +636,15 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               >
                 <Search size={16} color={colors.accent} />
                 <Text style={{ fontSize: 13, fontWeight: '700', color: colors.accent }}>
-                  Caută Produs, Brand sau Introducere Complet Manuală
+                  {t('jurnal.productSearch')}
                 </Text>
               </TouchableOpacity>
 
               {/* Search */}
               <BottomSheetTextInput
                 style={[styles.input, { marginBottom: 12, color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-                accessibilityLabel="Caută aliment"
-                placeholder="Caută aliment..."
+                accessibilityLabel={t('jurnal.searchPlaceholder')}
+                placeholder={t('jurnal.searchPlaceholder')}
                 placeholderTextColor={colors.textTertiary}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -624,7 +676,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
                       <Text style={[
                         styles.categoryText,
-                        { color: isSelected ? '#000000' : colors.textPrimary, fontWeight: isSelected ? '800' : '600' }
+                        { color: isSelected ? colors.textOnAccent : colors.textPrimary, fontWeight: isSelected ? '800' : '600' }
                       ]}>
                         {cat.name}
                       </Text>
@@ -636,10 +688,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               {selectedCategory && !searchQuery && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingHorizontal: 4 }}>
                   <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>
-                    Afișare opțiuni pentru {categories.find(c => c.id === selectedCategory)?.name} {categories.find(c => c.id === selectedCategory)?.icon}
+                    {t('jurnal.showOptionsFor', { categorie: categories.find(c => c.id === selectedCategory)?.name ?? '' })}
                   </Text>
                   <TouchableOpacity onPress={() => setSelectedCategory(null)}>
-                    <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '800' }}>✕ Închide</Text>
+                    <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '800' }}>{t('jurnal.close')}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -647,7 +699,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               {!selectedCategory && !searchQuery && (
                 <View style={{ paddingVertical: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceBg, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder, marginBottom: 12 }}>
                   <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', paddingHorizontal: 16 }}>
-                    👆 Apasă pe o categorie de mai sus sau caută în bară pentru a explora cele peste 150 de alimente și preparate.
+                    {t('jurnal.exploreHint')}
                   </Text>
                 </View>
               )}
@@ -669,10 +721,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   activeOpacity={0.8}
                 >
                   {aiEstimating ? (
-                    <ActivityIndicator color="#000000" size="small" />
+                    <ActivityIndicator color={colors.textOnAccent} size="small" />
                   ) : (
-                    <Text style={{ color: '#000000', fontWeight: 'bold', fontSize: 14 }}>
-                      🤖 Calculează instant macros cu AI pentru „{searchQuery}”
+                    <Text style={{ color: colors.textOnAccent, fontWeight: 'bold', fontSize: 14 }}>
+                      {t('jurnal.aiEstimateFor', { query: searchQuery })}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -706,10 +758,11 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           <View style={styles.formSection} onLayout={(e) => setFormSectionY(e.nativeEvent.layout.y)}>
             {/* Meal Category Selector */}
             <View style={{ marginBottom: 16 }}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>🍽️ Categoria Mesei *</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.mealCategory')}</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {MEAL_CATEGORIES.map((cat) => {
                   const isSelected = tipMasa === cat.id;
+                  const Icona = CATEGORIE_ICONA[cat.id];
                   return (
                     <TouchableOpacity
                       key={cat.id}
@@ -731,10 +784,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       }}
                       activeOpacity={0.8}
                     >
-                      <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
+                      <Icona size={16} color={isSelected ? colors.textOnAccent : colors.textPrimary} />
                       <Text style={[
                         styles.categoryText,
-                        { color: isSelected ? '#000000' : colors.textPrimary, fontWeight: isSelected ? '800' : '600' }
+                        { color: isSelected ? colors.textOnAccent : colors.textPrimary, fontWeight: isSelected ? '800' : '600' }
                       ]}>
                         {cat.label}
                       </Text>
@@ -744,31 +797,31 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               </View>
             </View>
 
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Nume aliment / preparat *</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.mealName')}</Text>
             <BottomSheetTextInput
               style={[
-                styles.input, 
-                { 
-                  color: colors.textPrimary, 
-                  borderColor: nume && !isNumeValid ? colors.danger : colors.cardBorder, 
-                  backgroundColor: colors.surfaceBg 
+                styles.input,
+                {
+                  color: colors.textPrimary,
+                  borderColor: nume && !isNumeValid ? colors.danger : colors.cardBorder,
+                  backgroundColor: colors.surfaceBg
                 }
               ]}
-              accessibilityLabel="Nume aliment / preparat"
-              placeholder="Ex: Piept de pui la grătar cu orez"
+              accessibilityLabel={t('jurnal.mealName')}
+              placeholder={t('jurnal.mealNamePlaceholder')}
               placeholderTextColor={colors.textTertiary}
               value={nume}
               onChangeText={setNume}
               selectionColor={colors.accent}
             />
             {nume.length > 0 && !isNumeValid && (
-              <Text style={[styles.errorText, { color: colors.danger }]}>Numele trebuie să aibă cel puțin 2 caractere</Text>
+              <Text style={[styles.errorText, { color: colors.danger }]}>{t('jurnal.nameMinLength')}</Text>
             )}
 
             {!editingMasaId && nume.trim().length >= 2 && (
               <View style={{ marginTop: 8, marginBottom: 12, backgroundColor: colors.surfaceBg, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder, overflow: 'hidden', maxHeight: 220 }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 4, textTransform: 'uppercase' }}>
-                  💡 Sugestii automate găsite ({presetsNume.length}):
+                  {t('jurnal.autoSuggestions', { count: presetsNume.length })}
                 </Text>
                 <ScrollView nestedScrollEnabled style={{ maxHeight: 180 }}>
                   {presetsNume
@@ -789,14 +842,14 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   {presetsNume.length === 0 && (
                     <View style={{ padding: 14, alignItems: 'center' }}>
                       <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', marginBottom: 10 }}>
-                        Nu am găsit „{nume}” în lista de bază. Calculează valorile cu AI:
+                        {t('jurnal.aiNotFound', { nume })}
                       </Text>
                       <TouchableOpacity
                         style={{ backgroundColor: colors.accent, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 6 }}
                         onPress={() => estimateWithAI(nume)}
                         disabled={aiEstimating}
                       >
-                        {aiEstimating ? <ActivityIndicator color="#000" size="small" /> : <Text style={{ color: '#000', fontWeight: '800', fontSize: 13 }}>⚡ Calculează Valori Cu NutriAI</Text>}
+                        {aiEstimating ? <ActivityIndicator color={colors.textOnAccent} size="small" /> : <Text style={{ color: colors.textOnAccent, fontWeight: '800', fontSize: 13 }}>{t('jurnal.aiCalculate')}</Text>}
                       </TouchableOpacity>
                     </View>
                   )}
@@ -821,11 +874,11 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               <View style={styles.gramajHeaderRow}>
                 <Scale size={16} color={colors.accent} />
                 <Text style={[styles.label, { color: colors.textSecondary, flex: 1, marginBottom: 0 }]}>
-                  Gramaj / Cantitate porție (grame)
+                  {t('jurnal.gramajLabel')}
                 </Text>
                 {baseNutrition && (
                   <Text style={[styles.liveSyncBadge, { color: colors.accent }]}>
-                    ⚡ Calcul live
+                    {t('jurnal.liveCalc')}
                   </Text>
                 )}
               </View>
@@ -839,7 +892,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                     backgroundColor: colors.surfaceBg,
                   },
                 ]}
-                placeholder="Ex: 150 (g)"
+                placeholder={t('jurnal.gramajPlaceholder')}
                 placeholderTextColor={colors.textTertiary}
                 keyboardType="numeric"
                 value={grame}
@@ -851,7 +904,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               {selectedPreset?.unitati && selectedPreset.unitati.length > 0 && (
                 <View style={{ marginTop: 10, marginBottom: 4 }}>
                   <Text style={[styles.inputLabel, { color: colors.textSecondary, marginBottom: 6, fontSize: 13 }]}>
-                    Alege cantitatea (porții rapide):
+                    {t('jurnal.chooseQuickPortions')}
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                     {selectedPreset.unitati.map((unit) => {
@@ -874,7 +927,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                             style={[
                               styles.gramChipText,
                               {
-                                color: isActive ? '#000000' : colors.textPrimary,
+                                color: isActive ? colors.textOnAccent : colors.textPrimary,
                                 fontWeight: isActive ? '800' : '600',
                               },
                             ]}
@@ -909,7 +962,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                         style={[
                           styles.gramChipText,
                           {
-                            color: isActive ? '#000000' : colors.textPrimary,
+                            color: isActive ? colors.textOnAccent : colors.textPrimary,
                             fontWeight: isActive ? '800' : '600',
                           },
                         ]}
@@ -934,12 +987,12 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       style={[
                         styles.gramChipText,
                         {
-                          color: grame === String(baseNutrition.defaultGrame) ? '#FFFFFF' : colors.accentSecondary,
+                          color: grame === String(baseNutrition.defaultGrame) ? colors.background : colors.accentSecondary,
                           fontWeight: '800',
                         },
                       ]}
                     >
-                      Porție ({baseNutrition.defaultGrame}g)
+                      {t('jurnal.serving', { gramaj: baseNutrition.defaultGrame })}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -948,17 +1001,17 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
             <View style={styles.row}>
               <View style={styles.halfWidth}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Calorii (kcal) *</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.caloriesLabel')}</Text>
                 <BottomSheetTextInput
                   style={[
-                    styles.input, 
-                    { 
-                      color: colors.textPrimary, 
-                      borderColor: calorii && !isCaloriiValid ? colors.danger : colors.cardBorder, 
-                      backgroundColor: colors.surfaceBg 
+                    styles.input,
+                    {
+                      color: colors.textPrimary,
+                      borderColor: calorii && !isCaloriiValid ? colors.danger : colors.cardBorder,
+                      backgroundColor: colors.surfaceBg
                     }
                   ]}
-                  placeholder="Ex: 450"
+                  placeholder={t('jurnal.caloriesPlaceholder')}
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="numeric"
                   value={calorii}
@@ -966,15 +1019,15 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   selectionColor={colors.accent}
                 />
                 {calorii.length > 0 && !isCaloriiValid && (
-                  <Text style={[styles.errorText, { color: colors.danger }]}>Calorii nevalide</Text>
+                  <Text style={[styles.errorText, { color: colors.danger }]}>{t('jurnal.caloriesInvalid')}</Text>
                 )}
               </View>
 
               <View style={styles.halfWidth}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Proteine (g)</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.proteinLabel')}</Text>
                 <BottomSheetTextInput
                   style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-                  placeholder="Ex: 35"
+                  placeholder={t('jurnal.proteinPlaceholder')}
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="numeric"
                   value={proteine}
@@ -986,10 +1039,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
             <View style={styles.row}>
               <View style={styles.halfWidth}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Carbohidrați (g)</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.carbsLabel')}</Text>
                 <BottomSheetTextInput
                   style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-                  placeholder="Ex: 40"
+                  placeholder={t('jurnal.carbsPlaceholder')}
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="numeric"
                   value={carbohidrati}
@@ -999,10 +1052,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               </View>
 
               <View style={styles.halfWidth}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Grăsimi (g)</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.fatsLabel')}</Text>
                 <BottomSheetTextInput
                   style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-                  placeholder="Ex: 12"
+                  placeholder={t('jurnal.fatsPlaceholder')}
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="numeric"
                   value={grasimi}
@@ -1014,10 +1067,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
             <View style={[styles.row, { marginTop: 12 }]}>
               <View style={styles.halfWidth}>
-                <Text style={[styles.label, { color: colors.textSecondary }]}>Fibre (g) (opțional)</Text>
+                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.fiberLabelOptional')}</Text>
                 <BottomSheetTextInput
                   style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-                  placeholder="Ex: 5"
+                  placeholder={t('jurnal.fiberPlaceholder')}
                   placeholderTextColor={colors.textTertiary}
                   keyboardType="numeric"
                   value={fibre}
@@ -1059,7 +1112,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   fill={isFavorite(nume) ? colors.danger : 'transparent'}
                 />
                 <Text style={[styles.favToggleText, { color: isFavorite(nume) ? colors.danger : colors.textPrimary }]}>
-                  {isFavorite(nume) ? 'Salvat la Favorite' : 'Salvează la Favorite'}
+                  {isFavorite(nume) ? t('jurnal.savedToFavorites') : t('jurnal.saveToFavorites')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -1072,23 +1125,26 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               disabled={loading || !isFormValid}
               onPress={handleSave}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={editingMasaId ? t('jurnal.saveChanges') : t('jurnal.addMeal')}
+              accessibilityState={{ disabled: loading || !isFormValid, busy: loading }}
             >
               <LinearGradient
-                colors={isFormValid ? colors.accentGradient : ['#2A323D', '#1A2129']}
+                colors={isFormValid ? colors.accentGradient : [colors.disabledBg, colors.disabledBg]}
                 style={styles.gradientBtn}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
                 {loading ? (
-                  <ActivityIndicator color="#000000" />
+                  <ActivityIndicator color={colors.textOnAccent} />
                 ) : (
                   <>
-                    <Check color={isFormValid ? '#000000' : '#64748B'} size={20} />
+                    <Check color={isFormValid ? colors.textOnAccent : colors.disabledText} size={20} />
                     <Text style={[
                       styles.saveBtnText,
-                      { color: isFormValid ? '#000000' : '#64748B' }
+                      { color: isFormValid ? colors.textOnAccent : colors.disabledText }
                     ]}>
-                      {editingMasaId ? 'Salvează Modificările' : 'Adaugă Masă'}
+                      {editingMasaId ? t('jurnal.saveChanges') : t('jurnal.addMeal')}
                     </Text>
                   </>
                 )}

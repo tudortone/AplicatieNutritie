@@ -91,13 +91,13 @@ export default function NotificariScreen() {
           <View style={styles.cardContent}>
             <View style={styles.cardHeader}>
               <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{item.title}</Text>
-              <Text style={[styles.cardTime, { color: colors.textTertiary }]}>{timeFormatted}</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.cardTime, { color: colors.textTertiary }]}>{timeFormatted}</Text>
             </View>
             {item.message ? (
-              <Text style={[styles.cardMessage, { color: colors.textSecondary }]}>{item.message}</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.cardMessage, { color: colors.textSecondary }]}>{item.message}</Text>
             ) : null}
             {item.actionLabel && canOpen ? (
-              <Text style={[styles.actionLink, { color: colors.accent }]}>{item.actionLabel} →</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.actionLink, { color: colors.accent }]}>{item.actionLabel} →</Text>
             ) : null}
           </View>
           {!item.read ? <View style={[styles.unreadDot, { backgroundColor: colors.accent }]} /> : null}
@@ -195,7 +195,7 @@ export default function NotificariScreen() {
               <Bell size={40} color={colors.textTertiary} />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Nicio notificare</Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.emptyText, { color: colors.textSecondary }]}>
               Evenimentele și recompensele din aplicație vor apărea aici.
             </Text>
           </Animated.View>

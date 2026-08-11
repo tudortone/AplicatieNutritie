@@ -362,8 +362,8 @@ export function ManualProductForm({
             onPress={handleSave}
             disabled={isSaving}
           >
-            <Plus size={18} color="#000" />
-            <Text style={styles.btnSaveText}>{isSaving ? 'Se salvează...' : 'Adaugă Produsul'}</Text>
+            <Plus size={18} color={colors.textOnAccent} />
+            <Text style={[styles.btnSaveText, { color: colors.textOnAccent }]}>{isSaving ? 'Se salvează...' : 'Adaugă Produsul'}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -429,5 +429,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  btnSaveText: { color: '#000', fontSize: 15, fontWeight: '800' },
+  btnSaveText: { fontSize: 15, fontWeight: '800' },
 });

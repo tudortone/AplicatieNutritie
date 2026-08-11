@@ -22,6 +22,8 @@ create table if not exists public.ai_jobs (
 -- ============================================================
 alter table public.ai_jobs enable row level security;
 
+drop policy if exists "Users read their own AI jobs" on public.ai_jobs;
+
 create policy "Users read their own AI jobs"
   on public.ai_jobs
   for select

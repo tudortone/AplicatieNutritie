@@ -1,8 +1,9 @@
 import React, { forwardRef, useImperativeHandle, useState } from 'react';
+import type { ComponentType } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Modal, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Flame, Award, CheckCircle2, ShieldCheck, X } from 'lucide-react-native';
+import { Flame, Award, CheckCircle2, ShieldCheck, X, Sprout, Zap, Trophy, Crown } from 'lucide-react-native';
 
 import { useTheme } from '../../context/ThemeContext';
 import { useGamificareData } from '../../context/GamificareContext';
@@ -12,12 +13,14 @@ export interface StreakBottomSheetRef {
   close: () => void;
 }
 
-const MILESTONES = [
-  { zile: 3, titlu: 'Început promițător', icon: '🌱', xp: 50 },
-  { zile: 7, titlu: 'O săptămână plină', icon: '🔥', xp: 150 },
-  { zile: 14, titlu: 'Campionul consecvenței', icon: '⚡', xp: 300 },
-  { zile: 30, titlu: 'Maestru nutrițional', icon: '🏆', xp: 750 },
-  { zile: 100, titlu: 'Legendă NutriAI', icon: '👑', xp: 2500 },
+// REMED-020: iconițe lucide în loc de emoji (🌱🔥⚡🏆👑 → Sprout/Flame/Zap/Trophy/Crown).
+type StreakIcon = ComponentType<{ size?: number; color?: string }>;
+const MILESTONES: { zile: number; titlu: string; Icon: StreakIcon; xp: number }[] = [
+  { zile: 3, titlu: 'Început promițător', Icon: Sprout, xp: 50 },
+  { zile: 7, titlu: 'O săptămână plină', Icon: Flame, xp: 150 },
+  { zile: 14, titlu: 'Campionul consecvenței', Icon: Zap, xp: 300 },
+  { zile: 30, titlu: 'Maestru nutrițional', Icon: Trophy, xp: 750 },
+  { zile: 100, titlu: 'Legendă NutriAI', Icon: Crown, xp: 2500 },
 ];
 
 export const StreakBottomSheet = forwardRef<StreakBottomSheetRef>((_, ref) => {
@@ -101,7 +104,7 @@ export const StreakBottomSheet = forwardRef<StreakBottomSheetRef>((_, ref) => {
                     }
                   ]}
                 >
-                  <Text style={{ fontSize: 24 }}>{m.icon}</Text>
+                  <m.Icon size={24} color={atins ? colors.accent : colors.textTertiary} />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.mTitle, { color: colors.textPrimary }]}>{m.titlu}</Text>
                     <Text style={[styles.mSub, { color: colors.textSecondary }]}>{m.zile} zile consecutive • +{m.xp} XP</Text>

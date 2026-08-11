@@ -80,7 +80,7 @@ export default function PaywallScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-      <View style={[styles.glowTop, { backgroundColor: '#FFD45A' }]} />
+      <View style={[styles.glowTop, { backgroundColor: colors.gold }]} />
       <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
 
       <View style={styles.header}>
@@ -94,8 +94,8 @@ export default function PaywallScreen() {
 
       {isPremium ? (
         <View style={styles.premiumActive}>
-          <Crown size={44} color="#FFD45A" />
-          <Text style={[styles.premiumActiveTitle, { color: colors.textPrimary }]}>Ești deja Premium 🎉</Text>
+          <Crown size={44} color={colors.gold} />
+          <Text maxFontSizeMultiplier={1.3} style={[styles.premiumActiveTitle, { color: colors.textPrimary }]}>Ești deja Premium 🎉</Text>
           <Text style={[styles.premiumActiveDesc, { color: colors.textSecondary }]}>
             Toate funcțiile sunt active pe acest cont.
           </Text>
@@ -109,11 +109,11 @@ export default function PaywallScreen() {
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
           <View style={styles.hero}>
-            <LinearGradient colors={['#FFD45A33', 'rgba(0,0,0,0)']} style={styles.heroBadge}>
-              <Crown size={18} color="#FFD45A" />
-              <Text style={[styles.heroBadgeText, { color: '#FFD45A' }]}>DEBLOCHEAZĂ TOT</Text>
+            <LinearGradient colors={[colors.gold + '33', 'rgba(0,0,0,0)']} style={[styles.heroBadge, { borderColor: colors.gold + '44' }]}>
+              <Crown size={18} color={colors.gold} />
+              <Text maxFontSizeMultiplier={1.3} style={[styles.heroBadgeText, { color: colors.gold }]}>DEBLOCHEAZĂ TOT</Text>
             </LinearGradient>
-            <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>NutriAI Premium</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.heroTitle, { color: colors.textPrimary }]}>NutriAI Premium</Text>
             <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
               Toată puterea AI-ului, fără limite. Anulezi oricând.
             </Text>
@@ -148,8 +148,8 @@ export default function PaywallScreen() {
                     disabled={buying != null}
                     style={({ pressed }) => [styles.planCard, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg, opacity: pressed ? 0.85 : 1 }]}
                   >
-                    <Text style={[styles.planName, { color: colors.textPrimary }]}>Lunar</Text>
-                    <Text style={[styles.planPrice, { color: colors.textPrimary }]}>{formatPrice(monthly)}</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.planName, { color: colors.textPrimary }]}>Lunar</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.planPrice, { color: colors.textPrimary }]}>{formatPrice(monthly)}</Text>
                     <Text style={[styles.planPer, { color: colors.textSecondary }]}>pe lună</Text>
                     {buying === monthly.identifier ? <ActivityIndicator color={colors.accent} /> : null}
                   </Pressable>
@@ -162,16 +162,16 @@ export default function PaywallScreen() {
                     style={({ pressed }) => [
                       styles.planCard,
                       styles.planCardHighlight,
-                      { borderColor: '#FFD45A', backgroundColor: `${colors.accent}14`, opacity: pressed ? 0.85 : 1 },
+                      { borderColor: colors.gold, backgroundColor: `${colors.accent}14`, opacity: pressed ? 0.85 : 1 },
                     ]}
                   >
-                    <View style={[styles.bestTag, { backgroundColor: '#FFD45A' }]}>
-                      <Text style={[styles.bestTagText, { color: '#000' }]}>CEL MAI BUN PREȚ</Text>
+                    <View style={[styles.bestTag, { backgroundColor: colors.gold }]}>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.bestTagText, { color: colors.textOnAccent }]}>CEL MAI BUN PREȚ</Text>
                     </View>
-                    <Text style={[styles.planName, { color: colors.textPrimary }]}>Anual</Text>
-                    <Text style={[styles.planPrice, { color: '#FFD45A' }]}>{formatPrice(annual)}</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.planName, { color: colors.textPrimary }]}>Anual</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.planPrice, { color: colors.gold }]}>{formatPrice(annual)}</Text>
                     <Text style={[styles.planPer, { color: colors.textSecondary }]}>pe an · ~35% reducere</Text>
-                    {buying === annual.identifier ? <ActivityIndicator color="#FFD45A" /> : null}
+                    {buying === annual.identifier ? <ActivityIndicator color={colors.gold} /> : null}
                   </Pressable>
                 ) : null}
               </View>
@@ -207,7 +207,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 16, fontWeight: '900' },
   scroll: { paddingHorizontal: 20, paddingBottom: 40 },
   hero: { alignItems: 'center', marginTop: 8, marginBottom: 20 },
-  heroBadge: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#FFD45A44', marginBottom: 14 },
+  // heroBadge: borderColor (gold+44) e setat inline în render; aici doar layout.
+  heroBadge: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, marginBottom: 14 },
   heroBadgeText: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
   heroTitle: { fontSize: 30, fontWeight: '900', letterSpacing: -0.5 },
   heroSubtitle: { fontSize: 14, marginTop: 8, textAlign: 'center', maxWidth: 300 },
@@ -228,7 +229,7 @@ const styles = StyleSheet.create({
   trialNote: { fontSize: 11, textAlign: 'center', marginTop: 14, lineHeight: 16 },
   restoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, minHeight: 44, paddingHorizontal: 12, paddingVertical: 8 },
   restoreText: { fontSize: 12, fontWeight: '700' },
-  legal: { fontSize: 10, textAlign: 'center', marginTop: 18, lineHeight: 15 },
+  legal: { fontSize: 11, textAlign: 'center', marginTop: 18, lineHeight: 16 },
   premiumActive: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30, gap: 10 },
   premiumActiveTitle: { fontSize: 22, fontWeight: '900', marginTop: 6 },
   premiumActiveDesc: { fontSize: 14, textAlign: 'center' },

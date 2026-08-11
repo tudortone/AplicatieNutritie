@@ -10,10 +10,11 @@ import { supabase } from '../supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import * as WebBrowser from 'expo-web-browser';
-import Animated, { FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, Sparkles } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
+import { PressableScale } from '../components/ui/PressableScale';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../context/ThemeContext';
@@ -265,25 +266,25 @@ export default function AuthScreen() {
         {/* Calculated Plan Banner */}
         {planCalculat ? (
           <>
-          <Animated.View entering={FadeInUp.duration(600).delay(280)} style={[styles.planCard, { maxWidth: contentMaxWidth }]}>
+          <Animated.View style={[styles.planCard, { maxWidth: contentMaxWidth }]}>
             <LinearGradient colors={colors.accentGradient} style={styles.planGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <View style={styles.planHeaderRow}>
                 <Sparkles size={20} color={colors.background} />
-                <Text style={[styles.planBadgeText, { color: colors.background }]}>Planul tău zilnic calculat AI</Text>
+                <Text style={[styles.planBadgeText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>Planul tău zilnic calculat AI</Text>
               </View>
-              <Text style={[styles.planKcalText, { color: colors.background }]}>{planCalculat.calorii} kcal/zi</Text>
+              <Text style={[styles.planKcalText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.calorii} kcal/zi</Text>
               <View style={styles.planMacroRow}>
                 <View style={[styles.planMacroPill, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-                  <Text style={[styles.planMacroText, { color: colors.background }]}>{planCalculat.proteineG}g Proteine</Text>
+                  <Text style={[styles.planMacroText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.proteineG}g Proteine</Text>
                 </View>
                 <View style={[styles.planMacroPill, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-                  <Text style={[styles.planMacroText, { color: colors.background }]}>{planCalculat.carbohidratiG}g Carbi</Text>
+                  <Text style={[styles.planMacroText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.carbohidratiG}g Carbi</Text>
                 </View>
                 <View style={[styles.planMacroPill, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-                  <Text style={[styles.planMacroText, { color: colors.background }]}>{planCalculat.grasimiG}g Grăsimi</Text>
+                  <Text style={[styles.planMacroText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.grasimiG}g Grăsimi</Text>
                 </View>
               </View>
-              <Text style={[styles.planSubtext, { color: colors.background }]}>
+              <Text style={[styles.planSubtext, { color: colors.background }]} maxFontSizeMultiplier={1.3}>
                 Creează-ți contul sau conectează-te pentru a-ți activa planul în aplicație.
               </Text>
             </LinearGradient>
@@ -291,7 +292,7 @@ export default function AuthScreen() {
           {/* Refă testele: chiar și cu un plan deja calculat, utilizatorul poate
               relua chestionarul de la început — aceeași acțiune ca la cardul fără
               plan (setOnboardingDone(false) + revenire la /onboarding). */}
-          <Animated.View entering={FadeInUp.duration(600).delay(280)} style={{ width: '100%', maxWidth: contentMaxWidth, marginBottom: 20, marginTop: 14 }}>
+          <Animated.View style={{ width: '100%', maxWidth: contentMaxWidth, marginBottom: 20, marginTop: 14 }}>
             <TouchableOpacity
               style={[styles.noPlanCard, { borderColor: colors.accent + '44', backgroundColor: colors.cardBg }]}
               onPress={() => {
@@ -304,14 +305,14 @@ export default function AuthScreen() {
             >
               <Sparkles size={20} color={colors.accent} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.noPlanTitle, { color: colors.textPrimary }]}>Vrei să recalculezi planul?</Text>
-                <Text style={[styles.noPlanSub, { color: colors.accent }]}>Refă testele de calorié ➔</Text>
+                <Text style={[styles.noPlanTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Vrei să recalculezi planul?</Text>
+                <Text style={[styles.noPlanSub, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>Refă testele de calorié ➔</Text>
               </View>
             </TouchableOpacity>
           </Animated.View>
           </>
         ) : (
-          <Animated.View entering={FadeInUp.duration(600).delay(280)} style={{ width: '100%', maxWidth: contentMaxWidth, marginBottom: 20 }}>
+          <Animated.View style={{ width: '100%', maxWidth: contentMaxWidth, marginBottom: 20 }}>
             <TouchableOpacity
               style={[styles.noPlanCard, { borderColor: colors.accent + '44', backgroundColor: colors.cardBg }]}
               onPress={() => {
@@ -322,8 +323,8 @@ export default function AuthScreen() {
             >
               <Sparkles size={20} color={colors.accent} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.noPlanTitle, { color: colors.textPrimary }]}>Vrei să-ți calculezi planul mai întâi?</Text>
-                <Text style={[styles.noPlanSub, { color: colors.accent }]}>Parcurge chestionarul NutriAI ➔</Text>
+                <Text style={[styles.noPlanTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Vrei să-ți calculezi planul mai întâi?</Text>
+                <Text style={[styles.noPlanSub, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>Parcurge chestionarul NutriAI ➔</Text>
               </View>
             </TouchableOpacity>
           </Animated.View>
@@ -334,7 +335,7 @@ export default function AuthScreen() {
           <BlurView intensity={25} tint="dark" style={styles.formBlur}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.formGrad}>
 
-              <Text style={[styles.formTitle, { color: colors.textPrimary }]}>{isSignUp ? 'Creare cont nou' : 'Bun venit înapoi'}</Text>
+              <Text style={[styles.formTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{isSignUp ? 'Creare cont nou' : 'Bun venit înapoi'}</Text>
 
               {/* Email */}
               <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}>
@@ -399,8 +400,8 @@ export default function AuthScreen() {
 
               {/* Password Requirements (doar la înregistrare) */}
               {isSignUp && (
-                <Animated.View entering={FadeInDown.duration(350)} style={[styles.passwordRulesBox, { backgroundColor: colors.overlayLight, borderColor: colors.overlayStrong }]}>
-                  <Text style={[styles.passwordRulesHeader, { color: colors.textSecondary }]}>
+                <Animated.View style={[styles.passwordRulesBox, { backgroundColor: colors.overlayLight, borderColor: colors.overlayStrong }]}>
+                  <Text style={[styles.passwordRulesHeader, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
                     Cerințe parolă:
                   </Text>
                   <View style={styles.ruleRow}>
@@ -409,7 +410,7 @@ export default function AuthScreen() {
                     ) : (
                       <Circle size={16} color={colors.danger} />
                     )}
-                    <Text style={[styles.ruleText, { color: isMinLength ? colors.success : colors.danger }]}>
+                    <Text style={[styles.ruleText, { color: isMinLength ? colors.success : colors.danger }]} maxFontSizeMultiplier={1.3}>
                       Minim 8 caractere
                     </Text>
                   </View>
@@ -420,7 +421,7 @@ export default function AuthScreen() {
                     ) : (
                       <Circle size={16} color={colors.danger} />
                     )}
-                    <Text style={[styles.ruleText, { color: hasUpperCase ? colors.success : colors.danger }]}>
+                    <Text style={[styles.ruleText, { color: hasUpperCase ? colors.success : colors.danger }]} maxFontSizeMultiplier={1.3}>
                       O literă mare (A-Z)
                     </Text>
                   </View>
@@ -431,7 +432,7 @@ export default function AuthScreen() {
                     ) : (
                       <Circle size={16} color={colors.danger} />
                     )}
-                    <Text style={[styles.ruleText, { color: hasNumber ? colors.success : colors.danger }]}>
+                    <Text style={[styles.ruleText, { color: hasNumber ? colors.success : colors.danger }]} maxFontSizeMultiplier={1.3}>
                       O cifră (0-9)
                     </Text>
                   </View>
@@ -440,20 +441,20 @@ export default function AuthScreen() {
 
               {/* Error Banner */}
               {authError && (
-                <Animated.View entering={FadeInDown.duration(300)} style={[styles.errorBanner, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}>
+                <Animated.View style={[styles.errorBanner, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}>
                   <AlertCircle size={18} color={colors.danger} style={{ marginRight: 8 }} />
-                  <Text style={[styles.errorText, { color: colors.danger }]}>{authError}</Text>
+                  <Text style={[styles.errorText, { color: colors.danger }]} maxFontSizeMultiplier={1.3}>{authError}</Text>
                 </Animated.View>
               )}
 
               {!isSignUp && (
                 <TouchableOpacity style={styles.forgotBtn} onPress={resetParola}>
-                  <Text style={[styles.forgotText, { color: colors.accent }]}>Ai uitat parola?</Text>
+                  <Text style={[styles.forgotText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>Ai uitat parola?</Text>
                 </TouchableOpacity>
               )}
 
               {/* Submit */}
-              <TouchableOpacity
+              <PressableScale
                 style={[
                   styles.submitBtn,
                   { shadowColor: colors.accent },
@@ -461,18 +462,20 @@ export default function AuthScreen() {
                 ]}
                 onPress={submit}
                 disabled={loading}
+                accessibilityLabel={isSignUp ? 'Creează cont' : 'Conectare'}
+                accessibilityState={{ disabled: loading }}
               >
                 <LinearGradient colors={colors.accentGradient} style={styles.submitGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                   {loading ? (
                     <ActivityIndicator color={colors.background} />
                   ) : (
                     <>
-                      <Text style={[styles.submitText, { color: colors.background }]}>{isSignUp ? 'Creează cont' : 'Conectare'}</Text>
+                      <Text style={[styles.submitText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{isSignUp ? 'Creează cont' : 'Conectare'}</Text>
                       <ArrowRight size={20} color={colors.background} strokeWidth={2.5} />
                     </>
                   )}
                 </LinearGradient>
-              </TouchableOpacity>
+              </PressableScale>
 
               {/* Toggle */}
               <TouchableOpacity
@@ -482,15 +485,15 @@ export default function AuthScreen() {
                   setIsSignUp(!isSignUp);
                 }}
               >
-                <Text style={[styles.toggleText, { color: colors.textSecondary }]}>
+                <Text style={[styles.toggleText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
                   {isSignUp ? 'Ai deja un cont? ' : 'Nu ai cont? '}
-                  <Text style={[styles.toggleAccent, { color: colors.accent }]}>{isSignUp ? 'Conectează-te' : 'Înregistrează-te'}</Text>
+                  <Text style={[styles.toggleAccent, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>{isSignUp ? 'Conectează-te' : 'Înregistrează-te'}</Text>
                 </Text>
               </TouchableOpacity>
 
               <View style={styles.dividerWrap}>
                 <View style={[styles.dividerLine, { backgroundColor: colors.overlayStrong }]} />
-                <Text style={[styles.dividerText, { color: colors.textSecondary }]}>sau</Text>
+                <Text style={[styles.dividerText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>sau</Text>
                 <View style={[styles.dividerLine, { backgroundColor: colors.overlayStrong }]} />
               </View>
 
@@ -508,7 +511,7 @@ export default function AuthScreen() {
                   ) : (
                     <View style={styles.oauthBtnContent}>
                       <GoogleLogo size={20} />
-                      <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]}>Google</Text>
+                      <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Google</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -525,7 +528,7 @@ export default function AuthScreen() {
                   ) : (
                     <View style={styles.oauthBtnContent}>
                       <AppleLogo size={20} color={colors.textPrimary} />
-                      <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]}>Apple</Text>
+                      <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Apple</Text>
                     </View>
                   )}
                 </TouchableOpacity>

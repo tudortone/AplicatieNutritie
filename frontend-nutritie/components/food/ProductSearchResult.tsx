@@ -37,11 +37,11 @@ export function ProductSearchResult({ product, onSelect }: ProductSearchResultPr
     >
       <View style={styles.infoCol}>
         <View style={styles.headerRow}>
-          <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
             {product.name}
           </Text>
           {product.brand ? (
-            <Text style={[styles.brand, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.brand, { color: colors.textSecondary }]} numberOfLines={1}>
               • {product.brand}
             </Text>
           ) : null}
@@ -49,9 +49,9 @@ export function ProductSearchResult({ product, onSelect }: ProductSearchResultPr
 
         <View style={styles.metaRow}>
           <View style={[styles.badge, { backgroundColor: badge.color + '18', borderColor: badge.color + '44' }]}>
-            <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
           </View>
-          <Text style={[styles.macros, { color: colors.accent }]}>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.macros, { color: colors.accent }]}>
             {Math.round(product.kcalPer100g)} kcal • P: {Math.round(product.proteinPer100g * 10) / 10}g • C: {Math.round(product.carbsPer100g * 10) / 10}g
           </Text>
         </View>

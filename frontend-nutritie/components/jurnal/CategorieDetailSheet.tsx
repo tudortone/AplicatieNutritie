@@ -1,5 +1,5 @@
-import React, { forwardRef, useImperativeHandle, useRef, useMemo, useCallback, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import React, { forwardRef, useImperativeHandle, useRef, useMemo, useCallback, useState, useEffect } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, BackHandler, Platform } from 'react-native';
 import { BottomSheetModal, BottomSheetScrollView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { X, PlusCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -39,6 +39,18 @@ export const CategorieDetailSheet = forwardRef<CategorieDetailSheetRef, Categori
     const bottomSheetRef = useRef<BottomSheetModal>(null);
     const [categorie, setCategorie] = useState<CategorieMasaGrupata | null>(null);
     const snapPoints = useMemo(() => ['72%'], []);
+    // REMED-010 (Android BackHandler): urmărim index-ul (BottomSheetModal) ca să
+    // închidem sheet-ul cu back DOAR când e deschis (>= 0).
+    const [sheetIndex, setSheetIndex] = useState(-1);
+
+    useEffect(() => {
+      if (Platform.OS !== 'android' || sheetIndex < 0) return;
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        bottomSheetRef.current?.dismiss();
+        return true;
+      });
+      return () => sub.remove();
+    }, [sheetIndex]);
 
     useImperativeHandle(ref, () => ({
       open: (cat: CategorieMasaGrupata) => {
@@ -65,6 +77,7 @@ export const CategorieDetailSheet = forwardRef<CategorieDetailSheetRef, Categori
       <BottomSheetModal
         ref={bottomSheetRef}
         snapPoints={snapPoints}
+        onChange={(index) => setSheetIndex(index)}
         enablePanDownToClose
         enableDynamicSizing={false}
         backdropComponent={renderBackdrop}

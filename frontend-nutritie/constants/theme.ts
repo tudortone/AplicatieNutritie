@@ -1,4 +1,4 @@
-import { Dimensions, Platform } from 'react-native';
+import { Dimensions, Platform, type TextStyle } from 'react-native';
 
 export type ThemeName = 'midnight' | 'ocean' | 'sunset';
 
@@ -9,6 +9,13 @@ export interface ThemeColors {
   accent: string;
   accentSecondary: string;
   accentTertiary: string;
+  // Auriu premium (badge-uri Pro, highlight-uri) + text pe fundal accent
+  gold: string;
+  textOnAccent: string;
+  // Text pe butoanele cu accentSecondary (contrast >= 4.5:1 pe hex-ul accentSecondary)
+  textOnAccentSecondary: string;
+  // Text pe butoanele destructive (fundal danger) — contrast >= 4.5:1 pe danger
+  textOnDanger: string;
   textPrimary: string;
   textSecondary: string;
   textTertiary: string;
@@ -29,6 +36,9 @@ export interface ThemeColors {
   // Input & form
   inputBg: string;
   inputBorder: string;
+  // Disabled state (butoane/selectii inactive)
+  disabledBg: string;
+  disabledText: string;
   // Danger/success surfaces
   dangerBg: string;
   dangerBorder: string;
@@ -45,6 +55,10 @@ const midnight: ThemeColors = {
   accent: '#CCFF00',
   accentSecondary: '#A855F7',
   accentTertiary: '#00F0FF',
+  gold: '#FFD45A',
+  textOnAccent: '#000000',
+  textOnAccentSecondary: '#000000',
+  textOnDanger: '#000000',
   textPrimary: '#FFFFFF',
   textSecondary: '#8B93A0',
   textTertiary: '#9AA0B0',
@@ -61,6 +75,8 @@ const midnight: ThemeColors = {
   muscleOutline: '#0A0D11',
   inputBg: 'rgba(255,255,255,0.04)',
   inputBorder: 'rgba(255,255,255,0.06)',
+  disabledBg: '#2A323D',
+  disabledText: '#64748B',
   dangerBg: 'rgba(255,77,77,0.12)',
   dangerBorder: 'rgba(255,77,77,0.3)',
   shadow: '#000000',
@@ -75,6 +91,10 @@ const ocean: ThemeColors = {
   accent: '#38BDF8',
   accentSecondary: '#818CF8',
   accentTertiary: '#2DD4BF',
+  gold: '#FFD45A',
+  textOnAccent: '#000000',
+  textOnAccentSecondary: '#000000',
+  textOnDanger: '#000000',
   textPrimary: '#F0F9FF',
   textSecondary: '#8B93A0',
   textTertiary: '#9AA0B0',
@@ -91,6 +111,8 @@ const ocean: ThemeColors = {
   muscleOutline: '#080F1C',
   inputBg: 'rgba(56,189,248,0.06)',
   inputBorder: 'rgba(56,189,248,0.10)',
+  disabledBg: '#1B2A40',
+  disabledText: '#64748B',
   dangerBg: 'rgba(251,113,133,0.12)',
   dangerBorder: 'rgba(251,113,133,0.3)',
   shadow: '#000000',
@@ -105,6 +127,10 @@ const sunset: ThemeColors = {
   accent: '#FB923C',
   accentSecondary: '#F472B6',
   accentTertiary: '#FBBF24',
+  gold: '#FFD45A',
+  textOnAccent: '#000000',
+  textOnAccentSecondary: '#000000',
+  textOnDanger: '#000000',
   textPrimary: '#FFF7ED',
   textSecondary: '#8B93A0',
   textTertiary: '#9AA0B0',
@@ -121,6 +147,8 @@ const sunset: ThemeColors = {
   muscleOutline: '#13090C',
   inputBg: 'rgba(251,146,60,0.06)',
   inputBorder: 'rgba(251,146,60,0.10)',
+  disabledBg: '#38232A',
+  disabledText: '#64748B',
   dangerBg: 'rgba(239,68,68,0.12)',
   dangerBorder: 'rgba(239,68,68,0.3)',
   shadow: '#000000',
@@ -146,6 +174,33 @@ export function getThemeColors(name: ThemeName): ThemeColors {
 
 export const Spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 export const Radius = { sm: 8, md: 12, lg: 16, xl: 24, pill: 999 } as const;
+
+// --- Scala tipografica canonica ---
+// Unifica dispersia actuala (8-60px) intr-o singura valoare per token; ecranele
+// adopta treptat acesti tokeni (NU retrofitting global aici).
+export const FontSize = {
+  display: 56,
+  h1: 34,
+  h2: 26,
+  h3: 20,
+  body: 16,
+  bodySecondary: 14,
+  caption: 12,
+  label: 13,
+  button: 15,
+} as const;
+
+export const Typography = {
+  display: { fontSize: FontSize.display, lineHeight: 60, fontWeight: '800' },
+  h1: { fontSize: FontSize.h1, lineHeight: 40, fontWeight: '700' },
+  h2: { fontSize: FontSize.h2, lineHeight: 32, fontWeight: '700' },
+  h3: { fontSize: FontSize.h3, lineHeight: 28, fontWeight: '600' },
+  body: { fontSize: FontSize.body, lineHeight: 24, fontWeight: '400' },
+  bodySecondary: { fontSize: FontSize.bodySecondary, lineHeight: 20, fontWeight: '400' },
+  caption: { fontSize: FontSize.caption, lineHeight: 16, fontWeight: '400' },
+  label: { fontSize: FontSize.label, lineHeight: 18, fontWeight: '600' },
+  button: { fontSize: FontSize.button, lineHeight: 22, fontWeight: '600' },
+} satisfies Record<keyof typeof FontSize, TextStyle>;
 
 const { width, height } = Dimensions.get('window');
 

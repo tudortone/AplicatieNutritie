@@ -63,7 +63,7 @@ export default function PasCalculare() {
 
         <Animated.View entering={FadeInDown.duration(600).delay(150)} style={styles.textWrap}>
           <Text style={[styles.titlu, { color: colors.textPrimary }]}>Calculăm planul tău AI...</Text>
-          <Text style={[styles.subtitlu, { color: colors.textSecondary }]}>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.subtitlu, { color: colors.textSecondary }]}>
             Personalizăm caloriile și macronuienții pe baza datelor tale unice.
           </Text>
         </Animated.View>
@@ -97,6 +97,7 @@ export default function PasCalculare() {
                   <View style={[styles.dotPendent, { backgroundColor: colors.textSecondary, opacity: 0.3 }]} />
                 )}
                 <Text
+                  maxFontSizeMultiplier={1.3}
                   style={[
                     styles.etapeText,
                     {

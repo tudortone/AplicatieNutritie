@@ -491,15 +491,15 @@ export default function AntrenamenteScreen() {
       <View style={[styles.trackerCardExpanded, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
         <View style={styles.trackerHeader}>
           <Text style={[styles.trackerTitle, { color: colors.textPrimary }]}>Loghează set</Text>
-          <Text style={[styles.modeBadge, { color: colors.accent, borderColor: colors.accent }]}>{fields.modeLabel}</Text>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.modeBadge, { color: colors.accent, borderColor: colors.accent }]}>{fields.modeLabel}</Text>
         </View>
 
         {exSets.map((s, idx) => (
           <View key={`${ex.id}-${idx}`} style={[styles.setRow, { borderColor: colors.cardBorder }]}>
-            <Text style={[styles.setIndex, { color: colors.textTertiary }]}>#{idx + 1}</Text>
-            <Text style={[styles.setValue, { color: colors.textPrimary }]}>{describeSet(s, fields)}</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.setIndex, { color: colors.textTertiary }]}>#{idx + 1}</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.setValue, { color: colors.textPrimary }]}>{describeSet(s, fields)}</Text>
             {s.set_type === 'warmup' && (
-              <Text style={[styles.warmupTag, { color: colors.textTertiary, borderColor: colors.cardBorder }]}>încălzire</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.warmupTag, { color: colors.textTertiary, borderColor: colors.cardBorder }]}>încălzire</Text>
             )}
             <Pressable onPress={() => removeSet(ex.id, idx)} accessibilityRole='button' accessibilityLabel={`Șterge setul ${idx + 1}`} hitSlop={14}>
               <Trash2 size={16} color={colors.textTertiary} />
@@ -519,13 +519,13 @@ export default function AntrenamenteScreen() {
             <View style={styles.timerActions}>
               {timerRunning ? (
                 <Pressable onPress={() => stopTimer(ex)} style={[styles.timerBtn, { backgroundColor: colors.accent }]} accessibilityRole='button' accessibilityLabel='Oprește cronometrul'>
-                  <Pause size={16} color='#0B0F14' />
-                  <Text style={styles.timerBtnText}>Stop</Text>
+                  <Pause size={16} color={colors.background} />
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.timerBtnText, { color: colors.background }]}>Stop</Text>
                 </Pressable>
               ) : (
                 <Pressable onPress={() => startTimer(ex)} style={[styles.timerBtn, { backgroundColor: colors.accent }]} accessibilityRole='button' accessibilityLabel='Pornește cronometrul'>
-                  <Play size={16} color='#0B0F14' />
-                  <Text style={styles.timerBtnText}>Start</Text>
+                  <Play size={16} color={colors.background} />
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.timerBtnText, { color: colors.background }]}>Start</Text>
                 </Pressable>
               )}
               <Pressable onPress={resetTimer} style={[styles.timerGhost, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Resetează cronometrul'>
@@ -571,7 +571,7 @@ export default function AntrenamenteScreen() {
             colors={colors}
           />
         ) : (
-          <Text style={[styles.noWeightHint, { color: colors.textTertiary }]}>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.noWeightHint, { color: colors.textTertiary }]}>
             Exercițiu cu greutatea corpului — nu are câmp de kilograme.
           </Text>
         )}
@@ -582,7 +582,7 @@ export default function AntrenamenteScreen() {
           accessibilityState={{ checked: isWarmup }}
           style={[styles.warmupToggle, { borderColor: isWarmup ? colors.accent : colors.cardBorder, backgroundColor: isWarmup ? colors.accent + '22' : 'transparent' }]}
         >
-          <Text style={[styles.warmupToggleText, { color: isWarmup ? colors.accent : colors.textSecondary }]}>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.warmupToggleText, { color: isWarmup ? colors.accent : colors.textSecondary }]}>
             Set de încălzire (nu intră în volum)
           </Text>
         </Pressable>
@@ -611,8 +611,8 @@ export default function AntrenamenteScreen() {
       >
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>Anatomie</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.title, { color: colors.textPrimary }]}>Anatomie</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.subtitle, { color: colors.textSecondary }]}>
               Harta rămâne aprinsă pe tot parcursul sesiunii
             </Text>
           </View>
@@ -625,7 +625,7 @@ export default function AntrenamenteScreen() {
           </View>
           <View style={styles.mapLegend}>
             <View style={[styles.legendDot, { backgroundColor: colors.accent }]} />
-            <Text style={[styles.legendText, { color: colors.textSecondary }]}>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.legendText, { color: colors.textSecondary }]}>
               {activeMuscleCount > 0 ? `${activeMuscleCount} mușchi activi` : 'Selectează un exercițiu'}
             </Text>
           </View>
@@ -635,15 +635,15 @@ export default function AntrenamenteScreen() {
           <View style={[styles.sessionBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.cardBorder }]}>
             <View style={styles.sessionItem}>
               <Text style={[styles.sessionValue, { color: colors.textPrimary }]}>{sessionStats.sets}</Text>
-              <Text style={[styles.sessionLabel, { color: colors.textTertiary }]}>seturi</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.sessionLabel, { color: colors.textTertiary }]}>seturi</Text>
             </View>
             <View style={styles.sessionItem}>
               <Text style={[styles.sessionValue, { color: colors.textPrimary }]}>{sessionStats.exercises}</Text>
-              <Text style={[styles.sessionLabel, { color: colors.textTertiary }]}>exerciții</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.sessionLabel, { color: colors.textTertiary }]}>exerciții</Text>
             </View>
             <View style={styles.sessionItem}>
               <Text style={[styles.sessionValue, { color: colors.textPrimary }]}>{Math.round(sessionStats.volume)}</Text>
-              <Text style={[styles.sessionLabel, { color: colors.textTertiary }]}>kg volum</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.sessionLabel, { color: colors.textTertiary }]}>kg volum</Text>
             </View>
           </View>
         )}
@@ -651,17 +651,18 @@ export default function AntrenamenteScreen() {
         {/* CE AI LUCRAT — exercițiile din sesiunea curentă, cu seturile lor. */}
         {workedExercises.length > 0 && (
           <View style={[styles.workedCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-            <Text style={[styles.workedTitle, { color: colors.textPrimary }]}>Ce ai lucrat</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.workedTitle, { color: colors.textPrimary }]}>Ce ai lucrat</Text>
             {workedExercises.map((entry) => (
               <View key={entry.exId} style={styles.workedItem}>
                 <View style={styles.workedRow}>
-                  <Text style={[styles.workedName, { color: colors.textPrimary }]} numberOfLines={1}>{entry.nume}</Text>
-                  <Text style={[styles.workedSummary, { color: colors.accent }]}>{summaryLabel(entry.summary, entry.fields)}</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.workedName, { color: colors.textPrimary }]} numberOfLines={1}>{entry.nume}</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.workedSummary, { color: colors.accent }]}>{summaryLabel(entry.summary, entry.fields)}</Text>
                 </View>
                 <View style={styles.workedSets}>
                   {entry.sets.map((s, idx) => (
                     <Text
                       key={`${entry.exId}-chip-${idx}`}
+                      maxFontSizeMultiplier={1.3}
                       style={[styles.setChip, {
                         color: s.set_type === 'warmup' ? colors.textTertiary : colors.textSecondary,
                         borderColor: colors.cardBorder,
@@ -679,15 +680,15 @@ export default function AntrenamenteScreen() {
         {restEndsAt != null && (
           <View style={[styles.restBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
             <Timer size={18} color={colors.accent} />
-            <Text style={[styles.restText, { color: colors.textPrimary }]}>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.restText, { color: colors.textPrimary }]}>
               Pauză{' '}
               <RestCountdown endsAt={restEndsAt} onDone={() => setRestEndsAt(null)} />
             </Text>
             <Pressable onPress={() => setRestEndsAt((s) => (s ?? Date.now()) + 15000)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Prelungește pauza cu 15 secunde'>
-              <Text style={[styles.restBtnText, { color: colors.textSecondary }]}>+15s</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.restBtnText, { color: colors.textSecondary }]}>+15s</Text>
             </Pressable>
             <Pressable onPress={() => setRestEndsAt(null)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Sari peste pauză'>
-              <Text style={[styles.restBtnText, { color: colors.textSecondary }]}>Skip</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.restBtnText, { color: colors.textSecondary }]}>Skip</Text>
             </Pressable>
           </View>
         )}
@@ -703,7 +704,7 @@ export default function AntrenamenteScreen() {
           />
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: 10 }]}>Exerciții</Text>
+        <Text maxFontSizeMultiplier={1.3} style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: 10 }]}>Exerciții</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
           {CATEGORII.map((cat) => {
             const active = selectedCategory === cat.id && searchQuery.trim().length === 0;
@@ -716,8 +717,8 @@ export default function AntrenamenteScreen() {
                 accessibilityLabel={`Categoria ${cat.nume}`}
                 style={[styles.pill, { backgroundColor: active ? colors.accent : colors.surfaceElevated, borderColor: active ? colors.accent : colors.cardBorder }]}
               >
-                <CatIcon size={18} color={active ? '#0B0F14' : colors.textSecondary} />
-                <Text style={[styles.pillText, { color: active ? '#0B0F14' : colors.textPrimary }]}>{cat.nume}</Text>
+                <CatIcon size={18} color={active ? colors.background : colors.textSecondary} />
+                <Text maxFontSizeMultiplier={1.3} style={[styles.pillText, { color: active ? colors.background : colors.textPrimary }]}>{cat.nume}</Text>
               </Pressable>
             );
           })}
@@ -750,33 +751,33 @@ export default function AntrenamenteScreen() {
                 >
                   <View style={[styles.verticalIcon, { backgroundColor: expanded ? colors.accent : colors.surfaceElevated }]}>
                     {fields.usesTime ? (
-                      <Timer size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
+                      <Timer size={20} color={expanded ? colors.background : colors.textSecondary} />
                     ) : ex.categorie === 'piept' || ex.categorie === 'spate' || ex.categorie === 'brate' || ex.categorie === 'umeri' ? (
-                      <Dumbbell size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
+                      <Dumbbell size={20} color={expanded ? colors.background : colors.textSecondary} />
                     ) : ex.categorie === 'picioare' || ex.categorie === 'abdomen' ? (
-                      <PersonStanding size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
+                      <PersonStanding size={20} color={expanded ? colors.background : colors.textSecondary} />
                     ) : ex.categorie === 'cardio' ? (
-                      <Activity size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
+                      <Activity size={20} color={expanded ? colors.background : colors.textSecondary} />
                     ) : (
-                      <MoveUp size={20} color={expanded ? '#0B0F14' : colors.textSecondary} />
+                      <MoveUp size={20} color={expanded ? colors.background : colors.textSecondary} />
                     )}
                   </View>
 
                   <View style={styles.verticalTextWrap}>
                     <Text style={[styles.verticalName, { color: colors.textPrimary }]} numberOfLines={1}>{ex.nume}</Text>
-                    <Text style={[styles.verticalSub, { color: colors.textTertiary }]} numberOfLines={1}>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.verticalSub, { color: colors.textTertiary }]} numberOfLines={1}>
                       {exSets.length > 0 ? summaryLabel(summary, fields) : `${fields.modeLabel} • ${ex.dificultate || 'mediu'}`}
                     </Text>
                   </View>
 
                   {exSets.length > 0 ? (
                     <View style={[styles.setsBadge, { backgroundColor: colors.accent }]}>
-                      <Text style={styles.setsBadgeText}>{exSets.length}</Text>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.setsBadgeText, { color: colors.background }]}>{exSets.length}</Text>
                     </View>
                   ) : null}
 
                   <View style={[styles.verticalAction, { backgroundColor: expanded ? colors.accent : colors.surfaceElevated }]}>
-                    {expanded ? <ChevronUp size={16} color='#0B0F14' /> : <Play size={16} color={colors.textSecondary} fill={colors.textSecondary} />}
+                    {expanded ? <ChevronUp size={16} color={colors.background} /> : <Play size={16} color={colors.textSecondary} fill={colors.textSecondary} />}
                   </View>
                 </Pressable>
 
@@ -795,11 +796,11 @@ export default function AntrenamenteScreen() {
             style={({ pressed }) => [styles.saveButton, { backgroundColor: colors.accent, opacity: pressed || saving ? 0.85 : 1 }]}
           >
             {saving ? (
-              <ActivityIndicator color='#0B0F14' />
+              <ActivityIndicator color={colors.background} />
             ) : (
               <>
-                <Save size={20} color='#0B0F14' />
-                <Text style={[styles.saveText, { color: '#0B0F14' }]}>Salvează antrenamentul</Text>
+                <Save size={20} color={colors.background} />
+                <Text maxFontSizeMultiplier={1.3} style={[styles.saveText, { color: colors.background }]}>Salvează antrenamentul</Text>
               </>
             )}
           </Pressable>
@@ -848,7 +849,8 @@ const styles = StyleSheet.create({
   verticalName: { fontSize: 16, fontWeight: '700', lineHeight: 22 } as TextStyle,
   verticalSub: { fontSize: 12, marginTop: 2 } as TextStyle,
   setsBadge: { minWidth: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 } as ViewStyle,
-  setsBadgeText: { color: '#0B0F14', fontSize: 12, fontWeight: '900' } as TextStyle,
+  // setsBadgeText: culoarea (colors.background) e setată inline în render, pe accent.
+  setsBadgeText: { fontSize: 12, fontWeight: '900' } as TextStyle,
   verticalAction: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginLeft: Spacing.md } as ViewStyle,
   trackerCardExpanded: { padding: Spacing.lg, borderWidth: 1, borderTopWidth: 0, borderBottomLeftRadius: Radius.md, borderBottomRightRadius: Radius.md } as ViewStyle,
   trackerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md, gap: Spacing.sm } as ViewStyle,
@@ -862,13 +864,14 @@ const styles = StyleSheet.create({
   timerValue: { fontSize: 40, fontWeight: '900', letterSpacing: 1 } as TextStyle,
   timerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm } as ViewStyle,
   timerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 22, borderRadius: Radius.pill } as ViewStyle,
-  timerBtnText: { color: '#0B0F14', fontSize: 14, fontWeight: '900' } as TextStyle,
+  // timerBtnText: culoarea (colors.background) e setată inline în render, pe accent.
+  timerBtnText: { fontSize: 14, fontWeight: '900' } as TextStyle,
   timerGhost: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' } as ViewStyle,
   noWeightHint: { fontSize: 12, marginTop: Spacing.sm, lineHeight: 16 } as TextStyle,
   warmupToggle: { borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, minHeight: 48, marginTop: Spacing.sm } as ViewStyle,
   warmupToggleText: { fontSize: 12, fontWeight: '700' } as TextStyle,
   ctaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: Radius.pill, gap: Spacing.sm, marginTop: Spacing.md } as ViewStyle,
-  ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' } as TextStyle,
+  ctaText: { fontSize: 15, fontWeight: '800' } as TextStyle,
   saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: Radius.pill, gap: Spacing.sm, marginTop: Spacing.lg } as ViewStyle,
   saveText: { fontSize: 16, fontWeight: '800' } as TextStyle,
 });

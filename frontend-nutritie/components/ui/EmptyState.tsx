@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
 
 interface EmptyStateProps {
   icon?: string;
@@ -7,7 +8,7 @@ interface EmptyStateProps {
   subtitle?: string;
   actionLabel?: string;
   onAction?: () => void;
-  /** Culori din tema (optional — foloseste valori default dark) */
+  /** Culori din tema (optional — cad pe valorile temei active prin useTheme) */
   accentColor?: string;
   textColor?: string;
   mutedColor?: string;
@@ -23,25 +24,30 @@ export function EmptyState({
   subtitle,
   actionLabel,
   onAction,
-  accentColor = '#CCFF00',
-  textColor = '#FFFFFF',
-  mutedColor = '#9CA3AF',
+  accentColor,
+  textColor,
+  mutedColor,
 }: EmptyStateProps) {
+  const { colors } = useTheme();
+  const accent = accentColor ?? colors.accent;
+  const text = textColor ?? colors.textPrimary;
+  const muted = mutedColor ?? colors.textSecondary;
+
   return (
     <View style={styles.container}>
       <Text style={styles.icon}>{icon}</Text>
-      <Text style={[styles.title, { color: textColor }]}>{title}</Text>
+      <Text style={[styles.title, { color: text }]} maxFontSizeMultiplier={1.3}>{title}</Text>
       {subtitle && (
-        <Text style={[styles.subtitle, { color: mutedColor }]}>{subtitle}</Text>
+        <Text style={[styles.subtitle, { color: muted }]} maxFontSizeMultiplier={1.3}>{subtitle}</Text>
       )}
       {actionLabel && onAction && (
         <TouchableOpacity
-          style={[styles.action, { backgroundColor: accentColor }]}
+          style={[styles.action, { backgroundColor: accent }]}
           onPress={onAction}
           accessibilityRole="button"
           accessibilityLabel={actionLabel}
         >
-          <Text style={styles.actionText}>{actionLabel}</Text>
+          <Text style={[styles.actionText, { color: colors.textOnAccent }]} maxFontSizeMultiplier={1.3}>{actionLabel}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -78,8 +84,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 14,
   },
+  // actionText: culoarea se pune inline (colors.textOnAccent) în render.
   actionText: {
-    color: '#090C0E',
     fontSize: 15,
     fontWeight: 'bold',
   },

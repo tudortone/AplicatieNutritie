@@ -201,6 +201,7 @@ export function ProductSearch({
           <Search size={18} color={colors.textSecondary} />
           <TextInput
             style={[styles.searchInput, { color: colors.textPrimary }]}
+            maxFontSizeMultiplier={1.3}
             placeholder="Caută produs, brand sau aliment..."
             placeholderTextColor={colors.textSecondary + '77'}
             value={query}
@@ -222,7 +223,7 @@ export function ProductSearch({
       {loading && (
         <View style={styles.loadingRow}>
           <ActivityIndicator size="small" color={colors.accent} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Căutăm în cataloage...</Text>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.loadingText, { color: colors.textSecondary }]}>Căutăm în cataloage...</Text>
         </View>
       )}
 
@@ -243,7 +244,7 @@ export function ProductSearch({
             onPress={() => setIsManualMode(true)}
           >
             <Plus size={18} color={colors.accent} />
-            <Text style={[styles.manualFooterText, { color: colors.accent }]}>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.manualFooterText, { color: colors.accent }]}>
               Nu găsești produsul? Introdu-l complet manual
             </Text>
           </TouchableOpacity>

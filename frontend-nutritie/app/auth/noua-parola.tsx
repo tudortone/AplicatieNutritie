@@ -205,6 +205,9 @@ export default function NouaParolaScreen() {
               style={[styles.submitBtn, { shadowColor: colors.accent }, !poateTrimite ? { opacity: 0.6 } : {}]}
               onPress={submit}
               disabled={loading}
+              accessibilityRole="button"
+              accessibilityLabel="Salvează parola nouă"
+              accessibilityState={{ disabled: loading }}
             >
               <LinearGradient colors={colors.accentGradient} style={styles.submitGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                 {loading ? (

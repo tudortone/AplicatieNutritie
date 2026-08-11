@@ -1,4 +1,6 @@
 import { TipMasa, Masa, AlimentDetaliat } from '../types';
+import type { ComponentType } from 'react';
+import { Egg, Soup, Apple, Salad } from 'lucide-react-native';
 
 /**
  * Limitele CHECK-urilor din baza de date public.mese (migrări 003/004) și ale
@@ -54,15 +56,24 @@ export function normalizeTipMasa(val?: string | null): TipMasa {
 export interface CategorieMasaMeta {
   id: TipMasa;
   label: string;
-  icon: string;
 }
 
 export const MEAL_CATEGORIES: CategorieMasaMeta[] = [
-  { id: 'mic_dejun', label: 'Mic Dejun', icon: '🍳' },
-  { id: 'pranz', label: 'Prânz', icon: '🍲' },
-  { id: 'gustare', label: 'Gustări', icon: '🍎' },
-  { id: 'cina', label: 'Cină', icon: '🥗' },
+  { id: 'mic_dejun', label: 'Mic Dejun' },
+  { id: 'pranz', label: 'Prânz' },
+  { id: 'gustare', label: 'Gustări' },
+  { id: 'cina', label: 'Cină' },
 ];
+
+// REMED-020: iconițele lucide ale categoriilor de masă, unice pentru toți
+// consumatorii (istoric/chat/camera/AddMealBottomSheet) — nu se mai duplică
+// maparea local, iar emoji-urile nu mai sunt folosite ca iconițe.
+export const CATEGORIE_ICONA: Record<TipMasa, ComponentType<{ size?: number; color?: string; strokeWidth?: number }>> = {
+  mic_dejun: Egg,
+  pranz: Soup,
+  gustare: Apple,
+  cina: Salad,
+};
 
 export function getTipMasaDupaOra(date: Date = new Date()): TipMasa {
   const hours = date.getHours();
@@ -168,6 +179,27 @@ export function obtinePozaMasa(masa: Pick<Masa, 'imagine_url' | 'alimente'>): st
     if (al.imageUrl) return al.imageUrl;
   }
   return null;
+}
+
+/**
+ * REMED-018: thumbnail pentru pozele din jurnal — același URL rezolvat de
+ * `obtinePozaMasa`, redimensionat pe server ImageKit (`?tr=w-<latime>`), ca
+ * cardurile/modalele să nu mai descarce rezoluția full la fiecare randare.
+ * Dacă URL-ul are deja un transform `tr=` sau nu aparține ImageKit, îl lăsăm
+ * intact (fără query-uri false care ar putea strica semnăturile).
+ */
+export function obtinePozaMasaThumb(
+  masa: Pick<Masa, 'imagine_url' | 'alimente'>,
+  latime = 480,
+): string | null {
+  const url = obtinePozaMasa(masa);
+  if (!url) return null;
+  // Pozele meselor vin din ImageKit (lib/imagekit.ts). Doar pentru ele
+  // apendăm transformul; orice alt URL (data URI, alt CDN) rămâne nemodificat.
+  if (!url.includes('ik.imagekit.io')) return url;
+  if (/[?&]tr=/.test(url)) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}tr=w-${latime}`;
 }
 
 export interface TotaluriMasa {

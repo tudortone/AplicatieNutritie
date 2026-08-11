@@ -7,6 +7,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { useTheme } from '../../context/ThemeContext';
 
 type Props = {
   currentKg: number;
@@ -17,10 +18,15 @@ type Props = {
 
 const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 
-const gradientForRank = (progress: number): [string, string, string] => {
-  if (progress >= 0.9) return ['#FF8C00', '#FF3D00', '#FF004C'];
-  if (progress >= 0.6) return ['#FFD700', '#FF8C00', '#FF3D00'];
-  return ['#00BFFF', '#278BFF', '#FFD700'];
+// REMED-032: rampă de culoare pe token-urile temei (warning/danger/success/gold)
+// în loc de hex-uri fixe — se respecă și Reduce Motion prin interpolarea shared value.
+const gradientForRank = (
+  progress: number,
+  colors: ReturnType<typeof useTheme>['colors'],
+): [string, string, string] => {
+  if (progress >= 0.9) return [colors.warning, colors.danger, colors.danger];
+  if (progress >= 0.6) return [colors.gold, colors.warning, colors.danger];
+  return [colors.accentTertiary, colors.accentSecondary, colors.gold];
 };
 
 export default function RankProgressBar({
@@ -29,6 +35,7 @@ export default function RankProgressBar({
   rankLabel,
   nextRankLabel,
 }: Props) {
+  const { colors } = useTheme();
   const progress = Math.max(0, Math.min(1, currentKg / nextRankKg));
   const progressValue = useSharedValue(0);
   const widthStyle = useAnimatedStyle(() => ({
@@ -42,27 +49,27 @@ export default function RankProgressBar({
     });
   }, [progress, progressValue]);
 
-  const colors = gradientForRank(progress);
+  const gradient = gradientForRank(progress, colors);
 
   return (
     <View style={styles.wrapper}>
       <View style={styles.metaRow}>
-        <Text style={styles.label}>Progres spre {nextRankLabel}</Text>
-        <Text style={styles.value}>
+        <Text style={[styles.label, { color: colors.textTertiary }]}>Progres spre {nextRankLabel}</Text>
+        <Text style={[styles.value, { color: colors.accentTertiary }]}>
           {currentKg.toFixed(3)} / {nextRankKg.toFixed(3)} kg
         </Text>
       </View>
 
-      <View style={styles.track}>
+      <View style={[styles.track, { backgroundColor: colors.surfaceBg }]}>
         <AnimatedGradient
-          colors={colors}
+          colors={gradient}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={[styles.fill, widthStyle]}
         />
       </View>
 
-      <Text style={styles.rank}>{rankLabel}</Text>
+      <Text style={[styles.rank, { color: colors.textPrimary }]}>{rankLabel}</Text>
     </View>
   );
 }
@@ -74,14 +81,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  label: { color: '#7F929B', fontSize: 14, fontWeight: '600' },
-  value: { color: '#39B9F4', fontSize: 14, fontWeight: '800' },
+  label: { fontSize: 14, fontWeight: '600' },
+  value: { fontSize: 14, fontWeight: '800' },
   track: {
     height: 10,
     borderRadius: 999,
     overflow: 'hidden',
-    backgroundColor: '#123341',
   },
   fill: { height: 10, borderRadius: 999, minWidth: 4 },
-  rank: { color: '#E8F0F2', fontSize: 13, fontWeight: '700' },
+  rank: { fontSize: 13, fontWeight: '700' },
 });

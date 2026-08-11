@@ -3,6 +3,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  View,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -17,6 +18,12 @@ interface Props {
    * explicit înălțimea lui.
    */
   keyboardVerticalOffset?: number;
+  /**
+   * REMED-003: când e true, KAV nu aplică NICIUN offset — ecranul își conduce
+   * singur tastatura (chat-ul folosește useAnimatedKeyboard pe compozitor).
+   * Default false => comportamentul existent rămâne neschimbat pentru ceilalți.
+   */
+  keyboardDisabled?: boolean;
 }
 
 /**
@@ -32,11 +39,18 @@ export default function KeyboardAwareScreen({
   children,
   style,
   keyboardVerticalOffset = 0,
+  keyboardDisabled = false,
 }: Props) {
   // BUG-010: pe Android fereastra se redimensionează deja la tastatură
   // (edge-to-edge + softwareKeyboardLayoutMode:resize, app.json), deci KAV cu
   // behavior:'height'/'padding' ar scădea încă o dată -> offset dublu. Doar iOS
   // are nevoie de behavior:'padding'; pe Android behavior undefined = fără KAV.
+  //
+  // REMED-003: chat-ul (keyboardDisabled=true) își conduce SINGUR offsetul prin
+  // useAnimatedKeyboard — fără KAV pe el, altfel s-ar aduna două offseturi.
+  if (keyboardDisabled) {
+    return <View style={[styles.flex, style]}>{children}</View>;
+  }
   return (
     <KeyboardAvoidingView
       style={[styles.flex, style]}

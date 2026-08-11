@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import { useTheme } from '../../context/ThemeContext';
 
 export type Equipment = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'kettlebell' | 'bench' | 'cardio' | string;
 export type MuscleGroup =
@@ -15,7 +16,7 @@ interface Props {
   label?: string;
 }
 
-const MUSCLE_THEME: Record<string, { color: string; label: string }> = {
+const MUSCLE_THEME: Record<string, { color?: string; label: string }> = {
   chest: { color: '#3B82F6', label: 'Piept' },
   piept: { color: '#3B82F6', label: 'Piept' },
   back: { color: '#EF4444', label: 'Spate' },
@@ -36,7 +37,8 @@ const MUSCLE_THEME: Record<string, { color: string; label: string }> = {
   abdomen: { color: '#EAB308', label: 'Abdomen' },
   forearms: { color: '#6366F1', label: 'Antebrațe' },
   antebrațe: { color: '#6366F1', label: 'Antebrațe' },
-  cardio: { color: '#FF003C', label: 'Cardio' },
+  // cardio: culoarea se setează din tema activă (colors.danger) în componentă.
+  cardio: { label: 'Cardio' },
 };
 
 function EquipmentPath({ equipment = 'bodyweight', strokeColor }: { equipment: Equipment; strokeColor: string }) {
@@ -127,10 +129,13 @@ export default function CategoryIcon({
   showLabel = false,
   label,
 }: Props) {
+  const { colors } = useTheme();
   const normMuscle = (muscleGroup || 'core').toLowerCase().trim();
-  const theme = MUSCLE_THEME[normMuscle] ?? MUSCLE_THEME.core;
-  const strokeColor = theme.color;
-  const displayLabel = label || theme.label;
+  const baseTheme = MUSCLE_THEME[normMuscle] ?? MUSCLE_THEME.core;
+  // Cardio: roșul se ia din tema activă (colors.danger), nu e fix în hartă.
+  const isCardio = normMuscle === 'cardio';
+  const strokeColor = isCardio ? colors.danger : (baseTheme.color ?? colors.danger);
+  const displayLabel = label || baseTheme.label;
 
   if (showLabel) {
     return (

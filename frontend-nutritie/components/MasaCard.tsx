@@ -9,7 +9,8 @@ import * as Haptics from 'expo-haptics';
 import { Masa } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { usePremium } from '../context/PremiumContext';
-import { obtinePozaMasa, parseAlimente } from '../lib/mealUtils';
+import { useTranslation } from 'react-i18next';
+import { obtinePozaMasaThumb, parseAlimente } from '../lib/mealUtils';
 
 interface MasaCardProps {
   masa: Masa;
@@ -28,10 +29,12 @@ export const MasaCard = React.memo(function MasaCard({
   afisarePoze = true,
 }: MasaCardProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const router = useRouter();
   const { isPremium } = usePremium();
   const alimenteSubList = useMemo(() => parseAlimente(masa), [masa.alimente]);
-  const pozaUrl = obtinePozaMasa(masa);
+  // REMED-018: thumbnail ImageKit (w-480) în locul rezoluției full pe card.
+  const pozaUrl = obtinePozaMasaThumb(masa);
 
   // BUG-023: layout spring doar pe iOS. Pe Android spring-ul pe orice schimbare
   // de listă (add/delete/edit) e fragil și scump cu multe mese; sistemul deja
@@ -47,7 +50,7 @@ export const MasaCard = React.memo(function MasaCard({
           onPress(masa);
         }}
         accessibilityRole="button"
-        accessibilityLabel={`Masa ${masa.nume}, ${masa.calorii || 0} kcal`}
+        accessibilityLabel={t('jurnal.mealA11y', { nume: masa.nume, kcal: masa.calorii || 0 })}
       >
         <View
           style={[
@@ -87,7 +90,7 @@ export const MasaCard = React.memo(function MasaCard({
                   }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
-                  accessibilityLabel="Editează masa"
+                  accessibilityLabel={t('jurnal.editMeal')}
                 >
                   <Pencil size={15} color={colors.accentSecondary} />
                 </TouchableOpacity>
@@ -105,7 +108,7 @@ export const MasaCard = React.memo(function MasaCard({
                   }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
-                  accessibilityLabel="Șterge masa"
+                  accessibilityLabel={t('jurnal.deleteMeal')}
                 >
                   <Trash2 size={15} color={colors.danger} />
                 </TouchableOpacity>
@@ -175,7 +178,7 @@ export const MasaCard = React.memo(function MasaCard({
                     {masa.proteine || 0}g
                   </Text>
                   <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]}>
-                    proteine
+                    {t('jurnal.macroProtein')}
                   </Text>
                 </LinearGradient>
               </View>
@@ -188,7 +191,9 @@ export const MasaCard = React.memo(function MasaCard({
                     {masa.carbohidrati != null ? masa.carbohidrati : '—'}
                     {masa.carbohidrati != null ? 'g' : ''}
                   </Text>
-                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]}>carbs</Text>
+                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]}>
+                    {t('jurnal.macroCarbs')}
+                  </Text>
                 </LinearGradient>
               </View>
               <View style={styles.cardStatItem}>
@@ -201,7 +206,7 @@ export const MasaCard = React.memo(function MasaCard({
                     {masa.grasimi != null ? 'g' : ''}
                   </Text>
                   <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]}>
-                    grăsimi
+                    {t('jurnal.macroFats')}
                   </Text>
                 </LinearGradient>
               </View>
@@ -214,7 +219,9 @@ export const MasaCard = React.memo(function MasaCard({
                     {masa.fibre != null ? masa.fibre : '—'}
                     {masa.fibre != null ? 'g' : ''}
                   </Text>
-                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]}>fibre</Text>
+                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]}>
+                    {t('jurnal.macroFiber')}
+                  </Text>
                 </LinearGradient>
               </View>
             </View>
@@ -231,7 +238,7 @@ export const MasaCard = React.memo(function MasaCard({
                   activeOpacity={0.9}
                   style={styles.imageBottomContainer}
                   accessibilityRole="imagebutton"
-                  accessibilityLabel="Vezi poza mesei și detaliile"
+                  accessibilityLabel={t('jurnal.viewMealPhoto')}
                 >
                   <Image
                     source={{ uri: pozaUrl }}
@@ -249,7 +256,7 @@ export const MasaCard = React.memo(function MasaCard({
                   activeOpacity={0.95}
                   style={styles.imageBottomContainer}
                   accessibilityRole="imagebutton"
-                  accessibilityLabel="Deblochează pozele meselor cu Premium"
+                  accessibilityLabel={t('jurnal.unlockMealPhotos')}
                 >
                   <Image
                     source={{ uri: pozaUrl }}
@@ -266,9 +273,9 @@ export const MasaCard = React.memo(function MasaCard({
                   <View style={styles.lockOverlay}>
                     <View style={styles.lockBadge}>
                       <Lock size={14} color={colors.textPrimary} />
-                      <Text style={styles.lockBadgeText}>Pozele mesei sunt Premium</Text>
+                      <Text style={styles.lockBadgeText}>{t('jurnal.mealPhotosPremium')}</Text>
                     </View>
-                    <Text style={styles.lockCta}>Deblochează cu Premium</Text>
+                    <Text style={styles.lockCta}>{t('jurnal.unlockPremium')}</Text>
                   </View>
                 </TouchableOpacity>
               )
@@ -382,9 +389,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -438,7 +445,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   cardStatLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
   },

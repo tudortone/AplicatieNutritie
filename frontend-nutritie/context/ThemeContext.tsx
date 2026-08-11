@@ -4,7 +4,7 @@ import { ThemeName, ThemeColors, getThemeColors } from '../constants/theme';
 
 const STORAGE_KEY = 'nutriai_theme';
 
-interface ThemeContextType {
+export interface ThemeContextType {
   themeName: ThemeName;
   colors: ThemeColors;
   setTheme: (name: ThemeName) => void;
@@ -12,7 +12,9 @@ interface ThemeContextType {
 
 const defaultColors = getThemeColors('midnight');
 
-const ThemeContext = createContext<ThemeContextType>({
+// Exportat pentru componentele clasa (ex. GlobalErrorBoundary) care nu pot folosi
+// hook-uri si citesc tema prin `static contextType = ThemeContext`.
+export const ThemeContext = createContext<ThemeContextType>({
   themeName: 'midnight',
   colors: defaultColors,
   setTheme: () => {},

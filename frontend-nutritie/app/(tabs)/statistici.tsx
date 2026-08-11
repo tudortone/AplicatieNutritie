@@ -4,9 +4,10 @@ import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { useFocusEffect } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, cancelAnimation } from 'react-native-reanimated';
+import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, cancelAnimation } from 'react-native-reanimated';
 import { Flame, Activity, TrendingUp, Award, Scale, TrendingDown, Sparkles, Plus, Target } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { PressableScale } from '../../components/ui/PressableScale';
 import { useTheme } from '../../context/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { supabase } from '../../supabase';
@@ -14,6 +15,8 @@ import { localDayKey } from '../../lib/dateUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Masa } from '../../types';
 import { AddWeightModal } from '../../components/AddWeightModal';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { useTranslation } from 'react-i18next';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 
 interface ZiStatistica {
@@ -75,6 +78,7 @@ const AnimatedTrendArrow = ({ isLoss, color }: { isLoss: boolean; color: string 
 
 export default function StatisticiScreen() {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { scrollPaddingTop, scrollPaddingBottom } = useResponsiveLayout();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'calorii' | 'greutate'>('calorii');
@@ -303,6 +307,10 @@ export default function StatisticiScreen() {
 
   const maxCalorii = Math.max(...zile.map((z) => z.calorii), caloriiTinta, 2500);
 
+  // Stări „fără date” pentru zona de grafice: afișăm EmptyState în loc de bare goale.
+  const areDateCalorii = zile.some((z) => z.calorii > 0);
+  const areDateGreutate = istoricGreutate.some((z) => Number(z.greutate) > 0);
+
   if (loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
@@ -404,12 +412,12 @@ export default function StatisticiScreen() {
             </Animated.View>
 
             {/* Record Weight CTA */}
-            <Animated.View entering={FadeInDown.duration(600).delay(150)} style={{ marginBottom: 20 }}>
-              <TouchableOpacity
+            <Animated.View style={{ marginBottom: 20 }}>
+              <PressableScale
                 style={[styles.recordBtn, { borderColor: colors.accentSecondary + '50' }]}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setModalInitialTab('curenta'); setModalGreutateVisible(true); }}
-                activeOpacity={0.85}
-                accessibilityRole="button"
+                onPress={() => { setModalInitialTab('curenta'); setModalGreutateVisible(true); }}
+                haptic
+                hapticStyle="medium"
                 accessibilityLabel="Modifică greutatea curentă sau țintă"
               >
                 <LinearGradient colors={[colors.accentSecondary + '20', 'rgba(0,0,0,0)']} style={styles.recordGrad}>
@@ -421,11 +429,11 @@ export default function StatisticiScreen() {
                     <Text style={[styles.recordSub, { color: colors.textSecondary }]}>Adaugă greutatea curentă sau modifică obiectivul tău de {greutateTinta} kg</Text>
                   </View>
                 </LinearGradient>
-              </TouchableOpacity>
+              </PressableScale>
             </Animated.View>
 
             {/* Weight Evolution Chart */}
-            <Animated.View entering={FadeInDown.duration(700).delay(200)} style={[styles.chartCard, { borderColor: colors.cardBorder }]}>
+            <Animated.View style={[styles.chartCard, { borderColor: colors.cardBorder }]}>
               <BlurView intensity={20} tint="dark" style={styles.chartBlur}>
                 <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.chartGrad}>
                   <View style={styles.chartHeader}>
@@ -455,6 +463,7 @@ export default function StatisticiScreen() {
                     </View>
                   </View>
 
+                  {areDateGreutate ? (
                   <View style={styles.chartArea}>
                     {(() => {
                       const displayData = zileChart === '7' ? istoricGreutate.slice(-7) : istoricGreutate.slice(-30);
@@ -489,9 +498,9 @@ export default function StatisticiScreen() {
                         const arataLabel = !compact || esteCurenta || index % 5 === 0;
 
                         return (
-                          <Animated.View key={zi.data + index} entering={FadeInUp.duration(500).delay(index * (compact ? 10 : 40))} style={styles.barContainer}>
+                          <View key={zi.data + index} style={styles.barContainer}>
                             {arataValoare && (
-                              <Text style={[styles.barValue, { color: esteCurenta ? colors.accentSecondary : colors.textPrimary, fontSize: compact ? 8 : 10 }]}>
+                              <Text style={[styles.barValue, { color: esteCurenta ? colors.accentSecondary : colors.textPrimary, fontSize: compact ? 9 : 11 }]}>
                                 {zi.greutate}
                               </Text>
                             )}
@@ -513,17 +522,26 @@ export default function StatisticiScreen() {
                                 {zi.ziNume}
                               </Text>
                             )}
-                          </Animated.View>
+                          </View>
                         );
                       });
                     })()}
                   </View>
+                  ) : (
+                    <EmptyState
+                      icon="⚖️"
+                      title={t('statistici.emptyGreutate.title')}
+                      subtitle={t('statistici.emptyGreutate.subtitle')}
+                      actionLabel={t('statistici.emptyGreutate.action')}
+                      onAction={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setModalInitialTab('curenta'); setModalGreutateVisible(true); }}
+                    />
+                  )}
                 </LinearGradient>
               </BlurView>
             </Animated.View>
 
             {/* AI Prediction Card */}
-            <Animated.View entering={FadeInUp.duration(600).delay(250)} style={[styles.predictCard, { borderColor: colors.accent + '40' }]}>
+            <Animated.View style={[styles.predictCard, { borderColor: colors.accent + '40' }]}>
               <BlurView intensity={20} tint="dark" style={styles.predictBlur}>
                 <LinearGradient colors={[colors.accent + '15', 'rgba(0,0,0,0)']} style={styles.predictGrad}>
                   <View style={styles.predictHeader}>
@@ -584,7 +602,7 @@ export default function StatisticiScreen() {
         </Animated.View>
 
         {/* Custom Interactive Bar Chart */}
-        <Animated.View entering={FadeInDown.duration(700).delay(200)} style={[styles.chartCard, { borderColor: colors.cardBorder }]}>
+        <Animated.View style={[styles.chartCard, { borderColor: colors.cardBorder }]}>
           <BlurView intensity={20} tint="dark" style={styles.chartBlur}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.chartGrad}>
               <View style={styles.chartHeader}>
@@ -592,18 +610,19 @@ export default function StatisticiScreen() {
                 <Text style={[styles.chartTargetLbl, { color: colors.textSecondary }]}>Țintă: {caloriiTinta} kcal</Text>
               </View>
 
+              {areDateCalorii ? (
               <View style={styles.chartArea}>
                 {zile.map((zi, index) => {
                   const inaltimeBara = Math.max((zi.calorii / maxCalorii) * 160, zi.calorii > 0 ? 12 : 4);
                   const depasit = zi.calorii > caloriiTinta * 1.05;
-                  const culoriBara: readonly [string, string, ...string[]] = depasit ? ['#f43f5e', '#fb7185'] : colors.accentGradient;
+                  const culoriBara: readonly [string, string, ...string[]] = depasit ? [colors.danger, colors.danger + 'CC'] : colors.accentGradient;
 
                   return (
-                    <Animated.View key={zi.data} entering={FadeInUp.duration(500).delay(index * 60)} style={styles.barContainer}>
+                    <View key={zi.data} style={styles.barContainer}>
                       <Text style={[styles.barValue, { color: zi.calorii > 0 ? colors.textPrimary : colors.textTertiary }]}>
                         {zi.calorii > 0 ? zi.calorii : '—'}
                       </Text>
-                      
+
                       <View style={styles.barTrack}>
                         <LinearGradient
                           colors={culoriBara}
@@ -619,16 +638,23 @@ export default function StatisticiScreen() {
                       <Text style={[styles.barLabel, { color: zi.esteAzi ? colors.accent : colors.textSecondary, fontWeight: zi.esteAzi ? '900' : '600' }]}>
                         {zi.ziNume}
                       </Text>
-                    </Animated.View>
+                    </View>
                   );
                 })}
               </View>
+              ) : (
+                <EmptyState
+                  icon="🍽️"
+                  title={t('statistici.emptyCalorii.title')}
+                  subtitle={t('statistici.emptyCalorii.subtitle')}
+                />
+              )}
             </LinearGradient>
           </BlurView>
         </Animated.View>
 
         {/* Info card */}
-        <Animated.View entering={FadeInUp.duration(600).delay(300)} style={[styles.infoCard, { borderColor: colors.cardBorder }]}>
+        <Animated.View style={[styles.infoCard, { borderColor: colors.cardBorder }]}>
           <BlurView intensity={15} tint="dark" style={styles.infoBlur}>
             <LinearGradient colors={['rgba(255,255,255,0.03)', 'rgba(0,0,0,0)']} style={styles.infoGrad}>
               <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>✨ Despre consistență</Text>
@@ -673,7 +699,7 @@ const styles = StyleSheet.create({
   summaryBox: { flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1 },
   summaryGrad: { paddingVertical: 16, paddingHorizontal: 8, alignItems: 'center', gap: 6 },
   summaryVal: { fontSize: 20, fontWeight: '900' },
-  summaryLbl: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', textAlign: 'center' },
+  summaryLbl: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', textAlign: 'center' },
 
   chartCard: { borderRadius: 28, overflow: 'hidden', borderWidth: 1, marginBottom: 24 },
   chartBlur: { overflow: 'hidden' },
@@ -684,7 +710,7 @@ const styles = StyleSheet.create({
 
   chartArea: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 200, paddingTop: 10 },
   barContainer: { flex: 1, alignItems: 'center', gap: 6 },
-  barValue: { fontSize: 10, fontWeight: '700' },
+  barValue: { fontSize: 11, fontWeight: '700' },
   barTrack: { width: 22, height: 160, justifyContent: 'flex-end', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 11, overflow: 'hidden' },
   barTrackCompact: { width: 6, borderRadius: 3 },
   barFill: { width: '100%', borderRadius: 11 },

@@ -6,10 +6,11 @@
  * Datele vin din AlimentDetaliat (per porție) sau AlimentAI (per 100g).
  */
 
-import React, { forwardRef, useImperativeHandle, useRef, useMemo, useCallback, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { forwardRef, useImperativeHandle, useRef, useMemo, useCallback, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, BackHandler, Platform } from 'react-native';
 import { BottomSheetModal, BottomSheetScrollView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import { X, Beaker, Zap, Droplets, Pill } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import type { AlimentDetaliat, AminoaciziEsentiali, Micronutrienti } from '../../types';
 // BUG-021: foaia folosește colors.* (tema activă), nu hex fixe de altă aplicație.
 import { useTheme } from '../../context/ThemeContext';
@@ -19,6 +20,8 @@ export interface FoodDetailSheetRef {
   /** Actualizează alimentul afișat (detalii îmbogățite sosind async) fără re-prezentare. */
   updateAliment: (aliment: AlimentDetaliat) => void;
   close: () => void;
+  /** REMED-010: pentru BackHandler-ul foii-părinte (top-of-stack corect pe Android). */
+  isPresent: () => boolean;
 }
 
 const AMINO_LABELS: Record<keyof AminoaciziEsentiali, string> = {
@@ -92,20 +95,41 @@ function SectionHeader({ icon: Icon, title, color }: { icon: any; title: string;
 
 export const FoodDetailSheet = forwardRef<FoodDetailSheetRef>((_, ref) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const [aliment, setAliment] = useState<AlimentDetaliat | null>(null);
   const [per100g, setPer100g] = useState(false);
+  // REMED-010: vizibilitate proprie pentru închiderea pe hardware-back (Android).
+  const [prezent, setPrezent] = useState(false);
   const snapPoints = useMemo(() => ['72%'], []);
 
   useImperativeHandle(ref, () => ({
     open: (al: AlimentDetaliat, la100g = false) => {
       setAliment(al);
       setPer100g(la100g);
+      setPrezent(true);
       bottomSheetRef.current?.present();
     },
     updateAliment: (al: AlimentDetaliat) => setAliment(al),
-    close: () => bottomSheetRef.current?.dismiss(),
+    close: () => {
+      setPrezent(false);
+      bottomSheetRef.current?.dismiss();
+    },
+    isPresent: () => prezent,
   }));
+
+  // REMED-010: hardware-back pe Android închide DOAR această foie (dacă e deschisă).
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (prezent) {
+        bottomSheetRef.current?.dismiss();
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [prezent]);
 
   const renderBackdrop = useCallback(
     (props: any) => (
@@ -141,6 +165,7 @@ export const FoodDetailSheet = forwardRef<FoodDetailSheetRef>((_, ref) => {
       backdropComponent={renderBackdrop}
       backgroundStyle={{ backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, borderWidth: 1 }}
       handleIndicatorStyle={{ backgroundColor: colors.overlayStrong, width: 44 }}
+      onDismiss={() => setPrezent(false)}
     >
       {aliment ? (
         <>
@@ -149,7 +174,7 @@ export const FoodDetailSheet = forwardRef<FoodDetailSheetRef>((_, ref) => {
             onPress={() => bottomSheetRef.current?.dismiss()}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
-            accessibilityLabel="Închide detaliile nutriționale"
+            accessibilityLabel={t('jurnal.closeNutritionDetails')}
           >
             <X size={22} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -159,33 +184,33 @@ export const FoodDetailSheet = forwardRef<FoodDetailSheetRef>((_, ref) => {
             <View style={{ flex: 1 }}>
               <Text style={[styles.title, { color: colors.textPrimary }]}>{aliment.nume}</Text>
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                Detalii nutriționale{prefix}
+                {t('jurnal.nutritionDetails')}{prefix}
               </Text>
             </View>
           </View>
 
           <BottomSheetScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             {/* Macronutrienți */}
-            <SectionHeader icon={Zap} title="Macronutrienți" color={colors.accent} />
+            <SectionHeader icon={Zap} title={t('jurnal.macronutrients')} color={colors.accent} />
             <View style={[styles.card, { backgroundColor: colors.surface }]}>
-              <NutrientRow label="Calorii" value={aliment.calorii} unit="kcal" color="#F1F5F9" />
-              <NutrientRow label="Proteine" value={aliment.proteine} unit="g" color="#34D399" />
-              <NutrientRow label="Carbohidrați" value={aliment.carbohidrati} unit="g" color="#FBBF24" />
-              <NutrientRow label="Grăsimi" value={aliment.grasimi} unit="g" color="#F87171" />
+              <NutrientRow label={t('jurnal.macroCalories')} value={aliment.calorii} unit="kcal" color={colors.textPrimary} />
+              <NutrientRow label={t('jurnal.macroProtein')} value={aliment.proteine} unit="g" color={colors.success} />
+              <NutrientRow label={t('jurnal.macroCarbs')} value={aliment.carbohidrati} unit="g" color={colors.warning} />
+              <NutrientRow label={t('jurnal.macroFats')} value={aliment.grasimi} unit="g" color={colors.danger} />
               {(aliment.fibre ?? 0) > 0 && (
-                <NutrientRow label="Fibre" value={aliment.fibre!} unit="g" color="#A78BFA" />
+                <NutrientRow label={t('jurnal.macroFiber')} value={aliment.fibre!} unit="g" color={colors.accentSecondary} />
               )}
             </View>
 
             {/* Aminoacizi */}
             {hasAminoacizi && (
               <>
-                <SectionHeader icon={Beaker} title="Aminoacizi Esențiali" color={colors.accentSecondary} />
+                <SectionHeader icon={Beaker} title={t('jurnal.aminoAcids')} color={colors.accentSecondary} />
                 <View style={[styles.card, { backgroundColor: colors.surface }]}>
                   {Object.entries(AMINO_LABELS).map(([key, label]) => {
                     const val = aminoacizi![key as keyof AminoaciziEsentiali];
                     if (!val || val <= 0) return null;
-                    return <NutrientRow key={key} label={label} value={val} unit="mg" color="#D8B4FE" />;
+                    return <NutrientRow key={key} label={label} value={val} unit="mg" color={colors.accentSecondary} />;
                   })}
                   {/* Total BCAA */}
                   {((aminoacizi?.leucina ?? 0) + (aminoacizi?.izoleucina ?? 0) + (aminoacizi?.valina ?? 0)) > 0 && (
@@ -203,12 +228,12 @@ export const FoodDetailSheet = forwardRef<FoodDetailSheetRef>((_, ref) => {
             {/* Vitamine */}
             {hasVitamins && (
               <>
-                <SectionHeader icon={Pill} title="Vitamine" color={colors.success} />
+                <SectionHeader icon={Pill} title={t('jurnal.vitamins')} color={colors.success} />
                 <View style={[styles.card, { backgroundColor: colors.surface }]}>
                   {VITAMIN_LABELS.map(({ key, label, unit }) => {
                     const val = micronutrienti![key];
                     if (!val || val <= 0) return null;
-                    return <NutrientRow key={key} label={label} value={val} unit={unit} color="#6EE7B7" />;
+                    return <NutrientRow key={key} label={label} value={val} unit={unit} color={colors.accentTertiary} />;
                   })}
                 </View>
               </>
@@ -217,12 +242,12 @@ export const FoodDetailSheet = forwardRef<FoodDetailSheetRef>((_, ref) => {
             {/* Minerale */}
             {hasMinerals && (
               <>
-                <SectionHeader icon={Droplets} title="Minerale" color={colors.warning} />
+                <SectionHeader icon={Droplets} title={t('jurnal.minerals')} color={colors.warning} />
                 <View style={[styles.card, { backgroundColor: colors.surface }]}>
                   {MINERAL_LABELS.map(({ key, label, unit }) => {
                     const val = micronutrienti![key];
                     if (!val || val <= 0) return null;
-                    return <NutrientRow key={key} label={label} value={val} unit={unit} color="#FCD34D" />;
+                    return <NutrientRow key={key} label={label} value={val} unit={unit} color={colors.warning} />;
                   })}
                 </View>
               </>
@@ -231,12 +256,12 @@ export const FoodDetailSheet = forwardRef<FoodDetailSheetRef>((_, ref) => {
             {/* Alte detalii */}
             {hasOther && (
               <>
-                <SectionHeader icon={Zap} title="Alte Detalii" color={colors.textSecondary} />
+                <SectionHeader icon={Zap} title={t('jurnal.otherDetails')} color={colors.textSecondary} />
                 <View style={[styles.card, { backgroundColor: colors.surface }]}>
                   {OTHER_LABELS.map(({ key, label, unit }) => {
                     const val = micronutrienti![key];
                     if (!val || val <= 0) return null;
-                    return <NutrientRow key={key} label={label} value={val} unit={unit} color="#CBD5E1" />;
+                    return <NutrientRow key={key} label={label} value={val} unit={unit} color={colors.textSecondary} />;
                   })}
                 </View>
               </>
@@ -247,10 +272,10 @@ export const FoodDetailSheet = forwardRef<FoodDetailSheetRef>((_, ref) => {
               <View style={styles.emptyCard}>
                 <Beaker size={32} color={colors.textTertiary} />
                 <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-                  Datele nutriționale detaliate (aminoacizi, vitamine, minerale) nu sunt disponibile pentru acest aliment.
+                  {t('jurnal.nutritionEmpty')}
                 </Text>
                 <Text style={[styles.emptyHint, { color: colors.textTertiary }]}>
-                  Scanează codul de bare al produsului pentru a obține informații complete din baza de date OpenFoodFacts.
+                  {t('jurnal.nutritionBarcodeHint')}
                 </Text>
               </View>
             )}

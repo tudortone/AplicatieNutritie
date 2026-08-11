@@ -39,8 +39,6 @@ const ALLOWLIST = new Set([
 	'@expo/prebuild-config',
 	'@gorhom/bottom-sheet',
 	'@react-native/community-cli-plugin',
-	'@react-three/drei',
-	'@react-three/fiber',
 	'@testing-library/react-native',
 	'expo',
 	'expo-asset',

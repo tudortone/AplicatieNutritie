@@ -101,8 +101,8 @@ export function QuantityEditor({ product, onConfirm, onCancel }: QuantityEditorP
         disabled={grame <= 0}
         onPress={() => onConfirm(grame)}
       >
-        <Check size={18} color="#000" />
-        <Text style={styles.confirmText}>Confirmă {calc.kcal} kcal ({grame}g)</Text>
+        <Check size={18} color={colors.textOnAccent} />
+        <Text style={[styles.confirmText, { color: colors.textOnAccent }]}>Confirmă {calc.kcal} kcal ({grame}g)</Text>
       </TouchableOpacity>
     </View>
   );
@@ -162,5 +162,5 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     gap: 8,
   },
-  confirmText: { color: '#000', fontSize: 15, fontWeight: '800' },
+  confirmText: { fontSize: 15, fontWeight: '800' },
 });

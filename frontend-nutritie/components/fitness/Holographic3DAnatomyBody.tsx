@@ -4,6 +4,7 @@ import BodyMap from './BodyMap';
 import type { MuscleId } from './heatColor';
 import { mapToCanonicalMuscleIds } from '../../lib/fitnessEngine';
 import { Radius, Spacing } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 export interface HumanBodyProps {
   activeGroups: string[];
@@ -33,6 +34,7 @@ export function Holographic3DAnatomyBody({
   rankBadgeColor = '#00F0FF',
   volumTotalKg = 0
 }: HumanBodyProps) {
+  const { colors } = useTheme();
   const isSpate = activeGroups.some(g => /spate|dorsali|trapez|romboizi|fesieri|ischiogambieri|femurali|triceps|lombari/i.test(g));
   const isPiept = activeGroups.some(g => /piept|pectorali/i.test(g));
   const isUmeri = activeGroups.some(g => /umeri|deltoid/i.test(g));
@@ -51,8 +53,10 @@ export function Holographic3DAnatomyBody({
     setViewSide(initialSide);
   }, [initialSide]);
 
-  // Culorile din sistemul termic Heatmap conform heatColor.ts (Secțiunea 3.1):
-  const COLOR_PRIMARY = '#FF003C';   // 🔴 Roșu maxim (100% Țintă Principală)
+  // Culorile din sistemul termic Heatmap conform heatColor.ts (Secțiunea 3.1).
+  // COLOR_PRIMARY derivă din tema activă (colors.danger) ca roșul de 100% Țintă să
+  // rămână lizibil/armonios pe toate paletele; restul rampei rămâne fix (engine).
+  const COLOR_PRIMARY = colors.danger;   // 🔴 Roșu maxim (100% Țintă Principală)
   const COLOR_SECONDARY = '#FF7B00'; // 🟠 Portocaliu intens (75% Sinergici)
   const COLOR_STAB = '#FACC15';      // 🟡 Galben mediu (40% Stabilizare)
   const COLOR_REST = '#38BDF8';      // 🔵 Albastru (0% Repaus)
@@ -100,13 +104,13 @@ export function Holographic3DAnatomyBody({
             onPress={() => setViewSide('anterior')}
             style={[bodyStyles.switchBtn, viewSide === 'anterior' && { backgroundColor: mainActiveColor }]}
           >
-            <Text style={[bodyStyles.switchText, { color: viewSide === 'anterior' ? '#FFFFFF' : textPrimary }]}>FAȚĂ</Text>
+            <Text style={[bodyStyles.switchText, { color: viewSide === 'anterior' ? colors.textOnAccent : textPrimary }]}>FAȚĂ</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setViewSide('posterior')}
             style={[bodyStyles.switchBtn, viewSide === 'posterior' && { backgroundColor: mainActiveColor }]}
           >
-            <Text style={[bodyStyles.switchText, { color: viewSide === 'posterior' ? '#FFFFFF' : textPrimary }]}>SPATE</Text>
+            <Text style={[bodyStyles.switchText, { color: viewSide === 'posterior' ? colors.textOnAccent : textPrimary }]}>SPATE</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -1,13 +1,16 @@
-import React, { forwardRef, useImperativeHandle, useRef, useMemo, useCallback, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { forwardRef, useImperativeHandle, useRef, useMemo, useCallback, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, BackHandler, Platform } from 'react-native';
 import { BottomSheetModal, BottomSheetScrollView, BottomSheetBackdrop, BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import { Check, X } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { AlimentDetaliat } from '../../types';
 
 export interface EditAlimentSheetRef {
   open: (aliment: AlimentDetaliat) => void;
   close: () => void;
+  /** REMED-010: pentru BackHandler-ul foii-părinte (top-of-stack corect pe Android). */
+  isPresent: () => boolean;
 }
 
 interface EditAlimentSheetProps {
@@ -23,6 +26,7 @@ function parseNumar(text: string): number {
 export const EditAlimentSheet = forwardRef<EditAlimentSheetRef, EditAlimentSheetProps>(
   function EditAlimentSheet({ onSave }, ref) {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const bottomSheetRef = useRef<BottomSheetModal>(null);
     const [nume, setNume] = useState<string>('');
     const [grame, setGrame] = useState<string>('');
@@ -31,6 +35,8 @@ export const EditAlimentSheet = forwardRef<EditAlimentSheetRef, EditAlimentSheet
     const [carbohidrati, setCarbohidrati] = useState<string>('');
     const [grasimi, setGrasimi] = useState<string>('');
     const [aliment, setAliment] = useState<AlimentDetaliat | null>(null);
+    // REMED-010: vizibilitate proprie pentru închiderea pe hardware-back (Android).
+    const [prezent, setPrezent] = useState(false);
     const snapPoints = useMemo(() => ['78%'], []);
 
     // Resetează formularul cu datele alimentului la fiecare deschidere.
@@ -43,10 +49,28 @@ export const EditAlimentSheet = forwardRef<EditAlimentSheetRef, EditAlimentSheet
         setProteine(al.proteine != null ? String(al.proteine) : '');
         setCarbohidrati(al.carbohidrati != null ? String(al.carbohidrati) : '');
         setGrasimi(al.grasimi != null ? String(al.grasimi) : '');
+        setPrezent(true);
         bottomSheetRef.current?.present();
       },
-      close: () => bottomSheetRef.current?.dismiss(),
+      close: () => {
+        setPrezent(false);
+        bottomSheetRef.current?.dismiss();
+      },
+      isPresent: () => prezent,
     }));
+
+    // REMED-010: hardware-back pe Android închide DOAR această foie (dacă e deschisă).
+    useEffect(() => {
+      if (Platform.OS !== 'android') return;
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (prezent) {
+          bottomSheetRef.current?.dismiss();
+          return true;
+        }
+        return false;
+      });
+      return () => sub.remove();
+    }, [prezent]);
 
     const renderBackdrop = useCallback(
       (props: any) => (
@@ -84,14 +108,15 @@ export const EditAlimentSheet = forwardRef<EditAlimentSheetRef, EditAlimentSheet
         backdropComponent={renderBackdrop}
         backgroundStyle={{ backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, borderWidth: 1 }}
         handleIndicatorStyle={{ backgroundColor: colors.overlayStrong, width: 44 }}
+        onDismiss={() => setPrezent(false)}
       >
         {aliment ? (
           <>
             <View style={styles.header}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.title, { color: colors.textPrimary }]}>Corectează alimentul</Text>
+                <Text style={[styles.title, { color: colors.textPrimary }]}>{t('jurnal.correctIngredientTitle')}</Text>
                 <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                  Numele pentru {aliment.nume}
+                  {t('jurnal.correctIngredientFor', { nume: aliment.nume })}
                 </Text>
               </View>
               <TouchableOpacity
@@ -99,23 +124,23 @@ export const EditAlimentSheet = forwardRef<EditAlimentSheetRef, EditAlimentSheet
                 style={styles.closeBtn}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 accessibilityRole="button"
-                accessibilityLabel="Închide corectarea alimentului"
+                accessibilityLabel={t('jurnal.closeCorrectIngredient')}
               >
                 <X size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <BottomSheetScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Nume</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.nameLabel')}</Text>
               <BottomSheetTextInput
                 style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
                 value={nume}
                 onChangeText={setNume}
-                placeholder="ex: Piept de pui 200g"
+                placeholder={t('jurnal.namePlaceholderEdit')}
                 placeholderTextColor={colors.textTertiary}
               />
 
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Gramaj (g)</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.gramajShort')}</Text>
               <BottomSheetTextInput
                 style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
                 value={grame}
@@ -138,7 +163,7 @@ export const EditAlimentSheet = forwardRef<EditAlimentSheetRef, EditAlimentSheet
                   />
                 </View>
                 <View style={styles.macroCol}>
-                  <Text style={[styles.label, { color: colors.textSecondary }]}>Proteine (g)</Text>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.proteinLabel')}</Text>
                   <BottomSheetTextInput
                     style={[styles.input, { color: colors.accentSecondary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
                     value={proteine}
@@ -152,7 +177,7 @@ export const EditAlimentSheet = forwardRef<EditAlimentSheetRef, EditAlimentSheet
 
               <View style={styles.macroRow}>
                 <View style={styles.macroCol}>
-                  <Text style={[styles.label, { color: colors.textSecondary }]}>Carbs (g)</Text>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.carbsLabel')}</Text>
                   <BottomSheetTextInput
                     style={[styles.input, { color: colors.accentTertiary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
                     value={carbohidrati}
@@ -163,7 +188,7 @@ export const EditAlimentSheet = forwardRef<EditAlimentSheetRef, EditAlimentSheet
                   />
                 </View>
                 <View style={styles.macroCol}>
-                  <Text style={[styles.label, { color: colors.textSecondary }]}>Grăsimi (g)</Text>
+                  <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.fatsLabel')}</Text>
                   <BottomSheetTextInput
                     style={[styles.input, { color: colors.warning, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
                     value={grasimi}
@@ -176,8 +201,8 @@ export const EditAlimentSheet = forwardRef<EditAlimentSheetRef, EditAlimentSheet
               </View>
 
               <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.accent }]} onPress={salveaza}>
-                <Check size={18} color="#000" />
-                <Text style={styles.saveBtnText}>Salvează și recalculează totalurile</Text>
+                <Check size={18} color={colors.textOnAccent} />
+                <Text style={[styles.saveBtnText, { color: colors.textOnAccent }]}>{t('jurnal.saveAndRecalc')}</Text>
               </TouchableOpacity>
             </BottomSheetScrollView>
           </>
@@ -230,5 +255,5 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginTop: 20,
   },
-  saveBtnText: { color: '#000', fontSize: 15, fontWeight: '800' },
+  saveBtnText: { fontSize: 15, fontWeight: '800' },
 });

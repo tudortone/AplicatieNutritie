@@ -6,18 +6,33 @@ import { Sparkles, X, Plus, Check, Clock, Utensils, Refrigerator } from 'lucide-
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import { useCamara } from '../hooks/useCamara';
+// REMED-002: traducerile modalei trec prin i18n (chei chat.recipeGen.*).
+import { useTranslation } from 'react-i18next';
 
 const { height } = Dimensions.get('window');
 
 const INGREDIENTE_PREDEFINITE = [
-  'Pui', 'Ouă', 'Spanac', 'Orez', 'Roșii', 
-  'Brânză / Telemea', 'Avocado', 'Ovăz', 'Ton', 
-  'Cartofi', 'Dovlecel', 'Iaurt grecesc', 'Paste', 
+  'Pui', 'Ouă', 'Spanac', 'Orez', 'Roșii',
+  'Brânză / Telemea', 'Avocado', 'Ovăz', 'Ton',
+  'Cartofi', 'Dovlecel', 'Iaurt grecesc', 'Paste',
   'Șuncă / Bacon', 'Ciuperci', 'Ceapă & Usturoi'
 ];
 
-const TIPURI_MASA = ['Orice', 'Micul dejun', 'Prânz', 'Cină', 'Gustare'];
-const TIMP_PREPARARE = ['Rapid (< 15 min)', 'Mediu (< 30 min)', 'Fără limită'];
+// REMED-002: `value` (RO) rămâne pentru prompt-ul AI; eticheta afișată trece
+// prin i18n. Numele ingredientelor rămân RO (sunt input funcțional pentru AI).
+const TIPURI_MASA: ReadonlyArray<{ value: string; labelKey: string }> = [
+  { value: 'Orice', labelKey: 'chat.recipeGen.tipMasa.any' },
+  { value: 'Micul dejun', labelKey: 'chat.recipeGen.tipMasa.breakfast' },
+  { value: 'Prânz', labelKey: 'chat.recipeGen.tipMasa.lunch' },
+  { value: 'Cină', labelKey: 'chat.recipeGen.tipMasa.dinner' },
+  { value: 'Gustare', labelKey: 'chat.recipeGen.tipMasa.snack' },
+];
+
+const TIMP_PREPARARE: ReadonlyArray<{ value: string; labelKey: string }> = [
+  { value: 'Rapid (< 15 min)', labelKey: 'chat.recipeGen.timp.rapid' },
+  { value: 'Mediu (< 30 min)', labelKey: 'chat.recipeGen.timp.mediu' },
+  { value: 'Fără limită', labelKey: 'chat.recipeGen.timp.nolimit' },
+];
 
 interface RecipeGeneratorModalProps {
   visible: boolean;
@@ -36,6 +51,9 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
 }) => {
   const { colors } = useTheme();
   const { produse } = useCamara();
+  // REMED-002: traduceri OPȚIONALE pe ecranul de generare — prompt-ul trimis
+  // modelului rămâne RO, doar etichetele UI se schimbă cu limba.
+  const { t } = useTranslation();
   const [ingredienteSelectate, setIngredienteSelectate] = useState<string[]>(['Ouă', 'Roșii', 'Brânză / Telemea']);
   const [inputCustom, setInputCustom] = useState('');
   const [tipMasa, setTipMasa] = useState('Orice');
@@ -97,11 +115,17 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
                 <Refrigerator size={22} color={colors.accent} />
               </View>
               <View>
-                <Text style={[styles.title, { color: colors.textPrimary }]}>Generator Rețete AI</Text>
-                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Gătește inteligent din ce ai în frigider</Text>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.title, { color: colors.textPrimary }]}>{t('chat.recipeGen.title')}</Text>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.subtitle, { color: colors.textSecondary }]}>{t('chat.recipeGen.subtitle')}</Text>
               </View>
             </View>
-            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} onPress={onClose} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+            <TouchableOpacity
+              style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]}
+              onPress={onClose}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+              accessibilityRole="button"
+              accessibilityLabel={t('chat.recipeGen.closeA11y')}
+            >
               <X size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
@@ -109,11 +133,11 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
             
             {/* Input ingredient custom */}
-            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>ADAUTĂ SAU SELECTEAZĂ INGREDIENTE</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.sectionTitle, { color: colors.textSecondary }]}>{t('chat.recipeGen.addIngredientsTitle')}</Text>
             <View style={[styles.inputRow, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
               <TextInput
                 style={[styles.input, { color: colors.textPrimary }]}
-                placeholder="Ex: ciuperci, avocado, somon..."
+                placeholder={t('chat.recipeGen.placeholder')}
                 placeholderTextColor={colors.textTertiary}
                 value={inputCustom}
                 onChangeText={setInputCustom}
@@ -127,7 +151,9 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
             {/* Tag-uri ingrediente */}
             {ingredienteCamara.length > 0 && (
               <View style={{ marginBottom: 12 }}>
-                <Text style={[styles.sectionTitle, { color: colors.accent, marginBottom: 8 }]}>📦 DISPONIBILE ÎN CĂMARĂ ({ingredienteCamara.length})</Text>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.sectionTitle, { color: colors.accent, marginBottom: 8 }]}>
+                  {t('chat.recipeGen.pantryTitle', { count: ingredienteCamara.length })}
+                </Text>
                 <View style={styles.tagsGrid}>
                   {ingredienteCamara.map((ing) => {
                     const bifeat = ingredienteSelectate.includes(ing);
@@ -138,7 +164,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
                         onPress={() => toggleIngredient(ing)}
                       >
                         {bifeat ? <Check size={14} color={colors.background} strokeWidth={3} /> : <Plus size={14} color={colors.textSecondary} />}
-                        <Text style={[styles.tagText, bifeat ? { color: colors.background, fontWeight: '800' } : { color: colors.textSecondary }]}>{ing}</Text>
+                        <Text maxFontSizeMultiplier={1.3} style={[styles.tagText, bifeat ? { color: colors.background, fontWeight: '800' } : { color: colors.textSecondary }]}>{ing}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -146,7 +172,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
               </View>
             )}
 
-            <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 8 }]}>ALTE INGREDIENTE SUGERATE</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 8 }]}>{t('chat.recipeGen.otherIngredientsTitle')}</Text>
             <View style={styles.tagsGrid}>
               {ingredienteSelectate.filter(i => !ingredienteCamara.includes(i)).map((ing) => (
                 <TouchableOpacity
@@ -155,7 +181,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
                   onPress={() => toggleIngredient(ing)}
                 >
                   <Check size={14} color={colors.background} strokeWidth={3} />
-                  <Text style={[styles.tagText, { color: colors.background, fontWeight: '800' }]}>{ing}</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.tagText, { color: colors.background, fontWeight: '800' }]}>{ing}</Text>
                 </TouchableOpacity>
               ))}
               {INGREDIENTE_PREDEFINITE.filter(i => !ingredienteSelectate.includes(i) && !ingredienteCamara.includes(i)).map((ing) => (
@@ -165,7 +191,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
                   onPress={() => toggleIngredient(ing)}
                 >
                   <Plus size={14} color={colors.textSecondary} />
-                  <Text style={[styles.tagText, { color: colors.textSecondary }]}>{ing}</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.tagText, { color: colors.textSecondary }]}>{ing}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -173,18 +199,19 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
             {/* Selector Tip Masă */}
             <View style={styles.sectionHeaderRow}>
               <Utensils size={15} color={colors.accentSecondary} />
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 0 }]}>TIPUL MESEI</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 0 }]}>{t('chat.recipeGen.mealType')}</Text>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalChips}>
-              {TIPURI_MASA.map((t) => {
-                const isSel = tipMasa === t;
+              {TIPURI_MASA.map((opt) => {
+                const isSel = tipMasa === opt.value;
                 return (
                   <TouchableOpacity
-                    key={t}
+                    key={opt.value}
                     style={[styles.chip, { backgroundColor: isSel ? colors.accentSecondary : colors.surfaceBg, borderColor: isSel ? colors.accentSecondary : colors.cardBorder }]}
-                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setTipMasa(t); }}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setTipMasa(opt.value); }}
                   >
-                    <Text style={[styles.chipText, { color: isSel ? colors.background : colors.textPrimary, fontWeight: isSel ? '800' : '600' }]}>{t}</Text>
+                    {/* REMED-013: text negru pe accentSecondary (contrast >= 4.5:1). */}
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.chipText, { color: isSel ? colors.textOnAccentSecondary : colors.textPrimary, fontWeight: isSel ? '800' : '600' }]}>{t(opt.labelKey)}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -193,18 +220,18 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
             {/* Selector Timp Preparare */}
             <View style={[styles.sectionHeaderRow, { marginTop: 20 }]}>
               <Clock size={15} color={colors.warning} />
-              <Text style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 0 }]}>TIMP DE PREPARARE</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.sectionTitle, { color: colors.textSecondary, marginBottom: 0 }]}>{t('chat.recipeGen.prepTime')}</Text>
             </View>
             <View style={styles.timeGrid}>
-              {TIMP_PREPARARE.map((tm) => {
-                const isSel = timp === tm;
+              {TIMP_PREPARARE.map((opt) => {
+                const isSel = timp === opt.value;
                 return (
                   <TouchableOpacity
-                    key={tm}
+                    key={opt.value}
                     style={[styles.timeCard, { backgroundColor: isSel ? colors.warning + '25' : colors.surfaceBg, borderColor: isSel ? colors.warning : colors.cardBorder }]}
-                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setTimp(tm); }}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setTimp(opt.value); }}
                   >
-                    <Text style={[styles.timeText, { color: isSel ? colors.warning : colors.textSecondary, fontWeight: isSel ? '800' : '600' }]}>{tm}</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.timeText, { color: isSel ? colors.warning : colors.textSecondary, fontWeight: isSel ? '800' : '600' }]}>{t(opt.labelKey)}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -217,8 +244,8 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
             <TouchableOpacity style={[styles.generateBtn, { shadowColor: colors.accent }]} onPress={handleGenerate} activeOpacity={0.85}>
               <LinearGradient colors={colors.accentGradient} style={styles.generateGrad}>
                 <Sparkles size={20} color={colors.background} strokeWidth={2.5} />
-                <Text style={[styles.generateText, { color: colors.background }]}>
-                  Generează Rețetă ({ingredienteSelectate.length} ingrediente)
+                <Text maxFontSizeMultiplier={1.3} style={[styles.generateText, { color: colors.background }]}>
+                  {t('chat.recipeGen.generate', { count: ingredienteSelectate.length })}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>

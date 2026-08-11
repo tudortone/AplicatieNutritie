@@ -1,6 +1,8 @@
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import Constants from 'expo-constants';
+import * as Notifications from 'expo-notifications';
 import 'react-native-reanimated';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, ActivityIndicator, LogBox } from 'react-native';
@@ -162,6 +164,21 @@ function RootNavigator() {
   const [profilServerDate, setProfilServerDate] = useState<ProfilRestaurare | null>(null);
 
   useEffect(() => { syncFromAsyncStorage(); }, [syncFromAsyncStorage]);
+
+  // Tap pe o notificare push din fundal/terminat → deschide ecranul /notificari.
+  // Foreground-ul (banner in-app) e deja acoperit în NotificationBannerContext;
+  // aici doar răspunsul la notificare în timp ce aplicația NU e în prim-plan.
+  // Guard Expo Go identic cu cel din NotificationBannerContext (SDK 53+ nu
+  // suportă push remote pe Android în Expo Go).
+  useEffect(() => {
+    if (Constants.appOwnership === 'expo') return;
+    try {
+      const subscription = Notifications.addNotificationResponseReceivedListener(() => {
+        router.push('/notificari');
+      });
+      return () => subscription.remove();
+    } catch {}
+  }, [router]);
 
   useEffect(() => {
     // TASK-16: fără auto-programare la login. Doar aducem notificările în

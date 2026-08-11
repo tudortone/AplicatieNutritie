@@ -13,6 +13,7 @@ import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useCurrentDayKey } from '../../hooks/useCurrentDayKey';
 import { useTheme } from '../../context/ThemeContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useApa } from '../../hooks/useApa';
 import { AddMealBottomSheet, AddMealBottomSheetRef } from '../../components/AddMealBottomSheet';
 import { useHealthSync } from '../../hooks/useHealthSync';
@@ -25,6 +26,7 @@ import { useExercitii } from '../../hooks/useExercitii';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { useGamificareData } from '../../context/GamificareContext';
 import { StreakBottomSheet, StreakBottomSheetRef } from '../../components/gamification/StreakBottomSheet';
+import { PressableScale } from '../../components/ui/PressableScale';
 import { AddWeightModal } from '../../components/AddWeightModal';
 import { supabase } from '../../supabase';
 import { localDayKey } from '../../lib/dateUtils';
@@ -111,6 +113,7 @@ function RingProgress({ procent, color, bgColor }: { procent: number; color: str
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
   const { unreadCount } = useNotificationBannerData();
   const { streak } = useGamificareData();
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
@@ -379,7 +382,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={[s.container, { backgroundColor: colors.background }]}>
+    <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(400)} style={[s.container, { backgroundColor: colors.background }]}>
       <View style={[s.glowTop, { backgroundColor: colors.accent }]} />
       <View style={[s.glowBottom, { backgroundColor: colors.accentSecondary }]} />
 
@@ -391,15 +394,15 @@ export default function HomeScreen() {
         }
       >
         {/* Header */}
-        <Animated.View entering={FadeInDown.duration(500)} style={s.header}>
+        <Animated.View style={s.header}>
           <View style={s.headerLeft}>
             <View style={s.greetingRow}>
               <Text style={[s.greeting, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{getSalut()}, {capitalizedName}!</Text>
               <Text style={s.greetingEmoji}>{getEmoji()}</Text>
             </View>
             <View style={s.greetingSubRow}>
-              <Text style={[s.greetingSub, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">Urmărește-ți nutriția de astăzi</Text>
-              <Text style={[s.caloriiInline, { color: calState.ringColor }]} numberOfLines={1} ellipsizeMode="tail">  {calState.emoji} {calState.mesaj}</Text>
+              <Text style={[s.greetingSub, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.3}>Urmărește-ți nutriția de astăzi</Text>
+              <Text style={[s.caloriiInline, { color: calState.ringColor }]} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.3}>  {calState.emoji} {calState.mesaj}</Text>
             </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -409,9 +412,9 @@ export default function HomeScreen() {
               accessibilityLabel={`Notificări${unreadCount > 0 ? `, ${unreadCount} necitite` : ''}`}
               hitSlop={6}
               style={{
-                width: 38,
-                height: 38,
-                borderRadius: 19,
+                width: 44,
+                height: 44,
+                borderRadius: 22,
                 backgroundColor: 'rgba(255,255,255,0.06)',
                 borderWidth: 1,
                 borderColor: 'rgba(255,255,255,0.1)',
@@ -435,7 +438,7 @@ export default function HomeScreen() {
                     paddingHorizontal: 4,
                   }}
                 >
-                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFF' }}>
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: colors.textOnAccent }}>
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </Text>
                 </View>
@@ -451,19 +454,19 @@ export default function HomeScreen() {
             >
               <LinearGradient colors={colors.accentGradient} style={s.streakGrad}>
                 <Flame size={14} color={colors.background} fill={colors.background} />
-                <Text style={[s.streakText, { color: colors.background }]}>{streak} zile</Text>
+                <Text style={[s.streakText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{streak} zile</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
         </Animated.View>
 
         {/* Main calorie ring card */}
-        <Animated.View entering={FadeInDown.duration(700).delay(100)} style={[s.ringCard, { borderColor: colors.cardBorder }]}>
+        <Animated.View style={[s.ringCard, { borderColor: colors.cardBorder }]}>
           <CardBackdrop style={s.ringCardBlur}>
             <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={s.ringCardGrad}>
               <View style={s.ringCardTop}>
                 <View style={s.ringCardInfo}>
-                  <Text style={[s.ringCardTitle, { color: caloriiRamase < 0 ? colors.danger : colors.textSecondary }]}>
+                  <Text style={[s.ringCardTitle, { color: caloriiRamase < 0 ? colors.danger : colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
                     {caloriiRamase < 0 ? 'CALORII DEPĂȘITE' : 'CALORII RĂMASE'}
                   </Text>
                   <View style={s.ringCardValueRow}>
@@ -473,15 +476,15 @@ export default function HomeScreen() {
                     <Text style={[s.ringCardUnit, { color: caloriiRamase < 0 ? colors.danger : colors.accent }]}>kcal</Text>
                   </View>
                   <View style={s.ringCardSubRow}>
-                    <Text style={[s.ringCardSubLabel, { color: colors.textSecondary }]}>Consumat: </Text>
-                    <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]}>{caloriiConsumate} kcal</Text>
-                    <Text style={[s.ringCardSubSep, { color: colors.textSecondary }]}>  •  Țintă: </Text>
-                    <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]}>{caloriiTinta} kcal</Text>
+                    <Text style={[s.ringCardSubLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Consumat: </Text>
+                    <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{caloriiConsumate} kcal</Text>
+                    <Text style={[s.ringCardSubSep, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>  •  Țintă: </Text>
+                    <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{caloriiTinta} kcal</Text>
                   </View>
                   {totalCaloriiArse > 0 && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
                       <Dumbbell size={14} color={colors.warning} />
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.warning }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.warning }} maxFontSizeMultiplier={1.3}>
                         Ars prin sport: +{totalCaloriiArse} kcal
                       </Text>
                     </View>
@@ -501,12 +504,12 @@ export default function HomeScreen() {
                   </View>
                   <View style={s.macroValueRow}>
                     <Text style={[s.macroValue, { color: proteineConsumate > (proteineTinta || 150) ? colors.danger : colors.textPrimary }]}>{proteineConsumate}</Text>
-                    <Text style={[s.macroUnit, { color: colors.textSecondary }]}>/ {proteineTinta || 150}g</Text>
+                    <Text style={[s.macroUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>/ {proteineTinta || 150}g</Text>
                   </View>
-                  <Text style={[s.macroLabel, { color: colors.textSecondary }]}>Proteine</Text>
+                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Proteine</Text>
                   <View style={s.macroBarBg}>
                     <LinearGradient
-                      colors={proteineConsumate > (proteineTinta || 150) ? [colors.danger, '#f43f5e'] : colors.accentSecondaryGradient}
+                      colors={proteineConsumate > (proteineTinta || 150) ? [colors.danger, colors.danger + 'CC'] : colors.accentSecondaryGradient}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={[s.macroBarFill, { width: `${procentProteine}%` }]}
@@ -522,12 +525,12 @@ export default function HomeScreen() {
                   </View>
                   <View style={s.macroValueRow}>
                     <Text style={[s.macroValue, { color: totalCarbohidrati > (carbiTinta || 250) ? colors.danger : colors.textPrimary }]}>{totalCarbohidrati}</Text>
-                    <Text style={[s.macroUnit, { color: colors.textSecondary }]}>/ {carbiTinta || 250}g</Text>
+                    <Text style={[s.macroUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>/ {carbiTinta || 250}g</Text>
                   </View>
-                  <Text style={[s.macroLabel, { color: colors.textSecondary }]}>Carbi</Text>
+                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Carbi</Text>
                   <View style={s.macroBarBg}>
                     <LinearGradient
-                      colors={totalCarbohidrati > (carbiTinta || 250) ? [colors.danger, '#f43f5e'] : [colors.accentTertiary, colors.accentTertiary + 'AA']}
+                      colors={totalCarbohidrati > (carbiTinta || 250) ? [colors.danger, colors.danger + 'CC'] : [colors.accentTertiary, colors.accentTertiary + 'AA']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={[s.macroBarFill, { width: `${Math.min((totalCarbohidrati / (carbiTinta || 250)) * 100, 100)}%` }]}
@@ -543,12 +546,12 @@ export default function HomeScreen() {
                   </View>
                   <View style={s.macroValueRow}>
                     <Text style={[s.macroValue, { color: totalGrasimi > (grasimiTinta || 70) ? colors.danger : colors.textPrimary }]}>{totalGrasimi}</Text>
-                    <Text style={[s.macroUnit, { color: colors.textSecondary }]}>/ {grasimiTinta || 70}g</Text>
+                    <Text style={[s.macroUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>/ {grasimiTinta || 70}g</Text>
                   </View>
-                  <Text style={[s.macroLabel, { color: colors.textSecondary }]}>Grăsimi</Text>
+                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Grăsimi</Text>
                   <View style={s.macroBarBg}>
                     <LinearGradient
-                      colors={totalGrasimi > (grasimiTinta || 70) ? [colors.danger, '#f43f5e'] : [colors.warning, colors.warning + 'AA']}
+                      colors={totalGrasimi > (grasimiTinta || 70) ? [colors.danger, colors.danger + 'CC'] : [colors.warning, colors.warning + 'AA']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       style={[s.macroBarFill, { width: `${Math.min((totalGrasimi / (grasimiTinta || 70)) * 100, 100)}%` }]}
@@ -561,13 +564,14 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* Camera scan CTA (Principal) */}
-        <Animated.View entering={FadeInDown.duration(700).delay(250)}>
-          <TouchableOpacity
+        <Animated.View>
+          <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Scanează Mâncarea cu camera foto sau din galerie"
             style={[s.scanCTA, { shadowColor: colors.accent }]}
             onPress={() => router.push('/camera')}
-            activeOpacity={0.85}
+            haptic
+            hapticStyle="medium"
           >
             <LinearGradient colors={colors.accentGradient} style={s.scanCTAGrad}>
               <View style={s.scanCTAIcon}>
@@ -575,17 +579,17 @@ export default function HomeScreen() {
               </View>
               <View style={s.scanCTAText}>
                 <Text style={[s.scanCTATitle, { color: colors.background }]}>Scanează Mâncarea cu AI</Text>
-                <Text style={s.scanCTASub}>Analiză foto instantă a caloriilor</Text>
+                <Text style={s.scanCTASub} maxFontSizeMultiplier={1.3}>Analiză foto instantă a caloriilor</Text>
               </View>
               <View style={s.scanCTAArrow}>
                 <Scan size={20} color={colors.background} />
               </View>
             </LinearGradient>
-          </TouchableOpacity>
+          </PressableScale>
         </Animated.View>
 
         {/* Rând acțiuni secundare (B1) - Cod de Bare + Manual */}
-        <Animated.View entering={FadeInDown.duration(700).delay(280)} style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+        <Animated.View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Scanează cod de bare produs"
@@ -593,7 +597,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/scanner-barcode' as any)}
           >
             <Scan size={18} color={colors.accent} />
-            <Text style={[s.secActionText, { color: colors.textPrimary }]}>Cod de Bare</Text>
+            <Text style={[s.secActionText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Cod de Bare</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -603,12 +607,12 @@ export default function HomeScreen() {
             onPress={() => addMealSheetRef.current?.open()}
           >
             <PlusCircle size={18} color={colors.accentSecondary} />
-            <Text style={[s.secActionText, { color: colors.textPrimary }]}>Adaugă Manual</Text>
+            <Text style={[s.secActionText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Adaugă Manual</Text>
           </TouchableOpacity>
         </Animated.View>
 
         {/* Mini-Card separat: Greutate & Progres (B2) */}
-        <Animated.View entering={FadeInDown.duration(700).delay(310)}>
+        <Animated.View>
           <TouchableOpacity
             onPress={() => setWeightModalVisible(true)}
             accessibilityRole="button"
@@ -619,19 +623,19 @@ export default function HomeScreen() {
               <Scale size={20} color={colors.accent} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[s.weightLabel, { color: colors.textSecondary }]}>GREUTATE & PROGRES</Text>
-              <Text style={[s.weightValue, { color: colors.textPrimary, fontSize: greutate ? 20 : 14 }]}>
+              <Text style={[s.weightLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>GREUTATE & PROGRES</Text>
+              <Text style={[s.weightValue, { color: colors.textPrimary, fontSize: greutate ? 20 : 14 }]} maxFontSizeMultiplier={1.3}>
                 {greutate ? `${greutate} kg` : 'Atinge pentru a adăuga'}
               </Text>
             </View>
-            <Text style={[s.weightLink, { color: colors.accent }]}>Editează →</Text>
+            <Text style={[s.weightLink, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>Editează →</Text>
           </TouchableOpacity>
         </Animated.View>
 
         {/* Water Hydration Card */}
         {/* BUG-028: culorile apei derivă din colors.accentTertiary (tinta cian a
             temei), nu din hex hardcodate — pe Ocean/Sunset cardul se adaptează. */}
-        <Animated.View entering={FadeInDown.duration(700).delay(320)} style={[s.waterCard, { borderColor: colors.accentTertiary + '33' }]}>
+        <Animated.View style={[s.waterCard, { borderColor: colors.accentTertiary + '33' }]}>
           <CardBackdrop style={s.waterBlur}>
             <LinearGradient colors={[colors.accentTertiary + '15', 'rgba(0,0,0,0)']} style={s.waterGrad}>
               <View style={s.waterHeader}>
@@ -640,8 +644,8 @@ export default function HomeScreen() {
                     <Droplet size={20} color={colors.accentTertiary} fill={colors.accentTertiary} />
                   </View>
                   <View>
-                    <Text style={[s.waterTitle, { color: colors.textPrimary }]}>Hidratare & Apă</Text>
-                    <Text style={[s.waterSub, { color: colors.textSecondary }]}>Obiectiv: {tintaPahare} pahare ({tintaPahare * 250} ml)</Text>
+                    <Text style={[s.waterTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Hidratare & Apă</Text>
+                    <Text style={[s.waterSub, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Obiectiv: {tintaPahare} pahare ({tintaPahare * 250} ml)</Text>
                   </View>
                 </View>
                 
@@ -663,7 +667,7 @@ export default function HomeScreen() {
                     onPress={adaugaPahar}
                   >
                     <LinearGradient colors={[colors.accentTertiary, colors.accentTertiary + '66']} style={s.waterBtnAddGrad}>
-                      <Text style={[s.waterBtnAddText, { color: '#000' }]}>+</Text>
+                      <Text style={[s.waterBtnAddText, { color: colors.textOnAccent }]}>+</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
@@ -679,10 +683,10 @@ export default function HomeScreen() {
               </View>
 
               <View style={s.waterFooter}>
-                <Text style={[s.waterCount, { color: colors.textPrimary }]}>
+                <Text style={[s.waterCount, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
                   <Text style={{ fontSize: 22, fontWeight: '900', color: colors.accentTertiary }}>{pahare}</Text> / {tintaPahare} pahare băute azi
                 </Text>
-                <Text style={[s.waterMl, { color: colors.textTertiary }]}>{pahare * 250} ml</Text>
+                <Text style={[s.waterMl, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>{pahare * 250} ml</Text>
               </View>
             </LinearGradient>
           </CardBackdrop>
@@ -691,7 +695,7 @@ export default function HomeScreen() {
         {/* Pași Card — BUG-005: copy corect despre sursă (doar senzorul telefonului,
             fără integrare Garmin/Fitbit), obiectiv editabil prin setNewStepGoal,
             permisiunea cerută la primul toggle explicit, nu la boot. */}
-        <Animated.View entering={FadeInDown.duration(700).delay(335)} style={[s.healthCard, { borderColor: isEnabled ? colors.accent + '40' : 'rgba(255,255,255,0.08)' }]}>
+        <Animated.View style={[s.healthCard, { borderColor: isEnabled ? colors.accent + '40' : 'rgba(255,255,255,0.08)' }]}>
           <CardBackdrop style={s.healthBlur}>
             <LinearGradient colors={[isEnabled ? colors.accent + '15' : 'rgba(255,255,255,0.03)', 'rgba(0,0,0,0)']} style={s.healthGrad}>
               <View style={s.healthHeader}>
@@ -700,8 +704,8 @@ export default function HomeScreen() {
                     <Footprints size={20} color={isEnabled ? colors.accent : colors.textSecondary} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.healthTitle, { color: colors.textPrimary }]}>Pași & Calorii</Text>
-                    <Text style={[s.healthSub, { color: colors.textSecondary }]}>
+                    <Text style={[s.healthTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Pași & Calorii</Text>
+                    <Text style={[s.healthSub, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
                       {isEnabled && isAvailable
                         ? `Sursă: senzorul telefonului • +${activeCalories} kcal arse`
                         : 'Sursă: senzorul telefonului (Pedometer). Atinge „Activează" pentru a cere permisiunea.'}
@@ -759,29 +763,29 @@ export default function HomeScreen() {
                         accessibilityLabel="Modifică obiectivul de pași"
                         hitSlop={8}
                       >
-                        <Text style={[s.healthCount, { color: colors.textPrimary }]}>
+                        <Text style={[s.healthCount, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
                           <Text style={{ fontSize: 22, fontWeight: '900', color: colors.accent }}>{steps.toLocaleString()}</Text> / {stepGoal.toLocaleString()} pași
                         </Text>
                       </TouchableOpacity>
                     )}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Flame size={14} color={colors.warning} />
-                      <Text style={[s.healthCalories, { color: colors.warning }]}>+{activeCalories} kcal arse</Text>
+                      <Text style={[s.healthCalories, { color: colors.warning }]} maxFontSizeMultiplier={1.3}>+{activeCalories} kcal arse</Text>
                     </View>
                   </View>
                   <View style={[s.manualAddRow, { borderColor: colors.cardBorder }]}>
-                    <Text style={[s.manualAddHint, { color: colors.textTertiary }]}>Adaugă manual</Text>
+                    <Text style={[s.manualAddHint, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>Adaugă manual</Text>
                     <TouchableOpacity onPress={() => addManualSteps(500)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel="Adaugă 500 de pași manual" hitSlop={6}>
-                      <Text style={[s.manualAddBtnText, { color: colors.accent }]}>+500</Text>
+                      <Text style={[s.manualAddBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>+500</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => addManualSteps(1000)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel="Adaugă 1000 de pași manual" hitSlop={6}>
-                      <Text style={[s.manualAddBtnText, { color: colors.accent }]}>+1000</Text>
+                      <Text style={[s.manualAddBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>+1000</Text>
                     </TouchableOpacity>
                   </View>
                 </>
               ) : (
                 <View style={s.healthOfflineBox}>
-                  <Text style={[s.healthOfflineText, { color: colors.textTertiary }]}>
+                  <Text style={[s.healthOfflineText, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>
                     {isEnabled
                       ? 'Senzorul nu e detectat sau permisiunea nu a fost acordată. Poți oricând adăuga pașii manual mai jos.'
                       : 'Activează pașii pentru a adăuga caloriile arse din mișcare în balanța ta de dietă — sau adaugă-i manual.'}
@@ -792,15 +796,15 @@ export default function HomeScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Activează senzorul de pași"
                   >
-                    <Text style={[s.connectBtnText, { color: colors.background }]}>Activează</Text>
+                    <Text style={[s.connectBtnText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>Activează</Text>
                   </TouchableOpacity>
                   <View style={[s.manualAddRow, { borderColor: colors.cardBorder, marginTop: 10 }]}>
-                    <Text style={[s.manualAddHint, { color: colors.textTertiary }]}>Adaugă manual</Text>
+                    <Text style={[s.manualAddHint, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>Adaugă manual</Text>
                     <TouchableOpacity onPress={() => addManualSteps(500)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel="Adaugă 500 de pași manual" hitSlop={6}>
-                      <Text style={[s.manualAddBtnText, { color: colors.accent }]}>+500</Text>
+                      <Text style={[s.manualAddBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>+500</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => addManualSteps(1000)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel="Adaugă 1000 de pași manual" hitSlop={6}>
-                      <Text style={[s.manualAddBtnText, { color: colors.accent }]}>+1000</Text>
+                      <Text style={[s.manualAddBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>+1000</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -810,7 +814,7 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* HARTĂ MUSCULARĂ LIVE Card pe ecranul Acasă (Secțiunea 4.4) */}
-        <Animated.View entering={FadeInDown.duration(700).delay(345)}>
+        <Animated.View>
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => router.push('/(tabs)/antrenamente' as any)}
@@ -821,7 +825,7 @@ export default function HomeScreen() {
             <View style={s.liveHeatmapHeader}>
               <View style={s.liveHeatmapTitleRow}>
                 <View style={[s.liveHeatmapDot, { backgroundColor: colors.danger }]} />
-                <Text style={[s.liveHeatmapTitle, { color: colors.textPrimary }]}>HARTĂ MUSCULARĂ LIVE</Text>
+                <Text style={[s.liveHeatmapTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>HARTĂ MUSCULARĂ LIVE</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setViewSideHome(v => v === 'front' ? 'back' : 'front')}
@@ -831,7 +835,7 @@ export default function HomeScreen() {
                 accessibilityLabel={viewSideHome === 'front' ? 'Arată partea din spate a hărții musculare' : 'Arată partea din față a hărții musculare'}
               >
                 <RotateCcw size={12} color={colors.accent} />
-                <Text style={[s.liveHeatmapToggleText, { color: colors.accent }]}>
+                <Text style={[s.liveHeatmapToggleText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
                   {viewSideHome === 'front' ? 'FAȚĂ' : 'SPATE'}
                 </Text>
               </TouchableOpacity>
@@ -847,7 +851,7 @@ export default function HomeScreen() {
 
             <View style={s.liveHeatmapFooter}>
               <Dumbbell size={14} color={colors.accentSecondary} />
-              <Text style={[s.liveHeatmapFooterText, { color: colors.textSecondary }]}>
+              <Text style={[s.liveHeatmapFooterText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
                 {antrenamente && antrenamente.length > 0
                   ? `${antrenamente.length} antrenamente azi • intensitate musculară în timp real`
                   : 'Niciun antrenament înregistrat azi • atinge pentru a începe'}
@@ -858,11 +862,11 @@ export default function HomeScreen() {
 
         {/* Tips card */}
         {isTipVisible && (
-          <Animated.View entering={FadeInDown.duration(700).delay(350)} style={[s.tipsCard, { borderColor: colors.accentSecondary + '25' }]}>
+          <Animated.View style={[s.tipsCard, { borderColor: colors.accentSecondary + '25' }]}>
             <CardBackdrop style={s.tipsBlur}>
               <LinearGradient colors={[colors.accentSecondary + '14', 'rgba(0,0,0,0)']} style={s.tipsGrad}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={[s.tipsTitle, { color: colors.textPrimary, marginBottom: 0 }]}>✨ Sfat NutriAI al Zilei</Text>
+                  <Text style={[s.tipsTitle, { color: colors.textPrimary, marginBottom: 0 }]} maxFontSizeMultiplier={1.3}>✨ Sfat NutriAI al Zilei</Text>
                   <TouchableOpacity
                     onPress={handleCloseTip}
                     style={{ padding: 4 }}
@@ -873,7 +877,7 @@ export default function HomeScreen() {
                     <X size={18} color={colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
-                <Text style={[s.tipsText, { color: colors.textTertiary }]}>{sfatAles}</Text>
+                <Text style={[s.tipsText, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>{sfatAles}</Text>
               </LinearGradient>
             </CardBackdrop>
           </Animated.View>
@@ -893,7 +897,7 @@ export default function HomeScreen() {
         greutateTinta={greutateTinta}
         onSaveTinta={salveazaGreutateTinta}
       />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -924,7 +928,7 @@ const s = StyleSheet.create({
   ringCardGrad: { padding: 24 },
   ringCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
   ringCardInfo: { flex: 1, paddingRight: 12 },
-  ringCardTitle: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 6 },
+  ringCardTitle: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 6 },
   ringCardValueRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginBottom: 10 },
   ringCardValue: { fontSize: 56, fontWeight: '900', letterSpacing: -2, lineHeight: 60 },
   ringCardUnit: { fontSize: 18, fontWeight: '800', marginBottom: 8 },
@@ -943,7 +947,7 @@ const s = StyleSheet.create({
   macroValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2, marginBottom: 3 },
   macroValue: { fontSize: 16, fontWeight: '900' },
   macroUnit: { fontSize: 11, fontWeight: '700' },
-  macroLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  macroLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   macroBarBg: { width: '80%', height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' },
   macroBarFill: { height: '100%', borderRadius: 2 },
   macroDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 4 },
@@ -1020,7 +1024,7 @@ const s = StyleSheet.create({
   manualAddBtnText: { fontSize: 13, fontWeight: '900' },
   goalEditRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   goalInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, minWidth: 84, fontSize: 15, fontWeight: '800' },
-  goalBtn: { minWidth: 44, height: 38, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 12, borderWidth: 1 },
+  goalBtn: { minWidth: 44, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 12, borderWidth: 1 },
   goalBtnText: { fontSize: 14, fontWeight: '900' },
   connectBtn: { marginTop: 10, alignSelf: 'center', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
   connectBtnText: { fontSize: 13, fontWeight: '900' },

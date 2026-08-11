@@ -23,6 +23,8 @@ export function GramInput({
   borderColor,
   accessibilityLabel = 'Gramaj',
 }: Props) {
+  // REMED-022: capăm scalarea fontului la Bold Text ca inputul numeric să nu
+  // iasă din casetă (maxFontSizeMultiplier pe TextInput + textul suffixului).
   const { colors } = useTheme();
   const [text, setText] = useState(String(value ?? ''));
   const [focused, setFocused] = useState(false);
@@ -72,6 +74,7 @@ export function GramInput({
         inputMode="numeric"
         returnKeyType="done"
         maxLength={maxLength}
+        maxFontSizeMultiplier={1.3}
         selectTextOnFocus
         placeholder="0"
         placeholderTextColor={colors.textTertiary}
@@ -80,7 +83,7 @@ export function GramInput({
         accessibilityHint={`Valoare maximă ${max} ${suffix}`}
         style={[styles.input, { color: resolvedColor }]}
       />
-      <Text style={[styles.suffix, { color: colors.textSecondary }]}>{suffix}</Text>
+      <Text maxFontSizeMultiplier={1.3} style={[styles.suffix, { color: colors.textSecondary }]}>{suffix}</Text>
       {text.length > 0 ? (
         <Pressable
           onPress={clear}

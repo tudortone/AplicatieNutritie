@@ -5,7 +5,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  FlatList
+  FlatList,
+  BackHandler,
+  Platform,
 } from 'react-native';
 import BottomSheet, {
   BottomSheetScrollView,
@@ -63,6 +65,18 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
     const [exercitiiRecenteIds, setExercitiiRecenteIds] = useState<string[]>([]);
     const [greutateUser, setGreutateUser] = useState(75);
     const [loading, setLoading] = useState(false);
+    // REMED-010 (Android BackHandler): BottomSheet non-modal e mereu montat,
+    // deci urmărim index-ul ca să închidem cu back DOAR când e deschis (>= 0).
+    const [sheetIndex, setSheetIndex] = useState(-1);
+
+    useEffect(() => {
+      if (Platform.OS !== 'android' || sheetIndex < 0) return;
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        bottomSheetRef.current?.close();
+        return true;
+      });
+      return () => sub.remove();
+    }, [sheetIndex]);
 
     // Editor state
     const [exercitiuEditor, setExercitiuEditor] = useState<Exercitiu | null>(null);
@@ -449,6 +463,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         ref={bottomSheetRef}
         index={-1}
         snapPoints={snapPoints}
+        onChange={(index) => setSheetIndex(index)}
         backdropComponent={renderBackdrop}
         enablePanDownToClose
         backgroundStyle={{ backgroundColor: colors.background, borderRadius: 28 }}

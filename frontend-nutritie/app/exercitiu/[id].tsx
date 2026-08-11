@@ -324,7 +324,7 @@ export default function ExercitiuDetailScreen() {
           {instructiuni.map((pas, idx) => (
             <View key={idx} style={[styles.stepCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
               <View style={[styles.stepNumBubble, { backgroundColor: colors.accent }]}>
-                <Text style={styles.stepNumText}>{idx + 1}</Text>
+                <Text style={[styles.stepNumText, { color: colors.textOnAccent }]}>{idx + 1}</Text>
               </View>
               <Text style={[styles.stepText, { color: colors.textPrimary }]}>{pas}</Text>
             </View>
@@ -354,8 +354,8 @@ export default function ExercitiuDetailScreen() {
           activeOpacity={0.88}
           onPress={handleQuickAdd}
         >
-          <PlusCircle size={20} color="#000" />
-          <Text style={[styles.actionBtnText, { color: '#000' }]}>
+          <PlusCircle size={20} color={colors.textOnAccent} />
+          <Text style={[styles.actionBtnText, { color: colors.textOnAccent }]}>
             {(() => {
               const maxWeight = sets.length > 0 ? Math.max(...sets.map(s => s.greutate || 0)) : 0;
               const hasWeight = spec.type === 'weight_reps' || spec.type === 'reps_weight' || spec.type === 'reps_assisted' || maxWeight > 0;
@@ -641,7 +641,6 @@ const styles = StyleSheet.create({
   stepNumText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#000',
   },
   stepText: {
     fontSize: 14,

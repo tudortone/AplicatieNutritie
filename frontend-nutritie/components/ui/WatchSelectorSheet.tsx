@@ -1,5 +1,5 @@
-import React, { forwardRef, useImperativeHandle, useRef, useMemo, useCallback } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import React, { forwardRef, useImperativeHandle, useRef, useMemo, useCallback, useEffect, useState } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, BackHandler, Platform } from 'react-native';
 import { BottomSheetModal, BottomSheetScrollView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Watch, CheckCircle2, X } from 'lucide-react-native';
@@ -20,6 +20,18 @@ export const WatchSelectorSheet = forwardRef<WatchSelectorSheetRef>((_, ref) => 
   const { selectedProvider, setProvider } = useHealthSync();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const snapPoints = useMemo(() => ['58%'], []);
+  // REMED-010 (Android BackHandler): urmărim index-ul (BottomSheetModal) ca să
+  // închidem sheet-ul cu back DOAR când e deschis (>= 0).
+  const [sheetIndex, setSheetIndex] = useState(-1);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' || sheetIndex < 0) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      bottomSheetRef.current?.dismiss();
+      return true;
+    });
+    return () => sub.remove();
+  }, [sheetIndex]);
 
   useImperativeHandle(ref, () => ({
     open: () => bottomSheetRef.current?.present(),
@@ -51,6 +63,7 @@ export const WatchSelectorSheet = forwardRef<WatchSelectorSheetRef>((_, ref) => 
     <BottomSheetModal
       ref={bottomSheetRef}
       snapPoints={snapPoints}
+      onChange={(index) => setSheetIndex(index)}
       enablePanDownToClose
       enableDynamicSizing={false}
       backdropComponent={renderBackdrop}

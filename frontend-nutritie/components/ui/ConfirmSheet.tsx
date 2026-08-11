@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 export interface ConfirmSheetProps {
   visible: boolean;
@@ -19,21 +20,37 @@ export interface ConfirmSheetProps {
   destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /**
+   * REMED-006: conținut opțional randat între mesaj și butoane (cardul de
+   * propunere + picker-ul explicit de categorie, compus în chat.tsx).
+   */
+  extra?: React.ReactNode;
+  /**
+   * REMED-006: blochează confirmarea până când utilizatorul a ales o categorie.
+   * Default false => ceilalți apelanți nu sunt afectați.
+   */
+  confirmDisabled?: boolean;
 }
 
 export function ConfirmSheet({
   visible,
   title,
   message,
-  confirmLabel = 'Șterge',
-  cancelLabel = 'Anulează',
+  confirmLabel,
+  cancelLabel,
   destructive = true,
   onConfirm,
   onCancel,
+  extra,
+  confirmDisabled = false,
 }: ConfirmSheetProps) {
   const { colors } = useTheme();
+  // REMED-002: default-urile ConfirmSheet + a11y trec prin i18n (chei chat.*).
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const actionColor = destructive ? colors.danger : colors.accent;
+  const confirmText = confirmLabel ?? t('chat.confirmSheet.confirmDefault');
+  const cancelText = cancelLabel ?? t('chat.confirmSheet.cancelDefault');
 
   return (
     <Modal
@@ -55,7 +72,7 @@ export function ConfirmSheet({
           style={StyleSheet.absoluteFill}
           onPress={onCancel}
           accessibilityRole="button"
-          accessibilityLabel="Închide dialogul de confirmare"
+          accessibilityLabel={t('chat.confirmSheet.a11yClose')}
         />
         <Animated.View
           entering={SlideInDown.springify().damping(20)}
@@ -76,33 +93,45 @@ export function ConfirmSheet({
             <View style={[styles.grip, { backgroundColor: `${colors.textTertiary}55` }]} />
             <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
             {message ? (
-              <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
             ) : null}
+            {extra ? <View style={styles.extra}>{extra}</View> : null}
 
             <Pressable
               onPress={onConfirm}
+              disabled={confirmDisabled}
               accessibilityRole="button"
-              accessibilityLabel={confirmLabel}
+              accessibilityLabel={confirmText}
+              accessibilityState={{ disabled: confirmDisabled }}
               style={({ pressed }) => [
                 styles.button,
-                { backgroundColor: actionColor, opacity: pressed ? 0.82 : 1 },
+                {
+                  backgroundColor: confirmDisabled ? colors.disabledBg : actionColor,
+                  opacity: pressed && !confirmDisabled ? 0.82 : 1,
+                },
               ]}
             >
-              <Text style={[styles.confirmText, { color: destructive ? '#FFFFFF' : colors.background }]}>
-                {confirmLabel}
+              <Text
+                maxFontSizeMultiplier={1.3}
+                style={[
+                  styles.confirmText,
+                  { color: confirmDisabled ? colors.disabledText : (destructive ? colors.textOnDanger : colors.textOnAccent) },
+                ]}
+              >
+                {confirmText}
               </Text>
             </Pressable>
 
             <Pressable
               onPress={onCancel}
               accessibilityRole="button"
-              accessibilityLabel={cancelLabel}
+              accessibilityLabel={cancelText}
               style={({ pressed }) => [
                 styles.ghostButton,
                 { borderColor: colors.border, opacity: pressed ? 0.65 : 1 },
               ]}
             >
-              <Text style={[styles.ghostText, { color: colors.textPrimary }]}>{cancelLabel}</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.ghostText, { color: colors.textPrimary }]}>{cancelText}</Text>
             </Pressable>
           </BlurView>
         </Animated.View>
@@ -146,6 +175,10 @@ const styles = StyleSheet.create({
   message: {
     fontSize: 14,
     lineHeight: 21,
+    marginBottom: 20,
+  },
+  // REMED-006/007: zonă opțională (cardul propunerii + picker de categorie).
+  extra: {
     marginBottom: 20,
   },
   button: {

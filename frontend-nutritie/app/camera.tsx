@@ -1,7 +1,7 @@
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
-  ActivityIndicator, Pressable, Text, View, StyleSheet, TouchableOpacity,
+  ActivityIndicator, Image, Pressable, Text, View, StyleSheet, TouchableOpacity,
   ScrollView, Alert, KeyboardAvoidingView, Platform, Modal,
   useWindowDimensions,
 } from 'react-native';
@@ -20,17 +20,29 @@ import { Scan, Zap, ChevronDown, Plus, Trash2, Image as ImageIcon } from 'lucide
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { clampValoare, LIMITE_DB_MESE } from '../lib/mealUtils';
+import { clampValoare, LIMITE_DB_MESE, MEAL_CATEGORIES, CATEGORIE_ICONA, getTipMasaDupaOra, insereazaMasaCuPoza } from '../lib/mealUtils';
 import { construiestePayloadMasaCamera, esteEroareDuplicate, eliminaAlimentScanat } from '../lib/payloadMese';
 import { GramInput } from '../components/ui/GramInput';
 import { ProductSearch } from '../components/food/ProductSearch';
 import { foodProductToAlimentAI } from '../components/food/types';
 import { type AlimentScanat } from '@/components/food/FoodScanSuccessModal';
+import type { TipMasa } from '../types';
+import { FontSize } from '../constants/theme';
 import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInput';
 import { uploadImageToImageKit } from '@/lib/imagekit';
 import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts } from '@/lib/imageOptimizer';
 import { pushOfflineMeal, processOfflineQueue, MasaOfflinePayload } from '@/lib/offlineQueue';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
+
+// Starea unui furnizor AI primită de la /ai-status și din câmpul `stareAI` al
+// răspunsului de analiză. REMED-021: tipare înlocuiește `any`.
+interface StareAiStatus {
+  nume: string;
+  status: string;
+  secundeRamase: number;
+  mesaj: string;
+}
 
 export default function CameraScreen() {
   const { colors } = useTheme();
@@ -39,7 +51,8 @@ export default function CameraScreen() {
   // din inaltime sau 360px ca sa nu depaseasca ecranul pe telefoane mici/landscape.
   const scanBoxSize = Math.round(Math.min(width * 0.78, height * 0.48, 360));
   const { t } = useTranslation();
-  
+  const reduceMotion = useReducedMotion();
+
   const scanSteps = useMemo(() => [
     t('camera.steps.optimizing'),
     t('camera.steps.sending'),
@@ -64,7 +77,13 @@ export default function CameraScreen() {
 
   const [aiMenuVisible, setAiMenuVisible] = useState(false);
   const [cautareProdusVisible, setCautareProdusVisible] = useState(false);
-  const [aiStatus, setAiStatus] = useState<Record<string, { nume: string; status: string; secundeRamase: number; mesaj: string }>>({});
+  const [aiStatus, setAiStatus] = useState<Record<string, StareAiStatus>>({});
+  // REMED-009: categoria mesei scanate — implicit = sugestia după oră, dar
+  // utilizatorul o poate suprascrie din chip-urile din foaia de review.
+  const [tipMasaSelectat, setTipMasaSelectat] = useState<TipMasa>(() => getTipMasaDupaOra(new Date()));
+  // REMED-008: URI-ul LOCAL al pozei scanate (înainte de upload ImageKit) folosit
+  // ca miniatură în review — disponibil instant, fără să așteptăm CDN-ul.
+  const [pozaScanPreview, setPozaScanPreview] = useState<string | null>(null);
 
   const cameraRef = useRef<CameraView>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -229,7 +248,7 @@ export default function CameraScreen() {
 
         const payload = (await response.json()) as
           | AlimentScanat[]
-          | { eroare?: string; stareAI?: any };
+          | { eroare?: string; stareAI?: Record<string, StareAiStatus> };
 
         if (controller.signal.aborted) return;
 
@@ -277,6 +296,10 @@ export default function CameraScreen() {
         }
 
         setRezultat(normalized);
+        // REMED-008/009: aducem în stare poza locală scanată (miniatura din review)
+        // și re-propunem categoria după ora curentă, ca utilizatorul să o suprascrie.
+        setPozaScanPreview(imagineOptimizata.uri);
+        setTipMasaSelectat(getTipMasaDupaOra(new Date()));
         // BUG-019/014: nu mai afișăm modalul read-only peste foaia de rezultat
         // editabilă — foaia de mai jos (gramaj inline + ștergere + adăugare) este
         // singura suprafață de review, iar `rezultat` rămâne în stare până la
@@ -377,6 +400,7 @@ export default function CameraScreen() {
     abortControllerRef.current = null;
     setTotaluri(null);
     setRezultat([]);
+    setPozaScanPreview(null);
     setScanError(null);
     setSeIncarca(false);
   }, []);
@@ -524,15 +548,19 @@ export default function CameraScreen() {
     // carbohidrati ≤2000, fibre ≤500). Id-ul UUID e determinist din conținutul
     // scanului: reluarea aceleiași salvări (dublu-tap, retry) se ciocnește pe PK
     // 23505 și e tratată ca „deja adăugată", nu ca rând duplicat.
-    const { payload } = construiestePayloadMasaCamera({
+    const payloadInitial = construiestePayloadMasaCamera({
       user_id: session.user.id,
       rezultat,
       now,
       poza: { url: imageKitUrlRef.current, fileId: imageKitFileIdRef.current },
-    });
+    }).payload;
+    // REMED-009: tipul mesei = alegerea utilizatorului din chip-uri (implicit
+    // sugestia după oră). Introducem prin insereazaMasaCuPoza ca poza plus
+    // fallback-ul la scheme vechi (fără imagine_url) să fie reutilizate.
+    const payload = { ...payloadInitial, tip_masa: tipMasaSelectat };
 
     try {
-      const { error } = await supabase.from('mese').insert(payload);
+      const { error } = await insereazaMasaCuPoza(supabase, payload);
 
       if (error) {
         if (esteEroareDuplicate(error)) {
@@ -550,8 +578,9 @@ export default function CameraScreen() {
       Alert.alert(t('alerts.titluri.succes'), t('alerts.mesaje.masaAdaugataJurnal'), [
         { text: t('alerts.butoane.superPunct'), onPress: () => router.replace('/(tabs)') },
       ]);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[adaugaInJurnal]', e);
+      const mesajEroare = e instanceof Error ? e.message : '';
       // U-04: salvare în coada offline FIFO pe eroare de conexiune/rețea
       try {
         const payloadOffline: MasaOfflinePayload = {
@@ -566,7 +595,7 @@ export default function CameraScreen() {
           [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
         );
       } catch (errOffline) {
-        Alert.alert(t('alerts.titluri.eroareSalvare'), e?.message ?? t('alerts.mesaje.eroareNecunoscutaSalvareMasa'));
+        Alert.alert(t('alerts.titluri.eroareSalvare'), mesajEroare || t('alerts.mesaje.eroareNecunoscutaSalvareMasa'));
       }
     } finally {
       setIsSavingDiary(false);
@@ -583,18 +612,18 @@ export default function CameraScreen() {
     return (
       <View style={[styles.permissionContainer, { backgroundColor: colors.background }]}>
         <View style={styles.permissionContent}>
-          <Animated.View entering={ZoomIn.duration(600)} style={[styles.permissionIcon, { shadowColor: colors.accent }]}>
+          <Animated.View entering={reduceMotion ? undefined : ZoomIn.duration(600)} style={[styles.permissionIcon, { shadowColor: colors.accent }]}>
             <LinearGradient colors={colors.accentGradient} style={styles.permissionIconGrad}>
               <Scan size={44} color={colors.background} strokeWidth={2.5} />
             </LinearGradient>
           </Animated.View>
-          <Text style={[styles.permissionTitle, { color: colors.textPrimary }]}>Permisiune Cameră</Text>
-          <Text style={[styles.permissionSub, { color: colors.textSecondary }]}>NutriAI are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.</Text>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.permissionTitle, { color: colors.textPrimary }]}>Permisiune Cameră</Text>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.permissionSub, { color: colors.textSecondary }]}>NutriAI are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.</Text>
           
-          <Animated.View entering={FadeInUp.duration(600).delay(200)} style={[styles.permissionBtn, { shadowColor: colors.accent }]}>
+          <Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(600).delay(200)} style={[styles.permissionBtn, { shadowColor: colors.accent }]}>
             <TouchableOpacity onPress={requestPermission} accessibilityRole="button" accessibilityLabel="Permite accesul la cameră">
               <LinearGradient colors={colors.accentGradient} style={styles.permissionBtnGrad}>
-                <Text style={[styles.permissionBtnText, { color: colors.background }]}>Permite accesul</Text>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.permissionBtnText, { color: colors.background }]}>Permite accesul</Text>
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
@@ -624,7 +653,7 @@ export default function CameraScreen() {
           >
             <View style={[styles.topBadgeBlur, { paddingVertical: 8 }]}>
               <Zap size={14} color={colors.accent} fill={colors.accent} />
-              <Text style={[styles.topBadgeText, { color: colors.textPrimary }]}>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.topBadgeText, { color: colors.textPrimary }]}>
                 {selectedAI === 'auto' ? 'AI Inteligent' : selectedAI.toUpperCase()}
               </Text>
               <ChevronDown size={14} color={colors.textSecondary} />
@@ -663,7 +692,7 @@ export default function CameraScreen() {
         {aiMenuVisible && (
           <Animated.View entering={FadeIn.duration(200)} style={[styles.aiDropdownMenu, { top: insets.top + 74, backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
             <BlurView intensity={80} tint="dark" style={styles.aiDropdownBlur}>
-              <Text style={styles.aiDropdownHeader}>SELECTEAZĂ CREIERUL AI</Text>
+              <Text maxFontSizeMultiplier={1.3} style={styles.aiDropdownHeader}>SELECTEAZĂ CREIERUL AI</Text>
               
               {(['auto', 'gemini', 'openai', 'groq'] as const).map((aiKey) => {
                 const info = aiStatus[aiKey === 'auto' ? 'gemini' : aiKey];
@@ -687,12 +716,12 @@ export default function CameraScreen() {
                     accessibilityState={{ selected: isSelected }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.aiDropdownTitle, isSelected && { color: colors.accent }]}>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.aiDropdownTitle, isSelected && { color: colors.accent }]}>
                         {aiKey === 'auto' ? '✨ NutriAI Auto-Routing (Recomandat)' : 
                          aiKey === 'gemini' ? '🧠 Google Gemini Pro Vision' :
                          aiKey === 'openai' ? '👁️ OpenAI GPT-4o Mini' : '⚡ Groq LLaVA Fast'}
                       </Text>
-                      <Text style={styles.aiDropdownDesc}>
+                      <Text maxFontSizeMultiplier={1.3} style={styles.aiDropdownDesc}>
                         {isCooldown ? `⏳ Cooldown (${info?.secundeRamase}s)` : '✅ Activ și pregătit'}
                       </Text>
                     </View>
@@ -715,7 +744,7 @@ export default function CameraScreen() {
               <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay} accessibilityLiveRegion="polite">
                 <BlurView intensity={60} tint="dark" style={styles.scanningBlur}>
                   <ActivityIndicator size="large" color={colors.accent} />
-                  <Animated.Text key={scanStepIndex} entering={FadeInUp.duration(250)} style={[styles.scanningText, { color: colors.accent }]}>
+                  <Animated.Text key={scanStepIndex} entering={FadeInUp.duration(250)} style={[styles.scanningText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
                     {scanSteps[scanStepIndex]}
                   </Animated.Text>
                   <View style={styles.stepProgressDots}>
@@ -748,32 +777,93 @@ export default function CameraScreen() {
                 <View style={styles.resultHandle} />
                 
                 <View style={styles.resultSection}>
-                  <Text style={[styles.resultTitle, { color: colors.textPrimary }]}>Ingredientele detectate</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.resultTitle, { color: colors.textPrimary }]}>Ingredientele detectate</Text>
+
+                  {/* REMED-009: categorie explicită pentru masa scanată — sugestia
+                      după oră e doar valoarea implicită, utilizatorul o schimbă. */}
+                  <View
+                    style={styles.mealTypeRow}
+                    accessibilityRole="radiogroup"
+                    accessibilityLabel="Categoria mesei"
+                  >
+                    {MEAL_CATEGORIES.map((cat) => {
+                      const selectat = tipMasaSelectat === cat.id;
+                      const Icona = CATEGORIE_ICONA[cat.id];
+                      return (
+                        <Pressable
+                          key={cat.id}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setTipMasaSelectat(cat.id);
+                          }}
+                          style={[
+                            styles.mealTypeChip,
+                            selectat && { borderColor: colors.accent, backgroundColor: colors.accent + '22' },
+                          ]}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: selectat }}
+                          accessibilityLabel={t(`chat.mealCategory.${cat.id}`)}
+                          hitSlop={6}
+                        >
+                          <Icona size={14} color={selectat ? colors.accent : colors.textSecondary} />
+                          <Text maxFontSizeMultiplier={1.3} style={[styles.mealTypeChipText, { color: selectat ? colors.accent : colors.textSecondary }]}>
+                            {t(`chat.mealCategory.${cat.id}`)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {pozaScanPreview ? (
+                    <Image
+                      source={{ uri: pozaScanPreview }}
+                      style={styles.scanPreviewThumb}
+                      importantForAccessibility="no"
+                      accessibilityElementsHidden
+                    />
+                  ) : null}
 
                   <ScrollView style={styles.itemsList} showsVerticalScrollIndicator={false}>
-                    {rezultat.map((ingredient, index) => (
-                      <View key={`${ingredient.nume}-${index}`} style={styles.ingredientRow}>
-                        <Text style={[styles.ingredientName, { color: colors.textPrimary }]}>{ingredient.nume}</Text>
-                        <View style={[styles.gramContainer, { borderColor: colors.accent + '33' }]}>
-                          <GramInput
-                            value={ingredient.estimare_grame}
-                            onChange={(g) => updateIngredient(index, { estimare_grame: g })}
-                            borderColor="transparent"
-                            color={colors.accent}
-                          />
+                    {rezultat.map((ingredient, index) => {
+                      // REMED-008: kcal per rând din gramajul curent (per-100g scalat).
+                      const kcalRand = Math.round(
+                        ((ingredient.calorii_per_100g || 0) * (ingredient.estimare_grame || 0)) / 100,
+                      );
+                      return (
+                        <View key={`${ingredient.nume}-${index}`} style={styles.ingredientRow}>
+                          <Text
+                            numberOfLines={1}
+                            maxFontSizeMultiplier={1.3}
+                            style={[styles.ingredientName, { color: colors.textPrimary }]}
+                          >
+                            {ingredient.nume}
+                          </Text>
+                          <View style={styles.kcalChip}>
+                            <Text maxFontSizeMultiplier={1.3} style={[styles.kcalChipText, { color: colors.accent }]}>
+                              {kcalRand} kcal
+                            </Text>
+                          </View>
+                          <View style={[styles.gramContainer, { borderColor: colors.accent + '33' }]}>
+                            <GramInput
+                              value={ingredient.estimare_grame}
+                              onChange={(g) => updateIngredient(index, { estimare_grame: g })}
+                              borderColor="transparent"
+                              color={colors.accent}
+                            />
+                          </View>
+                          <Pressable
+                            onPress={() => stergeIngredient(index)}
+                            hitSlop={10}
+                            style={styles.deleteIngredientBtn}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Șterge ${ingredient.nume} din rezultat`}
+                            accessibilityHint="Elimină doar acest aliment, restul rămân"
+                          >
+                            <Trash2 size={16} color={colors.danger} />
+                          </Pressable>
                         </View>
-                        <Pressable
-                          onPress={() => stergeIngredient(index)}
-                          hitSlop={10}
-                          style={styles.deleteIngredientBtn}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Șterge ${ingredient.nume} din rezultat`}
-                          accessibilityHint="Elimină doar acest aliment, restul rămân"
-                        >
-                          <Trash2 size={16} color={colors.danger} />
-                        </Pressable>
-                      </View>
-                    ))}
+                      );
+                    })}
 
                     <TouchableOpacity
                       style={[styles.addExtraBtn, { borderColor: colors.accent }]}
@@ -786,7 +876,7 @@ export default function CameraScreen() {
                       accessibilityHint="Deschide căutarea pentru a adăuga un aliment suplimentar"
                     >
                       <Plus size={16} color={colors.accent} />
-                      <Text style={[styles.addExtraText, { color: colors.accent, fontWeight: '700' }]}>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.addExtraText, { color: colors.accent, fontWeight: '700' }]}>
                         + Adaugă alt produs
                       </Text>
                     </TouchableOpacity>
@@ -803,23 +893,23 @@ export default function CameraScreen() {
 
                 <View style={styles.macroRow}>
                   <View style={styles.macroItem}>
-                    <Text style={[styles.macroValue, { color: colors.accent }]}>{Math.round(totalCalculat.calorii)}</Text>
-                    <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>kcal</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.accent }]}>{Math.round(totalCalculat.calorii)}</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>kcal</Text>
                   </View>
                   <View style={styles.macroDivider} />
                   <View style={styles.macroItem}>
-                    <Text style={[styles.macroValue, { color: colors.accentSecondary }]}>{Math.round(totalCalculat.proteine)}g</Text>
-                    <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>proteine</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.accentSecondary }]}>{Math.round(totalCalculat.proteine)}g</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>proteine</Text>
                   </View>
                   <View style={styles.macroDivider} />
                   <View style={styles.macroItem}>
-                    <Text style={[styles.macroValue, { color: colors.accentTertiary }]}>{Math.round(totalCalculat.carbohidrati)}g</Text>
-                    <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>carbs</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.accentTertiary }]}>{Math.round(totalCalculat.carbohidrati)}g</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>carbs</Text>
                   </View>
                   <View style={styles.macroDivider} />
                   <View style={styles.macroItem}>
-                    <Text style={[styles.macroValue, { color: colors.warning }]}>{Math.round(totalCalculat.grasimi)}g</Text>
-                    <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>grăsimi</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.warning }]}>{Math.round(totalCalculat.grasimi)}g</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>grăsimi</Text>
                   </View>
                 </View>
 
@@ -831,7 +921,7 @@ export default function CameraScreen() {
                   accessibilityState={{ disabled: isSavingDiary, busy: isSavingDiary }}
                 >
                   <LinearGradient colors={colors.accentGradient} style={styles.addBtnGrad}>
-                    <Text style={[styles.addBtnText, { color: colors.background }]}>+ Adaugă {Math.round(totalCalculat.calorii)} kcal în Jurnal</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.addBtnText, { color: colors.background }]}>+ Adaugă {Math.round(totalCalculat.calorii)} kcal în Jurnal</Text>
                   </LinearGradient>
                 </TouchableOpacity>
                 
@@ -841,7 +931,7 @@ export default function CameraScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Anulează rezultatul și scanează din nou"
                 >
-                  <Text style={styles.retryBtnText}>🔄 Anulează & Scanează din nou</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={styles.retryBtnText}>🔄 Anulează & Scanează din nou</Text>
                 </TouchableOpacity>
               </LinearGradient>
             </BlurView>
@@ -851,9 +941,9 @@ export default function CameraScreen() {
 
       {scanError && (
         <View style={[styles.errorCard, { top: insets.top + 78 }]} accessibilityRole="alert" accessibilityLiveRegion="assertive">
-          <Text style={styles.errorText}>{scanError}</Text>
+          <Text maxFontSizeMultiplier={1.3} style={styles.errorText}>{scanError}</Text>
           <Pressable onPress={() => setScanError(null)} accessibilityRole="button" accessibilityLabel="Închide mesajul de eroare">
-            <Text style={styles.retryText}>Închide</Text>
+            <Text maxFontSizeMultiplier={1.3} style={styles.retryText}>Închide</Text>
           </Pressable>
         </View>
       )}
@@ -861,7 +951,7 @@ export default function CameraScreen() {
       {isSavingDiary && (
         <View style={styles.savingOverlay} accessibilityLiveRegion="polite">
           <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={[styles.savingText, { color: colors.accent }]}>Salvez în jurnal...</Text>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.savingText, { color: colors.accent }]}>Salvez în jurnal...</Text>
         </View>
       )}
 
@@ -893,7 +983,7 @@ export default function CameraScreen() {
 
       {/* Shutter & Gallery button */}
       {rezultat.length === 0 && (
-        <Animated.View entering={FadeInUp.duration(600).delay(200)} style={[styles.shutterArea, { bottom: Math.max(insets.bottom, 16) + 20 }]}>
+        <Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(600).delay(200)} style={[styles.shutterArea, { bottom: Math.max(insets.bottom, 16) + 20 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 28 }}>
             <TouchableOpacity
               testID="gallery-button"
@@ -906,7 +996,7 @@ export default function CameraScreen() {
               disabled={seIncarca}
             >
               <ImageIcon size={22} color="#FFFFFF" />
-              <Text style={styles.galleryBtnText}>Galerie</Text>
+              <Text maxFontSizeMultiplier={1.3} style={styles.galleryBtnText}>Galerie</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -932,7 +1022,7 @@ export default function CameraScreen() {
 
             <View style={{ width: 72 }} />
           </View>
-          <Text style={styles.shutterLabel}>Apasă pe buton sau alege o poză din galerie</Text>
+          <Text maxFontSizeMultiplier={1.3} style={styles.shutterLabel}>Apasă pe buton sau alege o poză din galerie</Text>
         </Animated.View>
       )}
 
@@ -1016,10 +1106,36 @@ const styles = StyleSheet.create({
   resultHandle: { width: 48, height: 5, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 3, alignSelf: 'center', marginBottom: 24 },
   resultTitle: { fontSize: 20, fontWeight: '800', marginBottom: 16, letterSpacing: -0.3 },
   resultSection: { width: '100%' },
-  
+  // REMED-008: o singură miniatură a pozei scanate deasupra listei (NU per-rând).
+  scanPreviewThumb: { width: '100%', height: 140, borderRadius: 16, marginBottom: 12, resizeMode: 'cover' },
+
   itemsList: { maxHeight: 220, marginBottom: 20 },
   ingredientRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  ingredientName: { fontSize: 16, fontWeight: '600', flex: 1, marginRight: 12, paddingVertical: 4 },
+  ingredientName: { fontSize: 16, fontWeight: '600', flex: 1, marginRight: 8, paddingVertical: 4 },
+  // REMED-008: chip kcal per rând (gramaj scalat).
+  kcalChip: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kcalChipText: { fontSize: FontSize.caption, fontWeight: '800' },
+  // REMED-009: selectoare explicite de categorie a mesei scanate.
+  mealTypeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  mealTypeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 12, paddingVertical: 12,
+    borderRadius: 999, borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  mealTypeChipText: { fontSize: FontSize.caption, fontWeight: '700' },
   gramContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 12, paddingHorizontal: 12, borderWidth: 1 },
   deleteIngredientBtn: { padding: 6, marginLeft: 6, alignItems: 'center', justifyContent: 'center' },
   gramInput: { fontSize: 16, fontWeight: '800', paddingVertical: 8, minWidth: 40, textAlign: 'center' },

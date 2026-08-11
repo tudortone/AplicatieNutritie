@@ -129,8 +129,8 @@ function HoldTimerView({ value = 0, onStop }: HoldTimerViewProps) {
           onPress={toggleTimer}
           activeOpacity={0.8}
         >
-          {isRunning ? <Pause size={24} color="#FFF" /> : <Play size={24} color="#FFF" />}
-          <Text style={styles.timerBtnText}>{isRunning ? 'PAUZĂ' : 'PORNEȘTE'}</Text>
+          {isRunning ? <Pause size={24} color="#FFF" /> : <Play size={24} color={colors.textOnAccent} />}
+          <Text style={[styles.timerBtnText, { color: isRunning ? '#FFF' : colors.textOnAccent }]}>{isRunning ? 'PAUZĂ' : 'PORNEȘTE'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -275,7 +275,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   timerBtnText: {
-    color: '#FFF',
     fontSize: 16,
     fontWeight: '800',
   },

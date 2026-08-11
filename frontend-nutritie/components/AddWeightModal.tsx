@@ -116,7 +116,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
                 style={[styles.tabBtn, activeTab === 'tinta' && { backgroundColor: colors.accent }]}
                 onPress={() => handleTabSwitch('tinta')}
               >
-                <Text style={[styles.tabText, { color: activeTab === 'tinta' ? '#000000' : colors.textSecondary }]}>
+                <Text style={[styles.tabText, { color: activeTab === 'tinta' ? colors.textOnAccent : colors.textSecondary }]}>
                   🎯 Țintă ({greutateTinta} kg)
                 </Text>
               </TouchableOpacity>
@@ -159,8 +159,8 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
           {/* Save Button */}
           <TouchableOpacity style={[styles.saveBtn, { shadowColor: activeTab === 'curenta' ? colors.accentSecondary : colors.accent }]} onPress={handleSave} activeOpacity={0.85}>
             <LinearGradient colors={activeTab === 'curenta' ? colors.accentSecondaryGradient : colors.accentGradient} style={styles.saveGrad}>
-              <Check size={20} color={activeTab === 'curenta' ? colors.background : '#000000'} strokeWidth={3} />
-              <Text style={[styles.saveText, { color: activeTab === 'curenta' ? colors.background : '#000000' }]}>
+              <Check size={20} color={activeTab === 'curenta' ? colors.background : colors.textOnAccent} strokeWidth={3} />
+              <Text style={[styles.saveText, { color: activeTab === 'curenta' ? colors.background : colors.textOnAccent }]}>
                 {activeTab === 'curenta' ? 'Salvează Istoric Cântărire' : 'Salvează Noua Țintă'}
               </Text>
             </LinearGradient>
