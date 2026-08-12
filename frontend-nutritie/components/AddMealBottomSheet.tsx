@@ -32,6 +32,7 @@ import { Masa, TipMasa, AlimentDetaliat } from '../types';
 import { getTipMasaDupaOra, MEAL_CATEGORIES, CATEGORIE_ICONA, insereazaMasaCuPoza, actualizeazaMasaCuPoza, parseAlimente, construiesteAlimenteLaSalvare } from '../lib/mealUtils';
 import { pushOfflineMeal, MasaOfflinePayload } from '../lib/offlineQueue';
 import { localDayKey } from '../lib/dateUtils';
+import { generareUuid } from '../lib/idUtils';
 import { foodPresets, categories, FoodPreset } from '../constants/foodPresets';
 import { ProductSearch } from './food/ProductSearch';
 
@@ -475,7 +476,9 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             // scanul era pastrat. Eroarea de retea nu mai inseamna pierdere.
             try {
               const payloadOffline: MasaOfflinePayload = {
-                id: `offline-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                // BUG-054: id UUID, nu `offline-...` — coloana mese.id e UUID, iar
+                // sincronizarea offline trimite id-ul pentru dedupe pe PK (23505).
+                id: generareUuid(),
                 user_id: user.id,
                 nume: payload.nume,
                 calorii: payload.calorii,
@@ -672,6 +675,9 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       ]}
                       onPress={() => setSelectedCategory(prev => prev === cat.id ? null : cat.id)}
                       activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Categoria ${cat.name}`}
+                      accessibilityState={{ selected: isSelected }}
                     >
                       <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
                       <Text style={[
@@ -783,6 +789,9 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                         setTipMasa(cat.id);
                       }}
                       activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Tip masă ${cat.label}`}
+                      accessibilityState={{ selected: isSelected }}
                     >
                       <Icona size={16} color={isSelected ? colors.textOnAccent : colors.textPrimary} />
                       <Text style={[

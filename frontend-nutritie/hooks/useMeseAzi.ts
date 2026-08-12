@@ -37,6 +37,9 @@ export function useMeseAzi(dataSelectata?: Date) {
   const [greutate, setGreutate] = useState(75);
 
   const [loading, setLoading] = useState(true);
+  // BUG-062: eroare la fetch (mesaj sau null). Fara aceasta, un esec de retea
+  // ar afisa jurnalul gol ca si cum utilizatorul n-ar avea mese — esec silentios.
+  const [eroareFetch, setEroareFetch] = useState<string | null>(null);
   const hasLoadedDateRef = useRef<string | null>(null);
   // Guard anti-race: fiecare apel fetchData primește un id; la final, dacă id-ul
   // curent a fost invalidat (alt fetchData l-a înlocuit), ignorăm setState-urile
@@ -62,6 +65,7 @@ export function useMeseAzi(dataSelectata?: Date) {
       if (isStale()) return; // cerere invalidată (alt fetchData a preluat sau unmount)
       if (userError || !currentUser) {
         setLoading(false);
+        setEroareFetch(userError ? userError.message : null);
         return;
       }
       setUser(currentUser);
@@ -116,7 +120,11 @@ export function useMeseAzi(dataSelectata?: Date) {
 
       if (meseError) {
         console.error("Eroare fetch mese Supabase:", meseError.message);
+        // BUG-062: expunem eroarea — consumatorii afiseaza banner + retry in loc
+        // sa trateze lista goala ca adevar (jurnalul "disparut").
+        setEroareFetch(meseError.message);
       } else if (meseData) {
+        setEroareFetch(null);
         const parsedMese = meseData as Masa[];
         
         let totalC = 0, totalP = 0, totalG = 0, totalCarbs = 0;
@@ -162,6 +170,7 @@ export function useMeseAzi(dataSelectata?: Date) {
       }
     } catch (e) {
       console.error("Eroare neașteptată în hook-ul useMeseAzi:", e);
+      setEroareFetch(e instanceof Error ? e.message : String(e));
     } finally {
       // Marcăm ca încărcat doar dacă suntem încă montați și nu am fost invalidați
       if (!isStale()) {
@@ -250,6 +259,7 @@ export function useMeseAzi(dataSelectata?: Date) {
     greutate,
     user,
     loading,
+    eroareFetch,
     refresh: fetchData,
     optimisticDeleteMeal,
     optimisticAddMeal,

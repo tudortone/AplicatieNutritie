@@ -31,6 +31,16 @@ export default function AuthCallbackScreen() {
     procesat.current = true;
 
     const finalizeaza = async () => {
+      const code = unu(params.code);
+      const accessToken = unu(params.access_token);
+      const refreshToken = unu(params.refresh_token);
+      // H1/BUG-056: emailul de resetare a parolei ajunge aici cu `type=recovery`.
+      // Tipul se citește ÎNAINTE de short-circuit-ul pe sesiune existentă — altfel
+      // un utilizator deja autentificat care deschide link-ul de resetare era
+      // trimis direct în (tabs) fără să ajungă vreodată la setarea parolei noi
+      // (dead-end cu parola veche).
+      const esteRecovery = unu(params.type) === 'recovery';
+
       // G1: pe Android `openAuthSessionAsync` polifilizează prin
       // Linking.addEventListener('url'), la care e abonat și expo-router. Ca
       // urmare, auth.tsx ȘI callback.tsx pot primi același `code` PKCE de două
@@ -38,13 +48,9 @@ export default function AuthCallbackScreen() {
       // schimbăm nimic — doar navigăm, ca să nu dăm „code already used".
       const { data: sesiuneExistenta } = await supabase.auth.getSession();
       if (sesiuneExistenta.session) {
-        router.replace('/(tabs)');
+        router.replace(esteRecovery ? '/auth/noua-parola' : '/(tabs)');
         return;
       }
-
-      const code = unu(params.code);
-      const accessToken = unu(params.access_token);
-      const refreshToken = unu(params.refresh_token);
 
       try {
         if (code) {
@@ -66,11 +72,10 @@ export default function AuthCallbackScreen() {
 
         const { data: sesiune } = await supabase.auth.getSession();
         if (!sesiune.session) throw new Error(t('alerts.mesaje.problemaConexiuneOAuth'));
-        // H1: emailul de resetare a parolei redirecționează aici cu `type=recovery`
-        // în hash-ul URL-ului. După ce sesiunea e stabilită, NU mergem direct în
-        // (tabs) — utilizatorul trebuie să-și seteze parola nouă pe ecranul dedicat.
-        // Altfel ar rămâne blocat cu parola veche (dead-end).
-        if (unu(params.type) === 'recovery') {
+        // H1: după ce sesiunea e stabilită, NU mergem direct în (tabs) pe un
+        // link recovery — utilizatorul trebuie să-și seteze parola nouă pe
+        // ecranul dedicat. Altfel ar rămâne blocat cu parola veche (dead-end).
+        if (esteRecovery) {
           router.replace('/auth/noua-parola');
           return;
         }

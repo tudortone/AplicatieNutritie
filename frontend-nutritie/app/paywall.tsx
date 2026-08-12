@@ -147,6 +147,9 @@ export default function PaywallScreen() {
                     onPress={() => buy(monthly)}
                     disabled={buying != null}
                     style={({ pressed }) => [styles.planCard, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg, opacity: pressed ? 0.85 : 1 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Abonament Lunar ${formatPrice(monthly)} pe lună`}
+                    accessibilityState={{ disabled: buying != null }}
                   >
                     <Text maxFontSizeMultiplier={1.3} style={[styles.planName, { color: colors.textPrimary }]}>Lunar</Text>
                     <Text maxFontSizeMultiplier={1.3} style={[styles.planPrice, { color: colors.textPrimary }]}>{formatPrice(monthly)}</Text>
@@ -164,6 +167,9 @@ export default function PaywallScreen() {
                       styles.planCardHighlight,
                       { borderColor: colors.gold, backgroundColor: `${colors.accent}14`, opacity: pressed ? 0.85 : 1 },
                     ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Abonament Anual ${formatPrice(annual)} pe an`}
+                    accessibilityState={{ disabled: buying != null }}
                   >
                     <View style={[styles.bestTag, { backgroundColor: colors.gold }]}>
                       <Text maxFontSizeMultiplier={1.3} style={[styles.bestTagText, { color: colors.textOnAccent }]}>CEL MAI BUN PREȚ</Text>

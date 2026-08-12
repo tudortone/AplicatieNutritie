@@ -158,4 +158,59 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
     const queueRamasa = await getOfflineQueue();
     expect(queueRamasa.length).toBe(2);
   });
+
+  test('BUG-054 — 23505 (deja inserat) e tratat idempotent, fără duplicat în coadă', async () => {
+    const idUuid = '11111111-1111-4111-8111-111111111111';
+    await pushOfflineMeal({ ...masaSample1, id: idUuid });
+
+    const inserari: any[] = [];
+    const supabaseFake = {
+      from: () => ({
+        insert: async (payload: any) => {
+          inserari.push(payload);
+          return { error: { code: '23505', message: 'duplicate key value violates unique constraint' } };
+        },
+      }),
+    };
+
+    const rezultat = await processOfflineQueue(supabaseFake as any);
+    // id-ul UUID e trimis în insert, ca PK-ul să poată detecta duplicatul
+    expect(inserari[0].id).toBe(idUuid);
+    expect(rezultat.procesate).toBe(1);
+    expect(rezultat.esuate).toBe(0);
+
+    const finalQueue = await getOfflineQueue();
+    expect(finalQueue.length).toBe(0);
+  });
+
+  test('BUG-060 — un payload respins de server nu mai blochează restul cozii', async () => {
+    const idUuid1 = '11111111-1111-4111-8111-111111111111';
+    const idUuid2 = '22222222-2222-4222-8222-222222222222';
+    await pushOfflineMeal({ ...masaSample1, id: idUuid1 });
+    await pushOfflineMeal({ ...masaSample2, id: idUuid2 });
+
+    const inserari: any[] = [];
+    const supabaseFake = {
+      from: () => ({
+        insert: async (payload: any) => {
+          inserari.push(payload);
+          if (payload.id === idUuid1) {
+            // Serverul respinge ACEST payload (nu e eroare de rețea)
+            return { error: { code: '22P02', status: 400, message: 'invalid input syntax' } };
+          }
+          return { error: null };
+        },
+      }),
+    };
+
+    const rezultat = await processOfflineQueue(supabaseFake as any);
+    // a doua masă a fost procesată chiar dacă prima a fost respinsă permanent
+    expect(inserari.length).toBe(2);
+    expect(rezultat.procesate).toBe(1);
+    expect(rezultat.esuate).toBe(1);
+
+    const finalQueue = await getOfflineQueue();
+    expect(finalQueue.length).toBe(1);
+    expect(finalQueue[0].id).toBe(idUuid1); // item respins reîncadrat pentru reîncercare
+  });
 });

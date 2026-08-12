@@ -24,7 +24,9 @@ export class GlobalErrorBoundary extends React.Component<Props, State> {
   // (fără hook-uri). Dacă vreodată boundary-ul iese din AppThemeProvider, revine
   // la paleta midnight din valoarea default a contextului.
   static contextType = ThemeContext;
-  declare context: ThemeContextType;
+  // `this.context` e injectat de React prin `contextType` (nu există câmp
+  // propriu); tipul e forțat la destructuring — fără `declare`, ca Metro/Babel
+  // să compileze (allowDeclareFields e dezactivat).
 
   constructor(props: Props) {
     super(props);
@@ -58,7 +60,7 @@ export class GlobalErrorBoundary extends React.Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
 
-      const { colors } = this.context;
+      const { colors } = this.context as ThemeContextType;
 
       return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>

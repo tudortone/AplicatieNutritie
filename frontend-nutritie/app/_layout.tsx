@@ -1,10 +1,10 @@
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import 'react-native-reanimated';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ActivityIndicator, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -156,12 +156,53 @@ function RootNavigator() {
   const { isOffline } = useNetworkStatus();
   const router = useRouter();
   const segments = useSegments();
+  // Ruta curentă ca string simplu (nu tuple): folosită în guard-ul de sesiune
+  // pentru a detecta /auth/noua-parola. `useSegments()` cu typedRoutes poate
+  // returna tuple (ex. `[string]`) la care accesul pe index pica la typecheck.
+  const pathname = usePathname();
 
   // Verificare server-side a existentei profilului complet. `necunoscut` = inca
   // necunoscut sau eroare de retea — in acest caz gate-ul se comporta ca inainte
   // (fail-open), ca un utilizator offline sa nu fie prins in onboarding.
   const [profilServer, setProfilServer] = useState<'necunoscut' | 'exista' | 'lipsa'>('necunoscut');
   const [profilServerDate, setProfilServerDate] = useState<ProfilRestaurare | null>(null);
+
+  // BUG-063: fetch-ul profilului e reutilizabil (nu doar o dată la montare), ca
+  // să poată fi re-încercat la revenirea conexiunii — altfel un utilizator cu
+  // profil COMPLET în DB dar offline la pornire rămânea blocat în onboarding
+  // (profilServer = 'necunoscut' pentru tot restul sesiunii).
+  const profilServerMountedRef = useRef(true);
+  const incarcaProfilServer = useCallback(async () => {
+    if (!profilServerMountedRef.current) return;
+    const token = session?.access_token;
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+    if (!session || !token || !apiUrl) return;
+    try {
+      const resp = await fetch(buildApiUrl('/user/profil'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!profilServerMountedRef.current) return;
+      if (!resp.ok) {
+        setProfilServer('necunoscut');
+        setProfilServerDate(null);
+        return;
+      }
+      const body = await resp.json() as { exista?: boolean; complet?: boolean; profil?: ProfilRestaurare | null };
+      if (!profilServerMountedRef.current) return;
+      if (body.exista && body.complet && body.profil) {
+        setProfilServer('exista');
+        setProfilServerDate(body.profil);
+      } else {
+        setProfilServer('lipsa');
+        setProfilServerDate(null);
+      }
+    } catch {
+      if (profilServerMountedRef.current) {
+        setProfilServer('necunoscut');
+        setProfilServerDate(null);
+      }
+    }
+  }, [session]);
 
   useEffect(() => { syncFromAsyncStorage(); }, [syncFromAsyncStorage]);
 
@@ -232,42 +273,33 @@ function RootNavigator() {
   }, [isOffline, session]);
 
   useEffect(() => {
+    profilServerMountedRef.current = true;
+    return () => { profilServerMountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
     if (loadingAuth) return;
-    let activ = true;
     if (!session) {
       setProfilServer('necunoscut');
       setProfilServerDate(null);
-      return () => { activ = false; };
+      return;
     }
-    const token = session.access_token;
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL;
-    if (token && apiUrl) {
-      fetch(buildApiUrl('/user/profil'), { headers: { Authorization: `Bearer ${token}` } })
-        .then(async (resp) => {
-          if (!activ) return;
-          if (!resp.ok) {
-            setProfilServer('necunoscut');
-            setProfilServerDate(null);
-            return;
-          }
-          const body = await resp.json() as { exista?: boolean; complet?: boolean; profil?: ProfilRestaurare | null };
-          if (body.exista && body.complet && body.profil) {
-            setProfilServer('exista');
-            setProfilServerDate(body.profil);
-          } else {
-            setProfilServer('lipsa');
-            setProfilServerDate(null);
-          }
-        })
-        .catch(() => {
-          if (activ) {
-            setProfilServer('necunoscut');
-            setProfilServerDate(null);
-          }
-        });
-    }
-    return () => { activ = false; };
-  }, [session, loadingAuth]);
+    void incarcaProfilServer();
+  }, [session, loadingAuth, incarcaProfilServer]);
+
+  // BUG-063: la tranziția offline → online re-încercăm fetch-ul profilului dacă
+  // încă e 'necunoscut' (la pornirea offline un utilizator cu profil COMPLET în
+  // DB rămânea blocat în onboarding — 'necunoscut' nu se reîncerca niciodată,
+  // iar gate-ul de mai jos îl trimitea mereu la /onboarding).
+  const aFostOfflineProfilRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const esteOfflineAcum = isOffline;
+    const aFostOffline = aFostOfflineProfilRef.current;
+    aFostOfflineProfilRef.current = esteOfflineAcum;
+    if (!session || aFostOffline !== true || esteOfflineAcum) return;
+    if (profilServer !== 'necunoscut') return;
+    void incarcaProfilServer();
+  }, [isOffline, session, incarcaProfilServer, profilServer]);
 
   const appDarkTheme = useMemo(() => ({ ...DarkTheme, colors: { ...DarkTheme.colors, background: colors.background } }), [colors.background]);
 
@@ -275,6 +307,19 @@ function RootNavigator() {
     if (loadingAuth) return;
     const inAuth = segments[0] === 'auth';
     const inOnboarding = segments[0] === 'onboarding';
+    // H1/BUG-056: pe /auth/noua-parola (finalizare resetare parolă) NU
+    // redirecționăm automat — nici la onboarding, nici în (tabs) — chiar dacă
+    // sesiunea există sau onboarding-ul nu e terminat. Utilizatorul a ajuns aici
+    // din callback-ul recovery și încă trebuie să-și seteze parola nouă.
+    // Fără excepția asta, guard-ul de mai jos l-ar arunca în onboarding/(tabs)
+    // și resetarea ar rămâne dead-end (parola veche neschimbată).
+    // TS2493: cu typedRoutes activ, useSegments() poate returna tuple `[string]`
+    // (lungime 1) pe checkout curat (fără .expo/types) — accesul `segments[1]`
+    // pică la typecheck. Detectăm ruta prin `pathname` (string simplu), echivalent
+    // semantic: singura rută cu segmentul 'noua-parola' e /auth/noua-parola.
+    const esteRecuperareParola = inAuth && pathname === '/auth/noua-parola';
+    if (esteRecuperareParola) return;
+
     // Ordinea ceruta: intai chestionarul, apoi planul, apoi contul.
     // Cine nu a terminat onboarding-ul nu ajunge la ecranul de autentificare,
     // ca sa nu i se ceara cont inainte sa vada ce primeste.
@@ -295,14 +340,8 @@ function RootNavigator() {
       if (!inAuth) router.replace('/auth');
       return;
     }
-    // H1: pe /auth/noua-parola (finalizare resetare parolă) NU redirecționăm
-    // automat în (tabs) chiar dacă sesiunea există — utilizatorul a ajuns aici
-    // din callback-ul recovery și încă trebuie să-și seteze parola nouă.
-    // Fără excepția asta, guard-ul l-ar arunca în (tabs) și resetarea ar rămâne
-    // dead-end (parola veche neschimbată).
-    const esteRecuperareParola = inAuth && segments[1] === 'noua-parola';
-    if ((inAuth || inOnboarding) && !esteRecuperareParola) router.replace('/(tabs)');
-  }, [session, loadingAuth, isOnboardingDone, setOnboardingDone, profilServer, profilServerDate, segments, router]);
+    if (inAuth || inOnboarding) router.replace('/(tabs)');
+  }, [session, loadingAuth, isOnboardingDone, setOnboardingDone, profilServer, profilServerDate, segments, pathname, router]);
 
   if (loadingAuth) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}><ActivityIndicator size="large" color={colors.accent} /></View>;
   const push = { animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, gestureEnabled: true } as const;

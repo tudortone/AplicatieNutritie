@@ -75,6 +75,27 @@ export async function setManagedReminders(accountId: string | undefined, ids: st
   await AsyncStorage.setItem(MANAGED_KEY, JSON.stringify(stare));
 }
 
+/**
+ * Adaugă UN id în registry-ul de mementouri gestionate, fără să șteargă id-urile
+ * existente (merge, nu înlocuire). Necesar pentru notificările secundare (ex.
+ * expirare cămară) care coexistă cu mementurile de masă: altfel orice notificare
+ * care nu e în registry supraviețuiește logout/revocare/comutare cont.
+ */
+export async function registerManagedReminder(id: string): Promise<void> {
+  const reg = await getManagedReminders();
+  if (!reg.ids.includes(id)) {
+    await setManagedReminders(reg.accountId, [...reg.ids, id]);
+  }
+}
+
+/** Scoate UN id din registry-ul de mementouri gestionate (dacă există). */
+export async function unregisterManagedReminder(id: string): Promise<void> {
+  const reg = await getManagedReminders();
+  if (reg.ids.includes(id)) {
+    await setManagedReminders(reg.accountId, reg.ids.filter((x) => x !== id));
+  }
+}
+
 export async function clearManagedReminders(): Promise<void> {
   await AsyncStorage.setItem(MANAGED_KEY, JSON.stringify(MANAGED_GOL));
 }

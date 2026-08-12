@@ -111,7 +111,10 @@
       "sending": "Se trimite la modelul vizual AI...",
       "identifying": "Se identifică ingredientele și alimentele...",
       "calculating": "Se calculează gramajele și valorile nutriționale..."
-    }
+    },
+    "discardScanTitle": "Renunți la scanare?",
+    "discardScanMessage": "Ai un rezultat nesalvat. Dacă părăsești ecranul, scanarea se pierde.",
+    "discardScanAction": "Renunță la scanare"
   },
   "chat": {
     "welcome": "Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.",

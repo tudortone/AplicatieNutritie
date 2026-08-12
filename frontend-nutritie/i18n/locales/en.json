@@ -111,7 +111,10 @@
       "sending": "Sending to AI vision model...",
       "identifying": "Identifying ingredients and food...",
       "calculating": "Calculating grams and nutrition values..."
-    }
+    },
+    "discardScanTitle": "Discard the scan?",
+    "discardScanMessage": "You have an unsaved result. If you leave this screen, the scan will be lost.",
+    "discardScanAction": "Discard scan"
   },
   "chat": {
     "welcome": "Hi! I'm your AI nutrition assistant. I can suggest meals, analyze today's diet, or answer any nutrition question.",

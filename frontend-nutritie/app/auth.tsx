@@ -389,6 +389,9 @@ export default function AuthScreen() {
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   style={{ padding: 14, marginRight: 2 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Ascunde parola' : 'Arată parola'}
+                  accessibilityState={{ selected: showPassword }}
                 >
                   {showPassword ? (
                     <EyeOff size={18} color={colors.textSecondary} />
@@ -448,7 +451,12 @@ export default function AuthScreen() {
               )}
 
               {!isSignUp && (
-                <TouchableOpacity style={styles.forgotBtn} onPress={resetParola}>
+                <TouchableOpacity
+                  style={styles.forgotBtn}
+                  onPress={resetParola}
+                  accessibilityRole="button"
+                  accessibilityLabel="Ai uitat parola? Recuperează parola"
+                >
                   <Text style={[styles.forgotText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>Ai uitat parola?</Text>
                 </TouchableOpacity>
               )}
@@ -484,6 +492,8 @@ export default function AuthScreen() {
                   setAuthError(null);
                   setIsSignUp(!isSignUp);
                 }}
+                accessibilityRole="button"
+                accessibilityLabel={isSignUp ? 'Ai deja un cont? Conectează-te' : 'Nu ai cont? Înregistrează-te'}
               >
                 <Text style={[styles.toggleText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
                   {isSignUp ? 'Ai deja un cont? ' : 'Nu ai cont? '}

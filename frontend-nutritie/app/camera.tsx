@@ -2,14 +2,14 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator, Image, Pressable, Text, View, StyleSheet, TouchableOpacity,
-  ScrollView, Alert, KeyboardAvoidingView, Platform, Modal,
+  ScrollView, Alert, KeyboardAvoidingView, Platform, Modal, Linking,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useNavigation } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../supabase';
@@ -405,6 +405,43 @@ export default function CameraScreen() {
     setSeIncarca(false);
   }, []);
 
+  // BUG-065: pe Android, butonul/gestul „Înapoi" peste modalul fullScreen ejecta
+  // ecranul direct, aruncând un scan în review fără confirmare și fără să
+  // șteargă draftul persistent local. Gardul beforeRemove confirmă renunțarea;
+  // `permiteNavigareRef` marchează navigările INTENȚIONATE (X, salvare reușită,
+  // confirmare din dialog) ca să nu fie interceptate de propriul dialog.
+  const permitereNavigareRef = useRef(false);
+  const navigation = useNavigation();
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (permitereNavigareRef.current) {
+        permitereNavigareRef.current = false;
+        return;
+      }
+      const deConfirmat = rezultat.length > 0 || seIncarca;
+      if (!deConfirmat) return;
+      e.preventDefault();
+      Alert.alert(
+        t('camera.discardScanTitle'),
+        t('camera.discardScanMessage'),
+        [
+          { text: t('alerts.butoane.anuleaza'), style: 'cancel' },
+          {
+            text: t('camera.discardScanAction'),
+            style: 'destructive',
+            onPress: () => {
+              anuleazaScanarea();
+              permitereNavigareRef.current = true;
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ],
+        { cancelable: true }
+      );
+    });
+    return unsubscribe;
+  }, [navigation, rezultat.length, seIncarca, anuleazaScanarea, t]);
+
   const trimiteCorectieText = async (textCorectie: string) => {
     try {
       if (__DEV__) console.log('[Camera] Trimit corecție:', textCorectie.substring(0, 50));
@@ -567,7 +604,7 @@ export default function CameraScreen() {
           // Idempotență: masa a fost deja adăugată (același id) — fără duplicat.
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           Alert.alert(t('alerts.titluri.succes'), t('alerts.mesaje.masaAdaugataJurnal'), [
-            { text: t('alerts.butoane.superPunct'), onPress: () => router.replace('/(tabs)') },
+            { text: t('alerts.butoane.superPunct'), onPress: () => { permitereNavigareRef.current = true; router.replace('/(tabs)'); } },
           ]);
           return;
         }
@@ -576,7 +613,7 @@ export default function CameraScreen() {
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(t('alerts.titluri.succes'), t('alerts.mesaje.masaAdaugataJurnal'), [
-        { text: t('alerts.butoane.superPunct'), onPress: () => router.replace('/(tabs)') },
+        { text: t('alerts.butoane.superPunct'), onPress: () => { permitereNavigareRef.current = true; router.replace('/(tabs)'); } },
       ]);
     } catch (e: unknown) {
       console.error('[adaugaInJurnal]', e);
@@ -592,7 +629,7 @@ export default function CameraScreen() {
         Alert.alert(
           'Salvat offline',
           'Masa a fost salvată local în coada offline și va fi sincronizată automat la reconectarea la rețea.',
-          [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+          [{ text: 'OK', onPress: () => { permitereNavigareRef.current = true; router.replace('/(tabs)'); } }]
         );
       } catch (errOffline) {
         Alert.alert(t('alerts.titluri.eroareSalvare'), mesajEroare || t('alerts.mesaje.eroareNecunoscutaSalvareMasa'));
@@ -605,7 +642,13 @@ export default function CameraScreen() {
 
 
   if (!permission) {
-    return <View style={[styles.container, { backgroundColor: colors.background }]} />;
+    // BUG-059: ecran cu spinner în loc de View gol — fără flash alb/negru pe
+    // starea inițială (permission nu e încă încărcat).
+    return (
+      <View style={[styles.permissionContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    );
   }
 
   if (!permission.granted) {
@@ -620,13 +663,31 @@ export default function CameraScreen() {
           <Text maxFontSizeMultiplier={1.3} style={[styles.permissionTitle, { color: colors.textPrimary }]}>Permisiune Cameră</Text>
           <Text maxFontSizeMultiplier={1.3} style={[styles.permissionSub, { color: colors.textSecondary }]}>NutriAI are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.</Text>
           
-          <Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(600).delay(200)} style={[styles.permissionBtn, { shadowColor: colors.accent }]}>
-            <TouchableOpacity onPress={requestPermission} accessibilityRole="button" accessibilityLabel="Permite accesul la cameră">
-              <LinearGradient colors={colors.accentGradient} style={styles.permissionBtnGrad}>
-                <Text maxFontSizeMultiplier={1.3} style={[styles.permissionBtnText, { color: colors.background }]}>Permite accesul</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </Animated.View>
+          {/* BUG-059: când permisiunea e refuzată DEFINITIV (canAskAgain=false pe
+              Android), butonul de cerere nu mai face nimic — dead-end. În loc de
+              asta ghidăm utilizatorul către setările aplicației. */}
+          {permission.canAskAgain === false ? (
+            <>
+              <Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(600).delay(200)} style={[styles.permissionBtn, { shadowColor: colors.accent }]}>
+                <TouchableOpacity onPress={() => Linking.openSettings()} accessibilityRole="button" accessibilityLabel="Deschide setările aplicației" accessibilityHint="Permisiunea camerei a fost refuzată definitiv; deschide setările pentru a o activa">
+                  <LinearGradient colors={colors.accentGradient} style={styles.permissionBtnGrad}>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.permissionBtnText, { color: colors.background }]}>Deschide Setări</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animated.View>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.permissionDeniedText, { color: colors.textSecondary }]}>
+                Ai refuzat accesul la cameră. Deschide setările aplicației și activează permisiunea camerei.
+              </Text>
+            </>
+          ) : (
+            <Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(600).delay(200)} style={[styles.permissionBtn, { shadowColor: colors.accent }]}>
+              <TouchableOpacity onPress={requestPermission} accessibilityRole="button" accessibilityLabel="Permite accesul la cameră">
+                <LinearGradient colors={colors.accentGradient} style={styles.permissionBtnGrad}>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.permissionBtnText, { color: colors.background }]}>Permite accesul</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
 
           <TouchableOpacity style={styles.cancelLink} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi la ecranul anterior" hitSlop={12}>
             <Text style={[styles.cancelLinkText, { color: colors.textSecondary }]}>Înapoi</Text>
@@ -664,7 +725,7 @@ export default function CameraScreen() {
         {/* Buton X în Dreapta (Fără să se suprapună) */}
         <TouchableOpacity
           style={styles.closeButton}
-          onPress={() => { anuleazaScanarea(); router.back(); }}
+          onPress={() => { permitereNavigareRef.current = true; anuleazaScanarea(); router.back(); }}
           hitSlop={4}
           accessibilityRole="button"
           accessibilityLabel="Închide camera"
@@ -1038,6 +1099,7 @@ const styles = StyleSheet.create({
   permissionIconGrad: { width: 96, height: 96, borderRadius: 32, justifyContent: 'center', alignItems: 'center' },
   permissionTitle: { fontSize: 36, fontWeight: '900', letterSpacing: -1, marginBottom: 12 },
   permissionSub: { fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 40, maxWidth: '85%' },
+  permissionDeniedText: { fontSize: 13, textAlign: 'center', lineHeight: 19, marginTop: 16, maxWidth: '90%' },
   permissionBtn: { width: '100%', borderRadius: 20, overflow: 'hidden', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 10 },
   permissionBtnGrad: { padding: 20, alignItems: 'center' },
   permissionBtnText: { fontSize: 18, fontWeight: '900' },

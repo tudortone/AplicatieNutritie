@@ -13,7 +13,7 @@ import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Flame, Activity, PlusCircle, ChevronRight, Eye, EyeOff, Utensils, Calendar } from 'lucide-react-native';
+import { Flame, Activity, PlusCircle, ChevronRight, Eye, EyeOff, Utensils, Calendar, AlertCircle } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi, type CategorieMasaGrupata } from '../../hooks/useMeseAzi';
@@ -134,6 +134,7 @@ export default function HistoryScreen() {
     totalProteine,
     caloriiTinta,
     loading,
+    eroareFetch,
     refresh,
     optimisticDeleteMeal,
     optimisticAddMeal
@@ -225,6 +226,13 @@ export default function HistoryScreen() {
       const { error } = await actualizeazaMasaCuPoza(supabase, updated.id, payload);
       if (error) {
         console.error('[Istoric] Actualizare masa esuata:', error.message);
+        // BUG-055: update-ul ingredientului e optimist — daca salvare esueaza,
+        // refresh-ul va readuce starea server. Fara mesaj vizibil, editarea
+        // esuata parea ca "a mers dar a disparut" (eroare silentioasa).
+        Alert.alert(
+          t('alerts.titluri.eroareSalvare'),
+          t('alerts.mesaje.eroareSalvareDinamica', { eroare: error.message }),
+        );
       }
       // Reconciliere optimistă: refresh-ul reapun starea server, guverdează
       // divergențe dacă salvare a eșuat.
@@ -382,6 +390,7 @@ export default function HistoryScreen() {
               onPress={toggleAfisarePoze}
               accessibilityRole="button"
               accessibilityLabel={afisarePoze ? t('jurnal.hidePhotos') : t('jurnal.showPhotos')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               {afisarePoze ? <Eye size={18} color={colors.accent} /> : <EyeOff size={18} color={colors.textSecondary} />}
             </TouchableOpacity>
@@ -474,6 +483,31 @@ export default function HistoryScreen() {
     </>
   );
 
+  // BUG-062: banner vizibil când fetch-ul jurnalului a eșuat — fără el, lista
+  // goală ar părea că utilizatorul nu are mese (eșec silențios). Retry -> refresh.
+  const eroareBanner = eroareFetch ? (
+    <View
+      style={[styles.eroareBanner, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}
+      accessibilityRole="alert"
+    >
+      <AlertCircle size={18} color={colors.danger} style={{ marginRight: 8 }} />
+      <Text style={[styles.eroareText, { color: colors.danger }]} maxFontSizeMultiplier={1.3}>
+        {t('alerts.mesaje.problemaConexiune')}
+      </Text>
+      <TouchableOpacity
+        onPress={() => refresh(false, true)}
+        style={styles.eroareBtn}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityRole="button"
+        accessibilityLabel={t('chat.retry')}
+      >
+        <Text style={[styles.eroareBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
+          {t('chat.retry')}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  ) : null;
+
   // Skeleton Loader pe perioada încărcării
   if (loading) {
     return (
@@ -511,15 +545,19 @@ export default function HistoryScreen() {
           renderItem={({ item }) => redareItem(item)}
           onRefresh={onRefresh}
           refreshing={false}
-          ListHeaderComponent={renderHeader()}
+          ListHeaderComponent={<>{eroareBanner}{renderHeader()}</>}
           ListEmptyComponent={
-            <EmptyState
-              icon="🍽️"
-              title={t('jurnal.empty.title')}
-              subtitle={t('jurnal.empty.subtitle')}
-              actionLabel={t('jurnal.empty.action')}
-              onAction={() => deschideAddMeal()}
-            />
+            eroareFetch ? (
+              eroareBanner
+            ) : (
+              <EmptyState
+                icon="🍽️"
+                title={t('jurnal.empty.title')}
+                subtitle={t('jurnal.empty.subtitle')}
+                actionLabel={t('jurnal.empty.action')}
+                onAction={() => deschideAddMeal()}
+              />
+            )
           }
         />
       </View>
@@ -568,6 +606,12 @@ const styles = StyleSheet.create({
   title: { fontSize: 36, fontWeight: '900', letterSpacing: -0.5 },
   addBtnHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1 },
   addBtnHeaderText: { fontSize: 13, fontWeight: '800' },
+
+  // BUG-062: banner eroare la fetch-ul jurnalului (cu retry)
+  eroareBanner: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16 },
+  eroareText: { flex: 1, fontSize: 13, fontWeight: '600' },
+  eroareBtn: { marginLeft: 8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  eroareBtnText: { fontSize: 13, fontWeight: '800' },
 
   // Summary card
   summaryCard: { borderRadius: 28, overflow: 'hidden', borderWidth: 1, marginBottom: 24 },

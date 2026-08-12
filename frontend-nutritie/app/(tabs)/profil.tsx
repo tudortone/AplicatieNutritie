@@ -34,6 +34,7 @@ import { API_URL } from '../../constants/config';
 import { API_PREFIX } from '../../lib/api';
 import { getLegalUrls } from '../../lib/legalUrls';
 import { TARGETURI_PENDING_KEY } from '../../lib/sincronizeazaTargeturi';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 // Adresa oficiala de suport pentru sesizari si suport utilizatori.
 const EMAIL_SUPORT = 'suport@nutriai.app';
@@ -61,7 +62,8 @@ export default function ProfilScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showSuccessAnim, setShowSuccessAnim] = useState(false);
   const [feedbackVisible, setFeedbackVisible] = useState(false);
-  
+  const reduceMotion = useReducedMotion();
+
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
 
@@ -500,6 +502,7 @@ export default function ProfilScreen() {
                   onValueChange={(val) => { schimbaRemindere(val); }}
                   trackColor={{ false: '#3f3f3f', true: colors.accent + '80' }}
                   thumbColor={notificationsEnabled ? colors.accent : '#f4f3f4'}
+                  accessibilityLabel="Remindere Zilnice de Masă"
                 />
               </View>
               {isExpoGo && (
@@ -535,6 +538,7 @@ export default function ProfilScreen() {
                     onValueChange={(val) => { toggleBiometric(val); }}
                     trackColor={{ false: colors.surfaceElevated, true: colors.accent }}
                     thumbColor={Platform.OS === 'ios' ? '#FFFFFF' : (isEnabled ? colors.background : '#f4f3f4')}
+                    accessibilityLabel={`Blocare cu ${biometricType}`}
                   />
                 </View>
               </LinearGradient>
@@ -560,12 +564,13 @@ export default function ProfilScreen() {
                 </View>
                 <Switch
                   value={healthSyncEnabled}
-                  onValueChange={(val) => { 
-                    toggleHealthSync(val); 
+                  onValueChange={(val) => {
+                    toggleHealthSync(val);
                     if (val) AsyncStorage.removeItem('ascundeCardHealth');
                   }}
                   trackColor={{ false: colors.surfaceElevated, true: colors.accent }}
                   thumbColor={Platform.OS === 'ios' ? '#FFFFFF' : (healthSyncEnabled ? colors.background : '#f4f3f4')}
+                  accessibilityLabel={`Sincronizare Activă (${platformName})`}
                 />
               </View>
 
@@ -1008,10 +1013,10 @@ export default function ProfilScreen() {
 
       {/* Success Animation Modal Overlay */}
       {showSuccessAnim && (
-        <Animated.View entering={FadeInDown.duration(350).springify()} style={styles.successOverlay}>
+        <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(350).springify()} style={styles.successOverlay}>
           <BlurView intensity={85} tint="dark" style={[styles.successCard, { borderColor: colors.accent }]}>
             <LinearGradient colors={[colors.accent + '25', 'rgba(0,0,0,0.85)']} style={styles.successGrad}>
-              <Animated.View entering={FadeInUp.duration(400).delay(100).springify()} style={[styles.successIconCircle, { backgroundColor: colors.accent }]}>
+              <Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(400).delay(100).springify()} style={[styles.successIconCircle, { backgroundColor: colors.accent }]}>
                 <CheckCircle2 size={44} color={colors.textOnAccent} />
               </Animated.View>
               <Text maxFontSizeMultiplier={1.3} style={[styles.successTitle, { color: colors.textPrimary }]}>Profil Actualizat!</Text>

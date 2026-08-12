@@ -8,7 +8,11 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ProdusCamara } from '../hooks/useCamara';
-import { getConsent } from './notificationConsent';
+import {
+  getConsent,
+  registerManagedReminder,
+  unregisterManagedReminder,
+} from './notificationConsent';
 
 const PANTRY_NOTIF_KEY = 'nutriai_pantry_expiry_notif_enabled';
 
@@ -48,8 +52,10 @@ export async function checkAndSchedulePantryExpiryNotification(produse: ProdusCa
 
     // Găsim toate notificările programate în prezent
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const iduriPantryVeche: string[] = [];
     for (const notif of scheduled) {
       if (notif.content.data?.type === 'pantry_expiry') {
+        iduriPantryVeche.push(notif.identifier);
         await Notifications.cancelScheduledNotificationAsync(notif.identifier);
       }
     }
@@ -63,7 +69,11 @@ export async function checkAndSchedulePantryExpiryNotification(produse: ProdusCa
     );
 
     if (expiringSoon.length === 0) {
-      // Nu mai avem produse în prag de expirare — nu reprogramăm nimic
+      // Nu mai avem produse în prag de expirare — nu reprogramăm nimic.
+      // BUG-057: scoatem din registry id-urile vechi de cămară deja anulate.
+      for (const idVechi of iduriPantryVeche) {
+        await unregisterManagedReminder(idVechi);
+      }
       await AsyncStorage.setItem(PANTRY_NOTIF_KEY, 'false');
       return;
     }
@@ -75,7 +85,7 @@ export async function checkAndSchedulePantryExpiryNotification(produse: ProdusCa
       .join(', ');
     const plusOthers = expiringSoon.length > 3 ? ` și încă ${expiringSoon.length - 3} produse` : '';
 
-    await Notifications.scheduleNotificationAsync({
+    const pantryId = await Notifications.scheduleNotificationAsync({
       content: {
         title: '⚠️ Cămara NutriAI • Expirare Iminentă!',
         body: `Ai ${expiringSoon.length} aliment(e) pe cale să expire: ${numeAlimente}${plusOthers}. Intră în Cămară și folosește „Gătește cu AI” pentru o rețetă rapidă!`,
@@ -89,6 +99,15 @@ export async function checkAndSchedulePantryExpiryNotification(produse: ProdusCa
         minute: 0,
       },
     });
+
+    // BUG-057: înregistrăm id-ul în registry-ul de mementouri gestionate, ca
+    // logout/revocare/comutare cont (cancelManagedReminders) să o anuleze și pe
+    // ea. Scop izolare: notificările contului A nu persistă după deconectare.
+    // Apoi scoatem din registry id-urile vechi de cămară (deja anulate mai sus).
+    await registerManagedReminder(pantryId);
+    for (const idVechi of iduriPantryVeche) {
+      await unregisterManagedReminder(idVechi);
+    }
 
     await AsyncStorage.setItem(PANTRY_NOTIF_KEY, 'true');
   } catch (err) {

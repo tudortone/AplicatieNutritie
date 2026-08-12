@@ -18,10 +18,25 @@ export interface MasaOfflinePayload {
   imagine_url?: string | null;
 }
 
+export interface SupabaseEroare {
+  message: string;
+  code?: string;
+  status?: number;
+}
+
 export interface SupabaseMinimalClient {
   from: (table: string) => {
-    insert: (payload: any) => PromiseLike<{ error: { message: string } | null }> | Promise<{ error: { message: string } | null }>;
+    insert: (payload: any) => PromiseLike<{ error: SupabaseEroare | null }> | Promise<{ error: SupabaseEroare | null }>;
   };
+}
+
+// Mesele offline au id UUID (generareUuid/generareUuidDeterminist). Intrarile
+// vechi din coada (inainte de BUG-054) pot avea id de tip `offline-...` care nu
+// este UUID valid — la insert il omitem ca serverul sa genereze unul, altfel
+// am trimite un text in coloana UUID si am bloca sincronizarea (22P02).
+const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function esteUuidValid(v: string): boolean {
+  return RE_UUID.test(v);
 }
 
 
@@ -85,11 +100,16 @@ export async function processOfflineQueue(supabaseClient: SupabaseMinimalClient)
 
   let procesate = 0;
   let esuate = 0;
+  const pentruReincercare: MasaOfflinePayload[] = [];
 
   while (queue.length > 0) {
     const masa = queue[0];
     try {
       const { error } = await supabaseClient.from('mese').insert({
+        // BUG-054: trimitem id-ul deterministic al meselor offline. Daca un sync
+        // partial a inserat deja randul, PK-ul UUID (23505) il detecteaza si
+        // tratam eroarea ca succes — fara masa duplicata la reluare.
+        ...(esteUuidValid(masa.id) ? { id: masa.id } : {}),
         user_id: masa.user_id,
         nume: masa.nume,
         calorii: masa.calorii,
@@ -108,20 +128,43 @@ export async function processOfflineQueue(supabaseClient: SupabaseMinimalClient)
       });
 
       if (error) {
-        // Dacă e o eroare de rețea/server (ex: conexiune indisponibilă), oprim procesarea ca să păstrăm ordinea FIFO
+        if (error.code === '23505') {
+          // BUG-054: rand deja inserat de o sincronizare partiala precedenta
+          // (insertul a ajuns la DB, dar pop-ul din coada a esuat). Idempotent:
+          // il scoatem din coada si il consideram procesat, fara duplicat.
+          queue.shift();
+          procesate++;
+          continue;
+        }
+
+        if (!error.code && !error.status) {
+          // Eroare de transport (fara cod Postgres/status HTTP) — reteaua e
+          // indisponibila. Oprim pasul ca sa pastram ordinea FIFO si mesajele.
+          esuate++;
+          break;
+        }
+
+        // BUG-060: serverul a raspuns cu o eroare pentru ACEST payload (ex.
+        // constraint, payload invalid). Un singur item respins NU mai blocheaza
+        // restul cozii: il reincadram la final pentru o reincercare ulterioara
+        // si continuam cu urmatoarele (daca totul s-ar bloca pe primul, restul
+        // meselor offline nu s-ar sincroniza niciodata).
+        queue.shift();
+        pentruReincercare.push(masa);
         esuate++;
-        break;
+        continue;
       }
 
       // Succes -> scoatem primul element din coadă
       queue.shift();
       procesate++;
-      await saveOfflineQueue(queue);
     } catch {
+      // Eroare lansata (fetch rejected) — tot retea indisponibila. Pastram masa.
       esuate++;
       break;
     }
   }
 
+  await saveOfflineQueue([...queue, ...pentruReincercare]);
   return { procesate, esuate };
 }

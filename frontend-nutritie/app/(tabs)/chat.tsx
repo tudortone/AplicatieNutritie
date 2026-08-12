@@ -253,6 +253,19 @@ export default function ChatScreen() {
   const [mesaje, setMesaje] = useState<ChatMessage[]>([
     buleMesaj('ai', t('chat.welcome'))
   ]);
+  // BUG-058: plafon de retenție a istoricului — se păstrează ULTIMELE 300 de
+  // mesaje. BUG-039 eliminase cap-ul vechi de 50 (conversațiile lungi pierdeau
+  // primele mesaje la reîncărcare); pragul de aici e de 6× mai mare și taie
+  // DOAR din față (cele mai vechi), doar când o zi depășește 300 de mesaje.
+  // O zi normală de chat e mult sub prag, deci BUG-039 rămâne acoperit. Fără
+  // plafon, array-ul și scrierea AsyncStorage ar crește nelimitat (creștere
+  // necontrolată de memorie + stocare).
+  const MAX_CHAT_HISTORY = 300;
+  const cuPlafon = (lista: ChatMessage[]): ChatMessage[] =>
+    lista.length > MAX_CHAT_HISTORY ? lista.slice(lista.length - MAX_CHAT_HISTORY) : lista;
+  const adaugaMesaj = (m: ChatMessage) => {
+    setMesaje((prev) => cuPlafon([...prev, m]));
+  };
   // REMED-006: categoria aleasă explicit de utilizator înainte de a insera
   // propunerea (null => confirmarea rămâne blocată; fără auto-insert).
   const [proposalCategory, setProposalCategory] = useState<TipMasa | null>(null);
@@ -344,7 +357,9 @@ export default function ChatScreen() {
           }
         }
         if (parsed && parsed.length > 0) {
-          setMesaje(parsed);
+          // BUG-058: istoricul salvat dinainte de plafon poate fi oricât de lung
+          // — îl tăiem la încărcare ca să nu realimenteze creșterea nelimitată.
+          setMesaje(cuPlafon(parsed));
           mesajeKeyRef.current = storageKey;
         } else if (mesajeKeyRef.current !== storageKey) {
           // zi/sesiune noua fara istoric salvat -> pornim curat.
@@ -370,9 +385,11 @@ export default function ChatScreen() {
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
       const key = mesajeKeyRef.current ?? getChatStorageKey();
-      // BUG-039: istoricul zilei se salvează INTEGRAL (nu ultimele 50) — altfel
-      // conversațiile lungi pierdeau primele mesaje la reîncărcare. Contextul
-      // trimis către model rămâne limitat la ultimele (slice la trimitere).
+      // BUG-039+BUG-058: istoricul zilei se salvează INTEGRAL, cu plafonul de
+      // retenție aplicat deja pe `mesaje` (últimele 300) — BUG-039: conversațiile
+      // lungi nu mai pierd primele mesaje (prag de 50 era prea mic); BUG-058:
+      // scrierea e mărginită (fără creștere necontrolată) și debounce-ul de 800ms
+      // împiedică rescrierea întregului istoric la fiecare mesaj.
       AsyncStorage.setItem(key, JSON.stringify(mesaje)).catch((e) =>
         console.error('Eroare la salvarea istoricului chat:', e),
       );
@@ -433,7 +450,7 @@ useEffect(() => {
     };
   }, []);
 
-  const executaTrimitereMesaj = async (mesajText: string) => {
+  const executaTrimitereMesaj = async (mesajText: string, esteRetry = false) => {
     // CHAT-003: gardă anti-concurență la nivelul întregii funcții — acoperă
     // trimitePromptDirect, chip-urile rapide, generatorul de rețete și input-ul.
     // Fără ea se lansa o a doua cerere /chat în timp ce prima era în zbor
@@ -441,12 +458,16 @@ useEffect(() => {
     if (loadingRef.current) return;
     if (!mesajText.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setMesaje(prev => [...prev, buleMesaj('user', mesajText)]);
+    // BUG-061: la retry (esteRetry=true) bulele de utilizator există deja în
+    // istoric — nu o adăugăm încă o dată, altfel retrimiterea ar duplica bulele.
+    if (!esteRetry) {
+      adaugaMesaj(buleMesaj('user', mesajText));
+    }
     setLoadingChat(true);
     loadingRef.current = true;
 
     if (!session) {
-      setMesaje(prev => [...prev, buleMesaj('ai', t('chat.errorNotAuthed'), true)]);
+      adaugaMesaj(buleMesaj('ai', t('chat.errorNotAuthed'), true));
       setLoadingChat(false);
       loadingRef.current = false;
       return;
@@ -467,12 +488,12 @@ useEffect(() => {
           setMealProposal(propunere);
           setProposalCategory(null); // REMED-006: categorie curată la fiecare propunere nouă.
           setMealProposalVisible(true);
-          setMesaje(prev => [...prev, buleMesaj('ai', t('chat.foodsIdentified'))]);
+          adaugaMesaj(buleMesaj('ai', t('chat.foodsIdentified')));
           return;
         } catch (errMeal) {
           const mesajEroareMasa = errMeal instanceof Error ? errMeal.message : null;
           console.warn('Eroare rută dedicată de masă:', mesajEroareMasa || errMeal);
-          setMesaje(prev => [...prev, buleMesaj('ai', mesajEroareMasa || t('chat.errorMealProposal'), true)]);
+          adaugaMesaj(buleMesaj('ai', mesajEroareMasa || t('chat.errorMealProposal'), true));
           return;
         }
       }
@@ -515,7 +536,7 @@ useEffect(() => {
       // CHAT-008a: 2xx cu corp non-JSON — mesaj clar, nu „Eroare la procesarea
       // răspunsului." (care sugera greșit o problemă internă a AI-ului).
       if (raspuns.ok && date === null) {
-        setMesaje(prev => [...prev, buleMesaj('ai', t('chat.errorInvalidResponse'), true)]);
+        adaugaMesaj(buleMesaj('ai', t('chat.errorInvalidResponse'), true));
         return;
       }
 
@@ -531,7 +552,7 @@ useEffect(() => {
         } else {
           textEroare = mesajServer || t('chat.errorServer');
         }
-        setMesaje(prev => [...prev, buleMesaj('ai', textEroare, true)]);
+        adaugaMesaj(buleMesaj('ai', textEroare, true));
         return;
       }
 
@@ -554,9 +575,9 @@ useEffect(() => {
         raspunsText = t('chat.foodsIdentified');
       }
 
-      setMesaje(prev => [...prev, buleMesaj('ai', raspunsText)]);
+      adaugaMesaj(buleMesaj('ai', raspunsText));
     } catch {
-      setMesaje(prev => [...prev, buleMesaj('ai', t('chat.errorConnection'), true)]);
+      adaugaMesaj(buleMesaj('ai', t('chat.errorConnection'), true));
     } finally {
       clearTimeout(timeoutId);
       if (activeRequestRef.current === controller) activeRequestRef.current = null;
@@ -568,6 +589,11 @@ useEffect(() => {
 
   const trimiteMesaj = async () => {
     if (!chatInput.trim()) return;
+    // BUG-061: dacă o cerere e în zbor, NU ștergem input-ul înainte de gardă —
+    // altfel textul proaspăt scris de utilizator ar fi șters și apoi aruncat
+    // silențios (mesaj pierdut). Păstrăm textul în input, ca să poată fi trimis
+    // după ce cererea curentă se termină.
+    if (loadingRef.current) return;
     const inputCurent = chatInput;
     setChatInput('');
     await executaTrimitereMesaj(inputCurent);
@@ -625,7 +651,7 @@ useEffect(() => {
       setMealProposal(null);
       setProposalCategory(null);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setMesaje(prev => [...prev, buleMesaj('ai', t('chat.mealSavedSuccess'))]);
+      adaugaMesaj(buleMesaj('ai', t('chat.mealSavedSuccess')));
 
     } catch (e: unknown) {
       console.error('Eroare salvare propunere masă:', e);
@@ -656,7 +682,9 @@ useEffect(() => {
     for (let i = mesajeCurente.length - 1; i >= 0; i--) {
       const m = mesajeCurente[i];
       if (m.role === 'user' && !m.isError && m.text.trim()) {
-        void executareRef.current(m.text);
+        // BUG-061: esteRetry=true — textul utilizatorului e deja afișat; nu-l
+        // duplicăm ca bulă nouă, doar re-trimitem aceeași întrebare.
+        void executareRef.current(m.text, true);
         return;
       }
     }

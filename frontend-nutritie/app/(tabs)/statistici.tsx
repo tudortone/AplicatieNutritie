@@ -78,6 +78,7 @@ const AnimatedTrendArrow = ({ isLoss, color }: { isLoss: boolean; color: string 
 
 export default function StatisticiScreen() {
   const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
   const { t } = useTranslation();
   const { scrollPaddingTop, scrollPaddingBottom } = useResponsiveLayout();
   const [loading, setLoading] = useState(true);
@@ -332,7 +333,7 @@ export default function StatisticiScreen() {
           <RefreshControl refreshing={loading} onRefresh={fetchStatistici} tintColor={colors.accent} colors={[colors.accent]} />
         }
       >
-        <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
+        <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(500)} style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>Evoluția Ta</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             {activeTab === 'calorii' ? 'Analiza detaliată a aportului pe ultimele 7 zile' : 'Monitorizarea greutății și predicție AI'}
@@ -369,7 +370,7 @@ export default function StatisticiScreen() {
         {activeTab === 'greutate' ? (
           <>
             {/* Weight Summary Row */}
-            <Animated.View entering={FadeInDown.duration(600).delay(100)} style={styles.summaryRow}>
+            <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(600).delay(100)} style={styles.summaryRow}>
               <TouchableOpacity
                 style={[styles.summaryBox, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setModalInitialTab('curenta'); setModalGreutateVisible(true); }}

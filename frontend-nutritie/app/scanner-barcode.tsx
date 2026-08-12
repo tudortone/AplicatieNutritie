@@ -10,7 +10,8 @@ import {
   FlatList,
   Platform,
   Modal,
-  Pressable
+  Pressable,
+  Linking
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -173,7 +174,12 @@ export default function ScannerBarcodeScreen() {
   }, [produse, stergeProdus, modificaCantitate, showBanner]);
 
   if (!permission) {
-    return <View style={[styles.container, { backgroundColor: colors.background }]} />;
+    // BUG-059: ecran cu spinner în loc de View gol — fără flash pe starea inițială.
+    return (
+      <View style={[styles.permContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    );
   }
 
   if (!permission.granted) {
@@ -184,14 +190,33 @@ export default function ScannerBarcodeScreen() {
         <Text maxFontSizeMultiplier={1.3} style={[styles.permSub, { color: colors.textSecondary }]}>
           Avem nevoie de permisiunea ta pentru a scana coduri de bare de pe produse.
         </Text>
-        <TouchableOpacity
-          onPress={requestPermission}
-          style={[styles.permBtn, { backgroundColor: colors.accent }]}
-          accessibilityLabel="Acordă permisiunea camerei"
-          accessibilityRole="button"
-        >
-          <Text maxFontSizeMultiplier={1.3} style={[styles.permBtnText, { color: colors.background }]}>Permite Accesul</Text>
-        </TouchableOpacity>
+        {/* BUG-059: refuz definitiv (canAskAgain=false pe Android) = dead-end la
+            cererea de permisiune; ghidăm utilizatorul către setările aplicației. */}
+        {permission.canAskAgain === false ? (
+          <>
+            <TouchableOpacity
+              onPress={() => Linking.openSettings()}
+              style={[styles.permBtn, { backgroundColor: colors.accent }]}
+              accessibilityLabel="Deschide setările aplicației"
+              accessibilityRole="button"
+              accessibilityHint="Permisiunea camerei a fost refuzată definitiv; deschide setările pentru a o activa"
+            >
+              <Text maxFontSizeMultiplier={1.3} style={[styles.permBtnText, { color: colors.background }]}>Deschide Setări</Text>
+            </TouchableOpacity>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.permHint, { color: colors.textSecondary }]}>
+              Ai refuzat accesul la cameră. Deschide setările aplicației și activează permisiunea camerei.
+            </Text>
+          </>
+        ) : (
+          <TouchableOpacity
+            onPress={requestPermission}
+            style={[styles.permBtn, { backgroundColor: colors.accent }]}
+            accessibilityLabel="Acordă permisiunea camerei"
+            accessibilityRole="button"
+          >
+            <Text maxFontSizeMultiplier={1.3} style={[styles.permBtnText, { color: colors.background }]}>Permite Accesul</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -890,6 +915,7 @@ const styles = StyleSheet.create({
   permTitle: { fontSize: 24, fontWeight: '900', marginTop: 18, marginBottom: 8 },
   permSub: { fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
   permBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16 },
+  permHint: { fontSize: 13, textAlign: 'center', lineHeight: 19, marginTop: 14, maxWidth: '88%' },
   permBtnText: { fontSize: 16, fontWeight: '800' },
 
   headerBar: {
