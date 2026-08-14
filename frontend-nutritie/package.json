@@ -13,12 +13,10 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "build:anatomy": "node scripts/buildAnatomy.mjs",
-    "verify:anatomy": "node scripts/verifyAnatomy.mjs",
     "test": "jest",
     "test:ci": "jest --ci --runInBand --passWithNoTests=false",
     "audit:gate": "node scripts/auditGate.js",
-    "check": "npm run typecheck && npm run lint && npm run build:anatomy && npm run verify:anatomy"
+    "check": "npm run typecheck && npm run lint && npm run test && npm run audit:gate"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

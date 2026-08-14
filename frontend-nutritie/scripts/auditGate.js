@@ -30,12 +30,19 @@ const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 // versiune patched — npm sugereaza downgrade la 5.1.7 (major, rupe componenta pe
 // RN 0.81). Acelasi advisory apare si direct pe react-native-reanimated (allowlisted);
 // npm@10 din CI il expune si sub numele @gorhom/bottom-sheet. Backlog expo@57.
+//
+// @expo/ngrok: unealtă dev-only pentru `npx expo start --tunnel`, propagă `uuid < 11.1.1` (allowlisted).
+// Nu este inclus în bundle-ul de producție APK/AAB.
+//
+// jest-expo: pachet devDependencies pentru rularea testelor Jest pe Expo, propagă `@expo/config` (allowlisted).
+// Nu este inclus în bundle-ul de producție APK/AAB.
 const ALLOWLIST = new Set([
 	'@expo/cli',
 	'@expo/config',
 	'@expo/config-plugins',
 	'@expo/metro',
 	'@expo/metro-config',
+	'@expo/ngrok',
 	'@expo/prebuild-config',
 	'@gorhom/bottom-sheet',
 	'@react-native/community-cli-plugin',
@@ -50,6 +57,7 @@ const ALLOWLIST = new Set([
 	'expo-splash-screen',
 	'expo-updates',
 	'image-size',
+	'jest-expo',
 	'metro',
 	'metro-config',
 	'metro-transform-worker',

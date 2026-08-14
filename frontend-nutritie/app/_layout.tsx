@@ -247,10 +247,12 @@ function RootNavigator() {
         if (__DEV__) console.warn('[Reminders] Reconciliere eșuată:', e);
       }
     })();
-    processOfflineQueue(supabase as unknown as SupabaseMinimalClient).catch(() => {});
-    // BUG-035: impingem inapoi la server targeturile salvate offline (updateUser
-    // esuata), la fel cum procesam coada de mese offline.
-    sincronizeazaTargeturiLocale().catch(() => {});
+    if (session?.user?.id) {
+      processOfflineQueue(supabase as unknown as SupabaseMinimalClient, session.user.id).catch(() => {});
+      // BUG-035/BUG-068: impingem inapoi la server targeturile salvate offline (updateUser
+      // esuata), strict per-utilizator autentificat.
+      sincronizeazaTargeturiLocale(session.user.id).catch(() => {});
+    }
   }, [session]);
 
   // BUG-043: la SINGURA tranzitie offline -> online descărcăm coada de mese
@@ -264,10 +266,10 @@ function RootNavigator() {
     const esteOfflineAcum = isOffline;
     const aFostOffline = aFostOfflineRef.current;
     aFostOfflineRef.current = esteOfflineAcum;
-    if (!session || aFostOffline !== true || esteOfflineAcum) return;
+    if (!session?.user?.id || aFostOffline !== true || esteOfflineAcum) return;
     if (descarcareInCursRef.current) return;
     descarcareInCursRef.current = true;
-    processOfflineQueue(supabase as unknown as SupabaseMinimalClient)
+    processOfflineQueue(supabase as unknown as SupabaseMinimalClient, session.user.id)
       .catch(() => {})
       .finally(() => { descarcareInCursRef.current = false; });
   }, [isOffline, session]);

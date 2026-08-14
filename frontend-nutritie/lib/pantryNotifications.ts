@@ -100,13 +100,11 @@ export async function checkAndSchedulePantryExpiryNotification(produse: ProdusCa
       },
     });
 
-    // BUG-057: înregistrăm id-ul în registry-ul de mementouri gestionate, ca
-    // logout/revocare/comutare cont (cancelManagedReminders) să o anuleze și pe
-    // ea. Scop izolare: notificările contului A nu persistă după deconectare.
-    // Apoi scoatem din registry id-urile vechi de cămară (deja anulate mai sus).
-    await registerManagedReminder(pantryId);
+    // BUG-057/BUG-073: înregistrăm id-ul în registry-ul de mementouri gestionate pe domeniul
+    // 'pantry_expiry', fără a interfera cu 'daily_meals'.
+    await registerManagedReminder(pantryId, 'pantry_expiry');
     for (const idVechi of iduriPantryVeche) {
-      await unregisterManagedReminder(idVechi);
+      await unregisterManagedReminder(idVechi, 'pantry_expiry');
     }
 
     await AsyncStorage.setItem(PANTRY_NOTIF_KEY, 'true');

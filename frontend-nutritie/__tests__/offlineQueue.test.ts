@@ -17,6 +17,11 @@ jest.mock('@react-native-async-storage/async-storage', () => {
     removeItem: jest.fn(async (key: string) => {
       delete store[key];
     }),
+    multiRemove: jest.fn(async (keys: string[]) => {
+      for (const k of keys) delete store[k];
+    }),
+    multiGet: jest.fn(async (keys: string[]) => keys.map((k) => [k, store[k] || null])),
+    getAllKeys: jest.fn(async () => Object.keys(store)),
     clear: jest.fn(async () => {
       store = {};
     }),
@@ -92,6 +97,7 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
 
     const inserari: any[] = [];
     const supabaseFake = {
+      auth: { getUser: async () => ({ data: { user: { id: 'user_123' } }, error: null }) },
       from: (tabela: string) => ({
         insert: async (payload: any) => {
           if (tabela === 'mese') {
@@ -103,14 +109,14 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
       }),
     };
 
-    const rezultat = await processOfflineQueue(supabaseFake);
+    const rezultat = await processOfflineQueue(supabaseFake, 'user_123');
     expect(rezultat.procesate).toBe(2);
     expect(rezultat.esuate).toBe(0);
     expect(inserari.length).toBe(2);
     expect(inserari[0].nume).toContain('Omletă');
     expect(inserari[1].nume).toContain('Piept de pui');
 
-    const finalQueue = await getOfflineQueue();
+    const finalQueue = await getOfflineQueue('user_123');
     expect(finalQueue.length).toBe(0);
   });
 
@@ -126,6 +132,7 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
 
     const inserari: any[] = [];
     const supabaseFake = {
+      auth: { getUser: async () => ({ data: { user: { id: 'user_123' } }, error: null }) },
       from: () => ({
         insert: async (payload: any) => {
           inserari.push(payload);
@@ -134,7 +141,7 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
       }),
     };
 
-    const rezultat = await processOfflineQueue(supabaseFake as any);
+    const rezultat = await processOfflineQueue(supabaseFake as any, 'user_123');
     expect(rezultat.procesate).toBe(1);
     expect(inserari[0].created_at).toBe(createdAt);
     expect(inserari[0].imagine_url).toBe('https://ik.imagekit.io/x/foto.jpg');
@@ -146,16 +153,17 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
     await pushOfflineMeal(masaSample2);
 
     const supabaseFail = {
+      auth: { getUser: async () => ({ data: { user: { id: 'user_123' } }, error: null }) },
       from: () => ({
         insert: async () => ({ error: new Error('Rețea indisponibilă') }),
       }),
     };
 
-    const rezultat = await processOfflineQueue(supabaseFail);
+    const rezultat = await processOfflineQueue(supabaseFail, 'user_123');
     expect(rezultat.procesate).toBe(0);
     expect(rezultat.esuate).toBe(1);
 
-    const queueRamasa = await getOfflineQueue();
+    const queueRamasa = await getOfflineQueue('user_123');
     expect(queueRamasa.length).toBe(2);
   });
 
@@ -165,6 +173,7 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
 
     const inserari: any[] = [];
     const supabaseFake = {
+      auth: { getUser: async () => ({ data: { user: { id: 'user_123' } }, error: null }) },
       from: () => ({
         insert: async (payload: any) => {
           inserari.push(payload);
@@ -173,13 +182,13 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
       }),
     };
 
-    const rezultat = await processOfflineQueue(supabaseFake as any);
+    const rezultat = await processOfflineQueue(supabaseFake as any, 'user_123');
     // id-ul UUID e trimis în insert, ca PK-ul să poată detecta duplicatul
     expect(inserari[0].id).toBe(idUuid);
     expect(rezultat.procesate).toBe(1);
     expect(rezultat.esuate).toBe(0);
 
-    const finalQueue = await getOfflineQueue();
+    const finalQueue = await getOfflineQueue('user_123');
     expect(finalQueue.length).toBe(0);
   });
 
@@ -191,6 +200,7 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
 
     const inserari: any[] = [];
     const supabaseFake = {
+      auth: { getUser: async () => ({ data: { user: { id: 'user_123' } }, error: null }) },
       from: () => ({
         insert: async (payload: any) => {
           inserari.push(payload);
@@ -203,13 +213,13 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
       }),
     };
 
-    const rezultat = await processOfflineQueue(supabaseFake as any);
+    const rezultat = await processOfflineQueue(supabaseFake as any, 'user_123');
     // a doua masă a fost procesată chiar dacă prima a fost respinsă permanent
     expect(inserari.length).toBe(2);
     expect(rezultat.procesate).toBe(1);
     expect(rezultat.esuate).toBe(1);
 
-    const finalQueue = await getOfflineQueue();
+    const finalQueue = await getOfflineQueue('user_123');
     expect(finalQueue.length).toBe(1);
     expect(finalQueue[0].id).toBe(idUuid1); // item respins reîncadrat pentru reîncercare
   });

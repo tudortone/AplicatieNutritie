@@ -5,10 +5,11 @@ import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, FadeInDown, useAnimatedProps, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
-import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell, Bell, RotateCcw, X } from 'lucide-react-native';
+import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell, Bell, RotateCcw, X, AlertCircle } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useNotificationBannerData } from '../../context/NotificationBannerContext';
+import { useTranslation } from 'react-i18next';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useCurrentDayKey } from '../../hooks/useCurrentDayKey';
@@ -142,9 +143,11 @@ export default function HomeScreen() {
     grasimiTinta,
     greutate,
     user,
-    loading, 
-    refresh 
+    loading,
+    eroareFetch,
+    refresh
   } = useMeseAzi(dataSelectata);
+  const { t } = useTranslation();
   const { pahare, tinta: tintaPahare, adaugaPahar, scadePahar } = useApa();
   const { steps, activeCalories, stepGoal, isEnabled, isAvailable, setNewStepGoal, toggleSync, refreshSteps, addManualSteps } = useHealthSync();
   const { totalCaloriiArse, antrenamente, refresh: refreshAntrenamente } = useAntrenamente();
@@ -393,6 +396,32 @@ export default function HomeScreen() {
           <RefreshControl refreshing={loading} onRefresh={() => refresh(false, true)} tintColor={colors.accent} colors={[colors.accent]} />
         }
       >
+        {/* BUG-062: Home distinge eroare de rețea de o zi goală legitimă. Fără
+            acest banner, un fetch eșuat arăta ca și cum utilizatorul n-ar avea
+            mese — totalurile zero fiind indistincte de o zi fără mese. */}
+        {eroareFetch ? (
+          <View
+            style={[s.eroareBanner, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}
+            accessibilityRole="alert"
+          >
+            <AlertCircle size={18} color={colors.danger} style={{ marginRight: 8 }} />
+            <Text style={[s.eroareText, { color: colors.danger }]} maxFontSizeMultiplier={1.3}>
+              {t('alerts.mesaje.conexiuneServerEsueaza')}
+            </Text>
+            <TouchableOpacity
+              onPress={() => refresh(false, true)}
+              style={s.eroareBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={t('chat.retry')}
+            >
+              <Text style={[s.eroareBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
+                {t('chat.retry')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {/* Header */}
         <Animated.View style={s.header}>
           <View style={s.headerLeft}>
@@ -908,6 +937,13 @@ const s = StyleSheet.create({
   scroll: { paddingHorizontal: 20 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 15, fontWeight: '500' },
+
+  // BUG-062: banner vizibil când fetch-ul jurnalului eșuează pe Home — fără el,
+  // o zi cu eroare de rețea arăta ca o zi legitimă fără mese (eșec silențios).
+  eroareBanner: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16 },
+  eroareText: { flex: 1, fontSize: 13, fontWeight: '600' },
+  eroareBtn: { marginLeft: 8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  eroareBtnText: { fontSize: 13, fontWeight: '800' },
 
   // Header
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 },

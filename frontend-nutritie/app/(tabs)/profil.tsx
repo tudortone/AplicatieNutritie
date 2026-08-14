@@ -34,6 +34,7 @@ import { API_URL } from '../../constants/config';
 import { API_PREFIX } from '../../lib/api';
 import { getLegalUrls } from '../../lib/legalUrls';
 import { TARGETURI_PENDING_KEY } from '../../lib/sincronizeazaTargeturi';
+import { clearOfflineQueue } from '../../lib/offlineQueue';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 // Adresa oficiala de suport pentru sesizari si suport utilizatori.
@@ -279,6 +280,10 @@ export default function ProfilScreen() {
           // se mai declanșeze sub contul următor. Consimțământul rămâne persistat
           // la nivel de dispozitiv (nu e legat de cont).
           await cancelManagedReminders();
+          // BUG-067: coada offline e globală (nu scoped pe cont) — dacă rămâne
+          // după logout, payload-urile contului A s-ar procesa sub sesiunea B
+          // (payload invalid / date private expuse). O golim explicit la logout.
+          await clearOfflineQueue();
           await supabase.auth.signOut();
         } 
       }
@@ -389,7 +394,7 @@ export default function ProfilScreen() {
         <Animated.View entering={FadeInDown.duration(500)} style={styles.avatarSection}>
           <TouchableOpacity activeOpacity={0.85} onPress={alegePozaProfil} accessibilityRole="button" accessibilityLabel="Alege o poză de profil">
             <LinearGradient colors={colors.accentGradient} style={[styles.avatarRing, { shadowColor: colors.accent }]}>
-              <View style={[styles.avatarInner, { backgroundColor: '#0F1318', overflow: 'hidden' }]}>
+              <View style={[styles.avatarInner, { backgroundColor: colors.background, overflow: 'hidden' }]}>
                 {avatarUrl ? (
                   <Image
                     source={{ uri: avatarUrl }}
@@ -755,6 +760,7 @@ export default function ProfilScreen() {
                     keyboardType="numeric"
                     placeholderTextColor={colors.textSecondary}
                     selectionColor={colors.accent}
+                    accessibilityLabel="Greutate în kilograme"
                   />
                 </View>
               </View>
@@ -774,6 +780,7 @@ export default function ProfilScreen() {
                     keyboardType="numeric"
                     placeholderTextColor={colors.textSecondary}
                     selectionColor={colors.accent}
+                    accessibilityLabel="Greutate țintă în kilograme"
                   />
                 </View>
               </View>
@@ -792,6 +799,7 @@ export default function ProfilScreen() {
                     onChangeText={setCaloriiTinta}
                     keyboardType="numeric"
                     placeholderTextColor={colors.textSecondary}
+                    accessibilityLabel="Țintă calorii pe zi"
                     selectionColor={colors.accent}
                   />
                 </View>
@@ -812,6 +820,7 @@ export default function ProfilScreen() {
                     keyboardType="numeric"
                     placeholderTextColor={colors.textSecondary}
                     selectionColor={colors.accent}
+                    accessibilityLabel="Țintă proteine pe zi"
                   />
                 </View>
               </View>
@@ -831,6 +840,7 @@ export default function ProfilScreen() {
                     keyboardType="numeric"
                     placeholderTextColor={colors.textSecondary}
                     selectionColor={colors.accent}
+                    accessibilityLabel="Țintă carbohidrați pe zi"
                   />
                 </View>
               </View>
@@ -850,6 +860,7 @@ export default function ProfilScreen() {
                     keyboardType="numeric"
                     placeholderTextColor={colors.textSecondary}
                     selectionColor={colors.accent}
+                    accessibilityLabel="Țintă grăsimi pe zi"
                   />
                 </View>
               </View>

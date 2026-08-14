@@ -907,6 +907,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                 value={grame}
                 onChangeText={handleGramajChange}
                 selectionColor={colors.accent}
+                accessibilityLabel={t('jurnal.gramajLabel')}
               />
 
               {/* Porții și unități aproximative pentru fructe / preset-uri */}
@@ -1026,6 +1027,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   value={calorii}
                   onChangeText={setCalorii}
                   selectionColor={colors.accent}
+                  accessibilityLabel={t('jurnal.caloriesLabel')}
                 />
                 {calorii.length > 0 && !isCaloriiValid && (
                   <Text style={[styles.errorText, { color: colors.danger }]}>{t('jurnal.caloriesInvalid')}</Text>
@@ -1042,6 +1044,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   value={proteine}
                   onChangeText={setProteine}
                   selectionColor={colors.accent}
+                  accessibilityLabel={t('jurnal.proteinLabel')}
                 />
               </View>
             </View>
@@ -1057,6 +1060,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   value={carbohidrati}
                   onChangeText={setCarbohidrati}
                   selectionColor={colors.accent}
+                  accessibilityLabel={t('jurnal.carbsLabel')}
                 />
               </View>
 
@@ -1070,6 +1074,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   value={grasimi}
                   onChangeText={setGrasimi}
                   selectionColor={colors.accent}
+                  accessibilityLabel={t('jurnal.fatsLabel')}
                 />
               </View>
             </View>
@@ -1085,6 +1090,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   value={fibre}
                   onChangeText={setFibre}
                   selectionColor={colors.accent}
+                  accessibilityLabel={t('jurnal.fiberLabelOptional')}
                 />
               </View>
               <View style={styles.halfWidth} />

@@ -106,17 +106,17 @@ export default function AuthScreen() {
     const identificator = email.trim();
     const esteAdminLogin = !isSignUp && identificator.toLowerCase() === ADMIN_USERNAME;
     if (!identificator || !parola) {
-      setAuthError("Email și parolă sunt obligatorii.");
+      setAuthError(t('authValidation.requiredFields'));
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
       return;
     }
     if (!isValidEmail(identificator) && !esteAdminLogin) {
-      setAuthError("Te rugăm să introduci o adresă de email validă.");
+      setAuthError(t('authValidation.invalidEmail'));
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
       return;
     }
     if (isSignUp && !isPasswordValid) {
-      setAuthError("Parola nu îndeplinește toate cerințele de securitate.");
+      setAuthError(t('authValidation.passwordRequirements'));
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
       return;
     }

@@ -17,6 +17,8 @@ import * as Notifications from 'expo-notifications';
 const CONSENT_KEY = 'nutriai_notification_consent';
 const MANAGED_KEY = 'nutriai_managed_reminders';
 
+export type ReminderDomain = 'daily_meals' | 'pantry_expiry' | 'general';
+
 export interface NotificationConsentState {
   accepted: boolean;
   grantedAt: string | null;
@@ -25,10 +27,11 @@ export interface NotificationConsentState {
 export interface ManagedReminders {
   accountId?: string;
   ids: string[];
+  domains?: Partial<Record<ReminderDomain, string[]>>;
 }
 
 const CONSENT_GOL: NotificationConsentState = { accepted: false, grantedAt: null };
-const MANAGED_GOL: ManagedReminders = { ids: [] };
+const MANAGED_GOL: ManagedReminders = { ids: [], domains: {} };
 
 export async function getConsent(): Promise<NotificationConsentState> {
   try {
@@ -56,63 +59,131 @@ export async function revokeConsent(): Promise<void> {
   await AsyncStorage.setItem(CONSENT_KEY, JSON.stringify(CONSENT_GOL));
 }
 
-export async function getManagedReminders(): Promise<ManagedReminders> {
+export async function getManagedReminders(domain?: ReminderDomain): Promise<ManagedReminders> {
   try {
     const brut = await AsyncStorage.getItem(MANAGED_KEY);
-    if (!brut) return { ids: [] };
+    if (!brut) return { ids: [], domains: {} };
     const parsed = JSON.parse(brut);
+    const accountId = typeof parsed?.accountId === 'string' ? parsed.accountId : undefined;
+    const rawIds: string[] = Array.isArray(parsed?.ids) ? parsed.ids : [];
+    const domains: Partial<Record<ReminderDomain, string[]>> =
+      parsed?.domains && typeof parsed.domains === 'object' ? parsed.domains : {};
+
+    if (domain) {
+      const domainIds = domains[domain] || (domain === 'daily_meals' && !parsed.domains ? rawIds : []);
+      return { accountId, ids: domainIds, domains };
+    }
+
+    // Union complet al tuturor ID-urilor
+    const allIdsSet = new Set<string>(rawIds);
+    for (const dList of Object.values(domains)) {
+      if (Array.isArray(dList)) {
+        for (const id of dList) allIdsSet.add(id);
+      }
+    }
+
     return {
-      accountId: typeof parsed?.accountId === 'string' ? parsed.accountId : undefined,
-      ids: Array.isArray(parsed?.ids) ? parsed.ids : [],
+      accountId,
+      ids: Array.from(allIdsSet),
+      domains,
     };
   } catch {
-    return { ids: [] };
+    return { ids: [], domains: {} };
   }
 }
 
-export async function setManagedReminders(accountId: string | undefined, ids: string[]): Promise<void> {
-  const stare: ManagedReminders = { accountId, ids };
+export async function setManagedReminders(
+  accountId: string | undefined,
+  ids: string[],
+  domain: ReminderDomain = 'daily_meals',
+): Promise<void> {
+  const reg = await getManagedReminders();
+  const nextDomains: Partial<Record<ReminderDomain, string[]>> = {
+    ...reg.domains,
+    [domain]: ids,
+  };
+
+  const allIdsSet = new Set<string>();
+  for (const dList of Object.values(nextDomains)) {
+    if (Array.isArray(dList)) {
+      for (const id of dList) allIdsSet.add(id);
+    }
+  }
+
+  const stare: ManagedReminders = {
+    accountId: accountId ?? reg.accountId,
+    ids: Array.from(allIdsSet),
+    domains: nextDomains,
+  };
   await AsyncStorage.setItem(MANAGED_KEY, JSON.stringify(stare));
 }
 
 /**
- * Adaugă UN id în registry-ul de mementouri gestionate, fără să șteargă id-urile
- * existente (merge, nu înlocuire). Necesar pentru notificările secundare (ex.
- * expirare cămară) care coexistă cu mementurile de masă: altfel orice notificare
- * care nu e în registry supraviețuiește logout/revocare/comutare cont.
+ * Adaugă UN id în registry-ul de mementouri gestionate pe domeniul specificat,
+ * fără să șteargă mementourile din alte domenii (BUG-073).
  */
-export async function registerManagedReminder(id: string): Promise<void> {
+export async function registerManagedReminder(id: string, domain: ReminderDomain = 'general'): Promise<void> {
   const reg = await getManagedReminders();
-  if (!reg.ids.includes(id)) {
-    await setManagedReminders(reg.accountId, [...reg.ids, id]);
+  const domainIds = reg.domains?.[domain] || [];
+  if (!domainIds.includes(id)) {
+    await setManagedReminders(reg.accountId, [...domainIds, id], domain);
   }
 }
 
-/** Scoate UN id din registry-ul de mementouri gestionate (dacă există). */
-export async function unregisterManagedReminder(id: string): Promise<void> {
+/** Scoate UN id din registry-ul de mementouri gestionate. */
+export async function unregisterManagedReminder(id: string, domain?: ReminderDomain): Promise<void> {
   const reg = await getManagedReminders();
-  if (reg.ids.includes(id)) {
-    await setManagedReminders(reg.accountId, reg.ids.filter((x) => x !== id));
+  if (domain) {
+    const domainIds = reg.domains?.[domain] || [];
+    if (domainIds.includes(id)) {
+      await setManagedReminders(reg.accountId, domainIds.filter((x) => x !== id), domain);
+    }
+  } else {
+    // Căutare în toate domeniile
+    const nextDomains: Partial<Record<ReminderDomain, string[]>> = {};
+    for (const [d, list] of Object.entries(reg.domains || {})) {
+      if (Array.isArray(list)) {
+        nextDomains[d as ReminderDomain] = list.filter((x) => x !== id);
+      }
+    }
+    const allIdsSet = new Set<string>();
+    for (const dList of Object.values(nextDomains)) {
+      if (Array.isArray(dList)) {
+        for (const itm of dList) allIdsSet.add(itm);
+      }
+    }
+    const stare: ManagedReminders = {
+      accountId: reg.accountId,
+      ids: Array.from(allIdsSet),
+      domains: nextDomains,
+    };
+    await AsyncStorage.setItem(MANAGED_KEY, JSON.stringify(stare));
   }
 }
 
-export async function clearManagedReminders(): Promise<void> {
-  await AsyncStorage.setItem(MANAGED_KEY, JSON.stringify(MANAGED_GOL));
+export async function clearManagedReminders(domain?: ReminderDomain): Promise<void> {
+  if (domain) {
+    const reg = await getManagedReminders();
+    await setManagedReminders(reg.accountId, [], domain);
+  } else {
+    await AsyncStorage.setItem(MANAGED_KEY, JSON.stringify(MANAGED_GOL));
+  }
 }
 
 /**
- * Anulează DOAR mementurile înregistrate de această aplicație (registry-ul
- * MANAGED_KEY). Nu apelează niciodată cancelAllScheduledNotificationsAsync, ca
- * să nu șteargă notificări pe care aplicația nu le-a creat.
+ * Anulează mementourile înregistrate de această aplicație. Dacă se specifică
+ * un domeniu (ex: 'daily_meals'), anulează DOAR acel domeniu și păstrează celelalte
+ * (ex: 'pantry_expiry'). Fără domeniu, anulează toate mementourile (ex: logout / revocare).
  */
-export async function cancelManagedReminders(): Promise<void> {
-  const { ids } = await getManagedReminders();
+export async function cancelManagedReminders(domain?: ReminderDomain): Promise<void> {
+  const reg = await getManagedReminders(domain);
+  const targetIds = reg.ids;
   try {
-    for (const id of ids) {
+    for (const id of targetIds) {
       await Notifications.cancelScheduledNotificationAsync(id);
     }
   } catch {
-    // tolerăm erori pe dispozitiv la anulare; registry-ul se golește oricum
+    // tolerăm erori pe dispozitiv la anulare; registry-ul se actualizează oricum
   }
-  await clearManagedReminders();
+  await clearManagedReminders(domain);
 }

@@ -1,6 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const OFFLINE_QUEUE_KEY = '@nutri_offline_meals_queue';
+export const OFFLINE_QUEUE_KEY_LEGACY = '@nutri_offline_meals_queue';
+export const OFFLINE_QUEUE_KEY_PREFIX = '@nutri_offline_meals_queue_';
+
+export function getOfflineQueueKey(userId?: string | null): string {
+  if (userId && typeof userId === 'string' && userId.trim().length > 0) {
+    return `${OFFLINE_QUEUE_KEY_PREFIX}${userId.trim()}`;
+  }
+  return OFFLINE_QUEUE_KEY_LEGACY;
+}
 
 export interface MasaOfflinePayload {
   id: string;
@@ -25,6 +33,9 @@ export interface SupabaseEroare {
 }
 
 export interface SupabaseMinimalClient {
+  auth?: {
+    getUser?: () => Promise<{ data: { user: { id: string } | null }; error: unknown | null }>;
+  };
   from: (table: string) => {
     insert: (payload: any) => PromiseLike<{ error: SupabaseEroare | null }> | Promise<{ error: SupabaseEroare | null }>;
   };
@@ -39,62 +50,177 @@ function esteUuidValid(v: string): boolean {
   return RE_UUID.test(v);
 }
 
+const inMemoryFallbackQueues = new Map<string, MasaOfflinePayload[]>();
 
-
-let inMemoryFallbackQueue: MasaOfflinePayload[] = [];
-
-
-export async function getOfflineQueue(): Promise<MasaOfflinePayload[]> {
+/**
+ * Migrează datele dintr-o eventuală coadă globală veche (`@nutri_offline_meals_queue`)
+ * în cozile specifice per utilizator (`@nutri_offline_meals_queue_<userId>`),
+ * prevenind pierderea de date sau execuția cross-account.
+ */
+async function migreazaCoadaVecheDacaExista(): Promise<void> {
   try {
-    const raw = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
-    if (!raw) return [...inMemoryFallbackQueue];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [...inMemoryFallbackQueue];
+    const rawLegacy = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY_LEGACY);
+    if (!rawLegacy) return;
+    const parsedLegacy = JSON.parse(rawLegacy);
+    if (Array.isArray(parsedLegacy) && parsedLegacy.length > 0) {
+      const perUser: Record<string, MasaOfflinePayload[]> = {};
+      for (const item of parsedLegacy) {
+        if (item && typeof item === 'object' && item.user_id) {
+          const uid = String(item.user_id).trim();
+          if (!perUser[uid]) perUser[uid] = [];
+          if (!perUser[uid].some((m) => m.id === item.id)) {
+            perUser[uid].push(item);
+          }
+        }
+      }
+      for (const [uid, items] of Object.entries(perUser)) {
+        const userKey = getOfflineQueueKey(uid);
+        const existingRaw = await AsyncStorage.getItem(userKey);
+        const existing: MasaOfflinePayload[] = existingRaw ? JSON.parse(existingRaw) : [];
+        const merged = [...existing];
+        for (const itm of items) {
+          if (!merged.some((m) => m.id === itm.id)) {
+            merged.push(itm);
+          }
+        }
+        await AsyncStorage.setItem(userKey, JSON.stringify(merged));
+      }
+    }
+    await AsyncStorage.removeItem(OFFLINE_QUEUE_KEY_LEGACY);
+  } catch (err) {
+    if (__DEV__) console.warn('[OfflineQueue] Eroare la migrarea cozii legacy:', err);
   }
 }
 
-export async function saveOfflineQueue(queue: MasaOfflinePayload[]): Promise<void> {
-  inMemoryFallbackQueue = [...queue];
+export async function getOfflineQueue(userId?: string | null): Promise<MasaOfflinePayload[]> {
+  await migreazaCoadaVecheDacaExista();
+  if (userId && typeof userId === 'string' && userId.trim().length > 0) {
+    const key = getOfflineQueueKey(userId);
+    try {
+      const raw = await AsyncStorage.getItem(key);
+      if (!raw) return [...(inMemoryFallbackQueues.get(key) || [])];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [...(inMemoryFallbackQueues.get(key) || [])];
+    }
+  }
+
+  // Când userId nu este specificat, agregăm toate elementele existente
   try {
-    await AsyncStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+    const allKeys = await AsyncStorage.getAllKeys();
+    const userKeys = allKeys.filter((k) => k.startsWith(OFFLINE_QUEUE_KEY_PREFIX));
+    if (userKeys.length === 0) {
+      const legacyRaw = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY_LEGACY);
+      if (!legacyRaw) return [...(inMemoryFallbackQueues.get(OFFLINE_QUEUE_KEY_LEGACY) || [])];
+      const parsed = JSON.parse(legacyRaw);
+      return Array.isArray(parsed) ? parsed : [];
+    }
+    const entries = await AsyncStorage.multiGet(userKeys);
+    const combined: MasaOfflinePayload[] = [];
+    for (const [, val] of entries) {
+      if (val) {
+        try {
+          const arr = JSON.parse(val);
+          if (Array.isArray(arr)) combined.push(...arr);
+        } catch {}
+      }
+    }
+    return combined;
+  } catch {
+    const fallbackList: MasaOfflinePayload[] = [];
+    for (const list of inMemoryFallbackQueues.values()) {
+      fallbackList.push(...list);
+    }
+    return fallbackList;
+  }
+}
+
+export async function saveOfflineQueue(queue: MasaOfflinePayload[], userId?: string | null): Promise<void> {
+  const key = getOfflineQueueKey(userId);
+  inMemoryFallbackQueues.set(key, [...queue]);
+  try {
+    await AsyncStorage.setItem(key, JSON.stringify(queue));
   } catch (err) {
     if (__DEV__) console.warn('[OfflineQueue] Eroare la salvarea pe disc:', err);
   }
 }
 
 export async function pushOfflineMeal(payload: MasaOfflinePayload): Promise<number> {
-  const current = await getOfflineQueue();
+  if (!payload || !payload.user_id) return 0;
+  const userId = payload.user_id;
+  const current = await getOfflineQueue(userId);
   // Prevenim duplicatele după id
   if (current.some((item) => item.id === payload.id)) {
     return current.length;
   }
   const updated = [...current, payload];
-  await saveOfflineQueue(updated);
+  await saveOfflineQueue(updated, userId);
   return updated.length;
 }
 
-export async function popOfflineMeal(): Promise<MasaOfflinePayload | null> {
-  const current = await getOfflineQueue();
-  if (current.length === 0) return null;
-  const [removed, ...remaining] = current;
-  await saveOfflineQueue(remaining);
+export async function popOfflineMeal(userId?: string | null): Promise<MasaOfflinePayload | null> {
+  if (userId) {
+    const current = await getOfflineQueue(userId);
+    if (current.length === 0) return null;
+    const [removed, ...remaining] = current;
+    await saveOfflineQueue(remaining, userId);
+    return removed;
+  }
+
+  const all = await getOfflineQueue();
+  if (all.length === 0) return null;
+  const [removed] = all;
+  if (removed && removed.user_id) {
+    await popOfflineMeal(removed.user_id);
+  }
   return removed;
 }
 
-export async function clearOfflineQueue(): Promise<void> {
-  inMemoryFallbackQueue = [];
-  try {
-    await AsyncStorage.removeItem(OFFLINE_QUEUE_KEY);
-  } catch {
-    // Ignoră erorile la curățare
+export async function clearOfflineQueue(userId?: string | null): Promise<void> {
+  if (userId) {
+    const key = getOfflineQueueKey(userId);
+    inMemoryFallbackQueues.delete(key);
+    try {
+      await AsyncStorage.removeItem(key);
+    } catch {}
+  } else {
+    inMemoryFallbackQueues.clear();
+    try {
+      await AsyncStorage.removeItem(OFFLINE_QUEUE_KEY_LEGACY);
+      const allKeys = await AsyncStorage.getAllKeys();
+      const userQueueKeys = allKeys.filter((k) => k.startsWith(OFFLINE_QUEUE_KEY_PREFIX));
+      if (userQueueKeys.length > 0) {
+        await AsyncStorage.multiRemove(userQueueKeys);
+      }
+    } catch {}
   }
 }
 
-export async function processOfflineQueue(supabaseClient: SupabaseMinimalClient): Promise<{ procesate: number; esuate: number }> {
-  let queue = await getOfflineQueue();
-  if (queue.length === 0 || !supabaseClient) {
+export async function processOfflineQueue(
+  supabaseClient: SupabaseMinimalClient,
+  authenticatedUserId?: string | null,
+): Promise<{ procesate: number; esuate: number }> {
+  if (!supabaseClient) {
+    return { procesate: 0, esuate: 0 };
+  }
+
+  // BUG-068: Determinăm utilizatorul autentificat curent. Niciodată nu procesăm
+  // sau sincronizăm coada altui utilizator sub sesiunea utilizatorului activ.
+  let activeUid = authenticatedUserId;
+  if (!activeUid && typeof supabaseClient.auth?.getUser === 'function') {
+    try {
+      const { data } = await supabaseClient.auth.getUser();
+      activeUid = data?.user?.id || null;
+    } catch {}
+  }
+
+  if (!activeUid) {
+    return { procesate: 0, esuate: 0 };
+  }
+
+  let queue = await getOfflineQueue(activeUid);
+  if (queue.length === 0) {
     return { procesate: 0, esuate: 0 };
   }
 
@@ -104,6 +230,14 @@ export async function processOfflineQueue(supabaseClient: SupabaseMinimalClient)
 
   while (queue.length > 0) {
     const masa = queue[0];
+
+    // Gardă strictă de izolare cont: dacă un item are user_id diferit de utilizatorul
+    // conectat, nu îl trimitem în Supabase (ar pica la RLS sau ar polua DB-ul).
+    if (masa.user_id !== activeUid) {
+      queue.shift();
+      continue;
+    }
+
     try {
       const { error } = await supabaseClient.from('mese').insert({
         // BUG-054: trimitem id-ul deterministic al meselor offline. Daca un sync
@@ -165,6 +299,6 @@ export async function processOfflineQueue(supabaseClient: SupabaseMinimalClient)
     }
   }
 
-  await saveOfflineQueue([...queue, ...pentruReincercare]);
+  await saveOfflineQueue([...queue, ...pentruReincercare], activeUid);
   return { procesate, esuate };
 }

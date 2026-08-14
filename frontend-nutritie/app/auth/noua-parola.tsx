@@ -54,12 +54,12 @@ export default function NouaParolaScreen() {
   const submit = async () => {
     setError(null);
     if (!isPasswordValid) {
-      setError('Parola nu îndeplinește toate cerințele de securitate.');
+      setError(t('authNewPassword.errorNotValid'));
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
       return;
     }
     if (!confirmOk) {
-      setError('Parolele nu coincid.');
+      setError(t('authNewPassword.errorMismatch'));
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
       return;
     }
@@ -74,7 +74,7 @@ export default function NouaParolaScreen() {
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
       Alert.alert(
         t('alerts.titluri.succes'),
-        'Parola a fost schimbată cu succes. Te rugăm să te conectezi cu parola nouă.',
+        t('authNewPassword.successChanged'),
         [{ text: t('alerts.butoane.super'), onPress: () => router.replace('/(tabs)') }],
       );
     } catch (e: any) {
@@ -105,9 +105,9 @@ export default function NouaParolaScreen() {
 
         <View style={[styles.formCard, { borderColor: colors.cardBorder, maxWidth: contentMaxWidth }]}>
           <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.formGrad}>
-            <Text style={[styles.formTitle, { color: colors.textPrimary }]}>Setare parolă nouă</Text>
+            <Text style={[styles.formTitle, { color: colors.textPrimary }]}>{t('authNewPassword.title')}</Text>
             <Text style={[styles.formSubtitle, { color: colors.textSecondary }]}>
-              Alege o parolă nouă pentru contul tău. Cerințele sunt aceleași ca la înregistrare.
+              {t('authNewPassword.subtitle')}
             </Text>
 
             <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}>
@@ -116,8 +116,8 @@ export default function NouaParolaScreen() {
               </View>
               <TextInput
                 style={[styles.input, { color: colors.textPrimary }]}
-                accessibilityLabel="Parolă nouă"
-                placeholder="Parolă nouă"
+                accessibilityLabel={t('authNewPassword.passwordPlaceholder')}
+                placeholder={t('authNewPassword.passwordPlaceholder')}
                 placeholderTextColor={colors.textSecondary}
                 value={parola}
                 onChangeText={(text) => {
@@ -148,8 +148,8 @@ export default function NouaParolaScreen() {
               </View>
               <TextInput
                 style={[styles.input, { color: colors.textPrimary }]}
-                accessibilityLabel="Confirmă parola"
-                placeholder="Confirmă parola"
+                accessibilityLabel={t('authNewPassword.confirmPlaceholder')}
+                placeholder={t('authNewPassword.confirmPlaceholder')}
                 placeholderTextColor={colors.textSecondary}
                 value={confirmare}
                 onChangeText={(text) => {
@@ -176,22 +176,22 @@ export default function NouaParolaScreen() {
             </View>
 
             <View style={[styles.passwordRulesBox, { backgroundColor: colors.overlayLight, borderColor: colors.overlayStrong }]}>
-              <Text style={[styles.passwordRulesHeader, { color: colors.textSecondary }]}>Cerințe parolă:</Text>
+              <Text style={[styles.passwordRulesHeader, { color: colors.textSecondary }]}>{t('authNewPassword.rulesHeader')}</Text>
               <View style={styles.ruleRow}>
                 {isMinLength ? <CheckCircle2 size={16} color={colors.success} /> : <Circle size={16} color={colors.danger} />}
-                <Text style={[styles.ruleText, { color: isMinLength ? colors.success : colors.danger }]}>Minim 8 caractere</Text>
+                <Text style={[styles.ruleText, { color: isMinLength ? colors.success : colors.danger }]}>{t('authNewPassword.ruleMinLength')}</Text>
               </View>
               <View style={styles.ruleRow}>
                 {hasUpperCase ? <CheckCircle2 size={16} color={colors.success} /> : <Circle size={16} color={colors.danger} />}
-                <Text style={[styles.ruleText, { color: hasUpperCase ? colors.success : colors.danger }]}>O literă mare (A-Z)</Text>
+                <Text style={[styles.ruleText, { color: hasUpperCase ? colors.success : colors.danger }]}>{t('authNewPassword.ruleUpperCase')}</Text>
               </View>
               <View style={styles.ruleRow}>
                 {hasNumber ? <CheckCircle2 size={16} color={colors.success} /> : <Circle size={16} color={colors.danger} />}
-                <Text style={[styles.ruleText, { color: hasNumber ? colors.success : colors.danger }]}>O cifră (0-9)</Text>
+                <Text style={[styles.ruleText, { color: hasNumber ? colors.success : colors.danger }]}>{t('authNewPassword.ruleNumber')}</Text>
               </View>
               <View style={styles.ruleRow}>
                 {confirmOk ? <CheckCircle2 size={16} color={colors.success} /> : <Circle size={16} color={confirmare.length > 0 ? colors.danger : colors.danger} />}
-                <Text style={[styles.ruleText, { color: confirmOk ? colors.success : colors.danger }]}>Parolele coincid</Text>
+                <Text style={[styles.ruleText, { color: confirmOk ? colors.success : colors.danger }]}>{t('authNewPassword.ruleMatch')}</Text>
               </View>
             </View>
 
@@ -206,7 +206,7 @@ export default function NouaParolaScreen() {
               onPress={submit}
               disabled={loading}
               accessibilityRole="button"
-              accessibilityLabel="Salvează parola nouă"
+              accessibilityLabel={t('authNewPassword.saveBtn')}
               accessibilityState={{ disabled: loading }}
             >
               <LinearGradient colors={colors.accentGradient} style={styles.submitGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
@@ -214,7 +214,7 @@ export default function NouaParolaScreen() {
                   <ActivityIndicator color={colors.background} />
                 ) : (
                   <>
-                    <Text style={[styles.submitText, { color: colors.background }]}>Salvează parola nouă</Text>
+                    <Text style={[styles.submitText, { color: colors.background }]}>{t('authNewPassword.saveBtn')}</Text>
                     <ArrowRight size={20} color={colors.background} strokeWidth={2.5} />
                   </>
                 )}
@@ -225,9 +225,9 @@ export default function NouaParolaScreen() {
               style={styles.backBtn}
               onPress={() => router.replace('/auth')}
               accessibilityRole="button"
-              accessibilityLabel="Înapoi la autentificare"
+              accessibilityLabel={t('authNewPassword.backToLogin')}
             >
-              <Text style={[styles.backText, { color: colors.textSecondary }]}>Înapoi la autentificare</Text>
+              <Text style={[styles.backText, { color: colors.textSecondary }]}>{t('authNewPassword.backToLogin')}</Text>
             </TouchableOpacity>
           </LinearGradient>
         </View>

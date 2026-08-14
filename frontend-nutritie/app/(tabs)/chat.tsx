@@ -28,6 +28,7 @@ import { RecipeGeneratorModal } from '../../components/RecipeGeneratorModal';
 import { supabase } from '../../supabase';
 import { ConfirmSheet } from '../../components/ui/ConfirmSheet';
 import { construiesteRinduriMasaChat, esteEroareDuplicate } from '../../lib/payloadMese';
+import { pushOfflineMeal, type MasaOfflinePayload } from '../../lib/offlineQueue';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import KeyboardAwareScreen, { useContentBottomPadding } from '@/components/ui/KeyboardAwareScreen';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
@@ -633,15 +634,62 @@ useEffect(() => {
         meal_type: proposalCategory,
       });
 
-      const { error } = await supabase.from('mese').insert(rows);
+      let salvatOffline = false;
+      try {
+        const { error } = await supabase.from('mese').insert(rows);
 
-      if (error) {
-        // Idempotență: propunerea a fost deja adăugată (același id) — nu se
-        // creează duplicat; o tratăm ca succes.
-        if (!esteEroareDuplicate(error)) {
-          console.error("Eroare Supabase:", error);
-          Alert.alert(t('alerts.titluri.eroareLaSalvare'), t('alerts.mesaje.bazaDateRefuza', { eroare: error.message }));
-          throw error;
+        if (error) {
+          // Idempotență: propunerea a fost deja adăugată (același id) — nu se
+          // creează duplicat; o tratăm ca succes.
+          if (!esteEroareDuplicate(error)) {
+            // BUG-070: Dacă e eroare de transport / rețea, salvăm în coada offline FIFO
+            if (!error.code) {
+              for (const row of rows) {
+                const payloadOffline: MasaOfflinePayload = {
+                  id: row.id,
+                  user_id: row.user_id,
+                  nume: row.nume,
+                  calorii: row.calorii,
+                  proteine: row.proteine,
+                  grasimi: row.grasimi,
+                  carbohidrati: row.carbohidrati,
+                  fibre: row.fibre,
+                  tip_masa: row.tip_masa,
+                  alimente: [],
+                  data: row.data,
+                  created_at: acumMasa.toISOString(),
+                };
+                await pushOfflineMeal(payloadOffline);
+              }
+              salvatOffline = true;
+            } else {
+              console.error("Eroare Supabase:", error);
+              Alert.alert(t('alerts.titluri.eroareLaSalvare'), t('alerts.mesaje.bazaDateRefuza', { eroare: error.message }));
+              throw error;
+            }
+          }
+        }
+      } catch (_insertErr: unknown) {
+        if (!salvatOffline) {
+          // Rețea indisponibilă / fetch rejected -> salvare în coada offline FIFO
+          for (const row of rows) {
+            const payloadOffline: MasaOfflinePayload = {
+              id: row.id,
+              user_id: row.user_id,
+              nume: row.nume,
+              calorii: row.calorii,
+              proteine: row.proteine,
+              grasimi: row.grasimi,
+              carbohidrati: row.carbohidrati,
+              fibre: row.fibre,
+              tip_masa: row.tip_masa,
+              alimente: [],
+              data: row.data,
+              created_at: acumMasa.toISOString(),
+            };
+            await pushOfflineMeal(payloadOffline);
+          }
+          salvatOffline = true;
         }
       }
 
@@ -651,14 +699,19 @@ useEffect(() => {
       setMealProposal(null);
       setProposalCategory(null);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      adaugaMesaj(buleMesaj('ai', t('chat.mealSavedSuccess')));
+      if (salvatOffline) {
+        Alert.alert(t('offline.salvatOffline'), t('offline.masaSalvataOffline'));
+        adaugaMesaj(buleMesaj('ai', t('offline.masaSalvataOffline')));
+      } else {
+        adaugaMesaj(buleMesaj('ai', t('chat.mealSavedSuccess')));
+      }
 
     } catch (e: unknown) {
       console.error('Eroare salvare propunere masă:', e);
       // Dacă eroarea nu e de la Supabase, o prindem aici
       const mesajEroare = e instanceof Error ? e.message : '';
       if (!mesajEroare.includes('Baza de date')) {
-          Alert.alert(t('alerts.titluri.eroareSistem'), t('alerts.mesaje.salvareNeprocesata'));
+        Alert.alert(t('alerts.titluri.eroareSistem'), t('alerts.mesaje.salvareNeprocesata'));
       }
     } finally {
       setSavingProposal(false);

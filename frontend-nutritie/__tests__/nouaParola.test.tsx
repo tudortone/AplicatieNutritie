@@ -15,9 +15,26 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace }),
 }));
 
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
-}));
+jest.mock('react-i18next', () => {
+  const ro = require('../i18n/locales/ro.json');
+  function getNested(obj: any, path: string): string {
+    const parts = path.split('.');
+    let curr = obj;
+    for (const p of parts) {
+      if (curr && typeof curr === 'object' && p in curr) {
+        curr = curr[p];
+      } else {
+        return path;
+      }
+    }
+    return typeof curr === 'string' ? curr : path;
+  }
+  return {
+    useTranslation: () => ({
+      t: (k: string) => getNested(ro, k),
+    }),
+  };
+});
 
 jest.mock('../context/ThemeContext', () => ({
   useTheme: () => ({

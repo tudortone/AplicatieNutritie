@@ -34,7 +34,7 @@ jest.mock('expo-notifications', () => ({
   SchedulableTriggerInputTypes: { DAILY: 'daily' },
   getPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
   requestPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
-  scheduleNotificationAsync: jest.fn(async () => 'notif_id_123'),
+  scheduleNotificationAsync: jest.fn(async () => `notif_id_${Math.random().toString(36).slice(2)}`),
   cancelScheduledNotificationAsync: jest.fn(async () => {}),
   cancelAllScheduledNotificationsAsync: jest.fn(async () => {}),
 }));

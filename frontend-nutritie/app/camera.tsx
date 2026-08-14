@@ -257,15 +257,15 @@ export default function CameraScreen() {
         }
 
         if (!response.ok || !Array.isArray(payload)) {
-          let message = 'Nu am putut identifica alimentele din imagine.';
+          let message = t('camera.unidentifiedFoods');
           if (!Array.isArray(payload) && payload && payload.eroare) {
             message = payload.eroare;
           } else if (response.status === 404) {
-            message = `Eroare 404: Endpoint-ul de analiză vizuală nu a fost găsit pe server (${API_URL}).`;
+            message = `Eroare 404: Endpoint (${API_URL}).`;
           } else if (response.status === 401) {
-            message = 'Eroare de autentificare. Vă rugăm să vă reconectați în aplicație.';
+            message = t('chat.errorNotAuthed');
           } else if (response.status >= 500) {
-            message = `Eroare server (${response.status}): Serviciul AI întâmpină probleme temporare.`;
+            message = t('chat.errorServer');
           }
           throw new Error(message);
         }
@@ -275,7 +275,7 @@ export default function CameraScreen() {
 
         const normalized = payload
           .map((item) => ({
-            nume: String(item.nume || 'Aliment identificat'),
+            nume: String(item.nume || t('camera.unidentifiedFoodDefault')),
             // BUG-019: gramaj plafonat la 5000g (limita validatorului backend) ca
             // un rând astronomic (5000g × kcal_per_100g) să nu umfle totalurile.
             estimare_grame: clampValoare(Number(item.estimare_grame) || 100, LIMITE_DB_MESE.gramaj, 1),
@@ -292,7 +292,7 @@ export default function CameraScreen() {
         // CAM-001: un array gol înseamnă că AI-ul n-a identificat niciun aliment.
         // Îl tratăm ca eșec (fără succes fals, fără foaie/modal goale de salvat).
         if (normalized.length === 0) {
-          throw new Error('Nu am putut identifica alimentele din imagine.');
+          throw new Error(t('camera.unidentifiedFoods'));
         }
 
         setRezultat(normalized);
@@ -333,10 +333,10 @@ export default function CameraScreen() {
 
         setScanError(
           timeoutDepasit
-            ? 'Analiza a durat prea mult. Încearcă din nou.'
+            ? t('camera.timeoutError')
             : error instanceof Error
               ? error.message
-              : 'A apărut o eroare la analiza imaginii.',
+              : t('camera.genericScanError'),
         );
       } finally {
         clearTimeout(timeoutId);
@@ -369,18 +369,18 @@ export default function CameraScreen() {
         if (pending.length === 0 || !isMountedRef.current) return;
         const ultimulDraft = pending[pending.length - 1];
         Alert.alert(
-          'Imagine neanalizată',
-          'Există o poză neanalizată din sesiunea anterioară. Dorești să reiei analiza?',
+          t('camera.pendingDraftTitle'),
+          t('camera.pendingDraftMessage'),
           [
             {
-              text: 'Renunță',
+              text: t('alerts.butoane.anuleaza'),
               style: 'destructive',
               onPress: () => {
                 discardLocalImageDraft(ultimulDraft).catch(() => {});
               },
             },
             {
-              text: 'Reia analiza',
+              text: t('camera.resumeAnalysis'),
               onPress: () => {
                 analizeazaImaginea(ultimulDraft);
               },
@@ -627,11 +627,11 @@ export default function CameraScreen() {
         await pushOfflineMeal(payloadOffline);
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         Alert.alert(
-          'Salvat offline',
-          'Masa a fost salvată local în coada offline și va fi sincronizată automat la reconectarea la rețea.',
+          t('offline.salvatOffline'),
+          t('offline.masaSalvataOffline'),
           [{ text: 'OK', onPress: () => { permitereNavigareRef.current = true; router.replace('/(tabs)'); } }]
         );
-      } catch (errOffline) {
+      } catch (_errOffline) {
         Alert.alert(t('alerts.titluri.eroareSalvare'), mesajEroare || t('alerts.mesaje.eroareNecunoscutaSalvareMasa'));
       }
     } finally {
@@ -660,8 +660,8 @@ export default function CameraScreen() {
               <Scan size={44} color={colors.background} strokeWidth={2.5} />
             </LinearGradient>
           </Animated.View>
-          <Text maxFontSizeMultiplier={1.3} style={[styles.permissionTitle, { color: colors.textPrimary }]}>Permisiune Cameră</Text>
-          <Text maxFontSizeMultiplier={1.3} style={[styles.permissionSub, { color: colors.textSecondary }]}>NutriAI are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.</Text>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.permissionTitle, { color: colors.textPrimary }]}>{t('camera.permissionTitle')}</Text>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.permissionSub, { color: colors.textSecondary }]}>{t('camera.permissionSubtitle')}</Text>
           
           {/* BUG-059: când permisiunea e refuzată DEFINITIV (canAskAgain=false pe
               Android), butonul de cerere nu mai face nimic — dead-end. În loc de
@@ -669,28 +669,28 @@ export default function CameraScreen() {
           {permission.canAskAgain === false ? (
             <>
               <Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(600).delay(200)} style={[styles.permissionBtn, { shadowColor: colors.accent }]}>
-                <TouchableOpacity onPress={() => Linking.openSettings()} accessibilityRole="button" accessibilityLabel="Deschide setările aplicației" accessibilityHint="Permisiunea camerei a fost refuzată definitiv; deschide setările pentru a o activa">
+                <TouchableOpacity onPress={() => Linking.openSettings()} accessibilityRole="button" accessibilityLabel={t('camera.openSettings')} accessibilityHint={t('camera.permissionDeniedPermanent')}>
                   <LinearGradient colors={colors.accentGradient} style={styles.permissionBtnGrad}>
-                    <Text maxFontSizeMultiplier={1.3} style={[styles.permissionBtnText, { color: colors.background }]}>Deschide Setări</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.permissionBtnText, { color: colors.background }]}>{t('camera.openSettings')}</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </Animated.View>
               <Text maxFontSizeMultiplier={1.3} style={[styles.permissionDeniedText, { color: colors.textSecondary }]}>
-                Ai refuzat accesul la cameră. Deschide setările aplicației și activează permisiunea camerei.
+                {t('camera.permissionDeniedPermanent')}
               </Text>
             </>
           ) : (
             <Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(600).delay(200)} style={[styles.permissionBtn, { shadowColor: colors.accent }]}>
-              <TouchableOpacity onPress={requestPermission} accessibilityRole="button" accessibilityLabel="Permite accesul la cameră">
+              <TouchableOpacity onPress={requestPermission} accessibilityRole="button" accessibilityLabel={t('camera.allowAccess')}>
                 <LinearGradient colors={colors.accentGradient} style={styles.permissionBtnGrad}>
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.permissionBtnText, { color: colors.background }]}>Permite accesul</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.permissionBtnText, { color: colors.background }]}>{t('camera.allowAccess')}</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </Animated.View>
           )}
 
-          <TouchableOpacity style={styles.cancelLink} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi la ecranul anterior" hitSlop={12}>
-            <Text style={[styles.cancelLinkText, { color: colors.textSecondary }]}>Înapoi</Text>
+          <TouchableOpacity style={styles.cancelLink} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('camera.back')} hitSlop={12}>
+            <Text style={[styles.cancelLinkText, { color: colors.textSecondary }]}>{t('camera.back')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -709,13 +709,13 @@ export default function CameraScreen() {
               setAiMenuVisible(prev => !prev);
             }}
             accessibilityRole="button"
-            accessibilityLabel="Selectează furnizorul AI"
-            accessibilityHint="Deschide meniul pentru alegerea modelului AI"
+            accessibilityLabel={t('camera.aiDropdownTitle')}
+            accessibilityHint={t('camera.aiDropdownTitle')}
           >
             <View style={[styles.topBadgeBlur, { paddingVertical: 8 }]}>
               <Zap size={14} color={colors.accent} fill={colors.accent} />
               <Text maxFontSizeMultiplier={1.3} style={[styles.topBadgeText, { color: colors.textPrimary }]}>
-                {selectedAI === 'auto' ? 'AI Inteligent' : selectedAI.toUpperCase()}
+                {selectedAI === 'auto' ? t('camera.smartAI') : selectedAI.toUpperCase()}
               </Text>
               <ChevronDown size={14} color={colors.textSecondary} />
             </View>

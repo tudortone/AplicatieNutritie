@@ -25,11 +25,16 @@ const USER_EXACT_KEYS = new Set([
   // Date de sănătate strict per-utilizator — alt cont pe același telefon
   // nu trebuie să moștenească pașii/obiectivul/furnizorul contului precedent.
   'health_sync_enabled', 'health_step_goal', 'health_sync_provider',
+  // BUG-068: Cozi offline și targeturi nesincronizate
+  '@nutri_offline_meals_queue', 'targeturi_pending_sync',
+  'nutriai_image_cache_index_v1', 'nutriai_tip_closed_date',
+  'jurnal_poze_activate',
 ]);
 
 const USER_PREFIXES = [
   'chat_history_', 'nutriai_mese_', 'nutriai_apa_', 'nutriai_camara_',
   'nutriai_quest', 'nutriai_workout', 'manual_steps_',
+  '@nutri_offline_meals_queue_', 'targeturi_pending_sync_',
 ];
 
 export async function clearLocalUserData(): Promise<void> {

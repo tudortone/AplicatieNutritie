@@ -74,9 +74,9 @@ export async function scheduleDailyMealReminders(
     return [];
   }
 
-  // Anulăm DOAR mementurile create anterior de aplicație, apoi le reprogramăm —
-  // evităm duplicatele fără a atinge notificări străine.
-  await cancelManagedReminders();
+  // BUG-073: Anulăm DOAR mementurile din domeniul 'daily_meals', păstrând
+  // mementurile cămării ('pantry_expiry') înregistrate separat.
+  await cancelManagedReminders('daily_meals');
 
   const scheduledIds: string[] = [];
 
@@ -102,10 +102,10 @@ export async function scheduleDailyMealReminders(
     }
   }
 
-  await setManagedReminders(accountId, scheduledIds);
+  await setManagedReminders(accountId, scheduledIds, 'daily_meals');
   return scheduledIds;
 }
 
 export async function cancelAllMealReminders(): Promise<void> {
-  await cancelManagedReminders();
+  await cancelManagedReminders('daily_meals');
 }
