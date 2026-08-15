@@ -108,8 +108,10 @@ export type TipRezultatInsertMasa =
   | { tip: 'offline'; motiv: string }
   | { tip: 'eroare_server'; mesaj: string; cod?: string };
 
+const CODURI_RETEA_EXPLICITE = new Set(['ETIMEDOUT', 'ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND']);
+
 /**
- * Verifică dacă o eroare/excepție reprezintă un eșec real de transport/rețea/timeout/abort.
+ * RC-002: Verifică dacă o eroare fără cod de server reprezintă un eșec real de transport/fetch.
  */
 export function esteEroareRetea(err: unknown): boolean {
   if (!err) return false;
@@ -118,15 +120,18 @@ export function esteEroareRetea(err: unknown): boolean {
 
   if (name === 'AbortError' || /aborterror/i.test(name)) return true;
 
-  const reteaRegex = /network request failed|failed to fetch|network error|econnrefused|enotfound|etimedout|net::err|internet connection appears to be offline|socket hang up|connection refused|timeout|timed out|abort/i;
+  const reteaRegex = /network request failed|failed to fetch|network error|net::err|internet connection appears to be offline|socket hang up|connection refused/i;
   return reteaRegex.test(msg);
 }
 
 /**
- * REV-001 & CORR-001: Clasifică determinist rezultatul unei inserări de masă (Supabase sau excepție rețea).
- * Previne transformarea erorilor structurate de server (RLS 42501, constrângeri, validare)
- * sau a erorilor de runtime/programare (TypeError fără mesaj de rețea, Error generic)
- * în succese false salvate în coada offline.
+ * REV-001 / CORR-001 / RC-002: Clasifică determinist rezultatul unei inserări de masă.
+ * Ordine strictă:
+ * 1. 23505 -> duplicate;
+ * 2. Coduri explicite de transport OS/Node (ETIMEDOUT, ECONNREFUSED, ECONNRESET, ENOTFOUND) -> offline;
+ * 3. Orice alt cod SQL / HTTP sau status (ex: 57014 DB statement timeout, 42501 RLS, 23502, 23514) -> server error;
+ * 4. AbortError sau mesaje verificate de fetch/rețea fără cod de server -> offline;
+ * 5. Orice altceva necunoscut (TypeError de programare, Error generic) -> server/system error.
  */
 export function clasificaRezultatInsertMasa(
   rezultatOrError: { error: any } | Error | null | undefined
@@ -135,39 +140,38 @@ export function clasificaRezultatInsertMasa(
     return { tip: 'succes' };
   }
 
-  // Cazul în care a fost aruncată o excepție (Error / TypeError / etc.)
-  if (rezultatOrError instanceof Error) {
-    const msg = rezultatOrError.message || '';
-    const cod = (rezultatOrError as any).code;
-
-    // Doar dacă mesajul/tipul indică explicit o eroare reală de rețea/transport/timeout
-    if (esteEroareRetea(rezultatOrError)) {
-      return { tip: 'offline', motiv: msg };
-    }
-
-    // Altfel este o eroare de sistem/runtime/server (inclusiv TypeError de programare sau Error generic)
-    return { tip: 'eroare_server', mesaj: msg, cod: cod ? String(cod) : undefined };
-  }
-
-  const { error } = rezultatOrError;
-  if (!error) {
+  const rawErr = (rezultatOrError instanceof Error) ? rezultatOrError : (rezultatOrError as any).error;
+  if (!rawErr) {
     return { tip: 'succes' };
   }
 
-  if (esteEroareDuplicate(error)) {
+  const msg = typeof rawErr === 'string' ? rawErr : rawErr.message || rawErr.details || String(rawErr);
+  const name = rawErr.name || '';
+  const codRaw = rawErr.code ?? rawErr.status;
+  const cod = (codRaw !== null && codRaw !== undefined) ? String(codRaw).trim() : '';
+
+  // 1. 23505 (unique_violation) -> duplicat idempotent
+  if (esteEroareDuplicate(rawErr)) {
     return { tip: 'duplicat' };
   }
 
-  const cod = String(error.code || error.status || '').trim();
-  const msg = error.message || error.details || 'Eroare server Supabase';
-
-  // Dacă Supabase a returnat un obiect de eroare de transport/rețea
-  if (esteEroareRetea(error)) {
+  // 2. Coduri explicite de transport/rețea (ETIMEDOUT, ECONNREFUSED, ECONNRESET, ENOTFOUND)
+  if (cod && CODURI_RETEA_EXPLICITE.has(cod.toUpperCase())) {
     return { tip: 'offline', motiv: msg };
   }
 
-  // Erori structurate de server (RLS 42501, constrângeri 23502, 23514, etc.) sau alte erori
-  return { tip: 'eroare_server', mesaj: msg, cod: cod || undefined };
+  // 3. Orice alt cod SQL/HTTP/status nenul -> eroare structurată de server (inclusiv 57014 timeout statement, 42501 RLS)
+  if (cod) {
+    return { tip: 'eroare_server', mesaj: msg, cod };
+  }
+
+  // 4. Erori fără cod de server: AbortError sau mesaje verificate de rețea/transport
+  if (name === 'AbortError' || /aborterror/i.test(name) || esteEroareRetea(rawErr)) {
+    return { tip: 'offline', motiv: msg };
+  }
+
+  // 5. Tot restul (inclusiv TypeError de programare sau Error generic) -> eroare de server/sistem
+  return { tip: 'eroare_server', mesaj: msg };
 }
 
 export function eliminaAlimentScanat(rezultat: AlimentScanat[], index: number): AlimentScanat[] {

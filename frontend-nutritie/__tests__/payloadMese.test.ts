@@ -11,6 +11,7 @@ import {
 import { normalizeTipMasa, LIMITE_DB_MESE, getTipMasaDupaOra } from '../lib/mealUtils';
 import { parseMealProposal } from '../lib/parseMealProposal';
 import { pushOfflineMeal, clearOfflineQueue, getOfflineQueue } from '../lib/offlineQueue';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 jest.mock('@react-native-async-storage/async-storage', () => {
   let store: Record<string, string> = {};
@@ -256,7 +257,7 @@ describe('BUG-019 — insert esuat -> coada offline', () => {
   });
 });
 
-describe('REV-001 & CORR-001 — clasificaRezultatInsertMasa & protecție coadă offline', () => {
+describe('REV-001 / CORR-001 / RC-002 — clasificaRezultatInsertMasa & protecție coadă offline', () => {
   it('1. insert cu succes -> { tip: "succes" }', () => {
     expect(clasificaRezultatInsertMasa({ error: null })).toEqual({ tip: 'succes' });
     expect(clasificaRezultatInsertMasa(null)).toEqual({ tip: 'succes' });
@@ -273,24 +274,44 @@ describe('REV-001 & CORR-001 — clasificaRezultatInsertMasa & protecție coadă
     const fetchErr = new Error('Failed to fetch');
     expect(clasificaRezultatInsertMasa(fetchErr)).toEqual({ tip: 'offline', motiv: 'Failed to fetch' });
 
-    const timeoutErr = new Error('AbortError: request timed out');
-    expect(clasificaRezultatInsertMasa(timeoutErr)).toEqual({ tip: 'offline', motiv: 'AbortError: request timed out' });
+    const abortErr = new Error('AbortError: connection aborted');
+    abortErr.name = 'AbortError';
+    expect(clasificaRezultatInsertMasa(abortErr)).toEqual({ tip: 'offline', motiv: 'AbortError: connection aborted' });
 
     // Supabase payload cu eroare fără cod dar mesaj de rețea
     expect(clasificaRezultatInsertMasa({ error: { message: 'Failed to fetch' } })).toEqual({ tip: 'offline', motiv: 'Failed to fetch' });
   });
 
-  it('4. eroare RLS 42501 -> { tip: "eroare_server" } (NU intră în coada offline)', () => {
-    const rlsError = { code: '42501', message: 'new row violates row-level security policy for table "mese"' };
+  it('4. RC-002: coduri explicite de transport (ETIMEDOUT, ECONNREFUSED) -> { tip: "offline" }', () => {
+    const etimedoutErr = new Error('connect ETIMEDOUT 1.2.3.4:443');
+    (etimedoutErr as any).code = 'ETIMEDOUT';
+    expect(clasificaRezultatInsertMasa(etimedoutErr)).toEqual({ tip: 'offline', motiv: 'connect ETIMEDOUT 1.2.3.4:443' });
+
+    const econnErr = { code: 'ECONNREFUSED', message: 'connect ECONNREFUSED' };
+    expect(clasificaRezultatInsertMasa({ error: econnErr })).toEqual({ tip: 'offline', motiv: 'connect ECONNREFUSED' });
+  });
+
+  it('5. RC-002: SQL timeout (57014) -> { tip: "eroare_server" } (NU este confundat cu offline din cauza cuvântului timeout)', () => {
+    const dbTimeoutErr = { code: '57014', message: 'canceling statement due to statement timeout' };
+    const rez = clasificaRezultatInsertMasa({ error: dbTimeoutErr });
+    expect(rez.tip).toBe('eroare_server');
+    if (rez.tip === 'eroare_server') {
+      expect(rez.cod).toBe('57014');
+      expect(rez.mesaj).toContain('statement timeout');
+    }
+  });
+
+  it('6. RC-002: RLS 42501 cu text de tip network policy -> { tip: "eroare_server" } (NU este confundat cu offline)', () => {
+    const rlsError = { code: '42501', message: 'network policy violation on table "mese"' };
     const rez = clasificaRezultatInsertMasa({ error: rlsError });
     expect(rez.tip).toBe('eroare_server');
     if (rez.tip === 'eroare_server') {
       expect(rez.cod).toBe('42501');
-      expect(rez.mesaj).toContain('row-level security');
+      expect(rez.mesaj).toContain('network policy violation');
     }
   });
 
-  it('5. eroare de constrângere / validare DB (23502, 23514) -> { tip: "eroare_server" } (NU intră în coada offline)', () => {
+  it('7. eroare de constrângere / validare DB (23502, 23514) -> { tip: "eroare_server" } (NU intră în coada offline)', () => {
     const nullErr = { code: '23502', message: 'null value in column "nume" violates not-null constraint' };
     const rezNull = clasificaRezultatInsertMasa({ error: nullErr });
     expect(rezNull.tip).toBe('eroare_server');
@@ -306,7 +327,7 @@ describe('REV-001 & CORR-001 — clasificaRezultatInsertMasa & protecție coadă
     }
   });
 
-  it('6. CORR-001: eroare generică fără cod -> { tip: "eroare_server" } (NU intră în coada offline)', () => {
+  it('8. eroare generică fără cod -> { tip: "eroare_server" } (NU intră în coada offline)', () => {
     const genericErr = new Error('Unexpected parsing fault');
     const rez = clasificaRezultatInsertMasa(genericErr);
     expect(rez.tip).toBe('eroare_server');
@@ -315,12 +336,73 @@ describe('REV-001 & CORR-001 — clasificaRezultatInsertMasa & protecție coadă
     }
   });
 
-  it('7. CORR-001: TypeError de programare fără mesaj de rețea -> { tip: "eroare_server" } (NU intră în coada offline)', () => {
+  it('9. TypeError de programare fără mesaj de rețea -> { tip: "eroare_server" } (NU intră în coada offline)', () => {
     const typeErr = new TypeError('Cannot read properties of undefined (reading "id")');
     const rez = clasificaRezultatInsertMasa(typeErr);
     expect(rez.tip).toBe('eroare_server');
     if (rez.tip === 'eroare_server') {
       expect(rez.mesaj).toContain('Cannot read properties of undefined');
     }
+  });
+
+  describe('RC-002: Integrare efecte — server error vs transport offline queueing', () => {
+    beforeEach(async () => {
+      await clearOfflineQueue('u1');
+      await clearOfflineQueue();
+      await (AsyncStorage as any).clear?.();
+    });
+
+    it('10. eroare de server (ex: RLS 42501 sau DB Timeout 57014) nu apelează pushOfflineMeal', async () => {
+      const dbErr = { code: '57014', message: 'canceling statement due to statement timeout' };
+      const rez = clasificaRezultatInsertMasa({ error: dbErr });
+      expect(rez.tip).toBe('eroare_server');
+
+      // Doar dacă este offline se introduce în coadă
+      if (rez.tip === 'offline') {
+        await pushOfflineMeal({
+          id: 'm1',
+          user_id: 'u1',
+          nume: 'Test',
+          calorii: 200,
+          proteine: 20,
+          grasimi: 5,
+          carbohidrati: 20,
+          fibre: 2,
+          tip_masa: 'pranz',
+          alimente: [],
+          data: '2026-08-15',
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      const coada = await getOfflineQueue('u1');
+      expect(coada).toHaveLength(0);
+    });
+
+    it('11. eșec real de transport (ETIMEDOUT / fetch reject) pune fiecare rând exact o dată în coada offline', async () => {
+      const netErr = new Error('connect ETIMEDOUT');
+      (netErr as any).code = 'ETIMEDOUT';
+      const rez = clasificaRezultatInsertMasa(netErr);
+      expect(rez.tip).toBe('offline');
+
+      const rows = [
+        { id: 'r1', user_id: 'u1', nume: 'Aliment 1', calorii: 150, proteine: 10, grasimi: 2, carbohidrati: 20, fibre: 1, tip_masa: 'pranz', data: '2026-08-15' },
+        { id: 'r2', user_id: 'u1', nume: 'Aliment 2', calorii: 250, proteine: 20, grasimi: 5, carbohidrati: 30, fibre: 2, tip_masa: 'pranz', data: '2026-08-15' },
+      ];
+
+      if (rez.tip === 'offline') {
+        for (const row of rows) {
+          await pushOfflineMeal({
+            ...row,
+            alimente: [],
+            created_at: new Date().toISOString(),
+          });
+        }
+      }
+
+      const coada = await getOfflineQueue('u1');
+      expect(coada).toHaveLength(2);
+      expect(coada.map((m) => m.id)).toEqual(['r1', 'r2']);
+    });
   });
 });

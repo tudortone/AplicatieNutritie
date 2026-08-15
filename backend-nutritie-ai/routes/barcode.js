@@ -9,6 +9,7 @@ const { construiesteUrlOpenFoodFacts, EroareProprietateProdus } = require('../ut
 // Task 1: codEroare mutat în utilitarul comun (utils/codEroare.js) — aceeași
 // definiție ca în storePartajat/gdpr, ca tot backendul să logheze coduri identice.
 const { codEroare } = require('../utils/codEroare');
+const metrics = require('../utils/metrics');
 
 const GROQ_CHAT_URL = ['https:', '', 'api.groq.com', 'openai', 'v1', 'chat', 'completions'].join('/');
 
@@ -20,8 +21,9 @@ function numarIntrare(value, max) {
   return Math.round((parsed + Number.EPSILON) * 100) / 100;
 }
 
-function createBarcodeRouter({ requireAuth, generalLimiter, contextDate, barcodeRepo }) {
+function createBarcodeRouter({ requireAuth, generalLimiter, contextDate, config, barcodeRepo }) {
   const router = express.Router();
+  const groqTextModels = config?.ai?.groqTextModels || ['openai/gpt-oss-120b', 'qwen/qwen3.6-27b'];
   const raspunsBarcode = (res, { produs, sursa, estimat, dinCache }) => res.json({
     produs,
     sursa,
@@ -106,31 +108,45 @@ function createBarcodeRouter({ requireAuth, generalLimiter, contextDate, barcode
 
       const groqApiKey = process.env.GROQ_API_KEY?.trim();
       if (groqApiKey) {
-        try {
-          const aiPrompt = `Utilizatorul din Romania a scanat codul de bare EAN/UPC "${code}" dar produsul nu a fost gasit. Daca il cunosti cu certitudine, returneaza date reale; altfel returneaza un profil generic marcat ca estimare. Returneaza strict JSON cu codBare, nume, brand, cantitate, calorii, proteine, carbohidrati si grasimi.`;
-          const aiResp = await callWithTimeout((signal) => fetch(GROQ_CHAT_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${groqApiKey}`,
-            },
-            body: JSON.stringify({
-              model: 'openai/gpt-oss-120b',
-              messages: [{ role: 'user', content: aiPrompt }],
-              temperature: 0.1,
-              max_tokens: 400,
-              response_format: { type: 'json_object' },
-            }),
-            signal,
-          }), 18000);
+        const aiPrompt = `Utilizatorul din Romania a scanat codul de bare EAN/UPC "${code}" dar produsul nu a fost gasit. Daca il cunosti cu certitudine, returneaza date reale; altfel returneaza un profil generic marcat ca estimare. Returneaza strict JSON cu codBare, nume, brand, cantitate, calorii, proteine, carbohidrati si grasimi.`;
 
-          if (aiResp.ok) {
+        for (const modelName of groqTextModels) {
+          try {
+            const aiResp = await callWithTimeout((signal) => fetch(GROQ_CHAT_URL, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${groqApiKey}`,
+              },
+              body: JSON.stringify({
+                model: modelName,
+                messages: [{ role: 'user', content: aiPrompt }],
+                temperature: 0.1,
+                max_tokens: 400,
+                response_format: { type: 'json_object' },
+              }),
+              signal,
+            }), 18000);
+
+            if (!aiResp.ok) {
+              metrics.inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'barcode-estimate', ok: false });
+              continue;
+            }
+
             const aiData = await aiResp.json();
             const content = aiData.choices?.[0]?.message?.content;
             const parsed = /** @type {Record<string, unknown> | null} */ (
               content ? parseJsonFromLlm(content, { asteapta: 'obiect' }) : null
             );
-            if (parsed?.nume) {
+            if (parsed && typeof parsed === 'object' && parsed.nume) {
+              metrics.inregistreazaAi({
+                provider: 'groq',
+                model: modelName,
+                ruta: 'barcode-estimate',
+                usage: aiData.usage,
+                ok: true,
+              });
+
               const normalizedAi = {
                 codBare: code,
                 nume: String(parsed.nume).substring(0, 150),
@@ -155,10 +171,13 @@ function createBarcodeRouter({ requireAuth, generalLimiter, contextDate, barcode
                 estimat: true,
                 dinCache: false,
               });
+            } else {
+              metrics.inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'barcode-estimate', ok: false });
             }
+          } catch (err) {
+            metrics.inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'barcode-estimate', ok: false });
+            console.warn(`[Barcode] Estimare AI esuata pe modelul ${modelName}:`, codEroare(err));
           }
-        } catch (err) {
-          console.warn('[Barcode] Estimare AI esuata:', codEroare(err));
         }
       }
 

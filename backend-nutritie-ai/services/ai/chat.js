@@ -76,6 +76,17 @@ function curataProfilPer100g(sursa, limite) {
   return curatat;
 }
 
+/** Validează că obiectul extras din LLM respectă strict schema MEAL_PROPOSAL */
+function estePropunereMasaValida(parsed) {
+  if (!parsed || typeof parsed !== 'object') return false;
+  if (parsed.type !== 'MEAL_PROPOSAL') return false;
+  if (!Array.isArray(parsed.items) || parsed.items.length === 0) return false;
+  const tipuriPermise = ['mic_dejun', 'pranz', 'cina', 'gustare'];
+  if (!tipuriPermise.includes(parsed.meal_type)) return false;
+  if (!parsed.totals || typeof parsed.totals !== 'object') return false;
+  return true;
+}
+
 function creeazaServiciuChat({ config, genAI }) {
   const serviciuVision = creeazaServiciuVision({ config });
   const groqApiKey = process.env.GROQ_API_KEY || null;
@@ -120,10 +131,22 @@ Contextul utilizatorului de astazi:
 - Calorii: a mancat ${calCons} dintr-o tinta de ${calTinta} kcal.
 - Proteine: a mancat ${protCons}g dintr-o tinta de ${protTinta}g.
 
-Instructiuni de stil:
-- Daca utilizatorul spune "am mancat X", calculeaza automat macronutrientii aproximativi si genereaza un JSON valid pentru salvare daca e cazul, dar daca doar discuta, raspunde-i cald si incurajator.
-- Fii concis, foloseste paragrafe scurte sau bullet points.
-- Nu folosi niciodata un ton critic sau judecativ.`;
+Instructiuni de formatare si stil:
+1. Foloseste emoji-uri relevante la inceputul propozitiilor sau ideilor importante.
+2. Structureaza raspunsul cu bullet points daca oferi mai mult de 2 sugestii sau optiuni de mese.
+3. Raspunde concis, clar si la obiect. Poti folosi maximum 6-8 propozitii daca utilizatorul cere explicatii detaliate sau planuri de mese.
+4. REGULA JURNAL ALIMENTAR DIN CHAT: Daca utilizatorul mentioneaza ca a mancat, a consumat sau doreste sa inregistreaza o masa/un aliment (ex: "am mancat 200g piept de pui si orez", "logheaza o salata"), NU confirma si NU declara nimic salvat! Raspunde STRICT si EXCLUSIV cu un obiect JSON valid exact in formatul:
+{
+  "type": "MEAL_PROPOSAL",
+  "meal_type": "mic_dejun",
+  "items": [
+    { "name": "nume aliment", "qty": 100, "unit": "g", "protein_g": 20, "carbs_g": 0, "fat_g": 5, "kcal": 130, "fiber_g": 0 }
+  ],
+  "totals": { "protein_g": 20, "carbs_g": 0, "fat_g": 5, "kcal": 130, "fiber_g": 0 }
+}
+Nu include absolut niciun alt caracter sau text in fata ori dupa acest obiect JSON cand propui o masa! Cheia "meal_type" TREBUIE sa fie neaparat una din valorile: "mic_dejun", "pranz", "cina", "gustare".
+
+Sarcina ta: Raspunde prietenos, tinand cont de istoricul discutiei si de caloriile/proteinele ramase astazi.`;
 
     const messages = [{ role: 'system', content: systemPrompt }];
 
@@ -154,9 +177,9 @@ Instructiuni de stil:
       messages.splice(1, 1);
     }
 
-    try {
-      const isMealLog = /am m[aâ]ncat|am consumat|logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa/i.test(ultimulMesaj);
+    const isMealLog = /am m[aâ]ncat|am consumat|logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa/i.test(ultimulMesaj);
 
+    try {
       if (!groqApiKey) {
         // Groq nu e configurat: nu trimitem 'Bearer undefined'. /api/chat are un
         // fallback Gemini real mai jos, deci nu 503 — sarim doar peste Groq si
@@ -195,9 +218,24 @@ Instructiuni de stil:
           }
 
           const data = await response.json();
-          const raspunsText = data.choices?.[0]?.message?.content || 'Nu am putut genera un raspuns.';
+          const rawContent = data.choices?.[0]?.message?.content;
+          if (!rawContent) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', ok: false });
+            ultimulEsecGroq = new Error(`Raspuns gol primit de la AI pe modelul ${modelName}`);
+            continue;
+          }
+
+          if (isMealLog) {
+            const parsed = parseJsonFromLlm(rawContent, { asteapta: 'obiect' });
+            if (!estePropunereMasaValida(parsed)) {
+              inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', ok: false });
+              ultimulEsecGroq = new Error(`Raspuns JSON invalid pentru MEAL_PROPOSAL pe modelul ${modelName}`);
+              continue;
+            }
+          }
+
           inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', usage: data.usage, ok: true });
-          return { raspuns: raspunsText };
+          return { raspuns: rawContent };
         } catch (err) {
           inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', ok: false });
           ultimulEsecGroq = err;
@@ -218,6 +256,13 @@ Instructiuni de stil:
           }), 30000);
           const raspunsText = result?.response?.text();
           if (raspunsText) {
+            if (isMealLog) {
+              const parsed = parseJsonFromLlm(raspunsText, { asteapta: 'obiect' });
+              if (!estePropunereMasaValida(parsed)) {
+                console.warn(`Fallback Gemini (${modelName}) nu a generat un MEAL_PROPOSAL valid.`);
+                continue;
+              }
+            }
             inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'chat', usage: result.response.usageMetadata, ok: true });
             return { raspuns: raspunsText };
           }

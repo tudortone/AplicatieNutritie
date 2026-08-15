@@ -17,14 +17,14 @@ const contorAiFurnizori = new Map();
 const contorAiRute = new Map();
 
 /**
- * Preturi ESTIMATIVE USD / 1M tokeni, per model. NU sunt contractul de
- * facturare — doar o aproximare operationala pentru a putea raspunde la
- * "cat ne-a costat". Tarifele pot devia fata de factura reala.
+ * Preturi ESTIMATIVE USD / 1M tokeni, per model (snapshot 2026-08-15).
+ * NU sunt contractul de facturare — doar o aproximare operationala pentru a
+ * raspunde la "cat ne-a costat". Tarifele pot devia fata de factura reala.
  */
 const PRET_PER_MILION = Object.freeze({
   'gpt-4o-mini': { intrare: 0.15, iesire: 0.6 },
   'openai/gpt-oss-120b': { intrare: 0.15, iesire: 0.6 },
-  'qwen/qwen3.6-27b': { intrare: 0.15, iesire: 0.6 },
+  'qwen/qwen3.6-27b': { intrare: 0.6, iesire: 3.0 },
   'llama-4-scout-17b-16e-instruct': { intrare: 0.07, iesire: 0.28 },
   'llama-4-maverick-17b-128e-instruct': { intrare: 0.2, iesire: 0.8 },
   'gemini-2.5-flash': { intrare: 0.3, iesire: 2.5 },

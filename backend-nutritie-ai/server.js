@@ -374,6 +374,7 @@ const barcodeR = createBarcodeRouter({
   requireAuth,
   generalLimiter,
   contextDate,
+  config,
   barcodeRepo: createBarcodeRepo(),
 });
 const profilR = createProfilRouter({ requireAuth, generalLimiter, config });
