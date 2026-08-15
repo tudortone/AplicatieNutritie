@@ -179,7 +179,7 @@ export default function AuthScreen() {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: 'nutriai://auth/callback',
+        redirectTo: 'nutriai://auth/callback?flow=recovery',
       });
       if (error) {
         Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.eroareDinamica', { eroare: error.message }));

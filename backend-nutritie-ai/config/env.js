@@ -31,6 +31,7 @@ const IMPLICITE_TEST = {
 	SUPABASE_SERVICE_ROLE_KEY: 'service-role-de-test',
 	GEMINI_API_KEY: 'gemini-key-de-test',
 	GROQ_API_KEY: 'groq-key-de-test',
+	GROQ_TEXT_MODELS: 'openai/gpt-oss-120b,qwen/qwen3.6-27b',
 };
 
 function opreste(mesaj) {
@@ -147,6 +148,10 @@ function incarcaConfig() {
 			// B-3: cheia trece prin config validata (obligatorie in productie), nu se
 			// citeste direct din process.env in bootstrap.
 			geminiApiKey: process.env.GEMINI_API_KEY || null,
+			groqTextModels: (() => {
+				const dinEnv = listaDinEnv(process.env.GROQ_TEXT_MODELS);
+				return dinEnv.length > 0 ? dinEnv : ['openai/gpt-oss-120b', 'qwen/qwen3.6-27b'];
+			})(),
 			groqVisionModels: listaDinEnv(process.env.GROQ_VISION_MODELS),
 			// Plafon de cereri AI simultane pe instanta. Fara el, 20 de utilizatori
 			// paraleli inseamna 20 de imagini base64 de pana la 6,7 MB tinute in heap

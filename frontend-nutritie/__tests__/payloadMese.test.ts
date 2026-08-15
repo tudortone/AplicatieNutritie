@@ -256,7 +256,7 @@ describe('BUG-019 — insert esuat -> coada offline', () => {
   });
 });
 
-describe('REV-001 — clasificaRezultatInsertMasa & protecție coadă offline', () => {
+describe('REV-001 & CORR-001 — clasificaRezultatInsertMasa & protecție coadă offline', () => {
   it('1. insert cu succes -> { tip: "succes" }', () => {
     expect(clasificaRezultatInsertMasa({ error: null })).toEqual({ tip: 'succes' });
     expect(clasificaRezultatInsertMasa(null)).toEqual({ tip: 'succes' });
@@ -303,6 +303,24 @@ describe('REV-001 — clasificaRezultatInsertMasa & protecție coadă offline', 
     expect(rezCheck.tip).toBe('eroare_server');
     if (rezCheck.tip === 'eroare_server') {
       expect(rezCheck.cod).toBe('23514');
+    }
+  });
+
+  it('6. CORR-001: eroare generică fără cod -> { tip: "eroare_server" } (NU intră în coada offline)', () => {
+    const genericErr = new Error('Unexpected parsing fault');
+    const rez = clasificaRezultatInsertMasa(genericErr);
+    expect(rez.tip).toBe('eroare_server');
+    if (rez.tip === 'eroare_server') {
+      expect(rez.mesaj).toBe('Unexpected parsing fault');
+    }
+  });
+
+  it('7. CORR-001: TypeError de programare fără mesaj de rețea -> { tip: "eroare_server" } (NU intră în coada offline)', () => {
+    const typeErr = new TypeError('Cannot read properties of undefined (reading "id")');
+    const rez = clasificaRezultatInsertMasa(typeErr);
+    expect(rez.tip).toBe('eroare_server');
+    if (rez.tip === 'eroare_server') {
+      expect(rez.mesaj).toContain('Cannot read properties of undefined');
     }
   });
 });

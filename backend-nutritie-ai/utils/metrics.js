@@ -23,7 +23,8 @@ const contorAiRute = new Map();
  */
 const PRET_PER_MILION = Object.freeze({
   'gpt-4o-mini': { intrare: 0.15, iesire: 0.6 },
-  'llama-3.3-70b-versatile': { intrare: 0.59, iesire: 0.79 },
+  'openai/gpt-oss-120b': { intrare: 0.15, iesire: 0.6 },
+  'qwen/qwen3.6-27b': { intrare: 0.15, iesire: 0.6 },
   'llama-4-scout-17b-16e-instruct': { intrare: 0.07, iesire: 0.28 },
   'llama-4-maverick-17b-128e-instruct': { intrare: 0.2, iesire: 0.8 },
   'gemini-2.5-flash': { intrare: 0.3, iesire: 2.5 },

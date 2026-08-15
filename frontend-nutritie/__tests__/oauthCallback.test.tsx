@@ -74,11 +74,11 @@ describe('app/auth/callback — guard idempotență OAuth', () => {
     expect(mockReplace).not.toHaveBeenCalledWith('/(tabs)');
   });
 
-  describe('REV-002 — sesiuni de recuperare parolă & izolare conturi', () => {
-    it('1. cont B activ + link de recovery valid pentru cont A -> execută schimbul de cod și stabilește sesiunea lui A', async () => {
+  describe('REV-002 & CORR-002 — sesiuni de recuperare parolă & marker flow=recovery', () => {
+    it('1. cont B activ + link de recovery cu flow=recovery pentru cont A -> execută schimbul de cod și stabilește sesiunea lui A', async () => {
       // Sesiune inițială aparține contului B
       mockGetSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user_B' } } }, error: null });
-      mockParams = { code: 'recovery_code_for_user_A', type: 'recovery' };
+      mockParams = { code: 'recovery_code_for_user_A', flow: 'recovery' };
 
       mockExchangeCodeForSession.mockImplementationOnce(() => {
         // Schimbul reușit stabilește sesiunea contului A
@@ -88,14 +88,27 @@ describe('app/auth/callback — guard idempotență OAuth', () => {
 
       render(<AuthCallbackScreen />);
 
-      // REV-002: Nu se face short-circuit pe user_B; exchangeCodeForSession este apelat pentru codul lui A
+      // CORR-002: Nu se face short-circuit pe user_B; exchangeCodeForSession este apelat pentru codul lui A
       await waitFor(() => expect(mockExchangeCodeForSession).toHaveBeenCalledWith('recovery_code_for_user_A'));
       await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/noua-parola'));
       const finalSession = await mockGetSession();
       expect(finalSession.data.session.user.id).toBe('user_A');
     });
 
-    it('2. callback duplicat OAuth cu sesiune deja existentă -> nu repetă schimbul', async () => {
+    it('2. callback cu doar markerul efectiv suportat (flow: recovery) funcționează complet', async () => {
+      mockParams = { code: 'flow_only_code', flow: 'recovery' };
+      mockExchangeCodeForSession.mockImplementationOnce(() => {
+        mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'user_Flow' } } }, error: null });
+        return Promise.resolve({ error: null });
+      });
+
+      render(<AuthCallbackScreen />);
+
+      await waitFor(() => expect(mockExchangeCodeForSession).toHaveBeenCalledWith('flow_only_code'));
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/noua-parola'));
+    });
+
+    it('3. callback duplicat OAuth cu sesiune deja existentă -> nu repetă schimbul', async () => {
       mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'user_OAuth' } } }, error: null });
       mockParams = { code: 'oauth_code', provider: 'google' };
 
@@ -105,9 +118,8 @@ describe('app/auth/callback — guard idempotență OAuth', () => {
       expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
     });
 
-    it('3. link recovery invalid sau expirat -> redirecționează la /auth și NU navighează la noua-parola', async () => {
-      mockGetSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user_B' } } }, error: null });
-      mockParams = { code: 'invalid_expired_code', type: 'recovery' };
+    it('4. link recovery invalid sau expirat -> redirecționează la /auth și NU navighează la noua-parola', async () => {
+      mockParams = { code: 'invalid_expired_code', flow: 'recovery' };
       mockExchangeCodeForSession.mockResolvedValueOnce({ error: new Error('Token has expired or is invalid') });
 
       render(<AuthCallbackScreen />);
@@ -117,8 +129,20 @@ describe('app/auth/callback — guard idempotență OAuth', () => {
       expect(mockReplace).not.toHaveBeenCalledWith('/auth/noua-parola');
     });
 
-    it('4. recovery fără sesiune existentă -> funcționează normal și navighează la noua-parola', async () => {
-      mockGetSession.mockResolvedValueOnce({ data: { session: null }, error: null });
+    it('5. schimb reușit dar fără sesiune rezultantă validă -> redirect /auth, fără navigare la noua-parola', async () => {
+      mockParams = { code: 'no_resulting_session_code', flow: 'recovery' };
+      mockExchangeCodeForSession.mockResolvedValueOnce({ error: null });
+      // Sesiunea rămâne null
+      mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
+
+      render(<AuthCallbackScreen />);
+
+      await waitFor(() => expect(mockExchangeCodeForSession).toHaveBeenCalledWith('no_resulting_session_code'));
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth'));
+      expect(mockReplace).not.toHaveBeenCalledWith('/auth/noua-parola');
+    });
+
+    it('6. recovery fără sesiune existentă -> funcționează normal și navighează la noua-parola', async () => {
       mockParams = { code: 'clean_recovery_code', type: 'recovery' };
       mockExchangeCodeForSession.mockImplementationOnce(() => {
         mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'user_Clean' } } }, error: null });

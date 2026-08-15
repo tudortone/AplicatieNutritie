@@ -469,33 +469,37 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
       let content = null;
       let lastErr = null;
 
+      const groqTextModels = config?.ai?.groqTextModels || ['openai/gpt-oss-120b', 'qwen/qwen3.6-27b'];
       for (const key of serviciuVision.getApiKeysList('GROQ_API_KEY')) {
-        try {
-          const response = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(corpText('llama-3.3-70b-versatile')),
-            signal,
-          }), 30000, controllerAbord.signal);
+        for (const modelName of groqTextModels) {
+          try {
+            const response = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(corpText(modelName)),
+              signal,
+            }), 30000, controllerAbord.signal);
 
-          if (response.ok) {
-            const data = await response.json();
-            content = data.choices?.[0]?.message?.content;
-            if (content) {
-              inregistreazaAi({ provider: 'groq', model: 'llama-3.3-70b-versatile', ruta: 'vision-fallback', usage: data.usage, ok: true });
-              break;
+            if (response.ok) {
+              const data = await response.json();
+              content = data.choices?.[0]?.message?.content;
+              if (content) {
+                inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'vision-fallback', usage: data.usage, ok: true });
+                break;
+              }
+              inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'vision-fallback', ok: false });
+            } else {
+              inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'vision-fallback', ok: false });
+              lastErr = new Error(`Groq API (${response.status}) pe modelul ${modelName}`);
+              console.warn(`Groq vision-fallback esuat (${response.status}) pe modelul ${modelName}`);
             }
-            inregistreazaAi({ provider: 'groq', model: 'llama-3.3-70b-versatile', ruta: 'vision-fallback', ok: false });
-          } else {
-            inregistreazaAi({ provider: 'groq', model: 'llama-3.3-70b-versatile', ruta: 'vision-fallback', ok: false });
-            lastErr = new Error(`Groq API (${response.status})`);
-            console.warn(`Groq vision-fallback esuat (${response.status})`);
+          } catch (e) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'vision-fallback', ok: false });
+            lastErr = e;
+            console.warn(`Eroare Groq vision-fallback (${modelName}):`, e.message);
           }
-        } catch (e) {
-          inregistreazaAi({ provider: 'groq', model: 'llama-3.3-70b-versatile', ruta: 'vision-fallback', ok: false });
-          lastErr = e;
-          console.warn('Eroare Groq vision-fallback:', e.message);
         }
+        if (content) break;
       }
 
       if (!content) {

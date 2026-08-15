@@ -109,8 +109,23 @@ export type TipRezultatInsertMasa =
   | { tip: 'eroare_server'; mesaj: string; cod?: string };
 
 /**
- * REV-001: Clasifică determinist rezultatul unei inserări de masă (Supabase sau excepție rețea).
+ * Verifică dacă o eroare/excepție reprezintă un eșec real de transport/rețea/timeout/abort.
+ */
+export function esteEroareRetea(err: unknown): boolean {
+  if (!err) return false;
+  const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : String((err as any)?.message || '');
+  const name = err instanceof Error ? err.name : String((err as any)?.name || '');
+
+  if (name === 'AbortError' || /aborterror/i.test(name)) return true;
+
+  const reteaRegex = /network request failed|failed to fetch|network error|econnrefused|enotfound|etimedout|net::err|internet connection appears to be offline|socket hang up|connection refused|timeout|timed out|abort/i;
+  return reteaRegex.test(msg);
+}
+
+/**
+ * REV-001 & CORR-001: Clasifică determinist rezultatul unei inserări de masă (Supabase sau excepție rețea).
  * Previne transformarea erorilor structurate de server (RLS 42501, constrângeri, validare)
+ * sau a erorilor de runtime/programare (TypeError fără mesaj de rețea, Error generic)
  * în succese false salvate în coada offline.
  */
 export function clasificaRezultatInsertMasa(
@@ -120,14 +135,18 @@ export function clasificaRezultatInsertMasa(
     return { tip: 'succes' };
   }
 
-  // Cazul în care a fost aruncată o excepție (de ex. fetch eșuat / rețea offline)
+  // Cazul în care a fost aruncată o excepție (Error / TypeError / etc.)
   if (rezultatOrError instanceof Error) {
     const msg = rezultatOrError.message || '';
-    // Dacă este o excepție de rețea/transport (Failed to fetch, Network request failed, timeout, offline)
-    if (/network|fetch|timeout|offline|abort|econnrefused/i.test(msg) || !('code' in rezultatOrError)) {
+    const cod = (rezultatOrError as any).code;
+
+    // Doar dacă mesajul/tipul indică explicit o eroare reală de rețea/transport/timeout
+    if (esteEroareRetea(rezultatOrError)) {
       return { tip: 'offline', motiv: msg };
     }
-    return { tip: 'eroare_server', mesaj: msg, cod: (rezultatOrError as any).code };
+
+    // Altfel este o eroare de sistem/runtime/server (inclusiv TypeError de programare sau Error generic)
+    return { tip: 'eroare_server', mesaj: msg, cod: cod ? String(cod) : undefined };
   }
 
   const { error } = rezultatOrError;
@@ -139,20 +158,16 @@ export function clasificaRezultatInsertMasa(
     return { tip: 'duplicat' };
   }
 
-  // Dacă eroarea are un cod SQL / HTTP sau este o eroare structurată de server (RLS 42501, 23502, 23503, etc.)
   const cod = String(error.code || error.status || '').trim();
   const msg = error.message || error.details || 'Eroare server Supabase';
 
-  if (cod || error.status) {
-    return { tip: 'eroare_server', mesaj: msg, cod: cod || undefined };
-  }
-
-  // Dacă Supabase a returnat o eroare de transport/rețea fără cod
-  if (/network|fetch|offline|failed to fetch/i.test(msg)) {
+  // Dacă Supabase a returnat un obiect de eroare de transport/rețea
+  if (esteEroareRetea(error)) {
     return { tip: 'offline', motiv: msg };
   }
 
-  return { tip: 'eroare_server', mesaj: msg };
+  // Erori structurate de server (RLS 42501, constrângeri 23502, 23514, etc.) sau alte erori
+  return { tip: 'eroare_server', mesaj: msg, cod: cod || undefined };
 }
 
 export function eliminaAlimentScanat(rezultat: AlimentScanat[], index: number): AlimentScanat[] {

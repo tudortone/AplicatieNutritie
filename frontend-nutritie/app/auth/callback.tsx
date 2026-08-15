@@ -18,6 +18,7 @@ export default function AuthCallbackScreen() {
     access_token?: string | string[];
     refresh_token?: string | string[];
     type?: string | string[];
+    flow?: string | string[];
     error?: string | string[];
     error_description?: string | string[];
   }>();
@@ -34,12 +35,12 @@ export default function AuthCallbackScreen() {
       const code = unu(params.code);
       const accessToken = unu(params.access_token);
       const refreshToken = unu(params.refresh_token);
-      // H1/BUG-056: emailul de resetare a parolei ajunge aici cu `type=recovery`.
-      // Tipul se citește ÎNAINTE de short-circuit-ul pe sesiune existentă — altfel
+      // H1/BUG-056/CORR-002: link-ul de resetare a parolei vine cu `flow=recovery` (sau legacy `type=recovery`).
+      // Tipul/fluxul se citește ÎNAINTE de short-circuit-ul pe sesiune existentă — altfel
       // un utilizator deja autentificat care deschide link-ul de resetare era
       // trimis direct în (tabs) fără să ajungă vreodată la setarea parolei noi
       // (dead-end cu parola veche).
-      const esteRecovery = unu(params.type) === 'recovery';
+      const esteRecovery = unu(params.flow) === 'recovery' || unu(params.type) === 'recovery';
 
       // G1: pe Android `openAuthSessionAsync` polifilizează prin
       // Linking.addEventListener('url'), la care e abonat și expo-router. Ca
