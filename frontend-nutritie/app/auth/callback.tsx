@@ -44,12 +44,18 @@ export default function AuthCallbackScreen() {
       // G1: pe Android `openAuthSessionAsync` polifilizează prin
       // Linking.addEventListener('url'), la care e abonat și expo-router. Ca
       // urmare, auth.tsx ȘI callback.tsx pot primi același `code` PKCE de două
-      // ori. Dacă sesiunea există deja (auth.tsx a schimbat deja codul), nu mai
-      // schimbăm nimic — doar navigăm, ca să nu dăm „code already used".
-      const { data: sesiuneExistenta } = await supabase.auth.getSession();
-      if (sesiuneExistenta.session) {
-        router.replace(esteRecovery ? '/auth/noua-parola' : '/(tabs)');
-        return;
+      // ori. Dacă sesiunea există deja pentru OAuth obișnuit, nu mai schimbăm
+      // nimic — doar navigăm în (tabs) ca să nu dăm „code already used".
+      //
+      // REV-002: Pentru `type=recovery`, NU facem short-circuit pe o sesiune
+      // existentă! Link-ul de resetare trebuie să schimbe codul cu sesiunea
+      // utilizatorului de resetare (altfel un cont B activ primea noua parolă a lui A).
+      if (!esteRecovery) {
+        const { data: sesiuneExistenta } = await supabase.auth.getSession();
+        if (sesiuneExistenta.session) {
+          router.replace('/(tabs)');
+          return;
+        }
       }
 
       try {

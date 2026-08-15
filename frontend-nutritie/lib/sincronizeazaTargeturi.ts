@@ -1,77 +1,156 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 
-// BUG-035: cand updateUser esueaza (offline), profilul salveaza targeturile doar
-// local. Flag-ul marcheaza ca exista modificari locale NESINCRONIZATE, asa ca
-// cititorii (useMeseAzi) prefera localul fata de user_metadata stale, iar la
-// reconectare impingem inapoi la server.
+/**
+ * REV-003: Izolare strictă a țintelor nutriționale per utilizator.
+ * Țintele pending (salvate când rețeaua e indisponibilă) sunt stocate într-un
+ * payload JSON scoped `@nutri_pending_macro_targets_${userId}` ce conține
+ * { userId, targets, timestamp }.
+ *
+ * Previne contaminarea între conturi la switch / relogin și garantează că
+ * un cont B nu poate citi sau sincroniza țintele contului A.
+ */
+
+export const PENDING_TARGETS_PREFIX = '@nutri_pending_macro_targets_';
+export const TARGETURI_PENDING_PREFIX = PENDING_TARGETS_PREFIX;
 export const TARGETURI_PENDING_KEY = 'targeturi_pending_sync';
-export const TARGETURI_PENDING_PREFIX = 'targeturi_pending_sync_';
+
+export interface TargeturiValori {
+  greutate?: number;
+  greutateTinta?: number;
+  caloriiTinta?: number;
+  proteineTinta?: number;
+  carbiTinta?: number;
+  grasimiTinta?: number;
+  nume?: string;
+  avatar_url?: string;
+}
+
+export interface TargeturiPendingPayload {
+  userId: string;
+  targets: TargeturiValori;
+  timestamp: string;
+}
+
+export function getPendingTargetsKey(userId: string): string {
+  return `${PENDING_TARGETS_PREFIX}${userId.trim()}`;
+}
 
 export function getTargeturiPendingKey(userId?: string | null): string {
   if (userId && typeof userId === 'string' && userId.trim().length > 0) {
-    return `${TARGETURI_PENDING_PREFIX}${userId.trim()}`;
+    return getPendingTargetsKey(userId);
   }
   return TARGETURI_PENDING_KEY;
 }
 
-/**
- * Impinge targeturile locale nesincronizate inapoi la server, la primul boot /
- * relogin cu conexiune. Idempotent: daca flag-ul nu e setat, nu face nimic; dupa
- * succes, flag-ul se sterge, deci urmatorul fetch foloseste din nou serverul.
- */
-export async function sincronizeazaTargeturiLocale(userId?: string | null): Promise<void> {
+/** Salvează țintele pending exclusiv în cheia scoped a utilizatorului autentificat. */
+export async function salveazaTargeturiPending(
+  userId: string,
+  targets: TargeturiValori,
+): Promise<void> {
+  if (!userId || typeof userId !== 'string' || !userId.trim()) return;
+  const payload: TargeturiPendingPayload = {
+    userId: userId.trim(),
+    targets,
+    timestamp: new Date().toISOString(),
+  };
+  await AsyncStorage.setItem(getPendingTargetsKey(userId), JSON.stringify(payload));
+}
+
+/** Citește țintele pending doar dacă userId-ul din payload corespunde utilizatorului cerut. */
+export async function citesteTargeturiPending(
+  userId: string,
+): Promise<TargeturiPendingPayload | null> {
+  if (!userId || typeof userId !== 'string' || !userId.trim()) return null;
   try {
-    const key = getTargeturiPendingKey(userId);
-    const [pendingUser, pendingLegacy] = await Promise.all([
-      AsyncStorage.getItem(key),
-      AsyncStorage.getItem(TARGETURI_PENDING_KEY),
-    ]);
-    if (pendingUser !== '1' && pendingLegacy !== '1') return;
+    const raw = await AsyncStorage.getItem(getPendingTargetsKey(userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.userId !== userId.trim() || typeof parsed.targets !== 'object') {
+      return null;
+    }
+    return parsed as TargeturiPendingPayload;
+  } catch {
+    return null;
+  }
+}
 
-    const [greutate, caloriiTinta, proteineTinta, carbiTinta, grasimiTinta] = await Promise.all([
-      AsyncStorage.getItem('greutate'),
-      AsyncStorage.getItem('caloriiTinta'),
-      AsyncStorage.getItem('proteineTinta'),
-      AsyncStorage.getItem('carbiTinta'),
-      AsyncStorage.getItem('grasimiTinta'),
-    ]);
+/** Șterge payload-ul pending pentru utilizator și curăță cheia legacy dacă există. */
+export async function stergeTargeturiPending(userId: string): Promise<void> {
+  if (!userId || typeof userId !== 'string' || !userId.trim()) return;
+  await AsyncStorage.multiRemove([getPendingTargetsKey(userId), TARGETURI_PENDING_KEY]);
+}
 
-    // Doar campurile prezente, ca sa nu suprascriem cu default-uri un camp care
-    // nu s-a schimbat local.
-    const data: Record<string, number> = {};
-    if (greutate) {
-      const v = parseFloat(greutate);
-      if (Number.isFinite(v)) data.greutate = v;
+/**
+ * Împinge țintele pending ale utilizatorului autentificat la server.
+ * Idempotent: dacă nu există payload pentru `authenticatedUserId`, nu face nimic.
+ * Nu va trimite NICIODATĂ țintele unui alt utilizator către contul curent.
+ */
+export async function sincronizeazaTargeturiLocale(
+  authenticatedUserId?: string | null,
+): Promise<boolean> {
+  if (!authenticatedUserId || typeof authenticatedUserId !== 'string' || !authenticatedUserId.trim()) {
+    return false;
+  }
+
+  const userId = authenticatedUserId.trim();
+
+  try {
+    const pendingPayload = await citesteTargeturiPending(userId);
+
+    // Politică legacy sigură: dacă există doar cheia globală legacy fără ownership dovedit,
+    // o eliminăm pentru a preveni atribuirea accidentală către contul curent.
+    if (!pendingPayload) {
+      await AsyncStorage.removeItem(TARGETURI_PENDING_KEY);
+      return false;
     }
-    if (caloriiTinta) {
-      const v = parseInt(caloriiTinta, 10);
-      if (Number.isFinite(v)) data.caloriiTinta = v;
+
+    if (pendingPayload.userId !== userId) {
+      return false;
     }
-    if (proteineTinta) {
-      const v = parseInt(proteineTinta, 10);
-      if (Number.isFinite(v)) data.proteineTinta = v;
+
+    const { targets } = pendingPayload;
+    const data: Record<string, any> = {};
+
+    if (typeof targets.greutate === 'number' && Number.isFinite(targets.greutate)) {
+      data.greutate = targets.greutate;
     }
-    if (carbiTinta) {
-      const v = parseInt(carbiTinta, 10);
-      if (Number.isFinite(v)) data.carbiTinta = v;
+    if (typeof targets.greutateTinta === 'number' && Number.isFinite(targets.greutateTinta)) {
+      data.greutateTinta = targets.greutateTinta;
     }
-    if (grasimiTinta) {
-      const v = parseInt(grasimiTinta, 10);
-      if (Number.isFinite(v)) data.grasimiTinta = v;
+    if (typeof targets.caloriiTinta === 'number' && Number.isFinite(targets.caloriiTinta)) {
+      data.caloriiTinta = targets.caloriiTinta;
+    }
+    if (typeof targets.proteineTinta === 'number' && Number.isFinite(targets.proteineTinta)) {
+      data.proteineTinta = targets.proteineTinta;
+    }
+    if (typeof targets.carbiTinta === 'number' && Number.isFinite(targets.carbiTinta)) {
+      data.carbiTinta = targets.carbiTinta;
+    }
+    if (typeof targets.grasimiTinta === 'number' && Number.isFinite(targets.grasimiTinta)) {
+      data.grasimiTinta = targets.grasimiTinta;
+    }
+    if (typeof targets.nume === 'string' && targets.nume.trim().length > 0) {
+      data.nume = targets.nume.trim();
+    }
+    if (typeof targets.avatar_url === 'string' && targets.avatar_url.trim().length > 0) {
+      data.avatar_url = targets.avatar_url.trim();
     }
 
     if (Object.keys(data).length === 0) {
-      // Fara valori locale valide — nimic de impins; curatam flag-ul.
-      await AsyncStorage.multiRemove([key, TARGETURI_PENDING_KEY]);
-      return;
+      await stergeTargeturiPending(userId);
+      return true;
     }
 
     const { error } = await supabase.auth.updateUser({ data });
     if (!error) {
-      await AsyncStorage.multiRemove([key, TARGETURI_PENDING_KEY]);
+      await stergeTargeturiPending(userId);
+      return true;
     }
+
+    return false;
   } catch {
-    // Fara retea sau eroare — incercam din nou la urmatorul boot.
+    // Eșec de rețea / server indisponibil -> păstrăm payload-ul pentru retry
+    return false;
   }
 }

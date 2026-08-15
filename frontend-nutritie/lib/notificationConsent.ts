@@ -59,34 +59,53 @@ export async function revokeConsent(): Promise<void> {
   await AsyncStorage.setItem(CONSENT_KEY, JSON.stringify(CONSENT_GOL));
 }
 
+/**
+ * REV-004: Migrare sigură și deterministă a formatului legacy (`{ accountId, ids: [...] }`).
+ * Plasează ID-urile legacy neclasificate în `domains.general`, prevenind pierderea
+ * silențioasă a mementourilor programate la prima scriere pe domenii noi.
+ */
+export function migreazaRegistryLegacy(parsed: any): ManagedReminders {
+  if (!parsed || typeof parsed !== 'object') return { ids: [], domains: {} };
+  const accountId = typeof parsed.accountId === 'string' ? parsed.accountId : undefined;
+  const rawIds: string[] = Array.isArray(parsed.ids)
+    ? parsed.ids.filter((x: unknown) => typeof x === 'string' && x.length > 0)
+    : [];
+  const domains: Partial<Record<ReminderDomain, string[]>> =
+    parsed.domains && typeof parsed.domains === 'object' ? { ...parsed.domains } : {};
+
+  // Dacă formatul este legacy (lipsesc domeniile structurate dar există ID-uri gestionate)
+  if ((!parsed.domains || typeof parsed.domains !== 'object') && rawIds.length > 0) {
+    domains.general = Array.from(new Set([...(domains.general || []), ...rawIds]));
+  }
+
+  // Uniunea completă a tuturor ID-urilor din toate domeniile
+  const allIdsSet = new Set<string>(rawIds);
+  for (const dList of Object.values(domains)) {
+    if (Array.isArray(dList)) {
+      for (const id of dList) allIdsSet.add(id);
+    }
+  }
+
+  return {
+    accountId,
+    ids: Array.from(allIdsSet),
+    domains,
+  };
+}
+
 export async function getManagedReminders(domain?: ReminderDomain): Promise<ManagedReminders> {
   try {
     const brut = await AsyncStorage.getItem(MANAGED_KEY);
     if (!brut) return { ids: [], domains: {} };
     const parsed = JSON.parse(brut);
-    const accountId = typeof parsed?.accountId === 'string' ? parsed.accountId : undefined;
-    const rawIds: string[] = Array.isArray(parsed?.ids) ? parsed.ids : [];
-    const domains: Partial<Record<ReminderDomain, string[]>> =
-      parsed?.domains && typeof parsed.domains === 'object' ? parsed.domains : {};
+    const migrat = migreazaRegistryLegacy(parsed);
 
     if (domain) {
-      const domainIds = domains[domain] || (domain === 'daily_meals' && !parsed.domains ? rawIds : []);
-      return { accountId, ids: domainIds, domains };
+      const domainIds = migrat.domains?.[domain] || [];
+      return { accountId: migrat.accountId, ids: domainIds, domains: migrat.domains };
     }
 
-    // Union complet al tuturor ID-urilor
-    const allIdsSet = new Set<string>(rawIds);
-    for (const dList of Object.values(domains)) {
-      if (Array.isArray(dList)) {
-        for (const id of dList) allIdsSet.add(id);
-      }
-    }
-
-    return {
-      accountId,
-      ids: Array.from(allIdsSet),
-      domains,
-    };
+    return migrat;
   } catch {
     return { ids: [], domains: {} };
   }
@@ -122,7 +141,10 @@ export async function setManagedReminders(
  * Adaugă UN id în registry-ul de mementouri gestionate pe domeniul specificat,
  * fără să șteargă mementourile din alte domenii (BUG-073).
  */
-export async function registerManagedReminder(id: string, domain: ReminderDomain = 'general'): Promise<void> {
+export async function registerManagedReminder(
+  id: string,
+  domain: ReminderDomain = 'general',
+): Promise<void> {
   const reg = await getManagedReminders();
   const domainIds = reg.domains?.[domain] || [];
   if (!domainIds.includes(id)) {
@@ -131,7 +153,10 @@ export async function registerManagedReminder(id: string, domain: ReminderDomain
 }
 
 /** Scoate UN id din registry-ul de mementouri gestionate. */
-export async function unregisterManagedReminder(id: string, domain?: ReminderDomain): Promise<void> {
+export async function unregisterManagedReminder(
+  id: string,
+  domain?: ReminderDomain,
+): Promise<void> {
   const reg = await getManagedReminders();
   if (domain) {
     const domainIds = reg.domains?.[domain] || [];
@@ -174,16 +199,43 @@ export async function clearManagedReminders(domain?: ReminderDomain): Promise<vo
  * Anulează mementourile înregistrate de această aplicație. Dacă se specifică
  * un domeniu (ex: 'daily_meals'), anulează DOAR acel domeniu și păstrează celelalte
  * (ex: 'pantry_expiry'). Fără domeniu, anulează toate mementourile (ex: logout / revocare).
+ *
+ * REV-004: Dacă un ID eșuează la anularea pe dispozitiv, este reținut în registry
+ * astfel încât tentativa de anulare să poată fi reîncercată și să nu devină orfan.
  */
 export async function cancelManagedReminders(domain?: ReminderDomain): Promise<void> {
   const reg = await getManagedReminders(domain);
   const targetIds = reg.ids;
-  try {
-    for (const id of targetIds) {
+  const uncancelledIds: string[] = [];
+
+  for (const id of targetIds) {
+    try {
       await Notifications.cancelScheduledNotificationAsync(id);
+    } catch {
+      uncancelledIds.push(id);
     }
-  } catch {
-    // tolerăm erori pe dispozitiv la anulare; registry-ul se actualizează oricum
   }
-  await clearManagedReminders(domain);
+
+  if (uncancelledIds.length > 0) {
+    // Păstrăm ID-urile neanulate în registry pentru reîncercare
+    if (domain) {
+      await setManagedReminders(reg.accountId, uncancelledIds, domain);
+    } else {
+      const nextDomains: Partial<Record<ReminderDomain, string[]>> = {};
+      for (const [d, list] of Object.entries(reg.domains || {})) {
+        if (Array.isArray(list)) {
+          const ramase = list.filter((x) => uncancelledIds.includes(x));
+          if (ramase.length > 0) nextDomains[d as ReminderDomain] = ramase;
+        }
+      }
+      const stare: ManagedReminders = {
+        accountId: reg.accountId,
+        ids: uncancelledIds,
+        domains: nextDomains,
+      };
+      await AsyncStorage.setItem(MANAGED_KEY, JSON.stringify(stare));
+    }
+  } else {
+    await clearManagedReminders(domain);
+  }
 }

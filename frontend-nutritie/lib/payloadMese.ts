@@ -102,6 +102,59 @@ export function esteEroareDuplicate(error: any): boolean {
   return cod === '23505' || /duplicate key|unique constraint|already exists/i.test(mesaj);
 }
 
+export type TipRezultatInsertMasa =
+  | { tip: 'succes' }
+  | { tip: 'duplicat' }
+  | { tip: 'offline'; motiv: string }
+  | { tip: 'eroare_server'; mesaj: string; cod?: string };
+
+/**
+ * REV-001: Clasifică determinist rezultatul unei inserări de masă (Supabase sau excepție rețea).
+ * Previne transformarea erorilor structurate de server (RLS 42501, constrângeri, validare)
+ * în succese false salvate în coada offline.
+ */
+export function clasificaRezultatInsertMasa(
+  rezultatOrError: { error: any } | Error | null | undefined
+): TipRezultatInsertMasa {
+  if (!rezultatOrError) {
+    return { tip: 'succes' };
+  }
+
+  // Cazul în care a fost aruncată o excepție (de ex. fetch eșuat / rețea offline)
+  if (rezultatOrError instanceof Error) {
+    const msg = rezultatOrError.message || '';
+    // Dacă este o excepție de rețea/transport (Failed to fetch, Network request failed, timeout, offline)
+    if (/network|fetch|timeout|offline|abort|econnrefused/i.test(msg) || !('code' in rezultatOrError)) {
+      return { tip: 'offline', motiv: msg };
+    }
+    return { tip: 'eroare_server', mesaj: msg, cod: (rezultatOrError as any).code };
+  }
+
+  const { error } = rezultatOrError;
+  if (!error) {
+    return { tip: 'succes' };
+  }
+
+  if (esteEroareDuplicate(error)) {
+    return { tip: 'duplicat' };
+  }
+
+  // Dacă eroarea are un cod SQL / HTTP sau este o eroare structurată de server (RLS 42501, 23502, 23503, etc.)
+  const cod = String(error.code || error.status || '').trim();
+  const msg = error.message || error.details || 'Eroare server Supabase';
+
+  if (cod || error.status) {
+    return { tip: 'eroare_server', mesaj: msg, cod: cod || undefined };
+  }
+
+  // Dacă Supabase a returnat o eroare de transport/rețea fără cod
+  if (/network|fetch|offline|failed to fetch/i.test(msg)) {
+    return { tip: 'offline', motiv: msg };
+  }
+
+  return { tip: 'eroare_server', mesaj: msg };
+}
+
 export function eliminaAlimentScanat(rezultat: AlimentScanat[], index: number): AlimentScanat[] {
   return rezultat.filter((_, i) => i !== index);
 }

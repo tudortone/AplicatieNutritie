@@ -3,6 +3,7 @@ import {
   construiestePayloadMasaCamera,
   construiesteAlimenteScan,
   esteEroareDuplicate,
+  clasificaRezultatInsertMasa,
   eliminaAlimentScanat,
   adaugaAlimentScanat,
   construiesteRinduriMasaChat,
@@ -252,5 +253,56 @@ describe('BUG-019 — insert esuat -> coada offline', () => {
     expect(coada).toHaveLength(1);
     expect(coada[0].id).toBe(payload.id);
     expect(coada[0].calorii).toBe(payload.calorii);
+  });
+});
+
+describe('REV-001 — clasificaRezultatInsertMasa & protecție coadă offline', () => {
+  it('1. insert cu succes -> { tip: "succes" }', () => {
+    expect(clasificaRezultatInsertMasa({ error: null })).toEqual({ tip: 'succes' });
+    expect(clasificaRezultatInsertMasa(null)).toEqual({ tip: 'succes' });
+  });
+
+  it('2. duplicat 23505 -> { tip: "duplicat" } (idempotență fără eroare)', () => {
+    expect(clasificaRezultatInsertMasa({ error: { code: '23505', message: 'duplicate key' } })).toEqual({ tip: 'duplicat' });
+  });
+
+  it('3. eroare de rețea / fetch rejected -> { tip: "offline" }', () => {
+    const netErr = new TypeError('Network request failed');
+    expect(clasificaRezultatInsertMasa(netErr)).toEqual({ tip: 'offline', motiv: 'Network request failed' });
+
+    const fetchErr = new Error('Failed to fetch');
+    expect(clasificaRezultatInsertMasa(fetchErr)).toEqual({ tip: 'offline', motiv: 'Failed to fetch' });
+
+    const timeoutErr = new Error('AbortError: request timed out');
+    expect(clasificaRezultatInsertMasa(timeoutErr)).toEqual({ tip: 'offline', motiv: 'AbortError: request timed out' });
+
+    // Supabase payload cu eroare fără cod dar mesaj de rețea
+    expect(clasificaRezultatInsertMasa({ error: { message: 'Failed to fetch' } })).toEqual({ tip: 'offline', motiv: 'Failed to fetch' });
+  });
+
+  it('4. eroare RLS 42501 -> { tip: "eroare_server" } (NU intră în coada offline)', () => {
+    const rlsError = { code: '42501', message: 'new row violates row-level security policy for table "mese"' };
+    const rez = clasificaRezultatInsertMasa({ error: rlsError });
+    expect(rez.tip).toBe('eroare_server');
+    if (rez.tip === 'eroare_server') {
+      expect(rez.cod).toBe('42501');
+      expect(rez.mesaj).toContain('row-level security');
+    }
+  });
+
+  it('5. eroare de constrângere / validare DB (23502, 23514) -> { tip: "eroare_server" } (NU intră în coada offline)', () => {
+    const nullErr = { code: '23502', message: 'null value in column "nume" violates not-null constraint' };
+    const rezNull = clasificaRezultatInsertMasa({ error: nullErr });
+    expect(rezNull.tip).toBe('eroare_server');
+    if (rezNull.tip === 'eroare_server') {
+      expect(rezNull.cod).toBe('23502');
+    }
+
+    const checkErr = { code: '23514', message: 'new row for relation "mese" violates check constraint "calorii_bounds"' };
+    const rezCheck = clasificaRezultatInsertMasa({ error: checkErr });
+    expect(rezCheck.tip).toBe('eroare_server');
+    if (rezCheck.tip === 'eroare_server') {
+      expect(rezCheck.cod).toBe('23514');
+    }
   });
 });

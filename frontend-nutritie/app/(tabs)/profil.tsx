@@ -33,7 +33,7 @@ import { WatchSelectorSheet, WatchSelectorSheetRef } from '../../components/ui/W
 import { API_URL } from '../../constants/config';
 import { API_PREFIX } from '../../lib/api';
 import { getLegalUrls } from '../../lib/legalUrls';
-import { TARGETURI_PENDING_KEY } from '../../lib/sincronizeazaTargeturi';
+import { salveazaTargeturiPending, stergeTargeturiPending, citesteTargeturiPending } from '../../lib/sincronizeazaTargeturi';
 import { clearOfflineQueue } from '../../lib/offlineQueue';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -113,34 +113,28 @@ export default function ProfilScreen() {
     try {
       if (session) {
         const metadata = user?.user_metadata || session.user.user_metadata || {};
-        let g = metadata.greutate;
-        let gt = metadata.greutateTinta;
-        let c = metadata.caloriiTinta;
-        let p = metadata.proteineTinta;
-        let cb = metadata.carbiTinta;
-        let gr = metadata.grasimiTinta;
+        const pending = await citesteTargeturiPending(session.user.id);
+        const pTargets = pending?.userId === session.user.id ? pending.targets : undefined;
 
-        if (!g) g = await AsyncStorage.getItem('greutate');
-        if (!gt) gt = await AsyncStorage.getItem('greutateTinta');
-        if (!c) c = await AsyncStorage.getItem('caloriiTinta');
-        if (!p) p = await AsyncStorage.getItem('proteineTinta');
-        if (!cb) cb = await AsyncStorage.getItem('carbiTinta');
-        if (!gr) gr = await AsyncStorage.getItem('grasimiTinta');
+        let g = pTargets?.greutate ?? metadata.greutate;
+        let gt = pTargets?.greutateTinta ?? metadata.greutateTinta;
+        let c = pTargets?.caloriiTinta ?? metadata.caloriiTinta;
+        let p = pTargets?.proteineTinta ?? metadata.proteineTinta;
+        let cb = pTargets?.carbiTinta ?? metadata.carbiTinta;
+        let gr = pTargets?.grasimiTinta ?? metadata.grasimiTinta;
 
-        let nm = metadata.nume || metadata.display_name;
-        let av = metadata.avatar_url;
-        if (!nm) nm = await AsyncStorage.getItem('nume_profil');
-        if (!av) av = await AsyncStorage.getItem('avatar_url');
+        let nm = pTargets?.nume || metadata.nume || metadata.display_name;
+        let av = pTargets?.avatar_url || metadata.avatar_url;
 
         setNume(nm ? String(nm) : (session.user.email?.split('@')[0] || 'Utilizator'));
         setAvatarUrl(av ? String(av) : null);
 
-        setGreutate(g ? String(g) : '75');
-        setGreutateTinta(gt ? String(gt) : '70');
-        setCaloriiTinta(c ? String(c) : '2000');
-        setProteineTinta(p ? String(p) : '150');
-        setCarbiTinta(cb ? String(cb) : '250');
-        setGrasimiTinta(gr ? String(gr) : '70');
+        setGreutate(g !== undefined && g !== null ? String(g) : '75');
+        setGreutateTinta(gt !== undefined && gt !== null ? String(gt) : '70');
+        setCaloriiTinta(c !== undefined && c !== null ? String(c) : '2000');
+        setProteineTinta(p !== undefined && p !== null ? String(p) : '150');
+        setCarbiTinta(cb !== undefined && cb !== null ? String(cb) : '250');
+        setGrasimiTinta(gr !== undefined && gr !== null ? String(gr) : '70');
       }
     } catch (e) {
       console.warn('Eroare încărcare profil:', e);
@@ -220,8 +214,10 @@ export default function ProfilScreen() {
 
       // Apoi salvăm local (doar după ce Supabase a confirmat)
       await salveazaLocal();
-      // Serverul a confirmat -> nu mai avem modificari locale in asteptare (BUG-035).
-      await AsyncStorage.removeItem(TARGETURI_PENDING_KEY);
+      // REV-003: Serverul a confirmat -> curățăm payload-ul pending pentru acest utilizator
+      if (session?.user?.id) {
+        await stergeTargeturiPending(session.user.id);
+      }
 
       notify.success('Profil actualizat', 'Modificările au fost salvate');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -233,10 +229,20 @@ export default function ProfilScreen() {
       let salvatLocal = true;
       try {
         await salveazaLocal();
-        // BUG-035: serverul e indisponibil -> marcăm că există targeturi locale
-        // nesincronizate, ca useMeseAzi să le citească pe acestea (nu metadata
-        // stale), până când sincronizeazaTargeturiLocale le împinge la server.
-        await AsyncStorage.setItem(TARGETURI_PENDING_KEY, '1');
+        // REV-003: serverul e indisponibil -> marcăm țintele pending exclusiv în cheia
+        // utilizatorului curent autentificat, ca useMeseAzi să le citească corect.
+        if (session?.user?.id) {
+          await salveazaTargeturiPending(session.user.id, {
+            greutate: parseFloat(greutate) || 75,
+            greutateTinta: parseFloat(greutateTinta) || 70,
+            caloriiTinta: parseInt(caloriiTinta, 10) || 2000,
+            proteineTinta: parseInt(proteineTinta, 10) || 150,
+            carbiTinta: parseInt(carbiTinta, 10) || 250,
+            grasimiTinta: parseInt(grasimiTinta, 10) || 70,
+            nume: nume.trim() || undefined,
+            avatar_url: avatarUrl || undefined,
+          });
+        }
       } catch {
         salvatLocal = false;
       }

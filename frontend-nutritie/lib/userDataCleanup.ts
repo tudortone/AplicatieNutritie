@@ -35,6 +35,7 @@ const USER_PREFIXES = [
   'chat_history_', 'nutriai_mese_', 'nutriai_apa_', 'nutriai_camara_',
   'nutriai_quest', 'nutriai_workout', 'manual_steps_',
   '@nutri_offline_meals_queue_', 'targeturi_pending_sync_',
+  '@nutri_pending_macro_targets_',
 ];
 
 export async function clearLocalUserData(): Promise<void> {

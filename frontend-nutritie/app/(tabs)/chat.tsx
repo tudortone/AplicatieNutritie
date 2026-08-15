@@ -27,7 +27,7 @@ import BouncingDot from '../../components/BouncingDot';
 import { RecipeGeneratorModal } from '../../components/RecipeGeneratorModal';
 import { supabase } from '../../supabase';
 import { ConfirmSheet } from '../../components/ui/ConfirmSheet';
-import { construiesteRinduriMasaChat, esteEroareDuplicate } from '../../lib/payloadMese';
+import { construiesteRinduriMasaChat, clasificaRezultatInsertMasa, type TipRezultatInsertMasa } from '../../lib/payloadMese';
 import { pushOfflineMeal, type MasaOfflinePayload } from '../../lib/offlineQueue';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import KeyboardAwareScreen, { useContentBottomPadding } from '@/components/ui/KeyboardAwareScreen';
@@ -634,72 +634,53 @@ useEffect(() => {
         meal_type: proposalCategory,
       });
 
-      let salvatOffline = false;
+      let rezultatInsert: TipRezultatInsertMasa;
       try {
         const { error } = await supabase.from('mese').insert(rows);
+        rezultatInsert = clasificaRezultatInsertMasa({ error });
+      } catch (err: unknown) {
+        rezultatInsert = clasificaRezultatInsertMasa(err instanceof Error ? err : new Error(String(err)));
+      }
 
-        if (error) {
-          // Idempotență: propunerea a fost deja adăugată (același id) — nu se
-          // creează duplicat; o tratăm ca succes.
-          if (!esteEroareDuplicate(error)) {
-            // BUG-070: Dacă e eroare de transport / rețea, salvăm în coada offline FIFO
-            if (!error.code) {
-              for (const row of rows) {
-                const payloadOffline: MasaOfflinePayload = {
-                  id: row.id,
-                  user_id: row.user_id,
-                  nume: row.nume,
-                  calorii: row.calorii,
-                  proteine: row.proteine,
-                  grasimi: row.grasimi,
-                  carbohidrati: row.carbohidrati,
-                  fibre: row.fibre,
-                  tip_masa: row.tip_masa,
-                  alimente: [],
-                  data: row.data,
-                  created_at: acumMasa.toISOString(),
-                };
-                await pushOfflineMeal(payloadOffline);
-              }
-              salvatOffline = true;
-            } else {
-              console.error("Eroare Supabase:", error);
-              Alert.alert(t('alerts.titluri.eroareLaSalvare'), t('alerts.mesaje.bazaDateRefuza', { eroare: error.message }));
-              throw error;
-            }
-          }
-        }
-      } catch (_insertErr: unknown) {
-        if (!salvatOffline) {
-          // Rețea indisponibilă / fetch rejected -> salvare în coada offline FIFO
-          for (const row of rows) {
-            const payloadOffline: MasaOfflinePayload = {
-              id: row.id,
-              user_id: row.user_id,
-              nume: row.nume,
-              calorii: row.calorii,
-              proteine: row.proteine,
-              grasimi: row.grasimi,
-              carbohidrati: row.carbohidrati,
-              fibre: row.fibre,
-              tip_masa: row.tip_masa,
-              alimente: [],
-              data: row.data,
-              created_at: acumMasa.toISOString(),
-            };
-            await pushOfflineMeal(payloadOffline);
-          }
-          salvatOffline = true;
+      // REV-001: Erorile structurate de server (RLS 42501, constrângeri, validare)
+      // afișează alertă reală și NU intră în coada offline.
+      if (rezultatInsert.tip === 'eroare_server') {
+        console.error('Eroare Supabase la salvarea propunerii de masă:', rezultatInsert);
+        Alert.alert(
+          t('alerts.titluri.eroareLaSalvare'),
+          t('alerts.mesaje.bazaDateRefuza', { eroare: rezultatInsert.mesaj })
+        );
+        return;
+      }
+
+      // Eșec de transport / rețea -> salvare sigură în coada offline FIFO
+      if (rezultatInsert.tip === 'offline') {
+        for (const row of rows) {
+          const payloadOffline: MasaOfflinePayload = {
+            id: row.id,
+            user_id: row.user_id,
+            nume: row.nume,
+            calorii: row.calorii,
+            proteine: row.proteine,
+            grasimi: row.grasimi,
+            carbohidrati: row.carbohidrati,
+            fibre: row.fibre,
+            tip_masa: row.tip_masa,
+            alimente: [],
+            data: row.data,
+            created_at: acumMasa.toISOString(),
+          };
+          await pushOfflineMeal(payloadOffline);
         }
       }
 
-      // 4. Finalizare cu succes
+      // 4. Finalizare cu succes sau offline-queued
       refresh();
       setMealProposalVisible(false);
       setMealProposal(null);
       setProposalCategory(null);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (salvatOffline) {
+      if (rezultatInsert.tip === 'offline') {
         Alert.alert(t('offline.salvatOffline'), t('offline.masaSalvataOffline'));
         adaugaMesaj(buleMesaj('ai', t('offline.masaSalvataOffline')));
       } else {
@@ -708,11 +689,7 @@ useEffect(() => {
 
     } catch (e: unknown) {
       console.error('Eroare salvare propunere masă:', e);
-      // Dacă eroarea nu e de la Supabase, o prindem aici
-      const mesajEroare = e instanceof Error ? e.message : '';
-      if (!mesajEroare.includes('Baza de date')) {
-        Alert.alert(t('alerts.titluri.eroareSistem'), t('alerts.mesaje.salvareNeprocesata'));
-      }
+      Alert.alert(t('alerts.titluri.eroareSistem'), t('alerts.mesaje.salvareNeprocesata'));
     } finally {
       setSavingProposal(false);
     }

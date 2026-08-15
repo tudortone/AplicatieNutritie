@@ -3,7 +3,7 @@ import { supabase } from '../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Masa, TipMasa } from '../types';
 import { getTipMasaDupaOra, parseAlimente } from '../lib/mealUtils';
-import { TARGETURI_PENDING_KEY } from '../lib/sincronizeazaTargeturi';
+import { citesteTargeturiPending } from '../lib/sincronizeazaTargeturi';
 import { startOfLocalDayISO, endOfLocalDayISO } from '../lib/dateUtils';
 import type { User } from '@supabase/supabase-js';
 
@@ -71,36 +71,24 @@ export function useMeseAzi(dataSelectata?: Date) {
       setUser(currentUser);
 
       // 1. Încarcă profile targets. Sursa principala: user_metadata (server).
-      // Excepție BUG-035: dacă există targeturi locale NESINCRONIZATE (salvare
-      // offline), acele valori reprezintă intenția cea mai recentă a utilizatorului
-      // și nu trebuie suprascrise de metadata stale de pe server.
+      // REV-003: Dacă există un payload pending dedicat acestui utilizator autentificat
+      // (salvare offline), acele valori reprezintă intenția cea mai recentă și sunt
+      // preferate față de server metadata stale.
       const userMetadata = currentUser.user_metadata || {};
+      const pending = currentUser.id ? await citesteTargeturiPending(currentUser.id) : null;
+      const pendingTargets = pending?.userId === currentUser.id ? pending.targets : undefined;
 
-      const [storedC, storedP, storedCb, storedGr, storedG, pendingTargeturi] = await Promise.all([
-        AsyncStorage.getItem('caloriiTinta'),
-        AsyncStorage.getItem('proteineTinta'),
-        AsyncStorage.getItem('carbiTinta'),
-        AsyncStorage.getItem('grasimiTinta'),
-        AsyncStorage.getItem('greutate'),
-        AsyncStorage.getItem(TARGETURI_PENDING_KEY),
-      ]);
-      const preferLocal = pendingTargeturi === '1';
-      const rezolva = (metadataVal: number | undefined, localStr: string | null, fallback: number): number => {
-        let localVal: number | undefined;
-        if (localStr) {
-          const v = parseInt(localStr, 10);
-          if (Number.isFinite(v)) localVal = v;
-        }
-        if (preferLocal && localVal !== undefined) return localVal;
-        const meta = typeof metadataVal === 'number' && Number.isFinite(metadataVal) ? metadataVal : undefined;
-        return meta ?? localVal ?? fallback;
+      const rezolva = (metadataVal: number | undefined, localVal: number | undefined, fallback: number): number => {
+        if (typeof localVal === 'number' && Number.isFinite(localVal)) return localVal;
+        if (typeof metadataVal === 'number' && Number.isFinite(metadataVal)) return metadataVal;
+        return fallback;
       };
 
-      setCaloriiTinta(rezolva(userMetadata.caloriiTinta, storedC, 2000));
-      setProteineTinta(rezolva(userMetadata.proteineTinta, storedP, 150));
-      setCarbiTinta(rezolva(userMetadata.carbiTinta, storedCb, 250));
-      setGrasimiTinta(rezolva(userMetadata.grasimiTinta, storedGr, 70));
-      setGreutate(rezolva(userMetadata.greutate, storedG, 75));
+      setCaloriiTinta(rezolva(userMetadata.caloriiTinta, pendingTargets?.caloriiTinta, 2000));
+      setProteineTinta(rezolva(userMetadata.proteineTinta, pendingTargets?.proteineTinta, 150));
+      setCarbiTinta(rezolva(userMetadata.carbiTinta, pendingTargets?.carbiTinta, 250));
+      setGrasimiTinta(rezolva(userMetadata.grasimiTinta, pendingTargets?.grasimiTinta, 70));
+      setGreutate(rezolva(userMetadata.greutate, pendingTargets?.greutate, 75));
 
       // 2. Încarcă mesele din ziua selectată sau curentă.
       // Granița de zi e calculată în timezone-ul local (setHours), NU UTC — altfel
