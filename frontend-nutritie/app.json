@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "NutriAI",
+    "name": "GetFlow",
     "slug": "nutriai",
+    "owner": "totsrl",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -10,16 +11,16 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nutriai.app",
+      "bundleIdentifier": "com.totsrl.getflow",
       "buildNumber": "1",
       "infoPlist": {
-        "NSMotionUsageDescription": "NutriAI utilizează senzorul de mișcare pentru a contoriza pașii zilnici și caloriile arse.",
-        "NSCameraUsageDescription": "NutriAI are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.",
-        "NSPhotoLibraryUsageDescription": "NutriAI accesează galeria pentru a selecta poze cu mâncare."
+        "NSMotionUsageDescription": "GetFlow utilizează senzorul de mișcare pentru a contoriza pașii zilnici și caloriile arse.",
+        "NSCameraUsageDescription": "GetFlow are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.",
+        "NSPhotoLibraryUsageDescription": "GetFlow accesează galeria pentru a selecta poze cu mâncare."
       }
     },
     "android": {
-      "package": "com.nutriai.app",
+      "package": "com.totsrl.getflo",
       "versionCode": 1,
       "icon": "./assets/images/icon.png",
       "allowBackup": false,
@@ -27,6 +28,11 @@
         "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#090C0E",
@@ -59,22 +65,24 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "NutriAI are nevoie de acces la cameră pentru a analiza mâncarea din farfurie."
+          "cameraPermission": "GetFlow are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.",
+          "recordAudioAndroid": false
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "NutriAI are nevoie de acces la galerie pentru a selecta poze cu mâncare."
+          "photosPermission": "GetFlow are nevoie de acces la galerie pentru a selecta poze cu mâncare."
         }
       ],
       [
         "expo-sensors",
         {
-          "motionPermission": "NutriAI utilizează senzorul de mișcare pentru a număra pașii zilnici."
+          "motionPermission": "GetFlow utilizează senzorul de mișcare pentru a număra pașii zilnici."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true,
