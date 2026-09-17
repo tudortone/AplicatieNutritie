@@ -11,6 +11,7 @@ import { PressableScale } from '../../components/ui/PressableScale';
 import { useTheme } from '../../context/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { supabase } from '../../supabase';
+import { calculeazaTotaluriZi } from '../../lib/nutritionTotals';
 import { localDayKey } from '../../lib/dateUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Masa } from '../../types';
@@ -165,15 +166,24 @@ export default function StatisticiScreen() {
           };
         }
 
+        // P1-03: statisticile folosesc ACEEAȘI autoritate ca Home și Jurnalul.
+        // Înainte însumau aici separat (`m.calorii || 0`), fără normalizarea de la
+        // graniță — un rând legacy cu șir numeric ar fi produs concatenare, iar un
+        // `Infinity` ar fi ajuns în medie. Gruparea pe zile rămâne pe cheia LOCALĂ.
+        const meseCuZi = new Map<string, Masa[]>();
         mese.forEach((m) => {
-          // Folosim new Date() pentru a obține data locală din timestamp-ul UTC din Supabase
           const zi = localDayKey(new Date(m.created_at));
-          if (mapZile[zi]) {
-            mapZile[zi].calorii += m.calorii || 0;
-            mapZile[zi].proteine += m.proteine || 0;
-            mapZile[zi].carbs += m.carbohidrati || 0;
-            mapZile[zi].grasimi += m.grasimi || 0;
-          }
+          if (!mapZile[zi]) return;
+          const lista = meseCuZi.get(zi);
+          if (lista) lista.push(m);
+          else meseCuZi.set(zi, [m]);
+        });
+        meseCuZi.forEach((meseleZilei, zi) => {
+          const t = calculeazaTotaluriZi(meseleZilei);
+          mapZile[zi].calorii = t.calorii;
+          mapZile[zi].proteine = t.proteine;
+          mapZile[zi].carbs = t.carbohidrati;
+          mapZile[zi].grasimi = t.grasimi;
         });
 
         const arrayZile = Object.values(mapZile);
@@ -550,7 +560,7 @@ export default function StatisticiScreen() {
                       <Sparkles size={20} color={colors.accent} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.predictTitle, { color: colors.textPrimary }]}>🤖 Predicție NutriAI</Text>
+                      <Text style={[styles.predictTitle, { color: colors.textPrimary }]}>🤖 Predicție GetFlow</Text>
                       <Text style={[styles.predictSub, { color: colors.textSecondary }]}>Algoritm bazat pe ritmul și deficitul tău caloric</Text>
                     </View>
                   </View>

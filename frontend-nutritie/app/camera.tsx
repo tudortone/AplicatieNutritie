@@ -20,8 +20,11 @@ import { Scan, Zap, ChevronDown, Plus, Trash2, Image as ImageIcon } from 'lucide
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { useAds } from '@/context/AdsContext';
 import { clampValoare, LIMITE_DB_MESE, MEAL_CATEGORIES, CATEGORIE_ICONA, getTipMasaDupaOra, insereazaMasaCuPoza } from '../lib/mealUtils';
-import { construiestePayloadMasaCamera, esteEroareDuplicate, eliminaAlimentScanat } from '../lib/payloadMese';
+import { construiestePayloadMasaCamera, esteEroareDuplicate, eliminaAlimentScanat, verificaReluareMasa } from '../lib/payloadMese';
+import { idOperatieNoua } from '@/lib/idUtils';
+import { marcheazaMeseModificate } from '@/lib/freshnessMese';
 import { GramInput } from '../components/ui/GramInput';
 import { ProductSearch } from '../components/food/ProductSearch';
 import { foodProductToAlimentAI } from '../components/food/types';
@@ -30,9 +33,10 @@ import type { TipMasa } from '../types';
 import { FontSize } from '../constants/theme';
 import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInput';
 import { uploadImageToImageKit } from '@/lib/imagekit';
-import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts } from '@/lib/imageOptimizer';
-import { pushOfflineMeal, processOfflineQueue, MasaOfflinePayload } from '@/lib/offlineQueue';
+import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts, amprentaOperatieFoto } from '@/lib/imageOptimizer';
+import { pushOfflineMealVerificat, processOfflineQueue, MasaOfflinePayload } from '@/lib/offlineQueue';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { MealSaveSuccessModal, type MealSuccessData } from '../components/ui/MealSaveSuccessModal';
 
 
 // Starea unui furnizor AI primită de la /ai-status și din câmpul `stareAI` al
@@ -46,11 +50,12 @@ interface StareAiStatus {
 
 export default function CameraScreen() {
   const { colors } = useTheme();
+  const router = useRouter();
   const { width, height } = useWindowDimensions();
   // Dimensiuni reactive (fold/unfold pe dispozitive); scan box limitat la 48%
   // din inaltime sau 360px ca sa nu depaseasca ecranul pe telefoane mici/landscape.
   const scanBoxSize = Math.round(Math.min(width * 0.78, height * 0.48, 360));
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const reduceMotion = useReducedMotion();
 
   const scanSteps = useMemo(() => [
@@ -61,6 +66,7 @@ export default function CameraScreen() {
   ], [t]);
 
   const { session } = useAuth();
+  const { recordSuccessfulPhotoAnalysis, maybeShowInterstitial } = useAds();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   
@@ -81,11 +87,21 @@ export default function CameraScreen() {
   // REMED-009: categoria mesei scanate — implicit = sugestia după oră, dar
   // utilizatorul o poate suprascrie din chip-urile din foaia de review.
   const [tipMasaSelectat, setTipMasaSelectat] = useState<TipMasa>(() => getTipMasaDupaOra(new Date()));
+  const [saveSuccessData, setSaveSuccessData] = useState<MealSuccessData | null>(null);
+
+  const handleSaveSuccessDismiss = useCallback(() => {
+    setSaveSuccessData(null);
+    permitereNavigareRef.current = true;
+    maybeShowInterstitial('photo');
+    router.replace('/(tabs)');
+  }, [maybeShowInterstitial, router]);
   // REMED-008: URI-ul LOCAL al pozei scanate (înainte de upload ImageKit) folosit
   // ca miniatură în review — disponibil instant, fără să așteptăm CDN-ul.
   const [pozaScanPreview, setPozaScanPreview] = useState<string | null>(null);
 
   const cameraRef = useRef<CameraView>(null);
+  // P1-01: identitatea acțiunii de salvare în jurnal (nu a analizei AI).
+  const idOperatieSalvareRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
   // URL-ul pozei incarcate pe ImageKit CDN dupa un scan reusit (salvat in alimente JSONB).
@@ -101,7 +117,6 @@ export default function CameraScreen() {
   // U-03: garanteaza ca dialogul de recuperare a draft-ului apare o singura data
   // pe sesiunea ecranului, chiar daca efectul se re-executa la schimbarea tokenului.
   const draftPromptAfisatRef = useRef(false);
-  const router = useRouter();
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -124,7 +139,7 @@ export default function CameraScreen() {
     }, 1800);
 
     return () => clearInterval(interval);
-  }, [seIncarca]);
+  }, [seIncarca, scanSteps.length]);
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -222,7 +237,7 @@ export default function CameraScreen() {
         // (si de cost AI) vine de aici: de la ~15MB la <200KB.
         const imagineOptimizata = await optimizeImageBeforeUpload(imageUri);
         // U-03: Salvează poza în stocarea persistentă locală înainte de upload ca să nu fie pierdută la căderea rețelei
-        const draftPersistentUri = await saveLocalImageDraft(imagineOptimizata.uri);
+        const draftPersistentUri = await saveLocalImageDraft(imagineOptimizata.uri, session.user.id);
         draftCurrentUriRef.current = draftPersistentUri;
 
         const formData = new FormData();
@@ -233,18 +248,46 @@ export default function CameraScreen() {
           type: 'image/jpeg',
         } as unknown as Blob);
         formData.append('provider', selectedAI);
+        formData.append('limba', i18n.language || 'ro');
 
-        const response = await fetch(
+        // P1-12: cheia operației LOGICE, calculată o singură dată pentru această
+        // analiză. Corpul fiind multipart, serverul nu poate deriva singur o
+        // amprentă (multer rulează după middleware-ul de idempotență) — deci fără
+        // aceste antete analiza foto, cea mai scumpă operație din aplicație, nu ar
+        // avea nicio protecție la replay. Amprenta e derivată din conținutul
+        // imaginii + model + limbă, deci un retry al ACELEIAȘI acțiuni reia
+        // rezultatul înregistrat, fără a doua generare și fără a doua debitare.
+        const amprentaOperatie = await amprentaOperatieFoto(
+          imagineOptimizata.uri,
+          selectedAI,
+          i18n.language || 'ro',
+        );
+
+        const trimiteAnaliza = () => fetch(
           `${API_URL}${API_PREFIX}/analizeaza-mancare-structurat`,
           {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${session.access_token}`,
+              'Idempotency-Key': `foto-${amprentaOperatie.slice(0, 40)}`,
+              'X-Payload-Fingerprint': amprentaOperatie,
             },
             body: formData,
             signal: controller.signal,
           },
         );
+
+        let response = await trimiteAnaliza();
+
+        // P1-12: 409 IDEMPOTENCY_IN_PROGRESS înseamnă că o analiză cu ACEEAȘI cheie
+        // logică e deja în curs (dublu tap, sau prima cerere încă se închide pe
+        // server). Corect e să așteptăm rezultatul ei, nu să pornim a doua generare
+        // și nici să arătăm o eroare. Cheia rămâne NESCHIMBATĂ între încercări —
+        // regenerarea ei aici ar reintroduce exact dubla execuție pe care o prevenim.
+        if (response.status === 409) {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          if (!controller.signal.aborted) response = await trimiteAnaliza();
+        }
 
         const payload = (await response.json()) as
           | AlimentScanat[]
@@ -271,7 +314,7 @@ export default function CameraScreen() {
         }
 
         // Analiza a reșit → ștergem draftul local persistent
-        await discardLocalImageDraft(draftPersistentUri).catch(() => {});
+        await discardLocalImageDraft(draftPersistentUri, session.user.id).catch(() => {});
 
         const normalized = payload
           .map((item) => ({
@@ -296,6 +339,11 @@ export default function CameraScreen() {
         }
 
         setRezultat(normalized);
+        // Analiza s-a finalizat cu succes (utilizatorul vede rezultatul mai jos) —
+        // contorizăm evenimentul pentru reclame (utilizatori FREE, 1 la 3 analize).
+        // DOAR contorizează; reclama efectivă se încearcă la salvare/anulare
+        // (maybeShowInterstitial), niciodată peste acest ecran de rezultat.
+        recordSuccessfulPhotoAnalysis();
         // REMED-008/009: aducem în stare poza locală scanată (miniatura din review)
         // și re-propunem categoria după ora curentă, ca utilizatorul să o suprascrie.
         setPozaScanPreview(imagineOptimizata.uri);
@@ -348,7 +396,7 @@ export default function CameraScreen() {
         }
       }
     },
-    [session?.access_token, selectedAI],
+    [session?.access_token, session?.user.id, selectedAI, t, recordSuccessfulPhotoAnalysis, i18n.language],
   );
 
   // U-03: recuperarea draft-urilor neanalizate.
@@ -361,10 +409,10 @@ export default function CameraScreen() {
   // closure învechit, iar "Reia analiza" ar fi eșuat cu "Sesiunea a expirat".
   useEffect(() => {
     if (draftPromptAfisatRef.current) return;
-    if (!session?.access_token) return;
+    if (!session?.access_token || !session.user.id) return;
     draftPromptAfisatRef.current = true;
 
-    listPendingDrafts()
+    listPendingDrafts(session.user.id)
       .then((pending) => {
         if (pending.length === 0 || !isMountedRef.current) return;
         const ultimulDraft = pending[pending.length - 1];
@@ -376,7 +424,7 @@ export default function CameraScreen() {
               text: t('alerts.butoane.anuleaza'),
               style: 'destructive',
               onPress: () => {
-                discardLocalImageDraft(ultimulDraft).catch(() => {});
+                discardLocalImageDraft(ultimulDraft, session.user.id).catch(() => {});
               },
             },
             {
@@ -389,11 +437,11 @@ export default function CameraScreen() {
         );
       })
       .catch(() => {});
-  }, [session?.access_token, analizeazaImaginea]);
+  }, [session?.access_token, session?.user.id, analizeazaImaginea, t]);
 
   const anuleazaScanarea = useCallback(() => {
-    if (draftCurrentUriRef.current) {
-      discardLocalImageDraft(draftCurrentUriRef.current).catch(() => {});
+    if (draftCurrentUriRef.current && session?.user.id) {
+      discardLocalImageDraft(draftCurrentUriRef.current, session.user.id).catch(() => {});
       draftCurrentUriRef.current = null;
     }
     abortControllerRef.current?.abort();
@@ -403,7 +451,11 @@ export default function CameraScreen() {
     setPozaScanPreview(null);
     setScanError(null);
     setSeIncarca(false);
-  }, []);
+    // P1-01 (Blocant 2): anularea scanului ABANDONEAZĂ acțiunea de salvare. Fără
+    // asta, identitatea supraviețuia și următoarea scanare — alt aliment — o
+    // refolosea, ajungând pe aceeași cheie primară ca masa abandonată.
+    idOperatieSalvareRef.current = null;
+  }, [session?.user.id]);
 
   // BUG-065: pe Android, butonul/gestul „Înapoi" peste modalul fullScreen ejecta
   // ecranul direct, aruncând un scan în review fără confirmare și fără să
@@ -531,10 +583,12 @@ export default function CameraScreen() {
   const alegeDinGalerie = async () => {
     if (seIncarca || !session) return;
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert(t('alerts.titluri.permisiuneNecesara'), t('alerts.mesaje.permisiuneGaleriePoze'));
-        return;
+      if (Platform.OS === 'ios') {
+        const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permissionResult.granted) {
+          Alert.alert(t('alerts.titluri.permisiuneNecesara'), t('alerts.mesaje.permisiuneGaleriePoze'));
+          return;
+        }
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -585,7 +639,13 @@ export default function CameraScreen() {
     // carbohidrati ≤2000, fibre ≤500). Id-ul UUID e determinist din conținutul
     // scanului: reluarea aceleiași salvări (dublu-tap, retry) se ciocnește pe PK
     // 23505 și e tratată ca „deja adăugată", nu ca rând duplicat.
+    // P1-01: identitatea acțiunii „Adaugă în jurnal". Este DISTINCTĂ de identitatea
+    // operației de analiză AI (P1-12): reluarea analizei nu salvează nimic, iar
+    // reluarea salvării nu reapelează furnizorul. Se generează o dată per acțiune
+    // și se refolosește la retry / trecere în coada offline.
+    if (!idOperatieSalvareRef.current) idOperatieSalvareRef.current = idOperatieNoua();
     const payloadInitial = construiestePayloadMasaCamera({
+      idOperatie: idOperatieSalvareRef.current,
       user_id: session.user.id,
       rezultat,
       now,
@@ -601,20 +661,57 @@ export default function CameraScreen() {
 
       if (error) {
         if (esteEroareDuplicate(error)) {
-          // Idempotență: masa a fost deja adăugată (același id) — fără duplicat.
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert(t('alerts.titluri.succes'), t('alerts.mesaje.masaAdaugataJurnal'), [
-            { text: t('alerts.butoane.superPunct'), onPress: () => { permitereNavigareRef.current = true; router.replace('/(tabs)'); } },
-          ]);
+          // P1-01 (Blocant 1): 23505 dovedește doar că EXISTĂ un rând cu acest id,
+          // nu că este aceeași salvare. Citim rândul persistat și îl comparăm
+          // înainte de a confirma ceva utilizatorului.
+          const verificare = await verificaReluareMasa(supabase as never, payload as never);
+          if (verificare.tip === 'conflict_continut') {
+            Alert.alert(
+              t('alerts.titluri.eroareSalvare'),
+              'Această masă nu a putut fi salvată: o altă masă există deja sub aceeași operație. Reîncearcă scanarea.',
+            );
+            idOperatieSalvareRef.current = null;
+            return;
+          }
+          if (verificare.tip === 'necunoscut') {
+            Alert.alert(
+              t('alerts.titluri.eroareSalvare'),
+              t('alerts.mesaje.problemaNecunoscutaConectare'),
+            );
+            return;
+          }
+          // Reluare confirmată: rândul persistat chiar corespunde acestei salvări.
+          idOperatieSalvareRef.current = null;
+          marcheazaMeseModificate(session.user.id); // P1-04: date canonice noi
+          setSaveSuccessData({
+            nume: payload.nume || (rezultat.length === 1 ? rezultat[0].nume : `${rezultat.length} alimente`),
+            calorii: Math.round(totalCalculat.calorii),
+            proteine: Math.round(totalCalculat.proteine * 10) / 10,
+            carbohidrati: Math.round(totalCalculat.carbohidrati * 10) / 10,
+            grasimi: Math.round(totalCalculat.grasimi * 10) / 10,
+            tip_masa: tipMasaSelectat,
+            isOffline: false,
+          });
           return;
         }
         throw error;
       }
 
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(t('alerts.titluri.succes'), t('alerts.mesaje.masaAdaugataJurnal'), [
-        { text: t('alerts.butoane.superPunct'), onPress: () => { permitereNavigareRef.current = true; router.replace('/(tabs)'); } },
-      ]);
+      // P1-01: scriere confirmată — acțiunea logică s-a încheiat. O salvare
+      // ulterioară pornește o operație nouă, deci poate crea un rând nou.
+      idOperatieSalvareRef.current = null;
+      // P1-04: persistare dovedită → invalidare deterministă a datelor canonice.
+      marcheazaMeseModificate(session.user.id);
+
+      setSaveSuccessData({
+        nume: payload.nume || (rezultat.length === 1 ? rezultat[0].nume : `${rezultat.length} alimente`),
+        calorii: Math.round(totalCalculat.calorii),
+        proteine: Math.round(totalCalculat.proteine * 10) / 10,
+        carbohidrati: Math.round(totalCalculat.carbohidrati * 10) / 10,
+        grasimi: Math.round(totalCalculat.grasimi * 10) / 10,
+        tip_masa: tipMasaSelectat,
+        isOffline: false,
+      });
     } catch (e: unknown) {
       console.error('[adaugaInJurnal]', e);
       const mesajEroare = e instanceof Error ? e.message : '';
@@ -624,14 +721,26 @@ export default function CameraScreen() {
           ...payload,
           created_at: now.toISOString(),
         };
-        await pushOfflineMeal(payloadOffline);
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert(
-          t('offline.salvatOffline'),
-          t('offline.masaSalvataOffline'),
-          [{ text: 'OK', onPress: () => { permitereNavigareRef.current = true; router.replace('/(tabs)'); } }]
-        );
-      } catch (_errOffline) {
+        // F-11: nu confirmam „Salvat offline" decat daca masa a ajuns cu adevarat
+        // pe disc. Fara verificare, o scriere esuata (storage plin, SQLite ocupat)
+        // lasa masa doar in memorie, iar ea dispare la inchiderea aplicatiei —
+        // dupa ce utilizatorului i s-a spus ca e in siguranta.
+        const { persistat } = await pushOfflineMealVerificat(payloadOffline);
+        if (!persistat) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          Alert.alert(t('alerts.titluri.eroareSalvare'), t('offline.masaNesalvataOffline'));
+          return;
+        }
+        setSaveSuccessData({
+          nume: payload.nume || (rezultat.length === 1 ? rezultat[0].nume : `${rezultat.length} alimente`),
+          calorii: Math.round(totalCalculat.calorii),
+          proteine: Math.round(totalCalculat.proteine * 10) / 10,
+          carbohidrati: Math.round(totalCalculat.carbohidrati * 10) / 10,
+          grasimi: Math.round(totalCalculat.grasimi * 10) / 10,
+          tip_masa: tipMasaSelectat,
+          isOffline: true,
+        });
+      } catch {
         Alert.alert(t('alerts.titluri.eroareSalvare'), mesajEroare || t('alerts.mesaje.eroareNecunoscutaSalvareMasa'));
       }
     } finally {
@@ -689,7 +798,7 @@ export default function CameraScreen() {
             </Animated.View>
           )}
 
-          <TouchableOpacity style={styles.cancelLink} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('camera.back')} hitSlop={12}>
+          <TouchableOpacity style={styles.cancelLink} onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))} accessibilityRole="button" accessibilityLabel={t('camera.back')} hitSlop={12}>
             <Text style={[styles.cancelLinkText, { color: colors.textSecondary }]}>{t('camera.back')}</Text>
           </TouchableOpacity>
         </View>
@@ -725,7 +834,7 @@ export default function CameraScreen() {
         {/* Buton X în Dreapta (Fără să se suprapună) */}
         <TouchableOpacity
           style={styles.closeButton}
-          onPress={() => { permitereNavigareRef.current = true; anuleazaScanarea(); router.back(); }}
+          onPress={() => { permitereNavigareRef.current = true; anuleazaScanarea(); if (router.canGoBack()) router.back(); else router.replace('/(tabs)'); }}
           hitSlop={4}
           accessibilityRole="button"
           accessibilityLabel="Închide camera"
@@ -773,12 +882,12 @@ export default function CameraScreen() {
                       setAiMenuVisible(false);
                     }}
                     accessibilityRole="button"
-                    accessibilityLabel={`Selectează furnizorul ${aiKey === 'auto' ? 'NutriAI Auto' : aiKey}`}
+                    accessibilityLabel={`Selectează furnizorul ${aiKey === 'auto' ? 'GetFlow Auto' : aiKey}`}
                     accessibilityState={{ selected: isSelected }}
                   >
                     <View style={{ flex: 1 }}>
                       <Text maxFontSizeMultiplier={1.3} style={[styles.aiDropdownTitle, isSelected && { color: colors.accent }]}>
-                        {aiKey === 'auto' ? '✨ NutriAI Auto-Routing (Recomandat)' : 
+                        {aiKey === 'auto' ? '✨ GetFlow Auto-Routing (Recomandat)' : 
                          aiKey === 'gemini' ? '🧠 Google Gemini Pro Vision' :
                          aiKey === 'openai' ? '👁️ OpenAI GPT-4o Mini' : '⚡ Groq LLaVA Fast'}
                       </Text>
@@ -1087,6 +1196,11 @@ export default function CameraScreen() {
         </Animated.View>
       )}
 
+      <MealSaveSuccessModal
+        visible={!!saveSuccessData}
+        data={saveSuccessData}
+        onDismiss={handleSaveSuccessDismiss}
+      />
     </View>
   );
 }

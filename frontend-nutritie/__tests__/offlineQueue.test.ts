@@ -1,5 +1,6 @@
 import {
   pushOfflineMeal,
+  pushOfflineMealVerificat,
   getOfflineQueue,
   popOfflineMeal,
   clearOfflineQueue,
@@ -175,6 +176,26 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
     const supabaseFake = {
       auth: { getUser: async () => ({ data: { user: { id: 'user_123' } }, error: null }) },
       from: () => ({
+        // P1-01: 23505 nu mai este acceptat orbeste ca succes — coada citeste randul
+        // persistat si compara continutul. Fake-ul intoarce EXACT masa pusa in coada,
+        // deci scenariul ramane „acelasi rand, deja inserat".
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: {
+                id: idUuid,
+                nume: masaSample1.nume,
+                tip_masa: masaSample1.tip_masa,
+                calorii: masaSample1.calorii,
+                proteine: masaSample1.proteine,
+                grasimi: masaSample1.grasimi,
+                carbohidrati: masaSample1.carbohidrati,
+                fibre: masaSample1.fibre,
+              },
+              error: null,
+            }),
+          }),
+        }),
         insert: async (payload: any) => {
           inserari.push(payload);
           return { error: { code: '23505', message: 'duplicate key value violates unique constraint' } };
@@ -222,5 +243,69 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
     const finalQueue = await getOfflineQueue('user_123');
     expect(finalQueue.length).toBe(1);
     expect(finalQueue[0].id).toBe(idUuid1); // item respins reîncadrat pentru reîncercare
+  });
+
+  it('F-11: raporteaza esecul persistarii, ca UI-ul sa nu minta „Salvat offline"', async () => {
+    const AsyncStorage = require('@react-native-async-storage/async-storage');
+    const setItemOriginal = AsyncStorage.setItem;
+
+    // Disc plin / stocare indisponibila.
+    AsyncStorage.setItem = jest.fn(async () => {
+      throw new Error('SQLITE_FULL');
+    });
+
+    try {
+      const rez = await pushOfflineMealVerificat({
+        ...masaSample1,
+        id: '55555555-5555-4555-8555-555555555555',
+      });
+      expect(rez.persistat).toBe(false);
+    } finally {
+      AsyncStorage.setItem = setItemOriginal;
+    }
+  });
+
+  it('F-11: confirma persistarea cand scrierea pe disc reuseste', async () => {
+    const rez = await pushOfflineMealVerificat({
+      ...masaSample1,
+      id: '66666666-6666-4666-8666-666666666666',
+    });
+    expect(rez.persistat).toBe(true);
+    expect(rez.duplicat).toBe(false);
+
+    // Acelasi id a doua oara: duplicat, dar tot „persistat" (exista deja pe disc).
+    const dinNou = await pushOfflineMealVerificat({
+      ...masaSample1,
+      id: '66666666-6666-4666-8666-666666666666',
+    });
+    expect(dinNou.duplicat).toBe(true);
+    expect(dinNou.persistat).toBe(true);
+  });
+
+  it('nu pierde o masă adăugată în coadă în timp ce sincronizarea rulează', async () => {
+    const idUuidA = '33333333-3333-4333-8333-333333333333';
+    const idUuidB = '44444444-4444-4444-8444-444444444444';
+
+    // Coada porneste cu o singura masa (A), care se va sincroniza cu succes.
+    await pushOfflineMeal({ ...masaSample1, id: idUuidA });
+
+    const supabaseFake = {
+      auth: { getUser: async () => ({ data: { user: { id: 'user_123' } }, error: null }) },
+      from: () => ({
+        insert: async () => {
+          // In timp ce insertul lui A este "in zbor" (exact fereastra reala:
+          // retea lenta la reconectare), utilizatorul salveaza masa B, care
+          // esueaza si ajunge in coada offline.
+          await pushOfflineMeal({ ...masaSample2, id: idUuidB });
+          return { error: null };
+        },
+      }),
+    };
+
+    await processOfflineQueue(supabaseFake as any, 'user_123');
+
+    // B nu a fost niciodata trimisa la server, deci TREBUIE sa ramana in coada.
+    const finalQueue = await getOfflineQueue('user_123');
+    expect(finalQueue.map((m) => m.id)).toContain(idUuidB);
   });
 });

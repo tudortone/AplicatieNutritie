@@ -17,6 +17,7 @@ import { Flame, Activity, PlusCircle, ChevronRight, Eye, EyeOff, Utensils, Calen
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi, type CategorieMasaGrupata } from '../../hooks/useMeseAzi';
+import { totaluriPentruAfisare } from '../../lib/nutritionTotals';
 import { useCurrentDayKey } from '../../hooks/useCurrentDayKey';
 import { useZileCuMese } from '../../hooks/useZileCuMese';
 import { localDayKey } from '../../lib/dateUtils';
@@ -160,7 +161,7 @@ export default function HistoryScreen() {
       refreshZileCuMese();
     },
     5000,
-    [refresh, refreshZileCuMese],
+    [refresh, refreshZileCuMese, t],
   );
 
   const onRefresh = useCallback(async () => {
@@ -178,21 +179,33 @@ export default function HistoryScreen() {
           text: t('alerts.butoane.sterge'),
           style: "destructive",
           onPress: async () => {
-            // UI Optimist: eliminare instantanee din starea locală
+            // UI Optimist: eliminare instantanee din starea locală.
+            // F-10: pastram masa ca sa o putem pune LA LOC determinist daca
+            // stergerea esueaza. Rollback-ul anterior era `refresh()`, adica un
+            // refetch pe retea — care esueaza exact din acelasi motiv ca
+            // stergerea (offline). Rezultatul: masa ramanea vizibil stearsa si
+            // totalurile scazute, desi pe server nu se stersese nimic.
+            const masaSalvata = masa;
             optimisticDeleteMeal(masa.id);
+
+            const rollback = () => {
+              optimisticAddMeal(masaSalvata); // pur local, nu depinde de retea
+              // Reconciliem ordinea/starea reala cand reteaua permite; daca si
+              // asta esueaza, starea locala e deja corecta.
+              refresh();
+            };
+
             try {
               const { error } = await supabase.from('mese').delete().eq('id', masa.id).eq('user_id', masa.user_id);
               if (error) {
                 console.error("[Istoric] Stergere masa esuata:", error.message);
-                // Rollback optimist la eroare
-                refresh();
+                rollback();
                 Alert.alert(t('alerts.titluri.nuAmPututStergeMasa'), t('alerts.mesaje.incearcaDinNou'));
               } else {
                 refreshZileCuMese();
               }
             } catch {
-              // Rollback optimist
-              refresh();
+              rollback();
               Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.problemaConexiune'));
             }
           }
@@ -239,7 +252,7 @@ export default function HistoryScreen() {
       refresh();
       refreshZileCuMese();
     },
-    [refresh, refreshZileCuMese],
+    [refresh, refreshZileCuMese, t],
   );
 
   // BUG-029: listă aplatizată pentru FlashList — doar categoriile cu mese, în
@@ -274,6 +287,16 @@ export default function HistoryScreen() {
   // Atingerea antetului deschide CategorieDetailSheet (drill-down cu poze/detaliu).
   const renderSectionHeader = (cat: CategorieMasaGrupata, primul: boolean) => {
     const accent = accentCategorie(colors, cat);
+    // P1-03: totalurile pe categorie sunt canonice (brute) în hook; rotunjirea se
+    // face O SINGURĂ DATĂ, aici, la prezentare — aceeași politică folosită pentru
+    // totalul zilei, deci ecranele nu pot afișa reguli diferite.
+    const afisatCategorie = totaluriPentruAfisare({
+      calorii: cat.totalCalorii,
+      proteine: cat.totalProteine,
+      grasimi: cat.totalGrasimi,
+      carbohidrati: cat.totalCarbohidrati,
+      fibre: cat.totalFibre,
+    });
     return (
       <View style={[styles.sectionContainer, { marginTop: primul ? Spacing.sm : Spacing.xl, marginBottom: Spacing.md }]}>
         <TouchableOpacity
@@ -299,11 +322,11 @@ export default function HistoryScreen() {
           </View>
           <View style={styles.sectionMacrosSummary}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
-              <Text style={[styles.sectionTotalCal, { color: accent }]}>{cat.totalCalorii} kcal</Text>
+              <Text style={[styles.sectionTotalCal, { color: accent }]}>{afisatCategorie.calorii} kcal</Text>
               <ChevronRight size={16} color={colors.textTertiary} />
             </View>
             <Text style={[styles.sectionTotalMacros, { color: colors.textTertiary }]}>
-              P:{cat.totalProteine}g • C:{cat.totalCarbohidrati}g • G:{cat.totalGrasimi}g • F:{cat.totalFibre}g
+              P:{afisatCategorie.proteine}g • C:{afisatCategorie.carbohidrati}g • G:{afisatCategorie.grasimi}g • F:{afisatCategorie.fibre}g
             </Text>
           </View>
         </TouchableOpacity>
@@ -531,14 +554,15 @@ export default function HistoryScreen() {
 
   return (
     <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.glowTop, { backgroundColor: colors.accentTertiary }]} />
-      <View style={[styles.glowBottom, { backgroundColor: colors.accent }]} />
+      <View pointerEvents="none" style={[styles.glowTop, { backgroundColor: colors.accentTertiary }]} />
+      <View pointerEvents="none" style={[styles.glowBottom, { backgroundColor: colors.accent }]} />
 
-      {/* BUG-029: build-ul de FlashList 2.0.2 din acest repo are API redus —
-          nu suportă contentContainerStyle/refreshControl/estimatedItemSize, deci
-          padding-ul e mutat pe un View wrapper, iar refresh-ul folosește
-          onRefresh/refreshing built-in (indicatorul e cel de sistem). */}
-      <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }}>
+      {/* JOURNAL-LAYOUT-001 / NAV-LAYOUT-001: paddingBottom pe wrapper-ul extern
+          comprima ecranul și lăsa o zonă moartă deasupra barei de tab-uri.
+          Mutăm spațierea inferioară în ListFooterComponent pe FlashList pentru ca
+          lista să deruleze complet sub tab bar-ul translucid și ultimul element
+          să fie 100% vizibil și accesibil. */}
+      <View style={{ flex: 1, paddingHorizontal: 20, paddingTop: scrollPaddingTop }}>
         <FlashList
           data={listaJurnal}
           keyExtractor={(item) => item.cheie}
@@ -546,6 +570,7 @@ export default function HistoryScreen() {
           onRefresh={onRefresh}
           refreshing={false}
           ListHeaderComponent={<>{eroareBanner}{renderHeader()}</>}
+          ListFooterComponent={<View style={{ height: scrollPaddingBottom }} />}
           ListEmptyComponent={
             eroareFetch ? (
               eroareBanner
@@ -592,6 +617,9 @@ export default function HistoryScreen() {
         onEditMasa={openEditModal}
         onDeleteMasa={handleDelete}
         onAddMasa={(tip) => deschideAddMeal(null, tip)}
+        // F-12: lista vie, ca sheet-ul sa nu mai afiseze un instantaneu invechit
+        // dupa stergerea/editarea unei mese din interiorul lui.
+        categoriiLive={categoriiMeseList}
       />
     </KeyboardAwareScreen>
   );

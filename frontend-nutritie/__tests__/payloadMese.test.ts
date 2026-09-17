@@ -212,17 +212,20 @@ describe('BUG-007 — tip_masa invalid', () => {
 });
 
 describe('BUG-019 — idempotență la submit', () => {
-  it('9. același conținut -> același id determinist (fara duplicat pe PK)', () => {
-    const p1 = construiestePayloadMasaCamera({ user_id: 'u1', rezultat: [aliment()], now: ZI });
-    const p2 = construiestePayloadMasaCamera({ user_id: 'u1', rezultat: [aliment()], now: ZI });
+  // P1-01: CONTRACT INVERSAT DELIBERAT.
+  // Acest test cerea „același conținut -> același id". Identitatea nu mai derivă
+  // din conținut, ci din ACȚIUNEA de salvare (`idOperatie`), pentru că altfel a
+  // doua masă identică adăugată intenționat (același iaurt de două ori) se
+  // ciocnea pe cheia primară și nu se mai scria. Idempotența la reluare rămâne
+  // garantată — dar de operație, nu de conținut.
+  it('9. identitatea vine din operație: reluarea aceleiași acțiuni -> același id', () => {
+    const idOperatie = 'OP-SCAN-1';
+    const p1 = construiestePayloadMasaCamera({ user_id: 'u1', rezultat: [aliment()], now: ZI, idOperatie });
+    const p2 = construiestePayloadMasaCamera({ user_id: 'u1', rezultat: [aliment()], now: ZI, idOperatie });
     expect(p1.payload.id).toBe(p2.payload.id);
 
-    // Gramaj editat -> alt conținut -> alt id (editarea chiar salvează noua masă)
-    const p3 = construiestePayloadMasaCamera({
-      user_id: 'u1',
-      rezultat: [aliment({ estimare_grame: 250 })],
-      now: ZI,
-    });
+    // Două acțiuni distincte pe același conținut -> două mese distincte.
+    const p3 = construiestePayloadMasaCamera({ user_id: 'u1', rezultat: [aliment()], now: ZI, idOperatie: 'OP-SCAN-2' });
     expect(p3.payload.id).not.toBe(p1.payload.id);
   });
 

@@ -8,6 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { Masa, TipMasa } from '../../types';
 import { CategorieMasaGrupata } from '../../hooks/useMeseAzi';
+import { totaluriPentruAfisare } from '../../lib/nutritionTotals';
 import { MasaCard } from '../MasaCard';
 
 export interface CategorieDetailSheetRef {
@@ -22,6 +23,12 @@ interface CategorieDetailSheetProps {
   onEditMasa: (masa: Masa) => void;
   onDeleteMasa: (masa: Masa) => void;
   onAddMasa: (tip: TipMasa) => void;
+  /**
+   * F-12: lista VIE de categorii din părinte (derivată din `mese`). Sheet-ul o
+   * folosește ca sursă de adevăr cât timp e deschis, ca ștergerile/editările
+   * făcute din interiorul lui să se reflecte imediat, fără „fantome".
+   */
+  categoriiLive?: CategorieMasaGrupata[];
 }
 
 /**
@@ -31,13 +38,20 @@ interface CategorieDetailSheetProps {
  */
 export const CategorieDetailSheet = forwardRef<CategorieDetailSheetRef, CategorieDetailSheetProps>(
   function CategorieDetailSheet(
-    { afisarePoze, onPressMasa, onEditMasa, onDeleteMasa, onAddMasa },
+    { afisarePoze, onPressMasa, onEditMasa, onDeleteMasa, onAddMasa, categoriiLive },
     ref,
   ) {
     const { colors } = useTheme();
     const { t } = useTranslation();
     const bottomSheetRef = useRef<BottomSheetModal>(null);
-    const [categorie, setCategorie] = useState<CategorieMasaGrupata | null>(null);
+    // F-12: pastram DOAR identitatea categoriei deschise, nu un instantaneu al ei.
+    // Inainte, sheet-ul retinea obiectul primit la `open()`; dupa o stergere sau
+    // o editare facuta din interiorul lui, continua sa afiseze datele vechi —
+    // masa stearsa ramanea vizibila ca „fantoma", iar totalul categoriei ramanea
+    // cel de dinainte. O editare pe fantoma trimitea un UPDATE pe un id inexistent,
+    // care „reuseste" cu 0 randuri si afisa un toast de succes fals.
+    const [categorieId, setCategorieId] = useState<CategorieMasaGrupata['id'] | null>(null);
+    const [instantaneu, setInstantaneu] = useState<CategorieMasaGrupata | null>(null);
     const snapPoints = useMemo(() => ['72%'], []);
     // REMED-010 (Android BackHandler): urmărim index-ul (BottomSheetModal) ca să
     // închidem sheet-ul cu back DOAR când e deschis (>= 0).
@@ -54,11 +68,38 @@ export const CategorieDetailSheet = forwardRef<CategorieDetailSheetRef, Categori
 
     useImperativeHandle(ref, () => ({
       open: (cat: CategorieMasaGrupata) => {
-        setCategorie(cat);
+        setCategorieId(cat.id);
+        setInstantaneu(cat);
         bottomSheetRef.current?.present();
       },
       close: () => bottomSheetRef.current?.dismiss(),
     }));
+
+    // Sursa de adevar este lista VIE din parinte (recalculata din `mese`).
+    // `instantaneu` ramane doar ca rezerva pentru apelantii care inca nu paseaza
+    // `categoriiLive`, ca sa nu regresam comportamentul existent.
+    const categorie = useMemo<CategorieMasaGrupata | null>(() => {
+      if (categorieId && categoriiLive) {
+        return categoriiLive.find((c) => c.id === categorieId) ?? null;
+      }
+      return instantaneu;
+    }, [categorieId, categoriiLive, instantaneu]);
+
+    // P1-03: totalurile pe categorie sunt CANONICE BRUTE (nerotunjite) — doar așa
+    // „suma categoriilor == totalul zilei" se poate garanta. Conversia de prezentare
+    // se face aici, cu aceeași funcție canonică folosită de Jurnal și de Home, deci
+    // nu există o a doua regulă de rotunjire. Sheet-ul o aplică el însuși ca să fie
+    // corect și pentru apelanții care nu pasează `categoriiLive` (calea `instantaneu`).
+    const totaluriAfisare = useMemo(
+      () => totaluriPentruAfisare({
+        calorii: categorie?.totalCalorii ?? 0,
+        proteine: categorie?.totalProteine ?? 0,
+        grasimi: categorie?.totalGrasimi ?? 0,
+        carbohidrati: categorie?.totalCarbohidrati ?? 0,
+        fibre: categorie?.totalFibre ?? 0,
+      }),
+      [categorie],
+    );
 
     const renderBackdrop = useCallback(
       (props: any) => (
@@ -108,23 +149,23 @@ export const CategorieDetailSheet = forwardRef<CategorieDetailSheetRef, Categori
 
         <View style={[styles.macroBar, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
           <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.accent }]}>{categorie.totalCalorii}</Text>
+            <Text style={[styles.macroValue, { color: colors.accent }]}>{totaluriAfisare.calorii}</Text>
             <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>kcal</Text>
           </View>
           <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.accentSecondary }]}>{categorie.totalProteine}g</Text>
+            <Text style={[styles.macroValue, { color: colors.accentSecondary }]}>{totaluriAfisare.proteine}g</Text>
             <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>proteine</Text>
           </View>
           <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.accentTertiary }]}>{categorie.totalCarbohidrati}g</Text>
+            <Text style={[styles.macroValue, { color: colors.accentTertiary }]}>{totaluriAfisare.carbohidrati}g</Text>
             <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>carbs</Text>
           </View>
           <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.warning }]}>{categorie.totalGrasimi}g</Text>
+            <Text style={[styles.macroValue, { color: colors.warning }]}>{totaluriAfisare.grasimi}g</Text>
             <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>grăsimi</Text>
           </View>
           <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.success }]}>{categorie.totalFibre}g</Text>
+            <Text style={[styles.macroValue, { color: colors.success }]}>{totaluriAfisare.fibre}g</Text>
             <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>fibre</Text>
           </View>
         </View>

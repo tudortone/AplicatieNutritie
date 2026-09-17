@@ -1,3 +1,5 @@
+import { verificaReluareMasa } from './payloadMese';
+import { marcheazaMeseModificate } from './freshnessMese';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const OFFLINE_QUEUE_KEY_LEGACY = '@nutri_offline_meals_queue';
@@ -136,13 +138,24 @@ export async function getOfflineQueue(userId?: string | null): Promise<MasaOffli
   }
 }
 
-export async function saveOfflineQueue(queue: MasaOfflinePayload[], userId?: string | null): Promise<void> {
+/**
+ * F-11: intoarce `true` doar daca scrierea pe DISC a reusit.
+ *
+ * Inainte, semnatura era `Promise<void>` si inghitea orice eroare de la
+ * AsyncStorage: coada cadea tacut pe copia din memorie, iar apelantii afisau
+ * oricum „Salvat offline". Daca aplicatia era ucisa inainte de o sincronizare
+ * (eveniment banal pe Android), masa disparea complet — desi utilizatorului i se
+ * confirmase salvarea. Apelantii trebuie sa poata spune adevarul.
+ */
+export async function saveOfflineQueue(queue: MasaOfflinePayload[], userId?: string | null): Promise<boolean> {
   const key = getOfflineQueueKey(userId);
   inMemoryFallbackQueues.set(key, [...queue]);
   try {
     await AsyncStorage.setItem(key, JSON.stringify(queue));
+    return true;
   } catch (err) {
     if (__DEV__) console.warn('[OfflineQueue] Eroare la salvarea pe disc:', err);
+    return false;
   }
 }
 
@@ -157,6 +170,29 @@ export async function pushOfflineMeal(payload: MasaOfflinePayload): Promise<numb
   const updated = [...current, payload];
   await saveOfflineQueue(updated, userId);
   return updated.length;
+}
+
+/**
+ * F-11: varianta care spune daca masa a ajuns cu adevarat pe disc.
+ *
+ * `pushOfflineMeal` isi pastreaza contractul (numarul de elemente din coada),
+ * ca sa nu rupem apelantii existenti. Ecranele care confirma utilizatorului
+ * „Salvat offline" trebuie insa sa foloseasca `persistat`: daca e `false`, masa
+ * exista DOAR in memorie si dispare la inchiderea aplicatiei, deci mesajul
+ * corect este unul de eroare, nu de succes.
+ */
+export async function pushOfflineMealVerificat(
+  payload: MasaOfflinePayload,
+): Promise<{ persistat: boolean; lungime: number; duplicat: boolean }> {
+  if (!payload || !payload.user_id) return { persistat: false, lungime: 0, duplicat: false };
+  const userId = payload.user_id;
+  const current = await getOfflineQueue(userId);
+  if (current.some((item) => item.id === payload.id)) {
+    return { persistat: true, lungime: current.length, duplicat: true };
+  }
+  const updated = [...current, payload];
+  const persistat = await saveOfflineQueue(updated, userId);
+  return { persistat, lungime: updated.length, duplicat: false };
 }
 
 export async function popOfflineMeal(userId?: string | null): Promise<MasaOfflinePayload | null> {
@@ -227,6 +263,11 @@ export async function processOfflineQueue(
   let procesate = 0;
   let esuate = 0;
   const pentruReincercare: MasaOfflinePayload[] = [];
+  // Id-urile confirmate ca ajunse pe server (insert reusit sau duplicat 23505).
+  // Doar acestea au voie sa fie eliminate din coada persistata la final.
+  const sincronizate = new Set<string>();
+  // Intrari care nu apartin utilizatorului conectat: se purja, ca inainte.
+  const deEliminat = new Set<string>();
 
   while (queue.length > 0) {
     const masa = queue[0];
@@ -235,6 +276,7 @@ export async function processOfflineQueue(
     // conectat, nu îl trimitem în Supabase (ar pica la RLS sau ar polua DB-ul).
     if (masa.user_id !== activeUid) {
       queue.shift();
+      deEliminat.add(masa.id);
       continue;
     }
 
@@ -264,11 +306,34 @@ export async function processOfflineQueue(
       if (error) {
         if (error.code === '23505') {
           // BUG-054: rand deja inserat de o sincronizare partiala precedenta
-          // (insertul a ajuns la DB, dar pop-ul din coada a esuat). Idempotent:
-          // il scoatem din coada si il consideram procesat, fara duplicat.
-          queue.shift();
-          procesate++;
-          continue;
+          // (insertul a ajuns la DB, dar pop-ul din coada a esuat).
+          //
+          // P1-01 (Blocant 1): 23505 dovedeste doar ca EXISTA un rand cu acest id,
+          // nu ca este aceeasi masa. Verificam continutul persistat inainte de a
+          // declara intrarea sincronizata; altfel o intrare cu alt continut ar fi
+          // stearsa tacut din coada ca si cum ar fi ajuns pe server.
+          const verificare = await verificaReluareMasa(
+            supabaseClient as never,
+            masa as unknown as { id: string } & Record<string, unknown>,
+          );
+          if (verificare.tip === 'reluare_confirmata') {
+            queue.shift();
+            sincronizate.add(masa.id);
+            procesate++;
+            continue;
+          }
+          if (verificare.tip === 'conflict_continut') {
+            // Nu este masa noastra. Nu o declaram sincronizata si nu o pastram in
+            // coada la infinit: o scoatem si o contorizam ca esec real, vizibil.
+            queue.shift();
+            deEliminat.add(masa.id);
+            esuate++;
+            continue;
+          }
+          // `necunoscut`: nu putem dovedi nimic — pastram intrarea pentru o
+          // reluare ulterioara, fara sa pretindem succes.
+          esuate++;
+          break;
         }
 
         if (!error.code && !error.status) {
@@ -291,6 +356,7 @@ export async function processOfflineQueue(
 
       // Succes -> scoatem primul element din coadă
       queue.shift();
+      sincronizate.add(masa.id);
       procesate++;
     } catch {
       // Eroare lansata (fetch rejected) — tot retea indisponibila. Pastram masa.
@@ -299,6 +365,40 @@ export async function processOfflineQueue(
     }
   }
 
-  await saveOfflineQueue([...queue, ...pentruReincercare], activeUid);
+  // Nu suprascriem coada cu instantaneul citit la inceput: `pushOfflineMeal`
+  // poate scrie in acelasi timp (utilizatorul salveaza o masa noua cat timp
+  // sincronizarea e in zbor), iar un overwrite ar sterge definitiv acele mese
+  // fara ca ele sa fi ajuns vreodata pe server. Recitim starea curenta si
+  // eliminam DOAR intrarile pe care chiar le-am confirmat sincronizate.
+  const ramase = new Map<string, MasaOfflinePayload>();
+  for (const masa of [...queue, ...pentruReincercare]) ramase.set(masa.id, masa);
+
+  const live = await getOfflineQueue(activeUid);
+  const rezultat: MasaOfflinePayload[] = [];
+  const vazute = new Set<string>();
+  for (const masa of live) {
+    // Intrarile altui utilizator au fost deja filtrate mai sus; aici pastram
+    // orice masa care nu a fost sincronizata in aceasta rulare.
+    if (sincronizate.has(masa.id) || deEliminat.has(masa.id)) continue;
+    if (vazute.has(masa.id)) continue;
+    vazute.add(masa.id);
+    rezultat.push(ramase.get(masa.id) ?? masa);
+  }
+  // Intrari reincadrate care intre timp au disparut din storage (ex. golire
+  // concurenta) — le pastram, altfel s-ar pierde tacut.
+  for (const masa of pentruReincercare) {
+    if (!vazute.has(masa.id)) {
+      vazute.add(masa.id);
+      rezultat.push(masa);
+    }
+  }
+
+  await saveOfflineQueue(rezultat, activeUid);
+  // P1-04: dacă sincronizarea a scris efectiv pe server, datele canonice s-au
+  // schimbat — emitem o SINGURĂ invalidare pentru toată reluarea, ca ecranele
+  // deschise (Home) să se împrospăteze fără repornirea aplicației. Nu emitem
+  // nimic dacă nu s-a procesat nimic real.
+  if (procesate > 0) marcheazaMeseModificate(activeUid);
+
   return { procesate, esuate };
 }

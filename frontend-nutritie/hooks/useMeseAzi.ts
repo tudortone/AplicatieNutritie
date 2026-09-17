@@ -3,6 +3,8 @@ import { supabase } from '../supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Masa, TipMasa } from '../types';
 import { getTipMasaDupaOra, parseAlimente } from '../lib/mealUtils';
+import { calculeazaTotaluriZi, totaluriPentruAfisare } from '../lib/nutritionTotals';
+import { aboneazaLaModificariMese } from '../lib/freshnessMese';
 import { citesteTargeturiPending } from '../lib/sincronizeazaTargeturi';
 import { startOfLocalDayISO, endOfLocalDayISO } from '../lib/dateUtils';
 import type { User } from '@supabase/supabase-js';
@@ -22,12 +24,11 @@ export interface CategorieMasaGrupata {
 export type MeseGrupateMap = Record<TipMasa, CategorieMasaGrupata>;
 
 export function useMeseAzi(dataSelectata?: Date) {
+  // P1-03: `mese` este SINGURA stare canonică a zilei. Totalurile nu mai sunt
+  // stare separată — se derivă din ea prin autoritatea unică
+  // (`lib/nutritionTotals.ts`). Astfel nu mai pot exista două „adevăruri" care
+  // să divergă: orice mutație a listei reface automat toate totalurile.
   const [mese, setMese] = useState<Masa[]>([]);
-  const [totalCalorii, setTotalCalorii] = useState(0);
-  const [totalProteine, setTotalProteine] = useState(0);
-  const [totalGrasimi, setTotalGrasimi] = useState(0);
-  const [totalCarbohidrati, setTotalCarbohidrati] = useState(0);
-  const [numarMese, setNumarMese] = useState(0);
   const [user, setUser] = useState<User | null>(null);
   
   const [caloriiTinta, setCaloriiTinta] = useState(2000);
@@ -114,8 +115,9 @@ export function useMeseAzi(dataSelectata?: Date) {
       } else if (meseData) {
         setEroareFetch(null);
         const parsedMese = meseData as Masa[];
-        
-        let totalC = 0, totalP = 0, totalG = 0, totalCarbs = 0;
+
+        // Normalizare de formă (compoziție + categorie). Totalurile NU se mai
+        // calculează aici: se derivă din `mese` prin autoritatea unică.
         parsedMese.forEach(m => {
           let alimenteArr = parseAlimente(m);
           if (!alimenteArr || alimenteArr.length === 0) {
@@ -137,24 +139,9 @@ export function useMeseAzi(dataSelectata?: Date) {
             const dateToUse = m.created_at ? new Date(m.created_at) : new Date();
             m.tip_masa = getTipMasaDupaOra(dateToUse);
           }
-
-          totalC += m.calorii || 0;
-          totalP += m.proteine || 0;
-          totalG += m.grasimi || 0;
-          totalCarbs += m.carbohidrati || 0;
         });
 
-        const safeTotalC = Math.min(100000, Math.max(0, Math.round(totalC)));
-        const safeTotalP = Math.min(5000, Math.max(0, Math.round(totalP * 10) / 10));
-        const safeTotalG = Math.min(5000, Math.max(0, Math.round(totalG * 10) / 10));
-        const safeTotalCarbs = Math.min(5000, Math.max(0, Math.round(totalCarbs * 10) / 10));
-
         setMese(parsedMese);
-        setTotalCalorii(safeTotalC);
-        setTotalProteine(safeTotalP);
-        setTotalGrasimi(safeTotalG);
-        setTotalCarbohidrati(safeTotalCarbs);
-        setNumarMese(parsedMese.length);
       }
     } catch (e) {
       console.error("Eroare neașteptată în hook-ul useMeseAzi:", e);
@@ -182,6 +169,27 @@ export function useMeseAzi(dataSelectata?: Date) {
     };
   }, [fetchData]);
 
+  // P1-04: invalidare DETERMINISTĂ după o salvare verificată. Fără ea, Home se
+  // baza pe `useFocusRefresh`, care are throttle de 5s — o salvare din cameră sau
+  // din chat urmată de revenirea rapidă pe Home sărea refresh-ul și afișa
+  // totaluri vechi. Acum prospețimea nu mai depinde de niciun cronometru.
+  //
+  // Scopat pe proprietar (P0-02): ignorăm semnalele altui utilizator, ca datele
+  // lui A să nu poată împrospăta ecranul lui B.
+  useEffect(() => aboneazaLaModificariMese((userIdSemnal) => {
+    if (!isMountedRef.current) return;
+    if (!user?.id || userIdSemnal !== user.id) return;
+    fetchData(true, false);
+  }), [fetchData, user?.id]);
+
+  // P1-03: totalurile zilei — derivate, niciodată stare separată. Aceeași funcție
+  // canonică alimentează Home, Jurnalul și rezumatul zilei, deci nu pot diverge.
+  const totaluriZi = useMemo(
+    () => totaluriPentruAfisare(calculeazaTotaluriZi(mese)),
+    [mese],
+  );
+  const numarMese = mese.length;
+
   const { meseGrupate, categoriiMeseList } = useMemo(() => {
     const grupuri: MeseGrupateMap = {
       mic_dejun: { id: 'mic_dejun', label: 'Mic Dejun', icon: '🍳', mese: [], totalCalorii: 0, totalProteine: 0, totalCarbohidrati: 0, totalGrasimi: 0, totalFibre: 0 },
@@ -192,13 +200,24 @@ export function useMeseAzi(dataSelectata?: Date) {
 
     mese.forEach(m => {
       const tip: TipMasa = m.tip_masa && grupuri[m.tip_masa] ? m.tip_masa : 'gustare';
+      grupuri[tip].mese.push(m);
+    });
+
+    // P1-03: totalurile pe categorie folosesc EXACT aceeași autoritate ca totalul
+    // zilei și rămân valori BRUTE (nerotunjite).
+    //
+    // De ce brute: rotunjirea fiecărei categorii și apoi însumarea lor dă un
+    // rezultat diferit de rotunjirea sumei (dublă rotunjire — 95.5 în loc de 95.4
+    // pe fixtura canonică). Invariantul „suma categoriilor == totalul zilei" poate
+    // fi garantat doar pe valori brute; rotunjirea rămâne exclusiv la prezentare.
+    (Object.keys(grupuri) as TipMasa[]).forEach((tip) => {
       const cat = grupuri[tip];
-      cat.mese.push(m);
-      cat.totalCalorii += m.calorii || 0;
-      cat.totalProteine += m.proteine || 0;
-      cat.totalCarbohidrati += m.carbohidrati || 0;
-      cat.totalGrasimi += m.grasimi || 0;
-      cat.totalFibre += m.fibre || 0;
+      const t = calculeazaTotaluriZi(cat.mese);
+      cat.totalCalorii = t.calorii;
+      cat.totalProteine = t.proteine;
+      cat.totalCarbohidrati = t.carbohidrati;
+      cat.totalGrasimi = t.grasimi;
+      cat.totalFibre = t.fibre;
     });
 
     const listaOrd = ['mic_dejun', 'pranz', 'cina', 'gustare'].map(k => grupuri[k as TipMasa]);
@@ -206,39 +225,36 @@ export function useMeseAzi(dataSelectata?: Date) {
     return { meseGrupate: grupuri, categoriiMeseList: listaOrd };
   }, [mese]);
 
+  // P1-03: mutațiile optimiste ating DOAR setul canonic de mese. Totalurile se
+  // recalculează din el, deci nu mai există aritmetică pe deltă peste valori deja
+  // rotunjite — tiparul care făcea ca „adaugă apoi șterge" să nu readucă totalul
+  // inițial și ca ecranele să divergă între ele.
   const optimisticDeleteMeal = useCallback((id: string) => {
-    setMese((prev) => {
-      const deSters = prev.find((m) => m.id === id);
-      if (!deSters) return prev;
-      setTotalCalorii((c) => Math.max(0, c - (deSters.calorii || 0)));
-      setTotalProteine((p) => Math.max(0, p - (deSters.proteine || 0)));
-      setTotalGrasimi((g) => Math.max(0, g - (deSters.grasimi || 0)));
-      setTotalCarbohidrati((cb) => Math.max(0, cb - (deSters.carbohidrati || 0)));
-      setNumarMese((n) => Math.max(0, n - 1));
-      return prev.filter((m) => m.id !== id);
-    });
+    setMese((prev) => (prev.some((m) => m.id === id) ? prev.filter((m) => m.id !== id) : prev));
   }, []);
 
   // S10 (U-09): adăugare optimistă — reflectă instant o masă tocmai salvată, înainte
   // ca reîmprospătarea server-side să reconcilieze lista. Oglinda lui optimisticDeleteMeal.
-  // Plafoanele totalurilor → aceleași ca în fetchData (safeTotalC/P/G/Carbi).
   const optimisticAddMeal = useCallback((masa: Masa) => {
-    setMese((prev) => [masa, ...prev]);
-    setTotalCalorii((c) => Math.min(100000, Math.max(0, c + (masa.calorii || 0))));
-    setTotalProteine((p) => Math.min(5000, Math.max(0, p + (masa.proteine || 0))));
-    setTotalGrasimi((g) => Math.min(5000, Math.max(0, g + (masa.grasimi || 0))));
-    setTotalCarbohidrati((cb) => Math.min(5000, Math.max(0, cb + (masa.carbohidrati || 0))));
-    setNumarMese((n) => (n ?? 0) + 1);
+    setMese((prev) => {
+      // Aceeași masă canonică nu poate contribui de două ori: dacă `refresh()` a
+      // adus-o deja de pe server, adăugarea optimistă nu o dublează.
+      if (masa?.id && prev.some((m) => m.id === masa.id)) return prev;
+      return [masa, ...prev];
+    });
   }, []);
 
   return {
     mese,
     meseGrupate,
     categoriiMeseList,
-    totalCalorii,
-    totalProteine,
-    totalGrasimi,
-    totalCarbohidrati,
+    // Contractul public rămâne neschimbat pentru consumatori; sursa lor este acum
+    // autoritatea unică, nu patru calculatoare separate.
+    totalCalorii: totaluriZi.calorii,
+    totalProteine: totaluriZi.proteine,
+    totalGrasimi: totaluriZi.grasimi,
+    totalCarbohidrati: totaluriZi.carbohidrati,
+    totalFibre: totaluriZi.fibre,
     numarMese,
     caloriiTinta,
     proteineTinta,

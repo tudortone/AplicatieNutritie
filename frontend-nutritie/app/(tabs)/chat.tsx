@@ -6,14 +6,14 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildApiUrl } from '@/lib/api';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   FadeIn, FadeInDown, FadeInUp, FadeOut,
   useAnimatedKeyboard, useAnimatedStyle,
 } from 'react-native-reanimated';
-import { Send, Sparkles, RotateCcw, BarChart3, Dumbbell, ChefHat, Zap, RefreshCw } from 'lucide-react-native';
+import { Send, Sparkles, RotateCcw, BarChart3, Dumbbell, ChefHat, Zap, RefreshCw, X, Utensils } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useCurrentDayKey } from '../../hooks/useCurrentDayKey';
@@ -23,21 +23,26 @@ import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useAds } from '../../context/AdsContext';
 import BouncingDot from '../../components/BouncingDot';
 import { RecipeGeneratorModal } from '../../components/RecipeGeneratorModal';
 import { supabase } from '../../supabase';
 import { ConfirmSheet } from '../../components/ui/ConfirmSheet';
-import { construiesteRinduriMasaChat, clasificaRezultatInsertMasa, type TipRezultatInsertMasa } from '../../lib/payloadMese';
-import { pushOfflineMeal, type MasaOfflinePayload } from '../../lib/offlineQueue';
+import { construiesteRinduriMasaChat, decideRezultatInsertMasa, type DecizieInsertMasa } from '../../lib/payloadMese';
+import { idOperatieNoua } from '../../lib/idUtils';
+import { pushOfflineMealVerificat, type MasaOfflinePayload } from '../../lib/offlineQueue';
+import { marcheazaMeseModificate } from '../../lib/freshnessMese';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import KeyboardAwareScreen, { useContentBottomPadding } from '@/components/ui/KeyboardAwareScreen';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
-import { parseMealProposal, type MealProposal } from '../../lib/parseMealProposal';
+import { parseMealProposal, extractTextWithoutMealProposal, type MealProposal } from '../../lib/parseMealProposal';
+import { MealSaveSuccessModal, type MealSuccessData } from '../../components/ui/MealSaveSuccessModal';
 // REMED-006: categoriile de masă aparțin lib/mealUtils (read-only) — aici doar le citim;
 // eticheta tradusă o derivăm noi din id (clés chat.mealCategory.*), nu din label-ul RO fix.
 import { MEAL_CATEGORIES, CATEGORIE_ICONA } from '../../lib/mealUtils';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import type { TipMasa } from '../../types';
+import type { Masa, TipMasa } from '../../types';
+import { calculeazaTotaluriZi, totaluriPentruAfisare } from '../../lib/nutritionTotals';
 import type { ThemeColors } from '../../constants/theme';
 
 // Generator de id stabil pentru mesajele de chat (folosit ca `key` in lista).
@@ -238,6 +243,9 @@ export default function ChatScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { session } = useAuth();
+  const router = useRouter();
+  const { recordChatUserMessage, maybeShowInterstitial } = useAds();
+  const [successModalData, setSuccessModalData] = useState<MealSuccessData | null>(null);
   const currentDayKey = useCurrentDayKey();
   const insets = useSafeAreaInsets();
   const { tabBarHeight } = useResponsiveLayout();
@@ -270,6 +278,12 @@ export default function ChatScreen() {
   // REMED-006: categoria aleasă explicit de utilizator înainte de a insera
   // propunerea (null => confirmarea rămâne blocată; fără auto-insert).
   const [proposalCategory, setProposalCategory] = useState<TipMasa | null>(null);
+  const handleSuccessDismiss = useCallback(() => {
+    setSuccessModalData(null);
+    router.replace('/(tabs)');
+  }, [router]);
+  // P1-01: identitatea acțiunii „Adaugă în jurnal" din chat.
+  const idOperatieSalvareRef = useRef<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const mesajeRef = useRef(mesaje);
   // CHAT-002: controller-ul cererii AI active — pentru abort la unmount.
@@ -375,7 +389,7 @@ export default function ChatScreen() {
     })();
 
     return () => { activ = false; };
-  }, [session?.user?.id, currentDayKey]);
+  }, [session?.user?.id, currentDayKey, t]);
 
   // Salvare istoric debounce-uită (800ms): la mesaje succesive rapide scriem o
   // singură dată în AsyncStorage, iar la unmount golitm orice salvare restantă.
@@ -462,6 +476,7 @@ useEffect(() => {
     // BUG-061: la retry (esteRetry=true) bulele de utilizator există deja în
     // istoric — nu o adăugăm încă o dată, altfel retrimiterea ar duplica bulele.
     if (!esteRetry) {
+      recordChatUserMessage();
       adaugaMesaj(buleMesaj('user', mesajText));
     }
     setLoadingChat(true);
@@ -524,7 +539,8 @@ useEffect(() => {
           caloriiConsumate: totalCalorii,
           caloriiTinta,
           proteineConsumate: totalProteine,
-          proteineTinta
+          proteineTinta,
+          limba: i18n.language || 'ro'
         }),
       });
       let date: any = null;
@@ -560,23 +576,30 @@ useEffect(() => {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       let raspunsText = date?.raspuns || t('chat.errorResponseProcessing');
-      // CHAT-009: `parsed` nu mai e reasignat după eliminarea fallback-ului mort.
       const parsed = parseMealProposal(date) || parseMealProposal(raspunsText);
 
-      // CHAT-009: fallback-ul catre /api/log-food-from-chat de aici era cod mort —
-      // daca isMealLogIntent(mesajText) e adevarat, ramura de meal-intent de mai
-      // sus iese mereu cu return (try SAU catch), deci nu se ajunge aici; daca e
-      // fals, conditia de aici nu putea fi adevarata. Blocul a fost eliminat.
+      // P1-02: 200 OK cu corp MALFORMAT (fără `raspuns` și fără propunere
+      // interpretabilă) NU este un tur reușit. Înainte, textul de eroare era
+      // afișat ca o bulă normală de asistent și se evalua și reclama — adică un
+      // eșec arăta exact ca un răspuns complet.
+      if (!date?.raspuns && !parsed) {
+        adaugaMesaj(buleMesaj('ai', t('chat.errorResponseProcessing'), true));
+        return;
+      }
 
       if (parsed && (parsed.type === 'MEAL_PROPOSAL' || Array.isArray(parsed.items))) {
         if (Array.isArray(parsed.items)) parsed.type = 'MEAL_PROPOSAL';
         setMealProposal(parsed);
-        setProposalCategory(null); // REMED-006: categorie curată la fiecare propunere nouă.
-        setMealProposalVisible(true);
-        raspunsText = t('chat.foodsIdentified');
+        setProposalCategory(null);
+        // Păstrăm explicația și pașii rețetei, eliminând doar blocul tehnic JSON
+        const textCurat = extractTextWithoutMealProposal(date?.raspuns || raspunsText);
+        raspunsText = textCurat || t('chat.foodsIdentified');
       }
 
       adaugaMesaj(buleMesaj('ai', raspunsText));
+
+      // Phase C: evaluăm afișarea reclamei doar după ce răspunsul AI s-a finalizat complet
+      void maybeShowInterstitial('chat');
     } catch {
       adaugaMesaj(buleMesaj('ai', t('chat.errorConnection'), true));
     } finally {
@@ -627,25 +650,75 @@ useEffect(() => {
       // (23505), fără rânduri duplicate. REMED-006: meal_type = categoria
       // explicită din picker, NU derivarea automată (fost „gustare" default).
       const acumMasa = new Date();
+      // P1-01: identitatea acțiunii „Adaugă în jurnal" din chat. Separată de
+      // identitatea operației AI (P1-12). Aceeași apăsare reluată păstrează
+      // identitatea; o apăsare nouă primește alta, deci două propuneri identice
+      // salvate deliberat produc două mese.
+      if (!idOperatieSalvareRef.current) idOperatieSalvareRef.current = idOperatieNoua();
       const rows = construiesteRinduriMasaChat({
+        idOperatie: idOperatieSalvareRef.current,
         user_id: session.user.id,
         items: mealProposal.items,
         now: acumMasa,
         meal_type: proposalCategory,
       });
 
-      let rezultatInsert: TipRezultatInsertMasa;
+      // P1-01 (Blocant A): `23505` NU mai este un verdict. `decideRezultatInsertMasa`
+      // citește rândul chiar persistat și compară conținutul înainte ca ecranul să
+      // aibă voie să confirme ceva. Înainte, orice duplicat era tratat ca succes și
+      // modalul se construia din payload-ul LOCAL — deci utilizatorul putea citi
+      // „cină / 650 kcal" în timp ce jurnalul conținea „mic dejun / 500 kcal".
+      let rezultatInsert: DecizieInsertMasa;
       try {
         const { error } = await supabase.from('mese').insert(rows);
-        rezultatInsert = clasificaRezultatInsertMasa({ error });
+        rezultatInsert = await decideRezultatInsertMasa(supabase as never, rows as never, { error });
       } catch (err: unknown) {
-        rezultatInsert = clasificaRezultatInsertMasa(err instanceof Error ? err : new Error(String(err)));
+        rezultatInsert = await decideRezultatInsertMasa(
+          supabase as never,
+          rows as never,
+          err instanceof Error ? err : new Error(String(err)),
+        );
+      }
+
+      // Doar persistarea DOVEDITĂ încheie acțiunea și eliberează identitatea.
+      if (rezultatInsert.tip === 'succes' || rezultatInsert.tip === 'reluare_confirmata') {
+        idOperatieSalvareRef.current = null;
+        // P1-04: doar persistarea DOVEDITĂ pe server invalidează datele canonice.
+        // Punerea în coada offline NU emite semnal — nu este dată canonică.
+        marcheazaMeseModificate(session.user.id);
+      }
+
+      // Rândul persistat sub această identitate are ALT conținut: nu confirmăm
+      // nimic. Identitatea NU se eliberează ca persistare reușită — utilizatorul
+      // poate renunța la propunere (ceea ce o eliberează) sau reîncerca.
+      if (rezultatInsert.tip === 'conflict_continut') {
+        Alert.alert(
+          t('alerts.titluri.eroareLaSalvare'),
+          'Această masă nu a putut fi salvată: sub aceeași operație există deja o masă cu alt conținut.',
+        );
+        return;
+      }
+
+      // Nu am putut citi rândul persistat: starea reală e necunoscută, deci nu
+      // avem voie nici să confirmăm succes, nici să inventăm o salvare offline.
+      if (rezultatInsert.tip === 'verificare_esuata') {
+        Alert.alert(
+          t('alerts.titluri.eroareLaSalvare'),
+          t('alerts.mesaje.problemaNecunoscutaConectare'),
+        );
+        return;
       }
 
       // REV-001: Erorile structurate de server (RLS 42501, constrângeri, validare)
       // afișează alertă reală și NU intră în coada offline.
       if (rezultatInsert.tip === 'eroare_server') {
         console.error('Eroare Supabase la salvarea propunerii de masă:', rezultatInsert);
+        // P1-01 (Blocant 3): respingerea structurată de server (RLS 42501,
+        // constrângere, validare) înseamnă că NIMIC nu s-a persistat. Acțiunea e
+        // încheiată fără rezultat, deci identitatea se abandonează — altfel o
+        // propunere ulterioară, cu alt conținut, o moștenea și ajungea pe aceeași
+        // cheie primară.
+        idOperatieSalvareRef.current = null;
         Alert.alert(
           t('alerts.titluri.eroareLaSalvare'),
           t('alerts.mesaje.bazaDateRefuza', { eroare: rezultatInsert.mesaj })
@@ -653,7 +726,15 @@ useEffect(() => {
         return;
       }
 
-      // Eșec de transport / rețea -> salvare sigură în coada offline FIFO
+      // Eșec de transport / rețea -> salvare sigură în coada offline FIFO.
+      //
+      // P1-02: „pus în coadă" NU înseamnă „salvat" decât dacă scrierea pe disc a
+      // reușit cu adevărat. Înainte se apela `pushOfflineMeal` și se IGNORA
+      // rezultatul, apoi se afișa necondiționat confirmarea — dacă AsyncStorage
+      // eșua, masa exista doar în memorie și dispărea la închiderea aplicației,
+      // deși utilizatorul fusese anunțat că e salvată. Camera și salvarea manuală
+      // foloseau deja varianta verificată; chat-ul fusese omis.
+      let toateRandurilePersistate = true;
       if (rezultatInsert.tip === 'offline') {
         for (const row of rows) {
           const payloadOffline: MasaOfflinePayload = {
@@ -670,18 +751,47 @@ useEffect(() => {
             data: row.data,
             created_at: acumMasa.toISOString(),
           };
-          await pushOfflineMeal(payloadOffline);
+          const { persistat } = await pushOfflineMealVerificat(payloadOffline);
+          if (!persistat) toateRandurilePersistate = false;
+        }
+
+        // Persistarea durabilă a eșuat: nu avem voie să confirmăm nimic.
+        // Identitatea operației se PĂSTREAZĂ (P1-01), ca o reluare să rămână
+        // aceeași salvare logică, nu una nouă.
+        if (!toateRandurilePersistate) {
+          Alert.alert(
+            t('alerts.titluri.eroareLaSalvare'),
+            t('alerts.mesaje.problemaNecunoscutaConectare'),
+          );
+          return;
         }
       }
 
       // 4. Finalizare cu succes sau offline-queued
       refresh();
       setMealProposalVisible(false);
+      const salvatProposal = mealProposal;
       setMealProposal(null);
-      setProposalCategory(null);
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // P1-03: rezumatul de confirmare folosește aceeași normalizare și aceeași
+      // politică de rotunjire ca totalurile zilei. Înainte își avea propria copie
+      // (`Number(...) || 0` + rotunjiri locale), deci putea afișa altceva decât
+      // ceea ce ajungea efectiv în Jurnal pentru exact aceleași rânduri.
+      const totalSalvat = totaluriPentruAfisare(
+        calculeazaTotaluriZi(rows as unknown as Masa[]),
+      );
+
+      setSuccessModalData({
+        nume: salvatProposal.nume || (rows.length === 1 ? rows[0].nume : `${rows.length} alimente`),
+        calorii: totalSalvat.calorii,
+        proteine: totalSalvat.proteine,
+        carbohidrati: totalSalvat.carbohidrati,
+        grasimi: totalSalvat.grasimi,
+        tip_masa: proposalCategory,
+        isOffline: rezultatInsert.tip === 'offline',
+      });
+
       if (rezultatInsert.tip === 'offline') {
-        Alert.alert(t('offline.salvatOffline'), t('offline.masaSalvataOffline'));
         adaugaMesaj(buleMesaj('ai', t('offline.masaSalvataOffline')));
       } else {
         adaugaMesaj(buleMesaj('ai', t('chat.mealSavedSuccess')));
@@ -776,7 +886,7 @@ useEffect(() => {
                 </LinearGradient>
               </View>
               <View style={styles.aiMeta}>
-                <Text style={[styles.title, { color: colors.textPrimary }]}>NutriAI Coach</Text>
+                <Text style={[styles.title, { color: colors.textPrimary }]}>GetFlow Coach</Text>
                 <Text maxFontSizeMultiplier={1.3} style={[styles.aiSubtitle, { color: colors.textSecondary }]}>{t('chat.coachSubtitle')}</Text>
                 <View style={styles.onlineRow}>
                   <View style={[styles.onlineDot, { backgroundColor: colors.accent }]} />
@@ -948,6 +1058,45 @@ useEffect(() => {
           </>
         )}
 
+        {mealProposal && !mealProposalVisible && (
+          <Animated.View
+            entering={reduceMotion ? undefined : FadeInUp.duration(400)}
+            style={[styles.proposalBannerCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.accentSecondary }]}
+          >
+            <View style={styles.proposalBannerHeader}>
+              <View style={[styles.proposalBannerIcon, { backgroundColor: colors.accentSecondary + '20' }]}>
+                <Utensils size={18} color={colors.accentSecondary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1} style={[styles.proposalBannerTag, { color: colors.textPrimary }]}>
+                  {mealProposal.nume || t('chat.recipeCard.untitled')}
+                </Text>
+                <Text style={[styles.proposalBannerSub, { color: colors.textSecondary }]}>
+                  {`${mealProposal.totals?.kcal || 0} kcal · P ${Math.round(mealProposal.totals?.protein_g || 0)}g · C ${Math.round(mealProposal.totals?.carbs_g || 0)}g · G ${Math.round(mealProposal.totals?.fat_g || 0)}g`}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.proposalBannerBtn, { backgroundColor: colors.accentSecondary }]}
+                onPress={() => setMealProposalVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel={t('chat.addToJournal')}
+              >
+                <Text style={[styles.proposalBannerBtnText, { color: colors.textOnAccentSecondary }]}>
+                  {t('chat.addToJournal')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { idOperatieSalvareRef.current = null; setMealProposal(null); }}
+                style={styles.proposalBannerClose}
+                accessibilityRole="button"
+                accessibilityLabel={t('alerts.butoane.anuleaza')}
+              >
+                <X size={16} color={colors.textTertiary} />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        )}
+
         {/* Input */}
         <Animated.View
           entering={reduceMotion ? undefined : FadeInDown.duration(600).delay(200)}
@@ -1041,6 +1190,8 @@ useEffect(() => {
         onConfirm={confirmMealProposal}
         onCancel={() => {
           setMealProposalVisible(false);
+          // P1-01 (Blocant 3): închiderea propunerii abandonează acțiunea de salvare.
+          idOperatieSalvareRef.current = null;
           setMealProposal(null);
           setProposalCategory(null);
         }}
@@ -1149,11 +1300,56 @@ useEffect(() => {
         caloriiRamase={caloriiTinta - totalCalorii}
         proteineRamase={proteineTinta - totalProteine}
       />
+
+      <MealSaveSuccessModal
+        visible={!!successModalData}
+        data={successModalData}
+        onDismiss={handleSuccessDismiss}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  proposalBannerCard: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1.5,
+  },
+  proposalBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  proposalBannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  proposalBannerTag: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  proposalBannerSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  proposalBannerBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  proposalBannerBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  proposalBannerClose: {
+    padding: 4,
+  },
   outerContainer: { flex: 1 },
   container: { flex: 1 },
   glowTop: { position: 'absolute', top: -100, right: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.06 },

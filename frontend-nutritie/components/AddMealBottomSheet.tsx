@@ -29,12 +29,15 @@ import { useAuth } from '../context/AuthContext';
 import { useFavorite } from '../hooks/useFavorite';
 import { useGamificareActions } from '../context/GamificareContext';
 import { Masa, TipMasa, AlimentDetaliat } from '../types';
-import { getTipMasaDupaOra, MEAL_CATEGORIES, CATEGORIE_ICONA, insereazaMasaCuPoza, actualizeazaMasaCuPoza, parseAlimente, construiesteAlimenteLaSalvare } from '../lib/mealUtils';
-import { pushOfflineMeal, MasaOfflinePayload } from '../lib/offlineQueue';
+import { getTipMasaDupaOra, MEAL_CATEGORIES, CATEGORIE_ICONA, insereazaMasaCuPoza, actualizeazaMasaCuPoza, parseAlimente, construiesteAlimenteLaSalvare, totaluriPentruPersistare } from '../lib/mealUtils';
+import { pushOfflineMealVerificat, MasaOfflinePayload } from '../lib/offlineQueue';
+import { construiestePayloadMasaManuala, esteEroareDuplicate, decideRezultatInsertMasa } from '../lib/payloadMese';
+import { marcheazaMeseModificate } from '../lib/freshnessMese';
 import { localDayKey } from '../lib/dateUtils';
-import { generareUuid } from '../lib/idUtils';
+import { generareUuid, idOperatieNoua } from '../lib/idUtils';
 import { foodPresets, categories, FoodPreset } from '../constants/foodPresets';
 import { ProductSearch } from './food/ProductSearch';
+import { MealSaveSuccessModal, type MealSuccessData } from './ui/MealSaveSuccessModal';
 
 export interface AddMealBottomSheetRef {
   open: (masaToEdit?: Masa | null, defaultCategory?: TipMasa, imagineUrl?: string) => void;
@@ -86,6 +89,12 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     // BUG-041: guard sincron anti dublu-tap (ref, nu stare — răspunde în același
     // tick), ca două atingeri rapide pe „Adaugă Masă" să nu creeze două insert-uri.
     const savingRef = useRef(false);
+    // P1-01: identitatea acțiunii logice de salvare. Se generează la prima
+    // încercare și se păstrează pe toată durata acțiunii — inclusiv peste retry-uri
+    // și peste trecerea în coada offline. Se golește DOAR când acțiunea se încheie
+    // (salvare confirmată / sheet redeschis pentru o acțiune nouă), niciodată din
+    // cauza unui eșec de transport, altfel reluarea ar deveni o masă nouă.
+    const idOperatieSalvareRef = useRef<string | null>(null);
 
     const snapPoints = useMemo(() => ['75%', '90%'], []);
 
@@ -126,6 +135,17 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const [searchQuery, setSearchQuery] = useState('');
     const [aiEstimating, setAiEstimating] = useState(false);
     const [productSearchModalVisible, setProductSearchModalVisible] = useState(false);
+    const [successModalData, setSuccessModalData] = useState<MealSuccessData | null>(null);
+    const [createdMasaRef, setCreatedMasaRef] = useState<Masa | null>(null);
+
+    const handleSuccessDismiss = useCallback(() => {
+      setSuccessModalData(null);
+      if (createdMasaRef) {
+        onMasaCreata?.(createdMasaRef);
+        setCreatedMasaRef(null);
+      }
+      onSuccess?.();
+    }, [createdMasaRef, onMasaCreata, onSuccess]);
     const [baseNutrition, setBaseNutrition] = useState<BaseNutrition | null>(null);
     const [selectedPreset, setSelectedPreset] = useState<FoodPreset | null>(null);
 
@@ -153,12 +173,14 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
       setHighlightGramaj(true);
       setTimeout(() => setHighlightGramaj(false), 2000);
       setTimeout(() => {
-        if (scrollViewRef.current) {
+        if (scrollViewRef.current && typeof scrollViewRef.current.scrollTo === 'function') {
           const targetY = Math.max(0, formSectionY + gramajSectionY - 20);
-          scrollViewRef.current.scrollTo({
-            y: targetY,
-            animated: true,
-          });
+          try {
+            scrollViewRef.current.scrollTo({
+              y: targetY,
+              animated: true,
+            });
+          } catch {}
         }
       }, 150);
     }, [formSectionY, gramajSectionY]);
@@ -266,6 +288,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
     useImperativeHandle(ref, () => ({
       open: (masaToEdit?: Masa | null, defaultCategory?: TipMasa, fotoUrl?: string) => {
+        // P1-01: o deschidere nouă a sheet-ului începe o ACȚIUNE nouă. Identitatea
+        // precedentă nu se refolosește — altfel a doua masă, adăugată deliberat,
+        // s-ar ciocni pe cheia primară cu prima și nu s-ar mai scrie.
+        idOperatieSalvareRef.current = null;
         if (masaToEdit) {
           setEditingMasaId(masaToEdit.id);
           setTipMasa(masaToEdit.tip_masa || defaultCategory || getTipMasaDupaOra());
@@ -321,7 +347,15 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         try {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         } catch {}
-        bottomSheetRef.current?.expand();
+        try {
+          if (bottomSheetRef.current) {
+            bottomSheetRef.current.expand();
+          }
+        } catch {
+          try {
+            bottomSheetRef.current?.snapToIndex(0);
+          } catch {}
+        }
       },
       openWithItem: (item) => {
         const defaultGr = item.gramajDefault || 100;
@@ -348,7 +382,15 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         } catch {}
 
-        bottomSheetRef.current?.expand();
+        try {
+          if (bottomSheetRef.current) {
+            bottomSheetRef.current.expand();
+          }
+        } catch {
+          try {
+            bottomSheetRef.current?.snapToIndex(0);
+          } catch {}
+        }
         setTimeout(() => {
           scrollToGramajSection();
         }, 350);
@@ -365,9 +407,11 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           disappearsOnIndex={-1}
           appearsOnIndex={0}
           opacity={0.6}
+          pressBehavior="close"
+          pointerEvents={sheetIndex >= 0 ? 'auto' : 'none'}
         />
       ),
-      []
+      [sheetIndex]
     );
 
     const isNumeValid = nume.trim().length >= 2;
@@ -423,18 +467,52 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           alimentNou: alimentePayload[0],
         });
 
-        const payload: any = {
-          user_id: user.id,
-          nume: nume.trim(),
+        // F-04: totalul persistat se derivă din descompunere ori de câte ori
+        // aceasta conține date nutritionale reale. Fără asta, editarea macro-urilor
+        // pe o masă cu mai multe ingrediente scria un total nou peste o
+        // descompunere veche, iar cardul afișa două adevăruri contradictorii.
+        const totaluriCoerente = totaluriPentruPersistare(alimenteFinal, {
           calorii: calNumber,
           proteine: parseMacro(proteine),
           carbohidrati: parseMacro(carbohidrati),
           grasimi: parseMacro(grasimi),
           fibre: parseMacro(fibre),
-          tip_masa: tipMasa,
-          imagine_url: imagineUrl || null,
-          alimente: alimenteFinal,
-        };
+        });
+
+        // P1-01: identitatea acțiunii logice de salvare. Se generează O SINGURĂ
+        // DATĂ per apăsare și se refolosește identic pe toate căile (retry, coadă
+        // offline, replay după repornire). La EDITARE nu se aplică: editarea
+        // operează pe `editingMasaId`, cu contractul ei existent.
+        if (!editingMasaId && !idOperatieSalvareRef.current) {
+          idOperatieSalvareRef.current = idOperatieNoua();
+        }
+
+        const payload: any = editingMasaId
+          ? {
+            user_id: user.id,
+            nume: nume.trim(),
+            calorii: totaluriCoerente.calorii,
+            proteine: totaluriCoerente.proteine,
+            carbohidrati: totaluriCoerente.carbohidrati,
+            grasimi: totaluriCoerente.grasimi,
+            fibre: totaluriCoerente.fibre,
+            tip_masa: tipMasa,
+            imagine_url: imagineUrl || null,
+            alimente: alimenteFinal,
+          }
+          : construiestePayloadMasaManuala({
+            user_id: user.id,
+            idOperatie: idOperatieSalvareRef.current as string,
+            nume: nume.trim(),
+            calorii: totaluriCoerente.calorii,
+            proteine: totaluriCoerente.proteine,
+            carbohidrati: totaluriCoerente.carbohidrati,
+            grasimi: totaluriCoerente.grasimi,
+            fibre: totaluriCoerente.fibre,
+            tip_masa: tipMasa,
+            alimente: alimenteFinal,
+            imagine_url: imagineUrl || null,
+          });
 
         let err = null;
         let masaCreata: Masa | null = null;
@@ -457,12 +535,52 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               9000,
             );
             err = error;
-            if (!error && data && data[0]) masaCreata = data[0] as Masa;
+            if (!error && data && data[0]) {
+              masaCreata = data[0] as Masa;
+              // P1-01: acțiunea logică s-a încheiat confirmat. Abia acum eliberăm
+              // identitatea; un eșec de transport NU o eliberează, ca reluarea să
+              // rămână aceeași operație, nu o masă nouă.
+              idOperatieSalvareRef.current = null;
+            }
           }
         } catch (e: any) {
           // Respingere (timeout-ul nostru, db.timeout sau eroare de rețea) = `err`,
           // ca masa să ajungă în coada offline (insert) / alert de eroare (edit).
           err = e;
+        }
+
+        // P1-01 (Blocant B): `23505` se rezolvă ÎNAINTE de ramificarea eroare/succes.
+        // Înainte, orice eroare de insert — inclusiv coliziunea pe cheia primară —
+        // cădea în ramura generică offline și afișa „Salvat offline", fără să fi
+        // verificat dacă rândul deja persistat este chiar masa curentă.
+        if (err && !editingMasaId && esteEroareDuplicate(err)) {
+          const decizie = await decideRezultatInsertMasa(
+            supabase as never,
+            payload as never,
+            { error: err },
+          );
+
+          if (decizie.tip === 'reluare_confirmata') {
+            // Rândul persistat chiar este această salvare: acțiunea a reușit deja.
+            // Continuăm pe calea normală de SUCCES, fără a pune nimic în coadă —
+            // o intrare în coadă ar fi un duplicat garantat.
+            idOperatieSalvareRef.current = null;
+            err = null;
+          } else if (decizie.tip === 'conflict_continut') {
+            Alert.alert(
+              t('alerts.titluri.eroareSalvare'),
+              'Această masă nu a putut fi salvată: sub aceeași operație există deja o masă cu alt conținut.',
+            );
+            return; // `finally` resetează savingRef/loading
+          } else {
+            // `verificare_esuata`: starea reală e necunoscută. Nu confirmăm
+            // salvarea și nu o punem în coadă ca reușită.
+            Alert.alert(
+              t('alerts.titluri.eroareSalvare'),
+              t('alerts.mesaje.problemaNecunoscutaConectare'),
+            );
+            return; // `finally` resetează savingRef/loading
+          }
         }
 
         if (err) {
@@ -476,9 +594,11 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             // scanul era pastrat. Eroarea de retea nu mai inseamna pierdere.
             try {
               const payloadOffline: MasaOfflinePayload = {
-                // BUG-054: id UUID, nu `offline-...` — coloana mese.id e UUID, iar
-                // sincronizarea offline trimite id-ul pentru dedupe pe PK (23505).
-                id: generareUuid(),
+                // P1-01: EXACT id-ul folosit la încercarea online. Aici era ruptura:
+                // un `generareUuid()` nou rupea legătura cu rândul pe care serverul
+                // putea să îl fi scris deja înainte de timeout-ul local, iar reluarea
+                // cozii adăuga al doilea rând pentru o singură acțiune.
+                id: payload.id,
                 user_id: user.id,
                 nume: payload.nume,
                 calorii: payload.calorii,
@@ -492,13 +612,27 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                 data: localDayKey(new Date()),
                 created_at: new Date().toISOString(),
               };
-              await pushOfflineMeal(payloadOffline);
-              try {
-                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              } catch {}
+              // F-11: confirmam „Salvat offline" doar daca persistarea pe disc a
+              // reusit. Altfel masa traieste doar in memorie si dispare la
+              // inchiderea aplicatiei, desi utilizatorul a primit un mesaj de succes.
+              const { persistat } = await pushOfflineMealVerificat(payloadOffline);
+              if (!persistat) {
+                try {
+                  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                } catch {}
+                Alert.alert(t('alerts.titluri.eroareSalvare'), t('offline.masaNesalvataOffline'));
+                return;
+              }
               bottomSheetRef.current?.close();
-              onSuccess?.();
-              Alert.alert(t('offline.salvatOffline'), t('offline.masaSalvataOffline'));
+              setSuccessModalData({
+                nume: payload.nume,
+                calorii: payload.calorii,
+                proteine: payload.proteine,
+                carbohidrati: payload.carbohidrati,
+                grasimi: payload.grasimi,
+                tip_masa: payload.tip_masa,
+                isOffline: true,
+              });
             } catch {
               Alert.alert(t('alerts.titluri.eroareSalvare'), t('alerts.mesaje.eroareSalvareDinamica', { eroare: err.message }));
             }
@@ -508,11 +642,23 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch {}
 
+          // P1-04: persistare DOVEDITĂ (insert reușit sau reluare confirmată P1-01).
+          // Semnalul împrospătează determinist toți consumatorii canonici — Home nu
+          // mai depinde de throttle-ul de 5s al refresh-ului la focus.
+          marcheazaMeseModificate(user.id);
+
           adaugaProgres('proteine', payload.proteine);
           bottomSheetRef.current?.close();
-          // S10: informează jurnalul despre rândul creat (DOAR la insert, nu la edit)
-          if (masaCreata) onMasaCreata?.(masaCreata);
-          onSuccess?.();
+          if (masaCreata) setCreatedMasaRef(masaCreata);
+          setSuccessModalData({
+            nume: payload.nume,
+            calorii: payload.calorii,
+            proteine: payload.proteine,
+            carbohidrati: payload.carbohidrati,
+            grasimi: payload.grasimi,
+            tip_masa: payload.tip_masa,
+            isOffline: false,
+          });
           // Deducere automată din cămară
           if (pantryProductNameRef.current && onPantryUsed) {
             onPantryUsed(pantryProductNameRef.current);
@@ -528,6 +674,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     };
 
     return (
+      <>
       <BottomSheet
         ref={bottomSheetRef}
         index={-1}
@@ -1196,6 +1343,12 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           </View>
         </Modal>
       </BottomSheet>
+      <MealSaveSuccessModal
+        visible={!!successModalData}
+        data={successModalData}
+        onDismiss={handleSuccessDismiss}
+      />
+    </>
     );
   }
 );
