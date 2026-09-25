@@ -5,12 +5,7 @@ const express = require('express');
 function safeError(res, error, { log = false } = {}) {
   const status = Number.isInteger(error?.status) ? error.status : 503;
   const code = typeof error?.code === 'string' && /^[A-Z0-9_]{1,64}$/.test(error.code) ? error.code : 'REWARDED_UNAVAILABLE';
-  if (log) {
-    const safeAdUnit = typeof error?.safeAdUnit === 'string' && /^\d{1,32}$/.test(error.safeAdUnit)
-      ? ` ad_unit=${error.safeAdUnit}`
-      : '';
-    console.warn(`[AdMob SSV] Callback rejected: ${code}${safeAdUnit}`);
-  }
+  if (log) console.warn('[AdMob SSV] Callback rejected:', code);
   return res.status(status).json({ eroare: 'Creditul recompensat nu a putut fi procesat.', cod: code });
 }
 
