@@ -2,9 +2,10 @@
 
 const express = require('express');
 
-function safeError(res, error) {
+function safeError(res, error, { log = false } = {}) {
   const status = Number.isInteger(error?.status) ? error.status : 503;
   const code = typeof error?.code === 'string' && /^[A-Z0-9_]{1,64}$/.test(error.code) ? error.code : 'REWARDED_UNAVAILABLE';
+  if (log) console.warn('[AdMob SSV] Callback rejected:', code);
   return res.status(status).json({ eroare: 'Creditul recompensat nu a putut fi procesat.', cod: code });
 }
 
@@ -25,7 +26,7 @@ function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, ve
       await rewardedService.applyVerified(verified);
       return res.status(200).json({ ok: true });
     } catch (error) {
-      return safeError(res, error);
+      return safeError(res, error, { log: true });
     }
   });
   return router;
