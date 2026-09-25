@@ -4,13 +4,14 @@ const crypto = require('crypto');
 const { createAdmobSsvVerifier } = require('../utils/admobSsv');
 const CONTRACT = { expectedAdUnit: '3566028223', expectedRewardAmount: '1', expectedRewardItem: 'Flow Credit' };
 
-function fixture(overrides = {}) {
+function fixture({ signDecoded = false, ...overrides } = {}) {
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
   const pem = publicKey.export({ type: 'spki', format: 'pem' });
   const fetchImpl = jest.fn(async () => ({ ok: true, json: async () => ({ keys: [{ keyId: 7, pem }] }) }));
   const value = { adUnit: '3566028223', amount: '1', item: 'Flow Credit', ...overrides };
   const data = ['ad_network=123', `ad_unit=${value.adUnit}`, 'custom_data=secret-token', `reward_amount=${value.amount}`, `reward_item=${encodeURIComponent(value.item)}`, 'timestamp=1700000000000', 'transaction_id=transaction-1', 'user_id=11111111-1111-4111-8111-111111111111'].join('&');
-  const signature = crypto.sign('sha256', Buffer.from(data), privateKey).toString('base64url');
+  const signedContent = signDecoded ? decodeURIComponent(data) : data;
+  const signature = crypto.sign('sha256', Buffer.from(signedContent), privateKey).toString('base64url');
   return { fetchImpl, data, rawUrl: `/api/v1/webhooks/admob/rewarded?${data}&signature=${signature}&key_id=7` };
 }
 
@@ -30,6 +31,11 @@ describe('AdMob rewarded SSV verifier', () => {
     const before = f.rawUrl.slice(0, marker);
     const tail = f.rawUrl.slice(marker).replace(/(&signature=[^&]+)/, '$1=');
     await expect(createAdmobSsvVerifier({ fetchImpl: f.fetchImpl, ...CONTRACT }).verify(before + tail))
+      .resolves.toMatchObject({ transactionId: 'transaction-1' });
+  });
+  test('matches the decoded URI query used by the official Google verifier', async () => {
+    const f = fixture({ signDecoded: true });
+    await expect(createAdmobSsvVerifier({ fetchImpl: f.fetchImpl, ...CONTRACT }).verify(f.rawUrl))
       .resolves.toMatchObject({ transactionId: 'transaction-1' });
   });
   test('rejects tampered signed data', async () => {

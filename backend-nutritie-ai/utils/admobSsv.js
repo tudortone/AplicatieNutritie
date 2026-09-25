@@ -85,7 +85,18 @@ function createAdmobSsvVerifier({
       const signedData = raw.slice(queryStart + 1, signatureMarker);
       let valid = false;
       try {
-        valid = crypto.verify('sha256', Buffer.from(signedData, 'utf8'), pem, Buffer.from(signature, 'base64url'));
+        const signatureBytes = Buffer.from(signature, 'base64url');
+        valid = crypto.verify('sha256', Buffer.from(signedData, 'utf8'), pem, signatureBytes);
+        // Google's reference verifier uses java.net.URI#getQuery(), which
+        // percent-decodes the query before ECDSA verification. Keep the raw
+        // form first, then accept that official representation without ever
+        // reordering parameters or trusting unverified decoded values.
+        if (!valid) {
+          const decodedSignedData = decodeURIComponent(signedData);
+          if (decodedSignedData !== signedData) {
+            valid = crypto.verify('sha256', Buffer.from(decodedSignedData, 'utf8'), pem, signatureBytes);
+          }
+        }
       } catch {
         valid = false;
       }
