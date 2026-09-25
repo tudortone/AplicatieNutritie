@@ -30,17 +30,23 @@ const createBarcodeRouter = require('./routes/barcode');
 const createProfilRouter = require('./routes/profil');
 const createMeseRouter = require('./routes/mese');
 const createUserRouter = require('./routes/user');
+const createRewardedRouter = require('./routes/rewarded');
 const createWebhooksRouter = require('./routes/webhooks');
 const createWebhooksRevenueCatRouter = require('./routes/webhooksRevenueCat');
 const createMeseRepo = require('./repositories/meseRepo');
 const createBarcodeRepo = require('./repositories/barcodeRepo');
 const createProfilRepo = require('./repositories/profilRepo');
+const { createFlowCreditsRepo } = require('./repositories/flowCreditsRepo');
+const { createRewardedRepo } = require('./repositories/rewardedRepo');
 const { creeazaStoreRateLimit, creeazaRegistruCheiValori } = require('./utils/storePartajat');
 const { getAiStatistici } = require('./utils/metrics');
 const { sanitizeRequest } = require('./utils/sanitize');
 const { creeazaServiciuVision } = require('./services/ai/vision');
 const { creeazaServiciuCascada } = require('./services/ai/cascada');
 const { creeazaServiciuChat } = require('./services/ai/chat');
+const { createFlowCreditsService } = require('./services/monetization/flowCreditsService');
+const { createRewardedService } = require('./services/monetization/rewardedService');
+const { createAdmobSsvVerifier } = require('./utils/admobSsv');
 
 const config = incarcaConfig();
 
@@ -160,6 +166,13 @@ const fetchCuTimeoutSupabase = (input, init = {}) => {
 };
 const supabase = createClient(config.supabase.url, config.supabase.anonKey, { global: { fetch: fetchCuTimeoutSupabase } });
 const supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey, { global: { fetch: fetchCuTimeoutSupabase } });
+const flowCreditsService = createFlowCreditsService({
+  repo: createFlowCreditsRepo({ supabaseAdmin, rewardLimit: 5 }),
+});
+const rewardedService = createRewardedService({
+  repo: createRewardedRepo({ supabaseAdmin, dailyLimit: 5 }),
+  flowCredits: flowCreditsService,
+});
 const checkAiUsageQuota = creeazaCheckAiUsageQuota({ supabaseAdmin });
 // P-012: limitator dedicat webhook-urilor (Clerk/Svix). Se monteaza pe calea
 // webhook-urilor INAINTE de router (si INAINTE de preAuthLimiter, care altfel nu
@@ -390,6 +403,16 @@ const userR = createUserRouter({
   contextDate,
   profilRepo: createProfilRepo(),
 });
+const rewardedR = createRewardedRouter({
+  requireAuth,
+  generalLimiter,
+  rewardedService,
+  verifier: createAdmobSsvVerifier({
+    expectedAdUnit: config.admob.rewardedAdUnitId,
+    expectedRewardAmount: config.admob.rewardedAmount,
+    expectedRewardItem: config.admob.rewardedItem,
+  }),
+});
 const statusR = createStatusRouter({
   getProviderStatus: serviciuCascada.getProviderStatus,
   getAiStatistici,
@@ -407,6 +430,7 @@ const gdprR = createGdprRouter({
 // /api/v1 = prefix canonic
 app.use('/api/v1', statusR);
 app.use('/api/v1', aiR);
+app.use('/api/v1', rewardedR);
 app.use('/api/v1', barcodeR);
 app.use('/api/v1', profilR);
 app.use('/api/v1', meseR);
@@ -427,6 +451,7 @@ app.use('/api', (req, res, next) => {
 });
 app.use('/api', statusR);
 app.use('/api', aiR);
+app.use('/api', rewardedR);
 app.use('/api', barcodeR);
 app.use('/api', profilR);
 app.use('/api', meseR);

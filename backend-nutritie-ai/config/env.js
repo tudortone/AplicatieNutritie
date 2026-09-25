@@ -31,6 +31,9 @@ const IMPLICITE_TEST = {
 	SUPABASE_SERVICE_ROLE_KEY: 'service-role-de-test',
 	GEMINI_API_KEY: 'gemini-key-de-test',
 	GROQ_API_KEY: 'groq-key-de-test',
+	ADMOB_REWARDED_AD_UNIT_ID: '3566028223',
+	ADMOB_REWARDED_REWARD_AMOUNT: '1',
+	ADMOB_REWARDED_REWARD_ITEM: 'Flow Credit',
 };
 
 function opreste(mesaj) {
@@ -106,6 +109,18 @@ function incarcaConfig() {
 			'REDIS_URL lipseste: rate-limiting-ul e per-proces. Acceptabil doar pe o singura instanta.',
 		);
 	}
+	const admobRewardedAdUnitId = process.env.ADMOB_REWARDED_AD_UNIT_ID;
+	const admobRewardedAmount = process.env.ADMOB_REWARDED_REWARD_AMOUNT;
+	const admobRewardedItem = process.env.ADMOB_REWARDED_REWARD_ITEM;
+	if (esteProductie && (!admobRewardedAdUnitId || !admobRewardedAmount || !admobRewardedItem)) {
+		opreste('ADMOB_REWARDED_AD_UNIT_ID, ADMOB_REWARDED_REWARD_AMOUNT si ADMOB_REWARDED_REWARD_ITEM sunt obligatorii in productie.');
+	}
+	if (
+		esteProductie &&
+		(admobRewardedAdUnitId !== '3566028223' || admobRewardedAmount !== '1' || admobRewardedItem !== 'Flow Credit')
+	) {
+		opreste('Contractul AdMob Rewarded trebuie sa fie exact 3566028223 / 1 / Flow Credit.');
+	}
 	// P-01b: fara secretul webhook-ului RevenueCat, fiecare achizitie ar raspunde
 	// 500 si s-ar pierde tacut. Fail-fast la boot, nu la prima cerere reala.
 	if (esteProductie && !process.env.REVENUECAT_WEBHOOK_SECRET) {
@@ -175,6 +190,11 @@ function incarcaConfig() {
 			secretApiKey: process.env.REVENUECAT_SECRET_API_KEY || null,
 			// P-01b: secretul semnaturii webhook-ului. Obligatoriu in productie (fail-fast mai sus).
 			webhookSecret: process.env.REVENUECAT_WEBHOOK_SECRET || null,
+		}),
+		admob: Object.freeze({
+			rewardedAdUnitId: admobRewardedAdUnitId,
+			rewardedAmount: admobRewardedAmount,
+			rewardedItem: admobRewardedItem,
 		}),
 		imagekit: Object.freeze({
 			publicKey: process.env.IMAGEKIT_PUBLIC_KEY || null,
