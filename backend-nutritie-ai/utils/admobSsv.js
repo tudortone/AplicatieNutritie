@@ -3,9 +3,14 @@
 const crypto = require('crypto');
 
 const DEFAULT_KEYS_URL = 'https://www.gstatic.com/admob/reward/verifier-keys.json';
+const CONSOLE_VERIFICATION_PROBE = Object.freeze({
+  adUnit: '1234567890',
+  userId: 'ssv-admob-verification',
+  customData: 'ssv-verification',
+});
 const SECURITY_PARAMS = [
   'signature', 'key_id', 'transaction_id', 'user_id', 'custom_data',
-  'ad_unit', 'reward_amount', 'reward_item',
+  'ad_network', 'ad_unit', 'reward_amount', 'reward_item', 'timestamp',
 ];
 
 class AdmobSsvError extends Error {
@@ -76,9 +81,11 @@ function createAdmobSsvVerifier({
       const intentId = bounded(params.get('user_id'), 64, /^[a-zA-Z0-9_-]+$/, 'SSV_INTENT_INVALID');
       const customData = bounded(params.get('custom_data'), 256, /^[a-zA-Z0-9_-]+$/, 'SSV_CUSTOM_DATA_INVALID');
       const transactionId = bounded(params.get('transaction_id'), 256, /^[a-zA-Z0-9._:-]+$/, 'SSV_TRANSACTION_INVALID');
+      bounded(params.get('ad_network'), 32, /^\d+$/, 'SSV_AD_NETWORK_INVALID');
       const adUnit = bounded(params.get('ad_unit'), 32, /^\d+$/, 'SSV_AD_UNIT_INVALID');
       const rewardAmount = bounded(params.get('reward_amount'), 9, /^[1-9]\d*$/, 'SSV_REWARD_AMOUNT_INVALID');
       const rewardItem = bounded(params.get('reward_item'), 64, /^[\x20-\x7e]+$/, 'SSV_REWARD_ITEM_INVALID');
+      bounded(params.get('timestamp'), 20, /^\d{10,20}$/, 'SSV_TIMESTAMP_INVALID');
       const keys = await getKeys();
       const pem = keys.get(keyId);
       if (!pem) throw new AdmobSsvError('SSV_KEY_UNKNOWN');
@@ -101,12 +108,21 @@ function createAdmobSsvVerifier({
         valid = false;
       }
       if (!valid) throw new AdmobSsvError('SSV_SIGNATURE_INVALID');
+      const isConsoleVerificationProbe =
+        adUnit === CONSOLE_VERIFICATION_PROBE.adUnit &&
+        intentId === CONSOLE_VERIFICATION_PROBE.userId &&
+        customData === CONSOLE_VERIFICATION_PROBE.customData &&
+        rewardAmount === expectedRewardAmount &&
+        rewardItem === expectedRewardItem;
+      if (isConsoleVerificationProbe) {
+        return Object.freeze({ kind: 'console_verification', transactionId });
+      }
       if (adUnit !== expectedAdUnit) {
         throw new AdmobSsvError('SSV_AD_UNIT_MISMATCH');
       }
       if (rewardAmount !== expectedRewardAmount) throw new AdmobSsvError('SSV_REWARD_AMOUNT_MISMATCH');
       if (rewardItem !== expectedRewardItem) throw new AdmobSsvError('SSV_REWARD_ITEM_MISMATCH');
-      return Object.freeze({ intentId, customData, transactionId });
+      return Object.freeze({ kind: 'reward', intentId, customData, transactionId });
     },
   });
 }

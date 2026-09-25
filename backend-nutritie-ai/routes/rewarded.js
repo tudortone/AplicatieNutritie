@@ -23,6 +23,12 @@ function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, ve
   router.get('/webhooks/admob/rewarded', async (req, res) => {
     try {
       const verified = await verifier.verify(req.originalUrl);
+      if (verified.kind === 'console_verification') {
+        return res.status(200).json({ ok: true });
+      }
+      if (verified.kind !== 'reward') {
+        throw Object.assign(new Error('Unexpected verified callback kind.'), { code: 'SSV_FORMAT_INVALID', status: 400 });
+      }
       await rewardedService.applyVerified(verified);
       return res.status(200).json({ ok: true });
     } catch (error) {
