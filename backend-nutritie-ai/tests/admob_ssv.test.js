@@ -24,6 +24,14 @@ describe('AdMob rewarded SSV verifier', () => {
     await expect(createAdmobSsvVerifier({ fetchImpl: f.fetchImpl, ...CONTRACT }).verify(`/api/v1/webhooks/admob/rewarded?${f.data}&key_id=7`)).rejects.toMatchObject({ code: 'SSV_FORMAT_INVALID', status: 400 });
     expect(f.fetchImpl).not.toHaveBeenCalled();
   });
+  test('accepts optional base64url padding used by verification tools', async () => {
+    const f = fixture();
+    const marker = f.rawUrl.indexOf('&signature=');
+    const before = f.rawUrl.slice(0, marker);
+    const tail = f.rawUrl.slice(marker).replace(/(&signature=[^&]+)/, '$1=');
+    await expect(createAdmobSsvVerifier({ fetchImpl: f.fetchImpl, ...CONTRACT }).verify(before + tail))
+      .rejects.toMatchObject({ code: 'SSV_SIGNATURE_INVALID' });
+  });
   test('rejects tampered signed data', async () => {
     const f = fixture();
     await expect(createAdmobSsvVerifier({ fetchImpl: f.fetchImpl, ...CONTRACT }).verify(f.rawUrl.replace('reward_amount=1', 'reward_amount=9'))).rejects.toMatchObject({ code: 'SSV_SIGNATURE_INVALID' });

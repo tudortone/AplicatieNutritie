@@ -71,7 +71,7 @@ function createAdmobSsvVerifier({
       for (const name of SECURITY_PARAMS) {
         if (params.getAll(name).length !== 1) throw new AdmobSsvError('SSV_DUPLICATE_PARAMETER', 400);
       }
-      const signature = bounded(params.get('signature'), 1024, /^[A-Za-z0-9_-]+$/, 'SSV_SIGNATURE_INVALID');
+      const signature = bounded(params.get('signature'), 1024, /^[A-Za-z0-9_-]+={0,2}$/, 'SSV_SIGNATURE_ENCODING_INVALID');
       const keyId = bounded(params.get('key_id'), 32, /^\d+$/, 'SSV_KEY_INVALID');
       const intentId = bounded(params.get('user_id'), 64, /^[a-zA-Z0-9_-]+$/, 'SSV_INTENT_INVALID');
       const customData = bounded(params.get('custom_data'), 256, /^[a-zA-Z0-9_-]+$/, 'SSV_CUSTOM_DATA_INVALID');
