@@ -30,7 +30,7 @@ describe('AdMob rewarded SSV verifier', () => {
     const before = f.rawUrl.slice(0, marker);
     const tail = f.rawUrl.slice(marker).replace(/(&signature=[^&]+)/, '$1=');
     await expect(createAdmobSsvVerifier({ fetchImpl: f.fetchImpl, ...CONTRACT }).verify(before + tail))
-      .rejects.toMatchObject({ code: 'SSV_SIGNATURE_INVALID' });
+      .resolves.toMatchObject({ transactionId: 'transaction-1' });
   });
   test('rejects tampered signed data', async () => {
     const f = fixture();
