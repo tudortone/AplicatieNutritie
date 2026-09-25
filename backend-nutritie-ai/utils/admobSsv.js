@@ -101,7 +101,11 @@ function createAdmobSsvVerifier({
         valid = false;
       }
       if (!valid) throw new AdmobSsvError('SSV_SIGNATURE_INVALID');
-      if (adUnit !== expectedAdUnit) throw new AdmobSsvError('SSV_AD_UNIT_MISMATCH');
+      if (adUnit !== expectedAdUnit) {
+        const error = new AdmobSsvError('SSV_AD_UNIT_MISMATCH');
+        error.safeAdUnit = adUnit;
+        throw error;
+      }
       if (rewardAmount !== expectedRewardAmount) throw new AdmobSsvError('SSV_REWARD_AMOUNT_MISMATCH');
       if (rewardItem !== expectedRewardItem) throw new AdmobSsvError('SSV_REWARD_ITEM_MISMATCH');
       return Object.freeze({ intentId, customData, transactionId });
