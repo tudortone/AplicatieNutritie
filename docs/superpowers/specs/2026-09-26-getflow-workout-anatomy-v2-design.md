@@ -6,7 +6,7 @@ Scope: Anatomy V2, exercise catalog, workout templates and sessions, Strength Ma
 
 ## 1. Objective
 
-Build a separate, reversible Workout V2 experience that connects an original interactive anatomy model to a canonical exercise catalog, editable workout templates, active workout tracking, persisted history, and a transparent personal-progression rank.
+Build a separate, reversible Workout V2 experience that connects an original interactive anatomy model to a canonical exercise catalog, editable workout templates, active workout tracking, persisted history, a transparent current-strength rank, and a separate personal-progress metric.
 
 The existing production anatomy and workout screens remain intact. V2 stays behind a preview feature flag until automated verification and native validation establish that it is safe to enable.
 
@@ -27,7 +27,7 @@ The repository currently contains:
 - a legacy catalog assembled from four exercise files;
 - an active-workout draft stored under global AsyncStorage keys;
 - completed workouts stored in `public.antrenamente` with JSON exercise sets;
-- session-volume and tonnage ranks that are not suitable for the new personal-progression product.
+- session-volume and tonnage ranks that are not suitable for the new demonstrated-strength product.
 
 The existing assets have no repository-level provenance suitable for promotion as the V2 foundation. They remain production fallback only. Existing workout rows must remain readable.
 
@@ -203,13 +203,18 @@ Adding/removing/reordering exercises remains available during the active workout
 
 Existing `antrenamente.exercitii` JSON remains readable. V2 writes a versioned, backward-compatible payload containing canonical exercise IDs and actual set fields. History normalization handles both legacy and V2 payloads.
 
-Edit and delete operations update persisted history first. All progression is derived from the resulting history, so no stale rank cache needs invalidation.
+Edit and delete operations update persisted history first. Strength and progression metrics are derived from the resulting history, so no stale rank cache needs invalidation.
 
-## 11. Strength Map and original Flow Rank
+## 11. Strength Map, original Flow Rank, and Progress Momentum
 
-### 11.1 Product meaning
+### 11.1 Two independent product metrics
 
-The displayed e1RM is explicitly labeled “estimated 1RM.” Flow Score represents recorded personal progression and consistency, not a population percentile or medical measure. Muscle scores are described as training/strength contributions, not isolated muscle strength measurements.
+The displayed e1RM is explicitly labeled “estimated 1RM.” Two independent metrics are calculated and displayed:
+
+- **Strength Score / Flow Rank** represents how much current strength the user has demonstrated through recent valid lifting performances. It is the authority for exercise rank, muscle rank, overall rank, and Anatomy V2 strength colors.
+- **Progress Momentum** represents improvement, active-week consistency, and evidence accumulated over time. It appears in details and history but never increases Strength Score.
+
+Neither metric is a population percentile or medical measure. Muscle scores are described as GetFlow training-performance strength contributions, not isolated muscle measurements, muscle size, or hypertrophy.
 
 ### 11.2 Estimated 1RM
 
@@ -231,29 +236,46 @@ effectiveLoad = bodyWeight × catalogBodyweightFactor
 
 Missing bodyweight produces a limited/unranked state. No default bodyweight is invented for rank calculations.
 
-### 11.3 Exercise Flow Score
+### 11.3 Current demonstrated Exercise Strength Score
 
-For each eligible exercise, history is sorted chronologically and recalculated from source sessions.
+For each eligible exercise, the engine selects the highest valid e1RM demonstrated during the most recent 90 days. Performances older than 90 days remain visible in history but are marked stale and do not establish current Strength Rank. The rolling window and stale state are centralized configuration.
 
-- Baseline performance: median of the first up to three valid session-best e1RM values.
-- Recent performance: median of the latest up to three valid session-best e1RM values.
-- Progress signal: positive improvement from baseline, capped when it reaches 30%.
-- Consistency signal: distinct trained weeks, capped at eight.
-- Evidence signal: valid sessions, capped at six.
+Absolute load is not used alone. Each eligible catalog entry declares an auditable `strengthNormalizationAnchor`, expressed as an e1RM-to-bodyweight ratio that maps to 50 GetFlow Strength points for that specific movement. It is a product normalization anchor for comparing different movement mechanics, not a population standard, percentile, or sex/age curve. Coefficients and rationale are committed with the catalog and can be revised centrally. An exercise without an approved anchor remains unranked rather than receiving a guessed coefficient.
 
 ```text
-score = round(100 × (
-  0.60 × progressSignal +
-  0.25 × consistencySignal +
-  0.15 × evidenceSignal
-))
+relativeStrength = recentBestE1RM / currentBodyweightKg
+normalizedStrength = relativeStrength / strengthNormalizationAnchor
+strengthScore = round(100 × clamp(normalizedStrength / 2, 0, 1))
 ```
 
-The 0–100 scale is independent, transparent, and deliberately unlike a 1–1000 rating. Negative recent change is shown separately and never fabricated into a positive progression score.
+Therefore the declared anchor maps to 50 points and twice the anchor maps to the 100-point ceiling. This deliberately simple original 0–100 model has no fitted population curve, sex coefficient, percentile claim, or hidden dataset. At the same bodyweight a heavier valid lift scores higher; for the same lift a lighter athlete scores higher. Bodyweight remains a normalization input, so a heavier user is not rewarded merely for moving a larger absolute number.
+
+Strength Score depends only on the current valid performance, bodyweight, exercise mechanics, and catalog anchor. Attendance, historical improvement, and consistency contribute zero points to Strength Score.
+
+The V1 ranked set is intentionally limited to movements whose load is reasonably comparable. Initial anchors are internal product constants, not human-performance standards:
+
+| Movement | Load interpretation | Bodyweight factor | Strength anchor |
+|---|---|---:|---:|
+| Barbell bench press | total bar load | — | 1.00 |
+| Incline dumbbell press | combined dumbbell load | — | 0.75 |
+| Standing overhead press | total bar load | — | 0.65 |
+| Barbell row | total bar load | — | 0.90 |
+| Back squat | total bar load | — | 1.25 |
+| Front squat | total bar load | — | 1.05 |
+| Conventional deadlift | total bar load | — | 1.50 |
+| Romanian deadlift | total bar load | — | 1.20 |
+| Weighted lunge | combined external load | — | 0.60 |
+| Pull-up / chin-up | bodyweight plus added load minus assistance | 1.00 | 1.10 |
+| Parallel-bar dip | bodyweight plus added load minus assistance | 0.90 | 0.95 |
+| Push-up | estimated supported bodyweight plus added load | 0.69 | 0.60 |
+| Dumbbell curl | combined dumbbell load | — | 0.35 |
+| Dumbbell lateral raise | combined dumbbell load | — | 0.20 |
+
+Machine and cable exercises are excluded from Strength Rank V1 because stack labels and leverage vary across equipment. They remain loggable and may show their own historical progress. New ranked exercises require an explicit reviewed anchor and load interpretation; no generic category fallback is permitted.
 
 ### 11.4 Muscle score
 
-Exercise scores contribute through centralized role weights:
+Current Exercise Strength Scores contribute through centralized role weights:
 
 ```text
 PRIMARY     1.00
@@ -261,7 +283,7 @@ SECONDARY   0.45
 STABILIZER  0.15
 ```
 
-For a muscle, contributions are sorted, the top four are aggregated as a normalized weighted mean, and a coverage factor limits sparse evidence:
+For a muscle, current contributions are sorted, the top four are aggregated as a normalized weighted mean, and a coverage factor limits sparse evidence:
 
 ```text
 1 contributing exercise: 0.65
@@ -269,32 +291,55 @@ For a muscle, contributions are sorted, the top four are aggregated as a normali
 3 or more:                1.00
 ```
 
-This prevents a single compound lift from unrealistically granting a whole-body maximum. The detail view lists exactly which exercises contributed and their role.
+This prevents a single compound lift from unrealistically granting a whole-body maximum. The detail view lists exactly which current performances contributed, their e1RM, exercise score, and role.
 
 ### 11.5 Overall Flow Score and ranks
 
-Muscles aggregate into six equal-weight major regions: chest, back, shoulders, arms, core, and legs. Overall score is the mean of regions with evidence multiplied by coverage across all six. Fewer than three represented regions yields a limited state without an overall rank.
+Muscles aggregate into six equal-weight major regions: chest, back, shoulders, arms, core, and legs. Overall Strength Score is the mean of regions with current evidence multiplied by coverage across all six. Fewer than three represented regions yields a limited state without an overall rank.
 
 Central rank configuration uses these original internal keys and localized names:
 
 ```text
-NO_DATA
-BASE       1–19
-RHYTHM    20–39
-DRIVE     40–59
-MOMENTUM  60–79
-FLOW      80–100
+NO_DATA    0
+FOUNDATION 1–19
+FORGE      20–39
+DRIVE      40–59
+SURGE      60–79
+FLOW       80–100
 ```
 
-Thresholds, names, descriptions, and visual levels live in one configuration file. Exercise, muscle, and overall ranks use the same configuration but are clearly labeled by scope.
+These names describe demonstrated strength rather than attendance or momentum. Thresholds, localized names, descriptions, and visual levels live in one configuration file. Exercise, muscle, and overall ranks use the same configuration but are clearly labeled by scope.
 
-### 11.6 Recalculation rules
+### 11.6 Separate Progress Momentum
 
-The engine is a pure function of canonical catalog data, current bodyweight, and persisted workout history. It writes no rank cache. Editing or deleting history and then refetching necessarily produces a new result. Cardio never enters Strength Rank V1.
+Progress Momentum is calculated independently for each eligible exercise and may be summarized across exercises. History is sorted chronologically and recalculated from source sessions.
+
+- Baseline performance: median of the first up to three valid session-best e1RM values.
+- Recent performance: median of the latest up to three valid session-best e1RM values.
+- Recent improvement: signed percentage change from baseline to recent performance.
+- Progress signal: positive improvement capped when it reaches 30%.
+- Consistency signal: distinct trained weeks, capped at eight.
+- Evidence signal: valid sessions, capped at six.
+
+```text
+momentumScore = round(100 × (
+  0.65 × progressSignal +
+  0.25 × consistencySignal +
+  0.10 × evidenceSignal
+))
+```
+
+The UI presents the useful facts directly—such as `+8.4%`, `6 active weeks`, and `9 valid sessions`—alongside the optional 0–100 Momentum summary. A high Momentum score cannot change exercise, muscle, or overall Strength Rank.
+
+### 11.7 Recalculation rules
+
+The engine is a pure function of canonical catalog data, current bodyweight, current time, and persisted workout history. Tests inject the current time for determinism. It writes no rank cache. Editing or deleting history and then refetching necessarily produces new Strength and Momentum results. Cardio never enters Strength Rank V1.
 
 ## 12. Preview experience
 
-The isolated preview offers four mock profiles: no data, beginner history, intermediate progression, and high progression. It supports front/back, exercise-role visualization, strength visualization, muscle selection, muscle detail, preset editing, a disposable active workout, and rank summaries.
+The isolated preview offers deterministic mock profiles for no data, lower demonstrated strength with strong recent improvement, high demonstrated strength with little recent improvement, and high strength plus high progress. It proves that the high-strength/low-progress user has the higher Strength Rank while the lower-strength/high-progress user may have the higher Momentum score.
+
+Additional comparison fixtures cover the same bodyweight with different lifts, the same lift with different bodyweights, a bodyweight movement, an assisted bodyweight movement, and missing bodyweight. The preview supports front/back, exercise-role visualization, strength visualization, muscle selection, muscle detail, preset editing, a disposable active workout, and separate Strength/Momentum summaries.
 
 Mocks are deterministic fixtures injected into repositories. Preview operations cannot access Supabase or production AsyncStorage keys.
 
@@ -335,10 +380,14 @@ RO, EN, FR, and DE must have parity for all V2 keys. Raw keys are not acceptable
 
 - Epley e1RM boundaries and invalid inputs;
 - weighted, bodyweight, assisted, and missing-bodyweight cases;
-- deterministic exercise score and rank transitions;
+- current demonstrated exercise score and strength-rank transitions;
+- same-bodyweight/different-lift and same-lift/different-bodyweight normalization;
+- explicit catalog normalization anchors and unranked behavior without one;
 - primary/secondary/stabilizer contribution weights;
 - one-exercise dominance cap;
 - overall coverage rules and no-data states;
+- separate Progress Momentum and proof it cannot alter Strength Rank;
+- low-strength/high-progress versus high-strength/low-progress preview ordering;
 - cardio exclusion;
 - edit/delete recalculation;
 - front/back strength colors and muscle detail provenance.
