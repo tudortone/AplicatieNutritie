@@ -2,14 +2,13 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator
+  ScrollView, Alert, ActivityIndicator, Platform
 } from 'react-native';
 import KeyboardAwareScreen from '../components/ui/KeyboardAwareScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import * as WebBrowser from 'expo-web-browser';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, Sparkles } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -21,31 +20,31 @@ import { useTheme } from '../context/ThemeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAppStore } from '../hooks/useAppStore';
 import { incarcaDateOnboarding, calculeazaPlan, type PlanNutritional } from '../lib/onboarding';
-import { extrageCodDinUrl } from '../lib/oauth';
+import { oauthFlow, OAUTH_REDIRECT_URI } from '../lib/oauthFlow';
 
 // Contul de admin se logheaza cu username-ul „admin" (nu email). Supabase cere
 // email la autentificare, deci identificatorul se mapeaza intern la adresa contului.
 const ADMIN_USERNAME = 'admin';
 const ADMIN_EMAIL = 'admin@nutriai.app';
 
-const getFriendlyErrorMessage = (rawMsg: string): string => {
+const getFriendlyErrorMessage = (rawMsg: string, t?: (k: string) => string): string => {
   const m = rawMsg.toLowerCase();
   if (m.includes('invalid login credentials') || m.includes('invalid credentials')) {
-    return 'Email sau parolă incorectă. Verifică datele introduse.';
+    return t ? t('auth.errInvalidCredentials') : 'Email sau parolă incorectă. Verifică datele introduse.';
   }
   if (m.includes('email not confirmed')) {
-    return 'Adresa de email nu a fost confirmată încă. Verifică inbox-ul.';
+    return t ? t('auth.errEmailNotConfirmed') : 'Adresa de email nu a fost confirmată încă. Verifică inbox-ul.';
   }
   if (m.includes('user already registered') || m.includes('already exists')) {
-    return 'Există deja un cont înregistrat cu această adresă de email.';
+    return t ? t('auth.errUserAlreadyRegistered') : 'Există deja un cont înregistrat cu această adresă de email.';
   }
   if (m.includes('password should be at least')) {
-    return 'Parola trebuie să aibă minimum 8 caractere.';
+    return t ? t('auth.errPasswordLength') : 'Parola trebuie să aibă minimum 8 caractere.';
   }
   if (m.includes('rate limit')) {
-    return 'Prea multe încercări. Te rugăm să aștepți câteva minute.';
+    return t ? t('auth.errRateLimit') : 'Prea multe încercări. Te rugăm să aștepți câteva minute.';
   }
-  return rawMsg || 'A apărut o problemă la autentificare.';
+  return t ? t('auth.errGeneral') : 'A apărut o problemă la autentificare.';
 };
 
 // Logo-urile brand OAuth nu există în lucide-react-native; SVG inline cu path-urile
@@ -142,7 +141,7 @@ export default function AuthScreen() {
           options: { data: setupData },
         });
         if (error) {
-          const msg = getFriendlyErrorMessage(error.message);
+          const msg = getFriendlyErrorMessage(error.message, t);
           setAuthError(msg);
           try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
         } else {
@@ -152,14 +151,13 @@ export default function AuthScreen() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email: esteAdminLogin ? ADMIN_EMAIL : identificator, password: parola });
         if (error) {
-          const msg = getFriendlyErrorMessage(error.message);
+          const msg = getFriendlyErrorMessage(error.message, t);
           setAuthError(msg);
           try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
         }
       }
     } catch (e: any) {
-      console.error("Auth submit error:", e);
-      const msg = getFriendlyErrorMessage(e?.message || "Nu s-a putut realiza conexiunea la server.");
+      const msg = getFriendlyErrorMessage(e?.message || t('auth.errConnection'), t);
       setAuthError(msg);
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
     } finally {
@@ -179,16 +177,15 @@ export default function AuthScreen() {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: 'nutriai://auth/callback?flow=recovery',
+        redirectTo: `${OAUTH_REDIRECT_URI}?flow=recovery`,
       });
       if (error) {
-        Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.eroareDinamica', { eroare: error.message }));
+        Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.conexiuneServerEsueaza'));
       } else {
         Alert.alert(t('alerts.titluri.emailTrimis'), t('alerts.mesaje.emailTrimisResetare'));
       }
-    } catch (e: any) {
-      console.error("Reset password error:", e);
-      Alert.alert(t('alerts.titluri.eroareNeasteptata'), e?.message || t('alerts.mesaje.conexiuneServerEsueaza'));
+    } catch {
+      Alert.alert(t('alerts.titluri.eroareNeasteptata'), t('alerts.mesaje.conexiuneServerEsueaza'));
     } finally {
       setLoading(false);
     }
@@ -196,49 +193,23 @@ export default function AuthScreen() {
 
   const signInWithOAuth = async (provider: 'google' | 'apple') => {
     if (loadingOAuth) return;
+    if (Platform.OS === 'android' && provider === 'apple') {
+      return;
+    }
     setAuthError(null);
     setLoadingOAuth(provider);
+    setAuthError(null);
     try {
-      // Pe React Native SDK-ul Supabase NU navigheaza singur: returneaza URL-ul
-      // in `data.url`, pe care trebuie sa-l deschidem noi (expo-web-browser).
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: 'nutriai://auth/callback',
-        },
-      });
-      if (error) {
-        Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.eroareDinamica', { eroare: error.message }));
+      const rezultat = await oauthFlow.signIn(provider);
+      if (rezultat === 'cancelled') {
+        setAuthError(t('oauth.cancelled'));
         return;
       }
-      if (!data.url) {
-        Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.problemaConexiuneOAuth'));
-        return;
-      }
-      const rezultat = await WebBrowser.openAuthSessionAsync(data.url, 'nutriai://auth/callback');
-      if (rezultat.type === 'success' && rezultat.url) {
-        const cod = extrageCodDinUrl(rezultat.url);
-        if (!cod) {
-          Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.problemaConexiuneOAuth'));
-          return;
-        }
-        const { error: eroareSchimb } = await supabase.auth.exchangeCodeForSession(cod);
-        if (eroareSchimb) {
-          // G1: pe Android callback.tsx poate fi declanșat în paralel cu acest
-          // handler și poate schimba deja codul. Dacă sesiunea există, login-ul
-          // chiar a reușit — nu arătăm o alertă falsă de „code already used".
-          const { data: sesiuneExistenta } = await supabase.auth.getSession();
-          if (sesiuneExistenta.session) {
-            router.replace('/(tabs)');
-            return;
-          }
-          Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.eroareDinamica', { eroare: eroareSchimb.message }));
-        }
-      }
-      // rezultat.type 'cancel'/'dismiss' → utilizatorul a renuntat; fara eroare.
-    } catch (e: any) {
-      console.error("OAuth error:", e);
-      Alert.alert(t('alerts.titluri.eroareOAuth'), e?.message || t('alerts.mesaje.problemaConexiuneOAuth'));
+      // Sesiunea a fost schimbată și verificată de autoritatea PKCE comună.
+      // Gate-ul central decide apoi tabs vs onboarding.
+      router.replace('/auth/complete');
+    } catch {
+      Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.problemaConexiuneOAuth'));
     } finally {
       setLoadingOAuth(null);
     }
@@ -270,22 +241,22 @@ export default function AuthScreen() {
             <LinearGradient colors={colors.accentGradient} style={styles.planGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <View style={styles.planHeaderRow}>
                 <Sparkles size={20} color={colors.background} />
-                <Text style={[styles.planBadgeText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>Planul tău zilnic calculat AI</Text>
+                <Text style={[styles.planBadgeText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{t('auth.planBadge')}</Text>
               </View>
-              <Text style={[styles.planKcalText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.calorii} kcal/zi</Text>
+              <Text style={[styles.planKcalText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.calorii} {t('auth.kcalPerDay')}</Text>
               <View style={styles.planMacroRow}>
                 <View style={[styles.planMacroPill, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-                  <Text style={[styles.planMacroText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.proteineG}g Proteine</Text>
+                  <Text style={[styles.planMacroText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.proteineG}g {t('nutrition.protein')}</Text>
                 </View>
                 <View style={[styles.planMacroPill, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-                  <Text style={[styles.planMacroText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.carbohidratiG}g Carbi</Text>
+                  <Text style={[styles.planMacroText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.carbohidratiG}g {t('nutrition.carbs')}</Text>
                 </View>
                 <View style={[styles.planMacroPill, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-                  <Text style={[styles.planMacroText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.grasimiG}g Grăsimi</Text>
+                  <Text style={[styles.planMacroText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.grasimiG}g {t('nutrition.fats')}</Text>
                 </View>
               </View>
               <Text style={[styles.planSubtext, { color: colors.background }]} maxFontSizeMultiplier={1.3}>
-                Creează-ți contul sau conectează-te pentru a-ți activa planul în aplicație.
+                {t('auth.planActivateCta')}
               </Text>
             </LinearGradient>
           </Animated.View>
@@ -301,12 +272,12 @@ export default function AuthScreen() {
               }}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel="Refă testele de calorié din chestionarul NutriAI"
+              accessibilityLabel={t("auth.recalculatePlanA11y")}
             >
               <Sparkles size={20} color={colors.accent} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.noPlanTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Vrei să recalculezi planul?</Text>
-                <Text style={[styles.noPlanSub, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>Refă testele de calorié ➔</Text>
+                <Text style={[styles.noPlanTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{t('auth.recalculatePlanTitle')}</Text>
+                <Text style={[styles.noPlanSub, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>{t('auth.recalculatePlanCta')}</Text>
               </View>
             </TouchableOpacity>
           </Animated.View>
@@ -323,8 +294,8 @@ export default function AuthScreen() {
             >
               <Sparkles size={20} color={colors.accent} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.noPlanTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Vrei să-ți calculezi planul mai întâi?</Text>
-                <Text style={[styles.noPlanSub, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>Parcurge chestionarul NutriAI ➔</Text>
+                <Text style={[styles.noPlanTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{t('auth.calculateFirstTitle')}</Text>
+                <Text style={[styles.noPlanSub, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>{t('auth.calculateFirstCta')}</Text>
               </View>
             </TouchableOpacity>
           </Animated.View>
@@ -335,7 +306,7 @@ export default function AuthScreen() {
           <BlurView intensity={25} tint="dark" style={styles.formBlur}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.formGrad}>
 
-              <Text style={[styles.formTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{isSignUp ? 'Creare cont nou' : 'Bun venit înapoi'}</Text>
+              <Text style={[styles.formTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{isSignUp ? t('auth.signUpTitle') : t('auth.signInTitle')}</Text>
 
               {/* Email */}
               <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}>
@@ -344,8 +315,8 @@ export default function AuthScreen() {
                 </View>
                 <TextInput
                   style={[styles.input, { color: colors.textPrimary }]}
-                  accessibilityLabel="Email sau utilizator"
-                  placeholder="Email sau utilizator"
+                  accessibilityLabel={t("auth.emailPlaceholder")}
+                  placeholder={t("auth.emailPlaceholder")}
                   placeholderTextColor={colors.textSecondary}
                   value={email}
                   onChangeText={(t) => {
@@ -370,8 +341,8 @@ export default function AuthScreen() {
                 </View>
                 <TextInput
                   style={[styles.input, { color: colors.textPrimary }]}
-                  accessibilityLabel="Parolă"
-                  placeholder="Parolă"
+                  accessibilityLabel={t("auth.passwordPlaceholder")}
+                  placeholder={t("auth.passwordPlaceholder")}
                   placeholderTextColor={colors.textSecondary}
                   value={parola}
                   onChangeText={(t) => {
@@ -390,7 +361,7 @@ export default function AuthScreen() {
                   onPress={() => setShowPassword(!showPassword)}
                   style={{ padding: 14, marginRight: 2 }}
                   accessibilityRole="button"
-                  accessibilityLabel={showPassword ? 'Ascunde parola' : 'Arată parola'}
+                  accessibilityLabel={showPassword ? t('auth.hidePasswordA11y') : t('auth.showPasswordA11y')}
                   accessibilityState={{ selected: showPassword }}
                 >
                   {showPassword ? (
@@ -405,7 +376,7 @@ export default function AuthScreen() {
               {isSignUp && (
                 <Animated.View style={[styles.passwordRulesBox, { backgroundColor: colors.overlayLight, borderColor: colors.overlayStrong }]}>
                   <Text style={[styles.passwordRulesHeader, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
-                    Cerințe parolă:
+                    {t('auth.passwordRequirementsHeader')}
                   </Text>
                   <View style={styles.ruleRow}>
                     {isMinLength ? (
@@ -414,7 +385,7 @@ export default function AuthScreen() {
                       <Circle size={16} color={colors.danger} />
                     )}
                     <Text style={[styles.ruleText, { color: isMinLength ? colors.success : colors.danger }]} maxFontSizeMultiplier={1.3}>
-                      Minim 8 caractere
+                      {t('auth.ruleMinLength')}
                     </Text>
                   </View>
 
@@ -425,7 +396,7 @@ export default function AuthScreen() {
                       <Circle size={16} color={colors.danger} />
                     )}
                     <Text style={[styles.ruleText, { color: hasUpperCase ? colors.success : colors.danger }]} maxFontSizeMultiplier={1.3}>
-                      O literă mare (A-Z)
+                      {t('auth.ruleUpperCase')}
                     </Text>
                   </View>
 
@@ -436,7 +407,7 @@ export default function AuthScreen() {
                       <Circle size={16} color={colors.danger} />
                     )}
                     <Text style={[styles.ruleText, { color: hasNumber ? colors.success : colors.danger }]} maxFontSizeMultiplier={1.3}>
-                      O cifră (0-9)
+                      {t('auth.ruleNumber')}
                     </Text>
                   </View>
                 </Animated.View>
@@ -455,9 +426,9 @@ export default function AuthScreen() {
                   style={styles.forgotBtn}
                   onPress={resetParola}
                   accessibilityRole="button"
-                  accessibilityLabel="Ai uitat parola? Recuperează parola"
+                  accessibilityLabel={t("auth.forgotPasswordA11y")}
                 >
-                  <Text style={[styles.forgotText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>Ai uitat parola?</Text>
+                  <Text style={[styles.forgotText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>{t('auth.forgotPassword')}</Text>
                 </TouchableOpacity>
               )}
 
@@ -470,7 +441,7 @@ export default function AuthScreen() {
                 ]}
                 onPress={submit}
                 disabled={loading}
-                accessibilityLabel={isSignUp ? 'Creează cont' : 'Conectare'}
+                accessibilityLabel={isSignUp ? t('auth.signUpButton') : t('auth.signInButton')}
                 accessibilityState={{ disabled: loading }}
               >
                 <LinearGradient colors={colors.accentGradient} style={styles.submitGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
@@ -478,7 +449,7 @@ export default function AuthScreen() {
                     <ActivityIndicator color={colors.background} />
                   ) : (
                     <>
-                      <Text style={[styles.submitText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{isSignUp ? 'Creează cont' : 'Conectare'}</Text>
+                      <Text style={[styles.submitText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{isSignUp ? t('auth.signUpButton') : t('auth.signInButton')}</Text>
                       <ArrowRight size={20} color={colors.background} strokeWidth={2.5} />
                     </>
                   )}
@@ -493,17 +464,17 @@ export default function AuthScreen() {
                   setIsSignUp(!isSignUp);
                 }}
                 accessibilityRole="button"
-                accessibilityLabel={isSignUp ? 'Ai deja un cont? Conectează-te' : 'Nu ai cont? Înregistrează-te'}
+                accessibilityLabel={isSignUp ? t('auth.alreadyHaveAccountA11y') : t('auth.dontHaveAccountA11y')}
               >
                 <Text style={[styles.toggleText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
-                  {isSignUp ? 'Ai deja un cont? ' : 'Nu ai cont? '}
-                  <Text style={[styles.toggleAccent, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>{isSignUp ? 'Conectează-te' : 'Înregistrează-te'}</Text>
+                  {isSignUp ? t('auth.alreadyHaveAccount') : t('auth.dontHaveAccount')}
+                  <Text style={[styles.toggleAccent, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>{isSignUp ? t('auth.signInLink') : t('auth.signUpLink')}</Text>
                 </Text>
               </TouchableOpacity>
 
               <View style={styles.dividerWrap}>
                 <View style={[styles.dividerLine, { backgroundColor: colors.overlayStrong }]} />
-                <Text style={[styles.dividerText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>sau</Text>
+                <Text style={[styles.dividerText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>{t('auth.orDivider')}</Text>
                 <View style={[styles.dividerLine, { backgroundColor: colors.overlayStrong }]} />
               </View>
 
@@ -513,7 +484,7 @@ export default function AuthScreen() {
                   onPress={() => signInWithOAuth('google')}
                   disabled={loadingOAuth !== null}
                   accessibilityRole="button"
-                  accessibilityLabel="Continuă cu Google"
+                  accessibilityLabel={t("auth.continueWithGoogle") === 'auth.continueWithGoogle' ? 'Continuă cu Google' : t("auth.continueWithGoogle")}
                   accessibilityState={{ disabled: loadingOAuth !== null }}
                 >
                   {loadingOAuth === 'google' ? (
@@ -525,23 +496,25 @@ export default function AuthScreen() {
                     </View>
                   )}
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.oauthBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                  onPress={() => signInWithOAuth('apple')}
-                  disabled={loadingOAuth !== null}
-                  accessibilityRole="button"
-                  accessibilityLabel="Continuă cu Apple"
-                  accessibilityState={{ disabled: loadingOAuth !== null }}
-                >
-                  {loadingOAuth === 'apple' ? (
-                    <ActivityIndicator color={colors.accent} />
-                  ) : (
-                    <View style={styles.oauthBtnContent}>
-                      <AppleLogo size={20} color={colors.textPrimary} />
-                      <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Apple</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
+                {Platform.OS !== 'android' ? (
+                  <TouchableOpacity
+                    style={[styles.oauthBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                    onPress={() => signInWithOAuth('apple')}
+                    disabled={loadingOAuth !== null}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("auth.continueWithApple") === 'auth.continueWithApple' ? 'Continuă cu Apple' : t("auth.continueWithApple")}
+                    accessibilityState={{ disabled: loadingOAuth !== null }}
+                  >
+                    {loadingOAuth === 'apple' ? (
+                      <ActivityIndicator color={colors.accent} />
+                    ) : (
+                      <View style={styles.oauthBtnContent}>
+                        <AppleLogo size={20} color={colors.textPrimary} />
+                        <Text style={[styles.oauthBtnText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Apple</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ) : null}
               </View>
 
             </LinearGradient>

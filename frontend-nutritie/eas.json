@@ -18,11 +18,57 @@
       "autoIncrement": true
     },
     "production": {
+      "node": "22.20.0",
       "channel": "production",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_PLAY_INTEGRITY_CLOUD_PROJECT_NUMBER": "435128681048",
+        "EXPO_PUBLIC_ADS_MODE": "real",
+        "EXPO_PUBLIC_ADMOB_ANDROID_APP_ID": "ca-app-pub-5202280855139508~6141533757",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ANDROID_ID": "ca-app-pub-5202280855139508/1542500110",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ANDROID_ID": "ca-app-pub-5202280855139508/3566028223",
+        "EXPO_PUBLIC_PRIVACY_POLICY_URL": "https://getflow.app/politica-de-confidentialitate",
+        "EXPO_PUBLIC_TERMS_OF_SERVICE_URL": "https://getflow.app/politica-de-confidentialitate",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    },
+    "internal": {
+      "extends": "production",
+      "channel": "internal",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_PLAY_INTEGRITY_CLOUD_PROJECT_NUMBER": "435128681048",
+        "EXPO_PUBLIC_ADS_MODE": "test",
+        "EXPO_PUBLIC_ADMOB_ANDROID_APP_ID": "ca-app-pub-3940256099942544~3347511713",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ANDROID_ID": "ca-app-pub-3940256099942544/1033173712",
+        "EXPO_PUBLIC_ADMOB_REWARDED_ANDROID_ID": "ca-app-pub-3940256099942544/5224354917",
+        "EXPO_PUBLIC_ADMOB_IOS_APP_ID": "ca-app-pub-3940256099942544~1458002511",
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_IOS_ID": "ca-app-pub-3940256099942544/4411468910",
+        "EXPO_PUBLIC_ADMOB_REWARDED_IOS_ID": "ca-app-pub-3940256099942544/1712485313",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "internal": {
+      "android": {
+        "track": "internal"
+      }
+    },
+    "closed": {
+      "android": {
+        "track": "closed"
+      }
+    },
+    "production": {
+      "android": {
+        "track": "production"
+      }
+    }
   }
 }
