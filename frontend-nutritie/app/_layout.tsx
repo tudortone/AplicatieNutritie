@@ -16,9 +16,18 @@ import { OnboardingProvider } from '../context/OnboardingContext';
 import { useAppStore } from '../hooks/useAppStore';
 import { useBiometrics } from '../hooks/useBiometrics';
 import LockScreen from '../components/LockScreen';
+import * as SplashScreen from 'expo-splash-screen';
+import { AppSplashScreen } from '../components/ui/AppSplashScreen';
+import { canAccessWorkoutV2PreviewWithoutSession } from '../lib/workout-v2/featureFlag';
+
+void SplashScreen.preventAutoHideAsync().catch(() => {});
 import { NotificationBannerProvider } from '../context/NotificationBannerContext';
 import { GamificareProvider } from '../context/GamificareContext';
 import { PremiumProvider } from '../context/PremiumContext';
+import { BillingProvider } from '../context/BillingContext';
+import { AdsProvider } from '../context/AdsContext';
+import { FlowCreditsProvider } from '../context/FlowCreditsContext';
+import { FlowCreditsModalHost } from '../components/FlowCreditsModalHost';
 import { useDailySync } from '../hooks/useDailySync';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import OfflineBanner from '../components/OfflineBanner';
@@ -34,6 +43,13 @@ import {
 import { processOfflineQueue, type SupabaseMinimalClient } from '../lib/offlineQueue';
 import { sincronizeazaTargeturiLocale } from '../lib/sincronizeazaTargeturi';
 import { supabase } from '../supabase';
+import {
+  redactTelemetryText,
+  sanitizeSentryExceptionValue,
+  sanitizeSentryRequestData,
+  sanitizeProductionConsoleArguments,
+  scrubTelemetryObject,
+} from '../lib/telemetryPrivacy';
 import '../i18n';
 
 
@@ -41,52 +57,30 @@ import '../i18n';
 // Fara segmentul `@` (cheia publica), SDK-ul arunca "Invalid Sentry Dsn" la fiecare boot.
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
 const isSentryDsnValid = !!SENTRY_DSN && /^https:\/\/[^@\s]+@.+/.test(SENTRY_DSN);
+const SENTRY_ENVIRONMENT = process.env.EXPO_PUBLIC_APP_ENV || (__DEV__ ? 'development' : 'production');
 
-// --- Redactie PII pentru evenimentele/breadcrumbs Sentry (frontend) ---
-const JWT_RE = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g;
-const BEARER_RE = /Bearer\s+[A-Za-z0-9._~+/=-]+/gi;
-const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-const PHONE_RE = /(\+?\d[\d\s().-]{7,}\d)/g;
-
-/** Înlocuiește tokenuri, emaile și telefoane dintr-un text cu placeholdere. */
-function redactText(text: unknown): string {
-  if (typeof text !== 'string') return text == null ? '' : String(text);
-  return text
-    .replace(JWT_RE, '[JWT]')
-    .replace(BEARER_RE, '[BEARER]')
-    .replace(EMAIL_RE, '[EMAIL]')
-    .replace(PHONE_RE, '[PHONE]');
-}
-
-/** Scrubează recursiv un obiect: chei senzitive setate la marcator, string-uri redactate. */
-function scrubObject(input: unknown): unknown {
-  if (input === null || typeof input !== 'object') return input;
-  if (Array.isArray(input)) return input.map(scrubObject);
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
-    const key = k.toLowerCase();
-    if (['password', 'token', 'authorization', 'cookie', 'email', 'phone', 'imagine_base64', 'user_prompt', 'user_explanation'].includes(key)) {
-      out[k] = '[SCRUBBED_PII]';
-    } else if (v !== null && typeof v === 'object') {
-      out[k] = scrubObject(v);
-    } else if (typeof v === 'string') {
-      out[k] = redactText(v);
-    } else {
-      out[k] = v;
-    }
+if (!__DEV__) {
+  for (const level of ['log', 'debug', 'info', 'warn', 'error'] as const) {
+    const original = console[level].bind(console);
+    console[level] = (...args: unknown[]) => {
+      original(...sanitizeProductionConsoleArguments(args));
+    };
   }
-  return out;
 }
 
 if (isSentryDsnValid) {
   Sentry.init({
     dsn: SENTRY_DSN,
+    environment: SENTRY_ENVIRONMENT,
     debug: false,
     sendDefaultPii: false,
     beforeBreadcrumb(breadcrumb) {
+      // Obiectele brute trimise prin console.* pot conține date de sănătate.
+      // Diagnosticul controlat rămâne în event-uri și tag-uri, nu în breadcrumbs.
+      if (breadcrumb.category === 'console') return null;
       const b = { ...breadcrumb };
-      if (typeof b.message === 'string') b.message = redactText(b.message);
-      if (b.data && typeof b.data === 'object') b.data = scrubObject(b.data) as Record<string, unknown>;
+      if (typeof b.message === 'string') b.message = redactTelemetryText(b.message);
+      if (b.data && typeof b.data === 'object') b.data = scrubTelemetryObject(b.data) as Record<string, unknown>;
       return b;
     },
     beforeSend(event) {
@@ -97,18 +91,30 @@ if (isSentryDsnValid) {
         delete req.headers;
         delete req.cookies;
         if (req.url) req.url = String(req.url).split(/[?#]/, 1)[0];
-        if (req.data) req.data = scrubObject(req.data);
+        if (req.data) req.data = sanitizeSentryRequestData(req.data);
       }
       event.user = undefined;
-      if (event.message) event.message = redactText(event.message);
+      if (event.message) event.message = redactTelemetryText(event.message);
+      if (event.exception?.values) {
+        event.exception.values = event.exception.values.map((exception) => ({
+          ...exception,
+          value: exception.value
+            ? sanitizeSentryExceptionValue(exception.type, exception.value)
+            : exception.value,
+        }));
+      }
+      if (event.extra) event.extra = { redacted: true };
+      if (event.contexts) event.contexts = {};
       // B-11: datele de alimentatie sunt date de sanatate. Scrubeaza si
       // breadcrumbs-urile (mesajul de utilizator poate duce in contextul unui
       // crash) si pune un loc unde sa nu apara corpuri de cerere.
       if (Array.isArray(event.breadcrumbs)) {
-        event.breadcrumbs = event.breadcrumbs.map((crumb: any) => {
+        event.breadcrumbs = event.breadcrumbs.map((crumb) => {
           const c = { ...crumb };
-          if (typeof c.message === 'string') c.message = redactText(c.message);
-          if (c.data && typeof c.data === 'object') c.data = scrubObject(c.data);
+          if (typeof c.message === 'string') c.message = redactTelemetryText(c.message);
+          if (c.data && typeof c.data === 'object') {
+            c.data = scrubTelemetryObject(c.data) as Record<string, unknown>;
+          }
           return c;
         });
       }
@@ -118,8 +124,15 @@ if (isSentryDsnValid) {
 
   // Prinde crash-urile JS neprinse (ErrorUtils) si promisiunile respinse neprinse,
   // ca erorile sa ajunga in Sentry, nu doar in consola.
-  const ErrorUtils = (global as any).ErrorUtils;
-  if (ErrorUtils?.getGlobalHandler) {
+  const runtimeGlobal = globalThis as typeof globalThis & {
+    ErrorUtils?: {
+      getGlobalHandler?: () => ((error: unknown, isFatal?: boolean) => void);
+      setGlobalHandler?: (handler: (error: unknown, isFatal?: boolean) => void) => void;
+    };
+    addEventListener?: (type: string, listener: (event: unknown) => void) => void;
+  };
+  const ErrorUtils = runtimeGlobal.ErrorUtils;
+  if (ErrorUtils?.getGlobalHandler && ErrorUtils.setGlobalHandler) {
     const originalHandler = ErrorUtils.getGlobalHandler();
     ErrorUtils.setGlobalHandler((error: unknown, isFatal?: boolean) => {
       Sentry.captureException(error, { extra: { isFatal: !!isFatal } });
@@ -127,8 +140,11 @@ if (isSentryDsnValid) {
     });
   }
   try {
-    global.addEventListener?.('unhandledrejection', (event: any) => {
-      Sentry.captureException(event?.reason ?? event);
+    runtimeGlobal.addEventListener?.('unhandledrejection', (event: unknown) => {
+      const reason = event && typeof event === 'object' && 'reason' in event
+        ? (event as { reason?: unknown }).reason
+        : event;
+      Sentry.captureException(reason);
     });
   } catch {
     // 'unhandledrejection' nu e suportat pe toate runtime-urile RN — il ignoram.
@@ -166,6 +182,12 @@ function RootNavigator() {
   // (fail-open), ca un utilizator offline sa nu fie prins in onboarding.
   const [profilServer, setProfilServer] = useState<'necunoscut' | 'exista' | 'lipsa'>('necunoscut');
   const [profilServerDate, setProfilServerDate] = useState<ProfilRestaurare | null>(null);
+  const [profilVerificatPentru, setProfilVerificatPentru] = useState<string | null>(null);
+  const profilOwnerRef = useRef<string | undefined>(undefined);
+  profilOwnerRef.current = session?.user.id;
+  const profilRequestRef = useRef(0);
+  const [storageReady, setStorageReady] = useState(false);
+  const restaurareProfilInCursRef = useRef(false);
 
   // BUG-063: fetch-ul profilului e reutilizabil (nu doar o dată la montare), ca
   // să poată fi re-încercat la revenirea conexiunii — altfel un utilizator cu
@@ -176,19 +198,29 @@ function RootNavigator() {
     if (!profilServerMountedRef.current) return;
     const token = session?.access_token;
     const apiUrl = process.env.EXPO_PUBLIC_API_URL;
-    if (!session || !token || !apiUrl) return;
+    if (!session || !token) return;
+    const owner = session.user.id;
+    const request = ++profilRequestRef.current;
+    const isCurrent = () => profilServerMountedRef.current && profilOwnerRef.current === owner && request === profilRequestRef.current;
+    if (!apiUrl) {
+      setProfilVerificatPentru(owner);
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     try {
       const resp = await fetch(buildApiUrl('/user/profil'), {
         headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
       });
-      if (!profilServerMountedRef.current) return;
+      if (!isCurrent()) return;
       if (!resp.ok) {
         setProfilServer('necunoscut');
         setProfilServerDate(null);
         return;
       }
       const body = await resp.json() as { exista?: boolean; complet?: boolean; profil?: ProfilRestaurare | null };
-      if (!profilServerMountedRef.current) return;
+      if (!isCurrent()) return;
       if (body.exista && body.complet && body.profil) {
         setProfilServer('exista');
         setProfilServerDate(body.profil);
@@ -197,14 +229,21 @@ function RootNavigator() {
         setProfilServerDate(null);
       }
     } catch {
-      if (profilServerMountedRef.current) {
+      if (isCurrent()) {
         setProfilServer('necunoscut');
         setProfilServerDate(null);
       }
+    } finally {
+      clearTimeout(timeout);
+      if (isCurrent()) setProfilVerificatPentru(owner);
     }
   }, [session]);
 
-  useEffect(() => { syncFromAsyncStorage(); }, [syncFromAsyncStorage]);
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve(syncFromAsyncStorage()).catch(() => {}).finally(() => { if (active) setStorageReady(true); });
+    return () => { active = false; };
+  }, [syncFromAsyncStorage]);
 
   // Tap pe o notificare push din fundal/terminat → deschide ecranul /notificari.
   // Foreground-ul (banner in-app) e deja acoperit în NotificationBannerContext;
@@ -284,6 +323,7 @@ function RootNavigator() {
     if (!session) {
       setProfilServer('necunoscut');
       setProfilServerDate(null);
+      setProfilVerificatPentru(null);
       return;
     }
     void incarcaProfilServer();
@@ -308,6 +348,19 @@ function RootNavigator() {
   useEffect(() => {
     if (loadingAuth) return;
     const inAuth = segments[0] === 'auth';
+    // Callback-ul deține schimbul PKCE și așteaptă AuthContext. Nu îl evacuăm
+    // spre onboarding/tabs pe baza unei sesiuni vechi sau încă inexistente.
+    if (pathname === '/auth/callback') return;
+    if (!storageReady) return;
+    // Preview-ul V2 are propriul gate. În development (sau când flag-ul este
+    // explicit activ) trebuie să poată fi deschis direct pentru QA, fără ca
+    // guard-ul global de sesiune/onboarding să îl evacueze. Celelalte rute și
+    // build-urile production fără flag rămân neschimbate.
+    if (canAccessWorkoutV2PreviewWithoutSession(
+      pathname,
+      process.env.EXPO_PUBLIC_ENABLE_WORKOUT_V2_PREVIEW,
+      __DEV__,
+    )) return;
     const inOnboarding = segments[0] === 'onboarding';
     // H1/BUG-056: pe /auth/noua-parola (finalizare resetare parolă) NU
     // redirecționăm automat — nici la onboarding, nici în (tabs) — chiar dacă
@@ -321,6 +374,8 @@ function RootNavigator() {
     // semantic: singura rută cu segmentul 'noua-parola' e /auth/noua-parola.
     const esteRecuperareParola = inAuth && pathname === '/auth/noua-parola';
     if (esteRecuperareParola) return;
+    // Verificăm profilul contului curent înainte de a repeta chestionarul.
+    if (session && !isOnboardingDone && profilVerificatPentru !== session.user.id) return;
 
     // Ordinea ceruta: intai chestionarul, apoi planul, apoi contul.
     // Cine nu a terminat onboarding-ul nu ajunge la ecranul de autentificare,
@@ -329,9 +384,20 @@ function RootNavigator() {
       // Utilizator autentificat cu profil COMPLET in DB (dispozitiv nou / storage
       // sters): restaurăm flag-ul si planul local, fara sa repetam chestionarul.
       if (session && profilServer === 'exista' && profilServerDate) {
-        restaureazaProfilLocal(profilServerDate);
-        setOnboardingDone(true);
-        if (inOnboarding || inAuth) router.replace('/(tabs)');
+        if (!restaurareProfilInCursRef.current) {
+          restaurareProfilInCursRef.current = true;
+          void (async () => {
+            try {
+              await restaureazaProfilLocal(profilServerDate);
+              await setOnboardingDone(true);
+              if (inOnboarding || inAuth) router.replace('/(tabs)');
+            } catch (eroare) {
+              console.warn('[Onboarding] Restaurarea profilului local a eșuat:', eroare);
+            } finally {
+              restaurareProfilInCursRef.current = false;
+            }
+          })();
+        }
         return;
       }
       // Fara profil complet in DB (sau verificare in curs / offline): onboarding.
@@ -343,53 +409,74 @@ function RootNavigator() {
       return;
     }
     if (inAuth || inOnboarding) router.replace('/(tabs)');
-  }, [session, loadingAuth, isOnboardingDone, setOnboardingDone, profilServer, profilServerDate, segments, pathname, router]);
+  }, [session, loadingAuth, storageReady, profilVerificatPentru, isOnboardingDone, setOnboardingDone, profilServer, profilServerDate, segments, pathname, router]);
 
-  if (loadingAuth) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}><ActivityIndicator size="large" color={colors.accent} /></View>;
+  if (loadingAuth && pathname !== '/auth/callback') return <AppSplashScreen isReady={false} />;
   const push = { animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, gestureEnabled: true } as const;
 
   return <ThemeProvider value={appDarkTheme}>
     <OfflineBanner />
-    <PremiumProvider appUserId={session?.user.id ?? null} isAdmin={session?.user?.app_metadata?.rol === 'admin'}>
-      <Stack screenOptions={{ headerShown: false, gestureEnabled: true, animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, fullScreenGestureEnabled: true, contentStyle: { backgroundColor: colors.background } }}>
-        <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
-        <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
-        <Stack.Screen name="onboarding" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
-        <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
-        <Stack.Screen name="scanner-barcode" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
-        <Stack.Screen name="calculator-ai" options={push} />
-        <Stack.Screen name="legal" options={push} />
-        <Stack.Screen name="jurnal-antrenamente" options={push} />
-        <Stack.Screen name="notificari" options={push} />
-        <Stack.Screen name="paywall" options={push} />
-        <Stack.Screen name="progres-antrenamente" options={push} />
-      </Stack>
-    </PremiumProvider>
+    <BillingProvider appUserId={session?.user.id ?? null}>
+      <PremiumProvider appUserId={session?.user.id ?? null}>
+        <FlowCreditsProvider appUserId={session?.user.id ?? null}>
+        <AdsProvider userId={session?.user.id ?? null}>
+        <Stack screenOptions={{ headerShown: false, gestureEnabled: true, animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, fullScreenGestureEnabled: true, contentStyle: { backgroundColor: colors.background } }}>
+          <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
+          <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
+          <Stack.Screen name="onboarding" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
+          <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
+          <Stack.Screen name="scanner-barcode" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
+          <Stack.Screen name="calculator-ai" options={push} />
+          <Stack.Screen name="legal" options={push} />
+          <Stack.Screen name="jurnal-antrenamente" options={push} />
+          <Stack.Screen name="notificari" options={push} />
+          <Stack.Screen name="paywall" options={push} />
+          <Stack.Screen name="progres-antrenamente" options={push} />
+          <Stack.Screen name="workout-v2-preview" options={push} />
+        </Stack>
+        </AdsProvider>
+        <FlowCreditsModalHost />
+        </FlowCreditsProvider>
+      </PremiumProvider>
+    </BillingProvider>
     {session && isLocked ? <LockScreen biometricType={biometricType} onUnlock={unlockApp} /> : null}
+    <AppSplashScreen isReady={storageReady && !loadingAuth} />
     <StatusBar style="light" />
   </ThemeProvider>;
 }
 
-export default function RootLayout() {
+function AccountBoundProviders() {
+  const { user } = useAuth();
+  const ownerKey = user?.id ?? 'anonymous';
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider style={{ flex: 1 }}>
-        <BottomSheetModalProvider>
-          <AppThemeProvider>
-          <AuthProvider>
-            <OnboardingProvider>
-              <NotificationBannerProvider>
-                <GamificareProvider>
-                  <GlobalErrorBoundary>
-                    <RootNavigator />
-                  </GlobalErrorBoundary>
-                </GamificareProvider>
-              </NotificationBannerProvider>
-            </OnboardingProvider>
-          </AuthProvider>
-        </AppThemeProvider>
-        </BottomSheetModalProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <NotificationBannerProvider key={`notifications:${ownerKey}`}>
+      <GamificareProvider key={`gamification:${ownerKey}`}>
+        <GlobalErrorBoundary>
+          <RootNavigator />
+        </GlobalErrorBoundary>
+      </GamificareProvider>
+    </NotificationBannerProvider>
   );
 }
+
+function RootLayout() {
+  return (
+    <GlobalErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider style={{ flex: 1 }}>
+          <BottomSheetModalProvider>
+            <AppThemeProvider>
+            <AuthProvider>
+              <OnboardingProvider>
+                <AccountBoundProviders />
+              </OnboardingProvider>
+            </AuthProvider>
+          </AppThemeProvider>
+          </BottomSheetModalProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </GlobalErrorBoundary>
+  );
+}
+
+export default isSentryDsnValid ? Sentry.wrap(RootLayout) : RootLayout;

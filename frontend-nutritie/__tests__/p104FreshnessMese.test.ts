@@ -2,6 +2,7 @@ import { renderHook, act, waitFor } from '@testing-library/react-native';
 
 import { useMeseAzi } from '../hooks/useMeseAzi';
 import { marcheazaMeseModificate, aboneazaLaModificariMese } from '../lib/freshnessMese';
+import { clearJournalCache } from '../lib/journalCache';
 import type { Masa } from '../types';
 
 /**
@@ -29,6 +30,10 @@ const USER_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 let mockUtilizator = { id: USER_A, user_metadata: {} as Record<string, unknown> };
 let mockRanduri: Record<string, Masa[]> = {};
 let mockNumarInterogari = 0;
+
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+);
 
 jest.mock('../supabase', () => ({
   supabase: {
@@ -67,6 +72,7 @@ async function monteaza() {
 afterEach(() => { while (demontari.length) demontari.pop()!(); });
 
 beforeEach(() => {
+  clearJournalCache();
   mockUtilizator = { id: USER_A, user_metadata: {} };
   mockRanduri = { [USER_A]: [masa({ id: 'm1', calorii: 500 })], [USER_B]: [] };
   mockNumarInterogari = 0;

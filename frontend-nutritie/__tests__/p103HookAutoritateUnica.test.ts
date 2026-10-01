@@ -2,6 +2,7 @@ import { renderHook, act, waitFor, cleanup } from '@testing-library/react-native
 
 import { useMeseAzi } from '../hooks/useMeseAzi';
 import { calculeazaTotaluriZi, totaluriPentruAfisare, totaluriZiAfisate } from '../lib/nutritionTotals';
+import { clearJournalCache } from '../lib/journalCache';
 import type { Masa } from '../types';
 
 /**
@@ -20,6 +21,10 @@ let mockRanduri: Record<string, Masa[]> = {};
 let mockEroareFetch: { message: string } | null = null;
 let mockFiltruGte: string | null = null;
 let mockFiltruLte: string | null = null;
+
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+);
 
 jest.mock('../supabase', () => ({
   supabase: {
@@ -102,6 +107,7 @@ const totaluriDin = (c: ReturnType<typeof useMeseAzi>) => ({
 });
 
 beforeEach(() => {
+  clearJournalCache();
   mockUtilizator = USER_A;
   mockRanduri = { 'user-a': [...FIXTURA], 'user-b': [] };
   mockEroareFetch = null;
