@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, Platform
+  ScrollView, Alert, ActivityIndicator, Platform, Linking
 } from 'react-native';
 import KeyboardAwareScreen from '../components/ui/KeyboardAwareScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,7 +10,7 @@ import { supabase } from '../supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
-import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, Sparkles } from 'lucide-react-native';
+import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, Sparkles, ShieldCheck, FileText } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { PressableScale } from '../components/ui/PressableScale';
@@ -21,6 +21,7 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAppStore } from '../hooks/useAppStore';
 import { incarcaDateOnboarding, calculeazaPlan, type PlanNutritional } from '../lib/onboarding';
 import { oauthFlow, OAUTH_REDIRECT_URI } from '../lib/oauthFlow';
+import { getLegalUrls } from '../lib/legalUrls';
 
 // Contul de admin se logheaza cu username-ul „admin" (nu email). Supabase cere
 // email la autentificare, deci identificatorul se mapeaza intern la adresa contului.
@@ -97,6 +98,19 @@ export default function AuthScreen() {
   const hasUpperCase = /[A-Z]/.test(parola);
   const hasNumber = /[0-9]/.test(parola);
   const isPasswordValid = isMinLength && hasUpperCase && hasNumber;
+
+  const openLegal = (key: 'termsUrl' | 'privacyUrl') => {
+    try { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+    try {
+      const { termsUrl, privacyUrl } = getLegalUrls();
+      void Linking.openURL(key === 'termsUrl' ? termsUrl : privacyUrl);
+    } catch {
+      Alert.alert(
+        t('authLegal.unavailableTitle'),
+        t('authLegal.unavailableMessage'),
+      );
+    }
+  };
 
   const isValidEmail = (str: string) => /\S+@\S+\.\S+/.test(str.trim());
 
@@ -517,6 +531,63 @@ export default function AuthScreen() {
                 ) : null}
               </View>
 
+              {/* Legal Consent Notice */}
+              <View
+                style={[styles.legalConsentWrap, { borderTopColor: colors.cardBorder }]}
+                testID="auth-legal-consent"
+              >
+                <View style={styles.legalHeaderRow}>
+                  <ShieldCheck size={13} color={colors.accent} />
+                  <Text
+                    style={[styles.legalConsentText, { color: colors.textSecondary }]}
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {t('authLegal.disclosure')}
+                  </Text>
+                </View>
+                <View style={styles.legalLinksRow}>
+                  <TouchableOpacity
+                    onPress={() => openLegal('termsUrl')}
+                    style={[
+                      styles.legalChip,
+                      { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder },
+                    ]}
+                    accessibilityRole="link"
+                    accessibilityLabel={t('authLegal.termsA11y')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    activeOpacity={0.7}
+                  >
+                    <FileText size={12} color={colors.accent} />
+                    <Text
+                      style={[styles.legalChipText, { color: colors.textPrimary }]}
+                      maxFontSizeMultiplier={1.3}
+                    >
+                      {t('authLegal.terms')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => openLegal('privacyUrl')}
+                    style={[
+                      styles.legalChip,
+                      { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder },
+                    ]}
+                    accessibilityRole="link"
+                    accessibilityLabel={t('authLegal.privacyA11y')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    activeOpacity={0.7}
+                  >
+                    <ShieldCheck size={12} color={colors.accent} />
+                    <Text
+                      style={[styles.legalChipText, { color: colors.textPrimary }]}
+                      maxFontSizeMultiplier={1.3}
+                    >
+                      {t('authLegal.privacy')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
             </LinearGradient>
           </BlurView>
         </Animated.View>
@@ -566,6 +637,46 @@ const styles = StyleSheet.create({
   oauthBtn: { flex: 1, height: 50, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
   oauthBtnText: { fontSize: 15, fontWeight: '700' },
   oauthBtnContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  legalConsentWrap: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    alignItems: 'center',
+  },
+  legalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 10,
+    paddingHorizontal: 8,
+  },
+  legalConsentText: {
+    fontSize: 11.5,
+    textAlign: 'center',
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  legalLinksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  legalChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  legalChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   passwordRulesBox: { borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, gap: 8 },
   passwordRulesHeader: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
