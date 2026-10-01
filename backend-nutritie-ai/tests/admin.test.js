@@ -1,8 +1,14 @@
 const request = require('supertest');
 
-process.env.REVENUECAT_SECRET_API_KEY = 'rc_key_test';
-
 jest.mock('@supabase/supabase-js', () => {
+  const billingQuery = {
+    select: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    gt: jest.fn().mockReturnThis(),
+    order: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+  };
   return {
     createClient: jest.fn(() => ({
       auth: {
@@ -35,6 +41,8 @@ jest.mock('@supabase/supabase-js', () => {
         }),
         admin: { deleteUser: jest.fn().mockResolvedValue({ error: null }) },
       },
+      from: jest.fn(() => billingQuery),
+      rpc: jest.fn().mockResolvedValue({ data: null, error: null }),
     })),
   };
 });
@@ -52,7 +60,7 @@ describe('Admin (app_metadata.rol) — super-utilizator', () => {
     jest.restoreAllMocks();
   });
 
-  it('ar trebui sa acorde premium:true adminului FARA a apela RevenueCat', async () => {
+  it('pastreaza accesul de produs al adminului fara sa il declare abonat Premium sau tester', async () => {
     global.fetch = jest.fn();
 
     const res = await request(app)
@@ -60,18 +68,22 @@ describe('Admin (app_metadata.rol) — super-utilizator', () => {
       .set('Authorization', 'Bearer token_admin');
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.premium).toBe(true);
+    expect(res.body).toMatchObject({
+      premium: false,
+      isPremium: false,
+      isTester: false,
+      isAdmin: true,
+      accessTier: 'free',
+      hasFullAccess: true,
+    });
     expect(res.body.validatServer).toBe(true);
-    expect(res.body.entitlement).toBeNull();
+    expect(res.body.productId).toBeNull();
+    expect(res.body.state).toBeNull();
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('ar trebui sa pastreze comportamentul normal pentru un utilizator ne-admin', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: jest.fn().mockResolvedValue({ subscriber: { entitlements: {} } }),
-    });
+    global.fetch = jest.fn();
 
     const res = await request(app)
       .get('/api/user/premium-status')
@@ -79,7 +91,7 @@ describe('Admin (app_metadata.rol) — super-utilizator', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.premium).toBe(false);
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });
 

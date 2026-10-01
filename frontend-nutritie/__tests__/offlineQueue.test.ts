@@ -149,6 +149,31 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
     expect(inserari[0].data).toBe(masaSample1.data);
   });
 
+  test('P1-final — replay-ul offline păstrează ora locală a consumului', async () => {
+    const masaCuOra = {
+      ...masaSample1,
+      id: '77777777-7777-4777-8777-777777777777',
+      ora: '19:30:00',
+    } as MasaOfflinePayload & { ora: string };
+    await pushOfflineMeal(masaCuOra);
+
+    const inserari: any[] = [];
+    const supabaseFake = {
+      auth: { getUser: async () => ({ data: { user: { id: 'user_123' } }, error: null }) },
+      from: () => ({
+        insert: async (payload: any) => {
+          inserari.push(payload);
+          return { error: null };
+        },
+      }),
+    };
+
+    await processOfflineQueue(supabaseFake as any, 'user_123');
+
+    expect(inserari).toHaveLength(1);
+    expect(inserari[0].ora).toBe('19:30:00');
+  });
+
   test('4. Când Supabase eșuează din nou, procesarea se oprește fără pierderea meselor rămas', async () => {
     await pushOfflineMeal(masaSample1);
     await pushOfflineMeal(masaSample2);

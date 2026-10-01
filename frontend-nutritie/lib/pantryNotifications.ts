@@ -87,7 +87,7 @@ export async function checkAndSchedulePantryExpiryNotification(produse: ProdusCa
 
     const pantryId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: '⚠️ Cămara NutriAI • Expirare Iminentă!',
+        title: 'Cămara GetFlow • Expirare iminentă!',
         body: `Ai ${expiringSoon.length} aliment(e) pe cale să expire: ${numeAlimente}${plusOthers}. Intră în Cămară și folosește „Gătește cu AI” pentru o rețetă rapidă!`,
         sound: true,
         color: '#FF003C',

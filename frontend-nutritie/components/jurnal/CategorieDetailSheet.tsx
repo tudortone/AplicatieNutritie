@@ -10,6 +10,7 @@ import { Masa, TipMasa } from '../../types';
 import { CategorieMasaGrupata } from '../../hooks/useMeseAzi';
 import { totaluriPentruAfisare } from '../../lib/nutritionTotals';
 import { MasaCard } from '../MasaCard';
+import { FlowIcon } from '../ui/FlowIcon';
 
 export interface CategorieDetailSheetRef {
   open: (categorie: CategorieMasaGrupata) => void;
@@ -136,37 +137,74 @@ export const CategorieDetailSheet = forwardRef<CategorieDetailSheetRef, Categori
         </TouchableOpacity>
 
         <View style={styles.header}>
-          <Text style={{ fontSize: 28 }}>{categorie.icon}</Text>
+          <FlowIcon name={categorie.icon} size={28} color={colors.accent} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>{categorie.label}</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>
+              {t(`chat.mealCategory.${categorie.id}`, { defaultValue: categorie.label })}
+            </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               {categorie.mese.length === 1
-                ? '1 masă înregistrată'
-                : `${categorie.mese.length} mese înregistrate`}
+                ? t('jurnal.mealLogged')
+                : t('jurnal.mealsLogged', { count: categorie.mese.length })}
             </Text>
           </View>
         </View>
 
         <View style={[styles.macroBar, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
           <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.accent }]}>{totaluriAfisare.calorii}</Text>
-            <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>kcal</Text>
+            <Text
+              style={[styles.macroValue, { color: colors.accent }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
+              {totaluriAfisare.calorii}
+            </Text>
+            <Text style={[styles.macroLabel, { color: colors.textSecondary }]} numberOfLines={1}>kcal</Text>
           </View>
           <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.accentSecondary }]}>{totaluriAfisare.proteine}g</Text>
-            <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>proteine</Text>
+            <Text
+              style={[styles.macroValue, { color: colors.accentSecondary }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
+              {totaluriAfisare.proteine}g
+            </Text>
+            <Text style={[styles.macroLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('nutrition.protein')}</Text>
           </View>
           <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.accentTertiary }]}>{totaluriAfisare.carbohidrati}g</Text>
-            <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>carbs</Text>
+            <Text
+              style={[styles.macroValue, { color: colors.accentTertiary }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
+              {totaluriAfisare.carbohidrati}g
+            </Text>
+            <Text style={[styles.macroLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('nutrition.carbs')}</Text>
           </View>
           <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.warning }]}>{totaluriAfisare.grasimi}g</Text>
-            <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>grăsimi</Text>
+            <Text
+              style={[styles.macroValue, { color: colors.warning }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
+              {totaluriAfisare.grasimi}g
+            </Text>
+            <Text style={[styles.macroLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('nutrition.fats')}</Text>
           </View>
           <View style={styles.macroItem}>
-            <Text style={[styles.macroValue, { color: colors.success }]}>{totaluriAfisare.fibre}g</Text>
-            <Text style={[styles.macroLabel, { color: colors.textSecondary }]}>fibre</Text>
+            <Text
+              style={[styles.macroValue, { color: colors.success }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
+              {totaluriAfisare.fibre}g
+            </Text>
+            <Text style={[styles.macroLabel, { color: colors.textSecondary }]} numberOfLines={1}>{t('nutrition.fiber')}</Text>
           </View>
         </View>
 
@@ -195,11 +233,17 @@ export const CategorieDetailSheet = forwardRef<CategorieDetailSheetRef, Categori
             }}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel={`Adaugă masă la ${categorie.label}`}
+            accessibilityLabel={t('jurnal.addCategory', {
+              categorie: t(`chat.mealCategory.${categorie.id}`, { defaultValue: categorie.label }),
+              label: t(`chat.mealCategory.${categorie.id}`, { defaultValue: categorie.label }),
+            })}
           >
             <PlusCircle size={16} color={colors.accent} />
             <Text style={[styles.addBtnText, { color: colors.accent }]}>
-              Adaugă masă la {categorie.label}
+              {t('jurnal.addCategory', {
+                categorie: t(`chat.mealCategory.${categorie.id}`, { defaultValue: categorie.label }),
+                label: t(`chat.mealCategory.${categorie.id}`, { defaultValue: categorie.label }),
+              })}
             </Text>
           </TouchableOpacity>
         </View>
@@ -219,7 +263,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   macroBar: { flexDirection: 'row', marginHorizontal: 20, borderRadius: 16, borderWidth: 1, paddingVertical: 10, marginBottom: 8 },
   macroItem: { flex: 1, alignItems: 'center', gap: 2 },
-  macroValue: { fontSize: 15, fontWeight: '800' },
+  macroValue: { fontSize: 15, fontWeight: '800', includeFontPadding: false, textAlign: 'center' },
   macroLabel: { fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 },
   list: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
   footer: { paddingHorizontal: 20, paddingVertical: 10, paddingBottom: 20 },

@@ -28,7 +28,7 @@ const Sentry = require('@sentry/node');
 const {
   tabelUtilizator,
   inregistreazaUtilizareAdmin,
-  TABELE_CU_RLS_UTILIZATOR,
+  TABELE_STERGERE_GDPR_UTILIZATOR,
 } = require('../utils/clientUtilizator');
 
 // N-03: codurile pentru „tabela inexistentă" + helper-ii ImageKit/Clerk sunt
@@ -41,6 +41,10 @@ const {
   stergeFoldereImageKit,
   stergeIdentitateClerk,
   extrageFileIdsUtilizator,
+  stergeDeadLetterUtilizator,
+  citesteTotPaginat,
+  exportaAbonamenteGooglePlay,
+  stergeEvenimenteRtdnUtilizator,
 } = require('../utils/gdprServices');
 const { codEroare } = require('../utils/codEroare');
 
@@ -51,17 +55,49 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
     try {
       const ctx = contextDate(req, res);
       const userId = ctx.userId;
-      const citeste = async (tabela) => {
-        const { data, error } = await tabelUtilizator(ctx, tabela).select('*').eq('user_id', userId);
-        if (error) throw error;
-        return data ?? [];
-      };
+      // F-06: paginat. Fara `.range()`, PostgREST taia tacut exportul la
+      // `max-rows` (implicit 1000), deci un utilizator cu istoric lung primea un
+      // export INCOMPLET prezentat ca fiind complet.
+      const citeste = (tabela, coloanaOrdine = 'id') =>
+        citesteTotPaginat({
+          client: { from: (t) => tabelUtilizator(ctx, t) },
+          tabela,
+          userId,
+          coloanaOrdine,
+        });
 
-      const [mese, profil, antrenamente, estimariBarcode] = await Promise.all([
+      const [
+        mese,
+        profil,
+        antrenamente,
+        produseCamara,
+        gamificare,
+        evenimenteGamificare,
+        workoutLogs,
+        auditLog,
+        estimariBarcode,
+        aiJobs,
+        crediteAi,
+        tranzactiiCredite,
+        rezervariFlowCredits,
+        intentiiRecompensa,
+        abonamenteGooglePlay,
+      ] = await Promise.all([
         citeste('mese'),
         profilRepo.getProfil(ctx),
         citeste('antrenamente'),
-        citeste('barcode_estimari_utilizator'),
+        citeste('produse_camara'),
+        citeste('gamificare'),
+        citeste('gamificare_evenimente'),
+        citeste('workout_logs'),
+        citeste('audit_log'),
+        citeste('barcode_estimari_utilizator', 'code'),
+        citeste('ai_jobs'),
+        citeste('credite_ai', 'user_id'),
+        citeste('credite_tranzactii'),
+        citeste('flow_credit_reservations'),
+        citeste('flow_reward_intents'),
+        exportaAbonamenteGooglePlay({ supabaseAdmin, userId }),
       ]);
 
       return res.json({
@@ -71,7 +107,18 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         profil: profil || null,
         mese,
         antrenamente,
+        produse_camara: produseCamara,
+        gamificare,
+        gamificare_evenimente: evenimenteGamificare,
+        workout_logs: workoutLogs,
+        audit_log: auditLog,
         estimari_barcode: estimariBarcode,
+        ai_jobs: aiJobs,
+        credite_ai: crediteAi,
+        credite_tranzactii: tranzactiiCredite,
+        flow_credit_reservations: rezervariFlowCredits,
+        flow_reward_intents: intentiiRecompensa,
+        abonamente_google_play: abonamenteGooglePlay,
       });
     } catch (err) {
       console.error('[GDPR] Export esuat:', codEroare(err));
@@ -134,9 +181,21 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       const actualizezaStatus = async (status, lastError = null) => {
         if (!outboxId) return;
         try {
+          const finalizat = status === 'completed';
           await supabaseAdmin
             .from('gdpr_deletions')
-            .update({ status, last_error: lastError, ...(status === 'completed' ? { completed_at: new Date().toISOString() } : {}) })
+            .update({
+              status,
+              last_error: finalizat ? null : lastError,
+              ...(finalizat ? {
+                completed_at: new Date().toISOString(),
+                // Rândul rămâne ca audit operațional, dar nu mai păstrează PII
+                // sau fileId-uri după ce reluarea nu mai este necesară.
+                user_id: outboxId,
+                clerk_user_id: null,
+                file_ids: [],
+              } : {}),
+            })
             .eq('id', outboxId);
         } catch { /* best-effort */ }
       };
@@ -196,6 +255,11 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       // ștergerea prin clientul legat al utilizatorului ar eșua cu RLS.
       inregistreazaUtilizareAdmin();
 
+      // RTDN nu are user_id. Rezolvăm și ștergem relația prin hash ÎNAINTE ca
+      // google_play_subscriptions să dispară; altfel evenimentele ar deveni
+      // imposibil de atribuit și ar supraviețui cererii GDPR.
+      await stergeEvenimenteRtdnUtilizator({ supabaseAdmin, userId });
+
       const sterge = async (tabela) => {
         const rezultat = await supabaseAdmin.from(tabela).delete().eq('user_id', userId);
         const eroare = rezultat?.error;
@@ -204,7 +268,14 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         // eroare oprește ștergerea ca să nu marchem `completed` cu date rămase.
         if (eroare && !CODURI_TABELA_INEXISTENTA.has(eroare.code)) throw eroare;
       };
-      await Promise.all(TABELE_CU_RLS_UTILIZATOR.map(tabela => sterge(tabela)));
+      await Promise.all(TABELE_STERGERE_GDPR_UTILIZATOR.map(tabela => sterge(tabela)));
+
+      // F-07: tabelele dead-letter (`credite_esuate`, `clerk_webhook_esuate`) nu
+      // au FK catre `auth.users` si nu sunt in TABELE_CU_RLS_UTILIZATOR, deci nici
+      // cascada `deleteUser`, nici bucla de mai sus nu le atingeau: payload-urile
+      // evenimentele istorice de identitate/plata (cu PII) supravietuiau stergerii contului.
+      await stergeDeadLetterUtilizator({ supabaseAdmin, userId, clerkUserId });
+
       await actualizezaStatus('db_done');
 
       // PASUL 2 (reversibil — reluabil): Ștergere identitate Clerk

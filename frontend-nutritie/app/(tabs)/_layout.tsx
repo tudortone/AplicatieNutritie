@@ -5,15 +5,17 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, List, MessageCircle, User, BarChart3, Dumbbell, Gift, History } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 type SportAction = 'progress' | 'history';
 
 export default function TabLayout() {
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const compact = width <= 390;
+  const compact = width <= 420;
   const veryCompact = width <= 350;
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'ios' ? 24 : 14);
   const tabHeight = (compact ? 54 : 58) + bottomInset;
@@ -29,8 +31,8 @@ export default function TabLayout() {
 
   const headerAction = (type: SportAction) => {
     const config = {
-      progress: { Icon: Gift, label: 'Questuri și progres sport', route: '/progres-antrenamente' as const, active: true },
-      history: { Icon: History, label: 'Jurnal antrenamente', route: '/jurnal-antrenamente' as const, active: false },
+      progress: { Icon: Gift, label: t('tabs.workoutQuestsAction'), route: '/progres-antrenamente' as const, active: true },
+      history: { Icon: History, label: t('tabs.workoutJournalAction'), route: '/jurnal-antrenamente' as const, active: false },
     }[type];
     const ActionIcon = config.Icon;
     return (
@@ -80,16 +82,16 @@ export default function TabLayout() {
           tabBarLabelStyle: [styles.tabBarLabel, compact && styles.compactLabel],
         }}
       >
-        <Tabs.Screen name="index" options={{ title: 'Acasă', tabBarAccessibilityLabel: 'Acasă', tabBarIcon: icon(Home) }} />
-        <Tabs.Screen name="istoric" options={{ title: 'Jurnal', tabBarAccessibilityLabel: 'Jurnal alimentar', tabBarIcon: icon(List) }} />
+        <Tabs.Screen name="index" options={{ title: t('tabs.home'), tabBarAccessibilityLabel: t('tabs.a11yHome'), tabBarIcon: icon(Home) }} />
+        <Tabs.Screen name="istoric" options={{ title: t('tabs.journal'), tabBarAccessibilityLabel: t('tabs.a11yJournal'), tabBarIcon: icon(List) }} />
         <Tabs.Screen
           name="antrenamente"
           options={{
-            title: 'Sport',
-            tabBarAccessibilityLabel: 'Antrenamente',
+            title: t('tabs.workouts'),
+            tabBarAccessibilityLabel: t('tabs.a11yWorkouts'),
             tabBarIcon: icon(Dumbbell),
             headerShown: true,
-            headerTitle: 'Sport',
+            headerTitle: t('tabs.workouts'),
             headerTitleStyle: { color: colors.textPrimary, fontWeight: '900' },
             headerStyle: { backgroundColor: colors.background },
             headerShadowVisible: false,
@@ -101,9 +103,9 @@ export default function TabLayout() {
             ),
           }}
         />
-        <Tabs.Screen name="statistici" options={{ title: compact ? 'Stats' : 'Statistici', tabBarAccessibilityLabel: 'Statistici', tabBarIcon: icon(BarChart3) }} />
-        <Tabs.Screen name="chat" options={{ title: compact ? 'AI' : 'Asistent', tabBarAccessibilityLabel: 'Asistent NutriAI', tabBarIcon: icon(MessageCircle) }} />
-        <Tabs.Screen name="profil" options={{ title: 'Profil', tabBarAccessibilityLabel: 'Profil', tabBarIcon: icon(User) }} />
+        <Tabs.Screen name="statistici" options={{ title: compact ? t('tabs.statsCompact') : t('tabs.stats'), tabBarAccessibilityLabel: t('tabs.a11yStats'), tabBarIcon: icon(BarChart3) }} />
+        <Tabs.Screen name="chat" options={{ title: compact ? t('tabs.assistantCompact') : t('tabs.assistant'), tabBarAccessibilityLabel: t('tabs.a11yAssistant'), tabBarIcon: icon(MessageCircle) }} />
+        <Tabs.Screen name="profil" options={{ title: t('tabs.profile'), tabBarAccessibilityLabel: t('tabs.a11yProfile'), tabBarIcon: icon(User) }} />
       </Tabs>
     </View>
   );

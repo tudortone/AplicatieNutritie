@@ -189,8 +189,14 @@ describe('AI Text Models & Contracts (RC-001, RC-003, RC-004, CORR-003)', () => 
       const app = express();
       app.use(express.json());
       const router = createBarcodeRouter({
-        requireAuth: (_req, _res, next) => next(),
+        // P1-12: lantul real are `requireAuth` inaintea fallback-ului AI, iar zalogul
+        // de idempotenta este scopat pe utilizatorul autentificat. Harness-ul trebuie
+        // sa ofere aceeasi identitate; altfel testeaza o cale care nu exista in productie
+        // (chiar si `checkAiUsageQuota` real raspunde 401 fara `req.user.id`).
+        requireAuth: (req, _res, next) => { req.user = { id: 'test-user' }; next(); },
         generalLimiter: (_req, _res, next) => next(),
+        aiLimiter: (_req, _res, next) => next(),
+        checkAiUsageQuota: (_req, _res, next) => next(),
         contextDate: () => ({ userId: 'test-user' }),
         config: {
           ai: {

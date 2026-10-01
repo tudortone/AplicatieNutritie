@@ -32,15 +32,15 @@ export interface HealthProviderInfo {
 }
 
 export const HEALTH_PROVIDERS: HealthProviderInfo[] = [
-  { id: 'apple_health', name: 'Apple Health / Apple Watch', icon: '🍎', description: 'Integrare cu Apple Watch și HealthKit' },
-  { id: 'garmin', name: 'Garmin Connect', icon: '⌚', description: 'Sincronizare cu ceasuri și ciclocomputere Garmin' },
-  { id: 'samsung_health', name: 'Samsung Health / Galaxy Watch', icon: '🔵', description: 'Conectare cu ceasuri Galaxy și Samsung Health' },
-  { id: 'google_fit', name: 'Google Fit / Pixel Watch', icon: '🟢', description: 'Sincronizare cu Google Health & Pixel Watch' },
-  { id: 'fitbit', name: 'Fitbit', icon: '⌚', description: 'Conectare cu brățări și ceasuri Fitbit' },
-  { id: 'xiaomi', name: 'Xiaomi / Mi Fitness / Amazfit', icon: '⌚', description: 'Sincronizare cu brățări Mi Band și Amazfit' },
-  { id: 'huawei', name: 'Huawei Health', icon: '⌚', description: 'Conectare cu ceasuri Huawei GT & Fit' },
-  { id: 'smartwatch', name: 'Brățară / Smartwatch General', icon: '⌚', description: 'Brățări de fitness generice' },
-  { id: 'general', name: 'Fără Ceas (Senzor Telefon)', icon: '📱', description: 'Pedometer intern pe telefon' },
+  { id: 'apple_health', name: 'Apple Health / Apple Watch', icon: 'apple', description: 'Integrare cu Apple Watch și HealthKit' },
+  { id: 'garmin', name: 'Garmin Connect', icon: 'watch', description: 'Sincronizare cu ceasuri și ciclocomputere Garmin' },
+  { id: 'samsung_health', name: 'Samsung Health / Galaxy Watch', icon: 'circle', description: 'Conectare cu ceasuri Galaxy și Samsung Health' },
+  { id: 'google_fit', name: 'Google Fit / Pixel Watch', icon: 'circle', description: 'Sincronizare cu Google Health & Pixel Watch' },
+  { id: 'fitbit', name: 'Fitbit', icon: 'watch', description: 'Conectare cu brățări și ceasuri Fitbit' },
+  { id: 'xiaomi', name: 'Xiaomi / Mi Fitness / Amazfit', icon: 'watch', description: 'Sincronizare cu brățări Mi Band și Amazfit' },
+  { id: 'huawei', name: 'Huawei Health', icon: 'watch', description: 'Conectare cu ceasuri Huawei GT & Fit' },
+  { id: 'smartwatch', name: 'Brățară / Smartwatch General', icon: 'watch', description: 'Brățări de fitness generice' },
+  { id: 'general', name: 'Fără Ceas (Senzor Telefon)', icon: 'smartphone', description: 'Pedometer intern pe telefon' },
 ];
 
 export interface HealthSyncState {

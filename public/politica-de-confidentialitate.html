@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Politică de Confidențialitate — NutriAI</title>
+  <title>Politică de Confidențialitate — GetFlow</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -56,8 +56,8 @@
       margin-bottom: 0.75rem;
       color: #10B981;
     }
-    p, ul { color: #D1D5DB; margin-bottom: 1rem; font-size: 1rem; }
-    ul { padding-left: 1.5rem; }
+    p, ul, ol { color: #D1D5DB; margin-bottom: 1rem; font-size: 1rem; }
+    ul, ol { padding-left: 1.5rem; }
     li { margin-bottom: 0.5rem; }
     footer {
       text-align: center;
@@ -72,48 +72,58 @@
     <a href="/index.html" class="nav-back">&larr; Înapoi la pagina principală</a>
     
     <h1>Politică de Confidențialitate</h1>
-    <div class="date">Ultima actualizare: 3 August 2026</div>
+    <div class="date">Ultima actualizare: 30 Septembrie 2026</div>
 
-    <p>Această Politică de Confidențialitate explică modul în care aplicația <strong>NutriAI</strong> colectează, utilizează și protejează datele dvs. cu caracter personal în conformitate cu Regulamentul General privind Protecția Datelor (GDPR) și legislația în vigoare.</p>
+    <p>Această Politică de Confidențialitate explică modul în care aplicația mobilă <strong>GetFlow</strong> (denumită în continuare „Aplicația”), dezvoltată de T.O.T. Software S.R.L., colectează, utilizează, prelucrează și protejează datele dvs. cu caracter personal în conformitate cu Regulamentul General privind Protecția Datelor (GDPR - Regulamentul UE 2016/679) și cerințele politicilor Google Play.</p>
 
     <h2>1. Datele pe care le colectăm</h2>
-    <p>Pentru a furniza serviciile de analiză nutrițională și antrenamente, colectăm următoarele categorii de date:</p>
+    <p>Pentru a furniza serviciile de jurnal nutrițional, asistență nutrițională inteligentă și monitorizare a activității fizice, colectăm următoarele categorii de date:</p>
     <ul>
-      <li><strong>Informații de cont:</strong> Adresa de e-mail, numele și datele de autentificare securizată furnizate prin serviciul Clerk.</li>
-      <li><strong>Date biometrice și de profil:</strong> Vârstă, sex, înălțime, greutate curentă și țintă, nivel de activitate fizică și preferințe alimentare.</li>
-      <li><strong>Imagini și date multimedia:</strong> Fotografiile cu mâncarea încărcate din cameră sau galerie pentru analiza nutrițională AI. Încărcarea se face pe servere securizate (ImageKit CDN).</li>
-      <li><strong>Jurnal de antrenamente & activitate:</strong> Exercițiile înregistrate, tonajul, seriile și repetările pentru calculul hărții musculare.</li>
+      <li><strong>Informații de cont și autentificare:</strong> Adresa de e-mail, numele de profil și identificatorul unic de utilizator. În cadrul aplicației Android pentru producție, metodele de autentificare disponibile sunt <em>Autentificarea cu Google (Google Sign-In)</em> și <em>Autentificarea cu e-mail și parolă</em> securizată prin Supabase Auth. Aplicația Android nu include și nu oferă Sign in with Apple.</li>
+      <li><strong>Date nutriționale și de profil fizic:</strong> Vârstă, sex, înălțime, greutate curentă, greutate țintă, nivel de activitate fizică, necesar caloric zilnic și obiective de macronuțrienți (proteine, carbohidrați, grăsimi, fibre).</li>
+      <li><strong>Fotografii ale meselor (Media / Cameră):</strong> Fotografii ale mâncării capturate cu camera sau selectate voluntar din galerie, utilizate exclusiv pentru analiza nutrițională automată și înregistrarea în jurnalul alimentar. Încărcarea se realizează prin canal criptat HTTPS către serviciul de stocare securizat ImageKit.</li>
+      <li><strong>Jurnal de antrenamente și activitate:</strong> Exercițiile fizice efectuate, seriile, repetările, greutățile ridicate și istoricul muscular pentru reprezentarea hărții anatomice.</li>
+      <li><strong>Informații despre achiziții și abonamente:</strong> Tokenuri de achiziție, starea abonamentului Premium și balanța de Credite Flow, gestionate și verificate prin Google Play Billing. GetFlow nu colectează și nu stochează niciodată numere de card bancar sau date financiare sensibile.</li>
+      <li><strong>Diagnostic tehnic și telemetrie:</strong> Rapoarte anonimizate de erori (crash diagnostics) transmise către Sentry pentru stabilitatea aplicației. Datele cu caracter personal identificabile (PII) sunt filtrate și eliminate automat înainte de transmitere.</li>
     </ul>
 
-    <h2>2. Cum utilizăm datele dvs.</h2>
-    <p>Datele colectate sunt folosite exclusiv pentru:</p>
+    <h2>2. Scopurile prelucrării datelor</h2>
+    <p>Datele colectate sunt utilizate strict în următoarele scopuri:</p>
     <ul>
-      <li>Calcularea necesarului caloric și a reprezentării nutriționale (macronuțrienți).</li>
-      <li>Analiza imaginilor cu mâncare prin modele de Inteligență Artificială.</li>
-      <li>Generarea vizualizării hărții musculare și a statisticilor de antrenament.</li>
-      <li>Asigurarea securității contului și personalizarea experienței in-app.</li>
+      <li>Calcularea și personalizarea necesarului caloric și a țintelor nutriționale.</li>
+      <li>Analiza vizuală a alimentelor prin modele de Inteligență Artificială pentru detectarea ingredientelor și a valorilor nutriționale.</li>
+      <li>Salvarea și menținerea jurnalului alimentar zilnic și a jurnalului de fitness.</li>
+      <li>Gestionarea accesului la funcționalitățile Premium și debitarea/creditarea corectă a balanței de Credite Flow.</li>
+      <li>Afișarea de reclame adaptate prin Google AdMob pentru utilizatorii versiunii gratuite, conform consimțământului acordat prin platforma Google UMP.</li>
+      <li>Asigurarea securității contului și prevenirea fraudelor (inclusiv verificarea integrității prin Google Play Integrity API).</li>
     </ul>
 
-    <h2>3. Stocarea și Securitatea Datelor</h2>
-    <p>Toate datele sunt transmise prin conexiuni criptate SSL/TLS (HTTPS). Datele de profil sunt stocate în baza de date Supabase protejată prin politici Row Level Security (RLS), iar imaginile sunt procesate prin CDN-ul securizat ImageKit.</p>
-
-    <h2>4. Partajarea Datelor cu Terți</h2>
-    <p>Nu vindem și nu închiriem datele dvs. personale. Datele pot fi procesate prin intermediul furnizorilor noștri de încredere:</p>
+    <h2>3. Furnizori terți și procesarea datelor</h2>
+    <p>GetFlow nu vinde și nu închiriază datele dvs. personale niciunei terțe părți. Datele sunt prelucrate exclusiv prin furnizori tehnici de infrastructură, cu respectarea acordurilor de prelucrare a datelor:</p>
     <ul>
-      <li><strong>Supabase:</strong> Stocarea securizată a datelor.</li>
-      <li><strong>Clerk:</strong> Servicii de autentificare.</li>
-      <li><strong>Google AI / Groq / OpenAI:</strong> Procesarea analizelor vizuale și conversaționale (fără identificatori personali stocați de furnizorii AI).</li>
-      <li><strong>Sentry:</strong> Monitorizarea erorilor tehnice și a performanței aplicației.</li>
+      <li><strong>Supabase Inc.:</strong> Baza de date primară găzduită în Uniunea Europeană, protejată prin politici Row Level Security (RLS) la nivel de rând și criptare în tranzit și la repaus.</li>
+      <li><strong>Google LLC (Google Play Billing, Google Play Integrity, Google AdMob, Google Cloud AI):</strong> Furnizare de servicii de plăți securizate, verificare a integrității aplicației, distribuție de reclame pentru utilizatorii planului gratuit și procesare avansată de viziune computerizată. Nu oferim garanții externe privind retenția internă a modelelor terțe; datele transmise către modelele AI sunt strict limitate la conținutul imaginii analizate.</li>
+      <li><strong>ImageKit:</strong> CDN și stocare securizată pentru imaginile încărcate temporar sau salvate în jurnalul utilizatorului, asociate identificatorului de cont.</li>
+      <li><strong>Functional Software, Inc. (Sentry):</strong> Monitorizare tehnică a erorilor și a crash-urilor aplicației, cu mecanisme integrate de filtrare a oricăror date PII.</li>
     </ul>
 
-    <h2>5. Drepturile Dvs. conform GDPR</h2>
-    <p>Aveți dreptul de a accesa, rectifica sau șterge datele dvs. cu caracter personal în orice moment direct din secțiunea <em>Setări / Profil</em> din aplicație sau prin solicitare directă la suport.</p>
+    <h2>4. Securitatea datelor</h2>
+    <p>Toate comunicațiile dintre aplicația GetFlow și serverele backend se realizează exclusiv prin protocoale securizate criptate SSL/TLS (HTTPS). Datele sunt izolate per utilizator prin politici stricte de securitate RLS (Row Level Security) în baza de date Supabase, împiedicând accesul neautorizat.</p>
 
-    <h2>6. Contact</h2>
-    <p>Pentru orice întrebări referitoare la această politică, ne puteți contacta la adresa de e-mail: <strong>support@nutriai.app</strong></p>
+    <h2>5. Drepturile utilizatorului și ștergerea contului</h2>
+    <p>În conformitate cu GDPR și cerințele Google Play privind datele utilizatorilor, beneficiați de dreptul de acces, rectificare, portabilitate și ștergere definitivă a datelor dvs. personale („dreptul de a fi uitat”).</p>
+    <p>Puteți iniția ștergerea completă a contului în două moduri:</p>
+    <ol>
+      <li><strong>Direct din aplicație:</strong> Accesați ecranul <em>Profil &rarr; Date & Confidențialitate &rarr; Șterge contul definitiv</em>. Cererea este procesată printr-un flux durabil de ștergere pe server care elimină ireversibil toate înregistrările, profilul, jurnalul alimentar, fotografiile din CDN și creditele asociate.</li>
+      <li><strong>Solicitare prin e-mail:</strong> Dacă ați dezinstalat aplicația, puteți trimite oricând o solicitare scrisă echipei noastre la adresa de contact dedicată, detaliată pe pagina publică <a href="/stergere-cont.html" style="color: var(--accent);">Ștergere Cont</a>.</li>
+    </ol>
+
+    <h2>6. Date de contact</h2>
+    <p>Pentru orice întrebare, solicitare de exercitare a drepturilor GDPR sau nelămurire legată de această politică de confidențialitate, ne puteți contacta direct la adresa oficială monitorizată de suport:</p>
+    <p><strong>E-mail suport:</strong> <a href="mailto:tudortone9@gmail.com" style="color: var(--accent);">tudortone9@gmail.com</a></p>
 
     <footer>
-      &copy; 2026 NutriAI. Toate drepturile rezervate.
+      &copy; 2026 GetFlow. Toate drepturile rezervate.
     </footer>
   </div>
 </body>

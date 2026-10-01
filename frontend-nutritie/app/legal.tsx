@@ -4,19 +4,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ArrowLeft, FileText, Landmark, Mail, Building2, Scale, Calendar, ChevronRight } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { getLegalUrls } from '../lib/legalUrls';
 
 // ATENȚIE: conținutul juridic este informativ și principalul document obligatoriu
 // (Termenii și Politica de Confidențialitate) se deschide extern din documentele
-// legale oficiale configurate prin EXPO_PUBLIC_TERMS_URL / EXPO_PUBLIC_PRIVACY_URL.
+// legale oficiale configurate prin EXPO_PUBLIC_TERMS_OF_SERVICE_URL /
+// EXPO_PUBLIC_PRIVACY_POLICY_URL.
 
-// Adresa oficială de suport pentru relații cu utilizatorii.
-const EMAIL_SUPORT = 'suport@nutriai.app';
+// Operator și suport: configurabile prin variabile de mediu fără date fabricate.
+const OPERATOR_NAME = process.env.EXPO_PUBLIC_LEGAL_OPERATOR_NAME?.trim() || null;
+const EMAIL_SUPORT = process.env.EXPO_PUBLIC_SUPPORT_EMAIL?.trim() || 'tudortone9@gmail.com';
 
 export default function LegalScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
 
   const section = (icon: React.ReactNode, title: string, children: React.ReactNode, delay = 80) => (
     <Animated.View entering={FadeInDown.duration(450).delay(delay)} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -34,7 +38,10 @@ export default function LegalScreen() {
       const url = tip === 'terms' ? termsUrl : privacyUrl;
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Document indisponibil', `Documentul „${nume}” nu este momentan disponibil.`);
+      Alert.alert(
+        t('legalScreen.docUnavailableTitle'),
+        t('legalScreen.docUnavailableMsg', { nume })
+      );
     }
   };
 
@@ -69,9 +76,9 @@ export default function LegalScreen() {
         ]}
       >
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
           accessibilityRole="button"
-          accessibilityLabel="Înapoi"
+          accessibilityLabel={t('common.back')}
           hitSlop={8}
           style={({ pressed }) => [
             styles.headerButton,
@@ -81,7 +88,7 @@ export default function LegalScreen() {
           <ArrowLeft size={20} color={colors.textPrimary} />
         </Pressable>
 
-        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>Documente legale</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>{t('legalScreen.title')}</Text>
 
         <View style={styles.headerSpacer} />
       </View>
@@ -92,52 +99,52 @@ export default function LegalScreen() {
       >
         {actiuneDocument(
           <FileText size={18} color={colors.accent} />,
-          'Termeni și Condiții',
-          'Deschide documentul complet în browser',
+          t('legalScreen.termsTitle'),
+          t('legalScreen.termsSubtitle'),
           'terms'
         )}
 
         {actiuneDocument(
           <Scale size={18} color={colors.accent} />,
-          'Politica de Confidențialitate',
-          'Deschide documentul complet în browser',
+          t('legalScreen.privacyTitle'),
+          t('legalScreen.privacySubtitle'),
           'privacy'
         )}
 
         {section(
           <Building2 size={18} color={colors.accent} />,
-          'Operator',
+          t('legalScreen.operatorTitle'),
           <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
-            NutriPre S.R.L., operatorul aplicației, este responsabil de prelucrarea datelor personale.
+            {OPERATOR_NAME
+              ? t('legalScreen.operatorTextWithOperator', { operator: OPERATOR_NAME, defaultValue: `${OPERATOR_NAME}, operatorul aplicației, este responsabil de prelucrarea datelor personale.` })
+              : t('legalScreen.operatorText')}
           </Text>,
           120
         )}
 
         {section(
           <Landmark size={18} color={colors.accent} />,
-          'Jurisdicție',
+          t('legalScreen.jurisdictionTitle'),
           <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
-            Documentele sunt guvernate de legislația română și, unde este aplicabil, de Regulamentul (UE) 2016/679
-            (GDPR). Litigiile se soluționează de instanțele competente din România.
+            {t('legalScreen.jurisdictionText')}
           </Text>,
           160
         )}
 
         {section(
           <Mail size={18} color={colors.accent} />,
-          'Contact & Suport',
+          t('legalScreen.contactTitle'),
           <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
-            Pentru relații cu utilizatorii, sesizări și întrebări despre datele tale personale, scrie la{' '}
-            {EMAIL_SUPORT}.
+            {t('legalScreen.contactText', { email: EMAIL_SUPORT })}
           </Text>,
           200
         )}
 
         {section(
           <Calendar size={18} color={colors.accent} />,
-          'Data efectivă',
+          t('legalScreen.effectiveDateTitle'),
           <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
-            Prezentul document este efectiv începând cu 1 august 2026.
+            {t('legalScreen.effectiveDateText')}
           </Text>,
           240
         )}

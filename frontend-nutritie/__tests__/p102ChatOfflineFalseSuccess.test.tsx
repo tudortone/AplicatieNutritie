@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, act, fireEvent } from '@testing-library/react-native';
+import { Keyboard, Platform, StyleSheet } from 'react-native';
 
 import ChatScreen from '../app/(tabs)/chat';
 
@@ -27,6 +28,11 @@ const UTILIZATOR = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
 
 let mockPersistatOffline = true;
 const mockEnqueue: unknown[] = [];
+let mockScreenWidth = 390;
+let mockScreenHeight = 844;
+let mockFontScale = 1;
+let mockChatLocale = 'en';
+let mockResolveChatTranslations = false;
 
 jest.mock('../lib/offlineQueue', () => ({
   pushOfflineMeal: jest.fn(async (p: unknown) => { mockEnqueue.push(p); return 1; }),
@@ -80,9 +86,27 @@ jest.mock('../hooks/useCurrentDayKey', () => ({ useCurrentDayKey: () => '2026-09
 jest.mock('../hooks/useFocusRefresh', () => ({ useFocusRefresh: jest.fn() }));
 jest.mock('../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
 jest.mock('../hooks/useResponsiveLayout', () => ({
-  useResponsiveLayout: () => ({ isTablet: false, width: 390, scale: 1 }),
+  useResponsiveLayout: () => ({
+    isTablet: false,
+    screenWidth: mockScreenWidth,
+    screenHeight: mockScreenHeight,
+    fontScale: mockFontScale,
+    tabBarHeight: 68,
+  }),
 }));
-jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }));
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      if (!mockResolveChatTranslations) return key;
+      const resources: Record<string, Record<string, unknown>> = {
+        ro: require('../i18n/locales/ro.json'), en: require('../i18n/locales/en.json'),
+        fr: require('../i18n/locales/fr.json'), de: require('../i18n/locales/de.json'),
+      };
+      return key.split('.').reduce((value: any, part) => value?.[part], resources[mockChatLocale]) ?? 'Text unavailable';
+    },
+    i18n: { language: mockChatLocale },
+  }),
+}));
 jest.mock('../i18n', () => ({ __esModule: true, default: { language: 'ro', t: (k: string) => k } }));
 jest.mock('expo-haptics', () => ({
   notificationAsync: jest.fn(), impactAsync: jest.fn(), selectionAsync: jest.fn(),
@@ -163,6 +187,11 @@ beforeEach(() => {
   mockAreoPropunere = true;
   mockAds.recordChatUserMessage.mockClear();
   mockAds.maybeShowInterstitial.mockClear();
+  mockScreenWidth = 390;
+  mockScreenHeight = 844;
+  mockFontScale = 1;
+  mockChatLocale = 'en';
+  mockResolveChatTranslations = false;
 });
 
 describe('P1-02 — chat: confirmarea offline trebuie să fie adevărată', () => {
@@ -184,7 +213,92 @@ describe('P1-02 — chat: confirmarea offline trebuie să fie adevărată', () =
     const { queryByText } = await trimiteMesajSiSalveaza();
 
     expect(mockEnqueue.length).toBeGreaterThan(0);
+    for (const payload of mockEnqueue as Record<string, unknown>[]) {
+      expect(payload.ora).toEqual(expect.stringMatching(/^\d{2}:\d{2}:\d{2}$/));
+      expect(payload.created_at).toEqual(expect.any(String));
+    }
     expect(queryByText('CONFIRMARE_OFFLINE')).not.toBeNull();
+  });
+});
+
+describe('GetFlow Coach compact responsive layout', () => {
+  test.each(['ro', 'en', 'fr', 'de'])('mounts the production Coach copy without raw keys in %s', async (locale) => {
+    mockChatLocale = locale;
+    mockResolveChatTranslations = true;
+    const resources: Record<string, any> = {
+      ro: require('../i18n/locales/ro.json'), en: require('../i18n/locales/en.json'),
+      fr: require('../i18n/locales/fr.json'), de: require('../i18n/locales/de.json'),
+    };
+    const view = await render(<ChatScreen />);
+    expect(view.getByText(resources[locale].chat.coachLabel)).toBeTruthy();
+    expect(view.getByPlaceholderText(resources[locale].chat.inputPlaceholder)).toBeTruthy();
+    expect(view.queryByText(/(?:profile|PROFILE|nutrition|tabs|camera|common)\.[A-Za-z0-9_.-]+/)).toBeNull();
+  });
+
+  test.each([
+    [360, 640, 1], [360, 640, 1.3],
+    [360, 800, 1], [360, 800, 1.3],
+    [390, 844, 1], [390, 844, 1.3],
+    [412, 915, 1], [412, 915, 1.3],
+  ])('keeps the compact production layout reachable at %ix%i / fontScale %s', async (width, height, fontScale) => {
+    mockScreenWidth = width;
+    mockScreenHeight = height;
+    mockFontScale = fontScale;
+    const view = await render(<ChatScreen />);
+
+    expect(view.getByTestId('coach-compact-header')).toBeTruthy();
+    expect(view.getByTestId('coach-history-surface')).toBeTruthy();
+    expect(view.getByTestId('coach-quick-actions').props.horizontal).toBe(true);
+    expect(view.getByTestId('coach-composer')).toBeTruthy();
+    expect(view.getByTestId('send-button')).toBeTruthy();
+  });
+
+  test('real Coach screen gives most height to history and keeps a bounded compact header', async () => {
+    const view = await render(<ChatScreen />);
+    const header = view.getByTestId('coach-compact-header');
+    const history = view.getByTestId('coach-history-surface');
+
+    expect(StyleSheet.flatten(header.props.style)).toEqual(expect.objectContaining({ paddingBottom: 8 }));
+    expect(StyleSheet.flatten(history.props.style)).toEqual(expect.objectContaining({ flex: 1 }));
+    expect(view.getByLabelText('chat.newChatA11y')).toBeTruthy();
+    expect(view.getByText('0 / 2000 kcal')).toBeTruthy();
+    expect(view.getByText('0 / 150 g proteine')).toBeTruthy();
+  });
+
+  test('empty-state actions are horizontal compact chips and composer touch targets stay accessible', async () => {
+    const view = await render(<ChatScreen />);
+    const quickActions = view.getByTestId('coach-quick-actions');
+    const recipe = view.getByLabelText('chat.quickRecipeA11y');
+    const composer = view.getByTestId('coach-composer');
+    const send = view.getByTestId('send-button');
+
+    expect(quickActions.props.horizontal).toBe(true);
+    expect(quickActions.props.showsHorizontalScrollIndicator).toBe(false);
+    expect(StyleSheet.flatten(recipe.props.style)).toEqual(expect.objectContaining({ minHeight: 44 }));
+    expect(StyleSheet.flatten(composer.props.style)).toEqual(expect.objectContaining({ paddingTop: 4 }));
+    expect(StyleSheet.flatten(send.props.style)).toEqual(expect.objectContaining({ width: 42, height: 42 }));
+  });
+
+  test('Android keyboard opening hides quick actions while preserving history and composer', async () => {
+    const originalPlatform = Platform.OS;
+    Platform.OS = 'android';
+    let showKeyboard: ((event: { endCoordinates: { height: number } }) => void) | undefined;
+    const keyboardListenerSpy = jest.spyOn(Keyboard, 'addListener').mockImplementation(((eventName: string, callback: any) => {
+      if (eventName === 'keyboardDidShow') showKeyboard = callback;
+      return { remove: jest.fn() } as any;
+    }) as typeof Keyboard.addListener);
+
+    try {
+      const view = await render(<ChatScreen />);
+      expect(view.getByTestId('coach-quick-actions')).toBeTruthy();
+      await act(async () => showKeyboard?.({ endCoordinates: { height: 280 } }));
+      expect(view.queryByTestId('coach-quick-actions')).toBeNull();
+      expect(view.getByTestId('coach-history-surface')).toBeTruthy();
+      expect(view.getByTestId('coach-composer')).toBeTruthy();
+    } finally {
+      Platform.OS = originalPlatform;
+      keyboardListenerSpy.mockRestore();
+    }
   });
 });
 

@@ -1,52 +1,57 @@
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
-  ActivityIndicator, Image, Pressable, Text, View, StyleSheet, TouchableOpacity,
-  ScrollView, Alert, KeyboardAvoidingView, Platform, Modal, Linking,
+  ActivityIndicator, Pressable, Text, View, StyleSheet, TouchableOpacity,
+  ScrollView, Alert, KeyboardAvoidingView, Platform, Linking,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, useFocusEffect, useNavigation } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../supabase';
 import { API_URL } from '@/constants/config';
 import { API_PREFIX } from '@/lib/api';
 import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
-import { Scan, Zap, ChevronDown, Plus, Trash2, Image as ImageIcon } from 'lucide-react-native';
+import { Scan, Zap, Trash2, Image as ImageIcon, ChevronDown, AlertTriangle } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { useAds } from '@/context/AdsContext';
-import { clampValoare, LIMITE_DB_MESE, MEAL_CATEGORIES, CATEGORIE_ICONA, getTipMasaDupaOra, insereazaMasaCuPoza } from '../lib/mealUtils';
-import { construiestePayloadMasaCamera, esteEroareDuplicate, eliminaAlimentScanat, verificaReluareMasa } from '../lib/payloadMese';
+import { MEAL_CATEGORIES, CATEGORIE_ICONA, getTipMasaDupaOra, insereazaMasaCuPoza } from '../lib/mealUtils';
+import { clasificaRezultatInsertMasa, construiestePayloadMasaCamera, esteEroareDuplicate, eliminaAlimentScanat, verificaReluareMasa } from '../lib/payloadMese';
 import { idOperatieNoua } from '@/lib/idUtils';
 import { marcheazaMeseModificate } from '@/lib/freshnessMese';
 import { GramInput } from '../components/ui/GramInput';
-import { ProductSearch } from '../components/food/ProductSearch';
-import { foodProductToAlimentAI } from '../components/food/types';
 import { type AlimentScanat } from '@/components/food/FoodScanSuccessModal';
 import type { TipMasa } from '../types';
 import { FontSize } from '../constants/theme';
 import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInput';
+import { FlowIcon } from '../components/ui/FlowIcon';
 import { uploadImageToImageKit } from '@/lib/imagekit';
+import { useFlowCredits } from '../context/FlowCreditsContext';
+import { FlowCreditsPill } from '@/components/FlowCreditsPill';
 import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts, amprentaOperatieFoto } from '@/lib/imageOptimizer';
 import { pushOfflineMealVerificat, processOfflineQueue, MasaOfflinePayload } from '@/lib/offlineQueue';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { MealSaveSuccessModal, type MealSuccessData } from '../components/ui/MealSaveSuccessModal';
+import {
+  clearActivePhotoJob,
+  recoverPhotoJob,
+  submitPhotoJob,
+  waitForPhotoJob,
+  PhotoApiError,
+  type ActivePhotoJobPointer,
+  type PhotoJob,
+} from '@/lib/photoJobs';
+import {
+  evaluatePhotoMealQuality,
+  inferCanonicalMealType,
+  normalizePhotoResultItems,
+} from '@/lib/photoResultQuality';
 
-
-// Starea unui furnizor AI primită de la /ai-status și din câmpul `stareAI` al
-// răspunsului de analiză. REMED-021: tipare înlocuiește `any`.
-interface StareAiStatus {
-  nume: string;
-  status: string;
-  secundeRamase: number;
-  mesaj: string;
-}
 
 export default function CameraScreen() {
   const { colors } = useTheme();
@@ -57,6 +62,7 @@ export default function CameraScreen() {
   const scanBoxSize = Math.round(Math.min(width * 0.78, height * 0.48, 360));
   const { t, i18n } = useTranslation();
   const reduceMotion = useReducedMotion();
+  const flowCredits = useFlowCredits();
 
   const scanSteps = useMemo(() => [
     t('camera.steps.optimizing'),
@@ -66,12 +72,10 @@ export default function CameraScreen() {
   ], [t]);
 
   const { session } = useAuth();
-  const { recordSuccessfulPhotoAnalysis, maybeShowInterstitial } = useAds();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   
   const [rezultat, setRezultat] = useState<AlimentScanat[]>([]);
-  const [totaluri, setTotaluri] = useState<{ kcal: number; proteine: number; grasimi: number; carbohidrati: number } | null>(null);
   const ingredienteIdentificate = rezultat;
   const setIngredienteIdentificate = setRezultat;
   const [isSavingDiary, setIsSavingDiary] = useState(false);
@@ -79,11 +83,10 @@ export default function CameraScreen() {
 
   const [seIncarca, setSeIncarca] = useState(false);
   const [scanStepIndex, setScanStepIndex] = useState(0);
-  const [selectedAI, setSelectedAI] = useState<'auto' | 'gemini' | 'openai' | 'groq'>('auto');
-
-  const [aiMenuVisible, setAiMenuVisible] = useState(false);
-  const [cautareProdusVisible, setCautareProdusVisible] = useState(false);
-  const [aiStatus, setAiStatus] = useState<Record<string, StareAiStatus>>({});
+  const [mealCorrectionOpen, setMealCorrectionOpen] = useState(false);
+  const [recoveryChecked, setRecoveryChecked] = useState(false);
+  const [photoPhase, setPhotoPhase] = useState<'idle' | 'uploading' | 'processing' | 'background' | 'retrying' | 'completed' | 'failed'>('idle');
+  const [failedPhotoJob, setFailedPhotoJob] = useState<{ job: PhotoJob; pointer: ActivePhotoJobPointer } | null>(null);
   // REMED-009: categoria mesei scanate — implicit = sugestia după oră, dar
   // utilizatorul o poate suprascrie din chip-urile din foaia de review.
   const [tipMasaSelectat, setTipMasaSelectat] = useState<TipMasa>(() => getTipMasaDupaOra(new Date()));
@@ -92,13 +95,8 @@ export default function CameraScreen() {
   const handleSaveSuccessDismiss = useCallback(() => {
     setSaveSuccessData(null);
     permitereNavigareRef.current = true;
-    maybeShowInterstitial('photo');
     router.replace('/(tabs)');
-  }, [maybeShowInterstitial, router]);
-  // REMED-008: URI-ul LOCAL al pozei scanate (înainte de upload ImageKit) folosit
-  // ca miniatură în review — disponibil instant, fără să așteptăm CDN-ul.
-  const [pozaScanPreview, setPozaScanPreview] = useState<string | null>(null);
-
+  }, [router]);
   const cameraRef = useRef<CameraView>(null);
   // P1-01: identitatea acțiunii de salvare în jurnal (nu a analizei AI).
   const idOperatieSalvareRef = useRef<string | null>(null);
@@ -112,7 +110,7 @@ export default function CameraScreen() {
   // CAM-003: generația uploadului ImageKit curent + promisiunea lui. Un upload
   // mai vechi care se termină târziu nu mai suprascrie refs-urile după un nou scan.
   const uploadGenerationRef = useRef(0);
-  const imageKitUploadRef = useRef<{ generatie: number; promise: Promise<void> } | null>(null);
+  const currentPhotoJobIdRef = useRef<string | null>(null);
   const draftCurrentUriRef = useRef<string | null>(null);
   // U-03: garanteaza ca dialogul de recuperare a draft-ului apare o singura data
   // pe sesiunea ecranului, chiar daca efectul se re-executa la schimbarea tokenului.
@@ -148,43 +146,8 @@ export default function CameraScreen() {
   }, [session?.user?.id]);
 
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      const fetchStatus = async () => {
-        try {
-          const res = await fetch(`${API_URL}${API_PREFIX}/ai-status`, {
-            headers: {
-              Authorization: session?.access_token
-                ? `Bearer ${session.access_token}`
-                : '',
-            },
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (active) setAiStatus(data);
-          }
-        } catch {
-          // Polling necritic - erorile sunt normale in dev
-          // nu trebuie sa blocheze UI-ul, dar e util in development.
-          if (__DEV__) console.debug('[Camera] Status AI indisponibil (posibil offline).');
-        }
-      };
-      fetchStatus();
-      // Polling la 30s (evita 429 rate-limit)
-      // /api/ai-status este acum exclus din rate-limiter \u00een backend, dar men\u021binem intervalul mare
-      // pentru a nu consuma inutil resurse de re\u021bea \u0219i baterie.
-      const timer = setInterval(fetchStatus, 30000);
-      return () => {
-        active = false;
-        clearInterval(timer);
-      };
-    }, [session?.access_token])
-  );
-
   const updateIngredient = useCallback(
     (index: number, patch: Partial<AlimentScanat>) => {
-      setTotaluri(null);
       setRezultat((current) =>
         current.map((ingredient, itemIndex) =>
           itemIndex === index ? { ...ingredient, ...patch } : ingredient,
@@ -196,220 +159,232 @@ export default function CameraScreen() {
 
   // BUG-015: eliminarea unui singur aliment detectat greșit, fără să dispară restul.
   const stergeIngredient = useCallback((index: number) => {
-    setTotaluri(null);
     setRezultat((current) => eliminaAlimentScanat(current, index));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 
-  const analizeazaImaginea = useCallback(
-    async (imageUri: string) => {
-      if (!session?.access_token) {
-        setScanError('Sesiunea a expirat. Autentifică-te din nou.');
+  const applyPhotoJobResult = useCallback((job: PhotoJob, pointer?: ActivePhotoJobPointer | null) => {
+    if (!job.result?.success || !Array.isArray(job.result.items)) {
+      throw new PhotoApiError(502, 'INVALID_PHOTO_JOB_RESULT');
+    }
+    const normalized = normalizePhotoResultItems(job.result.items);
+    if (normalized.length === 0) throw new PhotoApiError(422, 'PHOTO_RESULT_EMPTY');
+
+    imageKitUrlRef.current = pointer?.imageUrl || job.imageUrl || imageKitUrlRef.current;
+    imageKitFileIdRef.current = pointer?.imageFileId || job.imageFileId || imageKitFileIdRef.current;
+    currentPhotoJobIdRef.current = job.id;
+    const capturedAt = pointer?.savedAt ? new Date(pointer.savedAt) : new Date();
+    setTipMasaSelectat(inferCanonicalMealType({
+      aiMealType: job.result.tipMasa,
+      capturedAt,
+    }));
+    setMealCorrectionOpen(false);
+    setRezultat(normalized);
+    setPhotoPhase('completed');
+    setFailedPhotoJob(null);
+  }, []);
+
+  const analizeazaImaginea = useCallback(async (imageUri: string, isRetry = false) => {
+    if (!session?.access_token || !session.user.id) {
+      setScanError(t('alerts.mesaje.sesiuneExpirata'));
+      return;
+    }
+    abortControllerRef.current?.abort();
+    uploadGenerationRef.current += 1;
+    imageKitUrlRef.current = null;
+    imageKitFileIdRef.current = null;
+    currentPhotoJobIdRef.current = null;
+    setFailedPhotoJob(null);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    setScanError(null);
+    setRezultat([]);
+    setSeIncarca(true);
+    setPhotoPhase(isRetry ? 'retrying' : 'uploading');
+    let timeoutDepasit = false;
+    let activePointer: ActivePhotoJobPointer | null = null;
+    const backgroundId = setTimeout(() => {
+      if (!controller.signal.aborted) setPhotoPhase('background');
+    }, 15000);
+    const timeoutId = setTimeout(() => {
+      timeoutDepasit = true;
+      setPhotoPhase('background');
+      controller.abort();
+    }, 75000);
+
+    try {
+      const imagineOptimizata = await optimizeImageBeforeUpload(imageUri);
+      const draftPersistentUri = await saveLocalImageDraft(imagineOptimizata.uri, session.user.id);
+      draftCurrentUriRef.current = draftPersistentUri;
+
+      const amprentaBaza = await amprentaOperatieFoto(
+        imagineOptimizata.uri,
+        'auto',
+        i18n.language || 'ro',
+      );
+      const amprentaOperatie = isRetry
+        ? `${amprentaBaza}:retry:${idOperatieNoua()}`
+        : amprentaBaza;
+
+      const uploaded = await uploadImageToImageKit(
+        imagineOptimizata.uri,
+        'mancare.jpg',
+        controller.signal,
+        { skipOptimization: true },
+      );
+      if (controller.signal.aborted || uploadGenerationRef.current === 0) return;
+      imageKitUrlRef.current = uploaded.url;
+      imageKitFileIdRef.current = uploaded.fileId;
+      setPhotoPhase(isRetry ? 'retrying' : 'processing');
+
+      const submitted = await submitPhotoJob({
+        token: session.access_token,
+        userId: session.user.id,
+        imageUrl: uploaded.url,
+        imageFileId: uploaded.fileId,
+        analysisId: amprentaOperatie,
+        mealType: getTipMasaDupaOra(new Date()),
+        language: i18n.language || 'ro',
+        localImageUri: imagineOptimizata.uri,
+        draftUri: draftPersistentUri,
+        signal: controller.signal,
+      });
+      currentPhotoJobIdRef.current = submitted.id;
+      activePointer = {
+        userId: session.user.id,
+        jobId: submitted.id,
+        imageUrl: uploaded.url,
+        imageFileId: uploaded.fileId,
+        localImageUri: imagineOptimizata.uri,
+        draftUri: draftPersistentUri,
+        savedAt: Date.now(),
+      };
+      const completed = await waitForPhotoJob({
+        token: session.access_token,
+        userId: session.user.id,
+        jobId: submitted.id,
+        signal: controller.signal,
+      });
+      applyPhotoJobResult(completed, activePointer);
+
+      await discardLocalImageDraft(draftPersistentUri, session.user.id).catch(() => {});
+      if (draftCurrentUriRef.current === draftPersistentUri) draftCurrentUriRef.current = null;
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      void flowCredits.refresh();
+    } catch (error) {
+      if (abortControllerRef.current !== controller) return;
+      if (error instanceof PhotoApiError && (
+        error.code === 'FLOW_CREDITS_EXHAUSTED'
+        || error.code === 'FLOW_CREDITS_UNAVAILABLE'
+        || error.code === 'PREMIUM_FAIR_USE_REACHED'
+      )) {
+        const quotaMsg = t('camera.quotaExceededMessage');
+        setScanError(quotaMsg);
+        Alert.alert(t('camera.quotaExceededTitle'), quotaMsg, [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('camera.openCredits'), onPress: () => flowCredits.open() },
+        ]);
         return;
       }
+      if (timeoutDepasit) {
+        setPhotoPhase('background');
+        setScanError(null);
+        return;
+      }
+      if (error instanceof PhotoApiError && error.status === 422 && activePointer) {
+        setPhotoPhase('failed');
+        setFailedPhotoJob({
+          job: { id: activePointer.jobId, status: 'failed', errorCode: error.code },
+          pointer: activePointer,
+        });
+        return;
+      }
+      setPhotoPhase('failed');
+      setScanError(
+        error instanceof Error
+            ? error.message
+            : t('camera.genericScanError'),
+      );
+    } finally {
+      clearTimeout(backgroundId);
+      clearTimeout(timeoutId);
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+        if (isMountedRef.current) setSeIncarca(false);
+      }
+    }
+  }, [applyPhotoJobResult, flowCredits, i18n.language, session?.access_token, session?.user?.id, t]);
 
-      abortControllerRef.current?.abort();
+  // Un job Photo AI este recuperabil după închiderea aplicației. Analiza rămâne
+  // în Trigger; acest ecran doar reia polling-ul și reconstruiește review-ul.
+  useEffect(() => {
+    if (!session?.access_token || !session.user.id) return;
+    const controller = new AbortController();
+    const token = session.access_token;
+    const userId = session.user.id;
 
-      // CAM-003: un nou scan invalidează orice upload ImageKit încă în zbor din
-      // scanul anterior — rezultatul lui nu mai poate suprascrie refs-urile.
-      uploadGenerationRef.current += 1;
-      imageKitUploadRef.current = null;
-
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-      setScanError(null);
-      setRezultat([]);
-      setSeIncarca(true);
-
-      // CAM-004: timeout pentru cererea de analiză AI — un răspuns care nu mai
-      // vine nu trebuie să țină ecranul în starea „Se încarcă" la nesfârșit
-      // (~75s = optimizare client + cascada AI pe server).
-      let timeoutDepasit = false;
-      const timeoutId = setTimeout(() => {
-        timeoutDepasit = true;
-        controller.abort();
-      }, 75000);
-
+    const recover = async () => {
       try {
-        // B-20: redimensionam pe client inainte de upload. Serverul pastreaza
-        // base64-ul necesar pe toata cascada AI, dar un Buffer brut in plus in
-        // heap dubleaza varful de memorie fara castig. Reducerea reala de payload
-        // (si de cost AI) vine de aici: de la ~15MB la <200KB.
-        const imagineOptimizata = await optimizeImageBeforeUpload(imageUri);
-        // U-03: Salvează poza în stocarea persistentă locală înainte de upload ca să nu fie pierdută la căderea rețelei
-        const draftPersistentUri = await saveLocalImageDraft(imagineOptimizata.uri, session.user.id);
-        draftCurrentUriRef.current = draftPersistentUri;
-
-        const formData = new FormData();
-
-        formData.append('imagine', {
-          uri: imagineOptimizata.uri,
-          name: `nutriai-${Date.now()}.jpg`,
-          type: 'image/jpeg',
-        } as unknown as Blob);
-        formData.append('provider', selectedAI);
-        formData.append('limba', i18n.language || 'ro');
-
-        // P1-12: cheia operației LOGICE, calculată o singură dată pentru această
-        // analiză. Corpul fiind multipart, serverul nu poate deriva singur o
-        // amprentă (multer rulează după middleware-ul de idempotență) — deci fără
-        // aceste antete analiza foto, cea mai scumpă operație din aplicație, nu ar
-        // avea nicio protecție la replay. Amprenta e derivată din conținutul
-        // imaginii + model + limbă, deci un retry al ACELEIAȘI acțiuni reia
-        // rezultatul înregistrat, fără a doua generare și fără a doua debitare.
-        const amprentaOperatie = await amprentaOperatieFoto(
-          imagineOptimizata.uri,
-          selectedAI,
-          i18n.language || 'ro',
-        );
-
-        const trimiteAnaliza = () => fetch(
-          `${API_URL}${API_PREFIX}/analizeaza-mancare-structurat`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-              'Idempotency-Key': `foto-${amprentaOperatie.slice(0, 40)}`,
-              'X-Payload-Fingerprint': amprentaOperatie,
-            },
-            body: formData,
-            signal: controller.signal,
-          },
-        );
-
-        let response = await trimiteAnaliza();
-
-        // P1-12: 409 IDEMPOTENCY_IN_PROGRESS înseamnă că o analiză cu ACEEAȘI cheie
-        // logică e deja în curs (dublu tap, sau prima cerere încă se închide pe
-        // server). Corect e să așteptăm rezultatul ei, nu să pornim a doua generare
-        // și nici să arătăm o eroare. Cheia rămâne NESCHIMBATĂ între încercări —
-        // regenerarea ei aici ar reintroduce exact dubla execuție pe care o prevenim.
-        if (response.status === 409) {
-          await new Promise((resolve) => setTimeout(resolve, 1200));
-          if (!controller.signal.aborted) response = await trimiteAnaliza();
+        const active = await recoverPhotoJob({ token, userId, signal: controller.signal });
+        if (!active || controller.signal.aborted) return;
+        currentPhotoJobIdRef.current = active.job.id;
+        imageKitUrlRef.current = active.pointer.imageUrl || active.job.imageUrl || null;
+        imageKitFileIdRef.current = active.pointer.imageFileId || active.job.imageFileId || null;
+        if (active.job.status === 'failed' || active.job.status === 'cancelled') {
+          setPhotoPhase('failed');
+          setFailedPhotoJob(active);
+          return;
         }
-
-        const payload = (await response.json()) as
-          | AlimentScanat[]
-          | { eroare?: string; stareAI?: Record<string, StareAiStatus> };
-
-        if (controller.signal.aborted) return;
-
-        if (payload && !Array.isArray(payload) && payload.stareAI && isMountedRef.current) {
-          setAiStatus(payload.stareAI);
+        setSeIncarca(true);
+        setPhotoPhase(active.job.status === 'succeeded' || active.job.status === 'completed' ? 'completed' : 'background');
+        const completed = active.job.status === 'succeeded' || active.job.status === 'completed'
+          ? active.job
+          : await waitForPhotoJob({
+            token, userId, jobId: active.job.id, signal: controller.signal,
+          });
+        if (!controller.signal.aborted) applyPhotoJobResult(completed, active.pointer);
+        if (active.pointer.draftUri) {
+          await discardLocalImageDraft(active.pointer.draftUri, userId).catch(() => {});
         }
-
-        if (!response.ok || !Array.isArray(payload)) {
-          let message = t('camera.unidentifiedFoods');
-          if (!Array.isArray(payload) && payload && payload.eroare) {
-            message = payload.eroare;
-          } else if (response.status === 404) {
-            message = `Eroare 404: Endpoint (${API_URL}).`;
-          } else if (response.status === 401) {
-            message = t('chat.errorNotAuthed');
-          } else if (response.status >= 500) {
-            message = t('chat.errorServer');
-          }
-          throw new Error(message);
-        }
-
-        // Analiza a reșit → ștergem draftul local persistent
-        await discardLocalImageDraft(draftPersistentUri, session.user.id).catch(() => {});
-
-        const normalized = payload
-          .map((item) => ({
-            nume: String(item.nume || t('camera.unidentifiedFoodDefault')),
-            // BUG-019: gramaj plafonat la 5000g (limita validatorului backend) ca
-            // un rând astronomic (5000g × kcal_per_100g) să nu umfle totalurile.
-            estimare_grame: clampValoare(Number(item.estimare_grame) || 100, LIMITE_DB_MESE.gramaj, 1),
-            calorii_per_100g: clampValoare(Number(item.calorii_per_100g) || 0, 1000, 0),
-            proteine_per_100g: Math.max(0, Number(item.proteine_per_100g) || 0),
-            grasimi_per_100g: Math.max(0, Number(item.grasimi_per_100g) || 0),
-            carbohidrati_per_100g: Math.max(
-              0,
-              Number(item.carbohidrati_per_100g) || 0,
-            ),
-          }))
-          .filter((item) => item.nume.trim().length > 0);
-
-        // CAM-001: un array gol înseamnă că AI-ul n-a identificat niciun aliment.
-        // Îl tratăm ca eșec (fără succes fals, fără foaie/modal goale de salvat).
-        if (normalized.length === 0) {
-          throw new Error(t('camera.unidentifiedFoods'));
-        }
-
-        setRezultat(normalized);
-        // Analiza s-a finalizat cu succes (utilizatorul vede rezultatul mai jos) —
-        // contorizăm evenimentul pentru reclame (utilizatori FREE, 1 la 3 analize).
-        // DOAR contorizează; reclama efectivă se încearcă la salvare/anulare
-        // (maybeShowInterstitial), niciodată peste acest ecran de rezultat.
-        recordSuccessfulPhotoAnalysis();
-        // REMED-008/009: aducem în stare poza locală scanată (miniatura din review)
-        // și re-propunem categoria după ora curentă, ca utilizatorul să o suprascrie.
-        setPozaScanPreview(imagineOptimizata.uri);
-        setTipMasaSelectat(getTipMasaDupaOra(new Date()));
-        // BUG-019/014: nu mai afișăm modalul read-only peste foaia de rezultat
-        // editabilă — foaia de mai jos (gramaj inline + ștergere + adăugare) este
-        // singura suprafață de review, iar `rezultat` rămâne în stare până la
-        // confirmarea explicită „Adaugă în Jurnal" sau anulare.
-        // Dupa un scan REUSIT, incarcam poza pe ImageKit CDN (nu aruncam gunoi pe CDN
-        // pentru poze esuate). URL-ul + fileId-ul ajung in masa salvata (campul
-        // alimente, JSONB) ca stergearea GDPR sa cunoasca assetul.
-        imageKitUrlRef.current = null;
-        imageKitFileIdRef.current = null;
-        const generatieUpload = uploadGenerationRef.current;
-        imageKitUploadRef.current = {
-          generatie: generatieUpload,
-          promise: uploadImageToImageKit(imageUri)
-            .then((r) => {
-              // CAM-003: dacă între timp a pornit un alt scan, acest upload e stale.
-              if (uploadGenerationRef.current !== generatieUpload) return;
-              imageKitUrlRef.current = r.url;
-              imageKitFileIdRef.current = r.fileId;
-            })
-            .catch((ikErr) => {
-              if (__DEV__) console.log('ImageKit upload notice:', ikErr.message);
-            }),
-        };
-        await Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Success,
-        );
       } catch (error) {
-        // Un scan nou (sau unmount/anulare) a invalidat această cerere →
-        // nu mai atingem starea, nici măcar pentru mesajul de timeout.
-        if (abortControllerRef.current !== controller) return;
-
-        setScanError(
-          timeoutDepasit
-            ? t('camera.timeoutError')
-            : error instanceof Error
-              ? error.message
-              : t('camera.genericScanError'),
-        );
+        if (!controller.signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) {
+          setPhotoPhase('failed');
+          setScanError(t('camera.genericScanError'));
+        }
       } finally {
-        clearTimeout(timeoutId);
-        // CAM-006: doar cererea CURENTĂ își poate reseta starea de încărcare —
-        // altfel un scan vechi care se termină târziu ar opri spinner-ul scanului nou.
-        if (abortControllerRef.current === controller) {
-          abortControllerRef.current = null;
-          if (isMountedRef.current) setSeIncarca(false);
+        if (!controller.signal.aborted) {
+          setSeIncarca(false);
+          setRecoveryChecked(true);
         }
       }
-    },
-    [session?.access_token, session?.user.id, selectedAI, t, recordSuccessfulPhotoAnalysis, i18n.language],
-  );
+    };
+    void recover();
+    return () => controller.abort();
+  }, [applyPhotoJobResult, session?.access_token, session?.user.id, t]);
+
+  const retryFailedPhotoJob = useCallback(async () => {
+    if (!failedPhotoJob || !session?.user.id) return;
+    const retryUri = failedPhotoJob.pointer.draftUri || failedPhotoJob.pointer.localImageUri;
+    if (!retryUri) {
+      setFailedPhotoJob(null);
+      setPhotoPhase('idle');
+      return;
+    }
+    await clearActivePhotoJob(session.user.id, failedPhotoJob.job.id).catch(() => {});
+    setFailedPhotoJob(null);
+    await analizeazaImaginea(retryUri, true);
+  }, [analizeazaImaginea, failedPhotoJob, session?.user.id]);
 
   // U-03: recuperarea draft-urilor neanalizate.
   //
   // Efectul stă DUPĂ `analizeazaImaginea` intenționat: referirea ei în dep array
   // înaintea declarației `const` ar arunca ReferenceError (temporal dead zone).
-  //
-  // Depinde de `session?.access_token` pentru că la montare AuthContext încă se
-  // încarcă și sesiunea e null. Pornit cu `[]`, dialogul ar fi apărut cu un
-  // closure învechit, iar "Reia analiza" ar fi eșuat cu "Sesiunea a expirat".
   useEffect(() => {
+    if (!recoveryChecked) return;
     if (draftPromptAfisatRef.current) return;
-    if (!session?.access_token || !session.user.id) return;
+    if (!session?.access_token || !session.user.id || seIncarca || rezultat.length > 0) return;
     draftPromptAfisatRef.current = true;
 
     listPendingDrafts(session.user.id)
@@ -437,7 +412,7 @@ export default function CameraScreen() {
         );
       })
       .catch(() => {});
-  }, [session?.access_token, session?.user.id, analizeazaImaginea, t]);
+  }, [session?.access_token, session?.user.id, analizeazaImaginea, recoveryChecked, rezultat.length, seIncarca, t]);
 
   const anuleazaScanarea = useCallback(() => {
     if (draftCurrentUriRef.current && session?.user.id) {
@@ -446,16 +421,29 @@ export default function CameraScreen() {
     }
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
-    setTotaluri(null);
+    imageKitUrlRef.current = null;
+    imageKitFileIdRef.current = null;
+    if (currentPhotoJobIdRef.current && session?.user.id) {
+      clearActivePhotoJob(session.user.id, currentPhotoJobIdRef.current).catch(() => {});
+    }
+    currentPhotoJobIdRef.current = null;
     setRezultat([]);
-    setPozaScanPreview(null);
+    setMealCorrectionOpen(false);
     setScanError(null);
     setSeIncarca(false);
-    // P1-01 (Blocant 2): anularea scanului ABANDONEAZĂ acțiunea de salvare. Fără
-    // asta, identitatea supraviețuia și următoarea scanare — alt aliment — o
-    // refolosea, ajungând pe aceeași cheie primară ca masa abandonată.
+    setPhotoPhase('idle');
+    setFailedPhotoJob(null);
     idOperatieSalvareRef.current = null;
   }, [session?.user.id]);
+
+  const lasaAnalizaInFundal = useCallback(() => {
+    if (!currentPhotoJobIdRef.current) return false;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setSeIncarca(false);
+    setPhotoPhase('background');
+    return true;
+  }, []);
 
   // BUG-065: pe Android, butonul/gestul „Înapoi" peste modalul fullScreen ejecta
   // ecranul direct, aruncând un scan în review fără confirmare și fără să
@@ -470,6 +458,7 @@ export default function CameraScreen() {
         permitereNavigareRef.current = false;
         return;
       }
+      if (seIncarca && lasaAnalizaInFundal()) return;
       const deConfirmat = rezultat.length > 0 || seIncarca;
       if (!deConfirmat) return;
       e.preventDefault();
@@ -492,11 +481,11 @@ export default function CameraScreen() {
       );
     });
     return unsubscribe;
-  }, [navigation, rezultat.length, seIncarca, anuleazaScanarea, t]);
+  }, [navigation, rezultat.length, seIncarca, anuleazaScanarea, lasaAnalizaInFundal, t]);
 
   const trimiteCorectieText = async (textCorectie: string) => {
     try {
-      if (__DEV__) console.log('[Camera] Trimit corecție:', textCorectie.substring(0, 50));
+      if (__DEV__) console.log('[Camera] Trimit corecție utilizator către backend.');
       
       const response = await fetch(`${API_URL}${API_PREFIX}/corecteaza-mancare-vizual-text`, {
         method: 'POST',
@@ -507,7 +496,8 @@ export default function CameraScreen() {
         // Backend-ul are nevoie exact de acești parametri
         body: JSON.stringify({ 
           current_ingredients: ingredienteIdentificate, 
-          user_prompt: textCorectie 
+          user_prompt: textCorectie,
+          limba: i18n.language || 'ro'
         })
       });
 
@@ -515,19 +505,15 @@ export default function CameraScreen() {
       const data = await response.json(); 
       if (__DEV__) console.log('[Camera] Răspuns corecție backend primit.');
 
-      // 2. Dacă a crăpat (400, 401, 500 etc), afișăm motivul exact pe ecran
+      // Răspunsurile backend rămân diagnostic intern. Nu afișăm `eroare` brută:
+      // poate fi în altă limbă sau poate conține detalii operaționale.
       if (!response.ok) {
-         Alert.alert(t('alerts.titluri.eroareServerAI'), data.eroare || t('alerts.mesaje.problemaNecunoscutaConectare'));
-         throw new Error(data.eroare || "Eroare de la server");
+         throw new Error('CAMERA_CORRECTION_FAILED');
       }
 
       // 3. Dacă e totul în regulă, actualizăm datele pe ecran
       if (data.ingredients) {
-        setIngredienteIdentificate(data.ingredients);
-        // Depinde de cum ai denumit starea pentru totaluri, asigură-te că numele funcției e corect (ex: setTotaluri)
-        if (data.new_totals) {
-            setTotaluri(data.new_totals); 
-        }
+        setIngredienteIdentificate(normalizePhotoResultItems(data.ingredients));
       }
     } catch (error) {
       // Afisam eroarea si pentru utilizator
@@ -540,25 +526,17 @@ export default function CameraScreen() {
   };
   const sendCorrectionToAI = trimiteCorectieText;
 
-  const totalCalculat = useMemo(() => {
-    if (totaluri) {
-      return {
-        calorii: totaluri.kcal,
-        proteine: totaluri.proteine,
-        grasimi: totaluri.grasimi,
-        carbohidrati: totaluri.carbohidrati,
-      };
-    }
-    return (rezultat || []).reduce((acc, item) => {
-      const factor = (item.estimare_grame || 0) / 100;
-      return {
-        calorii: acc.calorii + (item.calorii_per_100g || 0) * factor,
-        proteine: acc.proteine + (item.proteine_per_100g || 0) * factor,
-        grasimi: acc.grasimi + (item.grasimi_per_100g || 0) * factor,
-        carbohidrati: acc.carbohidrati + (item.carbohidrati_per_100g || 0) * factor,
-      };
-    }, { calorii: 0, proteine: 0, grasimi: 0, carbohidrati: 0 });
-  }, [rezultat, totaluri]);
+  const quality = useMemo(
+    () => evaluatePhotoMealQuality(normalizePhotoResultItems(rezultat)),
+    [rezultat],
+  );
+  const totalCalculat = useMemo(() => ({
+    calorii: quality.totals.kcal,
+    proteine: quality.totals.protein,
+    grasimi: quality.totals.fat,
+    carbohidrati: quality.totals.carbs,
+    fibre: quality.totals.fiber,
+  }), [quality.totals]);
 
   const analizeazaFoto = async () => {
     if (!cameraRef.current || seIncarca || !session) return;
@@ -576,7 +554,7 @@ export default function CameraScreen() {
       console.error("Eroare captură foto:", e);
       // CAM-005: captura eșuată nu rămâne mută — mesaj vizibil + stare curățată.
       setSeIncarca(false);
-      setScanError('Nu am putut captura imaginea. Încearcă din nou.');
+      setScanError(t('camera.genericScanError'));
     }
   };
 
@@ -609,6 +587,11 @@ export default function CameraScreen() {
   const adaugaInJurnal = async () => {
     if (!rezultat || rezultat.length === 0 || !session || isSavingDiary) return;
 
+    if (quality.requiresReview) {
+      Alert.alert(t('camera.reviewRequiredTitle'), t('camera.reviewRequiredMessage'));
+      return;
+    }
+
     // Validare gramaj minim înainte de submit
     const invalide = rezultat.filter((r) => !r.estimare_grame || r.estimare_grame < 1);
     if (invalide.length > 0) {
@@ -621,18 +604,6 @@ export default function CameraScreen() {
 
     setIsSavingDiary(true);
     const now = new Date();
-
-    // CAM-003: așteptăm (cu timeout) uploadul ImageKit al scanului curent ca poza
-    // să ajungă de obicei în masa salvată; un upload lent/eșuat nu blochează salvarea.
-    const uploadCurent = imageKitUploadRef.current;
-    if (uploadCurent) {
-      try {
-        await Promise.race([
-          uploadCurent.promise,
-          new Promise((resolve) => setTimeout(resolve, 3500)),
-        ]);
-      } catch {}
-    }
 
     // FIX 2.5 + BUG-019: per-100g → valori absolute, normalizate și clampate la
     // limitele CHECK-urilor din Postgres (calorii ≤10000, proteine/grasimi ≤1000,
@@ -668,7 +639,7 @@ export default function CameraScreen() {
           if (verificare.tip === 'conflict_continut') {
             Alert.alert(
               t('alerts.titluri.eroareSalvare'),
-              'Această masă nu a putut fi salvată: o altă masă există deja sub aceeași operație. Reîncearcă scanarea.',
+              t('alerts.mesaje.conflictOperatieMasa'),
             );
             idOperatieSalvareRef.current = null;
             return;
@@ -682,6 +653,10 @@ export default function CameraScreen() {
           }
           // Reluare confirmată: rândul persistat chiar corespunde acestei salvări.
           idOperatieSalvareRef.current = null;
+          if (currentPhotoJobIdRef.current) {
+            await clearActivePhotoJob(session.user.id, currentPhotoJobIdRef.current).catch(() => {});
+            currentPhotoJobIdRef.current = null;
+          }
           marcheazaMeseModificate(session.user.id); // P1-04: date canonice noi
           setSaveSuccessData({
             nume: payload.nume || (rezultat.length === 1 ? rezultat[0].nume : `${rezultat.length} alimente`),
@@ -700,6 +675,10 @@ export default function CameraScreen() {
       // P1-01: scriere confirmată — acțiunea logică s-a încheiat. O salvare
       // ulterioară pornește o operație nouă, deci poate crea un rând nou.
       idOperatieSalvareRef.current = null;
+      if (currentPhotoJobIdRef.current) {
+        await clearActivePhotoJob(session.user.id, currentPhotoJobIdRef.current).catch(() => {});
+        currentPhotoJobIdRef.current = null;
+      }
       // P1-04: persistare dovedită → invalidare deterministă a datelor canonice.
       marcheazaMeseModificate(session.user.id);
 
@@ -714,7 +693,27 @@ export default function CameraScreen() {
       });
     } catch (e: unknown) {
       console.error('[adaugaInJurnal]', e);
-      const mesajEroare = e instanceof Error ? e.message : '';
+      const clasificare = clasificaRezultatInsertMasa(
+        e instanceof Error ? e : { error: e },
+      );
+
+      // Erorile structurate ale serverului (RLS, CHECK, validare) și erorile
+      // locale de programare NU sunt dovezi de offline. Punerea lor în coadă ar
+      // afișa un succes fals și ar relua la nesfârșit o scriere pe care serverul
+      // o va refuza determinist. Doar transportul verificat intră în coadă.
+      if (clasificare.tip !== 'offline') {
+        idOperatieSalvareRef.current = null;
+        const mesaj = clasificare.tip === 'eroare_server'
+          ? clasificare.mesaj
+          : t('alerts.mesaje.eroareNecunoscutaSalvareMasa');
+        Alert.alert(
+          t('alerts.titluri.eroareSalvare'),
+          t('alerts.mesaje.bazaDateRefuza', { eroare: mesaj }),
+        );
+        return;
+      }
+
+      const mesajEroare = clasificare.motiv;
       // U-04: salvare în coada offline FIFO pe eroare de conexiune/rețea
       try {
         const payloadOffline: MasaOfflinePayload = {
@@ -730,6 +729,10 @@ export default function CameraScreen() {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           Alert.alert(t('alerts.titluri.eroareSalvare'), t('offline.masaNesalvataOffline'));
           return;
+        }
+        if (currentPhotoJobIdRef.current) {
+          await clearActivePhotoJob(session.user.id, currentPhotoJobIdRef.current).catch(() => {});
+          currentPhotoJobIdRef.current = null;
         }
         setSaveSuccessData({
           nume: payload.nume || (rezultat.length === 1 ? rezultat[0].nume : `${rezultat.length} alimente`),
@@ -809,39 +812,42 @@ export default function CameraScreen() {
   return (
     <View style={styles.container}>
       <View style={[styles.topHeader, { top: insets.top + 10 }]}>
-        {/* Selector AI în Stânga */}
+        {/* Furnizorul nu este selectat de client: backendul/Trigger păstrează
+            Gemini ca autoritate Photo AI și aplică retry-ul bounded. */}
         <View style={styles.aiSelectorContainer}>
-          <TouchableOpacity
+          <View
             style={[styles.topBadge, { backgroundColor: 'transparent', borderWidth: 0, zIndex: 9999 }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setAiMenuVisible(prev => !prev);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={t('camera.aiDropdownTitle')}
-            accessibilityHint={t('camera.aiDropdownTitle')}
+            accessibilityRole="text"
+            accessibilityLabel={t('camera.smartAI')}
           >
             <View style={[styles.topBadgeBlur, { paddingVertical: 8 }]}>
               <Zap size={14} color={colors.accent} fill={colors.accent} />
               <Text maxFontSizeMultiplier={1.3} style={[styles.topBadgeText, { color: colors.textPrimary }]}>
-                {selectedAI === 'auto' ? t('camera.smartAI') : selectedAI.toUpperCase()}
+                {t('camera.smartAI')}
               </Text>
-              <ChevronDown size={14} color={colors.textSecondary} />
             </View>
-          </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Buton X în Dreapta (Fără să se suprapună) */}
-        <TouchableOpacity
-          style={styles.closeButton}
-          onPress={() => { permitereNavigareRef.current = true; anuleazaScanarea(); if (router.canGoBack()) router.back(); else router.replace('/(tabs)'); }}
-          hitSlop={4}
-          accessibilityRole="button"
-          accessibilityLabel="Închide camera"
-          accessibilityHint="Renunță la scanare și revino la ecranul anterior"
-        >
-          <Text style={styles.closeButtonText}>X</Text>
-        </TouchableOpacity>
+        {/* Credite + Buton X în Dreapta */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <FlowCreditsPill />
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={() => {
+              permitereNavigareRef.current = true;
+              if (!lasaAnalizaInFundal()) anuleazaScanarea();
+              if (router.canGoBack()) router.back();
+              else router.replace('/(tabs)');
+            }}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close')}
+            accessibilityHint={t('camera.discardScanAction')}
+          >
+            <Text style={styles.closeButtonText}>X</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       {/* CAM-002: pauză cameră în timpul flow-urilor post-captură (foaia de
           rezultat și modalul de succes) — nu mai ținem senzorul activ în spatele
@@ -858,50 +864,6 @@ export default function CameraScreen() {
           pointerEvents="none"
         />
 
-        {/* Meniu alegere AI */}
-        {aiMenuVisible && (
-          <Animated.View entering={FadeIn.duration(200)} style={[styles.aiDropdownMenu, { top: insets.top + 74, backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
-            <BlurView intensity={80} tint="dark" style={styles.aiDropdownBlur}>
-              <Text maxFontSizeMultiplier={1.3} style={styles.aiDropdownHeader}>SELECTEAZĂ CREIERUL AI</Text>
-              
-              {(['auto', 'gemini', 'openai', 'groq'] as const).map((aiKey) => {
-                const info = aiStatus[aiKey === 'auto' ? 'gemini' : aiKey];
-                const isCooldown = info?.status === 'cooldown' || info?.status === 'rate_limit';
-                const isSelected = selectedAI === aiKey;
-
-                return (
-                  <TouchableOpacity
-                    key={aiKey}
-                    style={[
-                      styles.aiDropdownItem,
-                      isSelected && { backgroundColor: colors.accent + '22', borderColor: colors.accent }
-                    ]}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setSelectedAI(aiKey);
-                      setAiMenuVisible(false);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Selectează furnizorul ${aiKey === 'auto' ? 'GetFlow Auto' : aiKey}`}
-                    accessibilityState={{ selected: isSelected }}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.aiDropdownTitle, isSelected && { color: colors.accent }]}>
-                        {aiKey === 'auto' ? '✨ GetFlow Auto-Routing (Recomandat)' : 
-                         aiKey === 'gemini' ? '🧠 Google Gemini Pro Vision' :
-                         aiKey === 'openai' ? '👁️ OpenAI GPT-4o Mini' : '⚡ Groq LLaVA Fast'}
-                      </Text>
-                      <Text maxFontSizeMultiplier={1.3} style={styles.aiDropdownDesc}>
-                        {isCooldown ? `⏳ Cooldown (${info?.secundeRamase}s)` : '✅ Activ și pregătit'}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </BlurView>
-          </Animated.View>
-        )}
-
         {/* Box Scanare */}
         <View style={styles.scanArea}>
           <View style={[styles.scanBox, { width: scanBoxSize, height: scanBoxSize, borderColor: colors.cardBorder }]}>
@@ -914,8 +876,12 @@ export default function CameraScreen() {
               <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay} accessibilityLiveRegion="polite">
                 <BlurView intensity={60} tint="dark" style={styles.scanningBlur}>
                   <ActivityIndicator size="large" color={colors.accent} />
-                  <Animated.Text key={scanStepIndex} entering={FadeInUp.duration(250)} style={[styles.scanningText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
-                    {scanSteps[scanStepIndex]}
+                  <Animated.Text key={`${photoPhase}-${scanStepIndex}`} entering={FadeInUp.duration(250)} style={[styles.scanningText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
+                    {photoPhase === 'retrying'
+                      ? t('photoJob.retrying')
+                      : photoPhase === 'background'
+                        ? t('photoJob.backgroundTitle')
+                        : scanSteps[scanStepIndex]}
                   </Animated.Text>
                   <View style={styles.stepProgressDots}>
                     {scanSteps.map((_: string, idx: number) => (
@@ -934,83 +900,170 @@ export default function CameraScreen() {
             )}
 
           </View>
-          <Text style={styles.scanHint}>Încadrează farfuria clar și luminos</Text>
+          <Text style={styles.scanHint}>{t('camera.scanHint')}</Text>
         </View>
       </CameraView>
+
+      {failedPhotoJob ? (
+        <View testID="camera-failed-job" style={[styles.jobStateCard, { top: insets.top + 92, borderColor: colors.danger + '88' }]} accessibilityRole="alert">
+          <AlertTriangle size={22} color={colors.danger} />
+          <View style={styles.jobStateCopy}>
+            <Text style={[styles.jobStateTitle, { color: colors.textPrimary }]}>{t('photoJob.failedTitle')}</Text>
+            <Text style={[styles.jobStateBody, { color: colors.textSecondary }]}>{t('photoJob.failedBody')}</Text>
+          </View>
+          <Pressable
+            testID="camera-failed-retry"
+            onPress={() => void retryFailedPhotoJob()}
+            style={[styles.jobStateAction, { borderColor: colors.danger + '88' }]}
+            accessibilityRole="button"
+            accessibilityLabel={t('photoJob.retry')}
+          >
+            <Text style={[styles.jobStateActionText, { color: colors.danger }]}>{t('photoJob.retry')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {photoPhase === 'background' && !seIncarca && !failedPhotoJob ? (
+        <Pressable
+          testID="camera-background-job"
+          onPress={() => router.replace('/(tabs)')}
+          style={[styles.jobStateCard, { top: insets.top + 92, borderColor: colors.accentSecondary + '88' }]}
+          accessibilityRole="button"
+          accessibilityLabel={t('photoJob.viewStatus')}
+        >
+          <ActivityIndicator color={colors.accentSecondary} />
+          <View style={styles.jobStateCopy}>
+            <Text style={[styles.jobStateTitle, { color: colors.textPrimary }]}>{t('photoJob.backgroundTitle')}</Text>
+            <Text style={[styles.jobStateBody, { color: colors.textSecondary }]}>{t('photoJob.backgroundBody')}</Text>
+          </View>
+        </Pressable>
+      ) : null}
 
       {/* Result section & sheet */}
       {rezultat.length > 0 && (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <Animated.View entering={FadeInUp.duration(500).springify()} style={[styles.resultSheet, { borderColor: colors.accent + '26' }]}>
-            <BlurView intensity={50} tint="dark" style={[styles.resultBlur, { maxHeight: height * 0.8 }]}>
-              <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={[styles.resultGrad, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
+            <BlurView intensity={65} tint="dark" style={[styles.resultBlur, { maxHeight: Math.round(height * 0.88) }]}>
+              <LinearGradient colors={[colors.accent + '14', 'rgba(10,14,20,0.98)']} style={styles.resultGrad}>
                 <View style={styles.resultHandle} />
                 
-                <View style={styles.resultSection}>
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.resultTitle, { color: colors.textPrimary }]}>Ingredientele detectate</Text>
-
-                  {/* REMED-009: categorie explicită pentru masa scanată — sugestia
-                      după oră e doar valoarea implicită, utilizatorul o schimbă. */}
-                  <View
-                    style={styles.mealTypeRow}
-                    accessibilityRole="radiogroup"
-                    accessibilityLabel="Categoria mesei"
-                  >
-                    {MEAL_CATEGORIES.map((cat) => {
-                      const selectat = tipMasaSelectat === cat.id;
-                      const Icona = CATEGORIE_ICONA[cat.id];
-                      return (
-                        <Pressable
-                          key={cat.id}
-                          onPress={() => {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            setTipMasaSelectat(cat.id);
-                          }}
-                          style={[
-                            styles.mealTypeChip,
-                            selectat && { borderColor: colors.accent, backgroundColor: colors.accent + '22' },
-                          ]}
-                          accessibilityRole="radio"
-                          accessibilityState={{ checked: selectat }}
-                          accessibilityLabel={t(`chat.mealCategory.${cat.id}`)}
-                          hitSlop={6}
-                        >
-                          <Icona size={14} color={selectat ? colors.accent : colors.textSecondary} />
-                          <Text maxFontSizeMultiplier={1.3} style={[styles.mealTypeChipText, { color: selectat ? colors.accent : colors.textSecondary }]}>
-                            {t(`chat.mealCategory.${cat.id}`)}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
+                <ScrollView
+                  testID="camera-result-scroll"
+                  style={styles.resultScrollView}
+                  contentContainerStyle={[
+                    styles.resultScrollContent,
+                    { paddingBottom: Math.max(insets.bottom, 16) + 36 }
+                  ]}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  <View style={styles.resultHeading}>
+                    <View style={styles.resultHeadingText}>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.resultEyebrow, { color: colors.accent }]}>
+                        {t('camera.detectedMeal')}
+                      </Text>
+                      <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={[styles.resultTitle, { color: colors.textPrimary }]}>
+                        {rezultat.map((item) => item.nume).join(', ')}
+                      </Text>
+                    </View>
+                    <Pressable
+                      testID="camera-meal-correction-toggle"
+                      onPress={() => setMealCorrectionOpen((open) => !open)}
+                      style={[styles.mealSuggestionChip, { borderColor: colors.accent + '55' }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('camera.changeMealCategory')}
+                      accessibilityState={{ expanded: mealCorrectionOpen }}
+                    >
+                      <FlowIcon name={CATEGORIE_ICONA[tipMasaSelectat]} size={14} color={colors.accent} />
+                      <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.mealSuggestionText, { color: colors.accent }]}>
+                        {t(`chat.mealCategory.${tipMasaSelectat}`)}
+                      </Text>
+                      <ChevronDown size={14} color={colors.accent} />
+                    </Pressable>
                   </View>
 
-                  {pozaScanPreview ? (
-                    <Image
-                      source={{ uri: pozaScanPreview }}
-                      style={styles.scanPreviewThumb}
-                      importantForAccessibility="no"
-                      accessibilityElementsHidden
-                    />
+                  {mealCorrectionOpen ? (
+                    <View style={styles.mealTypeRow} accessibilityRole="radiogroup" accessibilityLabel={t('camera.mealCategoryLabel')}>
+                      {MEAL_CATEGORIES.map((cat) => {
+                        const selected = tipMasaSelectat === cat.id;
+                        return (
+                          <Pressable
+                            key={cat.id}
+                            onPress={() => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              setTipMasaSelectat(cat.id);
+                              setMealCorrectionOpen(false);
+                            }}
+                            style={[styles.mealTypeChip, selected && { borderColor: colors.accent, backgroundColor: colors.accent + '22' }]}
+                            accessibilityRole="radio"
+                            accessibilityState={{ checked: selected }}
+                            accessibilityLabel={t(`chat.mealCategory.${cat.id}`)}
+                          >
+                            <FlowIcon name={CATEGORIE_ICONA[cat.id]} size={14} color={selected ? colors.accent : colors.textSecondary} />
+                            <Text maxFontSizeMultiplier={1.3} style={[styles.mealTypeChipText, { color: selected ? colors.accent : colors.textSecondary }]}>
+                              {t(`chat.mealCategory.${cat.id}`)}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
                   ) : null}
 
-                  <ScrollView style={styles.itemsList} showsVerticalScrollIndicator={false}>
+                  {/* Rezumat macro & calorii */}
+                  <View style={styles.macroRow} testID="camera-macro-summary">
+                    <View style={styles.macroItem}>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.accent }]}>{Math.round(totalCalculat.calorii)}</Text>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>kcal</Text>
+                    </View>
+                    <View style={styles.macroDivider} />
+                    <View style={styles.macroItem}>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.accentSecondary }]}>{Math.round(totalCalculat.proteine)}g</Text>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>{t('jurnal.macroProtein')}</Text>
+                    </View>
+                    <View style={styles.macroDivider} />
+                    <View style={styles.macroItem}>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.accentTertiary }]}>{Math.round(totalCalculat.carbohidrati)}g</Text>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>{t('jurnal.macroCarbs')}</Text>
+                    </View>
+                    <View style={styles.macroDivider} />
+                    <View style={styles.macroItem}>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.warning }]}>{Math.round(totalCalculat.grasimi)}g</Text>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>{t('jurnal.macroFats')}</Text>
+                    </View>
+                    <View style={styles.macroDivider} />
+                    <View style={styles.macroItem}>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.textPrimary }]}>
+                        {totalCalculat.fibre === null ? '—' : `${Math.round(totalCalculat.fibre)}g`}
+                      </Text>
+                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>{t('camera.fiber')}</Text>
+                    </View>
+                  </View>
+
+                  {quality.requiresReview ? (
+                    <View testID="camera-quality-warning" style={[styles.qualityWarning, { borderColor: colors.warning + '66' }]} accessibilityRole="alert">
+                      <AlertTriangle size={18} color={colors.warning} />
+                      <View style={styles.qualityWarningTextWrap}>
+                        <Text maxFontSizeMultiplier={1.3} style={[styles.qualityWarningTitle, { color: colors.warning }]}>{t('camera.reviewRequiredTitle')}</Text>
+                        <Text maxFontSizeMultiplier={1.3} style={[styles.qualityWarningBody, { color: colors.textSecondary }]}>{t('camera.reviewRequiredMessage')}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {/* Rânduri ingrediente identificate */}
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.ingredientsTitle, { color: colors.textPrimary }]}>{t('camera.detectedIngredients')}</Text>
+                  <View style={styles.ingredientsList}>
                     {rezultat.map((ingredient, index) => {
-                      // REMED-008: kcal per rând din gramajul curent (per-100g scalat).
                       const kcalRand = Math.round(
                         ((ingredient.calorii_per_100g || 0) * (ingredient.estimare_grame || 0)) / 100,
                       );
                       return (
                         <View key={`${ingredient.nume}-${index}`} style={styles.ingredientRow}>
-                          <Text
-                            numberOfLines={1}
-                            maxFontSizeMultiplier={1.3}
-                            style={[styles.ingredientName, { color: colors.textPrimary }]}
-                          >
-                            {ingredient.nume}
-                          </Text>
-                          <View style={styles.kcalChip}>
-                            <Text maxFontSizeMultiplier={1.3} style={[styles.kcalChipText, { color: colors.accent }]}>
-                              {kcalRand} kcal
+                          <View style={styles.ingredientMain}>
+                            <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={[styles.ingredientName, { color: colors.textPrimary }]}>
+                              {ingredient.nume || t('camera.unidentifiedFoodDefault')}
+                            </Text>
+                            <Text maxFontSizeMultiplier={1.3} style={[styles.ingredientNutrition, { color: colors.textSecondary }]}>
+                              {kcalRand} kcal · {Math.round(ingredient.proteine_per_100g * ingredient.estimare_grame / 10) / 10}g {t('camera.proteinShort')} · {Math.round(ingredient.carbohidrati_per_100g * ingredient.estimare_grame / 10) / 10}g {t('camera.carbsShort')}
                             </Text>
                           </View>
                           <View style={[styles.gramContainer, { borderColor: colors.accent + '33' }]}>
@@ -1026,30 +1079,14 @@ export default function CameraScreen() {
                             hitSlop={10}
                             style={styles.deleteIngredientBtn}
                             accessibilityRole="button"
-                            accessibilityLabel={`Șterge ${ingredient.nume} din rezultat`}
-                            accessibilityHint="Elimină doar acest aliment, restul rămân"
+                            accessibilityLabel={t('jurnal.deleteIngredient', { nume: ingredient.nume })}
+                            accessibilityHint={t('camera.deleteIngredientHint')}
                           >
                             <Trash2 size={16} color={colors.danger} />
                           </Pressable>
                         </View>
                       );
                     })}
-
-                    <TouchableOpacity
-                      style={[styles.addExtraBtn, { borderColor: colors.accent }]}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setCautareProdusVisible(true);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Adaugă alt produs"
-                      accessibilityHint="Deschide căutarea pentru a adăuga un aliment suplimentar"
-                    >
-                      <Plus size={16} color={colors.accent} />
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.addExtraText, { color: colors.accent, fontWeight: '700' }]}>
-                        + Adaugă alt produs
-                      </Text>
-                    </TouchableOpacity>
 
                     <View style={{ marginTop: 12 }}>
                       <IngredientCorrectionInput
@@ -1058,51 +1095,38 @@ export default function CameraScreen() {
                         onSend={sendCorrectionToAI}
                       />
                     </View>
-                  </ScrollView>
-                </View>
+                  </View>
 
-                <View style={styles.macroRow}>
-                  <View style={styles.macroItem}>
-                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.accent }]}>{Math.round(totalCalculat.calorii)}</Text>
-                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>kcal</Text>
-                  </View>
-                  <View style={styles.macroDivider} />
-                  <View style={styles.macroItem}>
-                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.accentSecondary }]}>{Math.round(totalCalculat.proteine)}g</Text>
-                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>proteine</Text>
-                  </View>
-                  <View style={styles.macroDivider} />
-                  <View style={styles.macroItem}>
-                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.accentTertiary }]}>{Math.round(totalCalculat.carbohidrati)}g</Text>
-                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>carbs</Text>
-                  </View>
-                  <View style={styles.macroDivider} />
-                  <View style={styles.macroItem}>
-                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.warning }]}>{Math.round(totalCalculat.grasimi)}g</Text>
-                    <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>grăsimi</Text>
-                  </View>
-                </View>
+                  {/* Butoane acțiune Jurnal */}
+                  <View style={styles.actionButtonsArea}>
+                    <TouchableOpacity
+                      testID="camera-add-journal-btn"
+                      style={[styles.addBtn, { shadowColor: colors.accent, opacity: quality.requiresReview ? 0.45 : 1 }]}
+                      onPress={adaugaInJurnal}
+                      disabled={quality.requiresReview || isSavingDiary}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('camera.addToJournal')}
+                      accessibilityState={{ disabled: quality.requiresReview || isSavingDiary, busy: isSavingDiary }}
+                    >
+                      <LinearGradient colors={colors.accentGradient} style={styles.addBtnGrad}>
+                        <Text maxFontSizeMultiplier={1.3} style={[styles.addBtnText, { color: colors.background }]}>{t('camera.addToJournal')}</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[styles.addBtn, { shadowColor: colors.accent }]}
-                  onPress={adaugaInJurnal}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Adaugă cele ${Math.round(totalCalculat.calorii)} kilocalorii în jurnal`}
-                  accessibilityState={{ disabled: isSavingDiary, busy: isSavingDiary }}
-                >
-                  <LinearGradient colors={colors.accentGradient} style={styles.addBtnGrad}>
-                    <Text maxFontSizeMultiplier={1.3} style={[styles.addBtnText, { color: colors.background }]}>+ Adaugă {Math.round(totalCalculat.calorii)} kcal în Jurnal</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={styles.retryBtn}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); anuleazaScanarea(); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Anulează rezultatul și scanează din nou"
-                >
-                  <Text maxFontSizeMultiplier={1.3} style={styles.retryBtnText}>🔄 Anulează & Scanează din nou</Text>
-                </TouchableOpacity>
+                    <TouchableOpacity
+                      testID="camera-retry-btn"
+                      style={styles.retryBtn}
+                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); anuleazaScanarea(); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('camera.cancelAndRescan')}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                        <FlowIcon name="refresh" size={16} color={colors.accent} />
+                        <Text maxFontSizeMultiplier={1.3} style={styles.retryBtnText}>{t('camera.cancelAndRescan')}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
               </LinearGradient>
             </BlurView>
           </Animated.View>
@@ -1112,8 +1136,8 @@ export default function CameraScreen() {
       {scanError && (
         <View style={[styles.errorCard, { top: insets.top + 78 }]} accessibilityRole="alert" accessibilityLiveRegion="assertive">
           <Text maxFontSizeMultiplier={1.3} style={styles.errorText}>{scanError}</Text>
-          <Pressable onPress={() => setScanError(null)} accessibilityRole="button" accessibilityLabel="Închide mesajul de eroare">
-            <Text maxFontSizeMultiplier={1.3} style={styles.retryText}>Închide</Text>
+          <Pressable onPress={() => setScanError(null)} accessibilityRole="button" accessibilityLabel={t('camera.closeErrorA11y')}>
+            <Text maxFontSizeMultiplier={1.3} style={styles.retryText}>{t('common.close')}</Text>
           </Pressable>
         </View>
       )}
@@ -1121,35 +1145,9 @@ export default function CameraScreen() {
       {isSavingDiary && (
         <View style={styles.savingOverlay} accessibilityLiveRegion="polite">
           <ActivityIndicator size="large" color={colors.accent} />
-          <Text maxFontSizeMultiplier={1.3} style={[styles.savingText, { color: colors.accent }]}>Salvez în jurnal...</Text>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.savingText, { color: colors.accent }]}>{t('camera.savingToJournal')}</Text>
         </View>
       )}
-
-      {/* Modal Căutare Produs Extra */}
-      <Modal
-        visible={cautareProdusVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setCautareProdusVisible(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: colors.background, paddingHorizontal: 16, paddingTop: 16 }}>
-          <ProductSearch
-            onSelectProductWithGrams={(prod, gr) => {
-              const aliment = foodProductToAlimentAI(prod, gr);
-              setRezultat(prev => [...prev, {
-                nume: aliment.nume,
-                estimare_grame: aliment.estimare_grame || 100,
-                calorii_per_100g: aliment.calorii_per_100g || 0,
-                proteine_per_100g: aliment.proteine_per_100g || 0,
-                grasimi_per_100g: aliment.grasimi_per_100g || 0,
-                carbohidrati_per_100g: aliment.carbohidrati_per_100g || 0,
-              }]);
-              setCautareProdusVisible(false);
-            }}
-            onClose={() => setCautareProdusVisible(false)}
-          />
-        </View>
-      </Modal>
 
       {/* Shutter & Gallery button */}
       {rezultat.length === 0 && (
@@ -1158,22 +1156,22 @@ export default function CameraScreen() {
             <TouchableOpacity
               testID="gallery-button"
               accessibilityRole="button"
-              accessibilityLabel="Alege o poză din galerie"
-              accessibilityHint="Deschide galeria foto pentru a selecta o imagine"
+              accessibilityLabel={t('camera.galleryButton')}
+              accessibilityHint={t('camera.galleryHint')}
               accessibilityState={{ disabled: seIncarca, busy: seIncarca }}
               style={[styles.galleryBtn, { borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(0,0,0,0.5)' }]}
               onPress={alegeDinGalerie}
               disabled={seIncarca}
             >
               <ImageIcon size={22} color="#FFFFFF" />
-              <Text maxFontSizeMultiplier={1.3} style={styles.galleryBtnText}>Galerie</Text>
+              <Text maxFontSizeMultiplier={1.3} style={styles.galleryBtnText}>{t('camera.galleryLabel')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               testID="shutter-button"
               accessibilityRole="button"
-              accessibilityLabel="Fotografiază mâncarea"
-              accessibilityHint="Realizează o poză farfuriei și pornește analiza AI"
+              accessibilityLabel={t('camera.shutterButton')}
+              accessibilityHint={t('camera.shutterHint')}
               accessibilityState={{ disabled: seIncarca, busy: seIncarca }}
               style={[styles.shutterBtn, { shadowColor: colors.accent, borderColor: colors.accent + '4D' }]}
               onPress={analizeazaFoto}
@@ -1192,7 +1190,7 @@ export default function CameraScreen() {
 
             <View style={{ width: 72 }} />
           </View>
-          <Text maxFontSizeMultiplier={1.3} style={styles.shutterLabel}>Apasă pe buton sau alege o poză din galerie</Text>
+          <Text maxFontSizeMultiplier={1.3} style={styles.shutterLabel}>{t('camera.shutterLabel')}</Text>
         </Animated.View>
       )}
 
@@ -1276,32 +1274,25 @@ const styles = StyleSheet.create({
 
   scanHint: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '500', marginTop: 24, letterSpacing: 0.5 },
 
-  resultSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 40, borderTopRightRadius: 40, overflow: 'hidden', borderWidth: 1 },
+  resultSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 36, borderTopRightRadius: 36, overflow: 'hidden', borderWidth: 1 },
   resultBlur: { overflow: 'hidden' },
-  resultGrad: { padding: 32, paddingTop: 20 },
-  resultHandle: { width: 48, height: 5, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 3, alignSelf: 'center', marginBottom: 24 },
-  resultTitle: { fontSize: 20, fontWeight: '800', marginBottom: 16, letterSpacing: -0.3 },
-  resultSection: { width: '100%' },
-  // REMED-008: o singură miniatură a pozei scanate deasupra listei (NU per-rând).
-  scanPreviewThumb: { width: '100%', height: 140, borderRadius: 16, marginBottom: 12, resizeMode: 'cover' },
+  resultGrad: { paddingTop: 16, paddingHorizontal: 18 },
+  resultHandle: { width: 44, height: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, alignSelf: 'center', marginBottom: 16 },
+  resultScrollView: { width: '100%' },
+  resultScrollContent: { width: '100%', paddingHorizontal: 4 },
+  resultHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 14 },
+  resultHeadingText: { flex: 1, minWidth: 0 },
+  resultEyebrow: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
+  resultTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.3, lineHeight: 25 },
+  mealSuggestionChip: { minHeight: 40, maxWidth: '48%', flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 8 },
+  mealSuggestionText: { flexShrink: 1, fontSize: 12, fontWeight: '800' },
 
-  itemsList: { maxHeight: 220, marginBottom: 20 },
-  ingredientRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  ingredientName: { fontSize: 16, fontWeight: '600', flex: 1, marginRight: 8, paddingVertical: 4 },
-  // REMED-008: chip kcal per rând (gramaj scalat).
-  kcalChip: {
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginRight: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  kcalChipText: { fontSize: FontSize.caption, fontWeight: '800' },
-  // REMED-009: selectoare explicite de categorie a mesei scanate.
+  ingredientsList: { width: '100%', marginBottom: 16 },
+  ingredientsTitle: { fontSize: 15, fontWeight: '800', marginBottom: 9 },
+  ingredientRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  ingredientMain: { flex: 1, minWidth: 150 },
+  ingredientName: { fontSize: 16, fontWeight: '700', paddingVertical: 2 },
+  ingredientNutrition: { fontSize: 12, fontWeight: '600', lineHeight: 18, marginTop: 2 },
   mealTypeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   mealTypeChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -1316,23 +1307,31 @@ const styles = StyleSheet.create({
   deleteIngredientBtn: { padding: 6, marginLeft: 6, alignItems: 'center', justifyContent: 'center' },
   gramInput: { fontSize: 16, fontWeight: '800', paddingVertical: 8, minWidth: 40, textAlign: 'center' },
   gramUnit: { fontSize: 14, fontWeight: '600', marginLeft: 4 },
-  addExtraBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, marginTop: 4, gap: 6, borderWidth: 1, borderRadius: 14 },
-  addExtraText: { fontSize: 14, fontWeight: '600' },
-
-  macroRow: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, padding: 20, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  macroItem: { flex: 1, alignItems: 'center' },
-  macroValue: { fontSize: 22, fontWeight: '900', marginBottom: 4 },
+  macroRow: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  macroItem: { flexGrow: 1, flexBasis: '30%', alignItems: 'center', minWidth: 72 },
+  macroValue: { fontSize: 18, fontWeight: '900', marginBottom: 4 },
   macroLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  macroDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.08)' },
+  macroDivider: { width: 0 },
+  qualityWarning: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, backgroundColor: 'rgba(245,158,11,0.08)', marginBottom: 14 },
+  qualityWarningTextWrap: { flex: 1 },
+  qualityWarningTitle: { fontSize: 13, fontWeight: '800', marginBottom: 3 },
+  qualityWarningBody: { fontSize: 12, lineHeight: 17 },
+  actionButtonsArea: { width: '100%', marginTop: 8 },
   addBtn: { borderRadius: 20, overflow: 'hidden', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 10 },
-  addBtnGrad: { padding: 20, alignItems: 'center' },
-  addBtnText: { fontSize: 17, fontWeight: '900', letterSpacing: 0.5 },
-  retryBtn: { padding: 16, alignItems: 'center', marginTop: 12, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' },
-  retryBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  addBtnGrad: { padding: 18, alignItems: 'center' },
+  addBtnText: { fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
+  retryBtn: { padding: 14, alignItems: 'center', marginTop: 10, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' },
+  retryBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 
   errorCard: { position: 'absolute', top: 120, left: 20, right: 20, backgroundColor: 'rgba(239,68,68,0.9)', padding: 16, borderRadius: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 999 },
   errorText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14, flex: 1, marginRight: 12 },
   retryText: { color: '#FFFFFF', fontWeight: '900', fontSize: 14, textDecorationLine: 'underline' },
+  jobStateCard: { position: 'absolute', left: 16, right: 16, zIndex: 1200, minHeight: 86, borderWidth: 1, borderRadius: 18, padding: 13, backgroundColor: 'rgba(8,12,18,0.96)', flexDirection: 'row', alignItems: 'center', gap: 11 },
+  jobStateCopy: { flex: 1, minWidth: 0 },
+  jobStateTitle: { fontSize: 14, lineHeight: 18, fontWeight: '900' },
+  jobStateBody: { marginTop: 2, fontSize: 12, lineHeight: 17 },
+  jobStateAction: { minHeight: 44, borderWidth: 1, borderRadius: 13, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
+  jobStateActionText: { fontSize: 12, fontWeight: '900' },
 
   savingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(5,8,13,0.85)', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
   savingText: { fontSize: 18, fontWeight: '800', marginTop: 16 },

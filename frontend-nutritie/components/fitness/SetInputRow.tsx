@@ -40,7 +40,13 @@ function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffi
     <View style={styles.field}>
       <Text style={[styles.fieldLabel, { color: colors.textTertiary }]}>{label}</Text>
       <View style={[styles.pill, { backgroundColor: colors.surfaceBg }]}>
-        <Pressable style={[styles.stepBtn, { backgroundColor: colors.background }]} onPress={() => bump(-step)} hitSlop={12}>
+        <Pressable
+          style={[styles.stepBtn, { backgroundColor: colors.background }]}
+          onPress={() => bump(-step)}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={`Scade ${label.toLowerCase()} cu ${step}`}
+        >
           <Minus size={16} color={colors.accent} strokeWidth={3} />
         </Pressable>
         <TextInput
@@ -60,9 +66,16 @@ function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffi
           }}
           keyboardType="numeric"
           selectTextOnFocus
+          accessibilityLabel={label}
         />
         {suffix ? <Text style={[styles.suffix, { color: colors.textSecondary }]}>{suffix}</Text> : null}
-        <Pressable style={[styles.stepBtn, { backgroundColor: colors.background }]} onPress={() => bump(step)} hitSlop={12}>
+        <Pressable
+          style={[styles.stepBtn, { backgroundColor: colors.background }]}
+          onPress={() => bump(step)}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={`Crește ${label.toLowerCase()} cu ${step}`}
+        >
           <Plus size={16} color={colors.accent} strokeWidth={3} />
         </Pressable>
       </View>
@@ -139,7 +152,11 @@ export default function SetInputRow({ index, set, onChange, showWeight = true, s
       </View>
 
       {limitError ? (
-        <View style={[styles.errorBox, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}>
+        <View
+          style={[styles.errorBox, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="assertive"
+        >
           <AlertTriangle size={14} color={colors.danger} />
           <Text style={[styles.errorText, { color: colors.danger }]}>{limitError}</Text>
         </View>
@@ -163,7 +180,7 @@ const styles = StyleSheet.create({
     borderRadius: 16, paddingHorizontal: 8, paddingVertical: 6,
   },
   stepBtn: {
-    width: 34, height: 34, borderRadius: 12,
+    width: 44, height: 44, borderRadius: 12,
     alignItems: 'center', justifyContent: 'center',
   },
   input: { flex: 1, minWidth: 40, fontSize: 16, fontWeight: '700', textAlign: 'center', paddingVertical: 2 },

@@ -27,9 +27,10 @@ import { useGamificareActions } from '../context/GamificareContext';
 import { useNotify } from '../hooks/useNotify';
 import { EquipmentIcon } from './fitness/EquipmentIcon';
 import { Holographic3DAnatomyBody } from './fitness/Holographic3DAnatomyBody';
+import { FlowIcon } from './ui/FlowIcon';
 
 const ECHIPAMENTE_OPTIONS = [
-  { id: 'all', nume: '🏋️ Toate' },
+  { id: 'all', nume: 'Toate' },
   { id: 'bară', nume: 'Halteră / Bară' },
   { id: 'gantere', nume: 'Gantere' },
   { id: 'băncuță', nume: 'Băncuță' },
@@ -325,10 +326,10 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
 
     const rankInfoEditor = useMemo(() => {
       const scor = scorIntensitateEditor;
-      if (scor >= 85) return { rank: 'RANK S+ • ELITE PRO 👑⚡', badgeColor: '#FACC15', stele: '⭐⭐⭐⭐⭐' };
-      if (scor >= 65) return { rank: 'RANK A • ADVANCED HYPERTROPHY 🔥', badgeColor: '#00F0FF', stele: '⭐⭐⭐⭐' };
-      if (scor >= 45) return { rank: 'RANK B • INTERMEDIATE STRENGTH 💪', badgeColor: '#4ADE80', stele: '⭐⭐⭐' };
-      return { rank: 'RANK C • FOUNDATION & FORM 🌊', badgeColor: '#38BDF8', stele: '⭐⭐' };
+      if (scor >= 85) return { rank: 'RANK S+ • ELITE PRO', badgeColor: '#FACC15', stele: 5 };
+      if (scor >= 65) return { rank: 'RANK A • ADVANCED HYPERTROPHY', badgeColor: '#00F0FF', stele: 4 };
+      if (scor >= 45) return { rank: 'RANK B • INTERMEDIATE STRENGTH', badgeColor: '#4ADE80', stele: 3 };
+      return { rank: 'RANK C • FOUNDATION & FORM', badgeColor: '#38BDF8', stele: 2 };
     }, [scorIntensitateEditor]);
 
     const salveazaDinEditor = async () => {
@@ -500,7 +501,11 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                   <Text style={{ fontSize: 13, fontWeight: '900', color: rankInfoEditor.badgeColor }}>
                     {rankInfoEditor.rank}
                   </Text>
-                  <Text style={{ fontSize: 13, color: colors.textPrimary }}>{rankInfoEditor.stele}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    {Array.from({ length: rankInfoEditor.stele }, (_, index) => (
+                      <FlowIcon key={`rank-star-${index}`} name="star" size={12} color={rankInfoEditor.badgeColor} />
+                    ))}
+                  </View>
                 </View>
                 <View style={{ height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginBottom: 8 }}>
                   <View style={{ height: '100%', width: `${scorIntensitateEditor}%`, backgroundColor: rankInfoEditor.badgeColor }} />
@@ -654,7 +659,10 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
               onPress={duplicaDinEditor}
               disabled={loading}
             >
-              <Text style={[styles.addSerieText, { color: colors.textSecondary }]}>📑 Duplică exercițiul</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <FlowIcon name="copy" size={16} color={colors.textSecondary} />
+                <Text style={[styles.addSerieText, { color: colors.textSecondary }]}>Duplică exercițiul</Text>
+              </View>
             </TouchableOpacity>
           </BottomSheetScrollView>
         ) : (
@@ -706,6 +714,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                       }}
                     >
                       <Text style={[styles.catChipText, { color: active ? colors.background : colors.textPrimary }]}>
+                        {item.id && 'icon' in item && item.icon ? <FlowIcon name={String(item.icon)} size={14} color={active ? colors.background : colors.textSecondary} /> : null}
                         {item.nume}
                       </Text>
                     </TouchableOpacity>

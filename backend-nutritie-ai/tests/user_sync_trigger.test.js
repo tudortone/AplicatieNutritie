@@ -23,8 +23,13 @@ const adminFake = {
         },
       }),
       select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({ data: null, error: null }),
+        eq: (_col, value) => ({
+          maybeSingle: async () => ({
+            data: value === 'user_123'
+              ? { supabase_user_id: '11111111-1111-4111-8111-111111111111' }
+              : null,
+            error: null,
+          }),
         }),
       }),
     };
@@ -79,6 +84,34 @@ describe('user-sync Trigger task — persistenta reala (nu doar raspuns)', () =>
     expect(updateuri.length).toBe(1);
     expect(updateuri[0].eq).toEqual(['user_id', '11111111-1111-4111-8111-111111111111']);
     expect(updateuri[0].payload.nume).toBe('Test User');
+  });
+
+  test('user.updated cu payload-ul real Clerk nu reseteaza profilul la valorile implicite', async () => {
+    const rezultat = await executa({
+      admin: adminFake,
+      action: 'user.updated',
+      clerkUserId: 'user_123',
+      data: {
+        first_name: 'Ada',
+        last_name: 'Popescu',
+        email_addresses: [{ email_address: 'ada@example.test' }],
+        public_metadata: {
+          greutate: 64,
+          calorii_tinta: 2300,
+          proteine_tinta: 140,
+        },
+      },
+    });
+
+    expect(rezultat.status).toBe('completed');
+    const updateuri = apeluri.filter((a) => a.tabela === 'profil' && a.tip === 'update');
+    expect(updateuri).toHaveLength(1);
+    expect(updateuri[0].payload).toMatchObject({
+      nume: 'Ada Popescu',
+      greutate: 64,
+      calorii_tinta: 2300,
+      proteine_tinta: 140,
+    });
   });
 
   test('user.deleted -> sterge pe tabelele GDPR', async () => {

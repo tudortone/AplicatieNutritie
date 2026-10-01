@@ -4,10 +4,11 @@ import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg'
 
 import type { BodyView, MuscleId } from '../../constants/muscles'
 import type { IntensityMap } from '../../lib/muscleIntensity'
-import { heatColor } from './heatColor'
+import { heatColor, isOutline, COLOR_INACTIVE } from './heatColor'
 import { BACK_GRADIENTS, BACK_SHAPES, BACK_VIEWBOX } from './anatomyBack'
 import { FRONT_GRADIENTS, FRONT_SHAPES, FRONT_VIEWBOX } from './anatomyFront'
 import type { AnatomyGradient, AnatomyShape, AnatomyStop } from './types'
+import { anatomyMapSize } from '../../lib/anatomyLayout'
 
 /**
  * Rampa de caldura vine din heatColor.ts (sursa unica), aceeasi folosita de
@@ -17,13 +18,12 @@ import type { AnatomyGradient, AnatomyShape, AnatomyStop } from './types'
  */
 
 /** Opacitatea maxima a stratului de caldura. Sub 1 ca sa se vada in continuare umbrele. */
-const MAX_HEAT_OPACITY = 0.82
+const MAX_HEAT_OPACITY = 0.92
 
 /**
  * Opacitatea formelor neincalzite (corp general + muschi neantrenati).
- * Semi-transparente ca muschii antrenati (colorati) sa iasa in evidenta.
  */
-const UNHEATED_OPACITY = 0.5
+const UNHEATED_OPACITY = 0.7
 
 function clamp01(n: number): number {
 	if (!Number.isFinite(n)) return 0
@@ -47,6 +47,8 @@ export type BodyMapProps = {
 	intensity?: IntensityMap
 	/** Latimea in puncte. Inaltimea se calculeaza pastrand proportia. */
 	width?: number
+	/** Limita verticala optionala; latimea este redusa proportional, fara decupare. */
+	maxHeight?: number
 	/** Apelat cand utilizatorul atinge un muschi. */
 	onMusclePress?: (muscle: MuscleId) => void
 	/** Muschi evidentiat cu contur, ex. cel selectat in lista. */
@@ -57,60 +59,68 @@ export type BodyMapProps = {
 
 /**
  * Harta musculara. Deseneaza formele in ordinea exacta din fisierul sursa,
- * ca umbrele si detaliile corpului sa ramana deasupra muschilor coloriti.
+ * ca umbrele si detaliile corpului sa ramana deasupra muschilor colorati.
  *
- * Formele de corp general nu se coloreaza si nu sunt atingibile, deci raman
- * discret in fundal, exact ca in desenul original.
+ * FIT-ANATOMY-001: Formele de corp sunt desenate coerent, contururile originale
+ * sunt pastrate pentru profunzime 3D, iar muschii activi primesc direct culoarea
+ * termica corecta fara amestec pe baza rosie.
  */
 function BodyMapBase({
 	view,
 	intensity,
 	width = 280,
+	maxHeight,
 	onMusclePress,
 	selected = null,
 	style,
 	testID,
 }: BodyMapProps) {
 	const { shapes, gradients, box } = viewData(view)
-	const height = (width * box.height) / box.width
+	const size = anatomyMapSize(view, width, maxHeight)
 
 	// Recalculam doar cand se schimba intensitatile, nu la fiecare randare.
 	const heat = useMemo(() => {
-		const out = new Map<MuscleId, { color: string; opacity: number }>()
+		const out = new Map<MuscleId, { color: string; opacity: number; isHeated: boolean }>()
 		if (!intensity) return out
 		for (const [muscle, raw] of Object.entries(intensity) as [MuscleId, number][]) {
 			const v = clamp01(raw)
 			if (v <= 0.001) {
-				out.set(muscle, { color: heatColor(0), opacity: 0.35 })
+				out.set(muscle, { color: COLOR_INACTIVE, opacity: UNHEATED_OPACITY, isHeated: false })
 			} else {
-				out.set(muscle, { color: heatColor(v), opacity: Math.max(0.45, v * MAX_HEAT_OPACITY) })
+				out.set(muscle, { color: heatColor(v), opacity: Math.max(0.75, v * MAX_HEAT_OPACITY), isHeated: true })
 			}
 		}
 		return out
 	}, [intensity])
 
 	// Memoizam nodurile: la re-randari care nu schimba intensitatea/selectia
-	// (ex. tastare intr-un Stepper, comutarea warmup) nu mai reconstruim ~1500
-	// de <Path> pe firul principal. `heat` e deja memoizat, deci identitatea lui
-	// se schimba doar cand se logheaza un set.
+	// nu mai reconstruim ~1500 de <Path> pe firul principal.
 	const nodes = useMemo(() => {
 		const out: React.ReactNode[] = []
 		for (let i = 0; i < shapes.length; i++) {
 			const s = shapes[i]
+			const outline = isOutline(s.f)
 
-			// 1. desenul original, mereu, in ordinea lui — semi-transparent, ca
-			//    muschii incalziti sa iasa in evidenta
-			out.push(<Path key={`b${i}`} d={s.d} fill={s.f} fillOpacity={UNHEATED_OPACITY} />)
+			if (outline) {
+				// Contur / umbră anatomică: păstrăm culoarea originală din SVG pentru definire 3D
+				out.push(<Path key={`b${i}`} d={s.d} fill={s.f} fillOpacity={0.9} />)
+			} else if (s.m) {
+				// Formă asociată unui mușchi
+				const h = heat.get(s.m)
+				if (h && h.isHeated) {
+					// Mușchi antrenat: aplicăm direct culoarea din rampa termică (fără bază roșie murdărită)
+					out.push(<Path key={`h${i}`} d={s.d} fill={h.color} fillOpacity={h.opacity} />)
+				} else {
+					// Mușchi inactiv: culoare neutră uniformă (#2A323D)
+					out.push(<Path key={`b${i}`} d={s.d} fill={COLOR_INACTIVE} fillOpacity={UNHEATED_OPACITY} />)
+				}
+			} else {
+				// Țesut general / fond neasociat unui mușchi specific:
+				// Colorăm neutru ca să nu creeze găuri vizuale sau pete roșii parazite
+				out.push(<Path key={`b${i}`} d={s.d} fill={COLOR_INACTIVE} fillOpacity={0.6} />)
+			}
 
 			if (!s.m) continue
-
-			// 2. stratul de caldura, exact peste forma, ca sa ramana sub umbre
-			const h = heat.get(s.m)
-			if (h) {
-				out.push(
-					<Path key={`h${i}`} d={s.d} fill={h.color} fillOpacity={h.opacity} />,
-				)
-			}
 
 			// 3. conturul muschiului selectat
 			if (selected && s.m === selected) {
@@ -144,7 +154,7 @@ function BodyMapBase({
 
 	return (
 		<View style={style} testID={testID}>
-			<Svg width={width} height={height} viewBox={`0 0 ${box.width} ${box.height}`}>
+			<Svg width={size.width} height={size.height} viewBox={`0 0 ${box.width} ${box.height}`}>
 				<Defs>
 					{gradients.map((g) => (
 						<LinearGradient

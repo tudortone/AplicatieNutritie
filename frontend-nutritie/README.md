@@ -1,50 +1,49 @@
-# Welcome to your Expo app 👋
+# NutriAI Mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicație Expo SDK 54 / React Native pentru Android, iOS și web. Runtime-ul recomandat este Node.js 22 (vezi `engines` și profilul EAS production).
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Pornire locală
 
 ```bash
-npm run reset-project
+npm install
+copy .env.example .env
+npm start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Completează `.env` cu valori de dezvoltare. Fișierul este ignorat de git; nu pune secrete backend în variabile `EXPO_PUBLIC_*`, deoarece acestea sunt incluse în aplicația compilată.
 
-## Learn more
+## Verificări locale
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+npm run typecheck
+npm run lint
+npm run test:ci
+npm run audit:gate
+npx expo-doctor
+npm run pre-submit
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+`pre-submit` este intenționat fail-closed: pentru Android production cere API-ul public, Supabase public, ImageKit public, Sentry DSN și URL-urile HTTPS reale pentru Termeni și Politica de confidențialitate. Billing-ul direct Google Play nu folosește chei comerciale publicabile în client. `app.config.js` aplică aceeași poartă în profilul EAS production.
 
-## Join the community
+## Build Android production
 
-Join our community of developers creating universal apps.
+Configurează variabilele din `.env.example` în EAS Environment `production`, apoi:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npx eas-cli@latest build --platform android --profile production
+```
+
+Profilul generează AAB, folosește Node 22 și incrementează automat versiunea remote. `SENTRY_AUTH_TOKEN` este secret de build și trebuie configurat în EAS, nu în `.env` și nu în git; `SENTRY_ORG` și `SENTRY_PROJECT` identifică proiectul pentru upload-ul source maps.
+
+## Configurație publică
+
+- `EXPO_PUBLIC_APP_ENV`
+- `EXPO_PUBLIC_API_URL`
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- `EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY`
+- `EXPO_PUBLIC_SENTRY_DSN`
+- `EXPO_PUBLIC_TERMS_OF_SERVICE_URL`
+- `EXPO_PUBLIC_PRIVACY_POLICY_URL`
+
+Lista completă și exemplele fără credentiale reale sunt în `.env.example`.

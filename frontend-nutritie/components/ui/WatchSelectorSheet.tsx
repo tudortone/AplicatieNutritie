@@ -8,6 +8,8 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { useHealthSync, HEALTH_PROVIDERS, HealthProvider } from '../../hooks/useHealthSync';
 import { useTranslation } from 'react-i18next';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { FlowIcon } from './FlowIcon';
 
 export interface WatchSelectorSheetRef {
   open: () => void;
@@ -17,6 +19,7 @@ export interface WatchSelectorSheetRef {
 export const WatchSelectorSheet = forwardRef<WatchSelectorSheetRef>((_, ref) => {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const reduceMotion = useReducedMotion();
   const { selectedProvider, setProvider } = useHealthSync();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const snapPoints = useMemo(() => ['58%'], []);
@@ -101,7 +104,7 @@ export const WatchSelectorSheet = forwardRef<WatchSelectorSheetRef>((_, ref) => 
         {HEALTH_PROVIDERS.map((p, index) => {
           const active = selectedProvider === p.id;
           return (
-            <Animated.View key={p.id} entering={FadeInDown.duration(350).delay(index * 30)}>
+            <Animated.View key={p.id} entering={reduceMotion ? undefined : FadeInDown.duration(350).delay(index * 30)}>
               <TouchableOpacity
                 style={[
                   styles.item,
@@ -117,7 +120,7 @@ export const WatchSelectorSheet = forwardRef<WatchSelectorSheetRef>((_, ref) => 
                 accessibilityLabel={p.name}
                 testID={`watch_option_${p.id}`}
               >
-                <Text style={{ fontSize: 24 }}>{p.icon}</Text>
+                <FlowIcon name={p.icon} size={24} color={colors.accent} />
 
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.itemName, { color: active ? colors.accent : colors.textPrimary, fontWeight: active ? '800' : '600' }]}>

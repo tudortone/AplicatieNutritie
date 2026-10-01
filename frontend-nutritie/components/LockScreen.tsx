@@ -25,6 +25,7 @@ import { Lock, ShieldCheck } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useTranslation } from 'react-i18next';
 
 interface LockScreenProps {
   biometricType: string;
@@ -38,9 +39,13 @@ export default function LockScreen({ biometricType, onUnlock }: LockScreenProps)
   const btnScale = useSharedValue(1);
   const [unlocking, setUnlocking] = useState(false);
   const reduceMotion = useReducedMotion();
+  const { t } = useTranslation();
 
   React.useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion) {
+      pulseScale.value = 1;
+      return;
+    }
     pulseScale.value = withRepeat(withTiming(1.07, { duration: 1300 }), -1, true);
   }, [pulseScale, reduceMotion]);
 
@@ -62,10 +67,14 @@ export default function LockScreen({ biometricType, onUnlock }: LockScreenProps)
   const handleUnlockPress = async () => {
     if (unlocking) return;
     setUnlocking(true);
-    btnScale.value = withSequence(
-      withTiming(0.93, { duration: 100 }),
-      withTiming(1, { duration: 100 }),
-    );
+    if (!reduceMotion) {
+      btnScale.value = withSequence(
+        withTiming(0.93, { duration: 100 }),
+        withTiming(1, { duration: 100 }),
+      );
+    } else {
+      btnScale.value = 1;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
       await onUnlock();
@@ -77,7 +86,7 @@ export default function LockScreen({ biometricType, onUnlock }: LockScreenProps)
   return (
     <Animated.View
       style={[styles.container, { backgroundColor: colors.background }]}
-      entering={FadeIn.duration(300)}
+      entering={reduceMotion ? undefined : FadeIn.duration(300)}
       accessibilityViewIsModal
       importantForAccessibility="yes"
     >
@@ -101,7 +110,7 @@ export default function LockScreen({ biometricType, onUnlock }: LockScreenProps)
         ]}
       >
         <Animated.View
-          entering={ZoomIn.delay(100).duration(500)}
+          entering={reduceMotion ? undefined : ZoomIn.delay(100).duration(500)}
           style={[styles.iconRingOuter, shieldAnimatedStyle]}
         >
           <View
@@ -118,14 +127,14 @@ export default function LockScreen({ biometricType, onUnlock }: LockScreenProps)
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.textContainer}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>NutriAI securizat</Text>
+        <Animated.View entering={reduceMotion ? undefined : FadeInDown.delay(200).duration(400)} style={styles.textContainer}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{t('lockScreen.title')}</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Aplicația este blocată automat pentru a-ți proteja datele de nutriție și progresul fizic.
+            {t('lockScreen.subtitle')}
           </Text>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(300).duration(400)} style={[styles.buttonContainer, btnAnimatedStyle]}>
+        <Animated.View entering={reduceMotion ? undefined : FadeInDown.delay(300).duration(400)} style={[styles.buttonContainer, btnAnimatedStyle]}>
           <Pressable
             style={({ pressed }) => [
               styles.unlockButton,
@@ -134,7 +143,7 @@ export default function LockScreen({ biometricType, onUnlock }: LockScreenProps)
             onPress={handleUnlockPress}
             disabled={unlocking}
             accessibilityRole="button"
-            accessibilityLabel={`Deblochează cu ${biometricType} sau parola dispozitivului`}
+            accessibilityLabel={t('lockScreen.unlockA11y', { biometricType })}
             accessibilityState={{ busy: unlocking, disabled: unlocking }}
           >
             {unlocking ? (
@@ -143,7 +152,7 @@ export default function LockScreen({ biometricType, onUnlock }: LockScreenProps)
               <>
                 <Lock size={20} color={colors.background} style={styles.btnIcon} />
                 <Text style={[styles.unlockText, { color: colors.background }]} numberOfLines={2}>
-                  Deblochează cu {biometricType} / parolă
+                  {t('lockScreen.unlockAction', { biometricType })}
                 </Text>
               </>
             )}

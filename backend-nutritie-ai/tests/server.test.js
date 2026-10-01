@@ -16,9 +16,16 @@ jest.mock('@supabase/supabase-js', () => {
       from: jest.fn(() => ({
         select: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),
+        // F-06: exportul GDPR pagineaza acum explicit (`.order().range()`), ca sa
+        // nu mai fie taiat tacut de `max-rows` din PostgREST. Mock-ul trebuie sa
+        // ofere aceleasi metode ca builder-ul real supabase-js; `range` rezolva
+        // cu o pagina goala, deci bucla de paginare se opreste dupa un apel.
+        order: jest.fn().mockReturnThis(),
+        range: jest.fn().mockResolvedValue({ data: [], error: null }),
         single: jest.fn().mockResolvedValue({ data: { id: '11111111-1111-4111-8111-111111111111' }, error: null }),
         maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null })
-      }))
+      })),
+      rpc: jest.fn().mockResolvedValue({ data: null, error: null })
     }))
   };
 });
@@ -127,10 +134,18 @@ describe('Backend API Tests', () => {
         .set('Authorization', 'Bearer token_valid')
         .send({ varsta: 30, greutate: 80, inaltime: 180, sex: 'Masculin', activitate: 'Moderat', obiectiv: 'Menținere' });
       expect(res.statusCode).toBe(200);
+      // BMR = 10*80 + 6.25*180 - 5*30 + 5 = 1780; TDEE = 1780 * 1.55 = 2759.
+      // Menținere => țintă = TDEE (neschimbat față de implementarea anterioară).
       expect(res.body.caloriiTinta).toBe(2759);
-      expect(res.body.proteineTinta).toBe(128);
-      expect(res.body.grasimiTinta).toBe(77);
-      expect(res.body.carbiTinta).toBe(389);
+
+      // F-08: macro-urile vin acum din aceeași sursă ca onboarding-ul
+      // (utils/calculNutritional.js — dieta implicită „echilibrata", 30/40/30),
+      // nu din formula proprie a endpointului (2.0/1.6 g proteină per kg +
+      // grăsimi 25% + restul carbo), care dădea alte valori pentru ACELAȘI
+      // utilizator, în funcție de ecranul prin care ajungea la calcul.
+      expect(res.body.proteineTinta).toBe(207); // 2759 * 0.30 / 4
+      expect(res.body.carbiTinta).toBe(276);    // 2759 * 0.40 / 4
+      expect(res.body.grasimiTinta).toBe(92);   // 2759 * 0.30 / 9
     });
   });
 
@@ -178,6 +193,7 @@ describe('Backend API Tests', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body).toHaveProperty('user_id');
       expect(res.body).toHaveProperty('mese');
+      expect(res.body).toHaveProperty('audit_log');
     });
   });
 });

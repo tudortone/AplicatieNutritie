@@ -3,9 +3,11 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { callWithTimeout, callWithSoftTimeout } = require('../../utils/httpTimeout');
 const { inregistreazaAi } = require('../../utils/metrics');
+const { rezumatEroareSigur } = require('../../utils/sentrySanitize');
 const {
   creeazaServiciuVision,
   PROMPT_ANALIZA_FOTO,
+  obtinePromptAnalizaFoto,
   NUME_FURNIZORI_AI,
 } = require('./vision');
 
@@ -62,8 +64,9 @@ function creeazaServiciuCascada({ config, registruAi }) {
    * nu aveau niciun timeout, deci o singura conexiune blocata tinea cererea
    * utilizatorului deschisa la nesfarsit.
    */
-  async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider, semnalAnulare }) {
+  async function ruleazaCascadaVision({ imageBase64, imageMime, requestedProvider, limba = 'ro', semnalAnulare }) {
     let text = null;
+    const prompt = typeof obtinePromptAnalizaFoto === 'function' ? obtinePromptAnalizaFoto(limba) : PROMPT_ANALIZA_FOTO;
 
     // Anti-cost (B2): plafon de apeluri de furnizori per cerere. Inainte, un
     // singur upload putea declansa zeci de call-uri platite (N chei x M modele
@@ -87,7 +90,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
           const oaiRes = await callWithTimeout((signal) => fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(serviciuVision.corpVisionCompatibilOpenAi('gpt-4o-mini', PROMPT_ANALIZA_FOTO, imageMime, imageBase64, {
+            body: JSON.stringify(serviciuVision.corpVisionCompatibilOpenAi('gpt-4o-mini', prompt, imageMime, imageBase64, {
               temperature: 0.2,
               max_tokens: 1500,
             })),
@@ -109,7 +112,10 @@ function creeazaServiciuCascada({ config, registruAi }) {
           }
         } catch (e) {
           inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'analiza-foto', ok: false });
-          console.warn('OpenAI Vision exceptie:', e.message);
+          console.warn('[AI provider failure]', rezumatEroareSigur(e, {
+            operation: 'photo_analysis',
+            provider: 'openai',
+          }));
         }
       }
     }
@@ -131,7 +137,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
             const groqRes = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
               method: 'POST',
               headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify(serviciuVision.corpVisionCompatibilOpenAi(groqModel, PROMPT_ANALIZA_FOTO, imageMime, imageBase64, {
+              body: JSON.stringify(serviciuVision.corpVisionCompatibilOpenAi(groqModel, prompt, imageMime, imageBase64, {
                 temperature: 0.2,
                 max_tokens: 1000,
               })),
@@ -153,7 +159,10 @@ function creeazaServiciuCascada({ config, registruAi }) {
             }
           } catch (groqErr) {
             inregistreazaAi({ provider: 'groq', model: groqModel, ruta: 'analiza-foto', ok: false });
-            console.warn(`Groq Vision [${groqModel}] exceptie:`, groqErr.message);
+            console.warn('[AI provider failure]', rezumatEroareSigur(groqErr, {
+              operation: 'photo_analysis',
+              provider: 'groq',
+            }));
           }
         }
       }
@@ -173,7 +182,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
             const model = client.getGenerativeModel({ model: modelName });
             // SDK-ul Gemini nu accepta AbortSignal: deadline "soft", marcat explicit.
             const result = await callWithSoftTimeout(model.generateContent({
-              contents: [{ role: 'user', parts: [{ text: PROMPT_ANALIZA_FOTO }, imagePart] }],
+              contents: [{ role: 'user', parts: [{ text: prompt }, imagePart] }],
               generationConfig: { responseMimeType: 'application/json' },
             }), 30000);
 
@@ -189,7 +198,10 @@ function creeazaServiciuCascada({ config, registruAi }) {
             inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'analiza-foto', ok: false });
             const errMsg = err.message || String(err);
             if (errMsg.includes('429')) await blockProvider('gemini', 60, 'Limita de cereri Gemini (429)');
-            console.warn(`Gemini [${modelName}] esuat:`, errMsg.substring(0, 100));
+            console.warn('[AI provider failure]', rezumatEroareSigur(err, {
+              operation: 'photo_analysis',
+              provider: 'gemini',
+            }));
           }
         }
       }
@@ -204,7 +216,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
           const orRes = await callWithTimeout((signal) => fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(serviciuVision.corpVisionCompatibilOpenAi('google/gemini-flash-1.5', PROMPT_ANALIZA_FOTO, imageMime, imageBase64)),
+            body: JSON.stringify(serviciuVision.corpVisionCompatibilOpenAi('google/gemini-flash-1.5', prompt, imageMime, imageBase64)),
             signal,
           }), 30000, semnalAnulare);
 
@@ -222,7 +234,10 @@ function creeazaServiciuCascada({ config, registruAi }) {
           }
         } catch (e) {
           inregistreazaAi({ provider: 'openrouter', model: 'google/gemini-flash-1.5', ruta: 'analiza-foto', ok: false });
-          console.warn('OpenRouter Vision exceptie:', e.message || e);
+          console.warn('[AI provider failure]', rezumatEroareSigur(e, {
+            operation: 'photo_analysis',
+            provider: 'openrouter',
+          }));
         }
       }
     }

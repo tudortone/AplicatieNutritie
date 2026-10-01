@@ -1,6 +1,7 @@
 /** Ordinea pasilor din onboarding. Bara de progres se calculeaza din ea. */
 export const PASI_ONBOARDING = [
 	'/onboarding',
+	'/onboarding/gen',
 	'/onboarding/data-nasterii',
 	'/onboarding/inaltime',
 	'/onboarding/greutate',

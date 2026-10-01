@@ -3,7 +3,12 @@
 const { task } = require('@trigger.dev/sdk/v3');
 const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { PROMPT_ANALIZA_FOTO, numarModel } = require('../../services/ai/vision');
+const { obtinePromptAnalizaFoto } = require('../../services/ai/vision');
+const {
+  normalizePhotoItems,
+  evaluatePhotoQuality,
+  inferMealType,
+} = require('../../services/ai/photoResultQuality');
 const { parseJsonFromLlm } = require('../../utils/llmJson');
 const { callWithSoftTimeout } = require('../../utils/httpTimeout');
 const {
@@ -12,6 +17,8 @@ const {
 } = require('../../utils/valideazaUrlImagine');
 const { detecteazaMime, MIME_PERMISE } = require('../../utils/detecteazaMime');
 const { esteUuid } = require('../../utils/identitate');
+const { rezumatEroareSigur } = require('../../utils/sentrySanitize');
+const { inregistreazaOperational } = require('../../utils/metrics');
 
 const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
 const MAX_IMAGINE_BYTES = 5 * 1024 * 1024;
@@ -21,7 +28,10 @@ const VARIABILE_OBLIGATORII = Object.freeze([
   'SUPABASE_URL',
   'GEMINI_API_KEY',
 ]);
-const TIPURI_MASA = new Set(['mic_dejun', 'pranz', 'cina', 'gustare', 'Mic dejun', 'Pranz', 'Cina', 'Gustare']);
+const PHOTO_CONCURRENCY = (() => {
+  const value = Number(process.env.AI_PHOTO_TRIGGER_CONCURRENCY);
+  return Number.isInteger(value) && value >= 1 && value <= 32 ? value : 8;
+})();
 
 // Client admin (service_role) pentru tabela `ai_jobs` — nu are politici de
 // insert/update pentru clienti (revoke pe anon/authenticated), deci doar
@@ -39,8 +49,17 @@ function supabaseAiJobs() {
 /**
  * Actualizeaza starea unui job din tabela `ai_jobs`.
  * Best-effort: o eroare la DB nu trebuie sa darame analiza AI in sine.
+ *
+ * P1-12 — `completed` este stare FINALA. Task-ul are `maxAttempts: 3`, deci pot
+ * exista scrieri intarziate ale unei incercari anterioare. Fara garda, o incercare
+ * ramasa in urma isi scria `failed` PESTE un `completed` deja obtinut si sterge
+ * rezultatul reusit (utilizatorul vede „analiza a esuat" desi exista rezultat).
+ * Filtrul `not('status','eq','completed')` se evalueaza IN BAZA DE DATE, in aceeasi
+ * instructiune cu scrierea: nu exista fereastra de cursa intre citire si scriere.
+ * `failed` ramane NE-final intentionat — o reluare reusita trebuie sa il poata
+ * inlocui cu `completed`.
  */
-async function updateAiJob(jobId, patch) {
+async function updateAiJob(jobId, patch, userId = null) {
   if (!jobId || typeof jobId !== 'string') return;
   const client = supabaseAiJobs();
   if (!client) {
@@ -48,22 +67,62 @@ async function updateAiJob(jobId, patch) {
     return;
   }
   try {
-    const { error } = await client
+    let query = client
       .from('ai_jobs')
       .update(patch)
-      .eq('id', jobId);
+      .eq('id', jobId)
+      .not('status', 'eq', 'completed')
+      .not('status', 'eq', 'succeeded');
+    if (userId) query = query.eq('user_id', userId);
+    const { error } = await query;
     if (error) {
-      console.warn('updateAiJob: esec actualizare ai_jobs:', error.message);
+      console.warn('[AI job]', rezumatEroareSigur(error, { operation: 'update_ai_job', provider: 'supabase' }));
     }
   } catch (err) {
-    console.warn('updateAiJob: eroare neasteptata:', (err && err.message) || err);
+    console.warn('[AI job]', rezumatEroareSigur(err, { operation: 'update_ai_job', provider: 'supabase' }));
   }
 }
 
-function modelsDeIncercat() {
-  const preferat = (process.env.GEMINI_MODEL || '').trim();
-  if (!preferat) return [...GEMINI_MODELS];
-  return [preferat, ...GEMINI_MODELS.filter((model) => model !== preferat)];
+async function settlePhotoCredit({ userId, reservationId, action, reason = null }) {
+  if (!userId || !reservationId) return null;
+  const client = supabaseAiJobs();
+  if (!client) throw new Error('SUPABASE_CONFIG_MISSING');
+  const { data, error } = await client.rpc('settle_flow_photo_credit', {
+    p_user_id: userId,
+    p_reservation_id: reservationId,
+    p_action: action,
+    p_reason: reason,
+    p_now: new Date().toISOString(),
+  });
+  if (error) throw Object.assign(new Error('FLOW_CREDIT_SETTLEMENT_FAILED'), { cause: error });
+  inregistreazaOperational(action === 'commit' ? 'credit.commit' : 'credit.release');
+  return data;
+}
+
+async function requireOwnedJob({ jobId, userId, imageUrl, reservationId }) {
+  if (!jobId) return;
+  const client = supabaseAiJobs();
+  if (!client) throw new Error('SUPABASE_CONFIG_MISSING');
+  const { data, error } = await client.from('ai_jobs')
+    .select('id')
+    .eq('id', jobId)
+    .eq('user_id', userId)
+    .eq('image_url', imageUrl)
+    .eq('credit_reservation_id', reservationId)
+    .maybeSingle();
+  if (error || !data) throw new Error('JOB_OWNERSHIP_MISMATCH');
+}
+
+function construiesteIncercariGemini({ preferredModel, keys, maxAttempts } = {}) {
+  const model = typeof preferredModel === 'string' && preferredModel.trim()
+    ? preferredModel.trim()
+    : GEMINI_MODELS[0];
+  const uniqueKeys = [...new Set((Array.isArray(keys) ? keys : [])
+    .map((key) => (typeof key === 'string' ? key.trim() : ''))
+    .filter(Boolean))];
+  const requested = Number(maxAttempts);
+  const limit = Number.isInteger(requested) ? Math.min(3, Math.max(1, requested)) : 2;
+  return uniqueKeys.slice(0, limit).map((key) => ({ key, model }));
 }
 
 async function citesteCorpLimitat(resp, limita) {
@@ -103,23 +162,53 @@ function codEroareSigur(err) {
 
 exports.analizaMancareTask = task({
   id: 'analiza-mancare-ai',
+  queue: {
+    name: 'ai-photo',
+    concurrencyLimit: PHOTO_CONCURRENCY,
+  },
   retry: {
     maxAttempts: 3,
     minTimeoutInMs: 1000,
     maxTimeoutInMs: 5000,
     factor: 2,
   },
+  onFailure: async ({ payload, error }) => {
+    const { userId, jobId, reservationId } = payload || {};
+    const code = codEroareSigur(error);
+    await settlePhotoCredit({ userId, reservationId, action: 'release', reason: code }).catch(() => {});
+    await updateAiJob(jobId, {
+      status: 'failed', error_code: code, completed_at: new Date().toISOString(),
+    }, userId);
+    inregistreazaOperational('photo.failed');
+  },
+  onCancel: async ({ payload }) => {
+    const { userId, jobId, reservationId } = payload || {};
+    await settlePhotoCredit({
+      userId, reservationId, action: 'release', reason: 'TRIGGER_CANCELLED',
+    }).catch(() => {});
+    await updateAiJob(jobId, {
+      status: 'cancelled', error_code: 'TRIGGER_CANCELLED', completed_at: new Date().toISOString(),
+    }, userId);
+    inregistreazaOperational('photo.failed');
+  },
   run: async (payload) => {
-    const { imageUrl, tipMasa, userId, jobId } = payload || {};
+    const executionStartedAt = Date.now();
+    const { imageUrl, tipMasa, limba, userId, jobId, reservationId } = payload || {};
     // Marcheaza job-ul ca fiind in curs, din oficiu (persistarea ramane la confirmarea
     // explicita a utilizatorului in frontend; aici urmarim doar stadiul analizei).
-    if (jobId) await updateAiJob(jobId, { status: 'processing' });
+    if (jobId) await updateAiJob(jobId, {
+      status: 'running', started_at: new Date().toISOString(), error_code: null,
+    }, userId);
+    inregistreazaOperational('photo.started');
 
     const lipsesteCheiaPrincipalaGemini = !process.env.GEMINI_API_KEY;
     const lipsa = VARIABILE_OBLIGATORII.filter((cheie) => !process.env[cheie]?.trim());
     if (lipsesteCheiaPrincipalaGemini || lipsa.length > 0) {
       // Eroare de configurare: nu se retry (ar esua identic), dar se raporteaza.
-      if (jobId) await updateAiJob(jobId, { status: 'failed', error_code: 'NEEDS_CONFIG' });
+      await settlePhotoCredit({ userId, reservationId, action: 'release', reason: 'NEEDS_CONFIG' }).catch(() => {});
+      if (jobId) await updateAiJob(jobId, {
+        status: 'failed', error_code: 'NEEDS_CONFIG', completed_at: new Date().toISOString(),
+      }, userId);
       return {
         success: false,
         status: 'needs_config',
@@ -129,7 +218,10 @@ exports.analizaMancareTask = task({
     }
 
     if (typeof imageUrl !== 'string' || !imageUrl.trim() || !esteUuid(userId)) {
-      if (jobId) await updateAiJob(jobId, { status: 'failed', error_code: 'PAYLOAD_INVALID' });
+      await settlePhotoCredit({ userId, reservationId, action: 'release', reason: 'PAYLOAD_INVALID' }).catch(() => {});
+      if (jobId) await updateAiJob(jobId, {
+        status: 'failed', error_code: 'PAYLOAD_INVALID', completed_at: new Date().toISOString(),
+      }, userId);
       return { success: false, eroare: 'Payload invalid pentru analiza imaginii.' };
     }
 
@@ -138,14 +230,19 @@ exports.analizaMancareTask = task({
         imagekitUrlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
         supabaseUrl: process.env.SUPABASE_URL,
       }),
+      folderPrefix: `/mancare/${userId}/`,
     });
     const verificare = valideazaImagine(imageUrl);
     if (!verificare.ok) {
-      if (jobId) await updateAiJob(jobId, { status: 'failed', error_code: 'URL_IMAGINE_INVALIDA' });
+      await settlePhotoCredit({ userId, reservationId, action: 'release', reason: 'URL_IMAGINE_INVALIDA' }).catch(() => {});
+      if (jobId) await updateAiJob(jobId, {
+        status: 'failed', error_code: 'URL_IMAGINE_INVALIDA', completed_at: new Date().toISOString(),
+      }, userId);
       return { success: false, eroare: verificare.eroare };
     }
 
     try {
+      await requireOwnedJob({ jobId, userId, imageUrl: verificare.url, reservationId });
       const resp = await fetch(verificare.url, {
         signal: AbortSignal.timeout(20000),
         redirect: 'manual',
@@ -178,19 +275,26 @@ exports.analizaMancareTask = task({
         process.env.GEMINI_API_KEY_4,
       ].map((cheie) => cheie?.trim()).filter(Boolean);
 
-      for (const key of chei) {
+      const incercariGemini = construiesteIncercariGemini({
+        preferredModel: process.env.GEMINI_MODEL,
+        keys: chei,
+        maxAttempts: Number(process.env.GEMINI_PHOTO_ATTEMPTS_PER_RUN || 2),
+      });
+      for (const { key, model: modelName } of incercariGemini) {
         const client = new GoogleGenerativeAI(key);
-        for (const modelName of modelsDeIncercat()) {
-          try {
-            const model = client.getGenerativeModel({ model: modelName });
-            const result = await callWithSoftTimeout(model.generateContent({
-              contents: [{ role: 'user', parts: [{ text: PROMPT_ANALIZA_FOTO }, imagePart] }],
-              generationConfig: { responseMimeType: 'application/json' },
-            }), 30000);
-            text = result?.response?.text();
-            if (text) break;
-          } catch (err) {
-            ultimaEroare = err;
+        try {
+          const model = client.getGenerativeModel({ model: modelName });
+          const result = await callWithSoftTimeout(model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: obtinePromptAnalizaFoto(limba) }, imagePart] }],
+            generationConfig: { responseMimeType: 'application/json' },
+          }), 30000);
+          text = result?.response?.text();
+        } catch (err) {
+          ultimaEroare = err;
+          const code = codEroareSigur(err);
+          if (code === 'TIMEOUT') inregistreazaOperational('gemini.timeout');
+          if (String(err?.status || err?.code || err?.message || '').includes('429')) {
+            inregistreazaOperational('gemini.429');
           }
         }
         if (text) break;
@@ -200,18 +304,7 @@ exports.analizaMancareTask = task({
       const items = parseJsonFromLlm(text, { asteapta: 'array' });
       if (!Array.isArray(items)) throw new Error('JSON_AI_INVALID');
 
-      const normalizate = items.slice(0, MAX_ALIMENTE)
-        .map((item) => ({
-          nume: String(item?.nume || 'Aliment identificat').trim().substring(0, 150),
-          estimare_grame: numarModel(item?.estimare_grame, { min: 1, max: 5000, implicit: 100 }),
-          calorii_per_100g: numarModel(item?.calorii_per_100g, { max: 1000 }),
-          proteine_per_100g: numarModel(item?.proteine_per_100g, { max: 100 }),
-          grasimi_per_100g: numarModel(item?.grasimi_per_100g, { max: 100 }),
-          carbohidrati_per_100g: numarModel(item?.carbohidrati_per_100g, { max: 100 }),
-          incredere: String(item?.incredere || 'mediu').substring(0, 20),
-        }))
-        .filter((item) => item.nume.length > 0);
-      if (normalizate.length === 0) throw new Error('LISTA_AI_GOALA');
+      const normalizate = normalizePhotoItems(items.slice(0, MAX_ALIMENTE));
 
       // Ramura isNotFood: imaginea nu contine alimente (modelul a raspuns cu
       // alimente filtrate sau nume care semnaleaza non-food). Raspuns explicit
@@ -224,41 +317,61 @@ exports.analizaMancareTask = task({
           processedAt: new Date().toISOString(),
         };
         // Rezultat procesat valid: jobul se considera completed, nu o eroare tehnica.
-        if (jobId) await updateAiJob(jobId, { status: 'completed', result: rezultatNotFood });
+        await settlePhotoCredit({ userId, reservationId, action: 'release', reason: 'NOT_FOOD' });
+        if (jobId) await updateAiJob(jobId, {
+          status: 'failed', result: rezultatNotFood, error_code: 'NOT_FOOD',
+          completed_at: new Date().toISOString(),
+        }, userId);
         return rezultatNotFood;
       }
 
-      const totalKcal = normalizate.reduce(
-        (suma, item) => suma + (item.calorii_per_100g * item.estimare_grame) / 100,
-        0,
-      );
+      const quality = evaluatePhotoQuality(normalizate);
+      const suggestedMeal = normalizate.find((item) => item.tip_masa_sugerat)?.tip_masa_sugerat;
 
       const rezultatFinal = {
         success: true,
         items: normalizate,
-        totals: { kcal: Math.round(totalKcal) },
-        tipMasa: TIPURI_MASA.has(tipMasa) ? tipMasa : 'Pranz',
+        totals: quality.totals,
+        quality: { requiresReview: quality.requiresReview, issues: quality.issues },
+        tipMasa: inferMealType(suggestedMeal, tipMasa),
         userId,
         processedAt: new Date().toISOString(),
       };
-      if (jobId) await updateAiJob(jobId, { status: 'completed', result: rezultatFinal });
+      await settlePhotoCredit({ userId, reservationId, action: 'commit' });
+      if (jobId) await updateAiJob(jobId, {
+        status: 'succeeded', result: rezultatFinal, error_code: null,
+        completed_at: new Date().toISOString(),
+      }, userId);
+      inregistreazaOperational('photo.succeeded', Date.now() - executionStartedAt);
       return rezultatFinal;
     } catch (err) {
       if (process.env.SENTRY_DSN) {
         try {
-          require('@sentry/node').captureException(err);
+          const Sentry = require('@sentry/node');
+          Sentry.withScope((scope) => {
+            scope.setLevel('error');
+            scope.setExtra('error_summary', rezumatEroareSigur(err, {
+              operation: 'trigger_photo_analysis',
+              provider: 'gemini',
+            }));
+            Sentry.captureMessage('AI_TRIGGER_PHOTO_ANALYSIS_FAILED');
+          });
         } catch {
           // Telemetria optionala nu schimba rezultatul task-ului.
         }
       }
       const cod = codEroareSigur(err);
       console.error('[Trigger analiza-mancare-ai] Esuare:', cod);
-      // Marcam esecul in ai_jobs apoi RE-ARUNCAM: retry-ul Trigger.dev (maxAttempts: 3)
-      // depinde de `throw`, nu de un `return { success: false }`.
-      if (jobId) await updateAiJob(jobId, { status: 'failed', error_code: cod });
+      // Starea ramane running intre incercari. Doar hook-ul terminal onFailure
+      // marcheaza failed si elibereaza rezervarea, evitand refund intre retry-uri.
+      if (jobId) await updateAiJob(jobId, { error_code: cod }, userId);
       throw err;
     }
   },
 });
 
-exports._test = { citesteCorpLimitat, detecteazaMime, codEroareSigur, updateAiJob };
+exports._test = {
+  citesteCorpLimitat, detecteazaMime, codEroareSigur, updateAiJob,
+  settlePhotoCredit, requireOwnedJob, construiesteIncercariGemini, PHOTO_CONCURRENCY,
+  normalizePhotoItems, evaluatePhotoQuality, inferMealType,
+};

@@ -14,7 +14,13 @@ const { construiesteIstoricSigur, valideazaIngrediente } = require('../utils/pro
 const { Semafor } = require('../utils/semafor');
 const { callWithTimeout, callWithSoftTimeout, TimeoutAiError } = require('../utils/httpTimeout');
 const { StoreCuRezerva } = require('../utils/storePartajat');
-const { creeazaContextDate, EroareContextDate, TABELE_CU_RLS_UTILIZATOR, tabelUtilizator } = require('../utils/clientUtilizator');
+const {
+  creeazaContextDate,
+  EroareContextDate,
+  TABELE_CU_RLS_UTILIZATOR,
+  tabelUtilizator,
+  getStatisticiClientDate,
+} = require('../utils/clientUtilizator');
 const { creeazaServiciuChat, EroareAiClient } = require('../services/ai/chat');
 
 describe('parseJsonFromLlm', () => {
@@ -184,6 +190,42 @@ describe('storePartajat (A-1)', () => {
 });
 
 describe('clientUtilizator (A-3)', () => {
+  it('TASK-001: contextul unei cereri ordinare nu expune niciodata clientul service-role', () => {
+    const supabaseAdmin = { from: jest.fn() };
+    const ctx = creeazaContextDate({
+      config: {
+        supabase: {
+          url: 'https://proiect.test.supabase.co',
+          anonKey: 'anon-test',
+        },
+      },
+      supabaseAdmin,
+      token: 'jwt-supabase-valid',
+      userId: '11111111-1111-4111-8111-111111111111',
+      sursaToken: 'supabase',
+    });
+
+    expect(ctx.db).not.toBe(supabaseAdmin);
+    expect(ctx).not.toHaveProperty('admin');
+    expect(ctx.modAdmin).toBe(false);
+  });
+
+  it('TASK-001: o identitate fara JWT Supabase este refuzata, nu degradata pe service-role', () => {
+    const inainte = getStatisticiClientDate();
+    expect(() =>
+      creeazaContextDate({
+        config: { supabase: { url: 'https://proiect.test.supabase.co', anonKey: 'anon-test' } },
+        supabaseAdmin: { from: jest.fn() },
+        token: 'jwt-clerk-valid',
+        userId: '11111111-1111-4111-8111-111111111111',
+        sursaToken: 'clerk',
+      }),
+    ).toThrow(EroareContextDate);
+    const dupa = getStatisticiClientDate();
+    expect(dupa.cereriModAdmin).toBe(inainte.cereriModAdmin);
+    expect(dupa.esecuriClientRls).toBe(inainte.esecuriClientRls + 1);
+  });
+
   it('esecul construirii clientului RLS arunca eroarea de context, nu cade pe clientul admin', () => {
     const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {

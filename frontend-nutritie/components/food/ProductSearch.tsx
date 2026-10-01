@@ -3,7 +3,9 @@ import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   FlatList, ActivityIndicator
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Search, Plus, X } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../supabase';
@@ -13,29 +15,45 @@ import { foodPresets } from '../../constants/foodPresets';
 import { FoodProduct } from './types';
 import { ProductSearchResult } from './ProductSearchResult';
 import { QuantityEditor } from './QuantityEditor';
-import { ManualProductForm } from './ManualProductForm';
+import { ManualProductForm, LOCAL_CUSTOM_FOODS_STORAGE_KEY } from './ManualProductForm';
+import { FoodProductDetailModal } from './FoodProductDetailModal';
+import { cautaProduseOpenFoodFacts } from '../../lib/openfoodfacts';
 
 interface ProductSearchProps {
   initialBarcode?: string;
-  onSelectProductWithGrams: (product: FoodProduct, grams: number) => void;
+  onSelectProductWithGrams?: (product: FoodProduct, grams: number) => void;
   onClose?: () => void;
+  onMealAdded?: (masa: any) => void;
 }
 
 export function ProductSearch({
   initialBarcode = '',
   onSelectProductWithGrams,
-  onClose
+  onClose,
+  onMealAdded,
 }: ProductSearchProps) {
   const { colors } = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoodProduct[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedForQuantity, setSelectedForQuantity] = useState<FoodProduct | null>(null);
+  const [selectedProductForDetail, setSelectedProductForDetail] = useState<FoodProduct | null>(null);
   const [isManualMode, setIsManualMode] = useState(Boolean(initialBarcode));
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const searchSeqRef = useRef(0);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   const normalizeText = (text: string) =>
     text
@@ -44,12 +62,17 @@ export function ProductSearch({
       .toLowerCase()
       .trim();
 
-  // 1. Căutare locală în foodPresets & produse personalizate din Supabase
+  const handleSelectProduct = useCallback((p: FoodProduct) => {
+    setSelectedProductForDetail(p);
+  }, []);
+
+  // Căutare combinată: presets, custom foods locale (AsyncStorage), remote (Supabase produse_camara) și Open Food Facts
   const searchCombined = useCallback(async (qRaw: string) => {
+    const seq = ++searchSeqRef.current;
     const q = normalizeText(qRaw);
     const list: FoodProduct[] = [];
 
-    // A) Presets locale
+    // A) Presets locale (predefinite)
     foodPresets.forEach((p) => {
       const n = normalizeText(p.nume);
       if (!q || n.includes(q)) {
@@ -66,20 +89,41 @@ export function ProductSearch({
       }
     });
 
-    // B) Produse salvate anterior din Supabase (dacă user-ul e autentificat)
+    // B1) Produse personalizate salvate local în AsyncStorage
+    try {
+      const rawLocal = await AsyncStorage.getItem(LOCAL_CUSTOM_FOODS_STORAGE_KEY);
+      if (rawLocal) {
+        const localList: FoodProduct[] = JSON.parse(rawLocal);
+        localList.forEach((prod) => {
+          const n = normalizeText(prod.name);
+          const b = prod.brand ? normalizeText(prod.brand) : '';
+          if (!q || n.includes(q) || b.includes(q)) {
+            list.push({
+              ...prod,
+              source: 'user_saved',
+            });
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Eroare citire custom_foods local:', e);
+    }
+
+    // B2) Produse salvate anterior din Supabase (dacă user-ul e autentificat)
     if (session?.user?.id) {
       try {
         let sbQuery = supabase
           .from('produse_camara')
           .select('*')
           .eq('user_id', session.user.id)
-          .limit(20);
+          .limit(30);
 
         if (q) {
           sbQuery = sbQuery.ilike('nume', `%${qRaw}%`);
         }
 
         const { data } = await sbQuery;
+        if (!isMountedRef.current || searchSeqRef.current !== seq) return;
         if (data) {
           data.forEach((row: any) => {
             list.push({
@@ -112,47 +156,95 @@ export function ProductSearch({
 
       try {
         setLoading(true);
-        const res = await fetch(`${API_URL}${API_PREFIX}/cauta-produs?q=${encodeURIComponent(qRaw)}`, {
-          signal: abortControllerRef.current.signal,
-        });
-        if (res.ok) {
-          const extData = await res.json();
-          if (Array.isArray(extData)) {
-            extData.forEach((item: any, idx: number) => {
-              list.push({
-                id: `ext_${item.code || idx}`,
-                source: 'openfoodfacts',
-                name: item.product_name || item.nume || 'Produs',
-                brand: item.brands || item.brand || undefined,
-                barcode: item.code || undefined,
-                kcalPer100g: Number(item.nutriments?.['energy-kcal_100g'] || item.calorii_per_100g || 0),
-                proteinPer100g: Number(item.nutriments?.proteins_100g || item.proteine_per_100g || 0),
-                carbsPer100g: Number(item.nutriments?.carbohydrates_100g || item.carbohidrati_per_100g || 0),
-                fatPer100g: Number(item.nutriments?.fat_100g || item.grasimi_per_100g || 0),
-              });
-            });
-          }
+        const headers: Record<string, string> = { 'Accept': 'application/json' };
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
         }
-      } catch (e: any) {
-        if (e.name !== 'AbortError') {
-          console.warn('Eroare căutare externă:', e);
+
+        const backendPromise = fetch(`${API_URL}${API_PREFIX}/cauta-produs?q=${encodeURIComponent(qRaw)}`, {
+          signal: abortControllerRef.current.signal,
+          headers,
+        }).then(async (res) => {
+          if (res.ok) {
+            const extData = await res.json();
+            return Array.isArray(extData) ? extData : [];
+          }
+          return [];
+        }).catch(() => []);
+
+        const offPromise = cautaProduseOpenFoodFacts(qRaw, abortControllerRef.current.signal)
+          .catch(() => []);
+
+        const [extData, offProducts] = await Promise.all([backendPromise, offPromise]);
+        if (!isMountedRef.current || searchSeqRef.current !== seq) return;
+
+        if (Array.isArray(offProducts)) {
+          offProducts.forEach((p) => list.push(p));
+        }
+
+        if (Array.isArray(extData)) {
+          extData.forEach((item: any) => {
+            const p100 = item.nutriments || item;
+            list.push({
+              id: item.id || `ext_${item.code || Math.random().toString(36).substring(7)}`,
+              source: 'barcode_cache',
+              name: item.product_name || item.name || 'Produs necunoscut',
+              brand: item.brands || item.brand || undefined,
+              barcode: item.code || item.barcode || undefined,
+              imageUrl: item.image_url || undefined,
+              nutriscoreGrade: item.nutrition_grades || undefined,
+              novaGroup: item.nova_group || undefined,
+              kcalPer100g: Number(p100['energy-kcal_100g'] || p100.energy_kcal_100g || p100.calories || 0),
+              proteinPer100g: Number(p100.proteins_100g || p100.proteins || 0),
+              carbsPer100g: Number(p100.carbohydrates_100g || p100.carbohydrates || 0),
+              fatPer100g: Number(p100.fat_100g || p100.fat || 0),
+              fiberPer100g: Number(p100.fiber_100g || p100.fiber || 0),
+              servingGrams: Number(item.serving_quantity || 100),
+            });
+          });
+        }
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.warn('Eroare cautare produse externe:', err);
         }
       } finally {
-        setLoading(false);
+        if (isMountedRef.current && searchSeqRef.current === seq) {
+          setLoading(false);
+        }
+      }
+    } else {
+      setLoading(false);
+    }
+
+    // D) Deduplicare inteligentă păstrând prioritatea: user_saved > preset > barcode_cache > openfoodfacts
+    const seen = new Map<string, FoodProduct>();
+    for (const p of list) {
+      const key = p.barcode ? `b_${p.barcode}` : `n_${normalizeText(p.name)}_${normalizeText(p.brand || '')}`;
+      if (!seen.has(key)) {
+        seen.set(key, p);
+      } else {
+        const existing = seen.get(key)!;
+        // Păstrăm cea mai bună sursă și completăm detaliile lipsă
+        seen.set(key, {
+          ...p,
+          ...existing,
+          imageUrl: existing.imageUrl || p.imageUrl,
+          imageSmallUrl: existing.imageSmallUrl || p.imageSmallUrl,
+          nutriscoreGrade: existing.nutriscoreGrade || p.nutriscoreGrade,
+          nutriscoreScore: existing.nutriscoreScore ?? p.nutriscoreScore,
+          novaGroup: existing.novaGroup ?? p.novaGroup,
+          ecoscoreGrade: existing.ecoscoreGrade || p.ecoscoreGrade,
+          ingredientsText: existing.ingredientsText || p.ingredientsText,
+          allergens: existing.allergens || p.allergens,
+        });
       }
     }
 
-    // Deduplicare după barcode sau nume+brand
-    const seen = new Set<string>();
-    const deduped = list.filter((p) => {
-      const key = p.barcode ? `barcode_${p.barcode}` : `name_${normalizeText(p.name)}_${normalizeText(p.brand || '')}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    const deduped = Array.from(seen.values());
 
-    setResults(deduped.slice(0, 25));
-  }, [session?.user?.id]);
+    if (!isMountedRef.current || searchSeqRef.current !== seq) return;
+    setResults(deduped.slice(0, 30));
+  }, [session?.user?.id, session?.access_token]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -169,7 +261,8 @@ export function ProductSearch({
           initialName={query}
           onSave={(prod, gr) => {
             setIsManualMode(false);
-            onSelectProductWithGrams(prod, gr);
+            searchCombined(query);
+            setSelectedProductForDetail(prod);
           }}
           onCancel={() => setIsManualMode(false)}
         />
@@ -185,7 +278,9 @@ export function ProductSearch({
           onConfirm={(gr) => {
             const prod = selectedForQuantity;
             setSelectedForQuantity(null);
-            onSelectProductWithGrams(prod, gr);
+            if (onSelectProductWithGrams) {
+              onSelectProductWithGrams(prod, gr);
+            }
           }}
           onCancel={() => setSelectedForQuantity(null)}
         />
@@ -202,19 +297,20 @@ export function ProductSearch({
           <TextInput
             style={[styles.searchInput, { color: colors.textPrimary }]}
             maxFontSizeMultiplier={1.3}
-            placeholder="Caută produs, brand sau aliment..."
+            accessibilityLabel={t('productSearch.inputA11y')}
+            placeholder={t('productSearch.inputPlaceholder')}
             placeholderTextColor={colors.textSecondary + '77'}
             value={query}
             onChangeText={setQuery}
           />
           {query ? (
-            <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+            <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} accessibilityLabel={t('productSearch.clearSearchA11y')}>
               <X size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           ) : null}
         </View>
         {onClose ? (
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} accessibilityLabel={t('productSearch.closeA11y')}>
             <X size={22} color={colors.textPrimary} />
           </TouchableOpacity>
         ) : null}
@@ -223,7 +319,7 @@ export function ProductSearch({
       {loading && (
         <View style={styles.loadingRow}>
           <ActivityIndicator size="small" color={colors.accent} />
-          <Text maxFontSizeMultiplier={1.3} style={[styles.loadingText, { color: colors.textSecondary }]}>Căutăm în cataloage...</Text>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.loadingText, { color: colors.textSecondary }]}>{t('productSearch.searchingCatalogs')}</Text>
         </View>
       )}
 
@@ -231,25 +327,48 @@ export function ProductSearch({
         data={results}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: 20 }}
         renderItem={({ item }) => (
           <ProductSearchResult
             product={item}
-            onSelect={(p) => setSelectedForQuantity(p)}
+            onSelect={handleSelectProduct}
           />
         )}
         ListFooterComponent={
           <TouchableOpacity
+            accessibilityLabel={t('productSearch.manualEntryA11y')}
+            accessibilityRole="button"
             style={[styles.manualRowFooter, { backgroundColor: colors.cardBg, borderColor: colors.accent }]}
             onPress={() => setIsManualMode(true)}
           >
             <Plus size={18} color={colors.accent} />
             <Text maxFontSizeMultiplier={1.3} style={[styles.manualFooterText, { color: colors.accent }]}>
-              Nu găsești produsul? Introdu-l complet manual
+              {t('productSearch.manualEntryCta')}
             </Text>
           </TouchableOpacity>
         }
       />
+
+      {selectedProductForDetail && (
+        <FoodProductDetailModal
+          visible={Boolean(selectedProductForDetail)}
+          product={selectedProductForDetail}
+          onClose={() => setSelectedProductForDetail(null)}
+          onAddSuccess={(masa) => {
+            const p = selectedProductForDetail;
+            setSelectedProductForDetail(null);
+            if (onMealAdded) {
+              onMealAdded(masa);
+            } else if (p && onSelectProductWithGrams) {
+              onSelectProductWithGrams(p, p.servingGrams || 100);
+            }
+            if (onClose) {
+              onClose();
+            }
+          }}
+        />
+      )}
     </View>
   );
 }

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
 
 export interface AlimentFavorit {
   id: string;
@@ -50,7 +49,6 @@ export function useFavorite() {
       const updated = [newFav, ...favorite];
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       setFavorite(updated);
-      Alert.alert('❤️ Salvat la Favorite', `"${newFav.nume}" a fost adăugat în lista ta de alimente frecvente.`);
       return true;
     } catch (e) {
       console.error('Eroare la adăugare favorit:', e);

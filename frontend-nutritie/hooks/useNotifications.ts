@@ -53,7 +53,7 @@ export function useNotifications() {
     try {
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('meal-reminders', {
-          name: 'Remindere Mese NutriAI',
+          name: 'Remindere Mese GetFlow',
           importance: Notifications.AndroidImportance.HIGH,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: '#CCFF00',

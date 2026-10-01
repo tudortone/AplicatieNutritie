@@ -4,6 +4,7 @@ const express = require('express');
 
 const { esteUuid } = require('../utils/identitate');
 const { valideazaMasa } = require('../utils/validareMese');
+const { rezumatEroareSigur } = require('../utils/sentrySanitize');
 
 /**
  * Rute de gestionare a meselor (DELETE/PUT/POST /api/mese).
@@ -30,7 +31,7 @@ function createMeseRouter({ requireAuth, generalLimiter, contextDate, meseRepo }
       const { data, error } = await meseRepo.deleteMasa(ctx, id);
 
       if (error) {
-        console.error('Eroare DB stergere masa:', error.message);
+        console.error('[Meals DB]', rezumatEroareSigur(error, { operation: 'delete_meal', provider: 'supabase' }));
         return res.status(500).json({ eroare: 'Eroare la ștergerea mesei. Încearcă din nou.' });
       }
       if (!data || data.length === 0) {
@@ -38,7 +39,7 @@ function createMeseRouter({ requireAuth, generalLimiter, contextDate, meseRepo }
       }
       res.json({ succes: true });
     } catch (error) {
-      console.error('Eroare stergere masa:', error.message);
+      console.error('[Meals route]', rezumatEroareSigur(error, { operation: 'delete_meal' }));
       res.status(500).json({ eroare: 'Eroare la ștergerea mesei.' });
     }
   });
@@ -62,7 +63,7 @@ function createMeseRouter({ requireAuth, generalLimiter, contextDate, meseRepo }
       const { data, error } = await meseRepo.updateMasa(ctx, id, validare.payload);
 
       if (error) {
-        console.error('Eroare DB actualizare masa:', error.message);
+        console.error('[Meals DB]', rezumatEroareSigur(error, { operation: 'update_meal', provider: 'supabase' }));
         return res.status(500).json({ eroare: 'Eroare la actualizarea mesei. Încearcă din nou.' });
       }
       if (!data || data.length === 0) {
@@ -70,7 +71,7 @@ function createMeseRouter({ requireAuth, generalLimiter, contextDate, meseRepo }
       }
       res.json({ succes: true, masa: data[0] });
     } catch (error) {
-      console.error('Eroare actualizare masa:', error.message);
+      console.error('[Meals route]', rezumatEroareSigur(error, { operation: 'update_meal' }));
       res.status(500).json({ eroare: 'Eroare la actualizarea mesei.' });
     }
   });
@@ -102,12 +103,12 @@ function createMeseRouter({ requireAuth, generalLimiter, contextDate, meseRepo }
       const { data: result, error } = await meseRepo.createMasa(ctx, insertPayload);
 
       if (error) {
-        console.error('Eroare DB inserare masa:', error.message);
+        console.error('[Meals DB]', rezumatEroareSigur(error, { operation: 'insert_meal', provider: 'supabase' }));
         return res.status(500).json({ eroare: 'Eroare la adăugarea mesei. Încearcă din nou.' });
       }
       res.json({ succes: true, masa: result?.[0] || null });
     } catch (error) {
-      console.error('Eroare adaugare masa:', error.message);
+      console.error('[Meals route]', rezumatEroareSigur(error, { operation: 'insert_meal' }));
       res.status(500).json({ eroare: 'Eroare la adăugarea mesei.' });
     }
   });

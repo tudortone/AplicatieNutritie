@@ -26,6 +26,16 @@ const TTL_PROCESSARE_MS = 2 * 60 * 1000;
 // R2: un eșec de server (5xx) e păstrat ca 'failed' doar scurt, suficient cât un retry
 // cu aceeași cheie să primească replay, nu o re-executare (care ar debita din nou).
 const TTL_ESEC_MS = 2 * 60 * 1000;
+// P1-12: TTL pentru cheile DERIVATE de server (clientul nu a trimis Idempotency-Key).
+// Deliberat mult mai scurt decat TTL_MS: scopul lor e sa absoarba retry-urile de
+// transport (timeout mobil, reconectare, proxy care reia POST-ul, dublu tap), NU sa
+// transforme o repetare intentionata a aceleiasi actiuni intr-un replay permanent.
+// Peste aceasta fereastra, aceeasi cerere se executa din nou — ca inainte.
+const TTL_DERIVAT_MS = 90 * 1000;
+// P1-12: amprenta de continut trimisa de client pentru cererile multipart, unde
+// corpul nu e parsat inca (multer ruleaza dupa middleware). SHA-256 hex.
+const ANTET_AMPRENTA = 'x-payload-fingerprint';
+const TIPAR_AMPRENTA = /^[0-9a-f]{64}$/;
 const registruImplicit = creeazaRegistruCheiValori({
   url: process.env.REDIS_URL,
   prefix: 'nutri:idem',
@@ -114,6 +124,32 @@ function raspundeDinRegistru(res, existent, amprenta) {
   return false;
 }
 
+/**
+ * P1-12 (remediere) — finalizarea zălogului este best-effort prin design (scrierea
+ * nu poate fi în aceeași tranzacție cu răspunsul HTTP). Consecința este MĂRGINITĂ:
+ * dacă scrierea „finalizat" eșuează, înregistrarea `procesare` rămâne până la
+ * TTL_PROCESSARE_MS, deci un retry în acea fereastră primește 409 IN_PROGRESS —
+ * NU o a doua execuție. Abia după expirarea TTL-ului o reluare re-execută, și
+ * atunci este deja o încercare logică nouă.
+ *
+ * Ce NU era acceptabil: `catch(() => {})` făcea eșecul complet invizibil. Acum e
+ * observabil, ca degradarea să fie detectată, nu dedusă.
+ */
+function raporteazaFinalizareEsuata(err) {
+  const mesaj = `[Idempotenta] Finalizarea zalogului a esuat: ${err?.message || err}`;
+  console.warn(mesaj);
+  try {
+    const Sentry = require('@sentry/node');
+    Sentry.withScope((scope) => {
+      scope.setLevel('warning');
+      scope.setTag('component', 'idempotency-finalize');
+      Sentry.captureMessage(mesaj);
+    });
+  } catch {
+    // Sentry indisponibil — mesajul a fost deja loggat.
+  }
+}
+
 async function revendicaAtomic(registru, key, valoare, ttlMs) {
   if (typeof registru.setIfAbsent === 'function') {
     return registru.setIfAbsent(key, valoare, ttlMs);
@@ -156,17 +192,25 @@ function creeazaMiddlewareIdempotenta({
     const esteMultipart = contentType.startsWith('multipart/form-data');
     if (esteMultipart && !permiteMultipart) return next();
 
-    const idempotencyKey = req.headers['idempotency-key'];
-    if (typeof idempotencyKey !== 'string' || !idempotencyKey.trim()) return next();
-    const keyCurata = idempotencyKey.trim();
-    if (keyCurata.length > 200 || !/^[\x21-\x7e]+$/.test(keyCurata)) {
-      return res.status(400).json({ eroare: 'Idempotency-Key este invalid sau prea lung.' });
+    // P1-12: amprenta de continut pentru multipart. Fara ea, amprenta unei cereri
+    // multipart era doar ruta — deci aceeasi cheie cu ALTA imagine returna tacut
+    // rezultatul primei analize (date nutritionale gresite atribuite pozei noi).
+    const amprentaClient = req.headers[ANTET_AMPRENTA];
+    if (amprentaClient !== undefined) {
+      if (typeof amprentaClient !== 'string' || !TIPAR_AMPRENTA.test(amprentaClient)) {
+        return res.status(400).json({
+          eroare: 'X-Payload-Fingerprint trebuie sa fie un SHA-256 hex de 64 de caractere.',
+          cod: 'AMPRENTA_INVALIDA',
+        });
+      }
     }
 
     let amprenta;
     if (esteMultipart) {
-      // Corpul nu e parsat încă (multer rulează după). Amprenta pe rută + cheie.
-      amprenta = hash(`multipart:${req.method}:${String(req.originalUrl || req.path || '').split('?')[0]}`);
+      const cale = String(req.originalUrl || req.path || '').split('?')[0];
+      // Corpul nu e parsat inca (multer ruleaza dupa). Cu amprenta de continut de la
+      // client, doua imagini diferite produc amprente diferite => 409, nu replay.
+      amprenta = hash(`multipart:${req.method}:${cale}:${amprentaClient || ''}`);
     } else {
       try {
         amprenta = amprentaCerere(req);
@@ -175,6 +219,39 @@ function creeazaMiddlewareIdempotenta({
       }
     }
 
+    const idempotencyKey = req.headers['idempotency-key'];
+    const areCheieExplicita = typeof idempotencyKey === 'string' && idempotencyKey.trim() !== '';
+    let keyCurata;
+    let cheieDerivata = false;
+
+    if (areCheieExplicita) {
+      keyCurata = idempotencyKey.trim();
+      if (keyCurata.length > 200 || !/^[\x21-\x7e]+$/.test(keyCurata)) {
+        return res.status(400).json({ eroare: 'Idempotency-Key este invalid sau prea lung.' });
+      }
+    } else {
+      // P1-12 — MOD DE COMPATIBILITATE, EXPLICIT SI MARGINIT.
+      //
+      // Clientii deja lansati nu trimit `Idempotency-Key` decat pe /chat si
+      // /log-food-from-chat. Pana acum middleware-ul facea `return next()`: ruta cea
+      // mai scumpa (analiza foto) nu avea NICIO protectie la replay. Un refuz dur
+      // (400) ar fi rupt clientii din magazin, deci serverul DERIVA o cheie mai slaba
+      // din (utilizator, ruta, amprenta payload-ului) — suficient cat sa colapseze
+      // retry-urile de transport, cu TTL scurt (TTL_DERIVAT_MS) ca sa nu schimbe
+      // semantica repetarilor deliberate.
+      //
+      // Limita onesta: pe rutele necritice si pe multipart FARA amprenta de continut
+      // nu exista de unde deriva o cheie stabila — acolo protectia ramane absenta
+      // pana cand clientul trimite antetul. Nu este o bariera de securitate
+      // cross-account (aceea e namespace-ul pe utilizator), ci o protectie
+      // anti-dubla-debitare pentru acelasi utilizator.
+      if (!rutaCritica) return next();
+      if (esteMultipart && !amprentaClient) return next();
+      keyCurata = `derivat:${amprenta}`;
+      cheieDerivata = true;
+    }
+
+    const ttlRezultat = cheieDerivata ? Math.min(ttlMs, TTL_DERIVAT_MS) : ttlMs;
     const cacheKey = construiesteCheie(req, keyCurata);
     try {
       // M-04: fail-closed ÎNAINTE de orice claim — dacă store-ul partajat e „degradat"
@@ -234,7 +311,7 @@ function creeazaMiddlewareIdempotenta({
           status,
           body,
           finalizatLa: Date.now(),
-        }, ttlMs)).catch(() => {});
+        }, ttlRezultat)).catch(raporteazaFinalizareEsuata);
       } else if (status >= 500) {
         // R2: eșec de server (5xx) → păstrăm claim-ul 'failed' cu TTL scurt, ca un
         // retry cu aceeași cheie să primească replay 5xx, nu o re-executare (dublu
@@ -278,4 +355,6 @@ module.exports = {
   TTL_MS,
   TTL_PROCESSARE_MS,
   TTL_ESEC_MS,
+  TTL_DERIVAT_MS,
+  ANTET_AMPRENTA,
 };

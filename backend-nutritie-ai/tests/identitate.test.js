@@ -1,10 +1,14 @@
 'use strict';
 
+jest.mock('@clerk/express', () => ({
+  verifyToken: jest.fn(),
+}));
+
 /**
  * C1-S1: contractul favorizează calea Supabase (RLS). Un token Supabase valid
  * trebuie rezolvat ca `provider: 'supabase'` — singura cale pe care clientul cu
- * RLS se poate construi. Token-urile Clerk sunt acceptate DOAR ca fallback,
- * după eșecul explicit al GoTrue, și doar dacă există mapare în clerk_user_map.
+ * RLS se poate construi. Token-urile Clerk sunt WEBHOOK ONLY și nu sunt acceptate
+ * ca bearer fallback pe endpointurile ordinare.
  *
  * Aceste teste nu ating rețeaua: `rezolvaIdentitate` primește obiectele `supabase`
  * și `supabaseAdmin` prin injecție de dependență, deci simulăm doar fake-uri.
@@ -37,6 +41,32 @@ function getUserEroare(error) {
 }
 
 describe('identitate (C1-S1 supabase-first)', () => {
+  it('TASK-001: un bearer respins de Supabase nu este acceptat prin Clerk pe endpointuri ordinare', async () => {
+    const clerk = require('@clerk/express');
+    clerk.verifyToken.mockResolvedValueOnce({
+      sub: 'user_clerk_123',
+      email: 'legacy@example.com',
+    });
+    const query = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn().mockResolvedValue({
+        data: { supabase_user_id: UUID },
+        error: null,
+      }),
+    };
+    const supabaseAdmin = { from: jest.fn(() => query) };
+
+    await expect(rezolvaIdentitate({
+      token: 'jwt-clerk-valid',
+      supabase: supabaseCon(getUserEroare({ status: 401, message: 'invalid' })),
+      supabaseAdmin,
+      clerkSecretKey: 'sk_secret',
+    })).rejects.toMatchObject({ status: 401, cod: 'TOKEN_INVALID' });
+    expect(clerk.verifyToken).not.toHaveBeenCalled();
+    expect(supabaseAdmin.from).not.toHaveBeenCalled();
+  });
+
   it('un token Supabase valid se rezolva ca provider supabase (calea RLS)', async () => {
     const utilizator = await rezolvaIdentitate({
       token: 'jwt-supabase-valid',
@@ -48,8 +78,32 @@ describe('identitate (C1-S1 supabase-first)', () => {
       id: UUID,
       provider: 'supabase',
       esteAdmin: false,
+      esteTester: false,
       email: 'a@b.ro',
     });
+  });
+
+  it('acorda tester numai din app_metadata.full_access strict true', async () => {
+    const utilizator = await rezolvaIdentitate({
+      token: 'jwt',
+      supabase: supabaseCon(getUserSucces({
+        app_metadata: { full_access: true },
+      })),
+    });
+
+    expect(utilizator).toMatchObject({ esteTester: true, esteAdmin: false });
+  });
+
+  it('ignora full_access falsificat in user_metadata', async () => {
+    const utilizator = await rezolvaIdentitate({
+      token: 'jwt',
+      supabase: supabaseCon(getUserSucces({
+        user_metadata: { full_access: true },
+        app_metadata: {},
+      })),
+    });
+
+    expect(utilizator).toMatchObject({ esteTester: false, esteAdmin: false });
   });
 
   it('rolul de admin se citeste doar din app_metadata.rol, nu user_metadata', async () => {

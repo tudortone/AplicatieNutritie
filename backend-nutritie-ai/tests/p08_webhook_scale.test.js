@@ -137,7 +137,7 @@ describe('P-08 — Webhook Clerk rezistent la >1000 utilizatori', () => {
               maybeSingle: async () => ({ data: null, error: null }),
             }),
           }),
-          upsert: async (payload) => {
+          upsert: async (_payload) => {
             if (tabela === 'profil') {
               const err = new Error('foreign key constraint violation');
               err.code = '23503';

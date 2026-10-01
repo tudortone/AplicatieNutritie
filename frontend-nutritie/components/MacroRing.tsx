@@ -3,6 +3,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import Animated, { useSharedValue, useAnimatedProps, withTiming, Easing } from 'react-native-reanimated';
 import { useTheme } from '../context/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { MOTION_DURATIONS } from '../constants/motion';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -20,6 +22,7 @@ export const MacroRing: React.FC<MacroRingProps> = ({
   strokeWidth = 14,
 }) => {
   const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   
@@ -27,11 +30,15 @@ export const MacroRing: React.FC<MacroRingProps> = ({
   const progressValue = useSharedValue(0);
 
   useEffect(() => {
+    if (reduceMotion) {
+      progressValue.value = procent;
+      return;
+    }
     progressValue.value = withTiming(procent, {
-      duration: 1200,
+      duration: MOTION_DURATIONS.feedback,
       easing: Easing.out(Easing.cubic),
     });
-  }, [procent, progressValue]);
+  }, [procent, progressValue, reduceMotion]);
 
   const animatedProps = useAnimatedProps(() => {
     // Reanimated 4 + Fabric arunca "Loss of precision" pe valori fractionare
@@ -78,9 +85,23 @@ export const MacroRing: React.FC<MacroRingProps> = ({
         />
       </Svg>
 
-      <View style={styles.textContainer}>
-        <Text style={[styles.consumedText, { color: colors.textPrimary }]}>{consumat}</Text>
-        <Text style={[styles.targetText, { color: colors.textSecondary }]}>/ {tinta} kcal</Text>
+      <View style={[styles.textContainer, { maxWidth: size - strokeWidth * 2 - 8 }]}>
+        <Text
+          style={[styles.consumedText, { color: colors.textPrimary }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.65}
+        >
+          {consumat}
+        </Text>
+        <Text
+          style={[styles.targetText, { color: colors.textSecondary }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
+          / {tinta} kcal
+        </Text>
       </View>
     </View>
   );
@@ -97,15 +118,20 @@ const styles = StyleSheet.create({
   textContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 4,
   },
   consumedText: {
     fontSize: 22,
     fontWeight: '900',
     letterSpacing: -0.5,
+    includeFontPadding: false,
+    textAlign: 'center',
   },
   targetText: {
     fontSize: 12,
     fontWeight: '600',
     marginTop: 2,
+    includeFontPadding: false,
+    textAlign: 'center',
   },
 });

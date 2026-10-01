@@ -68,24 +68,31 @@ export async function getImageKitAuthParams(signal?: AbortSignal): Promise<Image
   };
 }
 
-/** Încarcă exclusiv varianta redimensionată într-un folder izolat per utilizator. */
+export interface UploadImageKitOptions {
+  skipOptimization?: boolean;
+}
+
+/** Încarcă varianta redimensionată într-un folder izolat per utilizator. */
 export async function uploadImageToImageKit(
   fileUri: string,
   fileName = 'mancare.jpg',
   signal?: AbortSignal,
+  options?: UploadImageKitOptions,
 ): Promise<ImageKitUploadResult> {
   const publicKey = process.env.EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY?.trim();
   if (!publicKey) throw new Error('ImageKit nu este configurat în această versiune a aplicației.');
 
-  const [authParams, optimized] = await Promise.all([
+  const [authParams, optimizedUri] = await Promise.all([
     getImageKitAuthParams(signal),
-    optimizeImageBeforeUpload(fileUri),
+    options?.skipOptimization
+      ? Promise.resolve(fileUri)
+      : optimizeImageBeforeUpload(fileUri).then((opt) => opt.uri),
   ]);
   const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 120) || 'mancare.jpg';
 
   const formData = new FormData();
   formData.append('file', {
-    uri: optimized.uri,
+    uri: optimizedUri,
     type: 'image/jpeg',
     name: safeFileName,
   } as unknown as Blob);

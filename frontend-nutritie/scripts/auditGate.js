@@ -1,20 +1,40 @@
 'use strict';
 
 /**
- * Gate de audit npm pentru frontend (înlocuiește `npm audit --audit-level=moderate`
- * în CI, care eșua fără cale reală de remediere).
+ * Gate de audit npm pentru frontend (P0-04).
  *
- * Context: aplicația e pe Expo SDK 54 (expo ~54.0.34, react-native 0.81.5). Toate
- * advisory-urile din 2026-08-08 pentru lanțul Expo (`@expo/*`, `metro`, `expo-*`,
- * `react-native` etc.) au ca singură remediere un upgrade MAJOR la Expo SDK 57 —
- * nu există versiune "patched" în SDK 54, iar un override pe un sub-pachet Expo
- * rupe prebuild/bundler-ul. Acest backlog e urmărit ca upgrade separat (expo@57).
+ * ==========================================================================
+ * ISTORIC / DE CE ARATA ASA
+ * ==========================================================================
+ * Versiunea anterioara folosea un ALLOWLIST PE NUME DE PACHET
+ * (`expo`, `metro`, `react-native`, `image-size`, ...). Acel model avea doua
+ * defecte structurale:
  *
- * Reguli (mențin severitatea gate-ului original pentru tot ce NU e backlog):
- *   - CRITICAL  -> EȘUEAZĂ întotdeauna (niciun pachet nu e scutit, inclusiv backlog).
- *   - moderate/high într-un pachet DIN ALLOWLIST -> permis (backlog documentat).
- *   - moderate/high într-un pachet ÎN AFARA ALLOWLIST -> EȘUEAZĂ (vuln nou, de triat).
- *   - low -> permis (idem `--audit-level=moderate`).
+ *   1. Scutea pachetul, nu vulnerabilitatea. Odata ce `expo` era in lista,
+ *      ORICE advisory viitor pe `expo` — inclusiv unul complet nou, critic
+ *      pentru runtime — trecea tacut de gate.
+ *   2. Nu avea versiune si nici expirare. O exceptie scrisa pentru
+ *      `image-size <=2.0.2` ar fi continuat sa acopere `image-size <=9.9.9`.
+ *
+ * P0-04 a remediat TOATE advisory-urile prin `overrides` la nivel de patch
+ * (metro 0.83.3 -> 0.83.8, decode-uri-component -> 0.5.0, fast-uri -> 3.1.7,
+ * @xmldom/xmldom -> 0.8.15/0.9.12, js-yaml -> 4.3.2/3.15.2, sharp -> 0.35.4),
+ * fara upgrade de Expo SDK, React Native, Expo Router sau React Navigation.
+ * In consecinta `EXCEPTII_AUDIT` este GOALA, iar gate-ul este complet
+ * fail-closed.
+ *
+ * ==========================================================================
+ * REGULI
+ * ==========================================================================
+ *   - CRITICAL -> EȘUEAZĂ întotdeauna; nu poate fi exceptat, niciodată.
+ *   - moderate/high -> EȘUEAZĂ, cu excepția unei potriviri EXACTE în
+ *     `EXCEPTII_AUDIT` (pachet + range + advisory + neexpirat).
+ *   - low -> permis (aceeași semantică cu `npm audit --audit-level=moderate`).
+ *   - raport invalid / registru indisponibil -> EȘUEAZĂ (fail-closed).
+ *
+ * O exceptie este valida DOAR daca declara toate campurile: `pachet`, `range`,
+ * `advisory` (GHSA/CVE), `motiv` si `expira`. Lipsa oricaruia o face inutila
+ * prin constructie — nu exista wildcard.
  */
 
 const { execFileSync } = require('child_process');
@@ -23,104 +43,196 @@ const { execFileSync } = require('child_process');
 // si pe Linux (unde `npm` e script shell).
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
-// Pachete blocate de SDK-ul Expo 54. Se goleste la upgrade-ul expo@57.
-// NU adauga pachete noi aici fara motiv: un pachet nou vulnerabil trebuie triat.
-//
-// @gorhom/bottom-sheet: advisory-ul propagat (via react-native-reanimated) nu are
-// versiune patched — npm sugereaza downgrade la 5.1.7 (major, rupe componenta pe
-// RN 0.81). Acelasi advisory apare si direct pe react-native-reanimated (allowlisted);
-// npm@10 din CI il expune si sub numele @gorhom/bottom-sheet. Backlog expo@57.
-//
-// @expo/ngrok: unealtă dev-only pentru `npx expo start --tunnel`, propagă `uuid < 11.1.1` (allowlisted).
-// Nu este inclus în bundle-ul de producție APK/AAB.
-//
-// jest-expo: pachet devDependencies pentru rularea testelor Jest pe Expo, propagă `@expo/config` (allowlisted).
-// Nu este inclus în bundle-ul de producție APK/AAB.
-const ALLOWLIST = new Set([
-	'@expo/cli',
-	'@expo/config',
-	'@expo/config-plugins',
-	'@expo/metro',
-	'@expo/metro-config',
-	'@expo/ngrok',
-	'@expo/prebuild-config',
-	'@gorhom/bottom-sheet',
-	'@react-native/community-cli-plugin',
-	'@testing-library/react-native',
-	'expo',
-	'expo-asset',
-	'expo-constants',
-	'expo-linking',
-	'expo-manifests',
-	'expo-notifications',
-	'expo-router',
-	'expo-splash-screen',
-	'expo-updates',
-	'image-size',
-	'jest-expo',
-	'metro',
-	'metro-config',
-	'metro-transform-worker',
-	'postcss',
-	'react-native',
-	'react-native-purchases',
-	'react-native-reanimated',
-	'uuid',
-	'xcode',
-]);
+/**
+ * Exceptii documentate. GOALA dupa P0-04.
+ *
+ * Forma obligatorie a unei intrari:
+ *   {
+ *     pachet:   'nume-exact',
+ *     range:    '<=1.2.3',              // exact string-ul `range` din npm audit
+ *     advisory: 'GHSA-xxxx-yyyy-zzzz',  // advisory-ul unic acoperit
+ *     motiv:    'de ce nu e exploatabil in productie',
+ *     expira:   'YYYY-MM-DD',           // data dupa care exceptia nu mai e valabila
+ *   }
+ *
+ * O exceptie noua se adauga NUMAI cu acordul unui reviewer independent.
+ */
+const EXCEPTII_AUDIT = [];
 
-const SEVERITATI = ['low', 'moderate', 'high', 'critical'];
+const SEVERITATI_IGNORATE = new Set(['low', 'info']);
 
-let stdout = '';
-try {
-	stdout = execFileSync(npmCmd, ['audit', '--json'], {
-		encoding: 'utf8',
-		stdio: ['ignore', 'pipe', 'pipe'],
-		shell: true,
-	});
-} catch (err) {
-	// `npm audit` iese non-zero când găsește vulnerabilități; JSON-ul util e pe stdout.
-	stdout = err.stdout || '';
-}
-
-let date;
-try {
-	date = JSON.parse(stdout);
-} catch {
-	console.error('auditGate: nu am putut parsa iesirea `npm audit --json`.');
-	process.exit(1);
-}
-
-const vulnerabilitati = date.vulnerabilities || {};
-const blocate = [];
-const permise = [];
-
-for (const [nume, vuln] of Object.entries(vulnerabilitati)) {
-	const severitate = vuln.severity || 'unknown';
-	if (severitate === 'critical') {
-		blocate.push(`${nume} [CRITICAL]`);
-	} else if (severitate !== 'low' && !ALLOWLIST.has(nume)) {
-		blocate.push(`${nume} [${severitate}]`);
-	} else {
-		permise.push(`${nume} [${severitate}]`);
+/** Extrage identificatorii de advisory (GHSA/CVE) dintr-un nod `npm audit`. */
+function extrageAdvisories(vuln) {
+	const gasite = new Set();
+	const via = Array.isArray(vuln?.via) ? vuln.via : [];
+	for (const intrare of via) {
+		if (!intrare || typeof intrare !== 'object') continue;
+		const url = typeof intrare.url === 'string' ? intrare.url : '';
+		const potrivire = url.match(/(GHSA-[a-z0-9-]+|CVE-\d{4}-\d+)/i);
+		if (potrivire) gasite.add(potrivire[1].toUpperCase());
+		if (typeof intrare.source === 'number') gasite.add(String(intrare.source));
 	}
+	return gasite;
 }
 
-const total = date.metadata?.vulnerabilities?.total ?? Object.keys(vulnerabilitati).length;
-
-console.log(`auditGate: ${total} pachete vulnerabile in total.`);
-if (permise.length > 0) {
-	console.log(`  permise (backlog expo@57, documentat): ${permise.length}`);
-	for (const p of permise) console.log(`    - ${p}`);
+/** O exceptie e structural valida doar daca declara toate campurile cerute. */
+function exceptieValida(exceptie) {
+	return Boolean(
+		exceptie &&
+		typeof exceptie.pachet === 'string' && exceptie.pachet &&
+		typeof exceptie.range === 'string' && exceptie.range &&
+		typeof exceptie.advisory === 'string' && exceptie.advisory &&
+		typeof exceptie.motiv === 'string' && exceptie.motiv &&
+		typeof exceptie.expira === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(exceptie.expira),
+	);
 }
 
-if (blocate.length > 0) {
-	console.error(`\nauditGate: ${blocate.length} vulnerabilitati NEPERMISE:`);
-	for (const p of blocate) console.error(`    - ${p}`);
-	console.error('Candida spre ALLOWLIST doar daca fac parte din lanțul Expo SDK 54 blocat;');
-	console.error('altfel remediaza-le (override / upgrade) inainte de merge.');
-	process.exit(1);
+/**
+ * Potrivire EXACTA: acelasi pachet, ACELASI range raportat de npm (deci o
+ * versiune afectata schimbata invalideaza exceptia) si acelasi advisory.
+ */
+function exceptiaAcopera(exceptie, nume, vuln, acum) {
+	if (!exceptieValida(exceptie)) return false;
+	if (exceptie.pachet !== nume) return false;
+	if (exceptie.range !== String(vuln?.range ?? '')) return false;
+	if (new Date(`${exceptie.expira}T23:59:59Z`).getTime() < acum.getTime()) return false;
+	return extrageAdvisories(vuln).has(exceptie.advisory.toUpperCase());
 }
 
-console.log('\nauditGate: OK — nicio vulnerabilitate in afara backlog-ului documentat.');
-process.exit(0);
+function evalueazaAudit(date, exceptii = EXCEPTII_AUDIT, acum = new Date()) {
+	const total = date?.metadata?.vulnerabilities?.total;
+	if (
+		date?.auditReportVersion !== 2 ||
+		!date.vulnerabilities ||
+		typeof date.vulnerabilities !== 'object' ||
+		typeof total !== 'number'
+	) {
+		return { valid: false, total: null, blocate: [], permise: [] };
+	}
+
+	const listaExceptii = Array.isArray(exceptii) ? exceptii : [];
+	const blocate = [];
+	const permise = [];
+
+	for (const [nume, vuln] of Object.entries(date.vulnerabilities)) {
+		const severitate = vuln?.severity || 'unknown';
+
+		if (severitate === 'critical') {
+			// Niciun CRITICAL nu poate fi exceptat.
+			blocate.push(`${nume} [CRITICAL] (exceptiile nu se aplica la critical)`);
+			continue;
+		}
+
+		if (SEVERITATI_IGNORATE.has(severitate)) {
+			permise.push(`${nume} [${severitate}]`);
+			continue;
+		}
+
+		const exceptie = listaExceptii.find((e) => exceptiaAcopera(e, nume, vuln, acum));
+		if (exceptie) {
+			permise.push(`${nume} [${severitate}] exceptie ${exceptie.advisory} exp. ${exceptie.expira}`);
+		} else {
+			const advisories = [...extrageAdvisories(vuln)].join(', ') || 'advisory necunoscut';
+			blocate.push(`${nume} [${severitate}] range=${vuln?.range ?? '?'} (${advisories})`);
+		}
+	}
+
+	return { valid: true, total, blocate, permise };
+}
+
+/**
+ * Verifica versiunea de Node fata de `engines.node` (forma `>=22 <23`).
+ *
+ * Implementare minimala, intentionat fara dependinta noua de `semver`: gate-ul
+ * de release nu trebuie sa introduca el insusi suprafata de dependinte.
+ */
+function evalueazaVersiuneNode(versiune, interval) {
+	const brut = String(versiune ?? '').trim().replace(/^v/i, '');
+	const potrivire = brut.match(/^(\d+)\.(\d+)\.(\d+)/);
+	if (!potrivire) {
+		return { ok: false, mesaj: `Versiune Node ilizibila: "${versiune}" (asteptat ${interval})` };
+	}
+	const major = Number(potrivire[1]);
+
+	const conditii = String(interval ?? '').trim().split(/\s+/).filter(Boolean);
+	if (conditii.length === 0) {
+		return { ok: false, mesaj: `Interval engines invalid: "${interval}"` };
+	}
+
+	for (const conditie of conditii) {
+		const c = conditie.match(/^(>=|<=|>|<|=)?\s*v?(\d+)/);
+		if (!c) return { ok: false, mesaj: `Conditie engines nesuportata: "${conditie}" (interval ${interval})` };
+		const operator = c[1] || '=';
+		const prag = Number(c[2]);
+		const okConditie =
+			operator === '>=' ? major >= prag :
+			operator === '<=' ? major <= prag :
+			operator === '>' ? major > prag :
+			operator === '<' ? major < prag :
+			major === prag;
+		if (!okConditie) {
+			return {
+				ok: false,
+				mesaj: `Node ${brut} (major ${major}) nu satisface engines "${interval}"`,
+			};
+		}
+	}
+
+	return { ok: true, mesaj: `Node ${brut} satisface engines "${interval}"` };
+}
+
+function ruleaza() {
+	let stdout = '';
+	try {
+		stdout = execFileSync(npmCmd, ['audit', '--json'], {
+			encoding: 'utf8',
+			stdio: ['ignore', 'pipe', 'pipe'],
+			shell: true,
+		});
+	} catch (err) {
+		// `npm audit` iese non-zero când găsește vulnerabilități; JSON-ul util e pe stdout.
+		stdout = err.stdout || '';
+	}
+
+	let date;
+	try {
+		date = JSON.parse(stdout);
+	} catch {
+		console.error('auditGate: nu am putut parsa iesirea `npm audit --json`.');
+		return 1;
+	}
+
+	const rezultat = evalueazaAudit(date);
+	if (!rezultat.valid) {
+		console.error('auditGate: registrul npm nu a returnat un raport audit complet; verificarea esueaza fail-closed.');
+		return 1;
+	}
+
+	console.log(`auditGate: ${rezultat.total} pachete vulnerabile in total.`);
+	if (rezultat.permise.length > 0) {
+		console.log(`  permise (low sau exceptie exacta documentata): ${rezultat.permise.length}`);
+		for (const p of rezultat.permise) console.log(`    - ${p}`);
+	}
+	if (rezultat.blocate.length > 0) {
+		console.error(`\nauditGate: ${rezultat.blocate.length} vulnerabilitati NEPERMISE:`);
+		for (const p of rezultat.blocate) console.error(`    - ${p}`);
+		console.error('\nRemediaza-le (preferabil prin `overrides` la nivel de patch).');
+		console.error('O exceptie se adauga NUMAI cu pachet+range+advisory+motiv+expirare');
+		console.error('si NUMAI cu acordul unui reviewer independent.');
+		return 1;
+	}
+
+	console.log('\nauditGate: OK — nicio vulnerabilitate neacoperita.');
+	return 0;
+}
+
+if (require.main === module) process.exit(ruleaza());
+
+module.exports = {
+	evalueazaAudit,
+	evalueazaVersiuneNode,
+	extrageAdvisories,
+	exceptieValida,
+	EXCEPTII_AUDIT,
+	ruleaza,
+};

@@ -1,158 +1,120 @@
-// G1: guard de idempotență pe fluxul OAuth PKCE — pe Android, `openAuthSessionAsync`
-// polifilizează prin Linking.addEventListener('url'), la care e abonat și
-// expo-router, deci callback.tsx poate fi declanșat de două ori cu același `code`.
-// Testăm că, dacă sesiunea există deja, nu se mai face exchangeCodeForSession.
 import React from 'react';
+import { Alert } from 'react-native';
 import { render, waitFor } from '@testing-library/react-native';
+import type { Session } from '@supabase/supabase-js';
 import AuthCallbackScreen from '../app/auth/callback';
 
 const mockReplace = jest.fn();
-const mockGetSession = jest.fn();
-const mockExchangeCodeForSession = jest.fn();
-let mockParams: Record<string, string> = { code: 'cod-unic', provider: 'google' };
+const mockRouter = { replace: mockReplace };
+const mockT = (key: string) => key;
+const mockExchange = jest.fn();
+let mockParams: Record<string, string> = {};
+let mockCurrent: Session | null = null;
+let mockObserved: Session | null = null;
+let mockLoading = false;
+let testNumber = 0;
+const makeSession = (id: string) => ({ user: { id }, access_token: `test-${id}` }) as Session;
 
-jest.mock('expo-router', () => ({
-  useRouter: () => ({ replace: mockReplace }),
-  useLocalSearchParams: () => mockParams,
-}));
-
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
-}));
-
+jest.mock('expo-router', () => ({ useRouter: () => mockRouter, useLocalSearchParams: () => mockParams }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: mockT }) }));
+jest.mock('expo-web-browser', () => ({ maybeCompleteAuthSession: jest.fn() }));
 jest.mock('../context/ThemeContext', () => ({
   useTheme: () => ({ colors: { background: '#000', accent: '#fff', textSecondary: '#aaa' } }),
 }));
-
+jest.mock('../context/AuthContext', () => ({
+  useAuth: () => ({ session: mockObserved, loadingAuth: mockLoading }),
+}));
 jest.mock('../supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: () => mockGetSession(),
-      exchangeCodeForSession: (cod: string) => mockExchangeCodeForSession(cod),
-    },
-  },
+  supabase: { auth: {
+    getSession: async () => ({ data: { session: mockCurrent }, error: null }),
+    exchangeCodeForSession: (code: string) => mockExchange(code),
+  } },
 }));
 
-describe('app/auth/callback — guard idempotență OAuth', () => {
+describe('AUTH-OAUTH-001 callback and AuthContext convergence', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockParams = { code: 'cod-unic', provider: 'google' };
-    mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
-    mockExchangeCodeForSession.mockImplementation((cod: string) => {
-      // Schimbul reușit populează sesiunea, pe care getSession() o întoarce apoi.
-      mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } }, error: null });
-      return Promise.resolve({ error: null });
+    mockParams = { code: `unique-test-${++testNumber}` };
+    mockCurrent = null; mockObserved = null; mockLoading = false;
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockExchange.mockImplementation(async () => {
+      mockCurrent = makeSession('new');
+      mockObserved = mockCurrent;
+      return { data: { session: mockCurrent }, error: null };
     });
   });
 
-  it('nu schimbă codul când sesiunea există deja (dublă procesare Android)', async () => {
-    mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } }, error: null });
-
-    render(<AuthCallbackScreen />);
-
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)'));
-    expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
-  });
-
-  it('schimbă codul când nu există sesiune', async () => {
-    render(<AuthCallbackScreen />);
-
-    await waitFor(() => expect(mockExchangeCodeForSession).toHaveBeenCalledWith('cod-unic'));
-    expect(mockReplace).toHaveBeenCalledWith('/(tabs)');
-  });
-
-  // H1: emailul de resetare a parolei redirecționează cu `type=recovery` în hash.
-  // După stabilirea sesiunii, callback-ul trebuie să ducă la ecranul de parolă
-  // NOUĂ, nu în (tabs) — altfel utilizatorul rămâne blocat cu parola veche.
-  it('redirectează la /auth/noua-parola când type=recovery', async () => {
-    mockParams = { code: 'cod-unic', type: 'recovery' };
-
-    render(<AuthCallbackScreen />);
-
-    await waitFor(() => expect(mockExchangeCodeForSession).toHaveBeenCalledWith('cod-unic'));
-    expect(mockReplace).toHaveBeenCalledWith('/auth/noua-parola');
+  it('exchanges a fresh code despite an unrelated existing session', async () => {
+    mockCurrent = makeSession('old');
+    mockObserved = mockCurrent;
+    await render(<AuthCallbackScreen />);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/complete'));
+    expect(mockExchange).toHaveBeenCalledWith(mockParams.code);
+    expect(mockCurrent?.user.id).toBe('new');
     expect(mockReplace).not.toHaveBeenCalledWith('/(tabs)');
   });
 
-  describe('REV-002 & CORR-002 — sesiuni de recuperare parolă & marker flow=recovery', () => {
-    it('1. cont B activ + link de recovery cu flow=recovery pentru cont A -> execută schimbul de cod și stabilește sesiunea lui A', async () => {
-      // Sesiune inițială aparține contului B
-      mockGetSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user_B' } } }, error: null });
-      mockParams = { code: 'recovery_code_for_user_A', flow: 'recovery' };
+  it('handles a cold callback without an existing session', async () => {
+    await render(<AuthCallbackScreen />);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/complete'));
+    expect(mockExchange).toHaveBeenCalledTimes(1);
+  });
 
-      mockExchangeCodeForSession.mockImplementationOnce(() => {
-        // Schimbul reușit stabilește sesiunea contului A
-        mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'user_A' } } }, error: null });
-        return Promise.resolve({ error: null });
-      });
-
-      render(<AuthCallbackScreen />);
-
-      // CORR-002: Nu se face short-circuit pe user_B; exchangeCodeForSession este apelat pentru codul lui A
-      await waitFor(() => expect(mockExchangeCodeForSession).toHaveBeenCalledWith('recovery_code_for_user_A'));
-      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/noua-parola'));
-      const finalSession = await mockGetSession();
-      expect(finalSession.data.session.user.id).toBe('user_A');
+  it('waits for AuthContext instead of navigating as the previously observed account', async () => {
+    mockObserved = makeSession('old');
+    mockExchange.mockImplementation(async () => {
+      mockCurrent = makeSession('new');
+      return { data: { session: mockCurrent }, error: null };
     });
+    const view = await render(<AuthCallbackScreen />);
+    expect(mockReplace).not.toHaveBeenCalled();
+    mockObserved = mockCurrent;
+    mockLoading = true;
+    await view.rerender(<AuthCallbackScreen />);
+    expect(mockReplace).not.toHaveBeenCalled();
+    mockLoading = false;
+    await view.rerender(<AuthCallbackScreen />);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/complete'));
+  });
 
-    it('2. callback cu doar markerul efectiv suportat (flow: recovery) funcționează complet', async () => {
-      mockParams = { code: 'flow_only_code', flow: 'recovery' };
-      mockExchangeCodeForSession.mockImplementationOnce(() => {
-        mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'user_Flow' } } }, error: null });
-        return Promise.resolve({ error: null });
-      });
+  it('does not re-exchange a completed callback after remount', async () => {
+    const first = await render(<AuthCallbackScreen />);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/complete'));
+    await first.unmount();
+    await render(<AuthCallbackScreen />);
+    expect(mockExchange).toHaveBeenCalledTimes(1);
+  });
 
-      render(<AuthCallbackScreen />);
+  it('does not reuse the previous completion while a different callback is exchanging', async () => {
+    const view = await render(<AuthCallbackScreen />);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/complete'));
+    mockReplace.mockClear();
+    mockParams = { code: 'second-callback-delivery', flow: 'recovery' };
+    mockExchange.mockImplementation(() => new Promise(() => {}));
+    await view.rerender(<AuthCallbackScreen />);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
 
-      await waitFor(() => expect(mockExchangeCodeForSession).toHaveBeenCalledWith('flow_only_code'));
-      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/noua-parola'));
-    });
+  it.each(['flow', 'type'])('preserves %s=recovery and changes the account before password reset', async marker => {
+    mockCurrent = makeSession('old'); mockObserved = mockCurrent;
+    mockParams[marker] = 'recovery';
+    await render(<AuthCallbackScreen />);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/noua-parola'));
+    expect(mockCurrent?.user.id).toBe('new');
+    expect(mockExchange).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalledWith('/auth/complete');
+  });
 
-    it('3. callback duplicat OAuth cu sesiune deja existentă -> nu repetă schimbul', async () => {
-      mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'user_OAuth' } } }, error: null });
-      mockParams = { code: 'oauth_code', provider: 'google' };
-
-      render(<AuthCallbackScreen />);
-
-      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)'));
-      expect(mockExchangeCodeForSession).not.toHaveBeenCalled();
-    });
-
-    it('4. link recovery invalid sau expirat -> redirecționează la /auth și NU navighează la noua-parola', async () => {
-      mockParams = { code: 'invalid_expired_code', flow: 'recovery' };
-      mockExchangeCodeForSession.mockResolvedValueOnce({ error: new Error('Token has expired or is invalid') });
-
-      render(<AuthCallbackScreen />);
-
-      await waitFor(() => expect(mockExchangeCodeForSession).toHaveBeenCalledWith('invalid_expired_code'));
-      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth'));
-      expect(mockReplace).not.toHaveBeenCalledWith('/auth/noua-parola');
-    });
-
-    it('5. schimb reușit dar fără sesiune rezultantă validă -> redirect /auth, fără navigare la noua-parola', async () => {
-      mockParams = { code: 'no_resulting_session_code', flow: 'recovery' };
-      mockExchangeCodeForSession.mockResolvedValueOnce({ error: null });
-      // Sesiunea rămâne null
-      mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
-
-      render(<AuthCallbackScreen />);
-
-      await waitFor(() => expect(mockExchangeCodeForSession).toHaveBeenCalledWith('no_resulting_session_code'));
-      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth'));
-      expect(mockReplace).not.toHaveBeenCalledWith('/auth/noua-parola');
-    });
-
-    it('6. recovery fără sesiune existentă -> funcționează normal și navighează la noua-parola', async () => {
-      mockParams = { code: 'clean_recovery_code', type: 'recovery' };
-      mockExchangeCodeForSession.mockImplementationOnce(() => {
-        mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'user_Clean' } } }, error: null });
-        return Promise.resolve({ error: null });
-      });
-
-      render(<AuthCallbackScreen />);
-
-      await waitFor(() => expect(mockExchangeCodeForSession).toHaveBeenCalledWith('clean_recovery_code'));
-      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/noua-parola'));
-    });
+  it.each(['provider', 'exchange', 'missing-session', 'missing-code', 'implicit-token'])('fails safely on %s with localized feedback', async failure => {
+    if (failure === 'provider') mockParams.error_description = 'private-provider-data';
+    if (failure === 'exchange') mockExchange.mockRejectedValue(new Error('private-provider-data'));
+    if (failure === 'missing-session') mockExchange.mockResolvedValue({ data: { session: null }, error: null });
+    if (failure === 'missing-code') mockParams = {};
+    if (failure === 'implicit-token') mockParams = { access_token: 'untrusted', refresh_token: 'untrusted' };
+    await render(<AuthCallbackScreen />);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth'));
+    expect(Alert.alert).toHaveBeenCalledWith('alerts.titluri.eroareOAuth', 'alerts.mesaje.problemaConexiuneOAuth');
+    expect(mockReplace).not.toHaveBeenCalledWith('/auth/complete');
+    expect(mockReplace).not.toHaveBeenCalledWith('/auth/noua-parola');
   });
 });

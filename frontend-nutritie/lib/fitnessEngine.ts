@@ -209,7 +209,7 @@ export function computeWorkoutMetrics(
   else if (sessionScore < 350) rank = { key: 'SILVER', label: 'Activ', color: '#C0C0C0', score: sessionScore };
   else if (sessionScore < 650) rank = { key: 'GOLD', label: 'Atlet', color: '#FFD700', score: sessionScore };
   else if (sessionScore < 1000) rank = { key: 'PLATINUM', label: 'Avansat', color: '#00F0FF', score: sessionScore };
-  else rank = { key: 'ELITE', label: 'Elite NutriAI', color: '#CCFF00', score: sessionScore };
+  else rank = { key: 'ELITE', label: 'Elite GetFlow', color: '#CCFF00', score: sessionScore };
 
   const maxLoad = Math.max(0, ...Object.values(muscleLoad));
   const heatLevels: Record<string, 0 | 1 | 2 | 3 | 4> = {};

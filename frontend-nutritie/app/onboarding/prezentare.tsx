@@ -1,69 +1,82 @@
 import React, { useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Alert, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { BarChart3, Camera, Flame, PieChart, TrendingUp } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 
 import EcranPas from '../../components/onboarding/EcranPas'
 import { useOnboarding } from '../../context/OnboardingContext'
 import { useTheme } from '../../context/ThemeContext'
 import { useAppStore } from '../../hooks/useAppStore'
 
-const FUNCTII = [
-	{
-		Pictograma: Flame,
-		titlu: 'Urmarirea caloriilor',
-		detaliu: 'Adaugi mesele in cateva secunde si vezi cat ti-a mai ramas pe ziua respectiva.',
-	},
-	{
-		Pictograma: Camera,
-		titlu: 'Scanare cu AI',
-		detaliu: 'Fotografiezi farfuria sau codul de bare si primesti valorile nutritionale instant.',
-	},
-	{
-		Pictograma: PieChart,
-		titlu: 'Impartirea macronutrientilor',
-		detaliu: 'Proteine, carbohidrati si grasimi, calculate pentru fiecare masa.',
-	},
-	{
-		Pictograma: BarChart3,
-		titlu: 'Antrenamente si harta musculara',
-		detaliu: 'Vezi ce grupe musculare ai lucrat si care raman in urma.',
-	},
-	{
-		Pictograma: TrendingUp,
-		titlu: 'Progres si serii zilnice',
-		detaliu: 'Grafice pe termen lung si streak-uri care te tin consecvent.',
-	},
-]
-
 export default function PasPrezentare() {
+	const { t } = useTranslation()
 	const { plan } = useOnboarding()
 	const { colors } = useTheme()
 	const { setOnboardingDone } = useAppStore()
 	const router = useRouter()
 	const [seIncarca, setSeIncarca] = useState(false)
 
-	const finalizeaza = () => {
+	const FUNCTII = [
+		{
+			Pictograma: Flame,
+			titlu: t('onboarding.featureCaloriesTitle'),
+			detaliu: t('onboarding.featureCaloriesDesc'),
+		},
+		{
+			Pictograma: Camera,
+			titlu: t('onboarding.featureAiScanTitle'),
+			detaliu: t('onboarding.featureAiScanDesc'),
+		},
+		{
+			Pictograma: PieChart,
+			titlu: t('onboarding.featureMacrosTitle'),
+			detaliu: t('onboarding.featureMacrosDesc'),
+		},
+		{
+			Pictograma: BarChart3,
+			titlu: t('onboarding.featureWorkoutsTitle'),
+			detaliu: t('onboarding.featureWorkoutsDesc'),
+		},
+		{
+			Pictograma: TrendingUp,
+			titlu: t('onboarding.featureProgressTitle'),
+			detaliu: t('onboarding.featureProgressDesc'),
+		},
+	]
+
+	const finalizeaza = async () => {
 		setSeIncarca(true)
-		// Raspunsurile raman in AsyncStorage si se urca in cont dupa autentificare.
-		setOnboardingDone(true)
-		router.replace('/auth')
-		// Oprim navigarea automata; am mers deja catre ecranul de autentificare.
-		return false
+		try {
+			// Confirmăm scrierea durabilă înainte de navigare, astfel încât un
+			// reload/kill imediat să nu repornească onboarding-ul.
+			await setOnboardingDone(true)
+			router.replace('/auth')
+			// Oprim navigarea automata; am mers deja catre ecranul de autentificare.
+			return false
+		} catch (eroare) {
+			setSeIncarca(false)
+			Alert.alert(
+				t('onboarding.featuresSaveErrorTitle'),
+				t('onboarding.featuresSaveErrorMsg'),
+			)
+			// EcranPas eliberează protecția de navigare în ramura de eroare.
+			throw eroare
+		}
 	}
 
 	return (
 		<EcranPas
 			pas="/onboarding/prezentare"
-			titlu="Ce primesti in aplicatie"
+			titlu={t('onboarding.featuresTitle')}
 			subtitlu={
 				plan
-					? `Planul tau de ${plan.calorii} kcal pe zi te asteapta dupa ce iti creezi contul.`
-					: 'Tot ce ai nevoie ca sa iti tii nutritia sub control.'
+					? t('onboarding.featuresSubtitle', { calories: plan.calorii })
+					: t('onboarding.featuresGenericSubtitle')
 			}
 			poateContinua
-			etichetaButon="Creeaza-ti contul"
+			etichetaButon={t('onboarding.featuresCreateAccountBtn')}
 			seIncarca={seIncarca}
 			laContinuare={finalizeaza}
 		>

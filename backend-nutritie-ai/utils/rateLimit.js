@@ -128,7 +128,19 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 		),
 	});
 
-	return { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter };
+	// Billing ruleaza dupa requireAuth si foloseste exclusiv UUID-ul verificat.
+	// Burst-ul de 30/min permite restore/recovery fara sa ofere un endpoint
+	// nelimitat spre Google Play Developer API.
+	const billingLimiter = rateLimit({
+		...comun,
+		...cuStorePropriu('rl:billing:'),
+		windowMs: 60 * 1000,
+		max: 30,
+		keyGenerator: cheieIdentitateVerificata,
+		message: mesaj('Prea multe cereri de verificare Google Play. Incearca intr-un minut.'),
+	});
+
+	return { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter, billingLimiter };
 }
 
 module.exports = {

@@ -15,9 +15,11 @@ import type { ComponentType } from 'react';
 import * as Haptics from 'expo-haptics';
 
 import KeyboardAwareScreen, { useContentBottomPadding } from '../../components/ui/KeyboardAwareScreen';
-import BodyMap from '../../components/fitness/BodyMap';
+import { BodyMap } from '../../components/fitness/BodyMap';
 import { mapToCanonicalMuscleIds } from '../../lib/fitnessEngine';
 import type { MuscleId } from '../../components/fitness/heatColor';
+import { dualAnatomyMapWidth } from '../../lib/anatomyLayout';
+import { useTranslation } from 'react-i18next';
 import { CATEGORII, type Categorie, type Exercitiu } from '../../constants/exercitii';
 import { Stepper } from '../../components/ui/Stepper';
 import { Spacing, Radius } from '../../constants/theme';
@@ -120,6 +122,7 @@ function unionInto(target: IntensityMap, source: IntensityMap, scale = 1) {
 
 export default function AntrenamenteScreen() {
   const { width: SCREEN_WIDTH } = useWindowDimensions();
+  const { t } = useTranslation();
   const { colors } = useTheme();
   const contentBottomPadding = useContentBottomPadding();
   const { adaugaAntrenament } = useAntrenamente();
@@ -479,7 +482,7 @@ export default function AntrenamenteScreen() {
     }
   };
 
-  const bodyWidth = (SCREEN_WIDTH - Spacing.lg * 2) * 0.45;
+  const bodyWidth = dualAnatomyMapWidth(SCREEN_WIDTH);
 
   const renderTracker = (ex: Exercitiu, fields: SetFields) => {
     const exSets = session[ex.id] ?? [];
@@ -602,7 +605,7 @@ export default function AntrenamenteScreen() {
   return (
     <KeyboardAwareScreen style={{ backgroundColor: colors.background }}>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding, width: '100%', maxWidth: 680, alignSelf: 'center' }]}
         keyboardShouldPersistTaps='handled'
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -611,22 +614,24 @@ export default function AntrenamenteScreen() {
       >
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text maxFontSizeMultiplier={1.3} style={[styles.title, { color: colors.textPrimary }]}>Anatomie</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.title, { color: colors.textPrimary }]}>{t('anatomy.workoutTitle')}</Text>
             <Text maxFontSizeMultiplier={1.3} style={[styles.subtitle, { color: colors.textSecondary }]}>
-              Harta rămâne aprinsă pe tot parcursul sesiunii
+              {t('anatomy.workoutSubtitle')}
             </Text>
           </View>
         </View>
 
         <View style={[styles.mapContainer, { backgroundColor: colors.surface }]}>
           <View style={styles.mapRow}>
-            <BodyMap view="front" intensity={displayIntensity} width={bodyWidth} />
-            <BodyMap view="back" intensity={displayIntensity} width={bodyWidth} />
+            <BodyMap view="front" intensity={displayIntensity} width={bodyWidth} maxHeight={300} />
+            <BodyMap view="back" intensity={displayIntensity} width={bodyWidth} maxHeight={300} />
           </View>
           <View style={styles.mapLegend}>
             <View style={[styles.legendDot, { backgroundColor: colors.accent }]} />
             <Text maxFontSizeMultiplier={1.3} style={[styles.legendText, { color: colors.textSecondary }]}>
-              {activeMuscleCount > 0 ? `${activeMuscleCount} mușchi activi` : 'Selectează un exercițiu'}
+              {activeMuscleCount > 0
+                ? t('anatomy.activeMuscles', { count: activeMuscleCount })
+                : t('anatomy.selectExercise')}
             </Text>
           </View>
         </View>

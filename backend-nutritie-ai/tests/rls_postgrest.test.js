@@ -9,20 +9,20 @@
  *
  * CI-ul `rls-integration` NU o rulează: imaginea `supabase/postgres` pornește
  * doar Postgres, iar `INTEGRATION_SUPABASE_URL` nu există acolo. Această suită
- * se SARE automat când URL-ul lipsește — prin design, nu un bug. (RLS-ul pur
- * Postgres, mereu rulat în CI, trăiește în `rls_integration.test.js`.)
+ * dedicată eșuează explicit când infrastructura lipsește. (RLS-ul pur Postgres
+ * trăiește în `rls_integration.test.js`.)
  *
  * Cum se rulează LOCAL (necesită `supabase start` care pornește și PostgREST):
  *
  *   cd backend-nutritie-ai
- *   INTEGRATION_DB_URL='postgres://postgres:postgres@localhost:54322/postgres' \
- *   INTEGRATION_SUPABASE_URL='http://localhost:54321' \
- *   INTEGRATION_ANON_KEY='<cheia anon afișată de supabase start>' \
- *   INTEGRATION_JWT_SECRET='<secretul postgres.role din supabase/config.toml>' \
- *   node tests/runJestWithAnnotations.js tests/rls_postgrest.test.js
+ *   npx supabase status -o env
+ *   INTEGRATION_DB_URL='<DB_URL>' \
+ *   INTEGRATION_SUPABASE_URL='<API_URL>' \
+ *   INTEGRATION_ANON_KEY='<ANON_KEY>' \
+ *   INTEGRATION_JWT_SECRET='<JWT_SECRET>' \
+ *   npm run test:integration:postgrest
  *
- * Fără variabile, suita e sarită (describe.skip), nu eșuată — CI-ul rapid nu
- * trebuie blocat de un PostgREST absent.
+ * Fără variabile, lipsa oricărei valori (inclusiv DB URL) este un eșec.
  */
 
 const pg = require('pg');
@@ -38,13 +38,15 @@ const lipsesc = [];
 if (!URL) lipsesc.push('INTEGRATION_SUPABASE_URL');
 if (!ANON_KEY) lipsesc.push('INTEGRATION_ANON_KEY');
 if (!JWT_SECRET) lipsesc.push('INTEGRATION_JWT_SECRET');
+if (!DB_URL) lipsesc.push('INTEGRATION_DB_URL');
 
 const configurat = lipsesc.length === 0;
 if (!configurat) {
-  console.warn(`[E-1] Suita RLS end-to-end (PostgREST) e SĂRITĂ. Lipsește: ${lipsesc.join(', ')}. Rulează doar cu 'supabase start'.`);
+  const mesaj = `[E-1] Suita RLS end-to-end (PostgREST) nu poate rula. Lipsește: ${lipsesc.join(', ')}. Rulează 'supabase start'.`;
+  console.error(`${mesaj} Suita dedicată va EȘUA.`);
 }
 
-const describePostgrest = configurat ? describe : describe.skip;
+const describePostgrest = describe;
 
 const USER_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -65,6 +67,9 @@ describePostgrest('B-05 — RLS pe Postgres real prin PostgREST (tabela reala me
   let clientB;
 
   beforeAll(async () => {
+    if (!configurat) {
+      throw new Error(`E-1: lipsesc ${lipsesc.join(', ')}. Testele RLS PostgREST nu pot rula.`);
+    }
     pool = new pg.Pool({ connectionString: DB_URL, max: 2 });
 
     // Curățăm resturile unei eventuale rulări anterioare (rol postgres = BYPASSRLS).

@@ -15,4 +15,5 @@ export interface AlimentScanat {
   proteine_per_100g: number;
   grasimi_per_100g: number;
   carbohidrati_per_100g: number;
+  fibre_per_100g?: number | null;
 }

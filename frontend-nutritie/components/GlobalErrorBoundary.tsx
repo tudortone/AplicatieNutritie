@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { AlertTriangle, RefreshCw } from 'lucide-react-native';
 import * as Sentry from '@sentry/react-native';
 import { ThemeContext, ThemeContextType } from '../context/ThemeContext';
+import i18n from '../i18n';
 
 interface Props {
   children: React.ReactNode;
@@ -65,9 +66,9 @@ export class GlobalErrorBoundary extends React.Component<Props, State> {
       return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
           <AlertTriangle size={48} color={colors.danger} />
-          <Text style={[styles.title, { color: colors.danger }]}>Ceva nu a mers bine</Text>
+          <Text style={[styles.title, { color: colors.danger }]}>{i18n.t('globalError.title')}</Text>
           <Text style={[styles.message, { color: colors.textSecondary }]}>
-            A apărut o eroare neașteptată. Nu-ți face griji — datele tale sunt în siguranță.
+            {i18n.t('globalError.message')}
           </Text>
           {__DEV__ && this.state.error && (
             <Text style={[styles.devError, { color: colors.textTertiary, backgroundColor: colors.surface }]} numberOfLines={6}>
@@ -78,10 +79,10 @@ export class GlobalErrorBoundary extends React.Component<Props, State> {
             style={[styles.retryButton, { backgroundColor: colors.accent }]}
             onPress={this.handleRetry}
             accessibilityRole="button"
-            accessibilityLabel="Reîncearcă"
+            accessibilityLabel={i18n.t('globalError.retry')}
           >
             <RefreshCw size={20} color={colors.textOnAccent} />
-            <Text style={[styles.retryText, { color: colors.textOnAccent }]}>Reîncearcă</Text>
+            <Text style={[styles.retryText, { color: colors.textOnAccent }]}>{i18n.t('globalError.retry')}</Text>
           </TouchableOpacity>
         </View>
       );

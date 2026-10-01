@@ -1,40 +1,78 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Plus } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { FoodProduct } from './types';
+
+import { Image } from 'expo-image';
+import { FlowIcon } from '../ui/FlowIcon';
+
+const NUTRI_COLORS: Record<string, string> = {
+  a: '#038141',
+  b: '#85BB2F',
+  c: '#FECB02',
+  d: '#EE8100',
+  e: '#E63E11',
+};
 
 interface ProductSearchResultProps {
   product: FoodProduct;
   onSelect: (product: FoodProduct) => void;
 }
 
-export function ProductSearchResult({ product, onSelect }: ProductSearchResultProps) {
+export const ProductSearchResult = React.memo(function ProductSearchResult({
+  product,
+  onSelect,
+}: ProductSearchResultProps) {
   const { colors } = useTheme();
+  const { t, i18n } = useTranslation();
 
   const getSourceBadge = () => {
     switch (product.source) {
       case 'preset':
-        return { label: 'Preset Rapid', color: colors.accent };
+        return { label: t('productSearch.badgePreset'), color: colors.accent };
       case 'user_saved':
-        return { label: 'Salvat de tine', color: '#00F0FF' };
+        return { label: t('productSearch.badgeUserSaved'), color: '#00F0FF' };
       case 'barcode_cache':
-        return { label: 'Catalog Verificat', color: '#10B981' };
+        return { label: t('productSearch.badgeVerified'), color: '#10B981' };
       case 'openfoodfacts':
         return { label: 'OpenFoodFacts', color: colors.textSecondary };
       default:
-        return { label: 'Manual', color: colors.accentSecondary };
+        return { label: t('productSearch.badgeManual'), color: colors.accentSecondary };
     }
   };
 
   const badge = getSourceBadge();
+  const nutriscore = product.nutriscoreGrade ? product.nutriscoreGrade.toLowerCase() : null;
+  const nutriColor = nutriscore && NUTRI_COLORS[nutriscore] ? NUTRI_COLORS[nutriscore] : null;
 
   return (
     <TouchableOpacity
       style={[styles.container, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
       onPress={() => onSelect(product)}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={(i18n && i18n.isInitialized && i18n.language !== 'ro') ? t('productSearch.addResultA11y', { name: product.name, kcal: Math.round(product.kcalPer100g) }) : `Adaugă ${product.name}, ${Math.round(product.kcalPer100g)} kcal per 100 grame`}
     >
+      {/* Thumbnail imagine sau Iconiță aliment */}
+      <View style={[styles.thumbWrap, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
+        {product.imageSmallUrl || product.imageUrl ? (
+          <Image
+            source={{ uri: product.imageSmallUrl || product.imageUrl }}
+            style={styles.thumbImage}
+            contentFit="cover"
+            transition={150}
+          />
+        ) : (
+          <FlowIcon
+            name="apple"
+            size={22}
+            color={colors.accent}
+          />
+        )}
+      </View>
+
       <View style={styles.infoCol}>
         <View style={styles.headerRow}>
           <Text maxFontSizeMultiplier={1.3} style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -48,21 +86,32 @@ export function ProductSearchResult({ product, onSelect }: ProductSearchResultPr
         </View>
 
         <View style={styles.metaRow}>
+          {nutriColor && nutriscore ? (
+            <View style={[styles.nutriPill, { backgroundColor: nutriColor }]}>
+              <Text style={styles.nutriPillText}>{nutriscore.toUpperCase()}</Text>
+            </View>
+          ) : null}
+
           <View style={[styles.badge, { backgroundColor: badge.color + '18', borderColor: badge.color + '44' }]}>
             <Text maxFontSizeMultiplier={1.3} style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
           </View>
+
           <Text maxFontSizeMultiplier={1.3} style={[styles.macros, { color: colors.accent }]}>
-            {Math.round(product.kcalPer100g)} kcal • P: {Math.round(product.proteinPer100g * 10) / 10}g • C: {Math.round(product.carbsPer100g * 10) / 10}g
+            {Math.round(product.kcalPer100g)} kcal • P: {Math.round(product.proteinPer100g * 10) / 10}g
           </Text>
         </View>
       </View>
 
-      <View style={[styles.addBtn, { backgroundColor: colors.accent + '22', borderColor: colors.accent }]}>
+      <View
+        style={[styles.addBtn, { backgroundColor: colors.accent + '22', borderColor: colors.accent }]}
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
+      >
         <Plus size={18} color={colors.accent} />
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -118,5 +167,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  thumbWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  thumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  nutriPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  nutriPillText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
 });

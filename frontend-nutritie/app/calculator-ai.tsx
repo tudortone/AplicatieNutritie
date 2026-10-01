@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNotificationBannerActions } from '../context/NotificationBannerContext';
+import { useTranslation } from 'react-i18next';
 // FIX UI: tastatura acoperea input-urile de varsta/greutate/inaltime.
 import KeyboardAwareScreen from '../components/ui/KeyboardAwareScreen';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -54,6 +55,7 @@ export default function CalculatorAI() {
   const router = useRouter();
   const { colors } = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
   const { showBanner } = useNotificationBannerActions();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
@@ -171,7 +173,9 @@ export default function CalculatorAI() {
         <Animated.View entering={ZoomIn.duration(600).delay(100)} style={[styles.aiBadge, { borderColor: colors.accent + '33' }]}>
           <LinearGradient colors={[colors.accent + '26', 'rgba(0,0,0,0)']} style={styles.aiBadgeGrad}>
             <Sparkles size={24} color={colors.accent} />
-            <Text style={styles.aiBadgeText}>Algoritm medical cu inteligență artificială. Introdu datele tale corecte pentru ținte precise de nutriție.</Text>
+            <Text style={styles.aiBadgeText}>
+              {t('calculatorAi.badge', 'Algoritm de nutriție cu inteligență artificială. Introdu datele tale pentru a calcula țintele nutriționale optime.')}
+            </Text>
           </LinearGradient>
         </Animated.View>
 

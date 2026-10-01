@@ -1,8 +1,10 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { FlowIcon, resolveFlowIconName } from './FlowIcon';
 
 interface EmptyStateProps {
+  /** Semantic FlowIcon name or known legacy icon metadata from static catalogs. */
   icon?: string;
   title: string;
   subtitle?: string;
@@ -15,11 +17,11 @@ interface EmptyStateProps {
 }
 
 /**
- * Stare goala cu ilustratie emoji, titlu, subtitlu si actiune optionala.
+ * Stare goală cu pictogramă vectorială, titlu, subtitlu și acțiune opțională.
  * Folosita pe ecranele unde utilizatorul nu are inca date (mese, antrenamente etc.).
  */
 export function EmptyState({
-  icon = '📭',
+  icon = 'inbox',
   title,
   subtitle,
   actionLabel,
@@ -35,7 +37,9 @@ export function EmptyState({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.icon}>{icon}</Text>
+      <View style={styles.icon}>
+        <FlowIcon name={resolveFlowIconName(icon) ?? 'inbox'} size={44} color={accent} />
+      </View>
       <Text style={[styles.title, { color: text }]} maxFontSizeMultiplier={1.3}>{title}</Text>
       {subtitle && (
         <Text style={[styles.subtitle, { color: muted }]} maxFontSizeMultiplier={1.3}>{subtitle}</Text>
@@ -64,7 +68,8 @@ const styles = StyleSheet.create({
     minHeight: 250,
   },
   icon: {
-    fontSize: 56,
+    width: 64,
+    height: 64,
     marginBottom: 8,
   },
   title: {

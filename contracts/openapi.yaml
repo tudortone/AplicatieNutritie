@@ -1,14 +1,16 @@
 openapi: 3.1.0
 info:
   title: NutriAI Backend API
+  version: 2.5.0-audit
   description: |
-    API-ul serverului NutriAI — analiză AI de mâncare (foto/text), chat nutrițional,
-    coduri de bare, jurnal de mese, validare premium și rute GDPR.
+    Contractul HTTP al backendului NutriAI. Prefixul canonic este `/api/v1`.
+    Aliasurile `/api` rămân disponibile temporar și sunt marcate prin
+    `x-legacy-alias`, cu sunset la 2026-09-30.
 
-    Toate rutele protejate așteaptă header-ul `Authorization: Bearer <token>` cu un
-    JWT valid (Supabase sau Clerk). Erorile răspund cu obiectul `{ "eroare": string }`
-    și codul HTTP potrivit.
-  version: 2.4.0
+    Rutele API normale folosesc `Authorization: Bearer <token>` (Supabase sau
+    Clerk). Webhook-urile folosesc semnătura/secretul furnizorului și nu folosesc
+    bearer auth. Majoritatea erorilor au forma `{ "eroare": string }`; ruta chat
+    păstrează și forma istorică `{ "raspuns": string }` pentru erorile handlerului.
 servers:
   - url: https://nutritie-backend-ai.onrender.com
     description: Producție (Render)
@@ -16,642 +18,442 @@ servers:
     description: Dezvoltare locală
 security:
   - bearerAuth: []
+
+# Seturi YAML folosite doar pentru a evita repetarea statusurilor de middleware.
+# După parsare, fiecare operație conține explicit toate cheile de răspuns.
+x-response-sets:
+  auth-limited: &authLimited
+    '401': { $ref: '#/components/responses/Unauthorized' }
+    '409': { $ref: '#/components/responses/Conflict' }
+    '429': { $ref: '#/components/responses/RateLimited' }
+    '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  json-mutation: &jsonMutation
+    '400': { $ref: '#/components/responses/BadRequest' }
+    '401': { $ref: '#/components/responses/Unauthorized' }
+    '409': { $ref: '#/components/responses/Conflict' }
+    '413': { $ref: '#/components/responses/BodyTooLarge' }
+    '429': { $ref: '#/components/responses/RateLimited' }
+    '500': { $ref: '#/components/responses/ServerError' }
+    '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  webhook: &webhookResponses
+    '400': { $ref: '#/components/responses/BadRequest' }
+    '401': { $ref: '#/components/responses/Unauthorized' }
+    '429': { $ref: '#/components/responses/RateLimited' }
+    '500': { $ref: '#/components/responses/ServerError' }
+
 paths:
   /:
     get:
-      summary: Stare serviciu (root)
+      summary: Stare serviciu
       security: []
       responses:
         '200':
           description: Serviciu funcțional
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  status: { type: string, example: OK }
-                  service: { type: string }
-                  version: { type: string }
-                  timestamp: { type: string, format: date-time }
+              schema: { $ref: '#/components/schemas/RootStatus' }
   /health:
     get:
-      summary: Health check (keep-alive)
+      summary: Readiness check Supabase
       security: []
       responses:
         '200':
-          description: Sănătos
+          description: Backend și Supabase disponibile
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  status: { type: string, example: ok }
-                  healthy: { type: boolean, example: true }
-                  uptime: { type: number }
-                  timestamp: { type: string, format: date-time }
-  /api/ai-status:
-    get:
-      summary: Stare furnizori AI + metrici
-      description: Status (active/cooldown) pentru Gemini, OpenAI, Groq, OpenRouter și metrici de tokeni/cost.
-      security: []
-      responses:
-        '200':
-          description: Status curent
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  gemini: { $ref: '#/components/schemas/ProviderStatus' }
-                  openai: { $ref: '#/components/schemas/ProviderStatus' }
-                  groq: { $ref: '#/components/schemas/ProviderStatus' }
-                  openrouter: { $ref: '#/components/schemas/ProviderStatus' }
-                  metriciAi: { type: object }
-  /api/imagekit-auth:
-    get:
-      summary: Parametri de autentificare ImageKit
-      description: Token + parametri pentru upload direct pe ImageKit. 503 dacă ImageKit nu e configurat.
-      responses:
-        '200':
-          description: Parametri de upload
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  token: { type: string }
-                  expire: { type: integer }
-                  signature: { type: string }
-                  urlEndpoint: { type: string }
+              schema: { $ref: '#/components/schemas/HealthStatus' }
+        '429': { $ref: '#/components/responses/RateLimited' }
         '503':
-          $ref: '#/components/responses/Disabled'
+          description: Supabase indisponibil; backend degradat
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthStatus' }
+
+  # Suprafața canonică /api/v1.
+  /api/v1/ai-status: { $ref: '#/components/pathItems/AiStatus' }
+  /api/v1/imagekit-auth: { $ref: '#/components/pathItems/ImageKitAuth' }
+  /api/v1/trigger-analiza-mancare: { $ref: '#/components/pathItems/TriggerAnaliza' }
+  /api/v1/analiza-foto: { $ref: '#/components/pathItems/AnalizaFoto' }
+  /api/v1/analizeaza-mancare-structurat: { $ref: '#/components/pathItems/AnalizaFoto' }
+  /api/v1/chat: { $ref: '#/components/pathItems/Chat' }
+  /api/v1/log-food-from-chat: { $ref: '#/components/pathItems/LogFoodChat' }
+  /api/v1/log-food: { $ref: '#/components/pathItems/LogFoodChat' }
+  /api/v1/log-food-chat: { $ref: '#/components/pathItems/LogFoodChat' }
+  /api/v1/estimeaza-mancare-text: { $ref: '#/components/pathItems/EstimeazaMancareText' }
+  /api/v1/profil-nutritiv: { $ref: '#/components/pathItems/ProfilNutritiv' }
+  /api/v1/vision-fallback: { $ref: '#/components/pathItems/VisionFallback' }
+  /api/v1/corecteaza-mancare-vizual-text: { $ref: '#/components/pathItems/VisionFallback' }
+  /api/v1/cauta-produs: { $ref: '#/components/pathItems/CautaProdus' }
+  /api/v1/produs-barcode/{code}: { $ref: '#/components/pathItems/ProdusBarcode' }
+  /api/v1/salveaza-produs-barcode: { $ref: '#/components/pathItems/SalveazaProdusBarcode' }
+  /api/v1/calculeaza-profil: { $ref: '#/components/pathItems/CalculeazaProfil' }
+  /api/v1/mese: { $ref: '#/components/pathItems/Mese' }
+  /api/v1/mese/{id}: { $ref: '#/components/pathItems/MasaId' }
+  /api/v1/user/profil: { $ref: '#/components/pathItems/UserProfil' }
+  /api/v1/user/premium-status: { $ref: '#/components/pathItems/PremiumStatus' }
+  /api/v1/billing/google/products: { $ref: '#/components/pathItems/GoogleBillingProducts' }
+  /api/v1/billing/google/verify: { $ref: '#/components/pathItems/GoogleBillingVerify' }
+  /api/v1/billing/google/resync: { $ref: '#/components/pathItems/GoogleBillingResync' }
+  /api/v1/billing/google/verify-consumable: { $ref: '#/components/pathItems/GoogleBillingVerifyConsumable' }
+  /api/v1/flow-credits: { $ref: '#/components/pathItems/FlowCredits' }
+  /api/v1/photo-jobs: { $ref: '#/components/pathItems/PhotoJobs' }
+  /api/v1/photo-jobs/active: { $ref: '#/components/pathItems/PhotoJobsActive' }
+  /api/v1/photo-jobs/{jobId}: { $ref: '#/components/pathItems/PhotoJobId' }
+  /api/v1/photo-assets/cleanup: { $ref: '#/components/pathItems/PhotoAssetCleanup' }
+  /api/v1/rewarded/intents: { $ref: '#/components/pathItems/RewardedIntent' }
+  /api/v1/webhooks/admob/rewarded: { $ref: '#/components/pathItems/AdmobRewardedWebhook' }
+  /api/v1/user/export-data: { $ref: '#/components/pathItems/ExportData' }
+  /api/v1/user/delete-account: { $ref: '#/components/pathItems/DeleteAccount' }
+  /api/v1/webhooks/clerk: { $ref: '#/components/pathItems/ClerkWebhook' }
+  /api/v1/webhooks/google-play: { $ref: '#/components/pathItems/GooglePlayWebhook' }
+
+  # Aliasuri legacy. x-legacy-alias este excepția verificabilă folosită de testul
+  # anti-drift; serverul emite și Sunset/Deprecation/Link pentru aceste căi.
+  /api/ai-status:
+    $ref: '#/components/pathItems/AiStatus'
+    x-legacy-alias: { canonical: /api/v1/ai-status, sunset: '2026-09-30T00:00:00Z' }
+  /api/imagekit-auth:
+    $ref: '#/components/pathItems/ImageKitAuth'
+    x-legacy-alias: { canonical: /api/v1/imagekit-auth, sunset: '2026-09-30T00:00:00Z' }
   /api/trigger-analiza-mancare:
-    post:
-      summary: Trimite analiza AI în fundal (Trigger.dev)
-      description: Programează un task asincron de analiză a imaginii. 503 dacă TRIGGER_SECRET_KEY lipsește.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [imageUrl]
-              properties:
-                imageUrl:
-                  type: string
-                  format: uri
-                  description: URL HTTPS pe stocarea aplicației (ImageKit/Supabase) — altfel SSRF.
-                tipMasa:
-                  type: string
-                  default: Pranz
-      responses:
-        '200':
-          description: Task programat
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  succes: { type: boolean, example: true }
-                  taskId: { type: string }
-                  status: { type: string, example: pending }
-                  mesaj: { type: string }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '503': { $ref: '#/components/responses/Disabled' }
+    $ref: '#/components/pathItems/TriggerAnaliza'
+    x-legacy-alias: { canonical: /api/v1/trigger-analiza-mancare, sunset: '2026-09-30T00:00:00Z' }
   /api/analiza-foto:
-    post:
-      summary: Analiză AI a unei fotografii cu mâncare
-      description: Upload multipart (`imagine`). Returnează lista alimentelor identificate cu valori per 100g.
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [imagine]
-              properties:
-                imagine:
-                  type: string
-                  format: binary
-                  description: Imagine JPEG/PNG/WEBP, max 5MB.
-                provider:
-                  type: string
-                  enum: [auto, gemini, openai, groq, openrouter]
-                  default: auto
-      responses:
-        '200':
-          description: Alimente identificate
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/AlimentAnalizat' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '413': { $ref: '#/components/responses/FileTooLarge' }
-        '429': { $ref: '#/components/responses/Cooldown' }
-        '503': { $ref: '#/components/responses/AIFail' }
+    $ref: '#/components/pathItems/AnalizaFoto'
+    x-legacy-alias: { canonical: /api/v1/analiza-foto, sunset: '2026-09-30T00:00:00Z' }
   /api/analizeaza-mancare-structurat:
-    post:
-      summary: Analiză AI structurată a unei fotografii (alias)
-      description: Identic cu `/api/analiza-foto` (același handler).
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [imagine]
-              properties:
-                imagine:
-                  type: string
-                  format: binary
-                  description: Imagine JPEG/PNG/WEBP, max 5MB.
-                provider:
-                  type: string
-                  enum: [auto, gemini, openai, groq, openrouter]
-                  default: auto
-      responses:
-        '200':
-          description: Alimente identificate
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/AlimentAnalizat' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '413': { $ref: '#/components/responses/FileTooLarge' }
-        '503': { $ref: '#/components/responses/AIFail' }
+    $ref: '#/components/pathItems/AnalizaFoto'
+    x-legacy-alias: { canonical: /api/v1/analizeaza-mancare-structurat, sunset: '2026-09-30T00:00:00Z' }
   /api/chat:
-    post:
-      summary: Chat nutrițional AI
-      description: Groq (Llama 3.3) cu fallback Gemini. Poate răspunde cu MEAL_PROPOSAL JSON când utilizatorul loghează o masă.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [mesaj]
-              properties:
-                mesaj: { type: string }
-                mesaje:
-                  type: array
-                  description: Istoric conversație ({ role, content }).
-                caloriiConsumate: { type: number }
-                caloriiTinta: { type: number }
-                proteineConsumate: { type: number }
-                proteineTinta: { type: number }
-      responses:
-        '200':
-          description: Răspuns AI
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  raspuns: { type: string }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '500':
-          $ref: '#/components/responses/ServerError'
+    $ref: '#/components/pathItems/Chat'
+    x-legacy-alias: { canonical: /api/v1/chat, sunset: '2026-09-30T00:00:00Z' }
   /api/log-food-from-chat:
-    post:
-      summary: Generează propunere de masă (MEAL_PROPOSAL) din chat
-      description: AI extrage alimentele menționate (inclusiv din istoric) într-un obiect JSON pentru jurnal.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [mesaj]
-              properties:
-                mesaj: { type: string }
-                mesaje:
-                  type: array
-                  description: Istoric conversație (max 6 mesaje).
-      responses:
-        '200':
-          description: Propunere de masă
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/MealProposal' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '500': { $ref: '#/components/responses/ServerError' }
+    $ref: '#/components/pathItems/LogFoodChat'
+    x-legacy-alias: { canonical: /api/v1/log-food-from-chat, sunset: '2026-09-30T00:00:00Z' }
+  /api/log-food:
+    $ref: '#/components/pathItems/LogFoodChat'
+    x-legacy-alias: { canonical: /api/v1/log-food, sunset: '2026-09-30T00:00:00Z' }
+  /api/log-food-chat:
+    $ref: '#/components/pathItems/LogFoodChat'
+    x-legacy-alias: { canonical: /api/v1/log-food-chat, sunset: '2026-09-30T00:00:00Z' }
   /api/estimeaza-mancare-text:
-    post:
-      summary: Estimează valorile nutriționale dintr-o descriere text
-      description: O porție standard din alimentul descris. Supusă plafonului zilnic AI.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [text]
-              properties:
-                text: { type: string, maxLength: 200 }
-      responses:
-        '200':
-          description: Valori estimate
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  nume: { type: string }
-                  calorii: { type: number }
-                  proteine: { type: number }
-                  carbohidrati: { type: number }
-                  grasimi: { type: number }
-                  gramajDefault: { type: number }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '429': { $ref: '#/components/responses/QuotaExceeded' }
-        '500': { $ref: '#/components/responses/ServerError' }
+    $ref: '#/components/pathItems/EstimeazaMancareText'
+    x-legacy-alias: { canonical: /api/v1/estimeaza-mancare-text, sunset: '2026-09-30T00:00:00Z' }
+  /api/profil-nutritiv:
+    $ref: '#/components/pathItems/ProfilNutritiv'
+    x-legacy-alias: { canonical: /api/v1/profil-nutritiv, sunset: '2026-09-30T00:00:00Z' }
   /api/vision-fallback:
-    post:
-      summary: Corectare / combinare ingrediente din imagine + text
-      description: "Smart merge or replace: corectează lista de ingrediente după explicația utilizatorului. Supusă plafonului zilnic AI."
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [user_prompt]
-              properties:
-                user_prompt: { type: string, maxLength: 500 }
-                current_ingredients:
-                  type: array
-                  description: Lista curentă de ingrediente ({ nume, calorii_per_100g, ... }).
-      responses:
-        '200':
-          description: Ingrediente corectate
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  action_taken: { type: string, enum: [replaced, appended] }
-                  ingredients:
-                    type: array
-                    items: { $ref: '#/components/schemas/IngredientCorectat' }
-                  new_totals:
-                    type: object
-                    properties:
-                      kcal: { type: number }
-                      proteine: { type: number }
-                      grasimi: { type: number }
-                      carbohidrati: { type: number }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '429': { $ref: '#/components/responses/QuotaExceeded' }
-        '500': { $ref: '#/components/responses/ServerError' }
+    $ref: '#/components/pathItems/VisionFallback'
+    x-legacy-alias: { canonical: /api/v1/vision-fallback, sunset: '2026-09-30T00:00:00Z' }
   /api/corecteaza-mancare-vizual-text:
-    post:
-      summary: Corectare vizual→text (alias vision-fallback)
-      description: Identic cu `/api/vision-fallback` (același handler).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [user_prompt]
-              properties:
-                user_prompt: { type: string, maxLength: 500 }
-                current_ingredients:
-                  type: array
-      responses:
-        '200':
-          description: Ingrediente corectate
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  action_taken: { type: string, enum: [replaced, appended] }
-                  ingredients:
-                    type: array
-                    items: { $ref: '#/components/schemas/IngredientCorectat' }
-                  new_totals:
-                    type: object
-                    properties:
-                      kcal: { type: number }
-                      proteine: { type: number }
-                      grasimi: { type: number }
-                      carbohidrati: { type: number }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '429': { $ref: '#/components/responses/QuotaExceeded' }
-        '500': { $ref: '#/components/responses/ServerError' }
+    $ref: '#/components/pathItems/VisionFallback'
+    x-legacy-alias: { canonical: /api/v1/corecteaza-mancare-vizual-text, sunset: '2026-09-30T00:00:00Z' }
+  /api/cauta-produs:
+    $ref: '#/components/pathItems/CautaProdus'
+    x-legacy-alias: { canonical: /api/v1/cauta-produs, sunset: '2026-09-30T00:00:00Z' }
   /api/produs-barcode/{code}:
-    get:
-      summary: Caută produs după cod de bare
-      description: |
-        Cascadă: cache global → estimare per utilizator → OpenFoodFacts → estimare AI.
-        Răspunsul are contract unic `{ produs, sursa, source, estimat, dinCache }`.
-        404 cu `allowManualEntry` când produsul nu există.
-      parameters:
-        - in: path
-          name: code
-          required: true
-          schema:
-            type: string
-            pattern: '^[0-9]{4,20}$'
-          description: Cod EAN/UPC (4–20 cifre)
-      responses:
-        '200':
-          description: Produs găsit
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  produs: { $ref: '#/components/schemas/ProdusBarcode' }
-                  sursa: { type: string, enum: [openfoodfacts, estimare_ai] }
-                  source: { type: string }
-                  estimat: { type: boolean }
-                  dinCache: { type: boolean }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '404':
-          description: Produs negăsit
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  eroare: { type: string, example: 'Produsul nu a fost gasit.' }
-                  allowManualEntry: { type: boolean, example: true }
-                  suggestedAction: { type: string, example: manual_or_ai_text }
-        '500': { $ref: '#/components/responses/ServerError' }
+    $ref: '#/components/pathItems/ProdusBarcode'
+    x-legacy-alias: { canonical: '/api/v1/produs-barcode/{code}', sunset: '2026-09-30T00:00:00Z' }
   /api/salveaza-produs-barcode:
-    post:
-      summary: Salvează un produs completat manual (cache per utilizator)
-      description: Validare strictă a valorilor nutriționale; conflict de proprietate → 409.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [code, name]
-              properties:
-                code: { type: string, pattern: '^[0-9]{4,20}$' }
-                name: { type: string }
-                brand: { type: string }
-                quantity: { type: string }
-                kcal_100g: { type: number, minimum: 0, maximum: 1000 }
-                protein_100g: { type: number, minimum: 0, maximum: 100 }
-                carbs_100g: { type: number, minimum: 0, maximum: 100 }
-                fat_100g: { type: number, minimum: 0, maximum: 100 }
-      responses:
-        '200':
-          description: Salvat
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  succes: { type: boolean, example: true }
-                  message: { type: string }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '409':
-          description: Produs deținut de alt utilizator
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-        '500': { $ref: '#/components/responses/ServerError' }
+    $ref: '#/components/pathItems/SalveazaProdusBarcode'
+    x-legacy-alias: { canonical: /api/v1/salveaza-produs-barcode, sunset: '2026-09-30T00:00:00Z' }
   /api/calculeaza-profil:
-    post:
-      summary: Calculează țintele nutriționale (Mifflin-St Jeor)
-      description: "Deterministic, fără AI. Valori: calorii, proteine, grasimi, carbohidrati țintă."
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [varsta, greutate, inaltime, sex, activitate, obiectiv]
-              properties:
-                varsta: { type: integer, minimum: 10, maximum: 100 }
-                greutate: { type: number, minimum: 30, maximum: 300 }
-                inaltime: { type: number, minimum: 100, maximum: 250 }
-                sex: { type: string, enum: [Masculin, Feminin] }
-                activitate: { type: string, enum: [Sedentar, Moderat, 'Foarte Activ'] }
-                obiectiv: { type: string, enum: [Slăbire, Menținere, 'Masă Musculară'] }
-      responses:
-        '200':
-          description: Ținte calculate
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  caloriiTinta: { type: integer }
-                  proteineTinta: { type: integer }
-                  grasimiTinta: { type: integer }
-                  carbiTinta: { type: integer }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '500': { $ref: '#/components/responses/ServerError' }
+    $ref: '#/components/pathItems/CalculeazaProfil'
+    x-legacy-alias: { canonical: /api/v1/calculeaza-profil, sunset: '2026-09-30T00:00:00Z' }
   /api/mese:
-    post:
-      summary: Adaugă o masă în jurnal
-      description: |
-        `user_id` vine exclusiv din identitatea JWT, niciodată din corpul cererii.
-        Validare partajată (`utils/validareMese.js`). Caloriile sunt obligatorii.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/MasaInput' }
-      responses:
-        '200':
-          description: Masă creată
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  succes: { type: boolean, example: true }
-                  masa: { $ref: '#/components/schemas/Masa' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '500': { $ref: '#/components/responses/ServerError' }
+    $ref: '#/components/pathItems/Mese'
+    x-legacy-alias: { canonical: /api/v1/mese, sunset: '2026-09-30T00:00:00Z' }
   /api/mese/{id}:
-    put:
-      summary: Actualizează o masă
-      description: Câmpurile absente rămân neatinse. `id` trebuie să fie un UUID care aparține utilizatorului.
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string, format: uuid }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/MasaInput' }
-      responses:
-        '200':
-          description: Masă actualizată
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  succes: { type: boolean, example: true }
-                  masa: { $ref: '#/components/schemas/Masa' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/ServerError' }
-    delete:
-      summary: Șterge o masă
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200':
-          description: Masă ștearsă
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  succes: { type: boolean, example: true }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/ServerError' }
+    $ref: '#/components/pathItems/MasaId'
+    x-legacy-alias: { canonical: '/api/v1/mese/{id}', sunset: '2026-09-30T00:00:00Z' }
+  /api/user/profil:
+    $ref: '#/components/pathItems/UserProfil'
+    x-legacy-alias: { canonical: /api/v1/user/profil, sunset: '2026-09-30T00:00:00Z' }
   /api/user/premium-status:
-    get:
-      summary: Validează premium server-side (RevenueCat)
-      description: Fail-closed — fără cheie configurată sau la eroare de rețea NU raportează premium. 503 dacă REVENUECAT_SECRET_API_KEY lipsește.
-      responses:
-        '200':
-          description: Status validat
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  premium: { type: boolean }
-                  entitlement: { type: object, nullable: true }
-                  expiresDate: { type: string, format: date-time, nullable: true }
-                  validatServer: { type: boolean, example: true }
-        '502':
-          description: RevenueCat a răspuns cu eroare
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-        '503': { $ref: '#/components/responses/Disabled' }
+    $ref: '#/components/pathItems/PremiumStatus'
+    x-legacy-alias: { canonical: /api/v1/user/premium-status, sunset: '2026-09-30T00:00:00Z' }
+  /api/billing/google/products:
+    $ref: '#/components/pathItems/GoogleBillingProducts'
+    x-legacy-alias: { canonical: /api/v1/billing/google/products, sunset: '2026-09-30T00:00:00Z' }
+  /api/billing/google/verify:
+    $ref: '#/components/pathItems/GoogleBillingVerify'
+    x-legacy-alias: { canonical: /api/v1/billing/google/verify, sunset: '2026-09-30T00:00:00Z' }
+  /api/billing/google/resync:
+    $ref: '#/components/pathItems/GoogleBillingResync'
+    x-legacy-alias: { canonical: /api/v1/billing/google/resync, sunset: '2026-09-30T00:00:00Z' }
   /api/user/export-data:
-    get:
-      summary: Export GDPR — toate datele utilizatorului
-      description: Citește prin clientul RLS, per tabelă, tolerând erori.
-      responses:
-        '200':
-          description: Export complet
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  exportDate: { type: string, format: date-time }
-                  user_id: { type: string }
-                  user: { type: object }
-                  profil: { type: object, nullable: true }
-                  mese: { type: array, items: { $ref: '#/components/schemas/Masa' } }
-                  antrenamente: { type: array }
-                  estimari_barcode: { type: array }
-                  audit_log: { type: array }
-        '500': { $ref: '#/components/responses/ServerError' }
+    $ref: '#/components/pathItems/ExportData'
+    x-legacy-alias: { canonical: /api/v1/user/export-data, sunset: '2026-09-30T00:00:00Z' }
   /api/user/delete-account:
-    delete:
-      summary: Șterge contul și toate datele (GDPR)
-      description: Șterge tabelele cu date de utilizator + contul Supabase (cascadă FK). Ireversibil.
-      responses:
-        '200':
-          description: Cont șters
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  succes: { type: boolean, example: true }
-                  mesaj: { type: string }
-        '500': { $ref: '#/components/responses/ServerError' }
+    $ref: '#/components/pathItems/DeleteAccount'
+    x-legacy-alias: { canonical: /api/v1/user/delete-account, sunset: '2026-09-30T00:00:00Z' }
+  /api/webhooks/clerk:
+    $ref: '#/components/pathItems/ClerkWebhook'
+    x-legacy-alias: { canonical: /api/v1/webhooks/clerk, sunset: '2026-09-30T00:00:00Z' }
+  /api/webhooks/google-play:
+    $ref: '#/components/pathItems/GooglePlayWebhook'
+    x-legacy-alias: { canonical: /api/v1/webhooks/google-play, sunset: '2026-09-30T00:00:00Z' }
+  /api/billing/google/verify-consumable: { $ref: '#/components/pathItems/GoogleBillingVerifyConsumable', x-legacy-alias: { canonical: /api/v1/billing/google/verify-consumable, sunset: '2026-09-30T00:00:00Z' } }
+  /api/flow-credits: { $ref: '#/components/pathItems/FlowCredits', x-legacy-alias: { canonical: /api/v1/flow-credits, sunset: '2026-09-30T00:00:00Z' } }
+  /api/photo-jobs: { $ref: '#/components/pathItems/PhotoJobs', x-legacy-alias: { canonical: /api/v1/photo-jobs, sunset: '2026-09-30T00:00:00Z' } }
+  /api/photo-jobs/active: { $ref: '#/components/pathItems/PhotoJobsActive', x-legacy-alias: { canonical: /api/v1/photo-jobs/active, sunset: '2026-09-30T00:00:00Z' } }
+  /api/photo-jobs/{jobId}: { $ref: '#/components/pathItems/PhotoJobId', x-legacy-alias: { canonical: '/api/v1/photo-jobs/{jobId}', sunset: '2026-09-30T00:00:00Z' } }
+  /api/photo-assets/cleanup: { $ref: '#/components/pathItems/PhotoAssetCleanup', x-legacy-alias: { canonical: /api/v1/photo-assets/cleanup, sunset: '2026-09-30T00:00:00Z' } }
+  /api/rewarded/intents: { $ref: '#/components/pathItems/RewardedIntent', x-legacy-alias: { canonical: /api/v1/rewarded/intents, sunset: '2026-09-30T00:00:00Z' } }
+  /api/webhooks/admob/rewarded: { $ref: '#/components/pathItems/AdmobRewardedWebhook', x-legacy-alias: { canonical: /api/v1/webhooks/admob/rewarded, sunset: '2026-09-30T00:00:00Z' } }
 
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
-      description: 'JWT Supabase sau Clerk (header `Authorization: Bearer <token>`)'
+      description: JWT Supabase sau Clerk
+
   schemas:
     Error:
       type: object
       required: [eroare]
       properties:
         eroare: { type: string }
-    DisabledResponse:
+        cod: { type: string }
+      additionalProperties: true
+    ChatError:
       type: object
+      required: [raspuns]
       properties:
-        eroare: { type: string }
-        status: { type: string, example: disabled }
+        raspuns: { type: string }
+      additionalProperties: false
+    RootStatus:
+      type: object
+      required: [status, service, version, timestamp]
+      properties:
+        status: { type: string, const: OK }
+        service: { type: string, const: NutriAI Secure Backend }
+        version: { type: string, const: 2.5.0-audit }
+        timestamp: { type: string, format: date-time }
+    HealthStatus:
+      type: object
+      required: [status, healthy, uptime, timestamp]
+      properties:
+        status: { type: string, enum: [ok, degradat] }
+        healthy: { type: boolean }
+        uptime: { type: number, minimum: 0 }
+        timestamp: { type: string, format: date-time }
     ProviderStatus:
       type: object
+      required: [status, secundeRamase]
       properties:
-        id: { type: string }
-        nume: { type: string }
-        status: { type: string, enum: [active, cooldown] }
-        secundeRamase: { type: integer }
+        status:
+          type: string
+          enum: [active, disponibil, ok, cooldown, rate_limit, indisponibil]
+        secundeRamase: { type: integer, minimum: 0, maximum: 3600 }
+      additionalProperties: false
+    AiStatusResponse:
+      type: object
+      required: [gemini, openai, groq, openrouter]
+      properties:
+        gemini: { $ref: '#/components/schemas/ProviderStatus' }
+        openai: { $ref: '#/components/schemas/ProviderStatus' }
+        groq: { $ref: '#/components/schemas/ProviderStatus' }
+        openrouter: { $ref: '#/components/schemas/ProviderStatus' }
+        rls: { type: object, description: Prezent numai pentru administratori. }
+      additionalProperties: false
+    ImageKitAuthResponse:
+      type: object
+      required: [token, expire, signature, urlEndpoint]
+      properties:
+        token: { type: string }
+        expire: { type: integer }
+        signature: { type: string }
+        urlEndpoint: { type: string, format: uri }
+    TriggerRequest:
+      type: object
+      required: [imageUrl]
+      properties:
+        imageUrl:
+          type: string
+          format: uri
+          description: URL HTTPS ImageKit/Supabase din folderul `/mancare/<userId>/` al apelantului.
+        tipMasa: { type: string, default: Pranz }
+      additionalProperties: false
+    TriggerResponse:
+      type: object
+      required: [jobId, succes, taskId, status, mesaj]
+      properties:
+        jobId: { type: [string, 'null'] }
+        succes: { type: boolean, const: true }
+        taskId: { type: string }
+        status: { type: string, const: pending }
         mesaj: { type: string }
+    PhotoRequest:
+      type: object
+      required: [imagine]
+      properties:
+        imagine: { type: string, format: binary, description: JPEG/PNG/WEBP, maximum 5 MB. }
+        provider: { type: string, enum: [auto, gemini, openai, groq, openrouter], default: auto }
     AlimentAnalizat:
       type: object
+      required: [nume, estimare_grame, calorii_per_100g, proteine_per_100g, grasimi_per_100g, carbohidrati_per_100g, incredere]
       properties:
         nume: { type: string }
-        estimare_grame: { type: integer }
+        estimare_grame: { type: number }
         calorii_per_100g: { type: number }
         proteine_per_100g: { type: number }
         grasimi_per_100g: { type: number }
         carbohidrati_per_100g: { type: number }
-        incredere: { type: string, enum: [ridicat, mediu, scazut] }
-    IngredientCorectat:
+        incredere: { type: string }
+    ChatMessage:
       type: object
       properties:
-        nume: { type: string }
-        calorii_per_100g: { type: number }
-        proteine_per_100g: { type: number }
-        carbohidrati_per_100g: { type: number }
-        grasimi_per_100g: { type: number }
-        estimare_grame: { type: integer }
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string }
+        text: { type: string }
+    ChatRequest:
+      type: object
+      anyOf:
+        - required: [mesaj]
+        - required: [mesaje]
+      properties:
+        mesaj: { type: string, maxLength: 500 }
+        mesaje:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/ChatMessage' }
+        caloriiConsumate: { type: number }
+        caloriiTinta: { type: number }
+        proteineConsumate: { type: number }
+        proteineTinta: { type: number }
+    ChatResponse:
+      type: object
+      required: [raspuns]
+      properties:
+        raspuns: { type: string }
+      additionalProperties: false
+    LogFoodRequest:
+      type: object
+      required: [mesaj]
+      properties:
+        mesaj: { type: string, maxLength: 500 }
+        mesaje:
+          type: array
+          maxItems: 6
+          items: { $ref: '#/components/schemas/ChatMessage' }
     MealProposal:
       type: object
       properties:
-        type: { type: string, enum: [MEAL_PROPOSAL] }
+        type: { type: string, const: MEAL_PROPOSAL }
         meal_type: { type: string, enum: [mic_dejun, pranz, cina, gustare] }
         items:
           type: array
           items: { $ref: '#/components/schemas/MealItem' }
-        totals:
-          type: object
-          properties:
-            protein_g: { type: number }
-            carbs_g: { type: number }
-            fat_g: { type: number }
-            kcal: { type: number }
-            fiber_g: { type: number }
+        totals: { $ref: '#/components/schemas/MealTotals' }
+      additionalProperties: true
     MealItem:
       type: object
       properties:
         name: { type: string }
         qty: { type: number }
-        unit: { type: string, example: g }
+        unit: { type: string }
         protein_g: { type: number }
         carbs_g: { type: number }
         fat_g: { type: number }
         kcal: { type: number }
         fiber_g: { type: number }
+    MealTotals:
+      type: object
+      properties:
+        protein_g: { type: number }
+        carbs_g: { type: number }
+        fat_g: { type: number }
+        kcal: { type: number }
+        fiber_g: { type: number }
+    TextEstimateRequest:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, maxLength: 200 }
+      additionalProperties: false
+    TextEstimateResponse:
+      type: object
+      required: [nume, calorii, proteine, carbohidrati, grasimi, gramajDefault]
+      properties:
+        nume: { type: string }
+        calorii: { type: number }
+        proteine: { type: number }
+        carbohidrati: { type: number }
+        grasimi: { type: number }
+        gramajDefault: { type: number }
+    ProfilNutritivRequest:
+      type: object
+      required: [aliment]
+      properties:
+        aliment: { type: string, maxLength: 200, pattern: '.*\p{L}.*' }
+      additionalProperties: false
+    ProfilNutritivResponse:
+      type: object
+      required: [nume, grame, calorii, proteine, carbohidrati, grasimi, fibre, aminoacizi, micronutrienti]
+      properties:
+        nume: { type: string }
+        grame: { type: number, const: 100 }
+        calorii: { type: number }
+        proteine: { type: number }
+        carbohidrati: { type: number }
+        grasimi: { type: number }
+        fibre: { type: number }
+        aminoacizi: { type: object, additionalProperties: { type: number } }
+        micronutrienti: { type: object, additionalProperties: { type: number } }
+    VisionRequest:
+      type: object
+      anyOf:
+        - required: [user_prompt]
+        - required: [userExplanation]
+      properties:
+        user_prompt: { type: string, maxLength: 500 }
+        userExplanation: { type: string, maxLength: 500, deprecated: true }
+        current_ingredients: { type: array, maxItems: 50, items: { type: object } }
+        imageIngredients: { type: array, maxItems: 50, items: { type: object }, deprecated: true }
+    IngredientCorectat:
+      type: object
+      required: [nume, calorii_per_100g, proteine_per_100g, carbohidrati_per_100g, grasimi_per_100g, estimare_grame]
+      properties:
+        nume: { type: string }
+        calorii_per_100g: { type: number }
+        proteine_per_100g: { type: number }
+        carbohidrati_per_100g: { type: number }
+        grasimi_per_100g: { type: number }
+        estimare_grame: { type: number }
+    VisionResponse:
+      type: object
+      required: [action_taken, ingredients, new_totals]
+      properties:
+        action_taken: { type: string, enum: [replaced, appended] }
+        ingredients: { type: array, items: { $ref: '#/components/schemas/IngredientCorectat' } }
+        new_totals:
+          type: object
+          required: [kcal, proteine, grasimi, carbohidrati]
+          properties:
+            kcal: { type: number }
+            proteine: { type: number }
+            grasimi: { type: number }
+            carbohidrati: { type: number }
+    ProductSearchItem:
+      type: object
+      required: [code, product_name, brands, nutriments]
+      properties:
+        code: { type: string }
+        product_name: { type: string }
+        brands: { type: string }
+        nutriments:
+          type: object
+          required: [energy-kcal_100g, proteins_100g, carbohydrates_100g, fat_100g]
+          properties:
+            energy-kcal_100g: { type: number }
+            proteins_100g: { type: number }
+            carbohydrates_100g: { type: number }
+            fat_100g: { type: number }
     ProdusBarcode:
       type: object
+      required: [codBare, nume, brand, cantitate, calorii, proteine, carbohidrati, grasimi]
       properties:
         codBare: { type: string }
         nume: { type: string }
@@ -661,27 +463,101 @@ components:
         proteine: { type: number }
         carbohidrati: { type: number }
         grasimi: { type: number }
-        aminoacizi_100g: { type: object, nullable: true }
-        micronutrienti_100g: { type: object, nullable: true }
-        imagine_url: { type: string, format: uri, nullable: true }
-    MasaInput:
+        aminoacizi_100g: { type: [object, 'null'] }
+        micronutrienti_100g: { type: [object, 'null'] }
+        imagine_url: { type: [string, 'null'], format: uri }
+    BarcodeResponse:
+      type: object
+      required: [produs, sursa, source, estimat, dinCache]
+      properties:
+        produs: { $ref: '#/components/schemas/ProdusBarcode' }
+        sursa: { type: string, enum: [openfoodfacts, estimare_ai, user_manual, necunoscut] }
+        source: { type: string, enum: [openfoodfacts, estimare_ai, user_manual, necunoscut] }
+        estimat: { type: boolean }
+        dinCache: { type: boolean }
+    BarcodeSaveRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, pattern: '^[0-9]{4,20}$' }
+        name: { type: string, maxLength: 150 }
+        brand: { type: string, maxLength: 100 }
+        quantity: { type: string, maxLength: 50 }
+        kcal_100g: { type: number, minimum: 0, maximum: 1000 }
+        protein_100g: { type: number, minimum: 0, maximum: 100 }
+        carbs_100g: { type: number, minimum: 0, maximum: 100 }
+        fat_100g: { type: number, minimum: 0, maximum: 100 }
+      additionalProperties: false
+    ProfilCalculationRequest:
+      type: object
+      required: [varsta, greutate, inaltime, sex, activitate, obiectiv]
+      properties:
+        varsta: { type: integer, minimum: 10, maximum: 100 }
+        greutate: { type: number, minimum: 30, maximum: 300 }
+        inaltime: { type: number, minimum: 100, maximum: 250 }
+        sex: { type: string, enum: [Masculin, Feminin] }
+        activitate: { type: string, enum: [Sedentar, Moderat, 'Foarte Activ'] }
+        obiectiv: { type: string, enum: [Slăbire, Menținere, 'Masă Musculară'] }
+      additionalProperties: false
+    ProfilCalculationResponse:
+      type: object
+      required: [caloriiTinta, proteineTinta, grasimiTinta, carbiTinta]
+      properties:
+        caloriiTinta: { type: integer }
+        proteineTinta: { type: integer }
+        grasimiTinta: { type: integer }
+        carbiTinta: { type: integer }
+    AlimentMasaInput:
+      type: object
+      required: [nume, calorii]
+      properties:
+        nume: { type: string, maxLength: 150 }
+        id: { type: string, maxLength: 500 }
+        imageUrl: { type: string, maxLength: 500 }
+        imageKitFileId: { type: string, maxLength: 500 }
+        grame: { type: number, minimum: 0, maximum: 5000 }
+        estimare_grame: { type: number, minimum: 0, maximum: 5000 }
+        calorii: { type: number, minimum: 0, maximum: 10000 }
+        proteine: { type: number, minimum: 0, maximum: 1000 }
+        grasimi: { type: number, minimum: 0, maximum: 1000 }
+        carbohidrati: { type: number, minimum: 0, maximum: 2000 }
+        fibre: { type: number, minimum: 0, maximum: 1000 }
+        calorii_per_100g: { type: number, minimum: 0, maximum: 1000 }
+        proteine_per_100g: { type: number, minimum: 0, maximum: 100 }
+        grasimi_per_100g: { type: number, minimum: 0, maximum: 100 }
+        carbohidrati_per_100g: { type: number, minimum: 0, maximum: 100 }
+        aminoacizi: { type: object, additionalProperties: { type: number } }
+        micronutrienti: { type: object, additionalProperties: { type: number } }
+      additionalProperties: false
+    MasaFields:
       type: object
       properties:
         nume: { type: string, maxLength: 150 }
+        nume_masa: { type: string, maxLength: 150, deprecated: true }
         calorii: { type: number, minimum: 0, maximum: 10000 }
         proteine: { type: number, minimum: 0, maximum: 1000 }
         grasimi: { type: number, minimum: 0, maximum: 1000 }
         carbohidrati: { type: number, minimum: 0, maximum: 2000 }
         fibre: { type: number, minimum: 0, maximum: 1000 }
         tip_masa: { type: string, enum: [mic_dejun, pranz, cina, gustare] }
-        alimente:
-          type: array
-          maxItems: 100
-          items: { type: object }
-        data: { type: string, description: 'YYYY-MM-DD' }
-        ora: { type: string, description: 'HH:MM sau HH:MM:SS' }
+        alimente: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AlimentMasaInput' } }
+        data: { type: string }
+        ora: { type: string }
+      additionalProperties: false
+    MasaCreateInput:
+      allOf:
+        - { $ref: '#/components/schemas/MasaFields' }
+        - required: [calorii]
+          anyOf:
+            - required: [nume]
+            - required: [nume_masa]
+    MasaPatchInput:
+      allOf:
+        - { $ref: '#/components/schemas/MasaFields' }
+        - minProperties: 1
     Masa:
       type: object
+      required: [id, user_id, nume, calorii, proteine, grasimi, carbohidrati, fibre, tip_masa, alimente, data, ora]
       properties:
         id: { type: string, format: uuid }
         user_id: { type: string }
@@ -693,8 +569,128 @@ components:
         fibre: { type: number }
         tip_masa: { type: string }
         alimente: { type: array, items: { type: object } }
-        data: { type: string }
-        ora: { type: string }
+        data: { type: [string, 'null'] }
+        ora: { type: [string, 'null'] }
+      additionalProperties: true
+    UserProfilResponse:
+      type: object
+      required: [exista, complet, profil]
+      properties:
+        exista: { type: boolean }
+        complet: { type: boolean }
+        profil:
+          type: [object, 'null']
+          properties:
+            varsta: { type: [number, 'null'] }
+            greutate: { type: [number, 'null'] }
+            inaltime: { type: [number, 'null'] }
+            sex: { type: [string, 'null'] }
+            activitate: { type: [string, 'null'] }
+            obiectiv: { type: [string, 'null'] }
+            caloriiTinta: { type: [number, 'null'] }
+            proteineTinta: { type: [number, 'null'] }
+            grasimiTinta: { type: [number, 'null'] }
+            carbiTinta: { type: [number, 'null'] }
+    PremiumStatusResponse:
+      type: object
+      required: [premium, isPremium, isTester, isAdmin, accessTier, hasFullAccess, productId, basePlanId, offerId, state, expiresDate, acknowledgementPending, isTestPurchase, validatServer]
+      properties:
+        premium: { type: boolean }
+        isPremium: { type: boolean, description: Abonament Google Play verificat și persistent, încă valabil. }
+        isTester: { type: boolean, description: Drept intern din app_metadata.full_access. }
+        isAdmin: { type: boolean, description: Rol administrativ separat de accesul de tester. }
+        accessTier: { type: string, enum: [free, tester, premium] }
+        hasFullAccess: { type: boolean, description: Decizia comuna pentru portile de produs si reclame. }
+        productId: { type: [string, 'null'] }
+        basePlanId: { type: [string, 'null'] }
+        offerId: { type: [string, 'null'] }
+        state: { type: [string, 'null'] }
+        expiresDate: { type: [string, 'null'], format: date-time }
+        acknowledgementPending: { type: boolean }
+        isTestPurchase: { type: boolean }
+        validatServer: { type: boolean, const: true }
+    GoogleBillingCatalogResponse:
+      type: object
+      required: [packageName, productIds]
+      properties:
+        packageName: { type: string, const: com.totsrl.getflo }
+        productIds:
+          type: array
+          uniqueItems: true
+          items: { type: string }
+    GoogleBillingResyncResponse:
+      allOf:
+        - { $ref: '#/components/schemas/PremiumStatusResponse' }
+        - type: object
+          required: [restored]
+          properties:
+            restored: { type: integer, minimum: 0, maximum: 20 }
+    GdprExportResponse:
+      type: object
+      required:
+        - exportDate
+        - user_id
+        - user
+        - profil
+        - mese
+        - antrenamente
+        - produse_camara
+        - gamificare
+        - gamificare_evenimente
+        - workout_logs
+        - audit_log
+        - estimari_barcode
+        - ai_jobs
+        - credite_ai
+        - credite_tranzactii
+        - abonamente_google_play
+      properties:
+        exportDate: { type: string, format: date-time }
+        user_id: { type: string }
+        user: { type: object }
+        profil: { type: [object, 'null'] }
+        mese: { type: array, items: { $ref: '#/components/schemas/Masa' } }
+        antrenamente: { type: array, items: { type: object } }
+        produse_camara: { type: array, items: { type: object } }
+        gamificare: { type: array, items: { type: object } }
+        gamificare_evenimente: { type: array, items: { type: object } }
+        workout_logs: { type: array, items: { type: object } }
+        audit_log: { type: array, items: { type: object } }
+        estimari_barcode: { type: array, items: { type: object } }
+        ai_jobs: { type: array, items: { type: object } }
+        credite_ai: { type: array, items: { type: object } }
+        credite_tranzactii: { type: array, items: { type: object } }
+        abonamente_google_play:
+          type: array
+          description: Metadate de abonament; tokenurile brute și legăturile dintre tokenuri nu sunt exportate.
+          items:
+            type: object
+            properties:
+              purchase_token_hash: { type: string, pattern: '^[a-f0-9]{64}$' }
+              product_id: { type: string }
+              base_plan_id: { type: [string, 'null'] }
+              offer_id: { type: [string, 'null'] }
+              subscription_state: { type: string }
+              expiry_time: { type: [string, 'null'], format: date-time }
+              acknowledgement_state: { type: string }
+              is_entitled: { type: boolean }
+              is_test_purchase: { type: boolean }
+            additionalProperties: true
+    WebhookAck:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        type: { type: string }
+        eventType: { type: string }
+        ignorat: { type: boolean }
+        idempotent: { type: boolean }
+        avertisment: { type: string }
+        motiv: { type: string }
+        soldNou: { type: number }
+        crediteDelta: { type: number }
+      additionalProperties: true
+
   responses:
     BadRequest:
       description: Cerere invalidă
@@ -702,7 +698,12 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Unauthorized:
-      description: Token lipsă sau invalid
+      description: Token, semnătură sau secret lipsă/invalid
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Operație refuzată
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -711,42 +712,664 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
-    FileTooLarge:
-      description: Fișier peste limita de 5MB
+    Conflict:
+      description: Identitate Clerk nemapată sau conflict de idempotență/proprietate
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
-    Cooldown:
-      description: Furnizor AI blocat temporar (cooldown)
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              eroare: { type: string }
-              providerStatus: { type: string, example: cooldown }
-              secundeRamase: { type: integer }
-    QuotaExceeded:
-      description: Plafonul zilnic AI atins
+    BodyTooLarge:
+      description: Corp peste limita acceptată
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
-    AIFail:
-      description: Toate sistemele AI au eșuat sau sunt în cooldown
+    RateLimited:
+      description: Limită de rată, cotă AI sau cooldown atins
+      headers:
+        Retry-After: { schema: { type: string } }
       content:
         application/json:
-          schema:
-            type: object
-            properties:
-              eroare: { type: string }
-              stareAI: { type: object }
-    Disabled:
-      description: Serviciu neconfigurat (503)
+          schema: { $ref: '#/components/schemas/Error' }
+    UpstreamError:
+      description: Furnizor extern indisponibil sau răspuns invalid
       content:
         application/json:
-          schema: { $ref: '#/components/schemas/DisabledResponse' }
+          schema: { $ref: '#/components/schemas/Error' }
     ServerError:
-      description: Eroare internă de server
+      description: Eroare internă
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+    ServiceUnavailable:
+      description: Serviciu, autentificare, cotă sau store temporar indisponibil
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  pathItems:
+    AiStatus:
+      get:
+        summary: Stare publicabilă a furnizorilor AI
+        description: Necesită bearer auth. Nu expune modele, tokeni, costuri sau mesaje interne; administratorii primesc opțional contoarele `rls`.
+        responses:
+          <<: *authLimited
+          '200':
+            description: Status curent
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/AiStatusResponse' }
+          '500': { $ref: '#/components/responses/ServerError' }
+    ImageKitAuth:
+      get:
+        summary: Parametri de autentificare ImageKit
+        responses:
+          <<: *authLimited
+          '200':
+            description: Parametri upload direct
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/ImageKitAuthResponse' }
+          '500': { $ref: '#/components/responses/ServerError' }
+    TriggerAnaliza:
+      post:
+        summary: Programează analiza AI în Trigger.dev
+        parameters:
+          - $ref: '#/components/parameters/IdempotencyKey'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TriggerRequest' }
+        responses:
+          <<: *jsonMutation
+          '202':
+            description: Job acceptat pentru procesare asincronă
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/TriggerResponse' }
+    AnalizaFoto:
+      post:
+        summary: Analiză AI a unei fotografii
+        parameters:
+          - $ref: '#/components/parameters/IdempotencyKey'
+          - $ref: '#/components/parameters/PayloadFingerprint'
+          - in: query
+            name: provider
+            required: false
+            schema: { type: string, enum: [auto, gemini, openai, groq, openrouter] }
+        requestBody:
+          required: true
+          content:
+            multipart/form-data:
+              schema: { $ref: '#/components/schemas/PhotoRequest' }
+        responses:
+          <<: *jsonMutation
+          '200':
+            description: Alimente normalizate
+            content:
+              application/json:
+                schema:
+                  type: array
+                  items: { $ref: '#/components/schemas/AlimentAnalizat' }
+          '499':
+            description: Clientul s-a deconectat înainte de răspuns
+    Chat:
+      post:
+        summary: Chat nutrițional AI
+        parameters:
+          - $ref: '#/components/parameters/IdempotencyKey'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatRequest' }
+        responses:
+          <<: *jsonMutation
+          '200':
+            description: Răspuns AI
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/ChatResponse' }
+          '400':
+            description: Validare handler sau middleware
+            content:
+              application/json:
+                schema:
+                  oneOf:
+                    - { $ref: '#/components/schemas/ChatError' }
+                    - { $ref: '#/components/schemas/Error' }
+          '500':
+            description: Eroare handler sau globală
+            content:
+              application/json:
+                schema:
+                  oneOf:
+                    - { $ref: '#/components/schemas/ChatError' }
+                    - { $ref: '#/components/schemas/Error' }
+    LogFoodChat:
+      post:
+        summary: Generează MEAL_PROPOSAL din conversație
+        parameters:
+          - $ref: '#/components/parameters/IdempotencyKey'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LogFoodRequest' }
+        responses:
+          <<: *jsonMutation
+          '200':
+            description: Propunere de masă
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/MealProposal' }
+    EstimeazaMancareText:
+      post:
+        summary: Estimează o porție din text
+        parameters:
+          - $ref: '#/components/parameters/IdempotencyKey'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TextEstimateRequest' }
+        responses:
+          <<: *jsonMutation
+          '200':
+            description: Estimare nutrițională
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/TextEstimateResponse' }
+    ProfilNutritiv:
+      post:
+        summary: Generează profilul nutrițional per 100 g
+        parameters:
+          - $ref: '#/components/parameters/IdempotencyKey'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfilNutritivRequest' }
+        responses:
+          <<: *jsonMutation
+          '200':
+            description: Profil nutrițional normalizat
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/ProfilNutritivResponse' }
+    VisionFallback:
+      post:
+        summary: Corectează/unește ingredientele folosind explicație text
+        parameters:
+          - $ref: '#/components/parameters/IdempotencyKey'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VisionRequest' }
+        responses:
+          <<: *jsonMutation
+          '200':
+            description: Ingrediente corectate și totaluri recalculate
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/VisionResponse' }
+    CautaProdus:
+      get:
+        summary: Caută produse în OpenFoodFacts
+        parameters:
+          - in: query
+            name: q
+            required: true
+            schema: { type: string, minLength: 2, maxLength: 80 }
+        responses:
+          <<: *authLimited
+          '200':
+            description: Maximum 20 rezultate normalizate
+            content:
+              application/json:
+                schema:
+                  type: array
+                  maxItems: 20
+                  items: { $ref: '#/components/schemas/ProductSearchItem' }
+          '400': { $ref: '#/components/responses/BadRequest' }
+          '502': { $ref: '#/components/responses/UpstreamError' }
+    ProdusBarcode:
+      get:
+        summary: Caută produs după cod de bare
+        description: >-
+          Lookup-urile din cache-ul public de produse și din estimările proprii sunt
+          gratuite. Doar un MISS avansează la fallback-ul AI, care consumă cotă/credite.
+          P1-12: pe MISS, fallback-ul AI este protejat de un zălog atomic partajat,
+          scopat pe (utilizator autentificat, cod de bare canonic). Codul se tratează ca
+          șir — zerourile din față sunt semnificative (`00012345` ≠ `12345`).
+          O singură operație logică produce cel mult un apel la furnizor și cel mult o
+          debitare, inclusiv când cereri duplicate sosesc simultan pe cache rece.
+        parameters:
+          - in: path
+            name: code
+            required: true
+            schema: { type: string, pattern: '^[0-9]{4,20}$' }
+        responses:
+          <<: *authLimited
+          '200':
+            description: Produs și proveniență
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/BarcodeResponse' }
+          '400': { $ref: '#/components/responses/BadRequest' }
+          '409':
+            description: >-
+              O estimare AI pentru același cod de bare și același utilizator este deja
+              în curs. Duplicatul NU apelează furnizorul și NU consumă cotă/credite.
+              Serverul așteaptă mărginit (maximum ~4s) rezultatul deținătorului; dacă
+              acesta nu este disponibil până atunci, răspunde retryable cu `Retry-After`.
+            headers:
+              Retry-After:
+                schema: { type: string }
+                description: Secunde recomandate până la reluare.
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required: [eroare, cod]
+                  properties:
+                    eroare: { type: string }
+                    cod: { type: string, const: BARCODE_AI_IN_PROGRESS }
+          '503':
+            description: >-
+              Stocul partajat de zăloguri este indisponibil. Fail-closed deliberat:
+              fără garanția de at-most-once, fallback-ul AI nu se execută neprotejat.
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required: [eroare, cod]
+                  properties:
+                    eroare: { type: string }
+                    cod: { type: string, const: IDEMPOTENCY_STORE_UNAVAILABLE }
+          '404':
+            description: Produs negăsit; se permite introducerea manuală
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required: [eroare, allowManualEntry, suggestedAction]
+                  properties:
+                    eroare: { type: string }
+                    allowManualEntry: { type: boolean, const: true }
+                    suggestedAction: { type: string, const: manual_or_ai_text }
+          '500': { $ref: '#/components/responses/ServerError' }
+    SalveazaProdusBarcode:
+      post:
+        summary: Salvează un produs completat manual
+        parameters:
+          - $ref: '#/components/parameters/IdempotencyKey'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BarcodeSaveRequest' }
+        responses:
+          <<: *jsonMutation
+          '200':
+            description: Produs salvat
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required: [succes, message]
+                  properties:
+                    succes: { type: boolean, const: true }
+                    message: { type: string }
+          '403': { $ref: '#/components/responses/Forbidden' }
+    CalculeazaProfil:
+      post:
+        summary: Calculează determinist țintele nutriționale
+        parameters:
+          - $ref: '#/components/parameters/IdempotencyKey'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfilCalculationRequest' }
+        responses:
+          <<: *jsonMutation
+          '200':
+            description: Ținte calculate
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/ProfilCalculationResponse' }
+    Mese:
+      post:
+        summary: Adaugă o masă în jurnal
+        parameters:
+          - $ref: '#/components/parameters/IdempotencyKey'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MasaCreateInput' }
+        responses:
+          <<: *jsonMutation
+          '200':
+            description: Masă creată
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required: [succes, masa]
+                  properties:
+                    succes: { type: boolean, const: true }
+                    masa:
+                      oneOf:
+                        - { $ref: '#/components/schemas/Masa' }
+                        - { type: 'null' }
+    MasaId:
+      put:
+        summary: Actualizează parțial o masă
+        parameters:
+          - $ref: '#/components/parameters/MasaId'
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MasaPatchInput' }
+        responses:
+          <<: *jsonMutation
+          '200':
+            description: Masă actualizată
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required: [succes, masa]
+                  properties:
+                    succes: { type: boolean, const: true }
+                    masa: { $ref: '#/components/schemas/Masa' }
+          '404': { $ref: '#/components/responses/NotFound' }
+      delete:
+        summary: Șterge o masă
+        parameters:
+          - $ref: '#/components/parameters/MasaId'
+        responses:
+          <<: *authLimited
+          '200':
+            description: Masă ștearsă
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required: [succes]
+                  properties:
+                    succes: { type: boolean, const: true }
+          '400': { $ref: '#/components/responses/BadRequest' }
+          '404': { $ref: '#/components/responses/NotFound' }
+          '500': { $ref: '#/components/responses/ServerError' }
+    UserProfil:
+      get:
+        summary: Citește completitudinea profilului
+        responses:
+          <<: *authLimited
+          '200':
+            description: Profil și indicatori de completitudine
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/UserProfilResponse' }
+    PremiumStatus:
+      get:
+        summary: Citește entitlement-ul Google Play persistent și autoritativ
+        responses:
+          <<: *authLimited
+          '200':
+            description: Status premium validat
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/PremiumStatusResponse' }
+    GoogleBillingProducts:
+      get:
+        summary: Returnează catalogul Google Play permis de backend
+        responses:
+          <<: *authLimited
+          '200':
+            description: Package și allowlist de abonamente, fără secrete
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/GoogleBillingCatalogResponse' }
+    GoogleBillingVerify:
+      post:
+        summary: Verifică un purchase token prin Google Play Developer API
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchaseToken]
+                properties:
+                  purchaseToken: { type: string, minLength: 20, maxLength: 4096, writeOnly: true }
+                additionalProperties: false
+        responses:
+          <<: *authLimited
+          '200':
+            description: Verdict persistent server-authoritative
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/PremiumStatusResponse' }
+          '400': { $ref: '#/components/responses/BadRequest' }
+          '403': { $ref: '#/components/responses/Forbidden' }
+          '413': { $ref: '#/components/responses/BodyTooLarge' }
+    GoogleBillingResync:
+      post:
+        summary: Re-verifică achizițiile curente raportate de Google Play
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [purchaseTokens]
+                properties:
+                  purchaseTokens:
+                    type: array
+                    maxItems: 20
+                    uniqueItems: true
+                    items: { type: string, minLength: 20, maxLength: 4096, writeOnly: true }
+                additionalProperties: false
+        responses:
+          <<: *authLimited
+          '200':
+            description: Entitlement curent după re-verificare
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/GoogleBillingResyncResponse' }
+          '400': { $ref: '#/components/responses/BadRequest' }
+          '403': { $ref: '#/components/responses/Forbidden' }
+          '413': { $ref: '#/components/responses/BodyTooLarge' }
+    GoogleBillingVerifyConsumable:
+      post:
+        summary: Verifică, acordă durabil și consumă un pack Flow Credits
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [productId, purchaseToken]
+                properties:
+                  productId: { type: string, enum: [getflow_credits_10, getflow_credits_30] }
+                  purchaseToken: { type: string, minLength: 20, maxLength: 4096, writeOnly: true }
+                additionalProperties: false
+        responses:
+          <<: *authLimited
+          '200': { description: Grant durabil și consume confirmate }
+          '400': { $ref: '#/components/responses/BadRequest' }
+          '403': { $ref: '#/components/responses/Forbidden' }
+    FlowCredits:
+      get:
+        summary: Sold Flow Credits server-authoritative
+        responses:
+          <<: *authLimited
+          '200': { description: Daily, rewarded, purchased și total }
+    PhotoJobs:
+      post:
+        summary: Rezervă creditul și trimite o analiză Photo AI durabilă
+        responses:
+          <<: *jsonMutation
+          '200': { description: Replay idempotent }
+          '202': { description: Job acceptat în coadă }
+          '402': { description: Flow Credits epuizate }
+    PhotoJobsActive:
+      get:
+        summary: Jobul Photo AI activ al utilizatorului curent
+        responses:
+          <<: *authLimited
+          '200': { description: Job activ sau null }
+    PhotoJobId:
+      get:
+        summary: Citește un job Photo AI deținut
+        parameters:
+          - { in: path, name: jobId, required: true, schema: { type: string } }
+        responses:
+          <<: *authLimited
+          '200': { description: Stare și rezultat }
+          '404': { $ref: '#/components/responses/NotFound' }
+    PhotoAssetCleanup:
+      post:
+        summary: Șterge un asset ImageKit numai după verificarea folderului proprietarului
+        responses:
+          <<: *jsonMutation
+          '200': { description: Asset șters }
+    RewardedIntent:
+      post:
+        summary: Creează un intent opac pentru AdMob SSV
+        responses:
+          <<: *authLimited
+          '201': { description: Intent SSV cu expirare }
+    AdmobRewardedWebhook:
+      get:
+        summary: Callback AdMob SSV verificat criptografic și idempotent
+        security: []
+        responses:
+          <<: *webhookResponses
+          '200': { description: Recompensă procesată }
+    ExportData:
+      get:
+        summary: Export GDPR paginat al tuturor datelor utilizatorului
+        responses:
+          <<: *authLimited
+          '200':
+            description: Export complet
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/GdprExportResponse' }
+          '500': { $ref: '#/components/responses/ServerError' }
+    DeleteAccount:
+      delete:
+        summary: Șterge contul și datele asociate prin outbox GDPR
+        responses:
+          <<: *authLimited
+          '200':
+            description: Cont șters
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required: [succes, mesaj]
+                  properties:
+                    succes: { type: boolean, const: true }
+                    mesaj: { type: string }
+          '500': { $ref: '#/components/responses/ServerError' }
+    ClerkWebhook:
+      post:
+        summary: Webhook Clerk/Svix
+        security: []
+        parameters:
+          - { in: header, name: svix-id, required: true, schema: { type: string } }
+          - { in: header, name: svix-timestamp, required: true, schema: { type: string } }
+          - { in: header, name: svix-signature, required: true, schema: { type: string } }
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema: { type: object, required: [type, data], additionalProperties: true }
+        responses:
+          <<: *webhookResponses
+          '200':
+            description: Eveniment procesat, ignorat sau dead-lettered permanent
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/WebhookAck' }
+    GooglePlayWebhook:
+      post:
+        summary: Push RTDN autentificat; notificarea declanșează re-verificarea Google
+        security: []
+        parameters:
+          - in: header
+            name: Authorization
+            required: true
+            schema: { type: string, pattern: '^Bearer .+$' }
+            description: Token OIDC Google semnat, cu audience și service-account verificate strict.
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    type: object
+                    required: [messageId, data]
+                    properties:
+                      messageId: { type: string, maxLength: 512 }
+                      data: { type: string, contentEncoding: base64 }
+                      publishTime: { type: string, format: date-time }
+                    additionalProperties: true
+                additionalProperties: true
+        responses:
+          '204': { description: Eveniment procesat, ignorat sau deja deduplicat }
+          '400': { $ref: '#/components/responses/BadRequest' }
+          '401': { $ref: '#/components/responses/Unauthorized' }
+          '403': { $ref: '#/components/responses/Forbidden' }
+          '413': { $ref: '#/components/responses/BodyTooLarge' }
+          '429': { $ref: '#/components/responses/RateLimited' }
+          '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      schema: { type: string, maxLength: 200, pattern: '^[\x21-\x7e]+$' }
+      description: >-
+        Identifică OPERAȚIA LOGICĂ, nu cererea HTTP: clientul o generează o dată la
+        începutul acțiunii și o refolosește identic la fiecare retry de transport.
+        Cheia este scopată pe utilizatorul autentificat — aceeași valoare la doi
+        utilizatori nu se ciocnește și nu expune rezultatul celuilalt.
+        Replay al unei operații încheiate cu succes returnează rezultatul înregistrat
+        (antet `Idempotency-Status: replayed`), fără reapelarea furnizorului AI și
+        fără a doua debitare de credit/cotă.
+        Refolosirea cu alt payload → 409 `IDEMPOTENCY_KEY_REUSED`.
+        Cerere încă în curs cu aceeași cheie → 409 `IDEMPOTENCY_IN_PROGRESS` + `Retry-After`.
+        P1-12 — MOD DE COMPATIBILITATE: dacă antetul lipsește pe o rută AI critică cu
+        corp JSON, serverul DERIVĂ o cheie mai slabă din (utilizator, rută, amprenta
+        corpului), cu TTL scurt (90s), suficient cât să absoarbă retry-urile de
+        transport fără a schimba semantica repetărilor deliberate. Pe cererile
+        multipart derivarea nu este posibilă fără `X-Payload-Fingerprint`, deci acolo
+        protecția depinde de client.
+    PayloadFingerprint:
+      in: header
+      name: X-Payload-Fingerprint
+      required: false
+      schema: { type: string, pattern: '^[0-9a-f]{64}$' }
+      description: >-
+        SHA-256 hex (64 caractere) al conținutului cererii. Obligatoriu în practică pe
+        rutele multipart: corpul nu este parsat încă la momentul verificării de
+        idempotență, deci fără această amprentă serverul nu poate distinge două imagini
+        diferite trimise cu aceeași cheie și ar returna tăcut rezultatul primei analize.
+        Format invalid → 400 `AMPRENTA_INVALIDA`.
+    MasaId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }

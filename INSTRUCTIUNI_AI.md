@@ -159,7 +159,7 @@ Toate tabelele cu date personale au RLS pe `auth.uid() = user_id` și FK `ON DEL
 
 ## 7. VARIABILE DE MEDIU
 
-Șablonul complet și comentat: `backend-nutritie-ai/.env.example`. Obligatorii: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Opționale importante: `GEMINI_API_KEY` (+ `_2/_3/_4` rotație), `GEMINI_MODEL`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_VISION_MODELS`, `CORS_ORIGINS`, `CLERK_SECRET_KEY`, `SENTRY_DSN`, `TRIGGER_SECRET_KEY`, `IMAGEKIT_*`, `REDIS_URL`, `REVENUECAT_SECRET_API_KEY`, `AI_MAX_CONCURENTA`, `AI_MAX_COADA`, `KEEP_ALIVE_URL`, `KEEP_ALIVE_INTERVAL_MINUTES`.
+Șablonul complet și comentat: `backend-nutritie-ai/.env.example`. Obligatorii: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Opționale importante: `GEMINI_API_KEY` (+ `_2/_3/_4` rotație), `GEMINI_MODEL`, `GROQ_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_VISION_MODELS`, `CORS_ORIGINS`, `CLERK_SECRET_KEY`, `SENTRY_DSN`, `TRIGGER_SECRET_KEY`, `IMAGEKIT_*`, `REDIS_URL`, `AI_MAX_CONCURENTA`, `AI_MAX_COADA`, `KEEP_ALIVE_URL`, `KEEP_ALIVE_INTERVAL_MINUTES`. Pentru billing production sunt obligatorii `GOOGLE_PLAY_PACKAGE_NAME`, `GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_IDS`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_PLAY_PUBSUB_AUDIENCE` și `GOOGLE_PLAY_PUBSUB_SERVICE_ACCOUNT_EMAIL`.
 
 Frontend: `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` (verificate fail-fast în `supabase.ts`).
 
@@ -187,7 +187,7 @@ Reguli de testare:
 ## 9. LANSARE & DEPLOY
 
 - **EAS Update (frontend):** după modificări majore, încarcă noua versiune cu `eas update` pe TOATE branch-urile active (`preview`, `main`, `production`) și șterge grupurile de update vechi cu `eas update:delete <groupId>` — pentru a menține un mediu curat în Expo Go.
-- **Backend:** keep-alive anti-sleep pe `KEEP_ALIVE_URL` (primește automat sufixul `/health`); monitorizare Sentry dacă `SENTRY_DSN` e setat; validare premium prin RevenueCat dacă `REVENUECAT_SECRET_API_KEY` e setat.
+- **Backend:** keep-alive anti-sleep pe `KEEP_ALIVE_URL` (primește automat sufixul `/health`); monitorizare Sentry dacă `SENTRY_DSN` e setat; Premium plătit este validat direct prin Google Play Developer API și persistat server-side.
 - **Git:** modificări făcute doar pe fișierele indicate de cerință; commit-uri mici, descriptive, în română; nu force-push pe `main`.
 
 ---

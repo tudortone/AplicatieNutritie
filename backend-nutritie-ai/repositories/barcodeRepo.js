@@ -12,16 +12,20 @@ const {
 /**
  * Acces la date pentru rutele de cod de bare (B-16).
  *
- * Alegerea clientului NU se face in ruta: fiecare functie primeste `ctx` si decide
- * singura intre `ctx.admin` (tabele backend-only, `barcode_cache`) si `ctx.db`
- * (date cu RLS, `barcode_estimari_utilizator`). Ruta nu mai vede un `.from(`.
+ * Clientul service-role ramane privat in acest repository backend-only; nu este
+ * atasat contextului cererii. Datele utilizatorului folosesc exclusiv `ctx.db`,
+ * clientul legat de JWT pe care Postgres aplica RLS.
  */
-function createBarcodeRepo() {
+function createBarcodeRepo({ supabaseAdmin }) {
+  if (!supabaseAdmin) {
+    throw new Error('BarcodeRepo necesita clientul backend service-role.');
+  }
+
   return {
     // `barcode_cache` este backend-only prin proiectare (politica `using (false)`):
     // clientul admin este singura cale corecta.
-    getProdusBarcode(ctx, code) {
-      return citesteDinCacheGlobal(ctx.admin, code);
+    getProdusBarcode(_ctx, code) {
+      return citesteDinCacheGlobal(supabaseAdmin, code);
     },
 
     // `barcode_estimari_utilizator` ARE politici pe `auth.uid() = user_id`:
@@ -30,8 +34,8 @@ function createBarcodeRepo() {
       return citesteEstimareClient(ctx.db, { userId: ctx.userId, cod: code });
     },
 
-    salveazaProdusOff(ctx, { cod, produs, payload }) {
-      return salveazaProdusOff(ctx.admin, { cod, produs, payload });
+    salveazaProdusOff(_ctx, { cod, produs, payload }) {
+      return salveazaProdusOff(supabaseAdmin, { cod, produs, payload });
     },
 
     salveazaEstimareUtilizator(ctx, { cod, produs }) {
@@ -43,14 +47,14 @@ function createBarcodeRepo() {
     // securitate, bariera e predicatul din RPC. Daca scrierea e refuzata, arunca
     // EroareProprietateProdus (409), tratata de ruta.
     async salveazaProdusBarcode(ctx, { code, valori }) {
-      const drept = await verificaDreptDeScriere(ctx.admin, {
+      const drept = await verificaDreptDeScriere(supabaseAdmin, {
         cod: code,
         userId: ctx.userId,
       });
       if (!drept.permis) {
         return { permis: false, status: drept.status, motiv: drept.motiv };
       }
-      await salveazaProdusManual(ctx.admin, {
+      await salveazaProdusManual(supabaseAdmin, {
         cod: code,
         userId: ctx.userId,
         valori,

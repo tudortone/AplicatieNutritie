@@ -110,3 +110,24 @@ export function parseMealProposal(text: any): MealProposal | null {
   }
   return null;
 }
+
+/**
+ * Extrage textul conversațional (explicații, pași de rețetă) eliminând
+ * blocul JSON MEAL_PROPOSAL, ca utilizatorul să vadă rețeta/sfatul în bulă
+ * și propunerea interactivă dedesubt.
+ */
+export function extractTextWithoutMealProposal(text: any): string {
+  if (!text || typeof text !== 'string') return '';
+  const startIndex = text.indexOf('{');
+  const endIndex = text.lastIndexOf('}');
+  if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+    const candidate = text.substring(startIndex, endIndex + 1);
+    if (candidate.includes('MEAL_PROPOSAL') || candidate.includes('meal_type')) {
+      const before = text.substring(0, startIndex).trim();
+      const after = text.substring(endIndex + 1).trim();
+      const combined = [before, after].filter(Boolean).join('\n\n').trim();
+      return combined.length > 0 ? combined : '';
+    }
+  }
+  return text.trim();
+}

@@ -140,6 +140,30 @@ export function calculeazaPlan(d: DateOnboarding, acum: Date = new Date()): Plan
 	}
 
 	const varsta = calculeazaVarsta(d.dataNasterii, acum)
+	const dataNasterii = new Date(d.dataNasterii)
+	const ritm = d.scop === 'mentinere' ? 0 : (d.ritmKgSaptamana ?? 0.5)
+	if (
+		!Number.isFinite(acum.getTime()) ||
+		!Number.isFinite(dataNasterii.getTime()) ||
+		!Number.isInteger(varsta) ||
+		varsta < LIMITE_ONBOARDING.varsta.min ||
+		varsta > LIMITE_ONBOARDING.varsta.max ||
+		!Number.isFinite(d.greutateKg) ||
+		d.greutateKg < LIMITE_ONBOARDING.greutateKg.min ||
+		d.greutateKg > LIMITE_ONBOARDING.greutateKg.max ||
+		!Number.isFinite(d.inaltimeCm) ||
+		d.inaltimeCm < LIMITE_ONBOARDING.inaltimeCm.min ||
+		d.inaltimeCm > LIMITE_ONBOARDING.inaltimeCm.max ||
+		(d.ritmKgSaptamana !== null &&
+			(!Number.isFinite(d.ritmKgSaptamana) || d.ritmKgSaptamana < 0 || d.ritmKgSaptamana > LIMITE_ONBOARDING.ritmKgSaptamana.max)) ||
+		!Number.isFinite(ritm) ||
+		ritm < 0 ||
+		(d.scop !== 'mentinere' &&
+			(ritm < LIMITE_ONBOARDING.ritmKgSaptamana.min || ritm > LIMITE_ONBOARDING.ritmKgSaptamana.max))
+	) {
+		return null
+	}
+
 	const bmr = calculeazaBMR({
 		gen: d.gen,
 		greutateKg: d.greutateKg,
@@ -148,7 +172,6 @@ export function calculeazaPlan(d: DateOnboarding, acum: Date = new Date()): Plan
 	})
 	const tdee = bmr * ETICHETE_ACTIVITATE[d.activitate].factor
 
-	const ritm = d.scop === 'mentinere' ? 0 : (d.ritmKgSaptamana ?? 0.5)
 	let ajustare = (ritm * KCAL_PER_KG) / 7
 	if (d.scop === 'slabire') ajustare = -ajustare
 	else if (d.scop === 'mentinere') ajustare = 0
@@ -231,6 +254,36 @@ export async function sincronizeazaOnboardingLaProfil(
 		const plan = calculeazaPlan(date)
 		if (!plan) return false
 
+		// F-02 (a doua trecere, adversariala): curatarea la schimbarea de cont NU
+		// acopera tot. Daca cineva parcurge chestionarul si abandoneaza inainte de
+		// autentificare, blob-ul ramane orfan, iar la urmatoarea autentificare
+		// `prepareLocalDataForUser` nu vede nicio schimbare de utilizator (nu exista
+		// sesiune anterioara), deci nu sterge nimic. Un utilizator EXISTENT care se
+		// autentifica pe acel dispozitiv si-ar fi vazut profilul suprascris cu datele
+		// altcuiva.
+		//
+		// Regula corecta: datele de onboarding INITIALIZEAZA un profil, nu il
+		// suprascriu niciodata. Daca profilul exista deja in DB, blob-ul nu ne
+		// apartine (sau e depasit) si il aruncam fara sa atingem contul.
+		if (supabaseClient) {
+			try {
+				const { data: profilExistent, error: eroareCitire } = await supabaseClient
+					.from('profil')
+					.select('user_id')
+					.eq('user_id', userId)
+					.maybeSingle()
+				// Fail-closed: la eroare de citire NU scriem — mai bine amanam
+				// initializarea decat sa suprascriem un profil real.
+				if (eroareCitire) return false
+				if (profilExistent) {
+					await stergeDateOnboarding()
+					return false
+				}
+			} catch {
+				return false
+			}
+		}
+
 		// Doar coloanele reale ale tabelului `profil` (migrarea 20260804000001):
 		// snake_case, fara greutateTinta / dieta / nivel_activitate (nu exista).
 		// Valorile locale raman in AsyncStorage sub cheile camelCase de mai jos.
@@ -263,11 +316,24 @@ export async function sincronizeazaOnboardingLaProfil(
 			['obiectiv', String(date.scop)],
 		])
 
+		let upsertReusit = true
 		if (supabaseClient) {
 			const { error } = await supabaseClient.from('profil').upsert(profileData, { onConflict: 'user_id' })
 			if (error) {
+				upsertReusit = false
 				console.warn('[OnboardingSync] Upsert profil esuat:', error.message)
 			}
+		}
+
+		// F-02: blob-ul cu raspunsurile brute este o zona de STAGING dinainte de
+		// autentificare. Odata scris in `profil` + cheile locale, si-a facut treaba.
+		// Daca il lasam pe disc, `sincronizeazaOnboardingLaProfil` (apelat la FIECARE
+		// aplicare de sesiune, inclusiv TOKEN_REFRESHED) l-ar rescrie periodic peste
+		// profil, anuland modificarile facute ulterior de utilizator din ecranul de
+		// profil. Il stergem doar dupa o sincronizare confirmata, ca un upsert esuat
+		// sa poata fi reincercat.
+		if (upsertReusit) {
+			await stergeDateOnboarding()
 		}
 
 		return true

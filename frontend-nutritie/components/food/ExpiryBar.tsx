@@ -3,6 +3,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useDaysUntilExpiry, expiryColor } from '@/hooks/useDaysUntilExpiry';
 import { useTheme } from '../../context/ThemeContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { MOTION_DURATIONS } from '../../constants/motion';
 
 interface Props {
   expiryDate: string | number | Date;
@@ -11,12 +13,17 @@ interface Props {
 
 export default function ExpiryBar({ expiryDate, addedDate }: Props) {
   const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
   const { days, hours, progress, expired, urgent } = useDaysUntilExpiry(expiryDate, addedDate);
   const width = useSharedValue(progress);
 
   useEffect(() => {
-    width.value = withTiming(progress, { duration: 600 });
-  }, [progress, width]);
+    if (reduceMotion) {
+      width.value = progress;
+      return;
+    }
+    width.value = withTiming(progress, { duration: MOTION_DURATIONS.standard });
+  }, [progress, width, reduceMotion]);
 
   const fillStyle = useAnimatedStyle(() => ({
     width: `${width.value * 100}%`,

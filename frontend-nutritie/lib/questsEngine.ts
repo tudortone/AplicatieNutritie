@@ -134,16 +134,16 @@ function seedFromDay(key: string): number {
 // ─── Catalogul de questuri ────────────────────────────────────────
 
 export const QUEST_POOL: QuestDef[] = [
-  { id: 'sets_10', metric: 'sets', title: 'Zi de volum', target: 10, unit: 'seturi', xp: 40, icon: '💪' },
-  { id: 'sets_16', metric: 'sets', title: 'Sesiune serioasă', target: 16, unit: 'seturi', xp: 65, icon: '🔥' },
-  { id: 'vol_2000', metric: 'volumeKg', title: 'Două tone ridicate', target: 2000, unit: 'kg', xp: 60, icon: '🏋️' },
-  { id: 'vol_5000', metric: 'volumeKg', title: 'Cinci tone ridicate', target: 5000, unit: 'kg', xp: 110, icon: '⛓️' },
-  { id: 'musc_3', metric: 'muscles', title: 'Full body ușor', target: 3, unit: 'grupe', xp: 45, icon: '🧬' },
-  { id: 'musc_5', metric: 'muscles', title: 'Hartă aprinsă', target: 5, unit: 'grupe', xp: 80, icon: '🌋' },
-  { id: 'ex_4', metric: 'exercises', title: 'Varietate', target: 4, unit: 'exerciții', xp: 45, icon: '🎯' },
-  { id: 'min_20', metric: 'minutes', title: 'Douăzeci de minute', target: 20, unit: 'min', xp: 35, icon: '⏱️' },
-  { id: 'min_45', metric: 'minutes', title: 'Sesiune completă', target: 45, unit: 'min', xp: 75, icon: '⏳' },
-  { id: 'reps_100', metric: 'reps', title: 'O sută de repetări', target: 100, unit: 'rep', xp: 55, icon: '🔁' },
+  { id: 'sets_10', metric: 'sets', title: 'Zi de volum', target: 10, unit: 'seturi', xp: 40, icon: 'dumbbell' },
+  { id: 'sets_16', metric: 'sets', title: 'Sesiune serioasă', target: 16, unit: 'seturi', xp: 65, icon: 'flame' },
+  { id: 'vol_2000', metric: 'volumeKg', title: 'Două tone ridicate', target: 2000, unit: 'kg', xp: 60, icon: 'dumbbell' },
+  { id: 'vol_5000', metric: 'volumeKg', title: 'Cinci tone ridicate', target: 5000, unit: 'kg', xp: 110, icon: 'dumbbell' },
+  { id: 'musc_3', metric: 'muscles', title: 'Full body ușor', target: 3, unit: 'grupe', xp: 45, icon: 'brain' },
+  { id: 'musc_5', metric: 'muscles', title: 'Hartă aprinsă', target: 5, unit: 'grupe', xp: 80, icon: 'activity' },
+  { id: 'ex_4', metric: 'exercises', title: 'Varietate', target: 4, unit: 'exerciții', xp: 45, icon: 'target' },
+  { id: 'min_20', metric: 'minutes', title: 'Douăzeci de minute', target: 20, unit: 'min', xp: 35, icon: 'timer' },
+  { id: 'min_45', metric: 'minutes', title: 'Sesiune completă', target: 45, unit: 'min', xp: 75, icon: 'timer' },
+  { id: 'reps_100', metric: 'reps', title: 'O sută de repetări', target: 100, unit: 'rep', xp: 55, icon: 'activity' },
 ];
 
 /** Alege determinist 3 questuri pentru o zi: unul ușor, unul mediu, unul greu. */

@@ -37,7 +37,7 @@ export function construiesteAlimenteScan(
       proteine: clampValoare(Math.round((r.proteine_per_100g ?? 0) * f), LIMITE_DB_MESE.proteine),
       carbohidrati: clampValoare(Math.round((r.carbohidrati_per_100g ?? 0) * f), LIMITE_DB_MESE.carbohidrati),
       grasimi: clampValoare(Math.round((r.grasimi_per_100g ?? 0) * f), LIMITE_DB_MESE.grasimi),
-      fibre: 0,
+      fibre: clampValoare(Math.round((r.fibre_per_100g ?? 0) * f), LIMITE_DB_MESE.fibre),
       ...(poza?.url ? { imageUrl: poza.url } : {}),
       ...(poza?.fileId ? { imageKitFileId: poza.fileId } : {}),
     };
@@ -56,6 +56,8 @@ export interface PayloadMasaCamera {
   tip_masa: TipMasa;
   alimente: AlimentScanatPayload[];
   data: string;
+  ora: string;
+  created_at: string;
 }
 
 /**
@@ -102,6 +104,8 @@ export function construiestePayloadMasaCamera(params: {
       tip_masa: normalizeTipMasa(getTipMasaDupaOra(now)),
       alimente,
       data: localDayKey(now),
+      ora: now.toTimeString().slice(0, 8),
+      created_at: now.toISOString(),
     },
   };
 }
@@ -303,6 +307,7 @@ export function construiestePayloadMasaManuala(params: {
   tip_masa: string;
   alimente?: unknown[];
   imagine_url?: string | null;
+  now?: Date;
 }): {
   id: string;
   user_id: string;
@@ -315,8 +320,14 @@ export function construiestePayloadMasaManuala(params: {
   tip_masa: string;
   alimente: unknown[];
   imagine_url: string | null;
+  data: string;
+  ora: string;
+  created_at: string;
 } {
   const { user_id, idOperatie, nume, tip_masa } = params;
+  const now = params.now instanceof Date ? params.now : new Date();
+  const zi = localDayKey(now);
+  const ora = now.toTimeString().slice(0, 8);
   return {
     id: idMasaDinOperatie(user_id, idOperatie),
     user_id,
@@ -329,6 +340,9 @@ export function construiestePayloadMasaManuala(params: {
     tip_masa: normalizeTipMasa(tip_masa),
     alimente: params.alimente ?? [],
     imagine_url: params.imagine_url ?? null,
+    data: zi,
+    ora,
+    created_at: now.toISOString(),
   };
 }
 

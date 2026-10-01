@@ -16,21 +16,21 @@ export interface NotificationScheduleConfig {
 export const DEFAULT_MEAL_REMINDERS: NotificationScheduleConfig[] = [
   {
     id: 'reminder_mic_dejun',
-    title: '☀️ Bună dimineața!',
-    body: 'Nu uita să îți înregistrezi micul dejun în NutriAI.',
+    title: 'Bună dimineața!',
+    body: 'Nu uita să îți înregistrezi micul dejun în GetFlow.',
     hour: 8,
     minute: 30,
   },
   {
     id: 'reminder_pranz',
-    title: '🥗 Ora prânzului!',
+    title: 'Ora prânzului!',
     body: 'Scanează mâncarea pentru a-ți urmări macronutrienții.',
     hour: 13,
     minute: 0,
   },
   {
     id: 'reminder_cina',
-    title: '🌙 Bună seara!',
+    title: 'Bună seara!',
     body: 'Adaugă cina pentru a-ți completa jurnalul alimentar de azi.',
     hour: 19,
     minute: 30,

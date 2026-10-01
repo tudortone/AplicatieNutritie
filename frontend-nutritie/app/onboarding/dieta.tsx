@@ -1,5 +1,6 @@
 import React from 'react'
 import { Text } from 'react-native'
+import { useTranslation } from 'react-i18next'
 
 import EcranPas from '../../components/onboarding/EcranPas'
 import CardOptiune from '../../components/onboarding/CardOptiune'
@@ -26,21 +27,32 @@ const SIMBOL: Record<TipDieta, string> = {
 	keto: '\u{1F951}',
 }
 
+const MAPARE_DIETA: Record<TipDieta, { titluKey: string; detaliuKey: string }> = {
+	echilibrata: { titluKey: 'onboarding.dietBalancedTitle', detaliuKey: 'onboarding.dietBalancedDesc' },
+	low_carb: { titluKey: 'onboarding.dietLowCarbTitle', detaliuKey: 'onboarding.dietLowCarbDesc' },
+	bogata_proteine: { titluKey: 'onboarding.dietHighProteinTitle', detaliuKey: 'onboarding.dietHighProteinDesc' },
+	mediteraneana: { titluKey: 'onboarding.dietMediterraneanTitle', detaliuKey: 'onboarding.dietMediterraneanDesc' },
+	vegetariana: { titluKey: 'onboarding.dietVegetarianTitle', detaliuKey: 'onboarding.dietVegetarianDesc' },
+	vegana: { titluKey: 'onboarding.dietVeganTitle', detaliuKey: 'onboarding.dietVeganDesc' },
+	keto: { titluKey: 'onboarding.dietKetoTitle', detaliuKey: 'onboarding.dietKetoDesc' },
+}
+
 export default function PasDieta() {
+	const { t } = useTranslation()
 	const { date, actualizeaza } = useOnboarding()
 
 	return (
 		<EcranPas
 			pas="/onboarding/dieta"
-			titlu="Ce stil de alimentatie preferi?"
-			subtitlu="Stabileste impartirea macronutrientilor si recomandarile primite."
+			titlu={t('onboarding.dietTitle')}
+			subtitlu={t('onboarding.dietSubtitle')}
 			poateContinua={date.dieta !== null}
 		>
 			{ORDINE.map((d) => (
 				<CardOptiune
 					key={d}
-					titlu={ETICHETE_DIETA[d].titlu}
-					detaliu={ETICHETE_DIETA[d].detaliu}
+					titlu={t(MAPARE_DIETA[d].titluKey, ETICHETE_DIETA[d].titlu)}
+					detaliu={t(MAPARE_DIETA[d].detaliuKey, ETICHETE_DIETA[d].detaliu)}
 					pictograma={<Text style={{ fontSize: 20 }}>{SIMBOL[d]}</Text>}
 					selectat={date.dieta === d}
 					laSelectare={() => actualizeaza({ dieta: d })}

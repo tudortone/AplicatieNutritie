@@ -3,11 +3,13 @@
 /**
  * Rezolvarea identitatii utilizatorului dintr-un token.
  *
- * Rezolva C4: un token Clerk este acceptat doar daca exista o mapare explicita
- * catre un cont Supabase in `clerk_user_map`. Fara mapare -> 409, fail-closed.
- * Nu se scrie NICIODATA in baza de date un identificator care nu e UUID.
+ * Endpointurile ordinare accepta exclusiv tokenuri Supabase verificate remote.
+ * Clerk ramane un furnizor de sincronizare prin webhook-urile semnate, nu o cale
+ * bearer alternativa: un JWT Clerk nu poate furniza un context `auth.uid()`
+ * Supabase si, prin urmare, nu poate primi acces la datele utilizatorului.
  *
- * Rolul de admin se citeste din `app_metadata.rol`, NU din `user_metadata`:
+ * Rolul de admin si dreptul de tester se citesc exclusiv din `app_metadata`,
+ * NU din `user_metadata`:
  * `app_metadata` este controlat de server (GoTrue/admin API), in timp ce
  * `user_metadata` poate fi rescris de orice utilizator prin SDK-ul client
  * (supabase.auth.updateUser({ data: ... })). Folosirea `user_metadata` pentru
@@ -56,57 +58,15 @@ function citesteExpiraLaMs(token) {
 	}
 }
 
-async function gasesteMapareClerk(supabaseAdmin, clerkUserId) {
-	const { data, error } = await supabaseAdmin
-		.from('clerk_user_map')
-		.select('supabase_user_id')
-		.eq('clerk_user_id', clerkUserId)
-		.maybeSingle();
-
-	if (error) {
-		throw new EroareIdentitate(
-			'Eroare la verificarea identitatii.',
-			'MAPARE_INDISPONIBILA',
-			503,
-		);
-	}
-
-	return data?.supabase_user_id ?? null;
-}
-
-/**
- * Leaga un cont Clerk de un cont Supabase existent.
- * De apelat dintr-un flux explicit de asociere, dupa ce ambele identitati au
- * fost dovedite. Nu se apeleaza automat din requireAuth.
- */
-async function leagaContClerk(supabaseAdmin, { clerkUserId, supabaseUserId }) {
-	if (typeof clerkUserId !== 'string' || !clerkUserId.trim()) {
-		throw new TypeError('clerkUserId invalid.');
-	}
-	if (!esteUuid(supabaseUserId)) {
-		throw new TypeError('supabaseUserId trebuie sa fie un UUID.');
-	}
-
-	const { error } = await supabaseAdmin.from('clerk_user_map').upsert({
-		clerk_user_id: clerkUserId.trim(),
-		supabase_user_id: supabaseUserId,
-	});
-
-	if (error) throw new Error(`Nu s-a putut lega contul Clerk: ${error.message}`);
-	return { clerkUserId: clerkUserId.trim(), supabaseUserId };
-}
-
 /**
  * Valideaza un token si intoarce o identitate normalizata.
  *
- * @returns {Promise<{id: string, email: string|null, provider: 'supabase'|'clerk', expiraLaMs: number|null, esteAdmin: boolean}>}
+ * @returns {Promise<{id: string, email: string|null, provider: 'supabase', expiraLaMs: number|null, esteAdmin: boolean, esteTester: boolean}>}
  * @throws {EroareIdentitate}
  */
 async function rezolvaIdentitate({
 	token,
 	supabase,
-	supabaseAdmin,
-	clerkSecretKey,
 }) {
 	if (typeof token !== 'string' || !token) {
 		throw new EroareIdentitate('Token lipsa.', 'TOKEN_LIPSA', 401);
@@ -129,6 +89,7 @@ async function rezolvaIdentitate({
 			provider: 'supabase',
 			expiraLaMs: citesteExpiraLaMs(token),
 			esteAdmin: utilizator.app_metadata?.rol === 'admin',
+			esteTester: utilizator.app_metadata?.full_access === true,
 		};
 	}
 
@@ -144,67 +105,16 @@ async function rezolvaIdentitate({
 		);
 	}
 
-	// 2. Clerk — acceptat doar daca exista o mapare catre un cont Supabase.
-	if (!clerkSecretKey) {
-		throw new EroareIdentitate(
-			'Token invalid sau respins de serverul Auth.',
-			'TOKEN_INVALID',
-			401,
-		);
-	}
-
-	let payloadClerk = null;
-	try {
-		const { verifyToken } = require('@clerk/express');
-		payloadClerk = await verifyToken(token, { secretKey: clerkSecretKey });
-	} catch (err) {
-		if (err && err.code === 'MODULE_NOT_FOUND') {
-			throw new EroareIdentitate(
-				'Autentificarea Clerk nu este disponibila pe server.',
-				'CLERK_INDISPONIBIL',
-				503,
-			);
-		}
-		throw new EroareIdentitate(
-			'Token invalid sau respins de serverul Auth.',
-			'TOKEN_INVALID',
-			401,
-		);
-	}
-
-	if (!payloadClerk?.sub) {
-		throw new EroareIdentitate(
-			'Token invalid sau respins de serverul Auth.',
-			'TOKEN_INVALID',
-			401,
-		);
-	}
-
-	const idSupabase = await gasesteMapareClerk(supabaseAdmin, payloadClerk.sub);
-	if (!idSupabase) {
-		throw new EroareIdentitate(
-			'Contul Clerk nu este asociat unui cont NutriAI. Autentifica-te o data cu emailul contului pentru a le lega.',
-			'CLERK_NEMAPAT',
-			409,
-		);
-	}
-
-	return {
-		id: idSupabase,
-		email: payloadClerk.email ?? null,
-		provider: 'clerk',
-		expiraLaMs: Number.isFinite(Number(payloadClerk.exp))
-			? Number(payloadClerk.exp) * 1000
-			: citesteExpiraLaMs(token),
-		esteAdmin: false,
-	};
+	throw new EroareIdentitate(
+		'Token invalid sau respins de serverul Auth.',
+		'TOKEN_INVALID',
+		401,
+	);
 }
 
 module.exports = {
 	esteUuid,
 	EroareIdentitate,
 	rezolvaIdentitate,
-	leagaContClerk,
-	gasesteMapareClerk,
 	citesteExpiraLaMs,
 };

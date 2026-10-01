@@ -36,6 +36,7 @@ jest.mock('@supabase/supabase-js', () => ({
       single: jest.fn().mockResolvedValue({ data: { id: '22222222-2222-4222-8222-222222222222' }, error: null }),
       maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
     })),
+    rpc: jest.fn().mockResolvedValue({ data: null, error: null }),
   })),
 }));
 

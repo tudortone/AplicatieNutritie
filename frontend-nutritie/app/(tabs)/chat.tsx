@@ -10,10 +10,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
-  FadeIn, FadeInDown, FadeInUp, FadeOut,
-  useAnimatedKeyboard, useAnimatedStyle,
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  FadeOut,
+  useAnimatedKeyboard,
+  useAnimatedStyle,
 } from 'react-native-reanimated';
-import { Send, Sparkles, RotateCcw, BarChart3, Dumbbell, ChefHat, Zap, RefreshCw, X, Utensils } from 'lucide-react-native';
+import { Send, Sparkles, RotateCcw, BarChart3, Dumbbell, ChefHat, RefreshCw, X, Utensils } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi } from '../../hooks/useMeseAzi';
 import { useCurrentDayKey } from '../../hooks/useCurrentDayKey';
@@ -37,6 +41,7 @@ import KeyboardAwareScreen, { useContentBottomPadding } from '@/components/ui/Ke
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { parseMealProposal, extractTextWithoutMealProposal, type MealProposal } from '../../lib/parseMealProposal';
 import { MealSaveSuccessModal, type MealSuccessData } from '../../components/ui/MealSaveSuccessModal';
+import { FlowIcon } from '../../components/ui/FlowIcon';
 // REMED-006: categoriile de masă aparțin lib/mealUtils (read-only) — aici doar le citim;
 // eticheta tradusă o derivăm noi din id (clés chat.mealCategory.*), nu din label-ul RO fix.
 import { MEAL_CATEGORIES, CATEGORIE_ICONA } from '../../lib/mealUtils';
@@ -118,7 +123,7 @@ async function cerePropunereMasa(mesaj: string, accessToken: string, signal?: Ab
       'Idempotency-Key': hashString(mesaj),
     },
     signal,
-    body: JSON.stringify({ mesaj }),
+    body: JSON.stringify({ mesaj, limba: i18n.language || 'ro' }),
   });
 
   if (!response.ok) {
@@ -233,10 +238,8 @@ const ChatMessageList = React.memo(function ChatMessageList({
 
 const isMealLogIntent = (text: string) => {
   const lower = text.toLowerCase().trim();
-  // Aliniat cu regex-ul din backend (/api/chat): "am mâncat"/"am consumat" se caută
-  // oriunde în frază (ex. "azi am mâncat 2 ouă"), nu doar la început. Altfel fallback-ul
-  // /api/log-food-from-chat nu se declanșa și utilizatorul vedea doar eroarea AI.
-  return /(?:am m[aâ]ncat|am consumat|am servit|am b[aă]ut|logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa)\b/i.test(lower);
+  // Aliniat cu regex-ul din backend (/api/chat) pentru suport multilingv (RO, EN, FR, DE):
+  return /(?:am m[aâ]ncat|am consumat|am servit|am b[aă]ut|logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa|i ate|i had|i drank|log meal|add to diary|log food|record meal|add meal|j'ai mang[eé]|j'ai bu|enregistre|ajouter au journal|ich habe gegessen|ich habe getrunken|mahlzeit loggen|zum tagebuch hinzuf[uü]gen)(?=[\s.,!?;:'"()[\]{}]|$)/iu.test(lower);
 };
 
 export default function ChatScreen() {
@@ -450,20 +453,6 @@ export default function ChatScreen() {
     }, 200);
   }, [mesaje, loadingChat]);
 
-  // REMED-003: offsetul tastaturii e condus UNIC de useAnimatedKeyboard pe
-// compozitor (mai jos). Aici rămâne doar auto-scroll-ul la deschidere — nu mai
-// există toggle manual de padding (acela + KAV = offset dublu la deschidere).
-useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      () => {
-        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-      }
-    );
-    return () => {
-      keyboardDidShowListener.remove();
-    };
-  }, []);
 
   const executaTrimitereMesaj = async (mesajText: string, esteRetry = false) => {
     // CHAT-003: gardă anti-concurență la nivelul întregii funcții — acoperă
@@ -670,7 +659,12 @@ useEffect(() => {
       // „cină / 650 kcal" în timp ce jurnalul conținea „mic dejun / 500 kcal".
       let rezultatInsert: DecizieInsertMasa;
       try {
-        const { error } = await supabase.from('mese').insert(rows);
+        const rowsCuratate = rows.map((r: any) => {
+          const clona = { ...r };
+          if (typeof clona.id === 'string' && isNaN(Number(clona.id))) delete clona.id;
+          return clona;
+        });
+        const { error } = await supabase.from('mese').insert(rowsCuratate);
         rezultatInsert = await decideRezultatInsertMasa(supabase as never, rows as never, { error });
       } catch (err: unknown) {
         rezultatInsert = await decideRezultatInsertMasa(
@@ -694,7 +688,7 @@ useEffect(() => {
       if (rezultatInsert.tip === 'conflict_continut') {
         Alert.alert(
           t('alerts.titluri.eroareLaSalvare'),
-          'Această masă nu a putut fi salvată: sub aceeași operație există deja o masă cu alt conținut.',
+          t('alerts.mesaje.conflictOperatieMasa'),
         );
         return;
       }
@@ -749,6 +743,7 @@ useEffect(() => {
             tip_masa: row.tip_masa,
             alimente: [],
             data: row.data,
+            ora: row.ora,
             created_at: acumMasa.toISOString(),
           };
           const { persistat } = await pushOfflineMealVerificat(payloadOffline);
@@ -851,19 +846,41 @@ useEffect(() => {
     setTimeout(() => setShowNewChatBanner(false), 3200);
   };
 
-  // REMED-003: offsetul compozitorului vine dintr-o SINGURĂ sursă animată
-  // (useAnimatedKeyboard). iOS = tastatură plutitoare (fără resize) → +întreaga
-  // înălțime a tastaturii. Android = softwareKeyboardLayoutMode:resize ridică
-  // singur fereastra → NU adăugăm înălțimea tastaturii (ar fi offset dublu),
-  // doar spațiu de respirație. KAV e dezactivat pe acest ecran (keyboardDisabled).
-  const keyboard = useAnimatedKeyboard();
+  // P1-16 / DEFECT F: offsetul compozitorului pe ambele platforme (iOS + Android).
+  // Pe Android cu edgeToEdgeEnabled: true, softwareKeyboardLayoutMode: resize NU
+  // redimensionează fereastra (sistemul desenează sub bară și sub tastatură).
+  // Astfel, compozitorul trebuie ridicat cu înălțimea tastaturii pe ambele platforme.
+  // Folosim useAnimatedKeyboard({ isStatusBarTranslucentAndroid: true }) ca sursă animată 60fps,
+  // completat cu un fallback Keyboard listener pentru compatibilitate maximă.
+  const [kbHeightFallback, setKbHeightFallback] = useState(0);
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKbHeightFallback(e.endCoordinates.height);
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+      }
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKbHeightFallback(0);
+      }
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const keyboard = useAnimatedKeyboard({ isStatusBarTranslucentAndroid: true });
   const composerBottomStyle = useAnimatedStyle(() => {
-    const kbH = keyboard.height.value;
+    const kbH = Math.max(keyboard.height.value, kbHeightFallback);
     const visible = kbH > 0;
-    const iosOffset = Platform.OS === 'ios' && visible ? kbH : 0;
+    const kbOffset = visible ? kbH : 0;
     const base = visible ? 10 : tabBarHeight + 8;
-    return { paddingBottom: base + iosOffset };
-  }, [tabBarHeight]);
+    return { paddingBottom: base + kbOffset };
+  }, [tabBarHeight, kbHeightFallback]);
 
   return (
     <View style={[styles.outerContainer, { backgroundColor: colors.background }]}>
@@ -873,7 +890,7 @@ useEffect(() => {
       <KeyboardAwareScreen style={styles.container} keyboardDisabled>
 
         {/* Header */}
-        <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(500)} style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <Animated.View testID="coach-compact-header" entering={reduceMotion ? undefined : FadeInDown.duration(500)} style={[styles.header, { paddingTop: insets.top + 6 }]}>
           <View style={styles.headerMainRow}>
             <View style={styles.headerIdentity}>
               <View style={[styles.aiAvatar, { borderColor: colors.accentSecondary + '44' }]}>
@@ -886,11 +903,13 @@ useEffect(() => {
                 </LinearGradient>
               </View>
               <View style={styles.aiMeta}>
-                <Text style={[styles.title, { color: colors.textPrimary }]}>GetFlow Coach</Text>
-                <Text maxFontSizeMultiplier={1.3} style={[styles.aiSubtitle, { color: colors.textSecondary }]}>{t('chat.coachSubtitle')}</Text>
-                <View style={styles.onlineRow}>
-                  <View style={[styles.onlineDot, { backgroundColor: colors.accent }]} />
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.onlineText, { color: colors.accent }]}>{t('chat.onlineNow')}</Text>
+                <Text style={[styles.title, { color: colors.textPrimary }]}>{t('chat.coachLabel')}</Text>
+                <View style={styles.coachMetaRow}>
+                  <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.aiSubtitle, { color: colors.textSecondary }]}>{t('chat.coachSubtitle')}</Text>
+                  <View style={styles.onlineRow}>
+                    <View style={[styles.onlineDot, { backgroundColor: colors.accent }]} />
+                    <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.onlineText, { color: colors.accent }]}>{t('chat.onlineNow')}</Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -899,7 +918,7 @@ useEffect(() => {
               onPress={handleResetChat}
               style={[styles.newChatPill, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
               activeOpacity={0.85}
-              hitSlop={{ top: 2, bottom: 2 }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityRole="button"
               accessibilityLabel={t('chat.newChatA11y')}
             >
@@ -908,11 +927,13 @@ useEffect(() => {
           </View>
 
           <View style={styles.headerStatsRow}>
-            <View style={[styles.contextChip, { backgroundColor: colors.accent + '14', borderColor: colors.accent + '26' }]}>
-              <Text style={[styles.contextChipText, { color: colors.accent }]}>{totalCalorii} / {caloriiTinta} kcal</Text>
+            <View style={[styles.contextChip, { backgroundColor: colors.surfaceElevated, borderColor: colors.cardBorder }]}>
+              <View style={[styles.miniIndicator, { backgroundColor: colors.accent }]} />
+              <Text style={[styles.contextChipText, { color: colors.textPrimary }]}>{totalCalorii} / {caloriiTinta} kcal</Text>
             </View>
-            <View style={[styles.contextChip, { backgroundColor: colors.accentSecondary + '14', borderColor: colors.accentSecondary + '26' }]}>
-              <Text style={[styles.contextChipText, { color: colors.accentSecondary }]}>{totalProteine} / {proteineTinta} g proteine</Text>
+            <View style={[styles.contextChip, { backgroundColor: colors.surfaceElevated, borderColor: colors.cardBorder }]}>
+              <View style={[styles.miniIndicator, { backgroundColor: colors.accentSecondary }]} />
+              <Text style={[styles.contextChipText, { color: colors.textPrimary }]}>{totalProteine} / {proteineTinta} g proteine</Text>
             </View>
           </View>
         </Animated.View>
@@ -926,137 +947,108 @@ useEffect(() => {
           </Animated.View>
         )}
 
-        {/* Messages / Empty State */}
-        {mesaje.length <= 1 ? (
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={[styles.emptyChatContainer, { paddingBottom: contentBottomPadding }]}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={[styles.emptyHeroCard, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceElevated }]}>
-              <LinearGradient colors={[colors.accentSecondary + '18', 'rgba(0,0,0,0.18)']} style={styles.emptyHeroGradient}>
-                <View style={[styles.emptyAvatar, { backgroundColor: colors.accentSecondary + '22' }]}>
-                  <Text style={styles.emptyAvatarText}>NC</Text>
-                </View>
-                <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('chat.emptyTitle')}</Text>
-                <Text maxFontSizeMultiplier={1.3} style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+        {/* Chat History Surface — receives most of the viewport */}
+        <ScrollView
+          testID="coach-history-surface"
+          ref={scrollViewRef}
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+          style={styles.chatScroll}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 10,
+            paddingBottom: contentBottomPadding,
+          }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Small elegant introductory surface when conversation is fresh */}
+          {mesaje.length <= 1 ? (
+            <View style={[styles.introSurface, { backgroundColor: colors.surfaceElevated, borderColor: colors.cardBorder }]}>
+              <View style={[styles.introIconBox, { backgroundColor: colors.accentSecondary + '20' }]}>
+                <Sparkles size={14} color={colors.accentSecondary} />
+              </View>
+              <View style={styles.introContent}>
+                <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.introTitle, { color: colors.textPrimary }]}>
+                  {t('chat.emptyTitle')}
+                </Text>
+                <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={[styles.introSubtitle, { color: colors.textSecondary }]}>
                   {t('chat.emptySubtitle')}
                 </Text>
-              </LinearGradient>
+              </View>
             </View>
+          ) : (
+            <ChatMessageList
+              messages={mesaje}
+              colors={colors}
+              loadingChat={loadingChat}
+              onRetryLast={retryLastUserMessage}
+            />
+          )}
+        </ScrollView>
 
-            <View style={styles.quickActionsList}>
+        {/* Quick AI Action Chips — horizontally scrollable single compact row */}
+        {kbHeightFallback === 0 ? (
+          <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(400)} style={styles.quickActionsRow}>
+            <ScrollView
+              testID="coach-quick-actions"
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickActionsList}
+              keyboardShouldPersistTaps="handled"
+            >
               <TouchableOpacity
-                style={[styles.quickActionCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                onPress={() => trimitePromptDirect('Analizează mesele mele de azi și spune-mi ce să mai mănânc până diseară.')}
+                style={[styles.quickActionChip, { backgroundColor: colors.surfaceElevated, borderColor: colors.cardBorder }]}
+                onPress={() => trimitePromptDirect(t('chat.quickAnalyzeA11y'))}
                 accessibilityRole="button"
                 accessibilityLabel={t('chat.quickAnalyzeA11y')}
               >
-                <BarChart3 size={24} color={colors.textPrimary} />
-                <View style={styles.quickActionBody}>
-                  <Text style={[styles.quickActionTitle, { color: colors.textPrimary }]}>{t('chat.quickAnalyzeTitle')}</Text>
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.quickActionText, { color: colors.textSecondary }]}>{t('chat.quickAnalyzeText')}</Text>
-                </View>
+                <BarChart3 size={13} color={colors.accentSecondary} />
+                <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.quickActionText, { color: colors.textPrimary }]}>
+                  {t('chat.quickAnalyzeTitle')}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.quickActionCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                onPress={() => trimitePromptDirect('Sugerează-mi o masă bogată în proteine, sub 600 kcal.')}
+                style={[styles.quickActionChip, { backgroundColor: colors.surfaceElevated, borderColor: colors.cardBorder }]}
+                onPress={() => trimitePromptDirect(t('chat.quickProteinA11y'))}
                 accessibilityRole="button"
                 accessibilityLabel={t('chat.quickProteinA11y')}
               >
-                <Dumbbell size={24} color={colors.textPrimary} />
-                <View style={styles.quickActionBody}>
-                  <Text style={[styles.quickActionTitle, { color: colors.textPrimary }]}>{t('chat.quickProteinTitle')}</Text>
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.quickActionText, { color: colors.textSecondary }]}>{t('chat.quickProteinText')}</Text>
-                </View>
+                <Dumbbell size={13} color={colors.accent} />
+                <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.quickActionText, { color: colors.textPrimary }]}>
+                  {t('chat.quickProteinTitle')}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.quickActionCard, { backgroundColor: colors.accent, borderColor: colors.accent }]}
-                onPress={() => setRecipeModalVisible(true)}
+                style={[styles.quickActionChip, { backgroundColor: colors.surfaceElevated, borderColor: colors.accentSecondary + '66' }]}
+                onPress={() => {
+                  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                  setRecipeModalVisible(true);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={t('chat.quickRecipeA11y')}
               >
-                <ChefHat size={24} color={colors.background} />
-                <View style={styles.quickActionBody}>
-                  <Text style={[styles.quickActionTitle, { color: colors.background }]}>{t('chat.quickRecipeTitle')}</Text>
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.quickActionText, { color: colors.background }]}>{t('chat.quickRecipeText')}</Text>
-                </View>
+                <ChefHat size={13} color={colors.accentSecondary} />
+                <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.quickActionText, { color: colors.textPrimary }]}>
+                  {t('chat.quickRecipeTitle')}
+                </Text>
               </TouchableOpacity>
-            </View>
-          </ScrollView>
-        ) : (
-          <>
-            <ScrollView
-              ref={scrollViewRef}
-              onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-              style={styles.chatScroll}
-              contentContainerStyle={{
-                paddingHorizontal: 20,
-                paddingTop: 18,
-                paddingBottom: contentBottomPadding,
-              }}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              {/* REMED-017: listă memoaizată — la tastare (chatInput) doar ChatScreen
-                  se re-randează; bulele rămân nere-randate. */}
-              <ChatMessageList
-                messages={mesaje}
-                colors={colors}
-                loadingChat={loadingChat}
-                onRetryLast={retryLastUserMessage}
-              />
+
+              <TouchableOpacity
+                style={[styles.quickActionChip, { backgroundColor: colors.surfaceElevated, borderColor: colors.cardBorder }]}
+                onPress={() => trimitePromptDirect(t('chat.planNextMealA11y'))}
+                accessibilityRole="button"
+                accessibilityLabel={t('chat.planNextMealA11y')}
+              >
+                <Utensils size={13} color={colors.textSecondary} />
+                <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.quickActionText, { color: colors.textPrimary }]}>
+                  {t('chat.planNextMealTitle')}
+                </Text>
+              </TouchableOpacity>
             </ScrollView>
-
-            {/* Quick AI Action Chips in Active Chat */}
-            <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(500).delay(150)} style={styles.chipsRow}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
-                <TouchableOpacity
-                  style={[styles.actionChip, { backgroundColor: colors.accent, borderColor: colors.accent }]}
-                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setRecipeModalVisible(true); }}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('chat.recipeGenChipA11y')}
-                >
-                  <ChefHat size={14} color={colors.background} />
-                  <Text style={[styles.actionChipText, { color: colors.background, fontWeight: '800' }]}>{t('chat.recipeGenTitle')}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                  onPress={() => trimitePromptDirect("Ce pot găti rapid și sănătos în mai puțin de 15 minute?")}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('chat.quickDinnerA11y')}
-                >
-                  <Zap size={14} color={colors.textPrimary} />
-                  <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>{t('chat.quickDinnerLabel')}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                  onPress={() => trimitePromptDirect(`Care este cea mai eficientă rețetă bogată în proteine pentru a-mi atinge ținta de ${proteineTinta}g?`)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('chat.proteinBombA11y')}
-                >
-                  <Dumbbell size={14} color={colors.textPrimary} />
-                  <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>{t('chat.proteinBombLabel')}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionChip, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                  onPress={() => trimitePromptDirect("Analizează mesele mele de azi și dă-mi o evaluare generală și un sfat pentru seară.")}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('chat.quickDayA11y')}
-                >
-                  <BarChart3 size={14} color={colors.textPrimary} />
-                  <Text style={[styles.actionChipText, { color: colors.textPrimary }]}>{t('chat.quickDayLabel')}</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </Animated.View>
-          </>
-        )}
+          </Animated.View>
+        ) : null}
 
         {mealProposal && !mealProposalVisible && (
           <Animated.View
@@ -1099,6 +1091,7 @@ useEffect(() => {
 
         {/* Input */}
         <Animated.View
+          testID="coach-composer"
           entering={reduceMotion ? undefined : FadeInDown.duration(600).delay(200)}
           style={[styles.inputWrapper, composerBottomStyle]}
         >
@@ -1260,7 +1253,7 @@ useEffect(() => {
               <View style={styles.categoryRow}>
                 {MEAL_CATEGORIES.map((cat) => {
                   const selected = proposalCategory === cat.id;
-                  const Icona = CATEGORIE_ICONA[cat.id];
+                  const iconName = CATEGORIE_ICONA[cat.id];
                   return (
                     <TouchableOpacity
                       key={cat.id}
@@ -1277,7 +1270,7 @@ useEffect(() => {
                       ]}
                     >
                       {/* REMED-013: text negru pe accentSecondary (contrast >= 4.5:1). */}
-                      <Icona size={14} color={selected ? colors.textOnAccentSecondary : colors.textPrimary} />
+                      <FlowIcon name={iconName} size={14} color={selected ? colors.textOnAccentSecondary : colors.textPrimary} />
                       <Text
                         maxFontSizeMultiplier={1.3}
                         style={[styles.categoryChipText, { color: selected ? colors.textOnAccentSecondary : colors.textPrimary }]}
@@ -1358,8 +1351,8 @@ const styles = StyleSheet.create({
   // UX-014: paddingTop e setat inline in JSX (paddingTop: insets.top + 10); o
   // valoare fixa aici era mereu suprascrisa — cod mort scos.
   header: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.04)',
   },
@@ -1367,8 +1360,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 6,
   },
   headerIdentity: {
     flexDirection: 'row',
@@ -1376,12 +1369,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   aiAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    marginRight: 12,
+    marginRight: 8,
   },
   aiAvatarGradient: {
     flex: 1,
@@ -1390,51 +1383,62 @@ const styles = StyleSheet.create({
   },
   aiAvatarText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 11,
     fontWeight: '900',
   },
   aiMeta: {
     flex: 1,
+    minWidth: 0,
   },
+  coachMetaRow: { flexDirection: 'row', alignItems: 'center', minWidth: 0, gap: 6 },
   aiSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
+    flexShrink: 1,
+    fontSize: 11,
   },
   newChatPill: {
-    minHeight: 40,
-    paddingHorizontal: 14,
-    borderRadius: 14,
+    minHeight: 34,
+    paddingHorizontal: 11,
+    borderRadius: 11,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   newChatPillText: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '800',
   },
   headerStatsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
-  title: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
-  onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  onlineDot: { width: 7, height: 7, borderRadius: 4 },
-  onlineText: { fontSize: 12, fontWeight: '600' },
-  contextChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
-  contextChipText: { fontSize: 12, fontWeight: '700' },
+  title: { fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
+  onlineRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 4 },
+  onlineDot: { width: 6, height: 6, borderRadius: 3 },
+  onlineText: { fontSize: 10, fontWeight: '700' },
+  contextChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  contextChipText: { fontSize: 11, fontWeight: '700' },
+  miniIndicator: { width: 5, height: 5, borderRadius: 2.5 },
 
   chatScroll: { flex: 1 },
   aiBubbleLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    marginBottom: 6,
+    marginBottom: 4,
     marginLeft: 6,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
   bubble: {
-    marginBottom: 16,
+    marginBottom: 12,
     width: '100%',
   },
   bubbleUser: {
@@ -1444,96 +1448,83 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   bubbleContentUser: {
-    padding: 16,
-    borderRadius: 22,
-    borderBottomRightRadius: 6,
-    maxWidth: '88%',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    borderBottomRightRadius: 4,
+    maxWidth: '85%',
   },
   bubbleContentAI: {
-    borderRadius: 22,
-    borderBottomLeftRadius: 8,
+    borderRadius: 18,
+    borderBottomLeftRadius: 4,
     maxWidth: '88%',
     overflow: 'hidden',
     borderWidth: 1,
   },
-  bubbleContentAIGrad: { padding: 16 },
-  textUser: { fontSize: 15, lineHeight: 22, fontWeight: '600' },
-  textAI: { fontSize: 15, lineHeight: 22 },
+  bubbleContentAIGrad: { paddingVertical: 12, paddingHorizontal: 14 },
+  textUser: { fontSize: 14, lineHeight: 21, fontWeight: '600' },
+  textAI: { fontSize: 14, lineHeight: 21 },
   typingRow: { flexDirection: 'row', gap: 6, paddingVertical: 4, paddingHorizontal: 4 },
 
   inputWrapper: { paddingHorizontal: 16, paddingTop: 4 },
-  inputContainer: { borderRadius: 24, overflow: 'hidden', borderWidth: 1 },
-  inputGrad: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 8, paddingVertical: 8 },
-  input: { flex: 1, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, maxHeight: 110, minHeight: 42, fontSize: 15, lineHeight: 20 },
-  sendBtn: { width: 42, height: 42, borderRadius: 14, overflow: 'hidden', marginLeft: 8 },
+  inputContainer: { borderRadius: 22, overflow: 'hidden', borderWidth: 1 },
+  inputGrad: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 5 },
+  input: { flex: 1, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8, maxHeight: 100, minHeight: 40, fontSize: 14, lineHeight: 19 },
+  sendBtn: { width: 42, height: 42, borderRadius: 13, overflow: 'hidden', marginLeft: 6 },
   sendGrad: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  chipsRow: { paddingBottom: 6 },
-  chipsScroll: { gap: 8, paddingHorizontal: 16 },
-  actionChip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1 },
-  actionChipText: { fontSize: 12, fontWeight: '700' },
-
-  emptyChatContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 40,
-  },
-  emptyHeroCard: {
-    borderRadius: 28,
-    overflow: 'hidden',
+  quickActionsRow: { paddingBottom: 4 },
+  quickActionsList: { gap: 8, paddingHorizontal: 16, paddingRight: 20, alignItems: 'center' },
+  quickActionChip: {
+    minHeight: 44,
+    borderRadius: 14,
     borderWidth: 1,
-    marginBottom: 14,
-  },
-  emptyHeroGradient: {
-    padding: 22,
-    alignItems: 'flex-start',
-  },
-  emptyAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  emptyAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  quickActionsList: {
-    gap: 12,
-  },
-  quickActionCard: {
-    minHeight: 76,
-    borderRadius: 22,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 6,
   },
-  quickActionBody: {
-    flex: 1,
+  quickActionCard: {
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  quickActionTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 2,
+  quickActionText: { fontSize: 12, fontWeight: '700' },
+  quickActionTitle: { fontSize: 12, fontWeight: '700' },
+
+  introSurface: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 12,
+    gap: 10,
   },
-  quickActionText: {
+  introIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  introContent: { flex: 1, minWidth: 0 },
+  introTitle: {
     fontSize: 13,
-    lineHeight: 18,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  introSubtitle: {
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 1,
   },
   newChatBanner: {
     flexDirection: 'row',

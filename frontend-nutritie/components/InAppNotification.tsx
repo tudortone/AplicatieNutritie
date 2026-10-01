@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
-import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeOut, FadeOutUp } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -15,6 +15,7 @@ import {
 import { router } from 'expo-router';
 import { Radius, Spacing } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { NotificationType } from '../context/NotificationBannerContext';
 import { isValidActionRoute } from '../lib/actionRoutes';
 
@@ -39,6 +40,7 @@ export default function InAppNotification({
 }: InAppNotificationProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
 
   if (!visible) return null;
 
@@ -77,8 +79,8 @@ export default function InAppNotification({
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(280).springify().damping(18)}
-      exiting={FadeOutUp.duration(200)}
+      entering={reduceMotion ? FadeIn.duration(120) : FadeInDown.duration(280).springify().damping(18)}
+      exiting={reduceMotion ? FadeOut.duration(100) : FadeOutUp.duration(200)}
       style={[styles.container, { top: topPosition }]}
       accessibilityLiveRegion="polite"
     >

@@ -68,5 +68,8 @@ describe('P-012: limite rate-limite webhooks', () => {
     expect(statusuri.filter((s) => s === 400).length).toBeGreaterThan(0);
     const count429 = statusuri.filter((s) => s === 429).length;
     expect(count429).toBeGreaterThan(0);
-  });
+    // 610 cereri secventiale prin supertest depasesc timeout-ul implicit de 5s
+    // cand suita completa ruleaza serial (--runInBand): testul pica nedeterminist
+    // in CI, desi trece izolat. Timeout explicit, nu un defect de produs.
+  }, 60000);
 });

@@ -15,17 +15,23 @@ export function useReducedMotion(): boolean {
 
   useEffect(() => {
     let active = true;
-    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (active) setReduced(enabled);
+    AccessibilityInfo.isReduceMotionEnabled?.()
+      ?.then((enabled) => {
+        if (active) setReduced(Boolean(enabled));
+      })
+      ?.catch(() => {});
+
+    const sub = AccessibilityInfo.addEventListener?.('reduceMotionChanged', (enabled) => {
+      if (active) setReduced(Boolean(enabled));
     });
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-      setReduced(enabled);
-    });
+
     return () => {
       active = false;
-      sub.remove();
+      sub?.remove?.();
     };
   }, []);
 
   return reduced;
 }
+
+export const useReducedMotionPreference = useReducedMotion;

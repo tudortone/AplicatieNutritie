@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +19,7 @@ import { useAntrenamente, SetExercitiu } from '../../hooks/useAntrenamente';
 import { useNotify } from '../../hooks/useNotify';
 import { classifyMeasurement, computeSessionLoad, type MeasurementSpec } from '../../lib/measurement';
 import { Holographic3DAnatomyBody } from '../../components/fitness/Holographic3DAnatomyBody';
+import { FlowIcon } from '../../components/ui/FlowIcon';
 
 export default function ExercitiuDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -53,6 +54,9 @@ export default function ExercitiuDetailScreen() {
   };
   const spec: MeasurementSpec = exercitiu ? (exercitiu.masurare ?? classifyMeasurement(exercitiu)) : DEFAULT_MEASUREMENT_SPEC;
   const [sets, setSets] = useState<SetExercitiu[]>([]);
+  // F-13: garda anti dublu-submit pentru „Adaugă" (ref = efect imediat, state = UI).
+  const salvareInCursRef = useRef(false);
+  const [salveazaAntrenament, setSalveazaAntrenament] = useState(false);
 
   if (!exercitiu) {
     return (
@@ -99,9 +103,9 @@ export default function ExercitiuDetailScreen() {
   const getExerciseRankInfo = () => {
     if (scorIntensitate >= 85) {
       return {
-        rank: 'RANK S+ • ELITE PRO 👑⚡',
+        rank: 'RANK S+ • ELITE PRO',
         badgeColor: '#FACC15',
-        stele: '⭐⭐⭐⭐⭐',
+        stele: 5,
         eficienta: 'Recrutare 99% Fibre Musculare',
         mesaj: 'Stimulare hipertrofică maximă — nivel competițional absolut.',
         hintNext: 'Ai atins nivelul maxim de măiestrie pentru acest exercițiu!'
@@ -109,9 +113,9 @@ export default function ExercitiuDetailScreen() {
     }
     if (scorIntensitate >= 65) {
       return {
-        rank: 'RANK A • ADVANCED HYPERTROPHY 🔥',
+        rank: 'RANK A • ADVANCED HYPERTROPHY',
         badgeColor: '#00F0FF',
-        stele: '⭐⭐⭐⭐',
+        stele: 4,
         eficienta: 'Recrutare 92% Fibre Musculare',
         mesaj: 'Tensiune mecanică intensă & adaptare structurală profundă.',
         hintNext: `Adaugă +${Math.max(2, Math.round((85 - scorIntensitate) / 2))} kg sau 1 serie pentru a debloca Rank S+`
@@ -119,18 +123,18 @@ export default function ExercitiuDetailScreen() {
     }
     if (scorIntensitate >= 45) {
       return {
-        rank: 'RANK B • INTERMEDIATE STRENGTH 💪',
+        rank: 'RANK B • INTERMEDIATE STRENGTH',
         badgeColor: '#4ADE80',
-        stele: '⭐⭐⭐',
+        stele: 3,
         eficienta: 'Recrutare 78% Fibre Musculare',
         mesaj: 'Volum solid de lucru pentru creștere progresivă și tonifiere.',
         hintNext: `Adaugă +${Math.max(2, Math.round((65 - scorIntensitate) / 2))} kg sau 2 repetări pentru Rank A`
       };
     }
     return {
-      rank: 'RANK C • FOUNDATION & FORM 🌊',
+      rank: 'RANK C • FOUNDATION & FORM',
       badgeColor: '#38BDF8',
-      stele: '⭐⭐',
+      stele: 2,
       eficienta: 'Recrutare 60% Fibre Musculare',
       mesaj: 'Execuție tehnică controlată și activare metabolică de bază.',
       hintNext: `Crește greutatea sau adaugă repetări pentru a atinge Rank B`
@@ -140,6 +144,13 @@ export default function ExercitiuDetailScreen() {
   const rankInfo = getExerciseRankInfo();
 
   const handleQuickAdd = async () => {
+    // F-13: fara garda, dublu/triplu tap (sau un tap pe retea lenta) trimitea
+    // mai multe `adaugaAntrenament` pentru ACEEASI serie, creand randuri
+    // duplicate in jurnal. `useRef` (nu state) pentru ca blocarea trebuie sa fie
+    // vizibila imediat, in acelasi tick, nu dupa un re-render.
+    if (salvareInCursRef.current) return;
+    salvareInCursRef.current = true;
+    setSalveazaAntrenament(true);
     try {
       const p = exercitiu.caloriiPeMinut ?? 6;
       const d = Math.max(15, sets.length * 3);
@@ -174,6 +185,9 @@ export default function ExercitiuDetailScreen() {
       router.back();
     } catch {
       notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+    } finally {
+      salvareInCursRef.current = false;
+      setSalveazaAntrenament(false);
     }
   };
 
@@ -276,7 +290,9 @@ export default function ExercitiuDetailScreen() {
               </View>
             </View>
             <View style={styles.starsBadgeWrap}>
-              <Text style={styles.rankStarsText}>{rankInfo.stele}</Text>
+              {Array.from({ length: rankInfo.stele }, (_, index) => (
+                <FlowIcon key={`rank-star-${index}`} name="star" size={13} color={rankInfo.badgeColor} />
+              ))}
             </View>
           </View>
 
@@ -350,9 +366,12 @@ export default function ExercitiuDetailScreen() {
       {/* Bară de acțiune inferioară adaptată la tipul de măsurare conform specificației v6 */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, Spacing.md), borderTopColor: colors.border, backgroundColor: colors.background }]}>
         <TouchableOpacity
-          style={[styles.actionBtn, { backgroundColor: rankInfo.badgeColor }]}
+          style={[styles.actionBtn, { backgroundColor: rankInfo.badgeColor, opacity: salveazaAntrenament ? 0.6 : 1 }]}
           activeOpacity={0.88}
           onPress={handleQuickAdd}
+          disabled={salveazaAntrenament}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: salveazaAntrenament, busy: salveazaAntrenament }}
         >
           <PlusCircle size={20} color={colors.textOnAccent} />
           <Text style={[styles.actionBtnText, { color: colors.textOnAccent }]}>
@@ -505,10 +524,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   starsBadgeWrap: {
+    flexDirection: 'row',
+    gap: 2,
     paddingLeft: 6,
-  },
-  rankStarsText: {
-    fontSize: 14,
   },
   rankProgressTrack: {
     height: 8,

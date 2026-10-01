@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable, ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Animated, {
   FadeIn,
@@ -10,6 +10,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export interface ConfirmSheetProps {
   visible: boolean;
@@ -18,7 +19,7 @@ export interface ConfirmSheetProps {
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   onCancel: () => void;
   /**
    * REMED-006: conținut opțional randat între mesaj și butoane (cardul de
@@ -26,10 +27,18 @@ export interface ConfirmSheetProps {
    */
   extra?: React.ReactNode;
   /**
-   * REMED-006: blochează confirmarea până când utilizatorul a ales o categorie.
-   * Default false => ceilalți apelanți nu sunt afectați.
+   * REMED-006: permite dezactivarea confirmării când starea internă a extras-ului
+   * nu e încă validă (ex. categorie nealeasă).
    */
   confirmDisabled?: boolean;
+  /** Pictogramă opțională afișată în antetul foii (ex. Trash2, LogOut). */
+  icon?: React.ReactNode;
+  /** Culoare de fundal pentru cercul pictogramei. */
+  iconBg?: string;
+  /** Indică dacă acțiunea de confirmare este în curs de execuție. */
+  loading?: boolean;
+  /** Dispunerea butoanelor: vertical (standard) sau horizontal (side-by-side [Cancel] [Confirm]). */
+  buttonLayout?: 'horizontal' | 'vertical';
 }
 
 export function ConfirmSheet({
@@ -38,26 +47,33 @@ export function ConfirmSheet({
   message,
   confirmLabel,
   cancelLabel,
-  destructive = true,
+  destructive = false,
   onConfirm,
   onCancel,
   extra,
   confirmDisabled = false,
+  icon,
+  iconBg,
+  loading = false,
+  buttonLayout = 'vertical',
 }: ConfirmSheetProps) {
   const { colors } = useTheme();
-  // REMED-002: default-urile ConfirmSheet + a11y trec prin i18n (chei chat.*).
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const actionColor = destructive ? colors.danger : colors.accent;
   const confirmText = confirmLabel ?? t('chat.confirmSheet.confirmDefault');
   const cancelText = cancelLabel ?? t('chat.confirmSheet.cancelDefault');
+  const isHorizontal = buttonLayout === 'horizontal';
 
   return (
     <Modal
       visible={visible}
       transparent
       animationType="none"
-      onRequestClose={onCancel}
+      onRequestClose={() => {
+        if (!loading) onCancel();
+      }}
       statusBarTranslucent
       navigationBarTranslucent
       presentationStyle="overFullScreen"
@@ -70,13 +86,15 @@ export function ConfirmSheet({
       >
         <Pressable
           style={StyleSheet.absoluteFill}
-          onPress={onCancel}
+          onPress={() => {
+            if (!loading) onCancel();
+          }}
           accessibilityRole="button"
           accessibilityLabel={t('chat.confirmSheet.a11yClose')}
         />
         <Animated.View
-          entering={SlideInDown.springify().damping(20)}
-          exiting={SlideOutDown.duration(180)}
+          entering={reduceMotion ? FadeIn.duration(120) : SlideInDown.springify().damping(20)}
+          exiting={reduceMotion ? FadeOut.duration(100) : SlideOutDown.duration(180)}
           style={[styles.sheetWrap, { paddingBottom: Math.max(insets.bottom, 12) }]}
         >
           <BlurView
@@ -91,48 +109,147 @@ export function ConfirmSheet({
             ]}
           >
             <View style={[styles.grip, { backgroundColor: `${colors.textTertiary}55` }]} />
-            <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-            {message ? (
-              <Text maxFontSizeMultiplier={1.3} style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
-            ) : null}
-            {extra ? <View style={styles.extra}>{extra}</View> : null}
 
-            <Pressable
-              onPress={onConfirm}
-              disabled={confirmDisabled}
-              accessibilityRole="button"
-              accessibilityLabel={confirmText}
-              accessibilityState={{ disabled: confirmDisabled }}
-              style={({ pressed }) => [
-                styles.button,
-                {
-                  backgroundColor: confirmDisabled ? colors.disabledBg : actionColor,
-                  opacity: pressed && !confirmDisabled ? 0.82 : 1,
-                },
+            {icon ? (
+              <View
+                style={[
+                  styles.iconWrap,
+                  {
+                    backgroundColor:
+                      iconBg || (destructive ? `${colors.danger}1A` : `${colors.accent}1A`),
+                  },
+                ]}
+              >
+                {icon}
+              </View>
+            ) : null}
+
+            <Text
+              style={[
+                styles.title,
+                { color: colors.textPrimary, textAlign: icon ? 'center' : 'left' },
               ]}
             >
+              {title}
+            </Text>
+            {message ? (
               <Text
                 maxFontSizeMultiplier={1.3}
                 style={[
-                  styles.confirmText,
-                  { color: confirmDisabled ? colors.disabledText : (destructive ? colors.textOnDanger : colors.textOnAccent) },
+                  styles.message,
+                  { color: colors.textSecondary, textAlign: icon ? 'center' : 'left' },
                 ]}
               >
-                {confirmText}
+                {message}
               </Text>
-            </Pressable>
+            ) : null}
+            {extra ? <View style={styles.extra}>{extra}</View> : null}
 
-            <Pressable
-              onPress={onCancel}
-              accessibilityRole="button"
-              accessibilityLabel={cancelText}
-              style={({ pressed }) => [
-                styles.ghostButton,
-                { borderColor: colors.border, opacity: pressed ? 0.65 : 1 },
-              ]}
-            >
-              <Text maxFontSizeMultiplier={1.3} style={[styles.ghostText, { color: colors.textPrimary }]}>{cancelText}</Text>
-            </Pressable>
+            {isHorizontal ? (
+              <View style={styles.horizontalRow}>
+                <Pressable
+                  onPress={onCancel}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel={cancelText}
+                  style={({ pressed }) => [
+                    styles.horizontalBtn,
+                    styles.ghostButton,
+                    { borderColor: colors.border, opacity: pressed ? 0.65 : (loading ? 0.45 : 1) },
+                  ]}
+                >
+                  <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={[styles.ghostText, { color: colors.textPrimary }]}>
+                    {cancelText}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={onConfirm}
+                  disabled={confirmDisabled || loading}
+                  accessibilityRole="button"
+                  accessibilityLabel={confirmText}
+                  accessibilityState={{ disabled: confirmDisabled || loading }}
+                  style={({ pressed }) => [
+                    styles.horizontalBtn,
+                    styles.button,
+                    {
+                      backgroundColor: confirmDisabled ? colors.disabledBg : actionColor,
+                      opacity: pressed && !confirmDisabled && !loading ? 0.82 : 1,
+                      marginBottom: 0,
+                    },
+                  ]}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color={destructive ? colors.textOnDanger : colors.textOnAccent} />
+                  ) : (
+                    <Text
+                      maxFontSizeMultiplier={1.3}
+                      numberOfLines={1}
+                      style={[
+                        styles.confirmText,
+                        {
+                          color: confirmDisabled
+                            ? colors.disabledText
+                            : (destructive ? colors.textOnDanger : colors.textOnAccent),
+                        },
+                      ]}
+                    >
+                      {confirmText}
+                    </Text>
+                  )}
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <Pressable
+                  onPress={onConfirm}
+                  disabled={confirmDisabled || loading}
+                  accessibilityRole="button"
+                  accessibilityLabel={confirmText}
+                  accessibilityState={{ disabled: confirmDisabled || loading }}
+                  style={({ pressed }) => [
+                    styles.button,
+                    {
+                      backgroundColor: confirmDisabled ? colors.disabledBg : actionColor,
+                      opacity: pressed && !confirmDisabled && !loading ? 0.82 : 1,
+                    },
+                  ]}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color={destructive ? colors.textOnDanger : colors.textOnAccent} />
+                  ) : (
+                    <Text
+                      maxFontSizeMultiplier={1.3}
+                      style={[
+                        styles.confirmText,
+                        {
+                          color: confirmDisabled
+                            ? colors.disabledText
+                            : (destructive ? colors.textOnDanger : colors.textOnAccent),
+                        },
+                      ]}
+                    >
+                      {confirmText}
+                    </Text>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  onPress={onCancel}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel={cancelText}
+                  style={({ pressed }) => [
+                    styles.ghostButton,
+                    { borderColor: colors.border, opacity: pressed ? 0.65 : (loading ? 0.45 : 1) },
+                  ]}
+                >
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.ghostText, { color: colors.textPrimary }]}>
+                    {cancelText}
+                  </Text>
+                </Pressable>
+              </>
+            )}
           </BlurView>
         </Animated.View>
       </Animated.View>
@@ -166,6 +283,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 16,
   },
+  iconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
   title: {
     fontSize: 19,
     lineHeight: 24,
@@ -180,6 +306,15 @@ const styles = StyleSheet.create({
   // REMED-006/007: zonă opțională (cardul propunerii + picker de categorie).
   extra: {
     marginBottom: 20,
+  },
+  horizontalRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  horizontalBtn: {
+    flex: 1,
+    marginBottom: 0,
   },
   button: {
     minHeight: 52,
@@ -206,3 +341,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
+
+export default ConfirmSheet;

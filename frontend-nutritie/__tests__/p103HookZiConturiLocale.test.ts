@@ -22,6 +22,10 @@ let mockEroareFetch: { message: string } | null = null;
 let mockFiltruGte: string | null = null;
 let mockFiltruLte: string | null = null;
 
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+);
+
 jest.mock('../supabase', () => ({
   supabase: {
     auth: {

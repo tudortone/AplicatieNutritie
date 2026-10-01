@@ -35,7 +35,7 @@ const REGEX_COD_BARE = /^[0-9]{4,20}$/;
 // Compus din bucati, nu ca literal intreg: literalul lung a fost deja corupt
 // o data la copiere si a scos din functiune intreg stratul OpenFoodFacts.
 const GAZDA_OFF = 'world.openfoodfacts.org';
-const CALE_PRODUS_OFF = '/api/v2/product/';
+const CALE_PRODUS_OFF = '/api/v3/product/';
 
 /**
  * Durata de viata a intrarilor din cache-ul global (zile).

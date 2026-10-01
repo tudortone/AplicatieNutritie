@@ -1,34 +1,100 @@
+let mockStore: Record<string, string> = {};
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __store: () => mockStore,
+  getItem: jest.fn(async (k: string) => mockStore[k] ?? null),
+  setItem: jest.fn(async (k: string, v: string) => { mockStore[k] = v; }),
+  removeItem: jest.fn(async (k: string) => { delete mockStore[k]; }),
+  clear: jest.fn(async () => { mockStore = {}; }),
+}));
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import i18n, { changeLanguage } from '../i18n';
 import ro from '../i18n/locales/ro.json';
 import en from '../i18n/locales/en.json';
+import fr from '../i18n/locales/fr.json';
+import de from '../i18n/locales/de.json';
 
-function getAllKeys(obj: any, prefix = ''): string[] {
+function flattenKeys(obj: Record<string, any>, prefix = ''): string[] {
   let keys: string[] = [];
-  for (const k in obj) {
-    if (typeof obj[k] === 'object' && obj[k] !== null) {
-      keys = keys.concat(getAllKeys(obj[k], prefix ? `${prefix}.${k}` : k));
+  for (const k of Object.keys(obj)) {
+    const fullKey = prefix ? `${prefix}.${k}` : k;
+    if (obj[k] && typeof obj[k] === 'object' && !Array.isArray(obj[k])) {
+      keys = keys.concat(flattenKeys(obj[k], fullKey));
     } else {
-      keys.push(prefix ? `${prefix}.${k}` : k);
+      keys.push(fullKey);
     }
   }
-  return keys;
+  return keys.sort();
 }
 
-describe('U-08 — Integritatea fișierelor de traducere i18n', () => {
-  test('1. Fișierele ro.json și en.json conțin exact aceleași chei de traducere', () => {
-    const keysRo = getAllKeys(ro).sort();
-    const keysEn = getAllKeys(en).sort();
+describe('Centralized Internationalization (i18n) — RO, EN, FR, DE', () => {
+  const roKeys = flattenKeys(ro);
+  const enKeys = flattenKeys(en);
+  const frKeys = flattenKeys(fr);
+  const deKeys = flattenKeys(de);
 
-    expect(keysRo).toEqual(keysEn);
+  it('loads all 4 supported locales with substantial key coverage', () => {
+    expect(roKeys.length).toBeGreaterThan(300);
+    expect(enKeys.length).toBeGreaterThan(300);
+    expect(frKeys.length).toBeGreaterThan(300);
+    expect(deKeys.length).toBeGreaterThan(300);
   });
 
-  test('2. Cheile noi adăugate (offline, notifications, camera.steps) sunt prezente în ambele limbi', () => {
-    expect(ro.offline.salvatOffline).toBeDefined();
-    expect(en.offline.salvatOffline).toBeDefined();
+  it('guarantees 100% mutual key parity between RO, EN, FR, and DE without missing keys', () => {
+    expect(enKeys).toEqual(roKeys);
+    expect(frKeys).toEqual(roKeys);
+    expect(deKeys).toEqual(roKeys);
+  });
 
-    expect(ro.notifications.breakfastTitle).toBeDefined();
-    expect(en.notifications.breakfastTitle).toBeDefined();
+  it('ensures no empty translation strings exist across all 4 locales', () => {
+    const checkNoEmpty = (obj: Record<string, any>, prefix = '', localeName: string) => {
+      for (const k of Object.keys(obj)) {
+        const fullKey = prefix ? `${prefix}.${k}` : k;
+        if (obj[k] && typeof obj[k] === 'object' && !Array.isArray(obj[k])) {
+          checkNoEmpty(obj[k], fullKey, localeName);
+        } else {
+          expect(typeof obj[k]).toBe('string');
+          expect(obj[k].trim().length).toBeGreaterThan(0);
+        }
+      }
+    };
 
-    expect(ro.camera.steps.optimizing).toBeDefined();
-    expect(en.camera.steps.optimizing).toBeDefined();
+    checkNoEmpty(ro, '', 'RO');
+    checkNoEmpty(en, '', 'EN');
+    checkNoEmpty(fr, '', 'FR');
+    checkNoEmpty(de, '', 'DE');
+  });
+
+  it('supports runtime language switching and persists choice to AsyncStorage', async () => {
+    await changeLanguage('fr');
+    expect(i18n.language).toBe('fr');
+    expect(await AsyncStorage.getItem('getflow_language')).toBe('fr');
+
+    await changeLanguage('de');
+    expect(i18n.language).toBe('de');
+    expect(await AsyncStorage.getItem('getflow_language')).toBe('de');
+
+    await changeLanguage('ro');
+    expect(i18n.language).toBe('ro');
+    expect(await AsyncStorage.getItem('getflow_language')).toBe('ro');
+  });
+
+  it('translates UI keys accurately according to active locale', async () => {
+    await changeLanguage('en');
+    expect(i18n.t('alerts.titluri.eroare')).toBe('Error');
+    expect(i18n.t('profile.save')).toBe('SAVE PROFILE');
+
+    await changeLanguage('ro');
+    expect(i18n.t('alerts.titluri.eroare')).toBe('Eroare');
+    expect(i18n.t('profile.save')).toBe('SALVEAZĂ PROFIL');
+
+    await changeLanguage('fr');
+    expect(i18n.t('alerts.titluri.eroare')).toBe('Erreur');
+    expect(i18n.t('profile.save')).toBe('ENREGISTRER LE PROFIL');
+
+    await changeLanguage('de');
+    expect(i18n.t('alerts.titluri.eroare')).toBe('Fehler');
+    expect(i18n.t('profile.save')).toBe('PROFIL SPEICHERN');
   });
 });

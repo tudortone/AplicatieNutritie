@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Compass, Home } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 
 // BUG-032: fără un +not-found propriu, expo-router folosea default-ul în engleză
@@ -12,6 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 export default function NotFoundScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t } = useTranslation();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -23,9 +25,9 @@ export default function NotFoundScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.duration(400).delay(120)} style={styles.textWrap}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Pagina nu a fost găsită</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{t('notFound.title')}</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Adresa cerută nu există în aplicație. Te poți întoarce în siguranță la ecranul principal.
+            {t('notFound.subtitle')}
           </Text>
         </Animated.View>
 
@@ -33,20 +35,20 @@ export default function NotFoundScreen() {
           <Pressable
             onPress={() => router.replace('/(tabs)')}
             accessibilityRole="button"
-            accessibilityLabel="Înapoi la aplicație"
+            accessibilityLabel={t('notFound.backToApp')}
             style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.8 : 1 }]}
           >
             <Home size={18} color={colors.background} />
-            <Text style={[styles.primaryText, { color: colors.background }]}>Înapoi la aplicație</Text>
+            <Text style={[styles.primaryText, { color: colors.background }]}>{t('notFound.backToApp')}</Text>
           </Pressable>
 
           <Pressable
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
             accessibilityRole="button"
-            accessibilityLabel="Înapoi"
+            accessibilityLabel={t('notFound.back')}
             style={({ pressed }) => [styles.secondaryBtn, { borderColor: colors.border, opacity: pressed ? 0.6 : 1 }]}
           >
-            <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>Înapoi</Text>
+            <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>{t('notFound.back')}</Text>
           </Pressable>
         </Animated.View>
       </View>

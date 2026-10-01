@@ -36,20 +36,9 @@
  *   - `clerk_user_map`     — RLS activ fara nicio politica: deny-all
  *   - `exercitii`          — catalog partajat, read-only pentru utilizatori
  *
- * ==========================================================================
- * LIMITARE IMPORTANTA — UTILIZATORII CLERK
- * ==========================================================================
- * Un utilizator autentificat prin Clerk NU are un JWT Supabase. Pentru el nu se
- * poate construi un client cu `auth.uid()` valid, deci RLS nu poate fi aplicat
- * si se cade inevitabil pe clientul admin cu filtrare manuala.
- *
- * Asta nu este o omisiune a acestui modul, este o consecinta a faptului ca
- * aplicatia are doua sisteme de identitate paralele. Cat timp calea Clerk exista,
- * o parte din trafic ramane fara plasa de siguranta a bazei de date.
- * Rezolvarea corecta pe termen lung este una din doua:
- *   (a) emiterea unui JWT Supabase pentru utilizatorii Clerk (JWT template), sau
- *   (b) renuntarea la una dintre cele doua metode de autentificare.
- * Pana atunci, `modAdmin: true` marcheaza explicit cererile neprotejate de RLS.
+ * Clerk este WEBHOOK ONLY: sincronizarea semnata poate folosi serviciile admin,
+ * dar un bearer Clerk nu intra in acest context. Orice identitate fara un JWT
+ * Supabase verificat este refuzata, nu degradata pe service_role.
  */
 
 const { createClient } = require('@supabase/supabase-js');
@@ -69,6 +58,7 @@ const TABELE_CU_RLS_UTILIZATOR = Object.freeze([
 	'antrenamente',
 	'produse_camara',
 	'gamificare',
+	'gamificare_evenimente',
 	'workout_logs',
 	'audit_log',
 	'barcode_estimari_utilizator',
@@ -78,6 +68,19 @@ const TABELE_CU_RLS_UTILIZATOR = Object.freeze([
 	// utilizatorului doar prin clientul cu RLS, nu prin service_role.
 	'ai_jobs',
 	'credite_ai',
+	'credite_tranzactii',
+	'flow_credit_reservations',
+	'flow_reward_intents',
+]);
+
+/**
+ * Toate tabelele care trebuie golite explicit inainte de stergerea identitatii.
+ * Billing ramane backend-only (nu intra in registrul accesibil clientului RLS),
+ * dar contine material sensibil legat de user_id si participa obligatoriu la GDPR.
+ */
+const TABELE_STERGERE_GDPR_UTILIZATOR = Object.freeze([
+	...TABELE_CU_RLS_UTILIZATOR,
+	'google_play_subscriptions',
 ]);
 
 /** Tabele accesibile exclusiv backendului. Aici clientul admin este corect. */
@@ -86,9 +89,9 @@ const TABELE_DOAR_ADMIN = Object.freeze([
 	'clerk_user_map',
 ]);
 
-/** Contoare interne (A-3): masoara ce procent din trafic ruleaza fara RLS. */
+/** Contoare interne (A-3): fallback-ul admin ramane vizibil ca zero invariabil. */
 let cereriCuRls = 0;
-let cereriModAdmin = 0;
+const cereriModAdmin = 0;
 let esecuriClientRls = 0;
 // C1-S4: contor pentru accesele de tip admin (service_role) pe tabele de
 // utilizator care NU trec prin creeazaContextDate (suprafețe care folosesc
@@ -157,19 +160,15 @@ function creeazaClientUtilizator({ url, anonKey, token }) {
  * Contextul de date al unei cereri.
  *
  * Returneaza:
- *   - `db`       clientul pentru datele utilizatorului (cu RLS daca e posibil)
- *   - `admin`    clientul privilegiat, DOAR pentru tabelele backend-only
+ *   - `db`       clientul pentru datele utilizatorului (cu RLS obligatoriu)
  *   - `userId`   identitatea rezolvata
- *   - `modAdmin` true cand RLS NU protejeaza aceasta cerere (cale Clerk)
+ *   - `modAdmin` false (pastrat in contractul metricilor; nu exista fallback)
  *
- * `sursaToken` este 'supabase' cand tokenul primit este un JWT Supabase valid.
- * Pentru orice alta sursa, `db` cade pe clientul admin: fara `auth.uid()`, un
- * client anon nu ar putea citi nimic, iar cererea ar esua in loc sa fie doar
- * mai putin protejata.
+ * `sursaToken` trebuie sa fie 'supabase'. Pentru orice alta sursa, cererea
+ * esueaza inchis: baza de date ramane limita de autorizare.
  */
 function creeazaContextDate({
 	config,
-	supabaseAdmin,
 	token,
 	userId,
 	sursaToken,
@@ -179,32 +178,32 @@ function creeazaContextDate({
 	}
 
 	const eroareContext = new EroareContextDate();
-	if (sursaToken === 'supabase' && token) {
-		try {
-			const db = creeazaClientUtilizator({
-				url: config.supabase.url,
-				anonKey: config.supabase.anonKey,
-				token,
-			});
-			cereriCuRls++;
-			return { db, admin: supabaseAdmin, userId, modAdmin: false };
-		} catch {
-			// Daca nu putem construi clientul restrans, NU tacem: o cerere care se
-			// crede protejata de RLS dar nu este, e mai periculoasa decat una care
-			// stie ca nu este.
-			// A-3: fail-closed — in loc sa degradam silențios pe clientul admin
-			// (care ocoleste RLS prin definitie), aruncam si cererea e refuzata cu 503.
-			esecuriClientRls++;
-			console.error(
-				'[securitate] Client RLS indisponibil, cerere refuzata:',
-				eroareContext.cod,
-			);
-			throw eroareContext;
-		}
+	if (sursaToken !== 'supabase' || !token) {
+		esecuriClientRls++;
+		throw eroareContext;
 	}
 
-	cereriModAdmin++;
-	return { db: supabaseAdmin, admin: supabaseAdmin, userId, modAdmin: true };
+	try {
+		const db = creeazaClientUtilizator({
+			url: config.supabase.url,
+			anonKey: config.supabase.anonKey,
+			token,
+		});
+		cereriCuRls++;
+		return { db, userId, modAdmin: false };
+	} catch {
+		// Daca nu putem construi clientul restrans, NU tacem: o cerere care se
+		// crede protejata de RLS dar nu este, e mai periculoasa decat una care
+		// stie ca nu este.
+		// A-3: fail-closed — in loc sa degradam silențios pe clientul admin
+		// (care ocoleste RLS prin definitie), aruncam si cererea e refuzata cu 503.
+		esecuriClientRls++;
+		console.error(
+			'[securitate] Client RLS indisponibil, cerere refuzata:',
+			eroareContext.cod,
+		);
+		throw eroareContext;
+	}
 }
 
 /**
@@ -225,7 +224,7 @@ function tabelUtilizator(ctx, tabela) {
 	}
 	if (TABELE_DOAR_ADMIN.includes(tabela)) {
 		throw new Error(
-			'Tabela ' + tabela + ' este backend-only: foloseste ctx.admin explicit.',
+			'Tabela ' + tabela + ' este backend-only: foloseste un serviciu admin explicit.',
 		);
 	}
 	if (!TABELE_CU_RLS_UTILIZATOR.includes(tabela)) {
@@ -240,6 +239,7 @@ function tabelUtilizator(ctx, tabela) {
 
 module.exports = {
 	TABELE_CU_RLS_UTILIZATOR,
+	TABELE_STERGERE_GDPR_UTILIZATOR,
 	TABELE_DOAR_ADMIN,
 	creeazaClientUtilizator,
 	creeazaContextDate,

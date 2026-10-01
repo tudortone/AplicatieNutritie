@@ -9,28 +9,29 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { BottomSheetModal, BottomSheetScrollView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
-import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { X, Pencil, Trash2, Dumbbell, Flame, Info, Lock, Plus } from 'lucide-react-native';
+import { X, Pencil, Trash2, Dumbbell, Flame, Info, Plus } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import { usePremium } from '../context/PremiumContext';
 import { Masa, AlimentDetaliat, AminoaciziEsentiali } from '../types';
 import { FoodDetailSheet, FoodDetailSheetRef } from './food/FoodDetailModal';
 import { EditAlimentSheet, EditAlimentSheetRef } from './food/EditAlimentModal';
+import { ConfirmSheet } from './ui/ConfirmSheet';
 import { imbogatesteAliment } from '../lib/imbogatesteAliment';
 import { obtinePozaMasaThumb, recalculeazaTotaluri, parseAlimente } from '../lib/mealUtils';
+import { PremiumPhotoPreview } from './jurnal/PremiumPhotoPreview';
 
 export interface MealDetailsSheetRef {
-  open: (masa: Masa) => void;
+  open: (masa: Masa, alimentIdxToEdit?: number) => void;
   close: () => void;
 }
 
 interface Props {
   onEdit?: (masa: Masa) => void;
   onDelete?: (masa: Masa) => void;
-  onUpdateMasa?: (updated: Masa) => Promise<void> | void;
+  onUpdateMasa?: (updated: Masa) => Promise<boolean | void> | boolean | void;
 }
 
 // Funcție pentru estimarea / calcularea profilului de aminoacizi esențiali pe baza cantității de proteine (dacă nu au fost furnizați manual)
@@ -75,7 +76,7 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
     const { colors } = useTheme();
     const { t } = useTranslation();
     const router = useRouter();
-    const { isPremium } = usePremium();
+    const { hasFullAccess } = usePremium();
     const bottomSheetRef = useRef<BottomSheetModal>(null);
     const detailSheetRef = useRef<FoodDetailSheetRef>(null);
     const editSheetRef = useRef<EditAlimentSheetRef>(null);
@@ -85,14 +86,22 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
     // butonul hardware de „înapoi" de pe Android să închidă foaia corectă din
     // stivă: mai întâi foile copil (edit / detaliu aliment), apoi aceasta.
     const [prezent, setPrezent] = useState(false);
+    const [ingredientToDelete, setIngredientToDelete] = useState<{ idx: number; name: string } | null>(null);
+    const [isDeletingIngredient, setIsDeletingIngredient] = useState(false);
     const snapPoints = useMemo(() => ['88%'], []);
 
     useImperativeHandle(ref, () => ({
-      open: (masa: Masa) => {
+      open: (masa: Masa, alimentIdxToEdit?: number) => {
         setMasaLocal(masa);
         setEditIdx(null);
         setPrezent(true);
         bottomSheetRef.current?.present();
+        if (alimentIdxToEdit !== undefined && masa.alimente && masa.alimente[alimentIdxToEdit]) {
+          setEditIdx(alimentIdxToEdit);
+          setTimeout(() => {
+            editSheetRef.current?.open(masa.alimente![alimentIdxToEdit]);
+          }, 150);
+        }
       },
       close: () => {
         setPrezent(false);
@@ -168,9 +177,9 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
     const totalBcaa = aminoProfile.leucina + aminoProfile.izoleucina + aminoProfile.valina;
 
     // Salvează ingredientul editat: înlocuiește elementul, recalculează totalurile
-    // din listă și actualizează — local (optimist) + upstream printr-onUpdateMasa.
-    const salveazaAliment = (idx: number, actualizat: AlimentDetaliat): void => {
-      if (!masaLocal) return;
+    // din listă și actualizează upstream prin onUpdateMasa înainte de a muta starea locală.
+    const salveazaAliment = async (idx: number, actualizat: AlimentDetaliat): Promise<boolean> => {
+      if (!masaLocal) return false;
       const sursa = parseAlimente(masaLocal);
       const alimente = sursa.length > 0
         ? sursa.map((a, i) => (i === idx ? { ...a, ...actualizat } : a))
@@ -185,19 +194,26 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
         grasimi: totaluri.grasimi,
         fibre: totaluri.fibre,
       };
+
+      if (onUpdateMasa) {
+        try {
+          const res = await onUpdateMasa(urmatoare);
+          if (res === false) return false;
+        } catch (err) {
+          console.error('[MealDetailsModal] onUpdateMasa failed:', err);
+          return false;
+        }
+      }
+
       setMasaLocal(urmatoare);
       setEditIdx(null);
-      if (onUpdateMasa) {
-        void Promise.resolve(onUpdateMasa(urmatoare)).catch(() => {});
-      }
+      return true;
     };
 
     // BUG-017: ștergere ingredient (per-component) — elimină din listă, recalculează
-    // totalurile din restul ingredientelor și actualizează optimist + upstream prin
-    // onUpdateMasa. La ultimul ingredient, păstrăm macro-urile plane ale mesei
-    // (alimente=[]), ca valorile să nu dispară cu lista de componente.
-    const stergeAliment = (idx: number): void => {
-      if (!masaLocal) return;
+    // totalurile din restul ingredientelor și actualizează upstream prin onUpdateMasa.
+    const stergeAliment = async (idx: number): Promise<boolean> => {
+      if (!masaLocal) return false;
       const sursa = parseAlimente(masaLocal);
       const alimente = sursa.filter((_, i) => i !== idx);
       const totaluri = recalculeazaTotaluri(alimente);
@@ -208,18 +224,27 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
         proteine: alimente.length > 0 ? totaluri.proteine : masaLocal.proteine,
         carbohidrati: alimente.length > 0 ? totaluri.carbohidrati : masaLocal.carbohidrati,
         grasimi: alimente.length > 0 ? totaluri.grasimi : masaLocal.grasimi,
-        fibre: alimente.length > 0 ? totaluri.fibre : masaLocal.fibre,
+        fibre: alimente.length > 0 ? totaluri.fibre : (masaLocal.fibre ?? 0),
       };
-      setMasaLocal(urmatoare);
+
       if (onUpdateMasa) {
-        void Promise.resolve(onUpdateMasa(urmatoare)).catch(() => {});
+        try {
+          const res = await onUpdateMasa(urmatoare);
+          if (res === false) return false;
+        } catch (err) {
+          console.error('[MealDetailsModal] stergeAliment onUpdateMasa failed:', err);
+          return false;
+        }
       }
+
+      setMasaLocal(urmatoare);
+      return true;
     };
 
     // REMED-015: adaugă un aliment NOU la o masă existentă (via EditAlimentSheet în
     // mod „append", editIdx === -1) și propagă lista extinsă prin onUpdateMasa.
-    const adaugaAliment = (al: AlimentDetaliat): void => {
-      if (!masaLocal) return;
+    const adaugaAliment = async (al: AlimentDetaliat): Promise<boolean> => {
+      if (!masaLocal) return false;
       const sursa = parseAlimente(masaLocal);
       const alimente = [...sursa, al];
       const totaluri = recalculeazaTotaluri(alimente);
@@ -232,11 +257,20 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
         grasimi: totaluri.grasimi,
         fibre: totaluri.fibre,
       };
+
+      if (onUpdateMasa) {
+        try {
+          const res = await onUpdateMasa(urmatoare);
+          if (res === false) return false;
+        } catch (err) {
+          console.error('[MealDetailsModal] adaugaAliment onUpdateMasa failed:', err);
+          return false;
+        }
+      }
+
       setMasaLocal(urmatoare);
       setEditIdx(null);
-      if (onUpdateMasa) {
-        void Promise.resolve(onUpdateMasa(urmatoare)).catch(() => {});
-      }
+      return true;
     };
 
     // Detaliu aliment: deschidem imediat cu datele existente, apoi îmbogățim
@@ -289,9 +323,8 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
             </View>
 
             <BottomSheetScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-              {/* Poza mesei (premium) — sus, imediat deasupra totalurilor */}
               {pozaUrl ? (
-                isPremium ? (
+                hasFullAccess ? (
                   <TouchableOpacity
                     activeOpacity={0.9}
                     onPress={() => {
@@ -306,23 +339,10 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
                     <Image source={{ uri: pozaUrl }} style={styles.photo} contentFit="cover" cachePolicy="memory-disk" />
                   </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity
-                    onPress={() => router.push('/paywall' as never)}
-                    activeOpacity={0.95}
-                    style={styles.photoContainer}
-                    accessibilityRole="imagebutton"
-                    accessibilityLabel={t('jurnal.unlockMealPhotos')}
-                  >
-                    <Image source={{ uri: pozaUrl }} style={styles.photo} contentFit="cover" cachePolicy="memory-disk" />
-                    <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={styles.photoLockOverlay}>
-                      <View style={styles.photoLockBadge}>
-                        <Lock size={14} color="#FFFFFF" />
-                        <Text style={styles.photoLockBadgeText}>{t('jurnal.mealPhotosPremium')}</Text>
-                      </View>
-                      <Text style={styles.photoLockCta}>{t('jurnal.unlockPremium')}</Text>
-                    </View>
-                  </TouchableOpacity>
+                  <PremiumPhotoPreview
+                    variant="modal"
+                    onPressPaywall={() => router.push('/paywall' as never)}
+                  />
                 )
               ) : null}
 
@@ -330,22 +350,22 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
               <View style={[styles.summaryGrid, { marginTop: pozaUrl ? 16 : 0 }]}>
                 <View style={[styles.macroBox, { backgroundColor: colors.accent + '15', borderColor: colors.accent + '40' }]}>
                   <Flame size={18} color={colors.accent} />
-                  <Text style={[styles.macroVal, { color: colors.accent }]}>{masaLocal.calorii}</Text>
+                  <Text style={[styles.macroVal, { color: colors.accent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{masaLocal.calorii}</Text>
                   <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>kcal</Text>
                 </View>
 
                 <View style={[styles.macroBox, { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masaLocal.proteine}g</Text>
+                  <Text style={[styles.macroVal, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{masaLocal.proteine}g</Text>
                   <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>{t('jurnal.macroProtein')}</Text>
                 </View>
 
                 <View style={[styles.macroBox, { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masaLocal.carbohidrati}g</Text>
+                  <Text style={[styles.macroVal, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{masaLocal.carbohidrati}g</Text>
                   <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>{t('jurnal.macroCarbs')}</Text>
                 </View>
 
                 <View style={[styles.macroBox, { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: colors.cardBorder }]}>
-                  <Text style={[styles.macroVal, { color: colors.textPrimary }]}>{masaLocal.grasimi}g</Text>
+                  <Text style={[styles.macroVal, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{masaLocal.grasimi}g</Text>
                   <Text style={[styles.macroLbl, { color: colors.textSecondary }]}>{t('jurnal.macroFats')}</Text>
                 </View>
               </View>
@@ -383,47 +403,85 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
               </View>
               <View style={styles.ingredientsSection}>
                 {alimenteList.map((al, idx) => (
-                  <View key={idx} style={[styles.ingredientItem, { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.cardBorder }]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.ingredientName, { color: colors.textPrimary }]}>{al.nume}</Text>
-                      {al.grame ? <Text style={[styles.ingredientGram, { color: colors.textTertiary }]}>{t('jurnal.ingredientPortion', { gramaj: al.grame })}</Text> : null}
+                  <TouchableOpacity
+                    key={idx}
+                    activeOpacity={0.75}
+                    onPress={() => {
+                      setEditIdx(idx);
+                      editSheetRef.current?.open(al);
+                    }}
+                    style={[
+                      styles.ingredientItem,
+                      { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.cardBorder },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('jurnal.editIngredientA11y', {
+                      nume: al.nume,
+                      grame: al.grame || 100,
+                      kcal: al.calorii,
+                    })}
+                  >
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={[styles.ingredientName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {al.nume}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                        {al.grame ? (
+                          <View style={[styles.portionPill, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '35' }]}>
+                            <Text style={[styles.portionPillText, { color: colors.accent }]}>
+                              {al.grame}g
+                            </Text>
+                          </View>
+                        ) : null}
+                        <Pencil size={11} color={colors.accentSecondary} />
+                      </View>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => { setEditIdx(idx); editSheetRef.current?.open(al); }}
-                      style={styles.editBtn}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('jurnal.correctIngredient', { nume: al.nume })}
-                    >
-                      <Pencil size={15} color={colors.accentSecondary} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => deschideDetaliu(al)}
-                      style={styles.detailBtn}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('jurnal.ingredientDetails', { nume: al.nume })}
-                    >
-                      <Info size={15} color={colors.accent} />
-                    </TouchableOpacity>
-                    {alimenteParsate.length > 0 ? (
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <TouchableOpacity
-                        onPress={() => stergeAliment(idx)}
-                        style={[styles.deleteBtn, { backgroundColor: colors.danger + '0F' }]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          deschideDetaliu(al);
+                        }}
+                        style={styles.detailBtn}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         accessibilityRole="button"
-                        accessibilityLabel={t('jurnal.deleteIngredient', { nume: al.nume })}
+                        accessibilityLabel={t('jurnal.ingredientDetails', { nume: al.nume })}
                       >
-                        <Trash2 size={15} color={colors.danger} />
+                        <Info size={15} color={colors.accentSecondary} />
                       </TouchableOpacity>
-                    ) : null}
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={[styles.ingredientKcal, { color: colors.accent }]}>{al.calorii} kcal</Text>
-                      <Text style={[styles.ingredientMacros, { color: colors.textSecondary }]}>
-                        P:{al.proteine}g • C:{al.carbohidrati}g • G:{al.grasimi}g
-                      </Text>
+
+                      {alimenteParsate.length > 0 ? (
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
+                            setIngredientToDelete({ idx, name: al.nume });
+                          }}
+                          style={[styles.deleteBtn, { backgroundColor: colors.danger + '0F' }]}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('jurnal.deleteIngredient', { nume: al.nume })}
+                        >
+                          <Trash2 size={15} color={colors.danger} />
+                        </TouchableOpacity>
+                      ) : null}
+
+                      <View style={{ alignItems: 'flex-end', marginLeft: 4, minWidth: 68 }}>
+                        <Text
+                          style={[styles.ingredientKcal, { color: colors.accent }]}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.75}
+                        >
+                          {al.calorii} kcal
+                        </Text>
+                        <Text style={[styles.ingredientMacros, { color: colors.textSecondary }]}>
+                          P:{al.proteine}g • C:{al.carbohidrati}g • G:{al.grasimi}g
+                        </Text>
+                      </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
 
@@ -542,18 +600,46 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
         {/* Detaliu nutrițional complet (foie deasupra, stackBehavior='push') */}
         <FoodDetailSheet ref={detailSheetRef} />
 
-        {/* Editare inline ingredient (corectare greșeli) */}
+        {/* Editare inline ingredient (corectare cantitate / valori) */}
         <EditAlimentSheet
           ref={editSheetRef}
-          onSave={(actualizat) => {
-            if (editIdx == null) return;
-            // REMED-015: editIdx === -1 = mod „append" (ingredient NOU), altfel edit.
+          onSave={async (actualizat) => {
+            if (editIdx == null) return false;
             if (editIdx >= 0) {
-              salveazaAliment(editIdx, actualizat);
+              return salveazaAliment(editIdx, actualizat);
             } else {
-              adaugaAliment(actualizat);
+              return adaugaAliment(actualizat);
             }
-            editSheetRef.current?.close();
+          }}
+          onDelete={async () => {
+            if (editIdx == null || editIdx < 0) return false;
+            return stergeAliment(editIdx);
+          }}
+        />
+
+        <ConfirmSheet
+          visible={ingredientToDelete !== null}
+          title={t('jurnal.confirmRemoveIngredientTitle')}
+          message={ingredientToDelete ? t('jurnal.confirmRemoveIngredientNamed', { nume: ingredientToDelete.name }) : ''}
+          icon={<Trash2 size={24} color={colors.danger} />}
+          destructive
+          loading={isDeletingIngredient}
+          buttonLayout="horizontal"
+          confirmLabel={t('jurnal.removeFromMeal')}
+          cancelLabel={t('alerts.butoane.anuleaza')}
+          onCancel={() => {
+            if (!isDeletingIngredient) setIngredientToDelete(null);
+          }}
+          onConfirm={async () => {
+            if (!ingredientToDelete) return;
+            const { idx } = ingredientToDelete;
+            setIsDeletingIngredient(true);
+            try {
+              await stergeAliment(idx);
+              setIngredientToDelete(null);
+            } finally {
+              setIsDeletingIngredient(false);
+            }
           }}
         />
       </>
@@ -608,32 +694,6 @@ const styles = StyleSheet.create({
   photo: {
     width: '100%',
     height: 300,
-  },
-  photoLockOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  photoLockBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  photoLockBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  photoLockCta: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-    textDecorationLine: 'underline',
   },
   summaryGrid: {
     flexDirection: 'row',
@@ -699,6 +759,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 2,
+  },
+  portionPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  portionPillText: {
+    fontSize: 11,
+    fontWeight: '800',
   },
   ingredientGram: {
     fontSize: 12,

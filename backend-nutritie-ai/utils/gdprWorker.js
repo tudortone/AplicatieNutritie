@@ -5,28 +5,39 @@
  */
 
 const Sentry = require('@sentry/node');
-const { stergeIdentitateClerk, stergeActiveImageKit, CODURI_TABELA_INEXISTENTA } = require('./gdprServices');
-const { inregistreazaUtilizareAdmin, TABELE_CU_RLS_UTILIZATOR } = require('./clientUtilizator');
+const {
+  stergeIdentitateClerk,
+  stergeActiveImageKit,
+  stergeDeadLetterUtilizator,
+  stergeEvenimenteRtdnUtilizator,
+  CODURI_TABELA_INEXISTENTA,
+} = require('./gdprServices');
+const {
+  inregistreazaUtilizareAdmin,
+  TABELE_STERGERE_GDPR_UTILIZATOR,
+} = require('./clientUtilizator');
 // TASK-11: tag-urile Sentry nu pot conține identificatori bruti (PII). Folosim
 // pseudonimizatorul central ca să păstrăm corelarea unui anumit cont fără a
 // expune user_id/sesiunea în telemetrie.
 const { pseudonimizeaza } = require('./sentrySanitize');
+const { codEroare } = require('./codEroare');
 
 // Codurile tolerate („tabela nu există") sunt definite o singură dată, în
 // utils/gdprServices.js — le importăm de acolo, ca ruta și workerul să
 // folosească aceeași listă. Orice altă eroare oprește avansarea statusului,
 // altfel am marca `completed` o ștergere care nu s-a întâmplat (P-05b).
 
-async function stergeRanduriDbUtilizator(supabaseAdmin, userId) {
+async function stergeRanduriDbUtilizator(supabaseAdmin, userId, clerkUserId = null) {
   if (!userId || !supabaseAdmin) return;
   // C1-S4: stergere admin (service_role) pe tabele de utilizator, fara context —
   // calea GDPR worker (reluarea stergerilor intrerupte din outbox).
   inregistreazaUtilizareAdmin();
   // N-03: aceeași listă unică de tabele user-scoped ca ruta — sursa de adevăr e
-  // TABELE_CU_RLS_UTILIZATOR din clientUtilizator.js. Un tabel inexistent pe un
+  // TABELE_STERGERE_GDPR_UTILIZATOR din clientUtilizator.js. Un tabel inexistent pe un
   // mediu nou e tolerat prin CODURI_TABELA_INEXISTENTA (importat mai
   // sus din utils/gdprServices.js — definiția unică, nu mai e copiată local).
-  const tabele = TABELE_CU_RLS_UTILIZATOR;
+  const tabele = TABELE_STERGERE_GDPR_UTILIZATOR;
+  await stergeEvenimenteRtdnUtilizator({ supabaseAdmin, userId });
   for (const tabela of tabele) {
     // supabase-js NU aruncă pentru erori de bază de date: le întoarce în `error`.
     // Un `catch {}` aici nu s-ar executa niciodată pe calea reală și ar lăsa
@@ -39,6 +50,9 @@ async function stergeRanduriDbUtilizator(supabaseAdmin, userId) {
       );
     }
   }
+  // F-07: aceleași tabele dead-letter ca ruta (`credite_esuate`,
+  // `clerk_webhook_esuate`), altfel o ștergere reluată de worker ar lăsa PII în urmă.
+  await stergeDeadLetterUtilizator({ supabaseAdmin, userId, clerkUserId });
 }
 
 async function reiaStergerileBlocate({ supabaseAdmin, config }) {
@@ -92,7 +106,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
       // Pasul 1 (dacă s-a oprit la pending): DB rows delete
       if (statusCurent === 'pending') {
         if (rand.user_id) {
-          await stergeRanduriDbUtilizator(supabaseAdmin, rand.user_id);
+          await stergeRanduriDbUtilizator(supabaseAdmin, rand.user_id, rand.clerk_user_id);
         }
         statusCurent = 'db_done';
         await supabaseAdmin
@@ -174,7 +188,15 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
       if (statusCurent === 'auth_done') {
         await supabaseAdmin
           .from('gdpr_deletions')
-          .update({ status: 'completed', completed_at: new Date().toISOString() })
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            // Audit fără PII după ce operația nu mai are nevoie de reluare.
+            user_id: rand.id,
+            clerk_user_id: null,
+            file_ids: [],
+            last_error: null,
+          })
           .eq('id', rand.id);
       }
 
@@ -183,7 +205,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
       await supabaseAdmin
         .from('gdpr_deletions')
         .update({
-          last_error: String(e?.message || e).slice(0, 300),
+          last_error: codEroare(e),
           retry_count: numariIncercare,
         })
         .eq('id', rand.id);

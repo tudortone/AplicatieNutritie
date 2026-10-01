@@ -7,6 +7,7 @@ import { Flame, Award, CheckCircle2, ShieldCheck, X, Sprout, Zap, Trophy, Crown 
 
 import { useTheme } from '../../context/ThemeContext';
 import { useGamificareData } from '../../context/GamificareContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export interface StreakBottomSheetRef {
   open: () => void;
@@ -20,11 +21,12 @@ const MILESTONES: { zile: number; titlu: string; Icon: StreakIcon; xp: number }[
   { zile: 7, titlu: 'O săptămână plină', Icon: Flame, xp: 150 },
   { zile: 14, titlu: 'Campionul consecvenței', Icon: Zap, xp: 300 },
   { zile: 30, titlu: 'Maestru nutrițional', Icon: Trophy, xp: 750 },
-  { zile: 100, titlu: 'Legendă NutriAI', Icon: Crown, xp: 2500 },
+  { zile: 100, titlu: 'Legendă GetFlow', Icon: Crown, xp: 2500 },
 ];
 
 export const StreakBottomSheet = forwardRef<StreakBottomSheetRef>((_, ref) => {
   const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
   const { streak, xpTotal, nivel, detaliiNivel } = useGamificareData();
   const [visible, setVisible] = useState(false);
 
@@ -37,7 +39,7 @@ export const StreakBottomSheet = forwardRef<StreakBottomSheetRef>((_, ref) => {
     <Modal
       visible={visible}
       onRequestClose={() => setVisible(false)}
-      animationType="slide"
+      animationType={reduceMotion ? 'none' : 'slide'}
       transparent
     >
       <Pressable style={styles.backdrop} onPress={() => setVisible(false)}>
@@ -52,7 +54,7 @@ export const StreakBottomSheet = forwardRef<StreakBottomSheetRef>((_, ref) => {
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           {/* Header Card */}
-          <Animated.View entering={FadeInDown.duration(400)}>
+          <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(400)}>
             <LinearGradient colors={colors.accentGradient} style={styles.headerGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <View style={styles.flameIconWrap}>
                 <Flame size={48} color={colors.background} fill={colors.background} />

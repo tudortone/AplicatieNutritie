@@ -3,11 +3,15 @@ import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
   KeyboardAvoidingView, Platform, Switch
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Plus } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../supabase';
 import { FoodProduct } from './types';
+
+export const LOCAL_CUSTOM_FOODS_STORAGE_KEY = '@getflow:custom_foods';
 
 interface ManualProductFormProps {
   initialBarcode?: string;
@@ -24,20 +28,24 @@ export function ManualProductForm({
 }: ManualProductFormProps) {
   const { colors } = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
 
+  // Core required fields
   const [nume, setNume] = useState(initialName);
-  const [brand, setBrand] = useState('');
-  const [barcode, setBarcode] = useState(initialBarcode);
-  const [cantitateGrameStr, setCantitateGrameStr] = useState('100');
+  const [servingQuantityStr, setServingQuantityStr] = useState('100');
+  const [servingUnit, setServingUnit] = useState('porție');
   const [kcal100Str, setKcal100Str] = useState('');
   const [prot100Str, setProt100Str] = useState('');
   const [carb100Str, setCarb100Str] = useState('');
   const [fat100Str, setFat100Str] = useState('');
   const [fibre100Str, setFibre100Str] = useState('');
+
+  // Optional fields
+  const [cantitateGrameStr, setCantitateGrameStr] = useState('100');
+  const [brand, setBrand] = useState('');
+  const [barcode, setBarcode] = useState(initialBarcode);
   const [zahar100Str, setZahar100Str] = useState('');
-  const [sare100Str] = useState('');
-  const [portieLabel] = useState('');
-  const [portieGrameStr] = useState('');
+  const [sare100Str, setSare100Str] = useState('');
   const [salveazaInCatalog, setSalveazaInCatalog] = useState(true);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -47,14 +55,15 @@ export function ManualProductForm({
     if (!str) return 0;
     const clean = str.replace(/,/g, '.').trim();
     const val = parseFloat(clean);
-    return isNaN(val) || !isFinite(val) ? 0 : val;
+    return isNaN(val) || !isFinite(val) || val < 0 ? 0 : val;
   };
 
-  const cantitateGrame = parseNum(cantitateGrameStr);
+  const cantitateGrame = parseNum(cantitateGrameStr) || 100;
   const kcal100 = parseNum(kcal100Str);
   const prot100 = parseNum(prot100Str);
   const carb100 = parseNum(carb100Str);
   const fat100 = parseNum(fat100Str);
+  const fibre100 = parseNum(fibre100Str);
 
   const previewMacro = useMemo(() => {
     const factor = cantitateGrame / 100;
@@ -63,29 +72,48 @@ export function ManualProductForm({
       prot: Math.round(prot100 * factor * 10) / 10,
       carb: Math.round(carb100 * factor * 10) / 10,
       fat: Math.round(fat100 * factor * 10) / 10,
+      fibre: Math.round(fibre100 * factor * 10) / 10,
     };
-  }, [cantitateGrame, kcal100, prot100, carb100, fat100]);
+  }, [cantitateGrame, kcal100, prot100, carb100, fat100, fibre100]);
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
-    if (!nume.trim()) {
-      errs.nume = 'Numele produsului este obligatoriu.';
+    const trimmedName = nume.trim();
+    if (!trimmedName || trimmedName.length < 2) {
+      errs.nume = t("manualProduct.errNameRequired");
     }
-    if (cantitateGrame <= 0) {
-      errs.cantitate = 'Cantitatea trebuie să fie mai mare decât 0g.';
+
+    const servingQ = parseNum(servingQuantityStr);
+    if (servingQ <= 0 || servingQ > 5000) {
+      errs.servingQuantity = t("manualProduct.errServingPositive");
     }
+
+    const cantitate = parseNum(cantitateGrameStr);
+    if (cantitate <= 0) {
+      errs.cantitate = t("manualProduct.errQuantityPositive");
+    } else if (cantitate > 5000) {
+      errs.cantitate = t("manualProduct.errQuantityMax");
+    }
+
     if (kcal100 < 0 || kcal100 > 1000) {
-      errs.kcal = 'Caloriile per 100g trebuie să fie între 0 și 1000.';
+      errs.kcal = t("manualProduct.errKcalRange");
     }
     if (prot100 < 0 || prot100 > 100) {
-      errs.prot = 'Proteinele per 100g trebuie să fie între 0 și 100.';
+      errs.prot = t("manualProduct.errProtRange");
     }
     if (carb100 < 0 || carb100 > 100) {
-      errs.carb = 'Carbohidrații per 100g trebuie să fie între 0 și 100.';
+      errs.carb = t("manualProduct.errCarbRange");
     }
     if (fat100 < 0 || fat100 > 100) {
-      errs.fat = 'Grăsimile per 100g trebuie să fie între 0 și 100.';
+      errs.fat = t("manualProduct.errFatRange");
     }
+    if (fibre100 < 0 || fibre100 > 100) {
+      errs.fibre = t("manualProduct.errFiberRange");
+    }
+    if (prot100 + carb100 + fat100 + fibre100 > 105) {
+      errs.macroSum = t("manualProduct.errMacroSum");
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -94,42 +122,59 @@ export function ManualProductForm({
     if (!validate()) return;
     setIsSaving(true);
 
+    const servingGramsFinal = parseNum(servingQuantityStr) > 0 ? parseNum(servingQuantityStr) : 100;
+    const servingUnitFinal = servingUnit.trim() || 'porție';
+
     const product: FoodProduct = {
-      id: `manual_${Date.now()}`,
-      source: 'manual',
+      id: `manual_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      source: 'user_saved',
       name: nume.trim(),
       brand: brand.trim() || undefined,
       barcode: barcode.trim() || undefined,
-      servingLabel: portieLabel.trim() || undefined,
-      servingGrams: parseNum(portieGrameStr) > 0 ? parseNum(portieGrameStr) : undefined,
+      servingLabel: servingUnitFinal,
+      servingGrams: servingGramsFinal,
       kcalPer100g: kcal100,
       proteinPer100g: prot100,
       carbsPer100g: carb100,
       fatPer100g: fat100,
-      fiberPer100g: parseNum(fibre100Str) || undefined,
+      fiberPer100g: fibre100,
       sugarPer100g: parseNum(zahar100Str) || undefined,
       saltPer100g: parseNum(sare100Str) || undefined,
       verified: false,
     };
 
-    if (salveazaInCatalog && session?.user?.id) {
+    if (salveazaInCatalog) {
+      // 1. Persistare locală pentru disponibilitate offline imediată și reutilizare în căutare
       try {
-        await supabase.from('produse_camara').insert({
-          user_id: session.user.id,
-          nume: product.name,
-          brand: product.brand || null,
-          barcode: product.barcode || null,
-          calorii_100g: product.kcalPer100g,
-          proteine_100g: product.proteinPer100g,
-          carbohidrati_100g: product.carbsPer100g,
-          grasimi_100g: product.fatPer100g,
-          fibre_100g: product.fiberPer100g || 0,
-          portie_label: product.servingLabel || null,
-          portie_grame: product.servingGrams || null,
-          source: 'manual',
-        });
+        const rawLocal = await AsyncStorage.getItem(LOCAL_CUSTOM_FOODS_STORAGE_KEY);
+        const list: FoodProduct[] = rawLocal ? JSON.parse(rawLocal) : [];
+        const filtered = list.filter((p) => p.name.toLowerCase() !== product.name.toLowerCase());
+        filtered.unshift(product);
+        await AsyncStorage.setItem(LOCAL_CUSTOM_FOODS_STORAGE_KEY, JSON.stringify(filtered.slice(0, 100)));
       } catch (err) {
-        console.warn('Nu s-a putut salva produsul în catalogul personal:', err);
+        console.warn('Nu s-a putut salva local produsul în catalog:', err);
+      }
+
+      // 2. Persistare remote în Supabase produse_camara dacă este autentificat
+      if (session?.user?.id) {
+        try {
+          await supabase.from('produse_camara').insert({
+            user_id: session.user.id,
+            nume: product.name,
+            brand: product.brand || null,
+            barcode: product.barcode || null,
+            calorii_100g: product.kcalPer100g,
+            proteine_100g: product.proteinPer100g,
+            carbohidrati_100g: product.carbsPer100g,
+            grasimi_100g: product.fatPer100g,
+            fibre_100g: product.fiberPer100g || 0,
+            portie_label: product.servingLabel || null,
+            portie_grame: product.servingGrams || null,
+            source: 'manual',
+          });
+        } catch (err) {
+          console.warn('Nu s-a putut salva produsul în Supabase produse_camara:', err);
+        }
       }
     }
 
@@ -149,16 +194,16 @@ export function ManualProductForm({
         keyboardShouldPersistTaps="handled"
       >
         <Text style={[styles.title, { color: colors.textPrimary }]}>
-          Introducere Complet Manuală
+          {t("manualProduct.title")}
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Completează valorile nutriționale fără nicio restricție.
+          {t("manualProduct.subtitle")}
         </Text>
 
         {/* Live Preview Card */}
         <View style={[styles.previewCard, { backgroundColor: colors.cardBg, borderColor: colors.accent + '40' }]}>
           <Text style={[styles.previewTitle, { color: colors.textSecondary }]}>
-            PREVIZUALIZARE PENTRU {cantitateGrame || 0}g CONSUMATE
+            {t("manualProduct.previewTitle", { grams: cantitateGrame || 0 })}
           </Text>
           <View style={styles.previewRow}>
             <View style={styles.previewItem}>
@@ -177,17 +222,22 @@ export function ManualProductForm({
               <Text style={[styles.previewVal, { color: colors.warning }]}>{previewMacro.fat}g</Text>
               <Text style={[styles.previewLab, { color: colors.textSecondary }]}>grăsimi</Text>
             </View>
+            <View style={styles.previewItem}>
+              <Text style={[styles.previewVal, { color: colors.success }]}>{previewMacro.fibre}g</Text>
+              <Text style={[styles.previewLab, { color: colors.textSecondary }]}>fibre</Text>
+            </View>
           </View>
         </View>
 
         {/* Câmpuri Obligatorii */}
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Informații Principale *</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t("manualProduct.mainInfo")}</Text>
         
+        {/* Nume produs */}
         <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Nume Produs *</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>{t("manualProduct.productName")}</Text>
           <TextInput
             style={[styles.input, { color: colors.textPrimary, borderColor: errors.nume ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
-            placeholder="ex: Iaurt grecesc 10%"
+            placeholder={t("manualProduct.productNamePlaceholder")}
             placeholderTextColor={colors.textSecondary + '77'}
             value={nume}
             onChangeText={(t) => {
@@ -198,9 +248,40 @@ export function ManualProductForm({
           {errors.nume ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.nume}</Text> : null}
         </View>
 
+        {/* Serving Quantity & Serving Unit */}
         <View style={styles.row}>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Cantitate Consumată (g) *</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("manualProduct.servingQuantity")}</Text>
+            <TextInput
+              style={[styles.input, { color: colors.textPrimary, borderColor: errors.servingQuantity ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
+              placeholder={t("manualProduct.servingQuantityPlaceholder")}
+              placeholderTextColor={colors.textSecondary + '77'}
+              keyboardType="numeric"
+              value={servingQuantityStr}
+              onChangeText={(t) => {
+                setServingQuantityStr(t);
+                if (errors.servingQuantity) setErrors({ ...errors, servingQuantity: '' });
+              }}
+            />
+            {errors.servingQuantity ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.servingQuantity}</Text> : null}
+          </View>
+
+          <View style={[styles.fieldGroup, { flex: 1 }]}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("manualProduct.servingUnit")}</Text>
+            <TextInput
+              style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
+              placeholder={t("manualProduct.servingUnitPlaceholder")}
+              placeholderTextColor={colors.textSecondary + '77'}
+              value={servingUnit}
+              onChangeText={setServingUnit}
+            />
+          </View>
+        </View>
+
+        {/* Cantitate Consumată & Calorii */}
+        <View style={styles.row}>
+          <View style={[styles.fieldGroup, { flex: 1 }]}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("manualProduct.consumedAmount")}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: errors.cantitate ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="100"
@@ -216,7 +297,7 @@ export function ManualProductForm({
           </View>
 
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Calorii per 100g *</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("manualProduct.caloriesPer100g")}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: errors.kcal ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="ex: 125"
@@ -233,10 +314,10 @@ export function ManualProductForm({
         </View>
 
         {/* Macronutrienți */}
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Macronutrienți per 100g</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t("manualProduct.macronutrientsPer100g")}</Text>
         <View style={styles.row}>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Proteine (g)</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("manualProduct.proteinPer100g")}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: errors.prot ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="0"
@@ -251,7 +332,7 @@ export function ManualProductForm({
             {errors.prot ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.prot}</Text> : null}
           </View>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Carbohidrați (g)</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("manualProduct.carbsPer100g")}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: errors.carb ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="0"
@@ -266,7 +347,7 @@ export function ManualProductForm({
             {errors.carb ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.carb}</Text> : null}
           </View>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Grăsimi (g)</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("manualProduct.fatPer100g")}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: errors.fat ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="0"
@@ -282,24 +363,42 @@ export function ManualProductForm({
           </View>
         </View>
 
+        {/* Fibre per 100g - Camp de baza conform cerintelor */}
+        <View style={styles.fieldGroup}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>{t("manualProduct.fiberPer100g")}</Text>
+          <TextInput
+            style={[styles.input, { color: colors.textPrimary, borderColor: errors.fibre ? colors.danger : colors.cardBorder, backgroundColor: colors.cardBg }]}
+            placeholder="0"
+            placeholderTextColor={colors.textSecondary + '77'}
+            keyboardType="numeric"
+            value={fibre100Str}
+            onChangeText={(t) => {
+              setFibre100Str(t);
+              if (errors.fibre) setErrors({ ...errors, fibre: '' });
+            }}
+          />
+          {errors.fibre ? <Text style={[styles.errorText, { color: colors.danger }]}>{errors.fibre}</Text> : null}
+        </View>
+        {errors.macroSum ? <Text style={[styles.errorText, { color: colors.danger, marginBottom: 8 }]}>{errors.macroSum}</Text> : null}
+
         {/* Detalii opționale */}
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Informații Opționale</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t("manualProduct.optionalInfo")}</Text>
         <View style={styles.row}>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Brand</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("manualProduct.brand")}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
-              placeholder="ex: Napolact"
+              placeholder={t("manualProduct.brandPlaceholder")}
               placeholderTextColor={colors.textSecondary + '77'}
               value={brand}
               onChangeText={setBrand}
             />
           </View>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Cod de bare</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("manualProduct.barcode")}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
-              placeholder="Cod scanat"
+              placeholder={t("manualProduct.barcodePlaceholder")}
               placeholderTextColor={colors.textSecondary + '77'}
               value={barcode}
               onChangeText={setBarcode}
@@ -309,18 +408,7 @@ export function ManualProductForm({
 
         <View style={styles.row}>
           <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Fibre per 100g (g)</Text>
-            <TextInput
-              style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
-              placeholder="0"
-              placeholderTextColor={colors.textSecondary + '77'}
-              keyboardType="numeric"
-              value={fibre100Str}
-              onChangeText={setFibre100Str}
-            />
-          </View>
-          <View style={[styles.fieldGroup, { flex: 1 }]}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Zahăr per 100g (g)</Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t("manualProduct.sugarPer100g")}</Text>
             <TextInput
               style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
               placeholder="0"
@@ -330,14 +418,25 @@ export function ManualProductForm({
               onChangeText={setZahar100Str}
             />
           </View>
+          <View style={[styles.fieldGroup, { flex: 1 }]}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Sare per 100g (g)</Text>
+            <TextInput
+              style={[styles.input, { color: colors.textPrimary, borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}
+              placeholder="0"
+              placeholderTextColor={colors.textSecondary + '77'}
+              keyboardType="numeric"
+              value={sare100Str}
+              onChangeText={setSare100Str}
+            />
+          </View>
         </View>
 
         {/* Comutator Salvare pentru data viitoare */}
         <View style={[styles.switchCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>Salvează produsul pentru data viitoare</Text>
+            <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>{t('manualProduct.saveForNextTime')}</Text>
             <Text style={[styles.switchDesc, { color: colors.textSecondary }]}>
-              Produsul va apărea automat în căutările tale viitoare.
+              {t('manualProduct.saveForNextTimeDesc')}
             </Text>
           </View>
           <Switch
@@ -354,7 +453,7 @@ export function ManualProductForm({
               style={[styles.btnCancel, { borderColor: colors.cardBorder }]}
               onPress={onCancel}
             >
-              <Text style={[styles.btnCancelText, { color: colors.textSecondary }]}>Anulează</Text>
+              <Text style={[styles.btnCancelText, { color: colors.textSecondary }]}>{t('common.cancel')}</Text>
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity
@@ -363,7 +462,7 @@ export function ManualProductForm({
             disabled={isSaving}
           >
             <Plus size={18} color={colors.textOnAccent} />
-            <Text style={[styles.btnSaveText, { color: colors.textOnAccent }]}>{isSaving ? 'Se salvează...' : 'Adaugă Produsul'}</Text>
+            <Text style={[styles.btnSaveText, { color: colors.textOnAccent }]}>{isSaving ? t('chat.saving') : t('manualProduct.addToMeal')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

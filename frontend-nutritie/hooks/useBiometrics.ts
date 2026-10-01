@@ -46,7 +46,7 @@ export function useBiometrics() {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: `Deblochează NutriAI cu ${biometricType}`,
+        promptMessage: `Deblochează GetFlow cu ${biometricType}`,
         fallbackLabel: 'Folosește PIN / Parolă dispozitiv',
         disableDeviceFallback: false,
       });

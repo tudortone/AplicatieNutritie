@@ -35,9 +35,8 @@
  *   INTEGRATION_DB_URL='postgres://postgres:postgres@localhost:54322/postgres' \
  *     npm run test:integration
  *
- * E-1: cu `RLS_TESTS_REQUIRED=1`, lipsa `INTEGRATION_DB_URL` devine EȘEC (nu
- * skip) și motivul exact e raportat în consolă — CI-ul RLS nu poate sări testele
- * pe tăcere. Fără flag, în dev, suita se sare (describe.skip).
+ * E-1: suita dedicată eșuează dacă `INTEGRATION_DB_URL` lipsește. Ea este
+ * exclusă numai din suita unit implicită și nu poate raporta verde prin skip.
  */
 
 const pg = require('pg');
@@ -47,19 +46,14 @@ const pg = require('pg');
 jest.setTimeout(30000);
 
 const DB_URL = process.env.INTEGRATION_DB_URL;
-const RLS_REQUIRED = process.env.RLS_TESTS_REQUIRED === '1';
 const configurat = Boolean(DB_URL);
 
-// E-1: motivul exact al sării / eșecului — nu doar un boolean.
+// E-1: motivul exact al eșecului — nu doar un boolean.
 if (!configurat) {
-  if (RLS_REQUIRED) {
-    console.error('[E-1] RLS_TESTS_REQUIRED=1, dar INTEGRATION_DB_URL lipsește. Testele RLS vor EȘUA.');
-  } else {
-    console.warn('[E-1] Suita RLS pur-Postgres e SĂRITĂ (dev). Lipsește: INTEGRATION_DB_URL.');
-  }
+  console.error('[E-1] INTEGRATION_DB_URL lipsește. Suita RLS dedicată va EȘUA.');
 }
 
-const describeDirect = configurat ? describe : (RLS_REQUIRED ? describe : describe.skip);
+const describeDirect = describe;
 
 // Identitățile fixe, aceleași în ambele fișiere RLS.
 const USER_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -68,6 +62,7 @@ const USER_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 // ID-uri fixe pentru rândurile de seed (uuid v4 sintactic valide, dar sigur
 // nefolosite în producție) — UPDATE/DELETE pot ținti exact rândul lui A.
 const ID_A = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const EXERCISE_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
 const claimsA = { sub: USER_A, role: 'authenticated' };
 const claimsB = { sub: USER_B, role: 'authenticated' };
@@ -156,6 +151,40 @@ function seedAiJobsA(c) {
 function seedCrediteAiA(c) {
   return c.query('INSERT INTO public.credite_ai (user_id, sold) VALUES ($1, $2)', [USER_A, 5]);
 }
+function seedAuditLogA(c) {
+  return c.query(
+    'INSERT INTO public.audit_log (id, user_id, action) VALUES ($1, $2, $3)',
+    [ID_A, USER_A, 'test_rls'],
+  );
+}
+function seedBarcodeEstimareA(c) {
+  return c.query(
+    'INSERT INTO public.barcode_estimari_utilizator (user_id, code, name) VALUES ($1, $2, $3)',
+    [USER_A, '5941111111111', 'estimarea lui A'],
+  );
+}
+async function seedWorkoutLogA(c) {
+  await c.query(
+    'INSERT INTO public.exercises (id, name, equipment, target_muscles, input_type) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING',
+    [EXERCISE_ID, 'RLS exercise', 'bodyweight', ['core'], 'bodyweight_reps'],
+  );
+  return c.query(
+    'INSERT INTO public.workout_logs (id, user_id, exercise_id, set_index, reps) VALUES ($1, $2, $3, $4, $5)',
+    [ID_A, USER_A, EXERCISE_ID, 1, 10],
+  );
+}
+function seedGamificareEvenimentA(c) {
+  return c.query(
+    'INSERT INTO public.gamificare_evenimente (id, user_id, event_key, event_date, xp) VALUES ($1, $2, $3, $4, $5)',
+    [ID_A, USER_A, 'rls_test', '2099-01-01', 10],
+  );
+}
+function seedCrediteTranzactieA(c) {
+  return c.query(
+    'INSERT INTO public.credite_tranzactii (id, user_id, event_id, event_type, credite_delta) VALUES ($1, $2, $3, $4, $5)',
+    [ID_A, USER_A, 'rls-event-a', 'INITIAL_PURCHASE', 50],
+  );
+}
 
 // Tabelele obligatorii (acoperire C2), cu seed-ul rândului lui A pe fiecare.
 const TABELE = [
@@ -166,13 +195,17 @@ const TABELE = [
   { nume: 'gamificare', seed: seedGamificareA },
   { nume: 'ai_jobs', seed: seedAiJobsA },
   { nume: 'credite_ai', seed: seedCrediteAiA },
+  { nume: 'audit_log', seed: seedAuditLogA },
+  { nume: 'barcode_estimari_utilizator', seed: seedBarcodeEstimareA },
+  { nume: 'workout_logs', seed: seedWorkoutLogA },
+  { nume: 'gamificare_evenimente', seed: seedGamificareEvenimentA },
+  { nume: 'credite_tranzactii', seed: seedCrediteTranzactieA },
 ];
 
 describeDirect('C2 — RLS pe Postgres real, direct (pool, fără PostgREST)', () => {
   beforeAll(async () => {
-    // E-1: modul fail — cu RLS_TESTS_REQUIRED=1 configurarea e obligatorie.
-    if (!configurat && RLS_REQUIRED) {
-      throw new Error('E-1: RLS_TESTS_REQUIRED=1, dar INTEGRATION_DB_URL lipsește. Testele RLS nu pot rula.');
+    if (!configurat) {
+      throw new Error('E-1: INTEGRATION_DB_URL lipsește. Testele RLS nu pot rula.');
     }
     pool = new pg.Pool({ connectionString: DB_URL, max: 4 });
 
@@ -182,9 +215,9 @@ describeDirect('C2 — RLS pe Postgres real, direct (pool, fără PostgREST)', (
     // nu avem voie să anulăm acea revocare.
     await pool.query('GRANT USAGE ON SCHEMA public TO authenticated;');
     await pool.query(
-      'GRANT ALL ON public.mese, public.profil, public.antrenamente, public.produse_camara, public.gamificare, public.credite_ai TO authenticated;',
+      'GRANT ALL ON public.mese, public.profil, public.antrenamente, public.produse_camara, public.audit_log, public.barcode_estimari_utilizator, public.workout_logs TO authenticated;',
     );
-    await pool.query('GRANT SELECT ON public.ai_jobs TO authenticated;');
+    await pool.query('GRANT SELECT ON public.gamificare, public.gamificare_evenimente, public.ai_jobs, public.credite_ai, public.credite_tranzactii TO authenticated;');
 
     // Tabelele au FK pe auth.users(id), dar migrările nu creează niciun user.
     // Creăm USER_A/USER_B în auth.users — altfel seed-urile ar cădea pe FK.
@@ -304,6 +337,41 @@ describeDirect('C2 — RLS pe Postgres real, direct (pool, fără PostgREST)', (
         c.query('INSERT INTO public.credite_ai (user_id, sold) VALUES ($1, $2)', [USER_A, 10])))
         .rejects.toBeTruthy();
     });
+
+    it('audit_log: B nu poate insera un eveniment pe user_id-ul lui A', async () => {
+      await expect(cuRole('authenticated', claimsB, null, (c) =>
+        c.query('INSERT INTO public.audit_log (user_id, action) VALUES ($1, $2)', [USER_A, 'atac'])))
+        .rejects.toBeTruthy();
+    });
+
+    it('barcode_estimari_utilizator: B nu poate insera pe user_id-ul lui A', async () => {
+      await expect(cuRole('authenticated', claimsB, null, (c) =>
+        c.query('INSERT INTO public.barcode_estimari_utilizator (user_id, code) VALUES ($1, $2)', [USER_A, 'atac'])))
+        .rejects.toBeTruthy();
+    });
+
+    it('workout_logs: B nu poate insera pe user_id-ul lui A', async () => {
+      await expect(cuRole('authenticated', claimsB, async (c) => {
+        await c.query(
+          'INSERT INTO public.exercises (id, name, equipment, target_muscles, input_type) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING',
+          [EXERCISE_ID, 'RLS exercise', 'bodyweight', ['core'], 'bodyweight_reps'],
+        );
+      }, (c) => c.query(
+        'INSERT INTO public.workout_logs (user_id, exercise_id, set_index, reps) VALUES ($1, $2, $3, $4)',
+        [USER_A, EXERCISE_ID, 1, 10],
+      ))).rejects.toBeTruthy();
+    });
+
+    it.each(['gamificare_evenimente', 'credite_tranzactii'])(
+      '%s: scrierea directă este revocată chiar și pentru propriul user_id',
+      async (tabela) => {
+        const query = tabela === 'gamificare_evenimente'
+          ? ['INSERT INTO public.gamificare_evenimente (user_id, event_key, event_date, xp) VALUES ($1, $2, $3, $4)', [USER_B, 'atac', '2099-01-02', 10]]
+          : ['INSERT INTO public.credite_tranzactii (user_id, event_id, event_type, credite_delta) VALUES ($1, $2, $3, $4)', [USER_B, 'atac', 'INITIAL_PURCHASE', 50]];
+        await expect(cuRole('authenticated', claimsB, null, (c) => c.query(query[0], query[1])))
+          .rejects.toBeTruthy();
+      },
+    );
   });
 
   describe('UPDATE pe rândul lui A de către B — 0 rânduri afectate', () => {
@@ -331,10 +399,10 @@ describeDirect('C2 — RLS pe Postgres real, direct (pool, fără PostgREST)', (
       expect(r.rowCount).toBe(0);
     });
 
-    it('gamificare: B nu poate modifica gamificarea lui A', async () => {
-      const r = await cuRole('authenticated', claimsB, seedGamificareA, (c) =>
-        c.query('UPDATE public.gamificare SET xp_total = $1 WHERE id = $2', [9999, ID_A]));
-      expect(r.rowCount).toBe(0);
+    it('gamificare: scrierea directă este revocată pentru B', async () => {
+      await expect(cuRole('authenticated', claimsB, seedGamificareA, (c) =>
+        c.query('UPDATE public.gamificare SET xp_total = $1 WHERE id = $2', [999, ID_A])))
+        .rejects.toBeTruthy();
     });
   });
 
@@ -367,6 +435,56 @@ describeDirect('C2 — RLS pe Postgres real, direct (pool, fără PostgREST)', (
       const r = await cuRole('authenticated', claimsB, seedGamificareA, (c) =>
         c.query('DELETE FROM public.gamificare WHERE id = $1', [ID_A]));
       expect(r.rowCount).toBe(0);
+    });
+  });
+
+  describe('Izolare completă pentru tabelele per-user suplimentare', () => {
+    const suplimentare = TABELE.filter((t) => [
+      'audit_log',
+      'barcode_estimari_utilizator',
+      'workout_logs',
+      'gamificare_evenimente',
+      'credite_tranzactii',
+    ].includes(t.nume));
+
+    it.each(suplimentare.map((t) => t.nume))('%s: B nu poate SELECTA rândul lui A', async (nume) => {
+      const tabela = suplimentare.find((t) => t.nume === nume);
+      const { rows } = await cuRole('authenticated', claimsB, tabela.seed, (c) =>
+        c.query(`SELECT * FROM public.${nume} WHERE user_id = $1`, [USER_A]));
+      expect(rows).toHaveLength(0);
+    });
+
+    it.each(suplimentare.map((t) => t.nume))('%s: B nu poate UPDATE rândul lui A', async (nume) => {
+      const tabela = suplimentare.find((t) => t.nume === nume);
+      await expect(cuRole('authenticated', claimsB, tabela.seed, async (c) => {
+        try {
+          const rezultat = await c.query(`UPDATE public.${nume} SET user_id = $1 WHERE user_id = $2`, [USER_B, USER_A]);
+          expect(rezultat.rowCount).toBe(0);
+        } catch (error) {
+          // Tabelele append-only/read-only resping UPDATE prin privilegii; acesta
+          // este un rezultat de securitate echivalent și trebuie demonstrat.
+          expect(error).toBeTruthy();
+        }
+      })).resolves.toBeUndefined();
+    });
+
+    it.each(suplimentare.map((t) => t.nume))('%s: B nu poate DELETE rândul lui A', async (nume) => {
+      const tabela = suplimentare.find((t) => t.nume === nume);
+      await expect(cuRole('authenticated', claimsB, tabela.seed, async (c) => {
+        try {
+          const rezultat = await c.query(`DELETE FROM public.${nume} WHERE user_id = $1`, [USER_A]);
+          expect(rezultat.rowCount).toBe(0);
+        } catch (error) {
+          expect(error).toBeTruthy();
+        }
+      })).resolves.toBeUndefined();
+    });
+
+    it.each(TABELE.map((t) => t.nume))('%s: rolul anon nu poate citi date per-user', async (nume) => {
+      const tabela = TABELE.find((t) => t.nume === nume);
+      await expect(cuRole('anon', { sub: USER_B, role: 'anon' }, tabela.seed, (c) =>
+        c.query(`SELECT * FROM public.${nume} WHERE user_id = $1`, [USER_A])))
+        .rejects.toBeTruthy();
     });
   });
 

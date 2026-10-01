@@ -1,13 +1,14 @@
 export interface FoodPreset {
   id: string;
   nume: string;
+  nume_en?: string;
   categorie: 'fructe' | 'mic-dejun' | 'pranz' | 'cina' | 'gustare' | 'bautura' | string;
   calorii: number;
   proteine: number;
   carbohidrati: number;
   grasimi: number;
   gramajDefault: number;
-  icon: string; // emoji
+  icon: string; // static catalog glyph rendered through the FlowIcon compatibility registry
   gramajImplicit?: number;
   mergeDirectLaGramaj?: boolean;
   unitati?: Array<{
@@ -765,3 +766,144 @@ export const categories = [
   { id: 'bautura', name: 'Băuturi', icon: '🥤' },
 ];
 
+export const PRESET_NAMES_EN: Record<string, string> = {
+  // Fructe
+  'mar': 'Fresh Apple',
+  'banana': 'Fresh Banana',
+  'para': 'Fresh Pear',
+  'piersica': 'Juicy Peach',
+  'nectarina': 'Fresh Nectarine',
+  'prune': 'Fresh Plums',
+  'struguri': 'Grapes (red/green)',
+  'portocala': 'Fresh Orange',
+  'mandarina': 'Clementine / Tangerine',
+  'grapefruit': 'Fresh Grapefruit',
+  'capsuni': 'Fresh Strawberries',
+  'afine': 'Fresh Blueberries',
+  'zmeura': 'Fresh Raspberries',
+  'mure': 'Fresh Blackberries',
+  'kiwi': 'Fresh Kiwi',
+  'ananas': 'Fresh Pineapple',
+  'mango': 'Fresh Mango',
+  'pepene-rosu': 'Watermelon',
+  'pepene-galben': 'Cantaloupe Melon',
+  'avocado': 'Fresh Avocado',
+  'lamaie': 'Fresh Lemon',
+  'rodie': 'Pomegranate Seeds',
+  'cirese': 'Fresh Cherries',
+  'visine': 'Sour Cherries',
+  'caise': 'Fresh Apricots',
+  'smochine': 'Fresh Figs',
+  'curmale': 'Dates',
+  'curmale-uscate': 'Dried Dates',
+  'smochine-uscate': 'Dried Figs',
+  'stafide': 'Raisins',
+  'prune-uscate': 'Dried Prunes',
+  'merisoare-uscate': 'Dried Cranberries',
+
+  // Mic dejun
+  'ou-fiert': 'Boiled Egg (1 pc ~50g)',
+  'ou-ochi': 'Fried Egg (1 pc ~50g)',
+  'omleta-simpla': 'Plain Omelet (2 eggs)',
+  'omleta-cascaval': 'Cheese Omelet (2 eggs)',
+  'paine-alba': 'White Bread (1 slice ~30g)',
+  'paine-integrala': 'Whole Wheat Bread (1 slice ~35g)',
+  'paine-secara': 'Rye Bread (1 slice ~35g)',
+  'ovaz-lapte': 'Oatmeal with Milk (~250g)',
+  'iaurt-grecesc': 'Greek Yogurt 10% (~150g)',
+  'iaurt-grecesc-2': 'Greek Yogurt 2% (~150g)',
+  'iaurt-natural': 'Plain Yogurt 3.5% (~150g)',
+  'kefir': 'Kefir / Buttermilk (~200ml)',
+  'lapte-vaca': 'Cow Milk 1.5% (~250ml)',
+  'lapte-migdale': 'Almond Milk (~250ml)',
+  'lapte-soia': 'Soy Milk (~250ml)',
+  'lapte-ovaz': 'Oat Milk (~250ml)',
+  'unt': 'Butter 82% (~10g)',
+  'unt-arahide': 'Peanut Butter (~20g)',
+  'miere': 'Natural Honey (~10g)',
+  'gem-dulceata': 'Fruit Jam (~20g)',
+  'telemea-vaca': 'Cow Feta Cheese (~50g)',
+  'telemea-oaie': 'Sheep Feta Cheese (~50g)',
+  'mozzarella': 'Fresh Mozzarella (~100g)',
+  'cascaval': 'Yellow Cheese (~50g)',
+  'branza-fagaras': 'Cottage Cheese (~150g)',
+  'branza-de-vaci': 'Farmer Cheese (~150g)',
+  'sunca-pui': 'Chicken Ham (3 slices ~60g)',
+  'sunca-curcan': 'Turkey Ham (3 slices ~60g)',
+  'croissant-francez-unt': 'French Butter Croissant (1 pc ~60g)',
+
+  // Prânz / Cină
+  'piept-pui': 'Grilled Chicken Breast (100g)',
+  'pulpa-pui-gratar': 'Grilled Chicken Thigh (100g)',
+  'piept-curcan': 'Grilled Turkey Breast (100g)',
+  'muschi-porc': 'Grilled Pork Tenderloin (100g)',
+  'ceafa-porc': 'Grilled Pork Collar (100g)',
+  'muschi-vita': 'Grilled Beef Sirloin (100g)',
+  'somon-gratar': 'Grilled Salmon Fillet (150g)',
+  'ton-conserva': 'Canned Tuna in Water (~120g)',
+  'pastrav-gratar': 'Grilled Trout (1 pc ~200g)',
+  'dorada-gratar': 'Grilled Sea Bream (1 pc ~250g)',
+  'creveti-gratar': 'Grilled Shrimp (100g)',
+  'orez-alb': 'Cooked White Rice (100g)',
+  'orez-brun': 'Cooked Brown Rice (100g)',
+  'orez-basmati': 'Cooked Basmati Rice (100g)',
+  'cartofi-fierti': 'Boiled Potatoes (100g)',
+  'cartofi-copti': 'Baked Potatoes (100g)',
+  'cartofi-prajiti': 'French Fries (~150g)',
+  'piure-cartofi': 'Mashed Potatoes (~150g)',
+  'paste-fierte': 'Cooked Pasta (100g)',
+  'mamaliga': 'Polenta (~150g)',
+  'fasole-boabe-fiarta': 'Cooked Beans (100g)',
+  'linte-fiarta': 'Cooked Lentils (100g)',
+  'naut-fiert': 'Cooked Chickpeas (100g)',
+  'quinoa-fiarta': 'Cooked Quinoa (100g)',
+  'salata-verde-mix': 'Mixed Green Salad (~150g)',
+  'rosii': 'Fresh Tomatoes (1 med ~150g)',
+  'castraveti': 'Fresh Cucumbers (1 med ~150g)',
+  'ardei-gras': 'Bell Pepper (1 pc ~150g)',
+  'morcovi': 'Fresh Carrots (1 pc ~80g)',
+  'broccoli-fiert': 'Steamed Broccoli (100g)',
+  'conopida-fiarta': 'Steamed Cauliflower (100g)',
+  'ciuperci-gratar': 'Grilled Mushrooms (100g)',
+  'dovlecei-gratar': 'Grilled Zucchini (100g)',
+
+  // Gustări
+  'nuci': 'Walnuts (1 handful ~30g)',
+  'migdale': 'Almonds (1 handful ~30g)',
+  'caju': 'Cashews (1 handful ~30g)',
+  'caju-crud': 'Raw / Roasted Cashews (~30g)',
+  'alune-padure': 'Hazelnuts (1 handful ~30g)',
+  'fistic': 'Pistachios (1 handful ~30g)',
+  'arahide-sarate': 'Salted Peanuts (1 handful ~40g)',
+  'seminte-floarea-soarelui': 'Shelled Sunflower Seeds (~30g)',
+  'seminte-dovleac': 'Pumpkin Seeds (1 handful ~30g)',
+  'ciocolata-neagra': 'Dark Chocolate 70%+ (~25g)',
+  'biscuiti-digestivi': 'Digestive Biscuits (3 pcs ~45g)',
+  'baton-proteic': 'Protein Bar (1 pc ~60g)',
+  'kefir-sana': 'Kefir / Buttermilk (~250ml)',
+  'clatite-fineti-1buc': 'Crepe with Hazelnut Spread (~80g)',
+  'clatite-gem-1buc': 'Crepe with Fruit Jam (~80g)',
+  'ecler-ciocolata': 'Chocolate Eclair (1 pc ~100g)',
+  'cornulete-rahat': 'Traditional Pastry Rolls (~60g)',
+
+  // Băuturi
+  'apa': 'Still / Sparkling Water (~250ml)',
+  'cafea-neagra': 'Black Coffee / Espresso (~60ml)',
+  'cappuccino': 'Cappuccino with Milk (~200ml)',
+  'ceai-verde': 'Green Tea (~250ml)',
+  'suc-portocale': 'Fresh Orange Juice (~250ml)',
+  'frappe-vanilie': 'Vanilla Frappé with Ice Cream (~300ml)',
+  'matcha-latte': 'Matcha Latte with Milk (~250ml)',
+  'energizant-doza': 'Energy Drink (1 can ~250ml)',
+  'energizant-zero': 'Sugar-Free Energy Drink (1 can ~250ml)',
+  'cidru-mere': 'Apple Cider (1 bottle ~330ml)',
+};
+
+export function getPresetDisplayName(preset: FoodPreset, lang?: string): string {
+  const currentLang = (lang || 'ro').slice(0, 2).toLowerCase();
+  if (currentLang !== 'ro') {
+    if (preset.nume_en) return preset.nume_en;
+    if (PRESET_NAMES_EN[preset.id]) return PRESET_NAMES_EN[preset.id];
+  }
+  return preset.nume;
+}

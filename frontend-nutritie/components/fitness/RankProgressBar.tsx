@@ -8,6 +8,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '../../context/ThemeContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { MOTION_DURATIONS } from '../../constants/motion';
 
 type Props = {
   currentKg: number;
@@ -36,6 +38,7 @@ export default function RankProgressBar({
   nextRankLabel,
 }: Props) {
   const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
   const progress = Math.max(0, Math.min(1, currentKg / nextRankKg));
   const progressValue = useSharedValue(0);
   const widthStyle = useAnimatedStyle(() => ({
@@ -43,11 +46,15 @@ export default function RankProgressBar({
   }));
 
   useEffect(() => {
+    if (reduceMotion) {
+      progressValue.value = progress;
+      return;
+    }
     progressValue.value = withTiming(progress, {
-      duration: 650,
+      duration: MOTION_DURATIONS.feedback,
       easing: Easing.out(Easing.cubic),
     });
-  }, [progress, progressValue]);
+  }, [progress, progressValue, reduceMotion]);
 
   const gradient = gradientForRank(progress, colors);
 

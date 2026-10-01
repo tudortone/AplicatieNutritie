@@ -1,19 +1,21 @@
 'use strict';
 
 const express = require('express');
+const crypto = require('crypto');
 const fs = require('fs');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Sentry = require('@sentry/node');
 
 const { callWithTimeout, callWithSoftTimeout } = require('../utils/httpTimeout');
 const { parseJsonFromLlm } = require('../utils/llmJson');
-const { inregistreazaAi } = require('../utils/metrics');
+const { inregistreazaAi, inregistreazaOperational } = require('../utils/metrics');
 const { curataMinim, detectPromptInjection, citesteQuery } = require('../utils/sanitize');
 const { valideazaIngrediente } = require('../utils/promptSafety');
 const { construiesteGazdePermise, creeazaValideazaUrlImagine } = require('../utils/valideazaUrlImagine');
 const { numarModel, NUME_FURNIZORI_AI } = require('../services/ai/vision');
 const { EroareAiClient } = require('../services/ai/chat');
 const { inregistreazaUtilizareAdmin } = require('../utils/clientUtilizator');
+const { rezumatEroareSigur } = require('../utils/sentrySanitize');
 
 /**
  * Rute AI (analiza foto, chat, estimare text, corectie vizual+text) + orfanele
@@ -37,6 +39,7 @@ function createAiRouter({
   serviciuCascada,
   serviciuChat,
   semaforAi,
+  chatAdmission = null,
   idempotencyCritic = (_req, _res, next) => next(),
   // M-05: clientul admin (service_role) se injecteaza din server.js, creat cu
   // fetch + timeout de 10s. Inainte se construia aici un client duplicat fara
@@ -127,11 +130,27 @@ function createAiRouter({
         }
       }
 
+      // P1-12: cheia de idempotenta a RUNULUI Trigger.dev se deriva din OPERATIA
+      // LOGICA (utilizator + imagine + tip masa), nu din identitatea cererii HTTP.
+      // Doua cereri HTTP distincte (retry dupa timeout, reconectare, dublu tap) au
+      // request-id-uri diferite, dar aceeasi operatie logica — fara asta, fiecare
+      // ar porni un run separat si ar factura inca o analiza vision.
+      // Includerea userId-ului pastreaza izolarea: aceeasi imagine la doi utilizatori
+      // ramane doua operatii distincte.
+      const cheieIdempotentaRun = crypto
+        .createHash('sha256')
+        .update(`analiza-mancare-ai:${req.user.id}:${verificare.url}:${tipMasa || 'Pranz'}`)
+        .digest('hex');
+
       const handle = await tasks.trigger('analiza-mancare-ai', {
         imageUrl: verificare.url,
         tipMasa: tipMasa || 'Pranz',
         userId: req.user.id,
         jobId,
+      }, {
+        idempotencyKey: cheieIdempotentaRun,
+        // Marginit: dupa fereastra, aceeasi poza poate fi re-analizata deliberat.
+        idempotencyKeyTTL: '15m',
       });
 
       // Asocim trigger_run_id-ul cu job-ul creat.
@@ -154,7 +173,7 @@ function createAiRouter({
       });
     } catch (err) {
       if (config.sentryDsn) Sentry.captureException(err);
-      console.error('Eroare Trigger.dev:', err.message);
+      console.error('[Trigger.dev]', rezumatEroareSigur(err, { operation: 'enqueue_ai_job', provider: 'trigger_dev' }));
       return res.status(500).json({ eroare: 'Nu s-a putut trimite task-ul in fundal.' });
     }
   });
@@ -174,6 +193,10 @@ function createAiRouter({
 
       const requestedProvider = String(
         req.body?.provider || citesteQuery(req, 'provider') || 'auto',
+      ).toLowerCase();
+
+      const limba = String(
+        req.body?.limba || citesteQuery(req, 'limba') || 'ro',
       ).toLowerCase();
 
       if (requestedProvider !== 'auto' && NUME_FURNIZORI_AI[requestedProvider]) {
@@ -222,6 +245,7 @@ function createAiRouter({
             imageBase64,
             imageMime,
             requestedProvider,
+            limba,
             // S4-04: semnalul de anulare ajunge si la fetch-urile din cascada, nu
             // doar la coada semaforului. Un client deconectat intelege imediat
             // providerii, fara sa se mai factureze generarea pana la deadline.
@@ -268,8 +292,16 @@ function createAiRouter({
         parsed = arrayProp || [parsed];
       }
 
+      const fallbackNume = limba.startsWith('en')
+        ? 'Identified food'
+        : limba.startsWith('fr')
+        ? 'Aliment identifié'
+        : limba.startsWith('de')
+        ? 'Identifiziertes Lebensmittel'
+        : 'Aliment identificat';
+
       const validated = parsed.map((item) => ({
-        nume: String(item?.nume || item?.aliment || 'Aliment identificat').substring(0, 150),
+        nume: String(item?.nume || item?.aliment || fallbackNume).substring(0, 150),
         estimare_grame: numarModel(item?.estimare_grame ?? item?.grame, { min: 1, max: 5000, implicit: 100 }),
         calorii_per_100g: numarModel(item?.calorii_per_100g ?? item?.calorii, { max: 1000 }),
         proteine_per_100g: numarModel(item?.proteine_per_100g ?? item?.proteine, { max: 100 }),
@@ -280,7 +312,7 @@ function createAiRouter({
 
       res.json(validated);
     } catch (error) {
-      console.error('Eroare analiza foto:', error.message || error);
+      console.error('[AI route]', rezumatEroareSigur(error, { operation: 'photo_analysis' }));
       res.status(500).json({ eroare: 'Eroare la analiza imaginii cu AI.' });
     } finally {
       if (req.file && req.file.path) {
@@ -296,6 +328,23 @@ function createAiRouter({
   // RUTA 2: CHAT CONVERSATIONAL (GROQ / LLAMA 3.3)
   // ==========================================
   router.post('/chat', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, async (req, res) => {
+    const admission = chatAdmission
+      ? await chatAdmission.acquire(req.user?.id)
+      : { ok: true, release: async () => true };
+    if (!admission.ok) {
+      inregistreazaOperational(`chat.rejected.${admission.reason}`);
+      res.setHeader('Retry-After', String(admission.retryAfterSeconds || 3));
+      if (admission.reason === 'unavailable') {
+        return res.status(503).json({ cod: 'CHAT_ADMISSION_UNAVAILABLE', raspuns: 'Asistentul este temporar indisponibil.' });
+      }
+      return res.status(429).json({
+        cod: admission.reason === 'user' ? 'CHAT_IN_PROGRESS' : 'CHAT_CAPACITY_REACHED',
+        raspuns: admission.reason === 'user'
+          ? 'Ai deja o conversație în curs. Așteaptă răspunsul curent.'
+          : 'Asistentul este foarte solicitat. Încearcă din nou în câteva momente.',
+      });
+    }
+    inregistreazaOperational('chat.active');
     // M1: propagăm AbortSignal-ul pe deconectarea clientului în tot fluxul chat
     // (ruleazaChat → Groq fetch). Fără asta, un client deconectat lăsa generarea
     // să continue 35s și să fie facturată degeaba — același pattern ca vision.
@@ -309,10 +358,20 @@ function createAiRouter({
       return res.json(await serviciuChat.ruleazaChat(req.body, controllerAbord.signal));
     } catch (err) {
       if (err instanceof EroareAiClient) return res.status(err.status).json({ raspuns: err.mesaj });
-      console.error('Eroare la generarea chat-ului AI:', err.message || err);
-      return res.status(500).json({ raspuns: 'A aparut o problema de conexiune cu asistentul AI. Te rugam sa mai incerci peste cateva momente!' });
+      console.error('[AI route]', rezumatEroareSigur(err, { operation: 'chat_completion' }));
+      const limbaChat = String(req.body?.limba || 'ro').toLowerCase();
+      let eroareMsg = 'A aparut o problema de conexiune cu asistentul AI. Te rugam sa mai incerci peste cateva momente!';
+      if (limbaChat.startsWith('en')) {
+        eroareMsg = 'A connection issue occurred with the AI assistant. Please try again in a few moments!';
+      } else if (limbaChat.startsWith('fr')) {
+        eroareMsg = 'Un problème de connexion est survenu avec l\'assistant IA. Veuillez réessayer dans quelques instants !';
+      } else if (limbaChat.startsWith('de')) {
+        eroareMsg = 'Ein Verbindungsproblem mit dem KI-Assistenten ist aufgetreten. Bitte versuche es in wenigen Augenblicken erneut!';
+      }
+      return res.status(500).json({ raspuns: eroareMsg });
     } finally {
       res.removeListener('close', peDeconectare);
+      await admission.release();
     }
   });
 
@@ -332,8 +391,17 @@ function createAiRouter({
       return res.json(await serviciuChat.logFoodDinChat(req.body, controllerAbord.signal));
     } catch (err) {
       if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
-      console.error('Eroare in /api/log-food-from-chat:', err.message);
-      return res.status(500).json({ eroare: 'Nu s-a putut genera propunerea de masa.' });
+      console.error('[AI route]', rezumatEroareSigur(err, { operation: 'log_food_from_chat' }));
+      const limbaLog = String(req.body?.limba || 'ro').toLowerCase();
+      let eroareMsg = 'Nu s-a putut genera propunerea de masa.';
+      if (limbaLog.startsWith('en')) {
+        eroareMsg = 'Could not generate the meal proposal.';
+      } else if (limbaLog.startsWith('fr')) {
+        eroareMsg = 'Impossible de générer la proposition de repas.';
+      } else if (limbaLog.startsWith('de')) {
+        eroareMsg = 'Mahlzeitvorschlag konnte nicht erstellt werden.';
+      }
+      return res.status(500).json({ eroare: eroareMsg });
     } finally {
       res.removeListener('close', peDeconectare);
     }
@@ -358,7 +426,7 @@ function createAiRouter({
       return res.json(await serviciuChat.estimeazaMancareText(req.body, controllerAbord.signal));
     } catch (err) {
       if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
-      console.error('Eroare estimare AI aliment:', err.message);
+      console.error('[AI route]', rezumatEroareSigur(err, { operation: 'estimate_food_text' }));
       return res.status(500).json({ eroare: 'Nu s-a putut estima alimentul cu AI.' });
     } finally {
       res.removeListener('close', peDeconectare);
@@ -380,7 +448,7 @@ function createAiRouter({
       return res.json(await serviciuChat.profilNutritiv(req.body, controllerAbord.signal));
     } catch (err) {
       if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
-      console.error('Eroare profil nutritiv AI:', err.message);
+      console.error('[AI route]', rezumatEroareSigur(err, { operation: 'nutrition_profile' }));
       return res.status(500).json({ eroare: 'Nu s-a putut genera profilul nutritiv cu AI.' });
     } finally {
       res.removeListener('close', peDeconectare);
@@ -496,7 +564,10 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
           } catch (e) {
             inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'vision-fallback', ok: false });
             lastErr = e;
-            console.warn(`Eroare Groq vision-fallback (${modelName}):`, e.message);
+            console.warn('[AI provider failure]', rezumatEroareSigur(e, {
+              operation: 'vision_fallback',
+              provider: 'groq',
+            }));
           }
         }
         if (content) break;
@@ -528,7 +599,10 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
             // Inainte acest catch era gol: erorile OpenAI dispareau fara urma.
             inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'vision-fallback', ok: false });
             lastErr = e;
-            console.warn('Eroare OpenAI vision-fallback:', e.message);
+            console.warn('[AI provider failure]', rezumatEroareSigur(e, {
+              operation: 'vision_fallback',
+              provider: 'openai',
+            }));
           }
         }
       }
@@ -560,7 +634,10 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
             } catch (e) {
               inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'vision-fallback', ok: false });
               lastErr = e;
-              console.warn(`Gemini vision-fallback [${modelName}]:`, e.message);
+              console.warn('[AI provider failure]', rezumatEroareSigur(e, {
+                operation: 'vision_fallback',
+                provider: 'gemini',
+              }));
             }
           }
           if (content) break;
@@ -600,7 +677,7 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
 
       res.json({ action_taken: actionTaken, ingredients, new_totals: totals });
     } catch (err) {
-      console.error('Eroare corectare vizual+text / vision-fallback:', err.message);
+      console.error('[AI route]', rezumatEroareSigur(err, { operation: 'vision_fallback' }));
       res.status(500).json({ eroare: 'Nu s-a putut procesa corectia cu AI.' });
     } finally {
       res.removeListener('close', peDeconectare);

@@ -6,25 +6,39 @@ import { LinearGradient } from 'expo-linear-gradient'
 import Animated, { FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { Activity, CheckCircle2, Sparkles } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
+import { useTranslation } from 'react-i18next'
 
 import { useTheme } from '../../context/ThemeContext'
-
-const ETAPE_CALCUL = [
-  'Analizăm parametrii biometrici și genul...',
-  'Calculăm Metabolismul Bazal (BMR) și TDEE...',
-  'Ajustăm deficitul/surplusul caloric conform obiectivului...',
-  'Optimizăm balanța de proteine, carbohidrați și grăsimi...',
-  'Planul tău personalizat AI este gata!',
-]
+import { useReducedMotion } from '../../hooks/useReducedMotion'
 
 export default function PasCalculare() {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const router = useRouter()
+  const reduceMotion = useReducedMotion()
   const [pasCurent, setPasCurent] = useState(0)
 
-  const progress = useSharedValue(0)
+  const ETAPE_CALCUL = [
+    t('onboarding.calculatingStep1'),
+    t('onboarding.calculatingStep2'),
+    t('onboarding.calculatingStep3'),
+    t('onboarding.calculatingStep4'),
+    t('onboarding.calculatingStep5'),
+  ]
+
+  const progress = useSharedValue(reduceMotion ? 1 : 0)
 
   useEffect(() => {
+    if (reduceMotion) {
+      progress.value = 1
+      setPasCurent(ETAPE_CALCUL.length - 1)
+      const timer = setTimeout(() => {
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success) } catch {}
+        router.replace('/onboarding/plan' as any)
+      }, 700)
+      return () => clearTimeout(timer)
+    }
+
     progress.value = withTiming(1, { duration: 2800 })
 
     const interval = setInterval(() => {
@@ -46,7 +60,7 @@ export default function PasCalculare() {
       clearInterval(interval)
       clearTimeout(timer)
     }
-  }, [progress, router])
+  }, [progress, router, ETAPE_CALCUL.length, reduceMotion])
 
   const barStyle = useAnimatedStyle(() => ({
     width: `${Math.min(100, progress.value * 100)}%`,
@@ -55,16 +69,16 @@ export default function PasCalculare() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <View style={styles.continut}>
-        <Animated.View entering={FadeInUp.duration(600)} style={styles.iconWrap}>
+        <Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(600)} style={styles.iconWrap}>
           <LinearGradient colors={colors.accentGradient} style={styles.iconGrad}>
             <Sparkles size={40} color={colors.background} />
           </LinearGradient>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.duration(600).delay(150)} style={styles.textWrap}>
-          <Text style={[styles.titlu, { color: colors.textPrimary }]}>Calculăm planul tău AI...</Text>
+        <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(600).delay(150)} style={styles.textWrap}>
+          <Text style={[styles.titlu, { color: colors.textPrimary }]}>{t('onboarding.calculatingTitle')}</Text>
           <Text maxFontSizeMultiplier={1.3} style={[styles.subtitlu, { color: colors.textSecondary }]}>
-            Personalizăm caloriile și macronuienții pe baza datelor tale unice.
+            {t('onboarding.calculatingSubtitle')}
           </Text>
         </Animated.View>
 
@@ -82,7 +96,7 @@ export default function PasCalculare() {
             const activ = i === pasCurent
             return (
               <Animated.View
-                key={etape}
+                key={i}
                 entering={FadeInDown.duration(400).delay(i * 100)}
                 style={[
                   styles.etapeRow,

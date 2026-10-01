@@ -24,6 +24,8 @@ export interface MasaOfflinePayload {
   tip_masa: string;
   alimente: unknown[];
   data: string;
+  /** Opțional doar pentru intrările legacy create înainte de fixul V7. */
+  ora?: string;
   created_at: string;
   imagine_url?: string | null;
 }
@@ -285,7 +287,11 @@ export async function processOfflineQueue(
         // BUG-054: trimitem id-ul deterministic al meselor offline. Daca un sync
         // partial a inserat deja randul, PK-ul UUID (23505) il detecteaza si
         // tratam eroarea ca succes — fara masa duplicata la reluare.
-        ...(esteUuidValid(masa.id) ? { id: masa.id } : {}),
+        ...(esteUuidValid(masa.id)
+          ? { id: masa.id }
+          : !isNaN(Number(masa.id)) && typeof masa.id !== 'boolean'
+          ? { id: Number(masa.id) }
+          : {}),
         user_id: masa.user_id,
         nume: masa.nume,
         calorii: masa.calorii,
@@ -296,6 +302,7 @@ export async function processOfflineQueue(
         tip_masa: masa.tip_masa,
         alimente: masa.alimente,
         data: masa.data,
+        ora: masa.ora ?? null,
         // BUG-018: fara created_at, DB pune server-now si masa offline ajunge in
         // ziua sincronizarii, nu in ziua consumului (useMeseAzi filtreaza dupa
         // created_at). Tinem timestamp-ul din momentul salvarii.

@@ -1,15 +1,31 @@
-import React from 'react'
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import {
+	View,
+	Text,
+	TouchableOpacity,
+	StyleSheet,
+	ScrollView,
+	ActivityIndicator,
+	BackHandler,
+	Platform,
+} from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated'
 import { ArrowLeft, ArrowRight } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
+import { useTranslation } from 'react-i18next'
+import { useReducedMotion } from '../../hooks/useReducedMotion'
 
 import { useTheme } from '../../context/ThemeContext'
 import { useOnboarding } from '../../context/OnboardingContext'
 import { pasiActivi, pasulUrmator, type PasOnboarding } from './pasi'
+import {
+	anuleazaProtectieNavigare,
+	incepeProtectieNavigare,
+	protectieNavigareRamasa,
+} from '../../lib/onboardingNavigationGuard'
 
 export type EcranPasProps = {
 	/** Ruta acestui pas, folosita pentru progres si pentru pasul urmator. */
@@ -17,18 +33,11 @@ export type EcranPasProps = {
 	titlu: string
 	subtitlu?: string
 	children: React.ReactNode
-	/** Cand e false, butonul de continuare e dezactivat. */
-	poateContinua: boolean
-	/** Eticheta butonului principal. Implicit `Continua`. */
+	poateContinua?: boolean
 	etichetaButon?: string
-	/**
-	 * Actiune la apasarea butonului, rulata inainte de navigare.
-	 * Returneaza `false` ca sa opresti navigarea automata catre pasul urmator.
-	 */
-	laContinuare?: () => void | boolean | Promise<void | boolean>
-	/** Afiseaza un indicator in buton. */
+	/** Callback optional inainte de a naviga. Poate returna false pentru a anula navigarea automata. */
+	laContinuare?: () => Promise<boolean | void> | boolean | void
 	seIncarca?: boolean
-	/** Ascunde bara de progres si sageata de intoarcere. */
 	faraAntet?: boolean
 }
 
@@ -41,48 +50,152 @@ export default function EcranPas({
 	titlu,
 	subtitlu,
 	children,
-	poateContinua,
-	etichetaButon = 'Continua',
+	poateContinua = true,
+	etichetaButon,
 	laContinuare,
 	seIncarca = false,
 	faraAntet = false,
 }: EcranPasProps) {
+	const { t, i18n } = useTranslation()
 	const { colors } = useTheme()
+	const reduceMotion = useReducedMotion()
 	const { date } = useOnboarding()
 	const router = useRouter()
+	const textButon = etichetaButon || (
+		(i18n?.isInitialized && i18n.language !== 'ro')
+			? t('onboarding.continue', 'Continue')
+			: (t('onboarding.continue') !== 'onboarding.continue' ? t('onboarding.continue') : 'Continuă')
+	)
+	const textInapoi = t('onboarding.back')
+	const apasareInCursRef = useRef(false)
+	const [apasareInCurs, setApasareInCurs] = useState(false)
+	const [protectieNavigare, setProtectieNavigare] = useState(() => protectieNavigareRamasa() > 0)
 
-	const pasi = pasiActivi(date.scop)
+	// Stabilizare referențială: pasiActivi alocă un nou array, deci îl memoizăm după date.scop
+	const pasi = useMemo(() => pasiActivi(date.scop), [date.scop])
 	const indice = pasi.indexOf(pas)
+	// pasAnterior este o valoare primitivă stabilă (string | null)
+	const pasAnterior = indice > 0 ? pasi[indice - 1] : null
+
+	// NAV-BACK-001: navigare „Înapoi” logică și sigură.
+	// Depinde doar de valori semantice stabile (router, pasAnterior), NU de array-ul nou alocat pasi.
+	const handleBack = useCallback(() => {
+		anuleazaProtectieNavigare()
+		apasareInCursRef.current = false
+		setApasareInCurs(false)
+		if (router.canGoBack()) {
+			router.back()
+			return true
+		}
+		if (pasAnterior) {
+			router.replace(pasAnterior as any)
+			return true
+		}
+		return false
+	}, [router, pasAnterior])
+
+	// P0-01: Focus-scoped lifecycle behavior:
+	// 1. Când ecranul primește focus (montare inițială sau revenire via Back):
+	//    - deblocăm lock-urile dacă ecranul fusese blocat la navigare înainte
+	//    - înregistrăm listener-ul de hardware Back pe Android doar pentru ecranul curent activ
+	// 2. Când ecranul pierde focusul (navigare înainte către pasul următor sau demontare):
+	//    - listener-ul de Back este imediat eliminat (prevenind handlere multiple / conflict de stivă)
+	// 3. Stabilitate la rerender:
+	//    - handleBack, pasAnterior și router sunt stabile referențial pe durata acestui pas
+	//    - rerender-urile cauzate de busy-state (setApasareInCurs) NU declanșează cleanup/re-entry!
+	useFocusEffect(
+		useCallback(() => {
+			if (apasareInCursRef.current) {
+				apasareInCursRef.current = false
+				setApasareInCurs(false)
+			}
+			if (protectieNavigareRamasa() > 0) {
+				anuleazaProtectieNavigare()
+				setProtectieNavigare(false)
+			}
+
+			let backSubscription: { remove: () => void } | null = null
+			if (Platform.OS === 'android') {
+				backSubscription = BackHandler.addEventListener('hardwareBackPress', () => {
+					if (pasAnterior !== null || router.canGoBack()) {
+						handleBack()
+						return true
+					}
+					return false
+				})
+			}
+
+			return () => {
+				if (backSubscription) {
+					backSubscription.remove()
+					backSubscription = null
+				}
+			}
+		}, [handleBack, pasAnterior, router])
+	)
+
+	useEffect(() => {
+		const ramas = protectieNavigareRamasa()
+		if (ramas <= 0) {
+			return
+		}
+		setProtectieNavigare(true)
+		const timer = setTimeout(() => setProtectieNavigare(false), ramas)
+		return () => clearTimeout(timer)
+	}, [pas])
 
 	const apasa = async () => {
-		if (!poateContinua || seIncarca) return
+		if (!poateContinua || seIncarca || apasareInCursRef.current || !incepeProtectieNavigare()) return
+		apasareInCursRef.current = true
+		setApasareInCurs(true)
 		try {
 			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 		} catch {}
 
-		if (laContinuare) {
-			const rezultat = await laContinuare()
-			// Un pas care navigheaza singur returneaza false ca sa nu mergem de doua ori.
-			if (rezultat === false) return
-		}
+		try {
+			if (laContinuare) {
+				const rezultat = await laContinuare()
+				// Un pas care navigheaza singur returneaza false ca sa nu mergem de doua ori.
+				if (rezultat === false) {
+					anuleazaProtectieNavigare()
+					apasareInCursRef.current = false
+					setApasareInCurs(false)
+					return
+				}
+			}
 
-		const urmator = pasulUrmator(pas, date.scop)
-		if (urmator) router.push(urmator as any)
+			const urmator = pasulUrmator(pas, date.scop)
+			if (urmator) router.push(urmator as any)
+			else {
+				anuleazaProtectieNavigare()
+				apasareInCursRef.current = false
+				setApasareInCurs(false)
+			}
+		} catch (eroare) {
+			anuleazaProtectieNavigare()
+			apasareInCursRef.current = false
+			setApasareInCurs(false)
+			console.error('[Onboarding] Continuarea pasului a eșuat:', eroare)
+		}
 	}
 
 	return (
 		<SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
 			{!faraAntet && (
 				<View style={styles.antet}>
-					<TouchableOpacity
-						onPress={() => router.canGoBack() && router.back()}
-						style={styles.butonInapoi}
-						hitSlop={12}
-						accessibilityLabel="Inapoi"
-						accessibilityRole="button"
-					>
-						<ArrowLeft size={24} color={colors.textPrimary} />
-					</TouchableOpacity>
+					{indice > 0 || router.canGoBack() ? (
+						<TouchableOpacity
+							onPress={handleBack}
+							style={styles.butonInapoi}
+							hitSlop={12}
+							accessibilityLabel={textInapoi}
+							accessibilityRole="button"
+						>
+							<ArrowLeft size={24} color={colors.textPrimary} />
+						</TouchableOpacity>
+					) : (
+						<View style={styles.butonInapoi} />
+					)}
 
 					<View style={styles.progresWrap}>
 						{pasi.map((p, i) => (
@@ -99,18 +212,19 @@ export default function EcranPas({
 			)}
 
 			<ScrollView
+				style={styles.scroll}
 				contentContainerStyle={styles.continut}
 				showsVerticalScrollIndicator={false}
 				keyboardShouldPersistTaps="handled"
 			>
-				<Animated.View entering={FadeInUp.duration(420)}>
+				<Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(420)}>
 					<Text style={[styles.titlu, { color: colors.textPrimary }]}>{titlu}</Text>
 					{subtitlu ? (
 						<Text style={[styles.subtitlu, { color: colors.textSecondary }]}>{subtitlu}</Text>
 					) : null}
 				</Animated.View>
 
-				<Animated.View entering={FadeInDown.duration(460).delay(90)} style={styles.corp}>
+				<Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(460).delay(90)} style={styles.corp}>
 					{children}
 				</Animated.View>
 			</ScrollView>
@@ -118,10 +232,11 @@ export default function EcranPas({
 			<View style={styles.subsol}>
 				<TouchableOpacity
 					onPress={apasa}
-					disabled={!poateContinua || seIncarca}
-					style={[styles.buton, (!poateContinua || seIncarca) && styles.butonInactiv]}
+					disabled={!poateContinua || seIncarca || apasareInCurs || protectieNavigare}
+					style={[styles.buton, (!poateContinua || seIncarca || apasareInCurs || protectieNavigare) && styles.butonInactiv]}
 					accessibilityRole="button"
-					accessibilityState={{ disabled: !poateContinua || seIncarca }}
+					accessibilityLabel={textButon}
+					accessibilityState={{ disabled: !poateContinua || seIncarca || apasareInCurs || protectieNavigare, busy: seIncarca || apasareInCurs || protectieNavigare }}
 				>
 					<LinearGradient
 						colors={colors.accentGradient}
@@ -129,11 +244,11 @@ export default function EcranPas({
 						end={{ x: 1, y: 0 }}
 						style={styles.butonGrad}
 					>
-						{seIncarca ? (
+						{seIncarca || apasareInCurs || protectieNavigare ? (
 							<ActivityIndicator color={colors.background} />
 						) : (
 							<>
-								<Text style={[styles.butonText, { color: colors.background }]}>{etichetaButon}</Text>
+								<Text style={[styles.butonText, { color: colors.background }]}>{textButon}</Text>
 								<ArrowRight size={20} color={colors.background} strokeWidth={2.5} />
 							</>
 						)}
@@ -146,14 +261,15 @@ export default function EcranPas({
 
 const styles = StyleSheet.create({
 	container: { flex: 1 },
+	scroll: { flex: 1 },
 	antet: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, gap: 14 },
-	butonInapoi: { padding: 4 },
+	butonInapoi: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 	progresWrap: { flex: 1, flexDirection: 'row', gap: 6 },
 	segment: { flex: 1, height: 4, borderRadius: 2 },
-	continut: { paddingHorizontal: 24, paddingTop: 28, paddingBottom: 24, flexGrow: 1 },
-	titlu: { fontSize: 30, fontWeight: '900', letterSpacing: -0.8, lineHeight: 36 },
-	subtitlu: { fontSize: 15, marginTop: 10, lineHeight: 21 },
-	corp: { marginTop: 28, flex: 1 },
+	continut: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16, flexGrow: 1 },
+	titlu: { fontSize: 28, fontWeight: '900', letterSpacing: -0.8, lineHeight: 34 },
+	subtitlu: { fontSize: 14, marginTop: 8, lineHeight: 20 },
+	corp: { marginTop: 18, flex: 1 },
 	subsol: { paddingHorizontal: 24, paddingBottom: 12, paddingTop: 8 },
 	buton: { borderRadius: 18, overflow: 'hidden' },
 	butonInactiv: { opacity: 0.4 },

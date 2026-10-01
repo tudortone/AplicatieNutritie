@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { Easing, FadeInDown, useAnimatedProps, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
-import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Droplet, Footprints, Dumbbell, Bell, RotateCcw, X, AlertCircle } from 'lucide-react-native';
+import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Footprints, Dumbbell, Bell, RotateCcw, X, AlertCircle } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useNotificationBannerData } from '../../context/NotificationBannerContext';
@@ -21,10 +21,11 @@ import { useHealthSync } from '../../hooks/useHealthSync';
 import { useAntrenamente } from '../../hooks/useAntrenamente';
 import { getCalorieState } from '../../lib/calorieState';
 import { SkeletonLoader } from '../../components/SkeletonLoader';
-import BodyMap from '../../components/fitness/BodyMap';
+import { BodyMap } from '../../components/fitness/BodyMap';
 import { computeDailyMuscleIntensity, normalizeMuscleLoadToIntensity } from '../../lib/fitnessEngine';
 import { useExercitii } from '../../hooks/useExercitii';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { FlowIcon } from '../../components/ui/FlowIcon';
 import { useGamificareData } from '../../context/GamificareContext';
 import { StreakBottomSheet, StreakBottomSheetRef } from '../../components/gamification/StreakBottomSheet';
 import { PressableScale } from '../../components/ui/PressableScale';
@@ -32,6 +33,11 @@ import { AddWeightModal } from '../../components/AddWeightModal';
 import { supabase } from '../../supabase';
 import { localDayKey } from '../../lib/dateUtils';
 import { TARGETURI_PENDING_KEY } from '../../lib/sincronizeazaTargeturi';
+import { anatomyMapSize, singleAnatomyMapWidth } from '../../lib/anatomyLayout';
+import { FlowCreditsPill } from '../../components/FlowCreditsPill';
+import { WaterIntakeCard } from '../../components/home/WaterIntakeCard';
+import { PhotoJobStatusCard } from '../../components/photo/PhotoJobStatusCard';
+import { calculateDailyWaterTargetMl, glassesToMilliliters } from '../../lib/hydration';
 
 const AnimatedRingCircle = Animated.createAnimatedComponent(Circle);
 
@@ -45,17 +51,22 @@ function CardBackdrop({ style, children }: { style?: StyleProp<ViewStyle>; child
   return <View style={style}>{children}</View>;
 }
 
-function RingProgress({ procent, color, bgColor }: { procent: number; color: string; bgColor: string }) {
-  const radius = 55;
-  const strokeWidth = 12;
+function RingProgress({ procent, color, bgColor, radius = 52, strokeWidth = 11 }: { procent: number; color: string; bgColor: string; radius?: number; strokeWidth?: number }) {
   const circumference = 2 * Math.PI * radius;
   const fill = Math.min(Math.max(procent, 0), 100);
   const progress = useSharedValue(0);
   const rotation = useSharedValue(0);
   const prevFill = useRef(fill);
+  const reduceMotion = useReducedMotion();
 
   // Când se adaugă o masă, inelul se rotește până la noul nivel (spring) și dă un mic wiggle.
   useEffect(() => {
+    if (reduceMotion) {
+      progress.value = fill / 100;
+      rotation.value = 0;
+      prevFill.current = fill;
+      return;
+    }
     progress.value = withSpring(fill / 100, { damping: 16, stiffness: 120, mass: 0.7 });
     if (fill > prevFill.current) {
       rotation.value = withSequence(
@@ -66,7 +77,7 @@ function RingProgress({ procent, color, bgColor }: { procent: number; color: str
       );
     }
     prevFill.current = fill;
-  }, [fill, progress, rotation]);
+  }, [fill, progress, rotation, reduceMotion]);
 
   const animatedProps = useAnimatedProps(() => ({
     // Reanimated 4 + Fabric arunca "Loss of precision" pe valori fractionare
@@ -124,6 +135,21 @@ export default function HomeScreen() {
   const [greutateTinta, setGreutateTinta] = useState(70);
   const [stepGoalEdit, setStepGoalEdit] = useState(false);
   const [stepGoalInput, setStepGoalInput] = useState('');
+
+  // HOME-TOUCH-001 / REMED-029: foaia Adaugă masă se montează DOAR la prima deschidere
+  // pentru a preveni interceptarea atingerilor pe Home de către containerul/backdrop-ul
+  // BottomSheet-ului nemontat complet.
+  const [mealSheetMounted, setMealSheetMounted] = useState(false);
+  const [mealSheetOpenNonce, setMealSheetOpenNonce] = useState(0);
+  const deschideAddMeal = React.useCallback(() => {
+    setMealSheetOpenNonce((n) => n + 1);
+    setMealSheetMounted(true);
+  }, []);
+  useEffect(() => {
+    if (!mealSheetMounted) return;
+    addMealSheetRef.current?.open();
+  }, [mealSheetMounted, mealSheetOpenNonce]);
+
   // BUG-001: cursorul zilei nu mai e inghetat la mount. Cand ziua locala se
   // schimba (miezul noptii, background peste miezul noptii, restart), sarim la
   // azi, iar useMeseAzi re-fetch-este automat pentru ca `dateKey` s-a schimbat.
@@ -141,20 +167,25 @@ export default function HomeScreen() {
     proteineTinta, 
     carbiTinta,
     grasimiTinta,
-    greutate,
+    greutateIntrodusaKg,
     user,
     loading,
     eroareFetch,
-    refresh
+    refresh,
+    optimisticAddMeal,
   } = useMeseAzi(dataSelectata);
-  const { t } = useTranslation();
-  const { pahare, tinta: tintaPahare, adaugaPahar, scadePahar } = useApa();
+  const { t, i18n } = useTranslation();
+  const { pahare, loading: waterLoading, adaugaPahar, scadePahar } = useApa();
   const { steps, activeCalories, stepGoal, isEnabled, isAvailable, setNewStepGoal, toggleSync, refreshSteps, addManualSteps } = useHealthSync();
   const { totalCaloriiArse, antrenamente, refresh: refreshAntrenamente } = useAntrenamente();
   const { exercitii } = useExercitii();
   const [viewSideHome, setViewSideHome] = useState<'front' | 'back'>('front');
   const [isTipVisible, setIsTipVisible] = useState(true);
-  const { topInset, scrollPaddingBottom, scrollPaddingTop } = useResponsiveLayout();
+  const { topInset, scrollPaddingBottom, scrollPaddingTop, screenWidth, horizontalPadding, contentMaxWidth, isCompact, isTablet } = useResponsiveLayout();
+  const ringRadius = isCompact ? 44 : isTablet ? 60 : 52;
+  const ringStroke = isCompact ? 10 : isTablet ? 13 : 11;
+  const homeBodyWidth = singleAnatomyMapWidth(screenWidth, 184);
+  const homeBodyHeight = anatomyMapSize(viewSideHome, homeBodyWidth).height;
 
   React.useEffect(() => {
     const checkTipClosed = async () => {
@@ -203,7 +234,7 @@ export default function HomeScreen() {
   const salveazaGreutate = async (nouaValoare: number) => {
     try {
       const aziStr = localDayKey(new Date());
-      const ziNume = new Date().toLocaleDateString('ro-RO', { weekday: 'short' }).slice(0, 3);
+      const ziNume = new Date().toLocaleDateString(i18n.language || 'ro', { weekday: 'short' }).slice(0, 3);
       const storedIstoric = await AsyncStorage.getItem('greutate_istoric');
       let istoric: { data: string; ziNume: string; greutate: number }[] = [];
       if (storedIstoric) {
@@ -329,40 +360,42 @@ export default function HomeScreen() {
   const safeProteineTinta = proteineTinta > 0 ? proteineTinta : 1;
   const procentCalorii = Math.min((caloriiConsumate / safeCaloriiTinta) * 100, 100);
   const procentProteine = Math.min((proteineConsumate / safeProteineTinta) * 100, 100);
+  const waterTargetMl = calculateDailyWaterTargetMl(greutateIntrodusaKg);
+  const waterConsumedMl = glassesToMilliliters(pahare);
 
-  const calState = getCalorieState(caloriiConsumate, bugetCaloricNet, colors.accent, colors.accentSecondary);
+  const calState = getCalorieState(caloriiConsumate, bugetCaloricNet, colors.accent, colors.accentSecondary, t);
 
-  const userName = user?.email ? user.email.split('@')[0] : 'Prieten';
+  const userName = user?.email ? user.email.split('@')[0] : t('home.friend');
   const capitalizedName = userName.charAt(0).toUpperCase() + userName.slice(1);
 
   const getSalut = () => {
     const ora = new Date().getHours();
-    if (ora >= 5 && ora < 12) return "Bună dimineața";
-    if (ora >= 12 && ora < 18) return "Bună ziua";
-    if (ora >= 18 && ora < 23) return "Bună seara";
-    return "Noapte bună";
+    if (ora >= 5 && ora < 12) return t('home.greetingMorning');
+    if (ora >= 12 && ora < 18) return t('home.greetingDay');
+    if (ora >= 18 && ora < 23) return t('home.greetingEvening');
+    return t('home.greetingNight');
   };
-  const getEmoji = () => {
+  const getGreetingIcon = () => {
     const ora = new Date().getHours();
-    if (ora >= 5 && ora < 12) return "☀️";
-    if (ora >= 12 && ora < 18) return "🌤️";
-    if (ora >= 18 && ora < 23) return "🌙";
-    return "🌟";
+    if (ora >= 5 && ora < 18) return 'sun';
+    return 'moon';
   };
 
-  const sfaturiZilnice = [
-    "💡 Hidratarea este cheia metabolizării eficiente a nutrienților. Bea un pahar cu apă cu 30 de minute înainte de fiecare masă.",
-    "💡 Proteinele ajută la sațietate pe termen lung și menținerea masei musculare în deficit caloric.",
-    "💡 Nu uita de fibre! Încearcă să incluzi cel puțin o porție de legume proaspete sau frunze verzi la prânz și cină.",
-    "💡 Grăsimile sănătoase din avocado, nuci sau ulei de măsline sunt esențiale pentru absorbția vitaminelor A, D, E și K.",
-    "💡 Somnul de 7-8 ore este vital pentru reglarea hormonilor foamei (grelina și leptina). Odihnește-te bine!",
-    "💡 Carbohidrații complecși (ovăz, cartof dulce, orez brun) îți oferă energie constantă fără vârfuri de insulină.",
-    "💡 Nu te stresa dacă într-o zi depășești ușor ținta. Consecvența pe termen lung este mult mai importantă decât perfecțiunea zilnică.",
-    "💡 Consumă alimente bogate în magneziu și zinc pentru o recuperare musculară optimă după antrenamente.",
-    "💡 Mănâncă încet și mestecă bine mâncarea — creierul are nevoie de aproximativ 20 de minute pentru a înregistra sațietatea.",
-    "💡 Planifică-ți mesele principale în avans pentru a evita deciziile impulsive când apare senzația de foame."
-  ];
-  const sfatAles = sfaturiZilnice[new Date().getDate() % sfaturiZilnice.length];
+  const sfatAles = React.useMemo(() => {
+    const sfaturi = [
+      t('home.dailyTip1'),
+      t('home.dailyTip2'),
+      t('home.dailyTip3'),
+      t('home.dailyTip4'),
+      t('home.dailyTip5'),
+      t('home.dailyTip6'),
+      t('home.dailyTip7'),
+      t('home.dailyTip8'),
+      t('home.dailyTip9'),
+      t('home.dailyTip10'),
+    ];
+    return sfaturi[new Date().getDate() % sfaturi.length];
+  }, [t]);
 
   if (loading) {
     return (
@@ -386,12 +419,12 @@ export default function HomeScreen() {
 
   return (
     <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(400)} style={[s.container, { backgroundColor: colors.background }]}>
-      <View style={[s.glowTop, { backgroundColor: colors.accent }]} />
-      <View style={[s.glowBottom, { backgroundColor: colors.accentSecondary }]} />
+      <View pointerEvents="none" style={[s.glowTop, { backgroundColor: colors.accent }]} />
+      <View pointerEvents="none" style={[s.glowBottom, { backgroundColor: colors.accentSecondary }]} />
 
       <ScrollView 
         showsVerticalScrollIndicator={false} 
-        contentContainerStyle={[s.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}
+        contentContainerStyle={[s.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom, paddingHorizontal: horizontalPadding }]}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={() => refresh(false, true)} tintColor={colors.accent} colors={[colors.accent]} />
         }
@@ -427,18 +460,22 @@ export default function HomeScreen() {
           <View style={s.headerLeft}>
             <View style={s.greetingRow}>
               <Text style={[s.greeting, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{getSalut()}, {capitalizedName}!</Text>
-              <Text style={s.greetingEmoji}>{getEmoji()}</Text>
+              <FlowIcon name={getGreetingIcon()} size={20} color={colors.accent} />
             </View>
             <View style={s.greetingSubRow}>
-              <Text style={[s.greetingSub, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.3}>Urmărește-ți nutriția de astăzi</Text>
-              <Text style={[s.caloriiInline, { color: calState.ringColor }]} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.3}>  {calState.emoji} {calState.mesaj}</Text>
+              <Text style={[s.greetingSub, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.3}>{t('home.greetingSubtitle')}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 }}>
+                <FlowIcon name={calState.iconName} size={14} color={calState.ringColor} />
+                <Text style={[s.caloriiInline, { color: calState.ringColor }]} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.3}>{calState.mesaj}</Text>
+              </View>
             </View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <FlowCreditsPill />
             <TouchableOpacity
               onPress={() => router.push('/notificari' as any)}
               accessibilityRole="button"
-              accessibilityLabel={`Notificări${unreadCount > 0 ? `, ${unreadCount} necitite` : ''}`}
+              accessibilityLabel={unreadCount > 0 ? t('home.notificationsUnreadA11y', { count: unreadCount }) : t('home.notificationsA11y')}
               hitSlop={6}
               style={{
                 width: 44,
@@ -477,44 +514,50 @@ export default function HomeScreen() {
             <TouchableOpacity
               onPress={() => streakSheetRef.current?.open()}
               accessibilityRole="button"
-              accessibilityLabel={`Seria de ${streak} zile`}
+              accessibilityLabel={t('home.streakDaysA11y', { count: streak })}
               style={s.streakBadge}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
               <LinearGradient colors={colors.accentGradient} style={s.streakGrad}>
                 <Flame size={14} color={colors.background} fill={colors.background} />
-                <Text style={[s.streakText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{streak} zile</Text>
+                <Text style={[s.streakText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{t('home.streakDays', { count: streak })}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
         </Animated.View>
 
         {/* Main calorie ring card */}
-        <Animated.View style={[s.ringCard, { borderColor: colors.cardBorder }]}>
+        <Animated.View style={[s.ringCard, { maxWidth: contentMaxWidth, borderColor: colors.cardBorder }]}>
           <CardBackdrop style={s.ringCardBlur}>
-            <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={s.ringCardGrad}>
+            <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={[s.ringCardGrad, { padding: isCompact ? 16 : 24 }]}>
               <View style={s.ringCardTop}>
                 <View style={s.ringCardInfo}>
                   <Text style={[s.ringCardTitle, { color: caloriiRamase < 0 ? colors.danger : colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
-                    {caloriiRamase < 0 ? 'CALORII DEPĂȘITE' : 'CALORII RĂMASE'}
+                    {caloriiRamase < 0 ? t('home.caloriesOver') : t('home.caloriesRemaining')}
                   </Text>
                   <View style={s.ringCardValueRow}>
-                    <Text style={[s.ringCardValue, { color: caloriiRamase < 0 ? colors.danger : colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+                    <Text
+                      style={[s.ringCardValue, { color: caloriiRamase < 0 ? colors.danger : colors.textPrimary }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.72}
+                      maxFontSizeMultiplier={1.3}
+                    >
                       {caloriiRamase < 0 ? Math.abs(caloriiRamase) : caloriiRamase}
                     </Text>
                     <Text style={[s.ringCardUnit, { color: caloriiRamase < 0 ? colors.danger : colors.accent }]}>kcal</Text>
                   </View>
                   <View style={s.ringCardSubRow}>
-                    <Text style={[s.ringCardSubLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Consumat: </Text>
-                    <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{caloriiConsumate} kcal</Text>
-                    <Text style={[s.ringCardSubSep, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>  •  Țintă: </Text>
-                    <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{caloriiTinta} kcal</Text>
+                    <Text style={[s.ringCardSubLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>{t('home.consumed')} </Text>
+                    <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.3}>{caloriiConsumate} kcal</Text>
+                    <Text style={[s.ringCardSubSep, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>  •  {t('home.target')} </Text>
+                    <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.3}>{caloriiTinta} kcal</Text>
                   </View>
                   {totalCaloriiArse > 0 && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
                       <Dumbbell size={14} color={colors.warning} />
                       <Text style={{ fontSize: 13, fontWeight: '800', color: colors.warning }} maxFontSizeMultiplier={1.3}>
-                        Ars prin sport: +{totalCaloriiArse} kcal
+                        {t('home.burnedSportInline', { calories: totalCaloriiArse })}
                       </Text>
                     </View>
                   )}
@@ -523,6 +566,8 @@ export default function HomeScreen() {
                   procent={procentCalorii} 
                   color={calState.ringColor} 
                   bgColor="rgba(255,255,255,0.06)" 
+                  radius={ringRadius}
+                  strokeWidth={ringStroke}
                 />
               </View>
 
@@ -532,10 +577,17 @@ export default function HomeScreen() {
                     <Activity size={14} color={proteineConsumate > (proteineTinta || 150) ? colors.danger : colors.accentSecondary} />
                   </View>
                   <View style={s.macroValueRow}>
-                    <Text style={[s.macroValue, { color: proteineConsumate > (proteineTinta || 150) ? colors.danger : colors.textPrimary }]}>{proteineConsumate}</Text>
-                    <Text style={[s.macroUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>/ {proteineTinta || 150}g</Text>
+                    <Text
+                      style={[s.macroValue, { color: proteineConsumate > (proteineTinta || 150) ? colors.danger : colors.textPrimary }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.65}
+                    >
+                      {proteineConsumate}
+                    </Text>
+                    <Text style={[s.macroUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3} numberOfLines={1}>/ {proteineTinta || 150}g</Text>
                   </View>
-                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Proteine</Text>
+                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>{t('nutrition.protein')}</Text>
                   <View style={s.macroBarBg}>
                     <LinearGradient
                       colors={proteineConsumate > (proteineTinta || 150) ? [colors.danger, colors.danger + 'CC'] : colors.accentSecondaryGradient}
@@ -553,10 +605,17 @@ export default function HomeScreen() {
                     <Zap size={14} color={totalCarbohidrati > (carbiTinta || 250) ? colors.danger : colors.accentTertiary} />
                   </View>
                   <View style={s.macroValueRow}>
-                    <Text style={[s.macroValue, { color: totalCarbohidrati > (carbiTinta || 250) ? colors.danger : colors.textPrimary }]}>{totalCarbohidrati}</Text>
-                    <Text style={[s.macroUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>/ {carbiTinta || 250}g</Text>
+                    <Text
+                      style={[s.macroValue, { color: totalCarbohidrati > (carbiTinta || 250) ? colors.danger : colors.textPrimary }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.65}
+                    >
+                      {totalCarbohidrati}
+                    </Text>
+                    <Text style={[s.macroUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3} numberOfLines={1}>/ {carbiTinta || 250}g</Text>
                   </View>
-                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Carbi</Text>
+                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>{t('nutrition.carbs')}</Text>
                   <View style={s.macroBarBg}>
                     <LinearGradient
                       colors={totalCarbohidrati > (carbiTinta || 250) ? [colors.danger, colors.danger + 'CC'] : [colors.accentTertiary, colors.accentTertiary + 'AA']}
@@ -574,10 +633,17 @@ export default function HomeScreen() {
                     <Flame size={14} color={totalGrasimi > (grasimiTinta || 70) ? colors.danger : colors.warning} />
                   </View>
                   <View style={s.macroValueRow}>
-                    <Text style={[s.macroValue, { color: totalGrasimi > (grasimiTinta || 70) ? colors.danger : colors.textPrimary }]}>{totalGrasimi}</Text>
-                    <Text style={[s.macroUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>/ {grasimiTinta || 70}g</Text>
+                    <Text
+                      style={[s.macroValue, { color: totalGrasimi > (grasimiTinta || 70) ? colors.danger : colors.textPrimary }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.65}
+                    >
+                      {totalGrasimi}
+                    </Text>
+                    <Text style={[s.macroUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3} numberOfLines={1}>/ {grasimiTinta || 70}g</Text>
                   </View>
-                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Grăsimi</Text>
+                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>{t('nutrition.fats')}</Text>
                   <View style={s.macroBarBg}>
                     <LinearGradient
                       colors={totalGrasimi > (grasimiTinta || 70) ? [colors.danger, colors.danger + 'CC'] : [colors.warning, colors.warning + 'AA']}
@@ -592,11 +658,13 @@ export default function HomeScreen() {
           </CardBackdrop>
         </Animated.View>
 
+        <PhotoJobStatusCard />
+
         {/* Camera scan CTA (Principal) */}
         <Animated.View>
           <PressableScale
             accessibilityRole="button"
-            accessibilityLabel="Scanează Mâncarea cu camera foto sau din galerie"
+            accessibilityLabel={t('home.scanAiA11y')}
             style={[s.scanCTA, { shadowColor: colors.accent }]}
             onPress={() => router.push('/camera')}
             haptic
@@ -607,8 +675,8 @@ export default function HomeScreen() {
                 <Camera size={28} color={colors.background} strokeWidth={2.5} />
               </View>
               <View style={s.scanCTAText}>
-                <Text style={[s.scanCTATitle, { color: colors.background }]}>Scanează Mâncarea cu AI</Text>
-                <Text style={s.scanCTASub} maxFontSizeMultiplier={1.3}>Analiză foto instantă a caloriilor</Text>
+                <Text style={[s.scanCTATitle, { color: colors.background }]}>{t('home.scanAiTitle')}</Text>
+                <Text style={s.scanCTASub} maxFontSizeMultiplier={1.3}>{t('home.scanAiSubtitle')}</Text>
               </View>
               <View style={s.scanCTAArrow}>
                 <Scan size={20} color={colors.background} />
@@ -618,108 +686,57 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* Rând acțiuni secundare (B1) - Cod de Bare + Manual */}
-        <Animated.View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+        <Animated.View style={{ width: '100%', maxWidth: 680, alignSelf: 'center', flexDirection: 'row', gap: 12, marginBottom: 16 }}>
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Scanează cod de bare produs"
+            accessibilityLabel={t('home.barcodeA11y')}
             style={[s.secActionCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
             onPress={() => router.push('/scanner-barcode' as any)}
           >
             <Scan size={18} color={colors.accent} />
-            <Text style={[s.secActionText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Cod de Bare</Text>
+            <Text style={[s.secActionText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{t('home.barcode')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Adaugă o masă manual"
+            accessibilityLabel={t('home.addManualA11y')}
             style={[s.secActionCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
-            onPress={() => addMealSheetRef.current?.open()}
+            onPress={deschideAddMeal}
           >
             <PlusCircle size={18} color={colors.accentSecondary} />
-            <Text style={[s.secActionText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Adaugă Manual</Text>
+            <Text style={[s.secActionText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{t('home.addManual')}</Text>
           </TouchableOpacity>
         </Animated.View>
 
         {/* Mini-Card separat: Greutate & Progres (B2) */}
-        <Animated.View>
+        <Animated.View style={{ width: '100%', maxWidth: 680, alignSelf: 'center' }}>
           <TouchableOpacity
             onPress={() => setWeightModalVisible(true)}
             accessibilityRole="button"
-            accessibilityLabel="Greutate și progres. Modifică"
+            accessibilityLabel={t('home.weightProgressA11y')}
             style={[s.weightCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
           >
             <View style={s.weightIconWrap}>
               <Scale size={20} color={colors.accent} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[s.weightLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>GREUTATE & PROGRES</Text>
-              <Text style={[s.weightValue, { color: colors.textPrimary, fontSize: greutate ? 20 : 14 }]} maxFontSizeMultiplier={1.3}>
-                {greutate ? `${greutate} kg` : 'Atinge pentru a adăuga'}
+              <Text style={[s.weightLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>{t('home.weightProgress')}</Text>
+              <Text style={[s.weightValue, { color: colors.textPrimary, fontSize: greutateIntrodusaKg ? 20 : 14 }]} maxFontSizeMultiplier={1.3}>
+                {greutateIntrodusaKg ? `${greutateIntrodusaKg} kg` : t('home.tapToAdd')}
               </Text>
             </View>
-            <Text style={[s.weightLink, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>Editează →</Text>
+            <Text style={[s.weightLink, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>{t('home.edit')}</Text>
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Water Hydration Card */}
-        {/* BUG-028: culorile apei derivă din colors.accentTertiary (tinta cian a
-            temei), nu din hex hardcodate — pe Ocean/Sunset cardul se adaptează. */}
-        <Animated.View style={[s.waterCard, { borderColor: colors.accentTertiary + '33' }]}>
-          <CardBackdrop style={s.waterBlur}>
-            <LinearGradient colors={[colors.accentTertiary + '15', 'rgba(0,0,0,0)']} style={s.waterGrad}>
-              <View style={s.waterHeader}>
-                <View style={s.waterTitleRow}>
-                  <View style={[s.waterIconBg, { backgroundColor: colors.accentTertiary + '25' }]}>
-                    <Droplet size={20} color={colors.accentTertiary} fill={colors.accentTertiary} />
-                  </View>
-                  <View>
-                    <Text style={[s.waterTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Hidratare & Apă</Text>
-                    <Text style={[s.waterSub, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>Obiectiv: {tintaPahare} pahare ({tintaPahare * 250} ml)</Text>
-                  </View>
-                </View>
-                
-                <View style={s.waterControls}>
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Scade un pahar de apă"
-                    hitSlop={6}
-                    style={[s.waterBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                    onPress={scadePahar}
-                  >
-                    <Text style={[s.waterBtnText, { color: colors.textPrimary }]}>−</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel="Adaugă un pahar de apă"
-                    hitSlop={4}
-                    style={[s.waterBtnAdd, { shadowColor: colors.accentTertiary }]}
-                    onPress={adaugaPahar}
-                  >
-                    <LinearGradient colors={[colors.accentTertiary, colors.accentTertiary + '66']} style={s.waterBtnAddGrad}>
-                      <Text style={[s.waterBtnAddText, { color: colors.textOnAccent }]}>+</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={s.waterProgressBg}>
-                <LinearGradient 
-                  colors={[colors.accentTertiary, colors.accentTertiary + '66']} 
-                  start={{ x: 0, y: 0 }} 
-                  end={{ x: 1, y: 0 }} 
-                  style={[s.waterProgressFill, { width: `${Math.min((pahare / (tintaPahare > 0 ? tintaPahare : 1)) * 100, 100)}%` }]}
-                />
-              </View>
-
-              <View style={s.waterFooter}>
-                <Text style={[s.waterCount, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
-                  <Text style={{ fontSize: 22, fontWeight: '900', color: colors.accentTertiary }}>{pahare}</Text> / {tintaPahare} pahare băute azi
-                </Text>
-                <Text style={[s.waterMl, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>{pahare * 250} ml</Text>
-              </View>
-            </LinearGradient>
-          </CardBackdrop>
-        </Animated.View>
+        <WaterIntakeCard
+          consumedMl={waterConsumedMl}
+          targetMl={waterTargetMl}
+          loading={waterLoading}
+          onAddGlass={adaugaPahar}
+          onRemoveGlass={scadePahar}
+          onAddWeight={() => setWeightModalVisible(true)}
+        />
 
         {/* Pași Card — BUG-005: copy corect despre sursă (doar senzorul telefonului,
             fără integrare Garmin/Fitbit), obiectiv editabil prin setNewStepGoal,
@@ -733,11 +750,11 @@ export default function HomeScreen() {
                     <Footprints size={20} color={isEnabled ? colors.accent : colors.textSecondary} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.healthTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>Pași & Calorii</Text>
+                    <Text style={[s.healthTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{t('home.stepsTitle')}</Text>
                     <Text style={[s.healthSub, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
                       {isEnabled && isAvailable
-                        ? `Sursă: senzorul telefonului • +${activeCalories} kcal arse`
-                        : 'Sursă: senzorul telefonului (Pedometer). Atinge „Activează" pentru a cere permisiunea.'}
+                        ? t('home.stepsSource', { calories: activeCalories })
+                        : t('home.stepsSourceOffline')}
                     </Text>
                   </View>
                 </View>
@@ -771,7 +788,7 @@ export default function HomeScreen() {
                           onPress={handleSaveStepGoal}
                           style={[s.goalBtn, { backgroundColor: colors.accent }]}
                           accessibilityRole="button"
-                          accessibilityLabel="Salvează obiectivul de pași"
+                          accessibilityLabel={t('home.stepsSaveGoalA11y')}
                         >
                           <Text style={[s.goalBtnText, { color: colors.background }]}>OK</Text>
                         </TouchableOpacity>
@@ -779,7 +796,7 @@ export default function HomeScreen() {
                           onPress={() => setStepGoalEdit(false)}
                           style={[s.goalBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                           accessibilityRole="button"
-                          accessibilityLabel="Anulează editarea obiectivului"
+                          accessibilityLabel={t('home.stepsCancelGoalA11y')}
                           hitSlop={8}
                         >
                           <X size={16} color={colors.textSecondary} />
@@ -789,25 +806,25 @@ export default function HomeScreen() {
                       <TouchableOpacity
                         onPress={() => { setStepGoalInput(String(stepGoal)); setStepGoalEdit(true); }}
                         accessibilityRole="button"
-                        accessibilityLabel="Modifică obiectivul de pași"
+                        accessibilityLabel={t('home.stepsEditGoalA11y')}
                         hitSlop={8}
                       >
-                        <Text style={[s.healthCount, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
-                          <Text style={{ fontSize: 22, fontWeight: '900', color: colors.accent }}>{steps.toLocaleString()}</Text> / {stepGoal.toLocaleString()} pași
+                        <Text style={[s.healthCount, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1.3}>
+                          <Text style={{ fontSize: 22, fontWeight: '900', color: colors.accent }}>{steps.toLocaleString()}</Text> / {stepGoal.toLocaleString()} {t('home.stepsUnit')}
                         </Text>
                       </TouchableOpacity>
                     )}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Flame size={14} color={colors.warning} />
-                      <Text style={[s.healthCalories, { color: colors.warning }]} maxFontSizeMultiplier={1.3}>+{activeCalories} kcal arse</Text>
+                      <Text style={[s.healthCalories, { color: colors.warning }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.3}>{t('home.stepsKcalBurned', { calories: activeCalories })}</Text>
                     </View>
                   </View>
                   <View style={[s.manualAddRow, { borderColor: colors.cardBorder }]}>
-                    <Text style={[s.manualAddHint, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>Adaugă manual</Text>
-                    <TouchableOpacity onPress={() => addManualSteps(500)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel="Adaugă 500 de pași manual" hitSlop={6}>
+                    <Text style={[s.manualAddHint, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>{t('home.stepsAddManual')}</Text>
+                    <TouchableOpacity onPress={() => addManualSteps(500)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel={t('home.stepsAdd500A11y')} hitSlop={6}>
                       <Text style={[s.manualAddBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>+500</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => addManualSteps(1000)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel="Adaugă 1000 de pași manual" hitSlop={6}>
+                    <TouchableOpacity onPress={() => addManualSteps(1000)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel={t('home.stepsAdd1000A11y')} hitSlop={6}>
                       <Text style={[s.manualAddBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>+1000</Text>
                     </TouchableOpacity>
                   </View>
@@ -816,23 +833,23 @@ export default function HomeScreen() {
                 <View style={s.healthOfflineBox}>
                   <Text style={[s.healthOfflineText, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>
                     {isEnabled
-                      ? 'Senzorul nu e detectat sau permisiunea nu a fost acordată. Poți oricând adăuga pașii manual mai jos.'
-                      : 'Activează pașii pentru a adăuga caloriile arse din mișcare în balanța ta de dietă — sau adaugă-i manual.'}
+                      ? t('home.stepsOfflineHelp')
+                      : t('home.stepsInactiveHelp')}
                   </Text>
                   <TouchableOpacity
                     onPress={() => toggleSync(true)}
                     style={[s.connectBtn, { backgroundColor: colors.accent }]}
                     accessibilityRole="button"
-                    accessibilityLabel="Activează senzorul de pași"
+                    accessibilityLabel={t('home.stepsActivateA11y')}
                   >
-                    <Text style={[s.connectBtnText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>Activează</Text>
+                    <Text style={[s.connectBtnText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{t('home.stepsActivate')}</Text>
                   </TouchableOpacity>
                   <View style={[s.manualAddRow, { borderColor: colors.cardBorder, marginTop: 10 }]}>
-                    <Text style={[s.manualAddHint, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>Adaugă manual</Text>
-                    <TouchableOpacity onPress={() => addManualSteps(500)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel="Adaugă 500 de pași manual" hitSlop={6}>
+                    <Text style={[s.manualAddHint, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>{t('home.stepsAddManual')}</Text>
+                    <TouchableOpacity onPress={() => addManualSteps(500)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel={t('home.stepsAdd500A11y')} hitSlop={6}>
                       <Text style={[s.manualAddBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>+500</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => addManualSteps(1000)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel="Adaugă 1000 de pași manual" hitSlop={6}>
+                    <TouchableOpacity onPress={() => addManualSteps(1000)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel={t('home.stepsAdd1000A11y')} hitSlop={6}>
                       <Text style={[s.manualAddBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>+1000</Text>
                     </TouchableOpacity>
                   </View>
@@ -843,38 +860,41 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* HARTĂ MUSCULARĂ LIVE Card pe ecranul Acasă (Secțiunea 4.4) */}
-        <Animated.View>
+        <Animated.View style={{ width: '100%', maxWidth: 680, alignSelf: 'center' }}>
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => router.push('/(tabs)/antrenamente' as any)}
             accessibilityRole="button"
-            accessibilityLabel="Hartă musculară live. Deschide antrenamentele"
+            accessibilityLabel={t('home.liveMuscleMapA11y')}
             style={[s.liveHeatmapCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
           >
             <View style={s.liveHeatmapHeader}>
               <View style={s.liveHeatmapTitleRow}>
                 <View style={[s.liveHeatmapDot, { backgroundColor: colors.danger }]} />
-                <Text style={[s.liveHeatmapTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>HARTĂ MUSCULARĂ LIVE</Text>
+                <Text style={[s.liveHeatmapTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{t('home.liveMuscleMap')}</Text>
               </View>
               <TouchableOpacity
-                onPress={() => setViewSideHome(v => v === 'front' ? 'back' : 'front')}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  setViewSideHome(v => v === 'front' ? 'back' : 'front');
+                }}
                 style={[s.liveHeatmapToggle, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={viewSideHome === 'front' ? 'Arată partea din spate a hărții musculare' : 'Arată partea din față a hărții musculare'}
+                accessibilityLabel={viewSideHome === 'front' ? t('home.showBackA11y') : t('home.showFrontA11y')}
               >
                 <RotateCcw size={12} color={colors.accent} />
                 <Text style={[s.liveHeatmapToggleText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
-                  {viewSideHome === 'front' ? 'FAȚĂ' : 'SPATE'}
+                  {viewSideHome === 'front' ? t('home.front') : t('home.back')}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <View style={[s.liveHeatmapBodyWrap, { height: 300, justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={[s.liveHeatmapBodyWrap, { height: homeBodyHeight + 16 }]}>
                 <BodyMap
                   view={viewSideHome}
                   intensity={dailyIntensityHome}
-                  width={158}
+                  width={homeBodyWidth}
                 />
             </View>
 
@@ -882,8 +902,8 @@ export default function HomeScreen() {
               <Dumbbell size={14} color={colors.accentSecondary} />
               <Text style={[s.liveHeatmapFooterText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
                 {antrenamente && antrenamente.length > 0
-                  ? `${antrenamente.length} antrenamente azi • intensitate musculară în timp real`
-                  : 'Niciun antrenament înregistrat azi • atinge pentru a începe'}
+                  ? t('home.workoutsToday', { count: antrenamente.length })
+                  : t('home.noWorkoutsToday')}
               </Text>
             </View>
           </TouchableOpacity>
@@ -895,13 +915,13 @@ export default function HomeScreen() {
             <CardBackdrop style={s.tipsBlur}>
               <LinearGradient colors={[colors.accentSecondary + '14', 'rgba(0,0,0,0)']} style={s.tipsGrad}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={[s.tipsTitle, { color: colors.textPrimary, marginBottom: 0 }]} maxFontSizeMultiplier={1.3}>✨ Sfat NutriAI al Zilei</Text>
+                  <Text style={[s.tipsTitle, { color: colors.textPrimary, marginBottom: 0 }]} maxFontSizeMultiplier={1.3}>{t('home.tipOfTheDay')}</Text>
                   <TouchableOpacity
                     onPress={handleCloseTip}
                     style={{ padding: 4 }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                     accessibilityRole="button"
-                    accessibilityLabel="Închide sfatul zilei"
+                    accessibilityLabel={t('home.closeTipA11y')}
                   >
                     <X size={18} color={colors.textSecondary} />
                   </TouchableOpacity>
@@ -914,15 +934,17 @@ export default function HomeScreen() {
 
       </ScrollView>
 
-      {/* Reusable Gorhom Bottom Sheet for adding meals */}
-      <AddMealBottomSheet ref={addMealSheetRef} onSuccess={refresh} />
+      {/* Reusable Gorhom Bottom Sheet for adding meals - lazy mounted (REMED-029/HOME-TOUCH-001) */}
+      {mealSheetMounted ? (
+        <AddMealBottomSheet ref={addMealSheetRef} onSuccess={refresh} onMasaCreata={optimisticAddMeal} />
+      ) : null}
       <StreakBottomSheet ref={streakSheetRef} />
       {/* BUG-004: greutatea se editează direct pe Home, fără navigare la Profil */}
       <AddWeightModal
         visible={weightModalVisible}
         onClose={() => setWeightModalVisible(false)}
         onSave={salveazaGreutate}
-        greutateCurenta={greutate}
+        greutateCurenta={greutateIntrodusaKg}
         greutateTinta={greutateTinta}
         onSaveTinta={salveazaGreutateTinta}
       />
@@ -940,13 +962,13 @@ const s = StyleSheet.create({
 
   // BUG-062: banner vizibil când fetch-ul jurnalului eșuează pe Home — fără el,
   // o zi cu eroare de rețea arăta ca o zi legitimă fără mese (eșec silențios).
-  eroareBanner: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16 },
+  eroareBanner: { width: '100%', maxWidth: 680, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16 },
   eroareText: { flex: 1, fontSize: 13, fontWeight: '600' },
   eroareBtn: { marginLeft: 8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   eroareBtnText: { fontSize: 13, fontWeight: '800' },
 
   // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 },
+  header: { width: '100%', maxWidth: 680, alignSelf: 'center', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 },
   headerLeft: { flex: 1, paddingRight: 12 },
   greetingRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 6 },
   greeting: { fontSize: 22, fontWeight: '900', letterSpacing: -0.3, flexShrink: 1 },
@@ -959,14 +981,14 @@ const s = StyleSheet.create({
   streakText: { fontWeight: '800', fontSize: 13 },
 
   // Ring Card
-  ringCard: { width: '100%', maxWidth: 520, alignSelf: 'center', borderRadius: 32, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
+  ringCard: { width: '100%', maxWidth: 680, alignSelf: 'center', borderRadius: 32, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
   ringCardBlur: { overflow: 'hidden' },
   ringCardGrad: { padding: 24 },
   ringCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  ringCardInfo: { flex: 1, paddingRight: 12 },
+  ringCardInfo: { flex: 1, minWidth: 0, paddingRight: 12 },
   ringCardTitle: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 6 },
-  ringCardValueRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginBottom: 10 },
-  ringCardValue: { fontSize: 56, fontWeight: '900', letterSpacing: -2, lineHeight: 60 },
+  ringCardValueRow: { flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'flex-end', gap: 6, minWidth: 0, marginBottom: 10 },
+  ringCardValue: { flexShrink: 1, minWidth: 0, fontSize: 56, fontWeight: '900', letterSpacing: -2, lineHeight: 60, includeFontPadding: false },
   ringCardUnit: { fontSize: 18, fontWeight: '800', marginBottom: 8 },
   ringCardSubRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   ringCardSubLabel: { fontSize: 12, fontWeight: '500' },
@@ -981,7 +1003,7 @@ const s = StyleSheet.create({
   macroItem: { flex: 1, alignItems: 'center', minWidth: 0 },
   macroIconBg: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   macroValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2, marginBottom: 3 },
-  macroValue: { fontSize: 16, fontWeight: '900' },
+  macroValue: { fontSize: 16, fontWeight: '900', includeFontPadding: false },
   macroUnit: { fontSize: 11, fontWeight: '700' },
   macroLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   macroBarBg: { width: '80%', height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' },
@@ -989,7 +1011,7 @@ const s = StyleSheet.create({
   macroDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 4 },
 
   // Scan CTA
-  scanCTA: { width: '100%', maxWidth: 520, alignSelf: 'center', borderRadius: 24, overflow: 'hidden', marginBottom: 20, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 12 },
+  scanCTA: { width: '100%', maxWidth: 680, alignSelf: 'center', borderRadius: 24, overflow: 'hidden', marginBottom: 20, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 12 },
   scanCTAGrad: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 16 },
   scanCTAIcon: { width: 56, height: 56, borderRadius: 18, backgroundColor: 'rgba(9,12,14,0.15)', justifyContent: 'center', alignItems: 'center' },
   scanCTAText: { flex: 1 },
@@ -998,43 +1020,22 @@ const s = StyleSheet.create({
   scanCTAArrow: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(9,12,14,0.15)', justifyContent: 'center', alignItems: 'center' },
 
   // Manual CTA
-  manualCTA: { width: '100%', maxWidth: 520, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1, marginBottom: 20, gap: 14 },
+  manualCTA: { width: '100%', maxWidth: 680, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1, marginBottom: 20, gap: 14 },
   manualCTAIcon: { width: 46, height: 46, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   manualCTAText: { flex: 1 },
   manualCTATitle: { fontSize: 16, fontWeight: '800' },
   manualCTASub: { fontSize: 12, fontWeight: '500', marginTop: 2 },
   manualCTAArrow: { fontSize: 18, fontWeight: '800' },
 
-  // Water Card
-  waterCard: { width: '100%', maxWidth: 520, alignSelf: 'center', borderRadius: 24, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
-  waterBlur: { overflow: 'hidden' },
-  waterGrad: { padding: 20 },
-  waterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  waterTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  waterIconBg: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  waterTitle: { fontSize: 16, fontWeight: '800' },
-  waterSub: { fontSize: 12, fontWeight: '500', marginTop: 2 },
-  waterControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  waterBtn: { width: 38, height: 38, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  waterBtnText: { fontSize: 20, fontWeight: '800', lineHeight: 22 },
-  waterBtnAdd: { width: 42, height: 42, borderRadius: 14, overflow: 'hidden', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
-  waterBtnAddGrad: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
-  waterBtnAddText: { fontSize: 24, fontWeight: '900', lineHeight: 26 },
-  waterProgressBg: { width: '100%', height: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 5, overflow: 'hidden', marginBottom: 12 },
-  waterProgressFill: { height: '100%', borderRadius: 5 },
-  waterFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  waterCount: { fontSize: 14, fontWeight: '700' },
-  waterMl: { fontSize: 13, fontWeight: '800' },
-
   // Tips Card
-  tipsCard: { borderRadius: 24, overflow: 'hidden', borderWidth: 1 },
+  tipsCard: { width: '100%', maxWidth: 680, alignSelf: 'center', borderRadius: 24, overflow: 'hidden', borderWidth: 1 },
   tipsBlur: { overflow: 'hidden' },
   tipsGrad: { padding: 24 },
   tipsTitle: { fontSize: 16, fontWeight: '800', marginBottom: 10 },
   tipsText: { fontSize: 14, lineHeight: 22, fontWeight: '400' },
 
   // Health Card
-  healthCard: { borderRadius: 24, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
+  healthCard: { width: '100%', maxWidth: 680, alignSelf: 'center', borderRadius: 24, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
   healthBlur: { overflow: 'hidden' },
   healthGrad: { padding: 20 },
   healthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
@@ -1068,17 +1069,17 @@ const s = StyleSheet.create({
   secActionCard: { flex: 1, height: 48, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   secActionText: { fontSize: 14, fontWeight: '800' },
 
-  weightCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, borderWidth: 1, marginBottom: 20 },
+  weightCard: { width: '100%', maxWidth: 680, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, borderWidth: 1, marginBottom: 20 },
   weightIconWrap: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
   weightLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
   weightValue: { fontSize: 20, fontWeight: '900', marginTop: 2 },
   weightLink: { fontSize: 13, fontWeight: '800' },
 
-  liveHeatmapCard: { borderRadius: 24, borderWidth: 1, padding: 16, marginBottom: 20 },
-  liveHeatmapHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  liveHeatmapTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  liveHeatmapCard: { width: '100%', maxWidth: 680, alignSelf: 'center', borderRadius: 24, borderWidth: 1, padding: 16, marginBottom: 20 },
+  liveHeatmapHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
+  liveHeatmapTitleRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
   liveHeatmapDot: { width: 8, height: 8, borderRadius: 4 },
-  liveHeatmapTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 0.6 },
+  liveHeatmapTitle: { flexShrink: 1, fontSize: 13, fontWeight: '900', letterSpacing: 0.6 },
   liveHeatmapToggle: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, minHeight: 44, borderRadius: 10, borderWidth: 1 },
   liveHeatmapToggleText: { fontSize: 11, fontWeight: '800' },
   liveHeatmapBodyWrap: { height: 245, alignItems: 'center', justifyContent: 'center' },

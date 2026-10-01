@@ -1,6 +1,4 @@
 import { TipMasa, Masa, AlimentDetaliat } from '../types';
-import type { ComponentType } from 'react';
-import { Egg, Soup, Apple, Salad } from 'lucide-react-native';
 
 /**
  * Limitele CHECK-urilor din baza de date public.mese (migrări 003/004) și ale
@@ -68,11 +66,11 @@ export const MEAL_CATEGORIES: CategorieMasaMeta[] = [
 // REMED-020: iconițele lucide ale categoriilor de masă, unice pentru toți
 // consumatorii (istoric/chat/camera/AddMealBottomSheet) — nu se mai duplică
 // maparea local, iar emoji-urile nu mai sunt folosite ca iconițe.
-export const CATEGORIE_ICONA: Record<TipMasa, ComponentType<{ size?: number; color?: string; strokeWidth?: number }>> = {
-  mic_dejun: Egg,
-  pranz: Soup,
-  gustare: Apple,
-  cina: Salad,
+export const CATEGORIE_ICONA: Record<TipMasa, string> = {
+  mic_dejun: 'eggFried',
+  pranz: 'utensilsCrossed',
+  gustare: 'apple',
+  cina: 'salad',
 };
 
 export function getTipMasaDupaOra(date: Date = new Date()): TipMasa {
@@ -99,7 +97,25 @@ export function getTipMasaDupaOra(date: Date = new Date()): TipMasa {
   return 'gustare';
 }
 
-export function getMealCategoryLabel(tip?: TipMasa): string {
+export function getMealCategoryLabel(tip?: TipMasa, t?: (key: string, options?: any) => string): string {
+  let translator = t;
+  if (!translator) {
+    try {
+      // Lazy load to prevent native AsyncStorage import in unit tests
+      const i18nModule = require('../i18n');
+      const i18nInstance = i18nModule.default || i18nModule;
+      if (i18nInstance && i18nInstance.t) {
+        translator = i18nInstance.t.bind(i18nInstance);
+      }
+    } catch {}
+  }
+  if (translator && tip) {
+    const key = `chat.mealCategory.${tip}`;
+    const translated = translator(key);
+    if (translated && translated !== key) {
+      return translated;
+    }
+  }
   switch (tip) {
     case 'mic_dejun':
       return 'Mic Dejun';
@@ -110,22 +126,22 @@ export function getMealCategoryLabel(tip?: TipMasa): string {
     case 'gustare':
       return 'Gustări';
     default:
-      return 'Alte Mese';
+      return translator ? translator('chat.mealCategory.other', { defaultValue: 'Alte Mese' }) : 'Alte Mese';
   }
 }
 
 export function getMealCategoryIcon(tip?: TipMasa): string {
   switch (tip) {
     case 'mic_dejun':
-      return '🍳';
+      return 'egg';
     case 'pranz':
-      return '🍲';
+      return 'soup';
     case 'cina':
-      return '🥗';
+      return 'salad';
     case 'gustare':
-      return '🍎';
+      return 'apple';
     default:
-      return '🍽️';
+      return 'utensils';
   }
 }
 
@@ -141,11 +157,17 @@ export async function insereazaMasaCuPoza(
   client: any,
   payload: Record<string, unknown>,
 ): Promise<{ data: any; error: any }> {
+  const payloadCurat = { ...payload };
+  // Schema Postgres pentru tabela 'mese' folosește id de tip bigint auto-increment.
+  // Trimiterea unui string UUID provoacă 22P02: invalid input syntax for type bigint.
+  if (payloadCurat.id !== undefined && (typeof payloadCurat.id === 'string' && isNaN(Number(payloadCurat.id)))) {
+    delete payloadCurat.id;
+  }
   // .select() face ca PostgREST să răspundă cu rândul creat (cu id real și
   // created_at), nu doar ok — necesar pentru adăugarea optimistă în jurnal (S10).
-  const prima = await client.from('mese').insert(payload).select();
+  const prima = await client.from('mese').insert(payloadCurat).select();
   if (prima.error && SEMNALE_COLOANA_LIPSA.test(String(prima.error.message))) {
-    const faraPoza = { ...payload };
+    const faraPoza = { ...payloadCurat };
     delete faraPoza.imagine_url;
     return client.from('mese').insert(faraPoza).select();
   }
@@ -239,6 +261,45 @@ export function recalculeazaTotaluri(alimente: AlimentDetaliat[]): TotaluriMasa 
   };
 }
 
+/**
+ * F-04 — INVARIANT: totalul unei mese == suma descompunerii ei.
+ *
+ * PROBLEMA
+ * La editarea unei mese cu MAI MULTE ingrediente, formularul plat
+ * (calorii/proteine/...) ramane editabil, dar descompunerea `alimente` este
+ * pastrata neatinsa (BUG-002/REMED-001, ca sa nu colapseze la un element).
+ * Rezultatul: se scria un total NOU peste o descompunere VECHE, iar acelasi
+ * card afisa doua adevaruri contradictorii (badge 600 kcal peste ingrediente
+ * insumand 500). Mai rau, o editare ulterioara a unui ingredient recalcula
+ * totalul din descompunere si stergea tacut corectia manuala a utilizatorului.
+ *
+ * DECIZIE (sursa unica de adevar)
+ * Cand exista o descompunere cu date nutritionale reale, EA este sursa de
+ * adevar, iar totalul se deriva mereu din ea — aceeasi regula pe care o aplica
+ * deja MealDetailsModal prin `recalculeazaTotaluri` la editarea unui ingredient.
+ * Astfel starea inconsistenta devine nereprezentabila, nu doar improbabila.
+ *
+ * EXCEPTIE (protejeaza datele mostenite)
+ * Mesele vechi pot avea `alimente: [{ nume, grame }]` fara macro-uri. Acolo
+ * derivarea ar duce totalul la 0, deci pastram totalul din formular. Detectam
+ * cazul prin „descompunerea nu contine nicio informatie nutritionala".
+ */
+export function descompunereAreDateNutritionale(alimente: AlimentDetaliat[] | null | undefined): boolean {
+  if (!Array.isArray(alimente) || alimente.length === 0) return false;
+  return alimente.some((al) => {
+    const valori = [al?.calorii, al?.proteine, al?.carbohidrati, al?.grasimi, al?.fibre];
+    return valori.some((v) => Number.isFinite(Number(v)) && Number(v) > 0);
+  });
+}
+
+export function totaluriPentruPersistare(
+  alimente: AlimentDetaliat[] | null | undefined,
+  totaluriFormular: TotaluriMasa,
+): TotaluriMasa {
+  if (!descompunereAreDateNutritionale(alimente)) return totaluriFormular;
+  return recalculeazaTotaluri(alimente as AlimentDetaliat[]);
+}
+
 export interface ConstruireAlimenteParams {
   /** Descompunerea originala a mesei editate (null daca masa nu avea alimente). */
   original: AlimentDetaliat[] | null;
@@ -271,17 +332,128 @@ export function construiesteAlimenteLaSalvare({
   return [alimentNou];
 }
 
-/** La fel ca `insereazaMasaCuPoza`, pentru editarea unei mese existente. */
+/** La fel ca `insereazaMasaCuPoza`, pentru editarea unei mese existente. Cu .select() pentru verificare persistență reală. */
 export async function actualizeazaMasaCuPoza(
   client: any,
   id: string,
   valori: Record<string, unknown>,
-): Promise<{ error: any }> {
-  const prima = await client.from('mese').update(valori).eq('id', id);
+): Promise<{ error: any; data?: any }> {
+  const valoriCurate = { ...valori };
+  if (valoriCurate.id !== undefined && (typeof valoriCurate.id === 'string' && isNaN(Number(valoriCurate.id)))) {
+    delete valoriCurate.id;
+  }
+  const prima = await client.from('mese').update(valoriCurate).eq('id', id).select();
   if (prima.error && SEMNALE_COLOANA_LIPSA.test(String(prima.error.message))) {
-    const faraPoza = { ...valori };
+    const faraPoza = { ...valoriCurate };
     delete faraPoza.imagine_url;
-    return client.from('mese').update(faraPoza).eq('id', id);
+    return client.from('mese').update(faraPoza).eq('id', id).select();
   }
   return prima;
 }
+
+export interface NutritionalBasis {
+  baseQuantity: number;
+  kcalPerUnit: number;
+  proteinPerUnit: number;
+  carbsPerUnit: number;
+  fatPerUnit: number;
+  fiberPerUnit: number;
+  unit: string;
+}
+
+/**
+ * Extrage baza nutrițională autoritară (per unitate / per gram) dintr-un aliment existent.
+ * Dacă alimentul are proprietăți per-100g (din Photo AI, Open Food Facts, Custom Food), acestea sunt prioritare.
+ * Altfel, se folosește cantitatea și valorile curente pentru a determina raportul canonic.
+ */
+export function extrageBazaNutritionala(al: AlimentDetaliat): NutritionalBasis {
+  const raw = al as unknown as Record<string, unknown>;
+  const unit = String(raw.unit || raw.servingUnit || raw.unitate || 'g').trim() || 'g';
+
+  // Verifică dacă există valori per 100g autoritare
+  const calorii100 = Number(raw.calorii_per_100g);
+  if (Number.isFinite(calorii100) && calorii100 > 0) {
+    return {
+      baseQuantity: 100,
+      kcalPerUnit: calorii100 / 100,
+      proteinPerUnit: (Number(raw.proteine_per_100g) || 0) / 100,
+      carbsPerUnit: (Number(raw.carbohidrati_per_100g) || 0) / 100,
+      fatPerUnit: (Number(raw.grasimi_per_100g) || 0) / 100,
+      fiberPerUnit: (Number(raw.fibre_per_100g) || 0) / 100,
+      unit,
+    };
+  }
+
+  // Altfel, cantitatea curentă este baza
+  const grame = Number(al.grame);
+  const baseQty = Number.isFinite(grame) && grame > 0 ? grame : 100;
+  return {
+    baseQuantity: baseQty,
+    kcalPerUnit: (Number(al.calorii) || 0) / baseQty,
+    proteinPerUnit: (Number(al.proteine) || 0) / baseQty,
+    carbsPerUnit: (Number(al.carbohidrati) || 0) / baseQty,
+    fatPerUnit: (Number(al.grasimi) || 0) / baseQty,
+    fiberPerUnit: (Number(al.fibre) || 0) / baseQty,
+    unit,
+  };
+}
+
+/**
+ * Recalculează valorile nutriționale scalând direct din baza autoritară,
+ * eliminând acumularea erorilor de rotunjire la editări succesive.
+ */
+export function scaleazaDinBaza(
+  basis: NutritionalBasis,
+  nouaCantitate: number,
+): {
+  calorii: number;
+  proteine: number;
+  carbohidrati: number;
+  grasimi: number;
+  fibre: number;
+} {
+  const q = Number.isFinite(nouaCantitate) && nouaCantitate > 0 ? nouaCantitate : 0;
+  return {
+    calorii: Math.round(basis.kcalPerUnit * q),
+    proteine: Math.round(basis.proteinPerUnit * q * 10) / 10,
+    carbohidrati: Math.round(basis.carbsPerUnit * q * 10) / 10,
+    grasimi: Math.round(basis.fatPerUnit * q * 10) / 10,
+    fibre: Math.round(basis.fiberPerUnit * q * 10) / 10,
+  };
+}
+
+/**
+ * Actualizează cantitatea unui aliment și recalculează toate valorile nutriționale
+ * scalate din baza canonică.
+ */
+export function actualizeazaCantitateAliment(
+  al: AlimentDetaliat,
+  nouaCantitate: number,
+  basis?: NutritionalBasis,
+): AlimentDetaliat {
+  const b = basis ?? extrageBazaNutritionala(al);
+  const scalat = scaleazaDinBaza(b, nouaCantitate);
+
+  let aminoacizi = al.aminoacizi;
+  if (al.aminoacizi && b.baseQuantity > 0) {
+    const f = nouaCantitate / b.baseQuantity;
+    aminoacizi = Object.fromEntries(
+      Object.entries(al.aminoacizi).map(([k, v]) => [
+        k,
+        typeof v === 'number' && Number.isFinite(v) ? Math.round(v * f) : v,
+      ]),
+    ) as any;
+  }
+
+  return {
+    ...al,
+    grame: nouaCantitate,
+    calorii: scalat.calorii,
+    proteine: scalat.proteine,
+    carbohidrati: scalat.carbohidrati,
+    grasimi: scalat.grasimi,
+    fibre: scalat.fibre,
+    ...(aminoacizi ? { aminoacizi } : {}),
+  };
+}
+

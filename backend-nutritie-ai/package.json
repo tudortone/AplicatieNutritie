@@ -7,8 +7,9 @@
     "node": ">=22 <23"
   },
   "scripts": {
-    "test": "node tests/runJestWithAnnotations.js",
+    "test": "node tests/runJestWithAnnotations.js --testPathIgnorePatterns=rls_integration.test.js --testPathIgnorePatterns=rls_postgrest.test.js",
     "test:integration": "node tests/runJestWithAnnotations.js tests/rls_integration.test.js",
+    "test:integration:postgrest": "node tests/runJestWithAnnotations.js tests/rls_postgrest.test.js",
     "lint": "node tests/runEslintWithAnnotations.js",
     "start": "node server.js"
   },
@@ -27,10 +28,11 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
+    "google-auth-library": "11.0.2",
     "helmet": "^8.2.0",
     "imagekit": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
-    "multer": "^2.2.0",
+    "multer": "^2.4.0",
     "rate-limit-redis": "^6.0.1",
     "redis": "^6.2.0",
     "svix": "^1.99.1"
@@ -39,6 +41,7 @@
     "eslint": "^10.8.0",
     "globals": "^17.9.0",
     "jest": "^30.4.2",
+    "js-yaml": "^3.15.2",
     "pg": "^8.22.0",
     "supertest": "^7.2.2"
   },
@@ -60,6 +63,10 @@
     "engine.io-client": "6.6.6",
     "nanoid": "^3.3.18",
     "uuid": "11.1.1",
-    "ws": "8.21.3"
+    "ws": "8.21.3",
+    "qs": "^6.16.0",
+    "browserslist": "^4.28.9",
+    "baseline-browser-mapping": "^2.11.23",
+    "js-yaml": "^3.15.2"
   }
 }

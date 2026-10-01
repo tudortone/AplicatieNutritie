@@ -29,7 +29,10 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion) {
+      opacity.value = 0.45;
+      return;
+    }
     opacity.value = withRepeat(
       withSequence(
         withTiming(0.75, { duration: 800, easing: Easing.inOut(Easing.ease) }),

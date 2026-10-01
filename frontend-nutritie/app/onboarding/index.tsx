@@ -1,35 +1,55 @@
-import React from 'react'
-import { Text } from 'react-native'
+import React, { useState } from 'react'
+import { Text, View } from 'react-native'
+import Animated, { FadeInDown } from 'react-native-reanimated'
+import { useTranslation } from 'react-i18next'
+import * as Haptics from 'expo-haptics'
 
 import EcranPas from '../../components/onboarding/EcranPas'
 import CardOptiune from '../../components/onboarding/CardOptiune'
-import { useOnboarding } from '../../context/OnboardingContext'
-import type { Gen } from '../../lib/onboarding'
+import { changeLanguage, SUPPORTED_LANGUAGES, LANGUAGE_NAMES, type SupportedLanguage } from '../../i18n'
+import { useReducedMotion } from '../../hooks/useReducedMotion'
 
-const OPTIUNI: { valoare: Gen; titlu: string; simbol: string }[] = [
-	{ valoare: 'masculin', titlu: 'Masculin', simbol: '\u2642' },
-	{ valoare: 'feminin', titlu: 'Feminin', simbol: '\u2640' },
-]
+export default function PasLimba() {
+	const { t, i18n } = useTranslation()
+	const reduceMotion = useReducedMotion()
+	const [currentLang, setCurrentLang] = useState<SupportedLanguage>(
+		() => (i18n.language as SupportedLanguage) || 'en'
+	)
 
-export default function PasGen() {
-	const { date, actualizeaza } = useOnboarding()
+	const handleSelectLanguage = async (lang: SupportedLanguage) => {
+		try {
+			Haptics.selectionAsync()
+		} catch {}
+		setCurrentLang(lang)
+		await changeLanguage(lang)
+	}
 
 	return (
 		<EcranPas
 			pas="/onboarding"
-			titlu="Hai sa te cunoastem"
-			subtitlu="Ne ajuta sa personalizam planul si recomandarile pentru tine."
-			poateContinua={date.gen !== null}
+			titlu={t('onboarding.chooseLanguageTitle', 'Choose your language')}
+			subtitlu={t('onboarding.chooseLanguageSubtitle', 'Select your preferred language for GetFlow.')}
+			poateContinua={true}
 		>
-			{OPTIUNI.map((o) => (
-				<CardOptiune
-					key={o.valoare}
-					titlu={o.titlu}
-					pictograma={<Text style={{ fontSize: 22 }}>{o.simbol}</Text>}
-					selectat={date.gen === o.valoare}
-					laSelectare={() => actualizeaza({ gen: o.valoare })}
-				/>
-			))}
+			<View style={{ marginTop: 8 }}>
+				{SUPPORTED_LANGUAGES.map((lang, index) => {
+					const isSelected = currentLang === lang
+					const info = LANGUAGE_NAMES[lang]
+					return (
+						<Animated.View
+							key={lang}
+							entering={reduceMotion ? undefined : FadeInDown.duration(350).delay(index * 60)}
+						>
+							<CardOptiune
+								titlu={info.label}
+								pictograma={<Text style={{ fontSize: 24 }}>{info.flag}</Text>}
+								selectat={isSelected}
+								laSelectare={() => handleSelectLanguage(lang)}
+							/>
+						</Animated.View>
+					)
+				})}
+			</View>
 		</EcranPas>
 	)
 }

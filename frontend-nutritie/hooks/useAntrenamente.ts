@@ -13,8 +13,12 @@ export interface SetExercitiu {
   set_type?: SetType;
   rpe?: number;
   completed?: boolean;
+  assistance_weight_kg?: number;
+  time_seconds?: number;
+  distance_km?: number;
 }
 export interface ExercitiuInAntrenament {
+  schemaVersion?: number;
   exercitiuId: string;
   nume: string;
   seturi: SetExercitiu[];

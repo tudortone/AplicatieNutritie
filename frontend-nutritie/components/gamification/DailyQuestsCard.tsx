@@ -8,6 +8,7 @@ import {
   type RewardState,
 } from '../../lib/questsEngine';
 import { useTheme } from '../../context/ThemeContext';
+import { FlowIcon } from '../ui/FlowIcon';
 
 export type DailyQuestsCardProps = {
   snapshot: DailySnapshot;
@@ -113,7 +114,7 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
           <Text style={[styles.title, { color: colors.textPrimary }]}>Questuri zilnice</Text>
           <CountdownLabel />
         </View>
-        <Text style={[styles.counter, { color: colors.accent }]}>
+        <Text style={[styles.counter, { color: colors.accent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
           {doneCount}/{quests.length} · {xpToday} XP
         </Text>
       </View>
@@ -122,13 +123,15 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
         <Text style={[styles.loading, { color: colors.textSecondary }]}>Se generează questurile zilei…</Text>
       ) : quests.map((q) => (
         <View key={q.id} style={styles.quest}>
-          <Text style={styles.questIcon}>{q.icon}</Text>
+          <View style={styles.questIcon}>
+            <FlowIcon name={q.icon} size={18} color={colors.accent} />
+          </View>
           <View style={styles.questBody}>
             <View style={styles.questTop}>
-              <Text style={[styles.questTitle, { color: q.done ? colors.success : colors.textPrimary }]}>
+              <Text style={[styles.questTitle, { color: q.done ? colors.success : colors.textPrimary }]} numberOfLines={1}>
                 {q.done ? '✓ ' : ''}{q.title}
               </Text>
-              <Text style={[styles.questProgress, { color: colors.textTertiary }]}>
+              <Text style={[styles.questProgress, { color: colors.textTertiary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
                 {formatValue(q.progress, q.unit)}/{formatValue(q.target, q.unit)} {q.unit}
               </Text>
             </View>
@@ -148,7 +151,10 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
       {!compact ? (
         <View style={[styles.streakBox, { borderColor: colors.cardBorder }]}>
           <View style={styles.streakRow}>
-            <Text style={[styles.streakLabel, { color: colors.textSecondary }]}>🔥 Serie: {reward.streak} zile</Text>
+            <View style={styles.streakValue}>
+              <FlowIcon name="flame" size={15} color={colors.accent} />
+              <Text style={[styles.streakLabel, { color: colors.textSecondary }]}>Serie: {reward.streak} zile</Text>
+            </View>
             <Text style={[styles.streakLabel, { color: colors.textTertiary }]}>Record: {reward.bestStreak}</Text>
           </View>
         </View>
@@ -158,7 +164,7 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 20, borderWidth: 1, padding: 16, gap: 14 },
+  card: { width: '100%', maxWidth: 680, alignSelf: 'center', borderRadius: 20, borderWidth: 1, padding: 16, gap: 14 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
   headerCopy: { flex: 1 },
   title: { fontSize: 17, fontWeight: '900' },
@@ -166,7 +172,7 @@ const styles = StyleSheet.create({
   counter: { fontSize: 13, fontWeight: '800' },
   loading: { fontSize: 13, paddingVertical: 12, textAlign: 'center' },
   quest: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  questIcon: { fontSize: 20, width: 26, textAlign: 'center' },
+  questIcon: { width: 26, alignItems: 'center', justifyContent: 'center' },
   questBody: { flex: 1, gap: 6 },
   questTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   questTitle: { fontSize: 14, fontWeight: '700', flex: 1 },
@@ -176,5 +182,6 @@ const styles = StyleSheet.create({
   xp: { fontSize: 12, fontWeight: '800', width: 34, textAlign: 'right' },
   streakBox: { borderTopWidth: 1, paddingTop: 14, gap: 12 },
   streakRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  streakValue: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   streakLabel: { fontSize: 13, fontWeight: '700' },
 });

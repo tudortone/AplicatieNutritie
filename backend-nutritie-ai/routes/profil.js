@@ -1,6 +1,13 @@
 'use strict';
 
 const express = require('express');
+const {
+  calculeazaPlanNutritional,
+  MAPARE_SEX,
+  MAPARE_ACTIVITATE,
+  MAPARE_OBIECTIV,
+} = require('../utils/calculNutritional');
+const { rezumatEroareSigur } = require('../utils/sentrySanitize');
 
 function campLipsa(valoare) {
   return valoare === undefined || valoare === null ||
@@ -54,33 +61,31 @@ function createProfilRouter({ requireAuth, generalLimiter }) {
         return res.status(400).json({ eroare: 'Obiectivul selectat este invalid.' });
       }
 
-      const bmr = sex === 'Masculin'
-        ? 10 * g + 6.25 * i - 5 * v + 5
-        : 10 * g + 6.25 * i - 5 * v - 161;
+      // F-08: aceeasi matematica cu lib/onboarding.ts (`calculeazaPlan`), prin
+      // modulul canonic utils/calculNutritional.js. Inainte, acest endpoint avea
+      // propria formula (deficit fix -500/+350, proteine g/kg, grasimi 25%),
+      // deci acelasi utilizator primea tinte diferite fata de chestionar.
+      const plan = calculeazaPlanNutritional({
+        gen: MAPARE_SEX[sex],
+        varsta: v,
+        greutateKg: g,
+        inaltimeCm: i,
+        activitate: MAPARE_ACTIVITATE[activitate],
+        scop: MAPARE_OBIECTIV[obiectiv],
+      });
 
-      const multiplicatori = { Sedentar: 1.2, Moderat: 1.55, 'Foarte Activ': 1.725 };
-      const tdee = bmr * multiplicatori[activitate];
-
-      let caloriiTinta;
-      if (obiectiv === 'Slăbire') {
-        caloriiTinta = Math.max(tdee - 500, sex === 'Masculin' ? 1500 : 1200);
-      } else if (obiectiv === 'Masă Musculară') {
-        caloriiTinta = tdee + 350;
-      } else {
-        caloriiTinta = tdee;
+      if (!plan) {
+        return res.status(400).json({ eroare: 'Datele trimise nu permit calculul unui plan.' });
       }
 
-      const protPerKg = obiectiv === 'Menținere' ? 1.6 : 2.0;
-      const proteineTinta = Math.round(g * protPerKg);
-      const calT = Math.round(caloriiTinta);
-      const grasimiTinta = Math.round((calT * 0.25) / 9);
-      const carbiTinta = Math.round(
-        Math.max((calT - proteineTinta * 4 - grasimiTinta * 9) / 4, 50),
-      );
-
-      return res.json({ caloriiTinta: calT, proteineTinta, grasimiTinta, carbiTinta });
+      return res.json({
+        caloriiTinta: plan.calorii,
+        proteineTinta: plan.proteineG,
+        grasimiTinta: plan.grasimiG,
+        carbiTinta: plan.carbohidratiG,
+      });
     } catch (error) {
-      console.error('Eroare la calculul profilului:', error.message);
+      console.error('[Profile route]', rezumatEroareSigur(error, { operation: 'calculate_profile' }));
       return res.status(500).json({ eroare: 'Îmi pare rău, am întâmpinat o problemă la calcul. Mai încearcă!' });
     }
   });

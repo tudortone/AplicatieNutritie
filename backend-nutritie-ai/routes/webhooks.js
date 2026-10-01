@@ -14,7 +14,7 @@ const {
   TABELE_CU_RLS_UTILIZATOR,
 } = require('../utils/clientUtilizator');
 const { CODURI_TABELA_INEXISTENTA } = require('../utils/gdprServices');
-const { pseudonimizeaza } = require('../utils/sentrySanitize');
+const { pseudonimizeaza, rezumatEroareSigur } = require('../utils/sentrySanitize');
 
 class EroareTranzitorie extends Error {
   constructor(mesaj, cauza) {
@@ -50,18 +50,20 @@ function numarClampat(valoare, min, max, implicit) {
 
 async function inregistreazaWebhookEsuat({ supabaseAdmin, clerkUserId, type, motiv, payload }) {
   const alerteazaEsecDeadLetter = (detaliu, exceptie) => {
-    console.error(
-      `[Webhook Clerk] DEAD_LETTER_WRITE_FAILED: nu am putut scrie în clerk_webhook_esuate: ${detaliu}`,
-    );
+    const rezumat = rezumatEroareSigur(exceptie || { code: detaliu }, {
+      operation: `dead_letter_${type || 'unknown'}`,
+      provider: 'supabase',
+    });
+    console.error('[Webhook Clerk] DEAD_LETTER_WRITE_FAILED', rezumat);
     try {
       Sentry.withScope((scope) => {
         scope.setLevel('error');
         scope.setTag('webhook', 'clerk');
         scope.setTag('webhook.dead_letter_failed', 'true');
-        scope.setTag('webhook.event_type', String(type));
-        scope.setFingerprint(['clerk-webhook-dead-letter', String(type)]);
-        if (exceptie) Sentry.captureException(exceptie);
-        else Sentry.captureMessage(`DEAD_LETTER_WRITE_FAILED: ${detaliu}`);
+        scope.setTag('webhook.event_type', rezumat.operation);
+        scope.setFingerprint(['clerk-webhook-dead-letter', rezumat.operation]);
+        scope.setExtra('error_summary', rezumat);
+        Sentry.captureMessage('CLERK_WEBHOOK_DEAD_LETTER_WRITE_FAILED');
       });
     } catch {
       // Sentry indisponibil
@@ -87,13 +89,13 @@ async function inregistreazaWebhookEsuat({ supabaseAdmin, clerkUserId, type, mot
     // Fără ramura asta, o tabelă lipsă sau o politică RLS ar trece complet tăcut
     // pe lângă alerte, iar singurul semnal ar fi un 500 fără cauză în log.
     if (error) {
-      alerteazaEsecDeadLetter(`${error.code || 'FARA_COD'} ${error.message || ''}`.trim());
+      alerteazaEsecDeadLetter(error.code || 'FARA_COD', error);
       return false;
     }
 
     return true;
   } catch (e) {
-    alerteazaEsecDeadLetter(e.message, e);
+    alerteazaEsecDeadLetter(e?.code || e?.name || 'EXCEPTION', e);
     return false;
   }
 }
@@ -205,7 +207,10 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
         'svix-signature': svix_signature,
       });
     } catch (err) {
-      console.error('[Webhook Clerk] Verificare semnătură eșuată:', err.message);
+      console.error('[Webhook Clerk]', rezumatEroareSigur(err, {
+        operation: 'verify_signature',
+        provider: 'clerk',
+      }));
       return res.status(401).json({ eroare: 'Semnătură webhook invalidă.' });
     }
 
@@ -278,7 +283,10 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
           try {
             await tasks.trigger('user-sync', { action: 'user.created', clerkUserId, supabaseUserId, email, meta });
           } catch (e) {
-            console.warn('[Webhook Clerk] Nu s-a putut declanșa task-ul Trigger.dev:', e.message);
+            console.warn('[Webhook Clerk]', rezumatEroareSigur(e, {
+              operation: 'trigger_user_created',
+              provider: 'trigger_dev',
+            }));
           }
         }
       } else if (type === 'user.updated') {
@@ -301,7 +309,10 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
           try {
             await tasks.trigger('user-sync', { action: 'user.updated', clerkUserId, data });
           } catch (e) {
-            console.warn('[Webhook Clerk] Trigger.dev error on user.updated:', e.message);
+            console.warn('[Webhook Clerk]', rezumatEroareSigur(e, {
+              operation: 'trigger_user_updated',
+              provider: 'trigger_dev',
+            }));
           }
         }
       } else if (type === 'user.deleted') {
@@ -334,14 +345,20 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
           try {
             await tasks.trigger('user-sync', { action: 'user.deleted', clerkUserId, supabaseUserId });
           } catch (e) {
-            console.warn('[Webhook Clerk] Trigger.dev error on user.deleted:', e.message);
+            console.warn('[Webhook Clerk]', rezumatEroareSigur(e, {
+              operation: 'trigger_user_deleted',
+              provider: 'trigger_dev',
+            }));
           }
         }
       }
 
       return res.json({ ok: true, type });
     } catch (err) {
-      console.error(`[Webhook Clerk] Eroare la procesarea evenimentului ${type}:`, err.message);
+      console.error('[Webhook Clerk]', rezumatEroareSigur(err, {
+        operation: `process_${type || 'unknown'}`,
+        provider: 'clerk',
+      }));
 
       try {
         Sentry.withScope((scope) => {

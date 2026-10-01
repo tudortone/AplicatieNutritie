@@ -19,6 +19,7 @@ import { AddWeightModal } from '../../components/AddWeightModal';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useTranslation } from 'react-i18next';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { FlowIcon } from '../../components/ui/FlowIcon';
 
 interface ZiStatistica {
   data: string;
@@ -81,7 +82,7 @@ export default function StatisticiScreen() {
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
   const { t } = useTranslation();
-  const { scrollPaddingTop, scrollPaddingBottom } = useResponsiveLayout();
+  const { scrollPaddingTop, scrollPaddingBottom, horizontalPadding } = useResponsiveLayout();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'calorii' | 'greutate'>('calorii');
   const [caloriiTinta, setCaloriiTinta] = useState(2000);
@@ -338,7 +339,7 @@ export default function StatisticiScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom, width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: horizontalPadding }]}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={fetchStatistici} tintColor={colors.accent} colors={[colors.accent]} />
         }
@@ -358,9 +359,10 @@ export default function StatisticiScreen() {
               accessibilityState={{ selected: activeTab === 'calorii' }}
               accessibilityLabel="Fila aport caloric"
             >
-              <Text style={[styles.tabText, { color: activeTab === 'calorii' ? colors.background : colors.textSecondary, fontWeight: activeTab === 'calorii' ? '800' : '600' }]}>
-                📊 Aport Caloric
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <FlowIcon name="chart" size={15} color={activeTab === 'calorii' ? colors.background : colors.textSecondary} />
+                <Text style={[styles.tabText, { color: activeTab === 'calorii' ? colors.background : colors.textSecondary, fontWeight: activeTab === 'calorii' ? '800' : '600' }]}>Aport Caloric</Text>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -370,9 +372,10 @@ export default function StatisticiScreen() {
               accessibilityState={{ selected: activeTab === 'greutate' }}
               accessibilityLabel="Fila evoluție greutate"
             >
-              <Text style={[styles.tabText, { color: activeTab === 'greutate' ? colors.background : colors.textSecondary, fontWeight: activeTab === 'greutate' ? '800' : '600' }]}>
-                ⚖️ Evoluție Greutate
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <FlowIcon name="scale" size={15} color={activeTab === 'greutate' ? colors.background : colors.textSecondary} />
+                <Text style={[styles.tabText, { color: activeTab === 'greutate' ? colors.background : colors.textSecondary, fontWeight: activeTab === 'greutate' ? '800' : '600' }]}>Evoluție Greutate</Text>
+              </View>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -436,7 +439,10 @@ export default function StatisticiScreen() {
                     <Plus size={20} color={colors.background} strokeWidth={3} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.recordTitle, { color: colors.textPrimary }]}>⚖️ Modifică Greutatea Curentă sau Țintă</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                      <FlowIcon name="scale" size={16} color={colors.accentSecondary} />
+                      <Text style={[styles.recordTitle, { color: colors.textPrimary }]}>Modifică Greutatea Curentă sau Țintă</Text>
+                    </View>
                     <Text style={[styles.recordSub, { color: colors.textSecondary }]}>Adaugă greutatea curentă sau modifică obiectivul tău de {greutateTinta} kg</Text>
                   </View>
                 </LinearGradient>
@@ -449,7 +455,10 @@ export default function StatisticiScreen() {
                 <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.chartGrad}>
                   <View style={styles.chartHeader}>
                     <View>
-                      <Text style={[styles.chartTitle, { color: colors.textPrimary }]}>⚖️ Grafic Greutate</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                        <FlowIcon name="scale" size={16} color={colors.accentSecondary} />
+                        <Text style={[styles.chartTitle, { color: colors.textPrimary }]}>Grafic Greutate</Text>
+                      </View>
                       <Text style={[styles.chartTargetLbl, { color: colors.textSecondary }]}>Istoric pe ultimele {zileChart} zile</Text>
                     </View>
                     <View style={[styles.chartSwitcher, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
@@ -540,7 +549,7 @@ export default function StatisticiScreen() {
                   </View>
                   ) : (
                     <EmptyState
-                      icon="⚖️"
+                      icon="scale"
                       title={t('statistici.emptyGreutate.title')}
                       subtitle={t('statistici.emptyGreutate.subtitle')}
                       actionLabel={t('statistici.emptyGreutate.action')}
@@ -560,7 +569,10 @@ export default function StatisticiScreen() {
                       <Sparkles size={20} color={colors.accent} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.predictTitle, { color: colors.textPrimary }]}>🤖 Predicție GetFlow</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <FlowIcon name="brain" size={16} color={colors.accent} />
+                        <Text style={[styles.predictTitle, { color: colors.textPrimary }]}>Predicție GetFlow</Text>
+                      </View>
                       <Text style={[styles.predictSub, { color: colors.textSecondary }]}>Algoritm bazat pe ritmul și deficitul tău caloric</Text>
                     </View>
                   </View>
@@ -570,7 +582,10 @@ export default function StatisticiScreen() {
                     return (
                       <>
                         <View style={[styles.predictBox, { backgroundColor: 'rgba(0,0,0,0.2)', borderColor: 'rgba(255,255,255,0.04)' }]}>
-                          <Text style={[styles.predictDate, { color: colors.accent }]}>🎯 {predictie.dataEst}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                            <FlowIcon name="target" size={14} color={colors.accent} />
+                            <Text style={[styles.predictDate, { color: colors.accent }]}>{predictie.dataEst}</Text>
+                          </View>
                           <Text style={[styles.predictWeeks, { color: colors.textSecondary }]}>În aproximativ {predictie.saptamani} săptămâni</Text>
                         </View>
                         <Text style={[styles.predictText, { color: colors.textSecondary }]}>
@@ -590,7 +605,7 @@ export default function StatisticiScreen() {
           <View style={[styles.summaryBox, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
             <LinearGradient colors={[colors.accent + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
               <Flame size={20} color={colors.accent} />
-              <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{medieCalorii}</Text>
+              <Text style={[styles.summaryVal, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{medieCalorii}</Text>
               <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>Medie kcal / zi</Text>
             </LinearGradient>
           </View>
@@ -598,7 +613,7 @@ export default function StatisticiScreen() {
           <View style={[styles.summaryBox, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
             <LinearGradient colors={[colors.accentSecondary + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
               <Activity size={20} color={colors.accentSecondary} />
-              <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{medieProteine}g</Text>
+              <Text style={[styles.summaryVal, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{medieProteine}g</Text>
               <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>Medie proteine</Text>
             </LinearGradient>
           </View>
@@ -606,7 +621,7 @@ export default function StatisticiScreen() {
           <View style={[styles.summaryBox, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
             <LinearGradient colors={[colors.warning + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
               <Award size={20} color={colors.warning} />
-              <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{zileInTinta}/7</Text>
+              <Text style={[styles.summaryVal, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>{zileInTinta}/7</Text>
               <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>Zile în țintă</Text>
             </LinearGradient>
           </View>
@@ -617,7 +632,10 @@ export default function StatisticiScreen() {
           <BlurView intensity={20} tint="dark" style={styles.chartBlur}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.chartGrad}>
               <View style={styles.chartHeader}>
-                <Text style={[styles.chartTitle, { color: colors.textPrimary }]}>📊 Consum Calorii</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                <FlowIcon name="chart" size={16} color={colors.accent} />
+                <Text style={[styles.chartTitle, { color: colors.textPrimary }]}>Consum Calorii</Text>
+              </View>
                 <Text style={[styles.chartTargetLbl, { color: colors.textSecondary }]}>Țintă: {caloriiTinta} kcal</Text>
               </View>
 
@@ -630,7 +648,12 @@ export default function StatisticiScreen() {
 
                   return (
                     <View key={zi.data} style={styles.barContainer}>
-                      <Text style={[styles.barValue, { color: zi.calorii > 0 ? colors.textPrimary : colors.textTertiary }]}>
+                      <Text
+                        style={[styles.barValue, { color: zi.calorii > 0 ? colors.textPrimary : colors.textTertiary }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.6}
+                      >
                         {zi.calorii > 0 ? zi.calorii : '—'}
                       </Text>
 
@@ -655,7 +678,7 @@ export default function StatisticiScreen() {
               </View>
               ) : (
                 <EmptyState
-                  icon="🍽️"
+                  icon="utensils"
                   title={t('statistici.emptyCalorii.title')}
                   subtitle={t('statistici.emptyCalorii.subtitle')}
                 />
@@ -668,7 +691,10 @@ export default function StatisticiScreen() {
         <Animated.View style={[styles.infoCard, { borderColor: colors.cardBorder }]}>
           <BlurView intensity={15} tint="dark" style={styles.infoBlur}>
             <LinearGradient colors={['rgba(255,255,255,0.03)', 'rgba(0,0,0,0)']} style={styles.infoGrad}>
-              <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>✨ Despre consistență</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                <FlowIcon name="sparkles" size={16} color={colors.accent} />
+                <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Despre consistență</Text>
+              </View>
               <Text style={[styles.infoText, { color: colors.textSecondary }]}>
                 O zi peste sau sub ținta calorică nu afectează rezultatele pe termen lung. Ceea ce contează cel mai mult este media săptămânală și aportul adecvat de proteine!
               </Text>
@@ -706,13 +732,13 @@ const styles = StyleSheet.create({
   title: { fontSize: 36, fontWeight: '900', letterSpacing: -0.5 },
   subtitle: { fontSize: 15, marginTop: 4, fontWeight: '500' },
 
-  summaryRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  summaryRow: { flexDirection: 'row', gap: 10, marginBottom: 20, width: '100%', maxWidth: 680, alignSelf: 'center' },
   summaryBox: { flex: 1, borderRadius: 20, overflow: 'hidden', borderWidth: 1 },
-  summaryGrad: { paddingVertical: 16, paddingHorizontal: 8, alignItems: 'center', gap: 6 },
-  summaryVal: { fontSize: 20, fontWeight: '900' },
+  summaryGrad: { paddingVertical: 16, paddingHorizontal: 6, alignItems: 'center', gap: 6 },
+  summaryVal: { fontSize: 20, fontWeight: '900', includeFontPadding: false, textAlign: 'center' },
   summaryLbl: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', textAlign: 'center' },
 
-  chartCard: { borderRadius: 28, overflow: 'hidden', borderWidth: 1, marginBottom: 24 },
+  chartCard: { width: '100%', maxWidth: 680, alignSelf: 'center', borderRadius: 28, overflow: 'hidden', borderWidth: 1, marginBottom: 24 },
   chartBlur: { overflow: 'hidden' },
   chartGrad: { padding: 22 },
   chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
@@ -720,14 +746,14 @@ const styles = StyleSheet.create({
   chartTargetLbl: { fontSize: 13, fontWeight: '600' },
 
   chartArea: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 200, paddingTop: 10 },
-  barContainer: { flex: 1, alignItems: 'center', gap: 6 },
-  barValue: { fontSize: 11, fontWeight: '700' },
+  barContainer: { flex: 1, alignItems: 'center', gap: 6, minWidth: 0 },
+  barValue: { fontSize: 11, fontWeight: '700', includeFontPadding: false, textAlign: 'center' },
   barTrack: { width: 22, height: 160, justifyContent: 'flex-end', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 11, overflow: 'hidden' },
   barTrackCompact: { width: 6, borderRadius: 3 },
   barFill: { width: '100%', borderRadius: 11 },
   barLabel: { fontSize: 12, marginTop: 4 },
 
-  infoCard: { borderRadius: 24, overflow: 'hidden', borderWidth: 1 },
+  infoCard: { width: '100%', maxWidth: 680, alignSelf: 'center', borderRadius: 24, overflow: 'hidden', borderWidth: 1 },
   infoBlur: { overflow: 'hidden' },
   infoGrad: { padding: 20 },
   infoTitle: { fontSize: 16, fontWeight: '800', marginBottom: 8 },

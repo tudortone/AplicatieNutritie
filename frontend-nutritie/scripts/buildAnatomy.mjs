@@ -1,4 +1,10 @@
 /**
+ * LEGACY/EXPERIMENTAL PIPELINE — not imported by production and not a package gate.
+ * It reads assets/body/* and writes the historical anatomyPaths.generated.ts,
+ * while production BodyMap uses anatomyFront.ts/anatomyBack.ts from assets/anatomy/*.
+ * Keep it for provenance only; use `npm run anatomy:verify` for the supported
+ * runtime contract. Do not publish its output without an explicit migration.
+ *
  * buildAnatomy.mjs — Node ESM script
  * Citește SVG-urile anatomice și generează anatomyPaths.generated.ts
  * Rulează cu: node scripts/buildAnatomy.mjs
@@ -15,6 +21,9 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+// Import explicit: `Buffer` e global in Node, dar config-ul ESLint (orientat pe
+// mediul aplicatiei) nu il cunoaste si raporta `no-undef`, spargand gate-ul lint.
+import { Buffer } from 'node:buffer';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');

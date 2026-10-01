@@ -57,6 +57,30 @@ function redacteazaPii(text) {
     .replace(PHONE_RE, '[REDACTED_PHONE]');
 }
 
+function etichetaTehnica(value, fallback) {
+  const text = value == null ? '' : String(value);
+  const safe = text.replace(/[^A-Za-z0-9_.:-]/g, '_').slice(0, 80);
+  return safe || fallback;
+}
+
+/**
+ * Rezumat pentru loguri operaționale. Mesajul/cause/response/body sunt omise
+ * intenționat: furnizorii pot reflecta promptul, emailul sau tokenul în ele.
+ */
+function rezumatEroareSigur(eroare, context = {}) {
+  const rezultat = {
+    operation: etichetaTehnica(context.operation, 'unknown'),
+    provider: etichetaTehnica(context.provider, 'internal'),
+    code: etichetaTehnica(eroare?.code ?? eroare?.name, 'UNKNOWN_ERROR'),
+    name: etichetaTehnica(eroare?.name, 'Error'),
+  };
+  const status = Number(eroare?.status ?? eroare?.statusCode);
+  if (Number.isInteger(status) && status >= 100 && status <= 599) {
+    rezultat.status = status;
+  }
+  return rezultat;
+}
+
 /**
  * Pseudonimizator stabil (HMAC-SHA256) pentru identificatori. Folosește la
  * corelare în telemetrie fără să expună valoarea brută. Același input →
@@ -121,10 +145,69 @@ function scrubbedBreadcrumb(crumb) {
   return decupat;
 }
 
+/** Curăță defensiv forma completă transmisă de SDK către Sentry. */
+function scrubSentryEvent(event) {
+  if (!event || typeof event !== 'object') return event;
+  const curatat = { ...event };
+  if (typeof curatat.message === 'string') {
+    curatat.message = redacteazaPii(curatat.message).slice(0, 200);
+  }
+  if (curatat.exception && Array.isArray(curatat.exception.values)) {
+    curatat.exception = {
+      ...curatat.exception,
+      values: curatat.exception.values.map((exceptie) => {
+        if (!exceptie || typeof exceptie !== 'object') return exceptie;
+        const urmatoare = { ...exceptie };
+        const tip = etichetaTehnica(exceptie.type, 'Error');
+        urmatoare.value = `${tip} [DETAILS_REDACTED]`;
+        if (exceptie.stacktrace && Array.isArray(exceptie.stacktrace.frames)) {
+          urmatoare.stacktrace = {
+            ...exceptie.stacktrace,
+            frames: exceptie.stacktrace.frames.map((cadru) => {
+              if (!cadru || typeof cadru !== 'object') return cadru;
+              const copie = { ...cadru };
+              for (const camp of ['filename', 'context_line', 'pre_context', 'post_context']) {
+                const valoare = copie[camp];
+                if (typeof valoare === 'string') copie[camp] = redacteazaPii(valoare);
+                else if (Array.isArray(valoare)) {
+                  copie[camp] = valoare.map((linie) =>
+                    typeof linie === 'string' ? redacteazaPii(linie) : linie);
+                }
+              }
+              return copie;
+            }),
+          };
+        }
+        return urmatoare;
+      }),
+    };
+  }
+  if (curatat.request && typeof curatat.request === 'object') {
+    curatat.request = { ...curatat.request };
+    curatat.request.data = '[SCRUBBED_PII]';
+    curatat.request.headers = {};
+    if (curatat.request.url) {
+      curatat.request.url = String(curatat.request.url).split(/[?#]/, 1)[0];
+    }
+  }
+  curatat.user = undefined;
+  if (curatat.extra) curatat.extra = { redacted: true };
+  if (curatat.contexts) curatat.contexts = {};
+  if (Array.isArray(curatat.breadcrumbs)) {
+    curatat.breadcrumbs = curatat.breadcrumbs
+      .filter((crumb) => crumb?.category !== 'console')
+      .slice(-50)
+      .map(scrubbedBreadcrumb);
+  }
+  return curatat;
+}
+
 module.exports = {
   redacteazaPii,
   pseudonimizeaza,
   scrubObjectForTelemetry,
   scrubbedBreadcrumb,
+  scrubSentryEvent,
+  rezumatEroareSigur,
   CHEI_PII,
 };

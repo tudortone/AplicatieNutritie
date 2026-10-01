@@ -57,6 +57,43 @@ function construiesteRandProfil({ supabaseUserId, nume, meta }) {
 	};
 }
 
+/**
+ * Construiește doar câmpurile prezente într-un eveniment de actualizare Clerk.
+ * Un `user.updated` poate conține doar numele; valorile absente nu trebuie
+ * transformate în null/default și apoi scrise peste profilul nutrițional.
+ */
+function construiestePatchProfil({ data, meta }) {
+	const metadata = meta || data?.unsafe_metadata || data?.public_metadata || {};
+	const patch = {};
+	const numeDinClerk = data
+		? `${data.first_name || ''} ${data.last_name || ''}`.trim()
+		: '';
+	const nume = textSauNull(metadata.nume ?? numeDinClerk);
+	if (nume) patch.nume = nume;
+
+	const campuriNumerice = [
+		['varsta', metadata.varsta ?? metadata.varstaLaZi],
+		['greutate', metadata.greutate],
+		['inaltime', metadata.inaltime],
+		['calorii_tinta', metadata.calorii_tinta],
+		['proteine_tinta', metadata.proteine_tinta],
+		['grasimi_tinta', metadata.grasimi_tinta],
+		['carbi_tinta', metadata.carbi_tinta],
+	];
+	for (const [camp, valoare] of campuriNumerice) {
+		if (valoare === undefined || valoare === null || valoare === '') continue;
+		const numar = toNumar(valoare);
+		if (numar !== null) patch[camp] = numar;
+	}
+
+	for (const camp of ['sex', 'activitate', 'obiectiv']) {
+		if (metadata[camp] === undefined) continue;
+		patch[camp] = textSauNull(metadata[camp]);
+	}
+
+	return patch;
+}
+
 /** Găsește id-ul Supabase asociat unui utilizator Clerk, prin tabela de mapare. */
 async function idSupabaseDupaClerk(admin, clerkUserId) {
 	if (!clerkUserId) return null;
@@ -68,7 +105,7 @@ async function idSupabaseDupaClerk(admin, clerkUserId) {
 	return data?.supabase_user_id ?? null;
 }
 
-async function executa({ admin, action, clerkUserId, supabaseUserId, email, meta }) {
+async function executa({ admin, action, clerkUserId, supabaseUserId, email, meta, data }) {
 	switch (action) {
 		case 'user.created': {
 			const id = supabaseUserId || (await idSupabaseDupaClerk(admin, clerkUserId));
@@ -82,8 +119,11 @@ async function executa({ admin, action, clerkUserId, supabaseUserId, email, meta
 		case 'user.updated': {
 			const id = supabaseUserId || (await idSupabaseDupaClerk(admin, clerkUserId));
 			if (!id) return { status: 'ignored', action, motiv: 'supabaseUserId lipsă' };
-			const rand = construiesteRandProfil({ supabaseUserId: id, nume: meta?.nume, meta });
-			const { error } = await admin.from('profil').update(rand).eq('user_id', id);
+			const patch = construiestePatchProfil({ data, meta });
+			if (Object.keys(patch).length === 0) {
+				return { status: 'completed', action, email, unchanged: true };
+			}
+			const { error } = await admin.from('profil').update(patch).eq('user_id', id);
 			return error
 				? { status: 'failed', action, error: error.message }
 				: { status: 'completed', action, email };
@@ -107,8 +147,12 @@ async function executa({ admin, action, clerkUserId, supabaseUserId, email, meta
 
 exports.userSyncTask = task({
 	id: 'user-sync',
+	queue: {
+		name: 'identity-sync',
+		concurrencyLimit: 2,
+	},
 	run: async (payload) => {
-		const { action, clerkUserId, supabaseUserId, email, meta } = payload || {};
+		const { action, clerkUserId, supabaseUserId, email, meta, data } = payload || {};
 
 		const admin = creeazaClientAdmin();
 		if (!admin) {
@@ -119,7 +163,7 @@ exports.userSyncTask = task({
 			};
 		}
 
-		return exports.executaSincronizare({ admin, action, clerkUserId, supabaseUserId, email, meta });
+		return exports.executaSincronizare({ admin, action, clerkUserId, supabaseUserId, email, meta, data });
 	},
 });
 

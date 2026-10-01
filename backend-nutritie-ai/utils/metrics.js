@@ -15,6 +15,7 @@
 
 const contorAiFurnizori = new Map();
 const contorAiRute = new Map();
+const contoareOperationale = new Map();
 
 /**
  * Preturi ESTIMATIVE USD / 1M tokeni, per model (snapshot 2026-08-15).
@@ -85,12 +86,25 @@ function getAiStatistici() {
   return {
     furnizori: contoareLaObiecte(contorAiFurnizori),
     rute: contoareLaObiecte(contorAiRute),
+    operational: [...contoareOperationale.entries()].map(([nume, valoare]) => ({ nume, ...valoare })),
   };
+}
+
+function inregistreazaOperational(nume, durataMs) {
+  if (typeof nume !== 'string' || !/^[a-z0-9_.-]{1,80}$/.test(nume)) return;
+  const entry = contoareOperationale.get(nume) || { count: 0, totalDurationMs: 0, maxDurationMs: 0 };
+  entry.count += 1;
+  if (Number.isFinite(durataMs) && durataMs >= 0) {
+    entry.totalDurationMs += durataMs;
+    entry.maxDurationMs = Math.max(entry.maxDurationMs, durataMs);
+  }
+  contoareOperationale.set(nume, entry);
 }
 
 module.exports = {
   PRET_PER_MILION,
   estimeazaCost,
   inregistreazaAi,
-  getAiStatistici
+  getAiStatistici,
+  inregistreazaOperational,
 };

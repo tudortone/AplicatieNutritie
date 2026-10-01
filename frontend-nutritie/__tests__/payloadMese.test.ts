@@ -45,6 +45,19 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const ZI = new Date(2026, 7, 10, 12, 30, 0); // 2026-08-10 12:30 local
 
 describe('BUG-014 — scan → editare gramaj → salvare', () => {
+  it('P1-final: payload-ul Camera păstrează aceeași dată, oră locală și created_at pentru momentul consumului', () => {
+    const { payload } = construiestePayloadMasaCamera({
+      user_id: 'u1',
+      rezultat: [aliment()],
+      now: ZI,
+      idOperatie: 'OP-CAMERA-TIMESTAMP',
+    });
+
+    expect(payload.data).toBe('2026-08-10');
+    expect((payload as unknown as Record<string, unknown>).ora).toBe('12:30:00');
+    expect((payload as unknown as Record<string, unknown>).created_at).toBe(ZI.toISOString());
+  });
+
   it('1. editarea gramajului se reflecta in payload (grame, kcal, macro, nume)', () => {
     const { payload } = construiestePayloadMasaCamera({
       user_id: 'u1',

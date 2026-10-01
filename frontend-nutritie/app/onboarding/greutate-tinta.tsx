@@ -1,5 +1,6 @@
 import React from 'react'
 import { StyleSheet, Text } from 'react-native'
+import { useTranslation } from 'react-i18next'
 
 import EcranPas from '../../components/onboarding/EcranPas'
 import SelectorValoare from '../../components/onboarding/SelectorValoare'
@@ -8,6 +9,7 @@ import { useTheme } from '../../context/ThemeContext'
 import { LIMITE_ONBOARDING } from '../../lib/onboarding'
 
 export default function PasGreutateTinta() {
+	const { t } = useTranslation()
 	const { date, actualizeaza } = useOnboarding()
 	const { colors } = useTheme()
 
@@ -25,15 +27,15 @@ export default function PasGreutateTinta() {
 
 	const avertizare = directieGresita
 		? date.scop === 'slabire'
-			? 'Ai ales sa slabesti, deci tinta trebuie sa fie sub greutatea actuala.'
-			: 'Ai ales sa pui in greutate, deci tinta trebuie sa fie peste greutatea actuala.'
+			? t('onboarding.targetWeightWarningLose')
+			: t('onboarding.targetWeightWarningGain')
 		: null
 
 	return (
 		<EcranPas
 			pas="/onboarding/greutate-tinta"
-			titlu="Ce greutate vrei sa atingi?"
-			subtitlu="Unde vrei sa ajungi? Poti schimba tinta oricand."
+			titlu={t('onboarding.targetWeightTitle')}
+			subtitlu={t('onboarding.targetWeightSubtitle')}
 			poateContinua={!directieGresita}
 			laContinuare={() => {
 				if (date.greutateTintaKg === null) actualizeaza({ greutateTintaKg: implicit })
@@ -53,8 +55,15 @@ export default function PasGreutateTinta() {
 			{!directieGresita ? (
 				<Text style={[styles.rezumat, { color: colors.textSecondary }]}>
 					{diferenta === 0
-						? 'Iti pastrezi greutatea actuala.'
-						: `${Math.abs(diferenta).toFixed(1)} kg ${diferenta < 0 ? 'de pierdut' : 'de adaugat'} fata de ${curenta.toFixed(1)} kg.`}
+						? t('onboarding.targetWeightMaintain')
+						: t('onboarding.targetWeightDiff', {
+								diff: Math.abs(diferenta).toFixed(1),
+								direction:
+									diferenta < 0
+										? t('onboarding.targetWeightLose')
+										: t('onboarding.targetWeightGain'),
+								current: curenta.toFixed(1),
+							})}
 				</Text>
 			) : null}
 		</EcranPas>

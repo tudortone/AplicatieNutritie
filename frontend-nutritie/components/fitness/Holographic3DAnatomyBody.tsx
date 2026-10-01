@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import BodyMap from './BodyMap';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { BodyMap } from './BodyMap';
 import type { MuscleId } from './heatColor';
 import { mapToCanonicalMuscleIds } from '../../lib/fitnessEngine';
 import { Radius, Spacing } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
+import { anatomyMapSize, singleAnatomyMapWidth } from '../../lib/anatomyLayout';
 
 export interface HumanBodyProps {
   activeGroups: string[];
@@ -35,6 +37,13 @@ export function Holographic3DAnatomyBody({
   volumTotalKg = 0
 }: HumanBodyProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
+  const { width: viewportWidth } = useWindowDimensions();
+  const bodyWidth = singleAnatomyMapWidth(viewportWidth, 210);
+  const bodyHeight = Math.max(
+    anatomyMapSize('front', bodyWidth).height,
+    anatomyMapSize('back', bodyWidth).height,
+  );
   const isSpate = activeGroups.some(g => /spate|dorsali|trapez|romboizi|fesieri|ischiogambieri|femurali|triceps|lombari/i.test(g));
   const isPiept = activeGroups.some(g => /piept|pectorali/i.test(g));
   const isUmeri = activeGroups.some(g => /umeri|deltoid/i.test(g));
@@ -91,11 +100,11 @@ export function Holographic3DAnatomyBody({
         <View style={bodyStyles.titleBox}>
           <View style={bodyStyles.hudBadgeRow}>
             <View style={[bodyStyles.hudDot, { backgroundColor: mainActiveColor }]} />
-            <Text style={[bodyStyles.hudLabel, { color: mainActiveColor }]}>SCANARE BIO-TERMICĂ • RECUPERARE & INTENSITATE</Text>
+            <Text style={[bodyStyles.hudLabel, { color: mainActiveColor }]} maxFontSizeMultiplier={1.3}>{t('anatomy.scanLabel')}</Text>
           </View>
-          <Text style={[bodyStyles.titleText, { color: textPrimary }]}>Anatomie Realistă & Heatmap Muscular</Text>
-          <Text style={[bodyStyles.subText, { color: mainActiveColor }]} numberOfLines={2}>
-            {activeGroups.join(' • ')} ({intensityScore}% intensitate)
+          <Text style={[bodyStyles.titleText, { color: textPrimary }]} maxFontSizeMultiplier={1.3}>{t('anatomy.detailTitle')}</Text>
+          <Text style={[bodyStyles.subText, { color: mainActiveColor }]} maxFontSizeMultiplier={1.3}>
+            {t('anatomy.intensitySummary', { groups: activeGroups.join(' • '), score: intensityScore })}
           </Text>
         </View>
 
@@ -103,20 +112,26 @@ export function Holographic3DAnatomyBody({
           <TouchableOpacity
             onPress={() => setViewSide('anterior')}
             style={[bodyStyles.switchBtn, viewSide === 'anterior' && { backgroundColor: mainActiveColor }]}
+            accessibilityRole="button"
+            accessibilityLabel={t('anatomy.showFrontA11y')}
+            accessibilityState={{ selected: viewSide === 'anterior' }}
           >
-            <Text style={[bodyStyles.switchText, { color: viewSide === 'anterior' ? colors.textOnAccent : textPrimary }]}>FAȚĂ</Text>
+            <Text style={[bodyStyles.switchText, { color: viewSide === 'anterior' ? colors.textOnAccent : textPrimary }]} maxFontSizeMultiplier={1.3}>{t('anatomy.front')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setViewSide('posterior')}
             style={[bodyStyles.switchBtn, viewSide === 'posterior' && { backgroundColor: mainActiveColor }]}
+            accessibilityRole="button"
+            accessibilityLabel={t('anatomy.showBackA11y')}
+            accessibilityState={{ selected: viewSide === 'posterior' }}
           >
-            <Text style={[bodyStyles.switchText, { color: viewSide === 'posterior' ? colors.textOnAccent : textPrimary }]}>SPATE</Text>
+            <Text style={[bodyStyles.switchText, { color: viewSide === 'posterior' ? colors.textOnAccent : textPrimary }]} maxFontSizeMultiplier={1.3}>{t('anatomy.back')}</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Desenul anatomic real (assets/anatomy) cu colorare directă pe mușchi (BodyMap) */}
-      <View style={[bodyStyles.svgWrap, { position: 'relative', height: 350, justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[bodyStyles.svgWrap, { height: bodyHeight + 24 }]}>
         {/* Fundal aură scanare biomecanică */}
         <View style={{ position: 'absolute', width: 220, height: 220, borderRadius: 110, backgroundColor: mainActiveColor, opacity: 0.12 }} />
 
@@ -124,29 +139,29 @@ export function Holographic3DAnatomyBody({
         <BodyMap
           view={viewSide === 'anterior' ? 'front' : 'back'}
           intensity={intensityMap}
-          width={184}
+          width={bodyWidth}
         />
       </View>
 
       {/* LEGENDA COLORISTICĂ HEATMAP INTERACTIVĂ */}
       <View style={bodyStyles.legendCard}>
-        <Text style={[bodyStyles.legendTitle, { color: textPrimary }]}>Culoare & Intensitate Recrutare:</Text>
+        <Text style={[bodyStyles.legendTitle, { color: textPrimary }]} maxFontSizeMultiplier={1.3}>{t('anatomy.legendTitle')}</Text>
         <View style={bodyStyles.legendGrid}>
           <View style={bodyStyles.legendItem}>
             <View style={[bodyStyles.legendDot, { backgroundColor: COLOR_PRIMARY }]} />
-            <Text style={[bodyStyles.legendText, { color: COLOR_PRIMARY }]}>🔴 100% Țintă Principală</Text>
+            <Text style={[bodyStyles.legendText, { color: COLOR_PRIMARY }]} maxFontSizeMultiplier={1.3}>{t('anatomy.legendPrimary')}</Text>
           </View>
           <View style={bodyStyles.legendItem}>
             <View style={[bodyStyles.legendDot, { backgroundColor: COLOR_SECONDARY }]} />
-            <Text style={[bodyStyles.legendText, { color: COLOR_SECONDARY }]}>🟠 75% Mușchi Sinergici</Text>
+            <Text style={[bodyStyles.legendText, { color: COLOR_SECONDARY }]} maxFontSizeMultiplier={1.3}>{t('anatomy.legendSynergists')}</Text>
           </View>
           <View style={bodyStyles.legendItem}>
             <View style={[bodyStyles.legendDot, { backgroundColor: COLOR_STAB }]} />
-            <Text style={[bodyStyles.legendText, { color: COLOR_STAB }]}>🟡 40% Stabilizare / Core</Text>
+            <Text style={[bodyStyles.legendText, { color: COLOR_STAB }]} maxFontSizeMultiplier={1.3}>{t('anatomy.legendStabilization')}</Text>
           </View>
           <View style={bodyStyles.legendItem}>
             <View style={[bodyStyles.legendDot, { backgroundColor: COLOR_REST }]} />
-            <Text style={[bodyStyles.legendText, { color: COLOR_REST }]}>🔵 0% Mușchi în Repaus</Text>
+            <Text style={[bodyStyles.legendText, { color: COLOR_REST }]} maxFontSizeMultiplier={1.3}>{t('anatomy.legendRest')}</Text>
           </View>
         </View>
       </View>
@@ -164,8 +179,10 @@ const bodyStyles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 10,
     marginBottom: 10,
   },
   hudBadgeRow: {
@@ -186,6 +203,7 @@ const bodyStyles = StyleSheet.create({
   },
   titleBox: {
     flex: 1,
+    minWidth: 180,
     paddingRight: 8,
   },
   titleText: {
@@ -201,10 +219,14 @@ const bodyStyles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 12,
     padding: 3,
+    alignSelf: 'flex-end',
   },
   switchBtn: {
     paddingHorizontal: 12,
-    paddingVertical: 7,
+    minWidth: 52,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderRadius: 9,
   },
   switchText: {
@@ -236,7 +258,9 @@ const bodyStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    width: '45%',
+    flexGrow: 1,
+    flexBasis: '45%',
+    minWidth: 140,
   },
   legendDot: {
     width: 10,
@@ -244,6 +268,7 @@ const bodyStyles = StyleSheet.create({
     borderRadius: 5,
   },
   legendText: {
+    flex: 1,
     fontSize: 11,
     fontWeight: '700',
   },

@@ -34,6 +34,44 @@ const TIPURI_MASA = Object.freeze(['mic_dejun', 'pranz', 'cina', 'gustare']);
 const MAX_ALIMENTE = 100;
 const MAX_OCTETI_ALIMENTE = 64 * 1024;
 
+/**
+ * F-03: campurile TEXT permise pe un aliment, conform contractului partajat
+ * (contracts/nutritie/types.ts — AlimentDetaliat / AlimentAI).
+ *
+ * Inainte, `valideazaAlimente` construia randul cu `{ ...aliment, nume }`, deci
+ * ORICE cheie trimisa de client ajungea verbatim in JSONB-ul `alimente`. Nu era
+ * doar dezordine: fluxul GDPR scaneaza acel JSONB dupa `fileId`/`imageKitFileId`
+ * si sterge de pe ImageKit ce gaseste, cu cheia privata. Un client putea deci
+ * sa-si injecteze in propria masa identificatorul unui fisier al ALTUI
+ * utilizator si sa il distruga la stergerea contului.
+ *
+ * Allowlist explicit => nicio cheie necunoscuta nu mai ajunge in baza de date.
+ * Proprietatea reala a fisierului este verificata separat, server-side, la
+ * momentul stergerii (utils/gdprServices.js) — un id de fisier trimis de client
+ * nu este niciodata o dovada de proprietate.
+ */
+const CAMPURI_TEXT_ALIMENT = Object.freeze(['id', 'imageUrl', 'imageKitFileId']);
+const MAX_LUNGIME_TEXT_ALIMENT = 500;
+
+/** Subobiecte numerice permise (aminoacizi / micronutrienti), curatate cheie cu cheie. */
+const CAMPURI_OBIECT_ALIMENT = Object.freeze(['aminoacizi', 'micronutrienti']);
+const MAX_CHEI_SUBOBIECT = 60;
+
+function curataSubobiectNumeric(valoare) {
+  if (!valoare || typeof valoare !== 'object' || Array.isArray(valoare)) return undefined;
+  const out = {};
+  let nr = 0;
+  for (const [cheie, brut] of Object.entries(valoare)) {
+    if (nr >= MAX_CHEI_SUBOBIECT) break;
+    if (typeof cheie !== 'string' || cheie.length > 60) continue;
+    const numar = Number(brut);
+    if (!Number.isFinite(numar) || numar < 0 || numar > 1e6) continue;
+    out[cheie] = numar;
+    nr += 1;
+  }
+  return nr > 0 ? out : undefined;
+}
+
 function rotunjesteControlat(numar, zecimale) {
   const factor = 10 ** zecimale;
   return Math.round((numar + Number.EPSILON) * factor) / factor;
@@ -116,7 +154,25 @@ function valideazaAlimente(alimente) {
       return { ok: false, eroare: `Alimentul ${index + 1} trebuie sa contina caloriile.` };
     }
 
-    const curat = { ...aliment, nume };
+    // F-03: construim randul de la ZERO, nu prin spread peste input-ul clientului.
+    const curat = { nume };
+
+    for (const cheie of CAMPURI_TEXT_ALIMENT) {
+      const brut = aliment[cheie];
+      if (typeof brut !== 'string') continue;
+      const text = brut.trim();
+      if (!text) continue;
+      if (text.length > MAX_LUNGIME_TEXT_ALIMENT) {
+        return { ok: false, eroare: `Camp text prea lung pentru alimentul ${index + 1} (${cheie}).` };
+      }
+      curat[cheie] = text;
+    }
+
+    for (const cheie of CAMPURI_OBIECT_ALIMENT) {
+      const subobiect = curataSubobiectNumeric(aliment[cheie]);
+      if (subobiect) curat[cheie] = subobiect;
+    }
+
     for (const cheie of Object.keys(LIMITE_ALIMENT)) {
       const rezultat = valideazaCampNumericAliment(aliment[cheie], cheie, index);
       if (!rezultat.ok) return rezultat;

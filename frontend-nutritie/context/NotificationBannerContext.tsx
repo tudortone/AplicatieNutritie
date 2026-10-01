@@ -213,7 +213,7 @@ export function NotificationBannerProvider({ children }: { children: React.React
       const subscription = Notifications.addNotificationReceivedListener((notification) => {
         const content = notification.request.content;
         showNotification({
-          title: content.title || 'NutriAI Reminder',
+          title: content.title || 'GetFlow Reminder',
           message: content.body || undefined,
           type: 'reminder',
           duration: 4000,

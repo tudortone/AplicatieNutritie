@@ -86,7 +86,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
             select: () => ({
               neq: () => ({
                 neq: () => ({
-                  lt: (col, val) => {
+                  lt: (col, _val) => {
                     ltColumn = col;
                     return {
                       limit: async () => ({ data: [randStocat], error: null }),
@@ -103,9 +103,30 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
             }),
           };
         }
+        if (tabela === 'google_play_subscriptions') {
+          const q = {
+            select: () => q,
+            eq: () => q,
+            order: () => q,
+            range: async () => ({ data: [], error: null }),
+            delete: () => ({
+              eq: async (col, val) => {
+                deleteCalls.push({ tabela, col, val });
+                return { error: null };
+              },
+            }),
+          };
+          return q;
+        }
         return {
           delete: () => ({
             eq: async (col, val) => {
+              deleteCalls.push({ tabela, col, val });
+              return { error: null };
+            },
+            // F-07: curatarea tabelelor dead-letter sterge dupa mai multe
+            // identitati simultan (`app_user_id in (supabaseId, clerkId)`).
+            in: async (col, val) => {
               deleteCalls.push({ tabela, col, val });
               return { error: null };
             },
@@ -118,12 +139,33 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
     expect(rez.reluate).toBe(1);
     // S3-01: worker-ul filtrează pe coloana reală (initiated_at), nu created_at
     expect(ltColumn).toBe('initiated_at');
-    // N-03: worker-ul șterge exact toate tabelele user-scoped din lista unică
-    expect(deleteCalls.map((d) => d.tabela).sort()).toEqual([...TABELE_CU_RLS_UTILIZATOR].sort());
+    // N-03: worker-ul șterge exact toate tabelele user-scoped din lista unică...
+    // F-07: ...PLUS tabelele dead-letter, care nu au FK către auth.users și deci
+    // nu erau atinse nici de cascadă, nici de listă (PII rămânea după ștergere).
+    expect(deleteCalls.map((d) => d.tabela).sort()).toEqual(
+      [
+        ...TABELE_CU_RLS_UTILIZATOR,
+        'google_play_subscriptions',
+        'credite_esuate',
+        'clerk_webhook_esuate',
+      ].sort(),
+    );
+    const credite = deleteCalls.find((d) => d.tabela === 'credite_esuate');
+    expect(credite.col).toBe('app_user_id');
+    expect(credite.val).toEqual(['user-456', 'clerk-789']);
+    const clerkDl = deleteCalls.find((d) => d.tabela === 'clerk_webhook_esuate');
+    expect(clerkDl.col).toBe('clerk_user_id');
+    expect(clerkDl.val).toBe('clerk-789');
     expect(adminFake.auth.admin.deleteUser).toHaveBeenCalledWith('user-456');
     // N-02: ordinea statusurilor = ordinea rutei (DB → Clerk → ImageKit → auth)
     const statusuri = updateCalls.map((u) => u.status);
     expect(statusuri).toEqual(['db_done', 'clerk_done', 'imagekit_done', 'auth_done', 'completed']);
+    expect(updateCalls.at(-1)).toEqual(expect.objectContaining({
+      user_id: randStocat.id,
+      clerk_user_id: null,
+      file_ids: [],
+      last_error: null,
+    }));
   });
 
   test('reluare de la clerk_done: ImageKit folosește fileIds persistate în outbox (N-04), apoi auth → completed', async () => {

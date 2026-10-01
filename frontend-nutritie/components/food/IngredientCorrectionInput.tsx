@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, TextInput, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Send } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/context/ThemeContext';
 import type { AlimentScanat } from '@/components/food/FoodScanSuccessModal';
 
@@ -12,6 +13,7 @@ interface Props {
 
 export default function IngredientCorrectionInput({ ingredienteCurente, onCorectat, onSend }: Props) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -34,7 +36,7 @@ export default function IngredientCorrectionInput({ ingredienteCurente, onCorect
     <View style={[styles.wrap, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
       <TextInput
         style={[styles.input, { color: colors.textPrimary }]}
-        placeholder='Ex: "plăcinta are făină de migdale"'
+        placeholder={t('camera.correctionPlaceholder')}
         placeholderTextColor={colors.textSecondary}
         value={text}
         onChangeText={setText}
@@ -42,11 +44,15 @@ export default function IngredientCorrectionInput({ ingredienteCurente, onCorect
         onSubmitEditing={handleSend}
         returnKeyType="send"
         multiline
+        accessibilityLabel={t('camera.correctionInputA11y')}
       />
       <Pressable
         style={[styles.sendBtn, { backgroundColor: colors.accent, opacity: text.trim() && !loading ? 1 : 0.5 }]}
         onPress={handleSend}
         disabled={!text.trim() || loading}
+        accessibilityRole="button"
+        accessibilityLabel={t('camera.sendCorrectionA11y')}
+        accessibilityState={{ disabled: !text.trim() || loading, busy: loading }}
       >
         {loading ? (
           <ActivityIndicator size="small" color={colors.background} />
@@ -60,9 +66,14 @@ export default function IngredientCorrectionInput({ ingredienteCurente, onCorect
 
 const styles = StyleSheet.create({
   wrap: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: 8,
-    borderRadius: 16, borderWidth: 1, padding: 8, paddingLeft: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 8,
+    paddingLeft: 14,
   },
   input: { flex: 1, fontSize: 15, maxHeight: 100, paddingVertical: 8 },
-  sendBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  sendBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });

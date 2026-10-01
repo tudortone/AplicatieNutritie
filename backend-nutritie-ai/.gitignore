@@ -1,5 +1,12 @@
 node_modules/
 .env
+.env.*
+!.env.example
 *.log
+coverage/
+dist/
+build/
+*.pem
+*.key
 check_schema.js
 build_full_code.js

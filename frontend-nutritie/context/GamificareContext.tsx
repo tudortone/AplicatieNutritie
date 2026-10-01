@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import { useNotificationBannerActions } from './NotificationBannerContext';
 import { useDailyReset } from '../hooks/useDailyReset';
+import { localDayKey } from '../lib/dateUtils';
 
 export interface QuestZilnic {
   id: string;
@@ -49,8 +50,13 @@ export function calculeazaNivel(xpTotal: number) {
 
 const GAMIFICARE_STORAGE_KEY = 'gamificare_v2_server_authoritative';
 
+// Ziua se calculeaza in fusul orar LOCAL, la fel ca in lib/dateUtils.ts
+// (localDayKey) si hooks/useDailyReset.ts (localDateKey). `toISOString()` da
+// data in UTC, deci pentru un utilizator din Romania (UTC+2/+3) intre 00:00 si
+// 03:00 ora locala intorcea ziua PRECEDENTA: questurile zilnice se reseteaza si
+// se atribuie in ziua gresita.
 function today(): string {
-  return new Date().toISOString().split('T')[0];
+  return localDayKey();
 }
 
 function questuriDefault(): QuestZilnic[] {

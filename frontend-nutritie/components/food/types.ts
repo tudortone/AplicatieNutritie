@@ -1,4 +1,4 @@
-import { AlimentAI, AminoaciziEsentiali } from '../../types';
+import { AlimentAI, AminoaciziEsentiali, Micronutrienti } from '../../types';
 
 export type FoodSource =
   | 'preset'
@@ -13,6 +13,14 @@ export interface FoodProduct {
   name: string;
   brand?: string;
   barcode?: string;
+  imageUrl?: string;
+  imageSmallUrl?: string;
+  nutriscoreGrade?: string;
+  nutriscoreScore?: number;
+  novaGroup?: number;
+  ecoscoreGrade?: string;
+  ingredientsText?: string;
+  allergens?: string;
   servingLabel?: string;
   servingGrams?: number;
   kcalPer100g: number;
@@ -21,8 +29,11 @@ export interface FoodProduct {
   fatPer100g: number;
   fiberPer100g?: number;
   sugarPer100g?: number;
+  saturatedFatPer100g?: number;
   saltPer100g?: number;
+  sodiumPer100g?: number;
   aminoacizi?: AminoaciziEsentiali;
+  micronutrienti?: Micronutrienti;
   verified?: boolean;
 }
 

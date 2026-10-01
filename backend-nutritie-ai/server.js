@@ -1,5 +1,32 @@
 'use strict';
 
+// Sentry trebuie inițializat înainte ca Express (direct sau prin routere) să fie
+// încărcat; altfel integrarea nu poate instrumenta cererile și tranzacțiile.
+const Sentry = require('@sentry/node');
+const { incarcaConfig } = require('./config/env');
+const {
+  scrubbedBreadcrumb,
+  scrubSentryEvent,
+  rezumatEroareSigur,
+} = require('./utils/sentrySanitize');
+
+const config = incarcaConfig();
+
+if (config.sentryDsn) {
+  Sentry.init({
+    dsn: config.sentryDsn,
+    environment: config.NODE_ENV,
+    tracesSampleRate: config.esteProductie ? 0.1 : 1.0,
+    sendDefaultPii: false,
+    beforeSend: scrubSentryEvent,
+    beforeBreadcrumb(crumb) {
+      if (crumb?.category === 'console') return null;
+      return scrubbedBreadcrumb(crumb);
+    },
+  });
+  console.log('Sentry Node.js configurat cu succes');
+}
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -8,15 +35,11 @@ const multer = require('multer');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { createClient } = require('@supabase/supabase-js');
 const os = require('os');
-const crypto = require('crypto');
-const Sentry = require('@sentry/node');
 const ImageKit = require('imagekit');
 const { tasks } = require('@trigger.dev/sdk/v3');
 
-const { incarcaConfig } = require('./config/env');
 const { creeazaLimitatoare, ipFallbackKey } = require('./utils/rateLimit');
 const rateLimit = require('express-rate-limit');
-const { TokenCache } = require('./utils/tokenCache');
 const { rezolvaIdentitate, EroareIdentitate } = require('./utils/identitate');
 const { callWithTimeout } = require('./utils/httpTimeout');
 const { Semafor } = require('./utils/semafor');
@@ -30,104 +53,52 @@ const createBarcodeRouter = require('./routes/barcode');
 const createProfilRouter = require('./routes/profil');
 const createMeseRouter = require('./routes/mese');
 const createUserRouter = require('./routes/user');
+const createBillingGoogleRouter = require('./routes/billingGoogle');
+const createPhotoFlowRouter = require('./routes/photoFlow');
 const createRewardedRouter = require('./routes/rewarded');
+const createGooglePlayWebhookRouter = require('./routes/webhooksGooglePlay');
 const createWebhooksRouter = require('./routes/webhooks');
-const createWebhooksRevenueCatRouter = require('./routes/webhooksRevenueCat');
 const createMeseRepo = require('./repositories/meseRepo');
 const createBarcodeRepo = require('./repositories/barcodeRepo');
 const createProfilRepo = require('./repositories/profilRepo');
+const { createGoogleBillingRepo } = require('./repositories/googleBillingRepo');
 const { createFlowCreditsRepo } = require('./repositories/flowCreditsRepo');
+const { createPhotoJobsRepo } = require('./repositories/photoJobsRepo');
 const { createRewardedRepo } = require('./repositories/rewardedRepo');
 const { creeazaStoreRateLimit, creeazaRegistruCheiValori } = require('./utils/storePartajat');
+const { createDistributedAdmission } = require('./utils/distributedAdmission');
 const { getAiStatistici } = require('./utils/metrics');
 const { sanitizeRequest } = require('./utils/sanitize');
 const { creeazaServiciuVision } = require('./services/ai/vision');
 const { creeazaServiciuCascada } = require('./services/ai/cascada');
 const { creeazaServiciuChat } = require('./services/ai/chat');
 const { createFlowCreditsService } = require('./services/monetization/flowCreditsService');
+const { createPhotoJobService } = require('./services/ai/photoJobService');
 const { createRewardedService } = require('./services/monetization/rewardedService');
+const {
+  createGoogleAccessTokenProvider,
+  createGooglePlayPublisher,
+} = require('./services/billing/googlePlayPublisher');
+const { createGoogleBillingService } = require('./services/billing/googleBillingService');
+const { createGooglePubsubVerifier } = require('./utils/googlePubsubAuth');
+const { createGoogleBillingWorker } = require('./utils/googleBillingWorker');
 const { createAdmobSsvVerifier } = require('./utils/admobSsv');
-
-const config = incarcaConfig();
-
-function rezumatEroare(eroare) {
-  return {
-    cod: eroare?.code ?? eroare?.name ?? 'NECUNOSCUT',
-    nume: eroare?.name ?? 'Necunoscut',
-    mesaj: String(eroare?.message ?? '').slice(0, 200),
-  };
-}
+const {
+  createGooglePlayIntegrityDecoder,
+  createPlayIntegrityGuard,
+  createPlayIntegrityVerifier,
+} = require('./utils/playIntegrity');
 
 process.on('unhandledRejection', (motiv) => {
-  console.error('[Proces] Promisiune respinsa netratata:', rezumatEroare(motiv));
+  console.error('[Proces] Promisiune respinsa netratata:', rezumatEroareSigur(motiv, { operation: 'unhandled_rejection' }));
   if (config.sentryDsn) Sentry.captureException(motiv);
 });
 
 process.on('uncaughtException', (eroare) => {
-  console.error('[Proces] Exceptie netratata:', rezumatEroare(eroare));
+  console.error('[Proces] Exceptie netratata:', rezumatEroareSigur(eroare, { operation: 'uncaught_exception' }));
   if (config.sentryDsn) Sentry.captureException(eroare);
   if (config.esteProductie) setTimeout(() => process.exit(1), 1000).unref();
 });
-
-// Sanitizare PII centralizată (TASK-11): regulile trăiesc într-un singur loc
-// (utils/sentrySanitize.js) ca toate fluxurile de capturare (webhook, GDPR,
-// rate-limit) să moștenească aceleași garzi fără duplicare.
-const {
-  redacteazaPii,
-  scrubbedBreadcrumb,
-} = require('./utils/sentrySanitize');
-
-if (config.sentryDsn) {
-  Sentry.init({
-    dsn: config.sentryDsn,
-    environment: config.NODE_ENV,
-    tracesSampleRate: config.esteProductie ? 0.1 : 1.0,
-    sendDefaultPii: false,
-    beforeSend(event) {
-      if (event.message) event.message = redacteazaPii(event.message);
-      // TASK-11: exceptiile brute (value + stacktrace) pot incastra PII — mesaje
-      // Supabase/Redis cu date de utilizator sau URL-uri cu parola. Se aplica
-      // aceeasi garda ca pe message, defensiv la forme lipsa/atipice.
-      if (event.exception && Array.isArray(event.exception.values)) {
-        for (const exceptie of event.exception.values) {
-          if (exceptie && typeof exceptie.value === 'string') {
-            exceptie.value = redacteazaPii(exceptie.value);
-          }
-          if (exceptie && exceptie.stacktrace && Array.isArray(exceptie.stacktrace.frames)) {
-            for (const cadru of exceptie.stacktrace.frames) {
-              if (!cadru || typeof cadru !== 'object') continue;
-              for (const camp of ['filename', 'context_line', 'pre_context', 'post_context']) {
-                const valoare = cadru[camp];
-                if (typeof valoare === 'string') {
-                  cadru[camp] = redacteazaPii(valoare);
-                } else if (Array.isArray(valoare)) {
-                  cadru[camp] = valoare.map((linie) =>
-                    typeof linie === 'string' ? redacteazaPii(linie) : linie);
-                }
-              }
-            }
-          }
-        }
-      }
-      if (event.request) {
-        event.request.data = '[SCRUBBED_PII]';
-        event.request.headers = {};
-        if (event.request.url) event.request.url = event.request.url.split('?')[0];
-      }
-      event.user = undefined;
-      if (event.extra) event.extra = { redacted: true };
-      if (event.contexts) event.contexts = {};
-      if (Array.isArray(event.breadcrumbs)) {
-        event.breadcrumbs = event.breadcrumbs.slice(-50).map(scrubbedBreadcrumb);
-      }
-      return event;
-    },
-    beforeBreadcrumb(crumb) {
-      return scrubbedBreadcrumb(crumb);
-    },
-  });
-  console.log('Sentry Node.js configurat cu succes');
-}
 
 let imagekit = null;
 if (config.imagekit.publicKey && config.imagekit.privateKey && config.imagekit.urlEndpoint) {
@@ -151,7 +122,18 @@ app.use(compression());
 app.use(cors({
   origin: config.cors.permiteOrice ? true : config.cors.origini,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+  // P1-12: `X-Payload-Fingerprint` transporta amprenta de continut pentru cererile
+  // multipart (analiza foto), unde corpul nu e parsat inca la momentul verificarii
+  // de idempotenta. Fara el in allowlist, preflight-ul CORS al build-ului web ar
+  // bloca antetul si analiza foto ar ramane fara protectie la replay.
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'Idempotency-Key',
+    'X-Payload-Fingerprint',
+    'X-Play-Integrity',
+    'X-Play-Integrity-Request-Hash',
+  ],
   exposedHeaders: ['Idempotency-Status', 'Retry-After', 'X-AI-Quota-Remaining', 'X-Protectie-RLS', 'X-Credite-Ramase'],
 }));
 // S4-06: fara timeout pe apelurile Supabase, o partitie de retea sau GoTrue
@@ -166,6 +148,7 @@ const fetchCuTimeoutSupabase = (input, init = {}) => {
 };
 const supabase = createClient(config.supabase.url, config.supabase.anonKey, { global: { fetch: fetchCuTimeoutSupabase } });
 const supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey, { global: { fetch: fetchCuTimeoutSupabase } });
+<<<<<<< Updated upstream
 const flowCreditsService = createFlowCreditsService({
   repo: createFlowCreditsRepo({ supabaseAdmin, rewardLimit: 5 }),
 });
@@ -174,6 +157,50 @@ const rewardedService = createRewardedService({
   flowCredits: flowCreditsService,
 });
 const checkAiUsageQuota = creeazaCheckAiUsageQuota({ supabaseAdmin });
+=======
+const googleBillingRepo = createGoogleBillingRepo({ supabaseAdmin });
+const flowCreditsService = createFlowCreditsService({
+  repo: createFlowCreditsRepo({
+    supabaseAdmin,
+    dailyLimit: config.flowCredits.dailyLimit,
+    rewardLimit: config.flowCredits.rewardedDailyLimit,
+    premiumFairUse: config.flowCredits.premiumDailyFairUse,
+  }),
+});
+const rewardedService = createRewardedService({
+  repo: createRewardedRepo({
+    supabaseAdmin,
+    dailyLimit: config.flowCredits.rewardedDailyLimit,
+  }),
+  flowCredits: flowCreditsService,
+});
+const googleBillingService = createGoogleBillingService({
+  publisher: createGooglePlayPublisher({
+    packageName: config.googlePlay.packageName,
+    getAccessToken: createGoogleAccessTokenProvider(),
+  }),
+  repo: googleBillingRepo,
+  allowedProductIds: config.googlePlay.productIds,
+  allowedCreditProductIds: config.googlePlay.creditProductIds,
+  flowCredits: flowCreditsService,
+});
+const photoJobService = createPhotoJobService({
+  repo: createPhotoJobsRepo({ supabaseAdmin }),
+  flowCredits: flowCreditsService,
+  tasks,
+  billing: googleBillingService,
+});
+const playIntegrityGuard = config.playIntegrity.mode === 'off'
+  ? createPlayIntegrityGuard({ mode: 'off' })
+  : createPlayIntegrityGuard({
+    mode: config.playIntegrity.mode,
+    verifier: createPlayIntegrityVerifier({
+      packageName: config.playIntegrity.packageName,
+      decodeToken: createGooglePlayIntegrityDecoder({ packageName: config.playIntegrity.packageName }),
+    }),
+  });
+const checkAiUsageQuota = creeazaCheckAiUsageQuota({ supabaseAdmin, billingService: googleBillingService });
+>>>>>>> Stashed changes
 // P-012: limitator dedicat webhook-urilor (Clerk/Svix). Se monteaza pe calea
 // webhook-urilor INAINTE de router (si INAINTE de preAuthLimiter, care altfel nu
 // se aplica), ca burst-urile legitime Clerk sa treaca dar traficul evadat sa fie
@@ -191,13 +218,21 @@ const webhooksLimiter = rateLimit({
 // PR1-backend: webhook-urile (Clerk/Svix) sunt montate ÎNAINTE de body-parse,
 // ca Svix sa prime bytes-urile brute netransformate. O singura periere webhooksR.
 const webhooksR = createWebhooksRouter({ supabaseAdmin, config });
-const webhooksRevenueCatR = createWebhooksRevenueCatRouter({ supabaseAdmin, config });
+const webhooksGooglePlayR = createGooglePlayWebhookRouter({
+  verifier: createGooglePubsubVerifier({
+    audience: config.googlePlay.pubsubAudience,
+    serviceAccountEmail: config.googlePlay.pubsubServiceAccountEmail,
+  }),
+  repo: googleBillingRepo,
+  billingService: googleBillingService,
+  googlePlayConfig: config.googlePlay,
+});
 app.use('/api/v1/webhooks', webhooksLimiter);
+app.use('/api/v1/webhooks/google-play', webhooksGooglePlayR);
 app.use('/api/v1/webhooks', webhooksR);
-app.use('/api/v1/webhooks/revenuecat', webhooksRevenueCatR);
 app.use('/api/webhooks', webhooksLimiter);
+app.use('/api/webhooks/google-play', webhooksGooglePlayR);
 app.use('/api/webhooks', webhooksR);
-app.use('/api/webhooks/revenuecat', webhooksRevenueCatR);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
@@ -233,7 +268,7 @@ app.use((req, res, next) => {
 app.use(idempotencyMiddleware);
 
 const storePartajat = creeazaStoreRateLimit({ url: config.redisUrl });
-const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter } = creeazaLimitatoare({
+const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter, billingLimiter } = creeazaLimitatoare({
   store: storePartajat?.store,
   avertizeazaFaraStore: config.esteProductie,
 });
@@ -263,13 +298,6 @@ const upload = multer({
   },
 });
 
-const tokenCache = new TokenCache({
-  maxEntries: 5000,
-  ttlMs: 60 * 1000,
-  cheiHashuite: true,
-});
-tokenCache.startSweeper();
-const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 const semaforAi = new Semafor({ max: config.ai.maxConcurenta, maxCoada: config.ai.maxCoada });
 
 const requireAuth = async (req, res, next) => {
@@ -280,35 +308,20 @@ const requireAuth = async (req, res, next) => {
   }
 
   const token = authHeader.slice(7);
-  const tokenKey = hashToken(token);
   req.tokenBrut = token;
-  const utilizatorCache = tokenCache.get(tokenKey);
-  if (utilizatorCache) {
-    req.user = utilizatorCache;
-    if (!res.headersSent) {
-      res.setHeader('X-Protectie-RLS', req.user.provider === 'clerk' ? 'inactiv' : 'activ');
-    }
-    return next();
-  }
 
   try {
     const utilizator = await rezolvaIdentitate({
       token,
       supabase,
-      supabaseAdmin,
-      clerkSecretKey: config.clerkSecretKey,
     });
-    tokenCache.set(tokenKey, utilizator, { expiraLaMs: utilizator.expiraLaMs });
     req.user = utilizator;
-    if (!res.headersSent) {
-      res.setHeader('X-Protectie-RLS', utilizator.provider === 'clerk' ? 'inactiv' : 'activ');
-    }
     return next();
   } catch (err) {
     if (err instanceof EroareIdentitate) {
       return res.status(err.status).json({ eroare: err.message, cod: err.cod });
     }
-    console.error('[Auth] Eroare neasteptata:', rezumatEroare(err).cod);
+    console.error('[Auth] Eroare neasteptata:', rezumatEroareSigur(err, { operation: 'auth_resolve' }));
     return res.status(503).json({ eroare: 'Serviciul de autentificare este indisponibil.' });
   }
 };
@@ -317,7 +330,6 @@ function contextDate(req, res) {
   if (!req._ctxDate) {
     req._ctxDate = creeazaContextDate({
       config,
-      supabaseAdmin,
       token: req.tokenBrut,
       userId: req.user.id,
       sursaToken: req.user.provider,
@@ -334,6 +346,11 @@ const registruAi = creeazaRegistruCheiValori({ url: config.redisUrl, prefix: 'nu
 const serviciuVision = creeazaServiciuVision({ config });
 const serviciuCascada = creeazaServiciuCascada({ config, registruAi });
 const serviciuChat = creeazaServiciuChat({ config, genAI });
+const chatAdmission = createDistributedAdmission({
+  url: config.redisUrl,
+  globalLimit: config.ai.chatGlobalConcurrency,
+  ttlMs: 60_000,
+});
 
 app.get('/', (_req, res) => {
   res.json({
@@ -380,15 +397,22 @@ const aiR = createAiRouter({
   serviciuCascada,
   serviciuChat,
   semaforAi,
+  chatAdmission,
   idempotencyCritic: idempotencyMiddlewareCritic,
   supabaseAdmin,
 });
 const barcodeR = createBarcodeRouter({
   requireAuth,
   generalLimiter,
+  aiLimiter,
+  checkAiUsageQuota,
   contextDate,
   config,
-  barcodeRepo: createBarcodeRepo(),
+  barcodeRepo: createBarcodeRepo({ supabaseAdmin }),
+  // P1-12: zălogul atomic pentru fallback-ul AI de barcode. Aceeași infrastructură
+  // partajată ca idempotența (Redis `SET NX`), cu prefix separat ca spațiile de
+  // chei ale celor două tipuri de operații să nu se ciocnească.
+  registruClaim: creeazaRegistruCheiValori({ url: config.redisUrl, prefix: 'nutri:barcode-ai' }),
 });
 const profilR = createProfilRouter({ requireAuth, generalLimiter, config });
 const meseR = createMeseRouter({
@@ -400,9 +424,38 @@ const meseR = createMeseRouter({
 const userR = createUserRouter({
   requireAuth,
   generalLimiter,
-  config,
   contextDate,
   profilRepo: createProfilRepo(),
+  billingService: googleBillingService,
+});
+const billingGoogleR = createBillingGoogleRouter({
+  requireAuth,
+  billingLimiter,
+  billingService: googleBillingService,
+  googlePlayConfig: config.googlePlay,
+  integrityGuard: playIntegrityGuard,
+});
+const photoFlowR = createPhotoFlowRouter({
+  requireAuth,
+  aiLimiter,
+  generalLimiter,
+  photoJobs: photoJobService,
+  flowCredits: flowCreditsService,
+  contextDate,
+  config,
+  imagekit,
+  integrityGuard: playIntegrityGuard,
+});
+const rewardedR = createRewardedRouter({
+  requireAuth,
+  generalLimiter,
+  rewardedService,
+  integrityGuard: playIntegrityGuard,
+  verifier: createAdmobSsvVerifier({
+    expectedAdUnit: config.admob.rewardedAdUnitId,
+    expectedRewardAmount: config.admob.rewardedAmount,
+    expectedRewardItem: config.admob.rewardedItem,
+  }),
 });
 const rewardedR = createRewardedRouter({
   requireAuth,
@@ -431,12 +484,17 @@ const gdprR = createGdprRouter({
 // /api/v1 = prefix canonic
 app.use('/api/v1', statusR);
 app.use('/api/v1', aiR);
+<<<<<<< Updated upstream
+=======
+app.use('/api/v1', photoFlowR);
+>>>>>>> Stashed changes
 app.use('/api/v1', rewardedR);
 app.use('/api/v1', barcodeR);
 app.use('/api/v1', profilR);
 app.use('/api/v1', meseR);
 app.use('/api/v1/user', gdprR);
 app.use('/api/v1/user', userR);
+app.use('/api/v1/billing/google', billingGoogleR);
 
 // P-19: /api = prefix deprecat, anunțat cu Sunset + Deprecation
 // Clientul (lib/api.ts) construiește deja URL-uri cu /api/v1.
@@ -452,12 +510,17 @@ app.use('/api', (req, res, next) => {
 });
 app.use('/api', statusR);
 app.use('/api', aiR);
+<<<<<<< Updated upstream
+=======
+app.use('/api', photoFlowR);
+>>>>>>> Stashed changes
 app.use('/api', rewardedR);
 app.use('/api', barcodeR);
 app.use('/api', profilR);
 app.use('/api', meseR);
 app.use('/api/user', gdprR);
 app.use('/api/user', userR);
+app.use('/api/billing/google', billingGoogleR);
 
 app.use((_req, res) => {
   res.status(404).json({ eroare: 'Ruta solicitată nu există (404).' });
@@ -466,7 +529,7 @@ app.use((_req, res) => {
 Sentry.setupExpressErrorHandler(app);
 app.use((err, _req, res, _next) => {
   const message = err?.message || '';
-  console.error('Eroare globala:', rezumatEroare(err).cod);
+  console.error('Eroare globala:', rezumatEroareSigur(err, { operation: 'express_error' }));
   if (err?.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ eroare: 'Fișierul este prea mare. Limita este 5MB.' });
   }
@@ -499,7 +562,7 @@ function startKeepAliveTicker() {
       const raspuns = await callWithTimeout((signal) => fetch(targetUrl, { signal }), 10000);
       if (!raspuns.ok) console.warn(`Keep-Alive: raspuns neasteptat (${raspuns.status})`);
     } catch (err) {
-      console.error('Keep-Alive eroare:', rezumatEroare(err).cod);
+      console.error('Keep-Alive eroare:', rezumatEroareSigur(err, { operation: 'keep_alive' }));
     }
   }, intervalMs);
   if (ticker.unref) ticker.unref();
@@ -507,11 +570,20 @@ function startKeepAliveTicker() {
 }
 
 if (require.main === module) {
+  const billingWorker = createGoogleBillingWorker({
+    billingService: googleBillingService,
+    onError: (error) => {
+      console.error('[Google billing worker]', rezumatEroareSigur(error, { operation: 'billing_acknowledgement', provider: 'google_play' }));
+      if (config.sentryDsn) Sentry.captureException(error);
+    },
+  });
+  console.log('[Google billing] Worker acknowledgement activ, interval 1 minut.');
+
   if (process.env.GDPR_WORKER_ACTIV === '1') {
     const { reiaStergerileBlocate } = require('./utils/gdprWorker');
     const tickerGdpr = setInterval(() => {
       reiaStergerileBlocate({ supabaseAdmin, config }).catch((e) =>
-        console.error('[GDPR worker]', e.message));
+        console.error('[GDPR worker]', rezumatEroareSigur(e, { operation: 'gdpr_retry' })));
     }, 5 * 60 * 1000);
     if (tickerGdpr.unref) tickerGdpr.unref();
     console.log('[GDPR] Worker de reluare activ, interval 5 minute.');
@@ -527,7 +599,7 @@ if (require.main === module) {
     const { reconciliaCrediteConsumate } = require('./utils/reconcileCredite');
     const tickerReconcile = setInterval(() => {
       reconciliaCrediteConsumate({ supabaseAdmin }).catch((e) =>
-        console.error('[Reconciliere credite]', e.message));
+        console.error('[Reconciliere credite]', rezumatEroareSigur(e, { operation: 'reconcile_credits' })));
     }, 15 * 60 * 1000);
     if (tickerReconcile.unref) tickerReconcile.unref();
     console.log('[Credite] Worker reconciliere activ, interval 15 minute.');
@@ -549,6 +621,7 @@ if (require.main === module) {
   server.timeout = 300000;
   const shutdown = (signal) => {
     console.log(`${signal} primit - inchid serverul elegant...`);
+    billingWorker.stop();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 10000).unref();
   };

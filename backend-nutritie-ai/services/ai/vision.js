@@ -26,9 +26,21 @@ const NUME_FURNIZORI_AI = {
   openrouter: 'OpenRouter Vision',
 };
 
-const PROMPT_ANALIZA_FOTO = `Analizeaza aceasta imagine cu mancare.
+function obtinePromptAnalizaFoto(limba = 'ro') {
+  const code = String(limba || 'ro').trim().toLowerCase().slice(0, 2);
+  let directivaLimba = 'IMPORTANT: Numele alimentelor din campul "nume" trebuie sa fie in limba romana.';
+  if (code === 'en') {
+    directivaLimba = 'CRITICAL LANGUAGE DIRECTIVE: All food names in the "nume" field MUST be in English (e.g., "Grilled chicken breast", "White rice", "Boiled egg"). Do not use Romanian or other languages.';
+  } else if (code === 'fr') {
+    directivaLimba = 'DIRECTIVE DE LANGUE CRITIQUE: Tous les noms d\'aliments dans le champ "nume" DOIVENT être en français (ex: "Blanc de poulet grillé", "Riz blanc", "Œuf dur").';
+  } else if (code === 'de') {
+    directivaLimba = 'KRITISCHE SPRACHANWEISUNG: Alle Lebensmittelbezeichnungen im Feld "nume" MÜSSEN auf Deutsch sein (z.B. "Gegrillte Hähnchenbrust", "Weißer Reis", "Gekochtes Ei").';
+  }
+
+  return `Analizeaza aceasta imagine cu mancare.
 Considera o farfurie standard de ~25cm diametru ca referinta de scara (E1). Foloseste baze de date nutritionale recunoscute (cum ar fi USDA) pentru o precizie cat mai mare.
 Identifica TOATE alimentele de pe farfurie separat. Pentru fiecare aliment, estimeaza cantitatea vizuala in grame, ofera valorile nutritionale PENTRU SUTA DE GRAME (100g) si adauga nivelul tau de incredere in estimare (E4).
+${directivaLimba}
 RETURNEAZA DOAR UN ARRAY JSON in urmatorul format (fara text inainte sau dupa):
 [
   {
@@ -38,9 +50,14 @@ RETURNEAZA DOAR UN ARRAY JSON in urmatorul format (fara text inainte sau dupa):
     "proteine_per_100g": grame proteina per 100g,
     "grasimi_per_100g": grame grasime per 100g,
     "carbohidrati_per_100g": grame carbohidrati per 100g,
+    "fibre_per_100g": grame fibre per 100g sau null daca nu poate fi estimat,
+    "tip_masa_sugerat": "mic_dejun" sau "pranz" sau "cina" sau "gustare",
     "incredere": "ridicat"
   }
 ]`;
+}
+
+const PROMPT_ANALIZA_FOTO = obtinePromptAnalizaFoto('ro');
 
 /**
  * Serviciu de tipar: primeste configuratia validata la boot si expune doar
@@ -103,4 +120,5 @@ module.exports = {
   GEMINI_FALLBACK_MODELS,
   NUME_FURNIZORI_AI,
   PROMPT_ANALIZA_FOTO,
+  obtinePromptAnalizaFoto,
 };

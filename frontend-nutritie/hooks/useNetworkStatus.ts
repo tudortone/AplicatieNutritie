@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 /**
  * Monitorizează starea conectivității.
@@ -26,6 +26,13 @@ export function useNetworkStatus(pollIntervalMs = 45_000) {
     let mounted = true;
 
     const runHealthCheck = async () => {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined') {
+          setIsConnected(navigator.onLine);
+          setIsInternetReachable(navigator.onLine);
+        }
+        return;
+      }
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);

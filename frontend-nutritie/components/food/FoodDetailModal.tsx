@@ -77,7 +77,12 @@ function NutrientRow({ label, value, unit, color }: { label: string; value: numb
   return (
     <View style={styles.nutrientRow}>
       <Text style={[styles.nutrientLabel, { color: colors.textSecondary }]}>{label}</Text>
-      <Text style={[styles.nutrientValue, { color: color ?? colors.textSecondary }]}>
+      <Text
+        style={[styles.nutrientValue, { color: color ?? colors.textSecondary }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+      >
         {value.toFixed(value < 1 ? 1 : 0)} {unit}
       </Text>
     </View>

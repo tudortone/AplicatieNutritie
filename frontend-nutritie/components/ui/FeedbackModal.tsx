@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Modal, Pressable } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import * as Haptics from 'expo-haptics';
-import { X, Send, MessageSquare, CheckCircle2 } from 'lucide-react-native';
+import { X, Send, MessageSquare, CheckCircle2, AlertCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { useTheme } from '../../context/ThemeContext';
@@ -17,6 +17,7 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
   const [mesaj, setMesaj] = useState('');
   const [seIncarca, setSeIncarca] = useState(false);
   const [trimis, setTrimis] = useState(false);
+  const [eroare, setEroare] = useState<string | null>(null);
 
   // Sanitize feedback-ul ÎNAINTE de trimitere: eliminăm textul brut sensibil
   // (JWT, email, telefon) și limităm lungimea — NU trimitem niciodată date raw.
@@ -29,6 +30,7 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
       .replace(/\+?\d[\d\s().-]{7,}\d/g, '[PHONE_REDACTED]');
 
   const trimiteFeedback = async () => {
+    setEroare(null);
     setSeIncarca(true);
 
     try {
@@ -47,11 +49,12 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
         setTrimis(false);
         setMesaj('');
         setSeIncarca(false);
+        setEroare(null);
         onClose();
       }, 1500);
     } catch {
       setSeIncarca(false);
-      Alert.alert('Eroare', 'Nu s-a putut trimite feedback-ul. Încearcă din nou.');
+      setEroare('Nu s-a putut trimite feedback-ul. Te rugăm să încerci din nou.');
     }
   };
 
@@ -82,7 +85,7 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
             <CheckCircle2 size={48} color={colors.success} />
             <Text style={[styles.succesTitlu, { color: colors.textPrimary }]}>Îți mulțumim!</Text>
             <Text style={[styles.succesSub, { color: colors.textSecondary }]}>
-              Mesajul tău a fost trimis către echipa NutriAI.
+              Mesajul tău a fost trimis către echipa GetFlow.
             </Text>
           </View>
         ) : (
@@ -112,6 +115,13 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
             <Text style={[styles.notaSansibilitate, { color: colors.textSecondary }]}>
               Nu include parole, date medicale, informații de plată sau tokenuri.
             </Text>
+
+            {eroare ? (
+              <View style={[styles.errorBox, { backgroundColor: colors.danger + '18', borderColor: colors.danger + '40' }]}>
+                <AlertCircle size={16} color={colors.danger} />
+                <Text style={[styles.errorText, { color: colors.danger }]}>{eroare}</Text>
+              </View>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.btn, (!mesaj.trim() || seIncarca) && { opacity: 0.5 }]}
@@ -145,6 +155,20 @@ const styles = StyleSheet.create({
   titlu: { fontSize: 17, fontWeight: '800' },
   closeBtn: { padding: 4 },
   subtitlu: { fontSize: 13, lineHeight: 18 },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  errorText: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
   input: { borderRadius: 16, borderWidth: 1, padding: 14, minHeight: 110, fontSize: 14 },
   notaSansibilitate: { fontSize: 11, fontStyle: 'italic', marginTop: 6, marginBottom: 4 },
   btn: { borderRadius: 16, overflow: 'hidden', marginTop: 4 },

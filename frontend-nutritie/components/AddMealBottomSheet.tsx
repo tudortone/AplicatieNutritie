@@ -29,13 +29,14 @@ import { useAuth } from '../context/AuthContext';
 import { useFavorite } from '../hooks/useFavorite';
 import { useGamificareActions } from '../context/GamificareContext';
 import { Masa, TipMasa, AlimentDetaliat } from '../types';
-import { getTipMasaDupaOra, MEAL_CATEGORIES, CATEGORIE_ICONA, insereazaMasaCuPoza, actualizeazaMasaCuPoza, parseAlimente, construiesteAlimenteLaSalvare, totaluriPentruPersistare } from '../lib/mealUtils';
+import { getTipMasaDupaOra, MEAL_CATEGORIES, CATEGORIE_ICONA, getMealCategoryLabel, insereazaMasaCuPoza, actualizeazaMasaCuPoza, parseAlimente, construiesteAlimenteLaSalvare, totaluriPentruPersistare, clampValoare, LIMITE_DB_MESE } from '../lib/mealUtils';
+import { FlowIcon, resolveFlowIconName } from './ui/FlowIcon';
 import { pushOfflineMealVerificat, MasaOfflinePayload } from '../lib/offlineQueue';
 import { construiestePayloadMasaManuala, esteEroareDuplicate, decideRezultatInsertMasa } from '../lib/payloadMese';
 import { marcheazaMeseModificate } from '../lib/freshnessMese';
-import { localDayKey } from '../lib/dateUtils';
-import { generareUuid, idOperatieNoua } from '../lib/idUtils';
-import { foodPresets, categories, FoodPreset } from '../constants/foodPresets';
+import { idOperatieNoua } from '../lib/idUtils';
+import { foodPresets, categories, FoodPreset, getPresetDisplayName } from '../constants/foodPresets';
+import { getQuickPortionLabel } from '../i18n/quickPortions';
 import { ProductSearch } from './food/ProductSearch';
 import { MealSaveSuccessModal, type MealSuccessData } from './ui/MealSaveSuccessModal';
 
@@ -76,7 +77,7 @@ interface BaseNutrition {
 export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBottomSheetProps>(
   ({ onSuccess, onMasaCreata, onPantryUsed }, ref) => {
     const { colors } = useTheme();
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { user } = useAuth();
     const { favorite, addFavorite, removeFavorite, isFavorite } = useFavorite();
     const { adaugaProgres } = useGamificareActions();
@@ -136,16 +137,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const [aiEstimating, setAiEstimating] = useState(false);
     const [productSearchModalVisible, setProductSearchModalVisible] = useState(false);
     const [successModalData, setSuccessModalData] = useState<MealSuccessData | null>(null);
-    const [createdMasaRef, setCreatedMasaRef] = useState<Masa | null>(null);
 
     const handleSuccessDismiss = useCallback(() => {
       setSuccessModalData(null);
-      if (createdMasaRef) {
-        onMasaCreata?.(createdMasaRef);
-        setCreatedMasaRef(null);
-      }
-      onSuccess?.();
-    }, [createdMasaRef, onMasaCreata, onSuccess]);
+    }, []);
     const [baseNutrition, setBaseNutrition] = useState<BaseNutrition | null>(null);
     const [selectedPreset, setSelectedPreset] = useState<FoodPreset | null>(null);
 
@@ -153,9 +148,12 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
       if (searchQuery.trim() === '' && !selectedCategory) {
         return [];
       }
+      const q = searchQuery.trim().toLowerCase();
       return foodPresets.filter(p => {
-        if (searchQuery.trim() !== '') {
-          return p.nume.toLowerCase().includes(searchQuery.trim().toLowerCase());
+        if (q !== '') {
+          const nRo = p.nume.toLowerCase();
+          const nEn = (p.nume_en || '').toLowerCase();
+          return nRo.includes(q) || nEn.includes(q);
         }
         return p.categorie === selectedCategory;
       });
@@ -166,7 +164,11 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     // e folosit și pentru numărul afișat în antet și pentru lista de 10.
     const presetsNume = useMemo(() => {
       const q = nume.trim().toLowerCase();
-      return foodPresets.filter((p) => p.nume.toLowerCase().includes(q));
+      return foodPresets.filter((p) => {
+        const nRo = p.nume.toLowerCase();
+        const nEn = (p.nume_en || '').toLowerCase();
+        return nRo.includes(q) || nEn.includes(q);
+      });
     }, [nume]);
 
     const scrollToGramajSection = useCallback(() => {
@@ -204,7 +206,8 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const applyPreset = useCallback((preset: FoodPreset) => {
       setSelectedPreset(preset);
       const defaultGr = preset.gramajDefault || preset.gramajImplicit || 100;
-      setNume(preset.nume);
+      const numeAfisat = getPresetDisplayName(preset, i18n?.language);
+      setNume(numeAfisat);
       setGrame(String(defaultGr));
       setCalorii(String(preset.calorii));
       setProteine(String(preset.proteine));
@@ -227,7 +230,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
       setSearchQuery('');
       setSelectedCategory(null);
       scrollToGramajSection();
-    }, [scrollToGramajSection]);
+    }, [scrollToGramajSection, i18n?.language]);
 
     const estimateWithAI = async (query: string) => {
       if (!query.trim()) return;
@@ -415,12 +418,12 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     );
 
     const isNumeValid = nume.trim().length >= 2;
-    const calNumber = parseInt(calorii, 10);
+    const calNumber = clampValoare(parseInt(calorii, 10) || 0, LIMITE_DB_MESE.calorii, 0);
     const isCaloriiValid = !isNaN(calNumber) && calNumber > 0;
     const isFormValid = isNumeValid && isCaloriiValid;
 
-    // Helper: parse macro with 1 decimal precision
-    const parseMacro = (val: string) => Math.round((parseFloat(val) || 0) * 10) / 10;
+    // Helper: parse macro with 1 decimal precision, clamped to DB limits and non-negative
+    const parseMacro = (val: string) => clampValoare(Math.round((parseFloat(val) || 0) * 10) / 10, LIMITE_DB_MESE.proteine, 0);
 
     const handleSave = async () => {
       if (!isFormValid) {
@@ -438,10 +441,12 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
       setLoading(true);
       try {
+        const parsedGrame = parseFloat(grame) || 0;
+        const grameVal = clampValoare(parsedGrame > 0 ? parsedGrame : 100, LIMITE_DB_MESE.gramaj, 1);
         const alimentePayload: AlimentDetaliat[] = [
           {
             nume: nume.trim(),
-            grame: parseFloat(grame) || 0,
+            grame: grameVal,
             calorii: calNumber,
             proteine: parseMacro(proteine),
             carbohidrati: parseMacro(carbohidrati),
@@ -609,8 +614,9 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                 tip_masa: payload.tip_masa,
                 alimente: payload.alimente,
                 imagine_url: payload.imagine_url ?? null,
-                data: localDayKey(new Date()),
-                created_at: new Date().toISOString(),
+                data: payload.data,
+                ora: payload.ora,
+                created_at: payload.created_at,
               };
               // F-11: confirmam „Salvat offline" doar daca persistarea pe disc a
               // reusit. Altfel masa traieste doar in memorie si dispare la
@@ -647,9 +653,14 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           // mai depinde de throttle-ul de 5s al refresh-ului la focus.
           marcheazaMeseModificate(user.id);
 
+          // P1-16: Notificare IMEDIATĂ pe calea canonică de salvare (fără întârziere modal Reanimated)!
+          if (masaCreata) {
+            onMasaCreata?.(masaCreata);
+          }
+          onSuccess?.();
+
           adaugaProgres('proteine', payload.proteine);
           bottomSheetRef.current?.close();
-          if (masaCreata) setCreatedMasaRef(masaCreata);
           setSuccessModalData({
             nume: payload.nume,
             calorii: payload.calorii,
@@ -805,6 +816,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12, justifyContent: 'center' }}>
                 {categories.map(cat => {
                   const isSelected = selectedCategory === cat.id;
+                  const labelTradus = t(`jurnal.presetCategories.${cat.id}`, { defaultValue: cat.name });
                   return (
                     <TouchableOpacity
                       key={cat.id}
@@ -823,15 +835,15 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       onPress={() => setSelectedCategory(prev => prev === cat.id ? null : cat.id)}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel={`Categoria ${cat.name}`}
+                      accessibilityLabel={`${t('jurnal.category')}: ${labelTradus}`}
                       accessibilityState={{ selected: isSelected }}
                     >
-                      <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
+                      <FlowIcon name={resolveFlowIconName(cat.icon) ?? 'utensils'} size={16} color={isSelected ? colors.textOnAccent : colors.textSecondary} />
                       <Text style={[
                         styles.categoryText,
                         { color: isSelected ? colors.textOnAccent : colors.textPrimary, fontWeight: isSelected ? '800' : '600' }
                       ]}>
-                        {cat.name}
+                        {labelTradus}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -841,7 +853,11 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               {selectedCategory && !searchQuery && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingHorizontal: 4 }}>
                   <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>
-                    {t('jurnal.showOptionsFor', { categorie: categories.find(c => c.id === selectedCategory)?.name ?? '' })}
+                    {t('jurnal.showOptionsFor', {
+                      categorie: t(`jurnal.presetCategories.${selectedCategory}`, {
+                        defaultValue: categories.find(c => c.id === selectedCategory)?.name ?? '',
+                      }),
+                    })}
                   </Text>
                   <TouchableOpacity onPress={() => setSelectedCategory(null)}>
                     <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '800' }}>{t('jurnal.close')}</Text>
@@ -892,9 +908,9 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                     onPress={() => applyPreset(preset)}
                     activeOpacity={0.8}
                   >
-                    <Text style={{ fontSize: 24, marginBottom: 4 }}>{preset.icon}</Text>
+                    <FlowIcon name={resolveFlowIconName(preset.icon) ?? 'utensils'} size={24} color={colors.accent} />
                     <Text style={[styles.presetName, { color: colors.textPrimary }]} numberOfLines={2}>
-                      {preset.nume}
+                      {getPresetDisplayName(preset, i18n?.language)}
                     </Text>
                     <Text style={[styles.presetCalories, { color: colors.accent }]}>
                       {preset.calorii} kcal
@@ -915,7 +931,8 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {MEAL_CATEGORIES.map((cat) => {
                   const isSelected = tipMasa === cat.id;
-                  const Icona = CATEGORIE_ICONA[cat.id];
+                  const iconName = CATEGORIE_ICONA[cat.id];
+                  const labelTradus = getMealCategoryLabel(cat.id, t);
                   return (
                     <TouchableOpacity
                       key={cat.id}
@@ -937,15 +954,15 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       }}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel={`Tip masă ${cat.label}`}
+                      accessibilityLabel={`${t('jurnal.mealCategory')}: ${labelTradus}`}
                       accessibilityState={{ selected: isSelected }}
                     >
-                      <Icona size={16} color={isSelected ? colors.textOnAccent : colors.textPrimary} />
+                      <FlowIcon name={iconName} size={16} color={isSelected ? colors.textOnAccent : colors.textPrimary} />
                       <Text style={[
                         styles.categoryText,
                         { color: isSelected ? colors.textOnAccent : colors.textPrimary, fontWeight: isSelected ? '800' : '600' }
                       ]}>
-                        {cat.label}
+                        {labelTradus}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -988,7 +1005,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                         style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', gap: 10 }}
                         onPress={() => applyPreset(preset)}
                       >
-                        <Text style={{ fontSize: 20 }}>{preset.icon}</Text>
+                        <FlowIcon name={resolveFlowIconName(preset.icon) ?? 'utensils'} size={20} color={colors.accent} />
                         <View style={{ flex: 1 }}>
                           <Text style={{ color: colors.textPrimary, fontWeight: '700', fontSize: 14 }}>{preset.nume}</Text>
                           <Text style={{ color: colors.accent, fontSize: 12, marginTop: 2 }}>{preset.calorii} kcal • {preset.proteine}g P • {preset.carbohidrati}g C • {preset.grasimi}g G</Text>
@@ -1063,14 +1080,18 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   <Text style={[styles.inputLabel, { color: colors.textSecondary, marginBottom: 6, fontSize: 13 }]}>
                     {t('jurnal.chooseQuickPortions')}
                   </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                    {selectedPreset.unitati.map((unit) => {
+                  <View testID="quick-portions-container" style={styles.quickPortionsContainer}>
+                    {selectedPreset.unitati.map((unit, unitIndex) => {
                       const isActive = grame === String(unit.grame);
+                      const localizedLabel = getQuickPortionLabel(selectedPreset, unitIndex, i18n?.language);
                       return (
                         <TouchableOpacity
-                          key={unit.label}
+                          key={`${selectedPreset.id}-${unit.grame}-${unitIndex}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={localizedLabel}
                           style={[
                             styles.gramChip,
+                            styles.quickPortionChip,
                             {
                               backgroundColor: isActive ? colors.accent : colors.surfaceBg,
                               borderColor: isActive ? colors.accent : colors.cardBorder,
@@ -1089,12 +1110,12 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                               },
                             ]}
                           >
-                            {unit.label}
+                            {localizedLabel}
                           </Text>
                         </TouchableOpacity>
                       );
                     })}
-                  </ScrollView>
+                  </View>
                 </View>
               )}
 
@@ -1323,19 +1344,36 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         >
           <View style={{ flex: 1, backgroundColor: colors.background, padding: 16 }}>
             <ProductSearch
+              onMealAdded={(masa) => {
+                setProductSearchModalVisible(false);
+                bottomSheetRef.current?.close();
+                if (onMasaCreata) {
+                  onMasaCreata(masa);
+                }
+                if (onSuccess) {
+                  onSuccess();
+                }
+              }}
               onSelectProductWithGrams={(prod, gr) => {
                 const al = prod;
                 setNume(al.brand ? `${al.name} (${al.brand})` : al.name);
-                const factor = gr / 100;
+                const safeGr = clampValoare(gr > 0 ? gr : 100, LIMITE_DB_MESE.gramaj, 1);
+                const factor = safeGr / 100;
                 setCalorii(String(Math.round(al.kcalPer100g * factor)));
                 setProteine(String(Math.round(al.proteinPer100g * factor * 10) / 10));
                 setCarbohidrati(String(Math.round(al.carbsPer100g * factor * 10) / 10));
                 setGrasimi(String(Math.round(al.fatPer100g * factor * 10) / 10));
-                // Product path: macro-urile vin din produs (per 100g); nu mai
-                // recalcula din baseNutrition expirat (preset/AI) si il curatam
-                // ca o editare ulterioara a gramajului sa nu rescrie valorile.
-                setGrame(String(gr));
-                setBaseNutrition(null);
+                if (al.fiberPer100g != null) {
+                  setFibre(String(Math.round(al.fiberPer100g * factor * 10) / 10));
+                }
+                setGrame(String(safeGr));
+                setBaseNutrition({
+                  defaultGrame: 100,
+                  calorii: al.kcalPer100g,
+                  proteine: al.proteinPer100g,
+                  carbohidrati: al.carbsPer100g,
+                  grasimi: al.fatPer100g,
+                });
                 setProductSearchModalVisible(false);
               }}
               onClose={() => setProductSearchModalVisible(false)}
@@ -1486,6 +1524,17 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginTop: 10,
+  },
+  quickPortionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  quickPortionChip: {
+    minHeight: 44,
+    maxWidth: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   gramChip: {
     paddingHorizontal: 12,

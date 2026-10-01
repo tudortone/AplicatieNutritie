@@ -16,7 +16,7 @@ export type Dificultate = 'usor' | 'mediu' | 'greu';
 export interface CategorieInfo {
   id: Categorie;
   nume: string;
-  emoji?: string;
+  icon?: string;
   grupe?: string[];
 }
 
@@ -50,20 +50,20 @@ export interface Exercitiu {
 }
 
 export const CATEGORII: CategorieInfo[] = [
-  { id: 'piept', nume: 'Piept', emoji: '💪', grupe: ['pectorali', 'triceps', 'deltoid anterior'] },
-  { id: 'spate', nume: 'Spate', emoji: '🔙', grupe: ['dorsali', 'trapez', 'romboizi', 'biceps'] },
-  { id: 'picioare', nume: 'Picioare', emoji: '🦵', grupe: ['cvadriceps', 'ischiogambieri', 'fesieri', 'gambe'] },
-  { id: 'umeri', nume: 'Umeri', emoji: '🏋️', grupe: ['deltoizi', 'trapez'] },
-  { id: 'brate', nume: 'Brațe', emoji: '💪', grupe: ['biceps', 'triceps', 'brahial'] },
-  { id: 'abdomen', nume: 'Abdomen', emoji: '🔥', grupe: ['abdomeni', 'oblici', 'core'] },
-  { id: 'cardio', nume: 'Cardio', emoji: '🏃', grupe: ['cardio', 'picioare'] },
-  { id: 'full-body', nume: 'Full Body', emoji: '⚡', grupe: ['corp_intreg', 'core', 'umeri', 'picioare'] },
-  { id: 'mobilitate', nume: 'Mobilitate', emoji: '🧘', grupe: ['mobilitate', 'femurali', 'coloană'] },
+  { id: 'piept', nume: 'Piept', icon: 'dumbbell', grupe: ['pectorali', 'triceps', 'deltoid anterior'] },
+  { id: 'spate', nume: 'Spate', icon: 'activity', grupe: ['dorsali', 'trapez', 'romboizi', 'biceps'] },
+  { id: 'picioare', nume: 'Picioare', icon: 'footsteps', grupe: ['cvadriceps', 'ischiogambieri', 'fesieri', 'gambe'] },
+  { id: 'umeri', nume: 'Umeri', icon: 'dumbbell', grupe: ['deltoizi', 'trapez'] },
+  { id: 'brate', nume: 'Brațe', icon: 'dumbbell', grupe: ['biceps', 'triceps', 'brahial'] },
+  { id: 'abdomen', nume: 'Abdomen', icon: 'flame', grupe: ['abdomeni', 'oblici', 'core'] },
+  { id: 'cardio', nume: 'Cardio', icon: 'footsteps', grupe: ['cardio', 'picioare'] },
+  { id: 'full-body', nume: 'Full Body', icon: 'zap', grupe: ['corp_intreg', 'core', 'umeri', 'picioare'] },
+  { id: 'mobilitate', nume: 'Mobilitate', icon: 'activity', grupe: ['mobilitate', 'femurali', 'coloană'] },
   // Categorii suplimentare folosite de exerciții
-  { id: 'superior', nume: 'Partea Superioară', emoji: '🔼', grupe: ['piept', 'spate', 'umeri', 'brate'] },
-  { id: 'inferior', nume: 'Partea Inferioară', emoji: '🔽', grupe: ['picioare', 'fesieri', 'gambe'] },
-  { id: 'core', nume: 'Core', emoji: '🎯', grupe: ['abdomeni', 'oblici', 'lombari'] },
-  { id: 'corp_intreg', nume: 'Corp Întreg', emoji: '⚡', grupe: ['full-body', 'core', 'picioare', 'umeri'] },
+  { id: 'superior', nume: 'Partea Superioară', icon: 'moveUp', grupe: ['piept', 'spate', 'umeri', 'brate'] },
+  { id: 'inferior', nume: 'Partea Inferioară', icon: 'moveDown', grupe: ['picioare', 'fesieri', 'gambe'] },
+  { id: 'core', nume: 'Core', icon: 'target', grupe: ['abdomeni', 'oblici', 'lombari'] },
+  { id: 'corp_intreg', nume: 'Corp Întreg', icon: 'zap', grupe: ['full-body', 'core', 'picioare', 'umeri'] },
 ];
 
 export const calculeazaCaloriiArse = (met: number, greutateKg: number, minute: number): number =>

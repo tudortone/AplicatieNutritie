@@ -1,4 +1,5 @@
 const globals = require("globals");
+const createNoServiceRoleBypassRule = require("./eslint-rules/no-service-role-bypass");
 
 // C1-S3: tabele cu politici RLS pe `auth.uid() = user_id`. Un acces direct prin
 // clientul service_role (`supabaseAdmin`) ar ocoli RLS prin definitie; aceste
@@ -8,41 +9,7 @@ const globals = require("globals");
 // acolo sa intre automat sub regula, fara drift intre cele doua locuri.
 const { TABELE_CU_RLS_UTILIZATOR } = require("./utils/clientUtilizator");
 
-// Interzice `.*from('<tabela-RLS>')` indiferent de numele variabilei care tine
-// clientul service_role. Prinde atat forma directa cat si aliasurile pe care
-// codul le foloseste efectiv:
-//   - supabaseAdmin.from('mese')      (identificator direct)
-//   - ctx.admin.from('mese')          (alias expus de creeazaContextDate)
-//   - req.supabaseAdmin.from('mese')  (client atasat cererii)
-//   - clientAdmin.from('mese')        (variabila redenumita)
-// Omiterea filtrului devine o eroare la lint in loc de o scurgere silentioasa.
-// Scrierile backend-legitime (webhook/GDPR/AI, fara JWT Supabase valid) fac
-// exceptie, listate explicit jos, in blocul de overrides.
-const SELECTOR_SUPABASE_ADMIN_USER_TABLE = {
-  selector:
-    "CallExpression[callee.object.name=/admin/i][callee.property.name='from']" +
-    "[arguments.0.type='Literal'][arguments.0.value=/^(" +
-    TABELE_CU_RLS_UTILIZATOR.join("|") +
-    ")$/]",
-  message:
-    "C1-S3: nu accesa tabela de utilizator prin clientul service_role (ocoleste RLS). " +
-    "Foloseste tabelUtilizator(ctx, ...) pe clientul legat al JWT-ului. " +
-    "Doar scrierile pe baza de webhook/GDPR/AI (fara JWT Supabase valid) fac exceptie, " +
-    "listate explicit in eslint.config.js overrides.",
-};
-
-// A doua forma: clientul service_role ca PROPRIETATE a unui obiect
-// (req.supabaseAdmin, this.supabaseAdmin, ctx.clientSupabase). Acolo callee.object
-// e un MemberExpression, deci selectorul de mai sus (care citeste
-// callee.object.name) nu l-ar prinde.
-const SELECTOR_SUPABASE_ADMIN_USER_TABLE_PROPRIETATE = {
-  selector:
-    "CallExpression[callee.object.property.name=/admin/i][callee.property.name='from']" +
-    "[arguments.0.type='Literal'][arguments.0.value=/^(" +
-    TABELE_CU_RLS_UTILIZATOR.join("|") +
-    ")$/]",
-  message: SELECTOR_SUPABASE_ADMIN_USER_TABLE.message,
-};
+const noServiceRoleBypass = createNoServiceRoleBypassRule(TABELE_CU_RLS_UTILIZATOR);
 
 module.exports = [
   {
@@ -65,21 +32,31 @@ module.exports = [
     }
   },
   {
-    // C1-S3: regula anti-by-pass RLS — doar in fioalele de route (routes/**, utils/**)
-    // se interzice direct supabaseAdmin pe tabeleul de utilizator. restul trece.
-    files: ["routes/**/*.js", "utils/**/*.js"],
+    // TASK-001: regula urmareste provenienta createClient(...serviceRoleKey),
+    // inclusiv aliasuri si atribuiri, in intreaga suprafata backend de runtime.
+    files: [
+      "server.js",
+      "routes/**/*.js",
+      "repositories/**/*.js",
+      "utils/**/*.js",
+      "services/**/*.js",
+      "src/**/*.js",
+    ],
+    plugins: {
+      task001: {
+        rules: {
+          "no-service-role-bypass": noServiceRoleBypass,
+        },
+      },
+    },
     rules: {
-      "no-restricted-syntax": [
-        "error",
-        SELECTOR_SUPABASE_ADMIN_USER_TABLE,
-        SELECTOR_SUPABASE_ADMIN_USER_TABLE_PROPRIETATE,
-      ],
+      "task001/no-service-role-bypass": "error",
     },
   },
   {
     // EXCEPT unor (C1-S3): aceste fișiere scriu date de utilizator pe baza de
     // indicator de sistem — nu pot folosi clientul legat de JWT:
-    //   - routes/webhooks.js + webhooksRevenueCat.js: user.created/updated/deleted
+    //   - routes/webhooks.js: user.created/updated/deleted
     //     ruleaza INAINTE ca utilizatorul sa aiba un JWT Supabase — nu exista
     //     client RLS legit la aceasta faza.
     //   - routes/gdpr.js: stergeCont autent atat identit; verifica userId inainte
@@ -91,7 +68,6 @@ module.exports = [
     //     outbox-ul a marcat contul deletion_pending.
     files: [
       "routes/webhooks.js",
-      "routes/webhooksRevenueCat.js",
       "routes/gdpr.js",
       "routes/ai.js",
       "utils/gdprWorker.js",
@@ -99,7 +75,7 @@ module.exports = [
       "src/trigger/**",
     ],
     rules: {
-      "no-restricted-syntax": "off",
+      "task001/no-service-role-bypass": "off",
     },
   },
 ];

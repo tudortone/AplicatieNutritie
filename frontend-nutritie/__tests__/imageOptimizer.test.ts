@@ -6,6 +6,7 @@ import {
   saveLocalImageDraft,
   discardLocalImageDraft,
   listPendingDrafts,
+  purgeLocalImageDrafts,
   optimizeImageBeforeUpload,
   DRAFT_DIR,
 } from '../lib/imageOptimizer';
@@ -20,7 +21,7 @@ jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(),
   makeDirectoryAsync: jest.fn(),
   copyAsync: jest.fn(),
-  deleteAsync: jest.fn(),
+  deleteAsync: jest.fn(async () => {}),
 }));
 
 jest.mock('expo-image-manipulator', () => ({
@@ -78,9 +79,12 @@ describe('U-03 — Storage local persistent imagini (drafts) & Optimizing', () =
     (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
 
-    const path = await saveLocalImageDraft('file:///tmp/camera_photo.jpg');
+    const path = await saveLocalImageDraft('file:///tmp/camera_photo.jpg', 'user-1');
 
-    expect(FileSystem.makeDirectoryAsync).toHaveBeenCalled();
+    expect(FileSystem.makeDirectoryAsync).toHaveBeenCalledWith(
+      `${DRAFT_DIR}user-1/`,
+      { intermediates: true },
+    );
     expect(FileSystem.copyAsync).toHaveBeenCalledWith({
       from: 'file:///tmp/camera_photo.jpg',
       to: path,
@@ -92,10 +96,10 @@ describe('U-03 — Storage local persistent imagini (drafts) & Optimizing', () =
   });
 
   test('discardLocalImageDraft șterge fișierul și elimină calea din AsyncStorage', async () => {
-    const draftPath = 'file:///data/user/0/com.app/files/drafts/123.jpg';
+    const draftPath = 'file:///data/user/0/com.app/files/drafts/user-1/123.jpg';
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify([draftPath]));
 
-    await discardLocalImageDraft(draftPath);
+    await discardLocalImageDraft(draftPath, 'user-1');
 
     expect(FileSystem.deleteAsync).toHaveBeenCalledWith(draftPath, { idempotent: true });
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
@@ -105,10 +109,27 @@ describe('U-03 — Storage local persistent imagini (drafts) & Optimizing', () =
   });
 
   test('listPendingDrafts returnează lista din AsyncStorage', async () => {
-    const drafts = ['file:///path/1.jpg', 'file:///path/2.jpg'];
-    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify(drafts));
+    const drafts = [
+      'file:///data/user/0/com.app/files/drafts/user-1/1.jpg',
+      'file:///data/user/0/com.app/files/drafts/user-1/2.jpg',
+    ];
+    const ambiguousLegacyDraft = 'file:///data/user/0/com.app/files/drafts/legacy.jpg';
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify([...drafts, ambiguousLegacyDraft]));
 
-    const result = await listPendingDrafts();
+    const result = await listPendingDrafts('user-1');
     expect(result).toEqual(drafts);
+    expect(FileSystem.deleteAsync).toHaveBeenCalledWith(ambiguousLegacyDraft, { idempotent: true });
+  });
+
+  test('purjarea de cont propagă eșecul de ștergere ca să poată fi reluată', async () => {
+    const draftPath = 'file:///data/user/0/com.app/files/drafts/user-1/retry.jpg';
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(JSON.stringify([draftPath]));
+    (FileSystem.deleteAsync as jest.Mock).mockRejectedValueOnce(new Error('disk busy'));
+
+    await expect(purgeLocalImageDrafts('user-1')).rejects.toThrow('disk busy');
+    expect(AsyncStorage.setItem).not.toHaveBeenCalledWith(
+      'nutriai:image-drafts',
+      JSON.stringify([]),
+    );
   });
 });

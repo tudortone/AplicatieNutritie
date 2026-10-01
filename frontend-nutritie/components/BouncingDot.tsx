@@ -22,7 +22,10 @@ export default function BouncingDot({ delay, color }: BouncingDotProps) {
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion) {
+      translateY.value = 0;
+      return;
+    }
     translateY.value = withDelay(
       delay,
       withRepeat(

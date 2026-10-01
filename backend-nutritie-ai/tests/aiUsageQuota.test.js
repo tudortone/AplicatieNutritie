@@ -70,6 +70,54 @@ describe('Plafon cost AI per utilizator (H-06)', () => {
     expect(res.headers['X-AI-Quota-Remaining']).toBeUndefined();
   });
 
+  test('testerul foloseste plafonul intern de 500 fara sa consume credite platite', async () => {
+    const contor = contorCu(51);
+    const admin = { rpc: jest.fn() };
+    const check = creeazaCheckAiUsageQuota({
+      contor,
+      supabaseAdmin: admin,
+      limitaZi: 50,
+      limitaTester: 500,
+    });
+    const res = raspunsFals();
+    const next = jest.fn();
+
+    await check({ user: { id: 'tester-1', esteTester: true } }, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(admin.rpc).not.toHaveBeenCalled();
+    expect(res.headers['X-AI-Quota-Tier']).toBe('tester');
+    expect(res.headers['X-AI-Quota-Remaining']).toBe(449);
+  });
+
+  test('testerul ramane limitat de plafonul intern explicit', async () => {
+    const contor = contorCu(501);
+    const check = creeazaCheckAiUsageQuota({ contor, limitaZi: 50, limitaTester: 500 });
+    const res = raspunsFals();
+    const next = jest.fn();
+
+    await check({ user: { id: 'tester-1', esteTester: true } }, res, next);
+
+    expect(res.statusCode).toBe(429);
+    expect(res.body.cod).toBe('AI_TESTER_QUOTA_EXCEEDED');
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('flagurile trimise de client nu pot activa plafonul de tester', async () => {
+    const contor = contorCu(51);
+    const { promise, res, next } = ruleaza({
+      user: { id: 'free-1', esteTester: false },
+      body: { full_access: true },
+      headers: { 'x-full-access': 'true' },
+    }, contor, { limita: 50 });
+
+    await promise;
+
+    expect(res.statusCode).toBe(429);
+    expect(res.body.cod).toBe('AI_QUOTA_EXCEEDED');
+    expect(next).not.toHaveBeenCalled();
+  });
+
   test('#14: fara userId => 401, fara contor', async () => {
     const contor = contorCu(1);
     const { promise, res, next } = ruleaza({}, contor);
@@ -273,5 +321,51 @@ describe('Plafon cost AI per utilizator (H-06)', () => {
 
     const refund = apeluriRpc.filter((a) => a.functie === 'aplica_tranzactie_credite');
     expect(refund).toHaveLength(0);
+  });
+
+  test('utilizatorul cu abonament Google Play Premium beneficiaza de plafonul extins fara sa consume credite', async () => {
+    const contor = contorCu(51);
+    const admin = { rpc: jest.fn() };
+    const billing = {
+      getPaidEntitlement: jest.fn(async () => ({ premium: true })),
+    };
+    const check = creeazaCheckAiUsageQuota({
+      contor,
+      supabaseAdmin: admin,
+      billingService: billing,
+      limitaZi: 50,
+      limitaTester: 500,
+    });
+    const res = raspunsFals();
+    const next = jest.fn();
+
+    await check({ user: { id: 'premium-user-1' } }, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(billing.getPaidEntitlement).toHaveBeenCalledWith({ userId: 'premium-user-1' });
+    expect(admin.rpc).not.toHaveBeenCalled();
+    expect(res.headers['X-AI-Quota-Tier']).toBe('premium');
+    expect(res.headers['X-AI-Quota-Remaining']).toBe(449);
+  });
+
+  test('utilizatorul Premium care depaseste 500 primeste PREMIUM_FAIR_USE_REACHED', async () => {
+    const contor = contorCu(501);
+    const billing = {
+      getPaidEntitlement: jest.fn(async () => ({ premium: true })),
+    };
+    const check = creeazaCheckAiUsageQuota({
+      contor,
+      billingService: billing,
+      limitaZi: 50,
+      limitaTester: 500,
+    });
+    const res = raspunsFals();
+    const next = jest.fn();
+
+    await check({ user: { id: 'premium-user-2' } }, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(429);
+    expect(res.body.cod).toBe('PREMIUM_FAIR_USE_REACHED');
   });
 });

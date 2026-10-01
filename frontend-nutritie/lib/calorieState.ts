@@ -1,3 +1,5 @@
+import i18n from '../i18n';
+
 export type CalorieStateKey = 'start' | 'on_track' | 'aproape' | 'atins' | 'depasit';
 
 export interface CalorieStateConfig {
@@ -5,7 +7,7 @@ export interface CalorieStateConfig {
   ringColor: string;
   glowColor: string;
   mesaj: string;
-  emoji: string;
+  iconName: string;
   isOver: boolean;
   surplusKcal: number;
 }
@@ -17,20 +19,30 @@ export function getCalorieState(
   consumat: number,
   tinta: number,
   defaultAccent: string,
-  defaultSecondary: string
+  defaultSecondary: string,
+  t?: (key: string, options?: any) => string
 ): CalorieStateConfig {
-  const t = Math.max(tinta, 1);
-  const c = Math.max(consumat, 0);
-  const procent = (c / t) * 100;
+  const translator = t || (i18n && i18n.t ? i18n.t.bind(i18n) : null);
+  const tFn = (key: string, opts?: any, fallback?: string): string => {
+    if (translator) {
+      const res = translator(key, opts);
+      if (res && res !== key) return res;
+    }
+    return fallback || key;
+  };
+
+  const target = Math.max(tinta, 1);
+  const consumed = Math.max(consumat, 0);
+  const procent = (consumed / target) * 100;
 
   if (procent > 100) {
-    const surplus = c - t;
+    const surplus = consumed - target;
     return {
       key: 'depasit',
       ringColor: '#f43f5e', // Roșu de depășire vizibil clar
       glowColor: '#f43f5e',
-      mesaj: `Ai depășit ținta cu ${surplus} kcal`,
-      emoji: '🔴',
+      mesaj: tFn('home.calorieState.depasit', { surplus }, `Ai depășit ținta cu ${surplus} kcal`),
+      iconName: 'circle',
       isOver: true,
       surplusKcal: surplus,
     };
@@ -41,8 +53,8 @@ export function getCalorieState(
       key: 'atins',
       ringColor: '#10B981', // Teal / Verde smarald de succes
       glowColor: '#10B981',
-      mesaj: 'Țintă atinsă perfect azi',
-      emoji: '🎯',
+      mesaj: tFn('home.calorieState.atins', {}, 'Țintă atinsă perfect azi'),
+      iconName: 'target',
       isOver: false,
       surplusKcal: 0,
     };
@@ -53,8 +65,8 @@ export function getCalorieState(
       key: 'aproape',
       ringColor: '#F59E0B', // Galben energetic
       glowColor: '#F59E0B',
-      mesaj: 'Aproape de țintă',
-      emoji: '⚡',
+      mesaj: tFn('home.calorieState.aproape', {}, 'Aproape de țintă'),
+      iconName: 'zap',
       isOver: false,
       surplusKcal: 0,
     };
@@ -65,33 +77,19 @@ export function getCalorieState(
       key: 'on_track',
       ringColor: defaultAccent,
       glowColor: defaultAccent,
-      mesaj: 'Ești pe drumul bun',
-      emoji: '✅',
+      mesaj: tFn('home.calorieState.on_track', {}, 'Ești pe drumul bun'),
+      iconName: 'check',
       isOver: false,
       surplusKcal: 0,
     };
-  }
-
-  const ora = new Date().getHours();
-  let mesajStart = 'Hai să începem dimineața cu energie!';
-  let emojiStart = '🌅';
-  if (ora >= 12 && ora < 18) {
-    mesajStart = 'Timp perfect pentru un prânz nutritiv!';
-    emojiStart = '🌤️';
-  } else if (ora >= 18 && ora < 23) {
-    mesajStart = 'Pregătește o seară echilibrată!';
-    emojiStart = '🌙';
-  } else if (ora < 5 || ora >= 23) {
-    mesajStart = 'Odihnă plăcută și refacere!';
-    emojiStart = '✨';
   }
 
   return {
     key: 'start',
     ringColor: defaultAccent,
     glowColor: defaultSecondary,
-    mesaj: mesajStart,
-    emoji: emojiStart,
+    mesaj: tFn('home.calorieState.start', {}, 'Hai să începem dimineața cu energie!'),
+    iconName: 'sun',
     isOver: false,
     surplusKcal: 0,
   };

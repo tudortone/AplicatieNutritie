@@ -1,24 +1,38 @@
-// URL-uri publice ale documentelor legale (Termeni și Condiții / Politica de
-// Confidențialitate). Se configurează prin variabile de mediu Expo
-// (EXPO_PUBLIC_TERMS_URL / EXPO_PUBLIC_PRIVACY_URL) și se deschid în browser
-// extern prin Linking.openURL.
-//
-// Validăm că sunt URL-uri HTTPS publice (nu pagini locale), altfel refuzăm să
-// deschidem ceva suspect sau neconfigurat — fail-closed.
-
-const REGEX_URL_HTTPS_PUBLIC = /^https:\/\/[^/]+\/.+/;
-
-function citesteURL(variabila: string): string {
-  const valoare = process.env[variabila]?.trim();
-  if (!valoare || !REGEX_URL_HTTPS_PUBLIC.test(valoare)) {
-    throw new Error(`Document legal indisponibil: ${variabila} trebuie configurat cu un URL HTTPS public`);
+/** Validează fail-closed că documentul legal este o pagină HTTPS publică reală. */
+export function validateLegalUrl(value: string | undefined, documentName: string): string {
+  const normalized = value?.trim();
+  try {
+    if (!normalized) throw new Error('missing');
+    const url = new URL(normalized);
+    const host = url.hostname.toLowerCase();
+    const placeholder = host === 'localhost'
+      || host === '127.0.0.1'
+      || host === '0.0.0.0'
+      || host === 'example.com'
+      || host.endsWith('.example.com')
+      || host.endsWith('.example')
+      || host.endsWith('.invalid')
+      || host.endsWith('.test');
+    if (url.protocol !== 'https:' || placeholder || url.pathname === '/') throw new Error('invalid');
+    return url.toString();
+  } catch {
+    throw new Error(`Document legal indisponibil: ${documentName} trebuie configurat cu un URL HTTPS public real`);
   }
-  return valoare;
 }
 
-export function getLegalUrls(): { termsUrl: string; privacyUrl: string } {
+export function getLegalUrls(overrides?: {
+  termsUrl?: string;
+  privacyUrl?: string;
+}): { termsUrl: string; privacyUrl: string } {
+  // Accesul static este obligatoriu pentru ca Expo să inline-uiască EXPO_PUBLIC_* la build.
   return {
-    termsUrl: citesteURL('EXPO_PUBLIC_TERMS_URL'),
-    privacyUrl: citesteURL('EXPO_PUBLIC_PRIVACY_URL'),
+    termsUrl: validateLegalUrl(
+      overrides?.termsUrl ?? process.env.EXPO_PUBLIC_TERMS_OF_SERVICE_URL,
+      'EXPO_PUBLIC_TERMS_OF_SERVICE_URL',
+    ),
+    privacyUrl: validateLegalUrl(
+      overrides?.privacyUrl ?? process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL,
+      'EXPO_PUBLIC_PRIVACY_POLICY_URL',
+    ),
   };
 }

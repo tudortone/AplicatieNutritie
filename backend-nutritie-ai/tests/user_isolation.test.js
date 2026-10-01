@@ -92,7 +92,8 @@ jest.mock('@supabase/supabase-js', () => {
           eq: jest.fn().mockReturnThis(),
           single: jest.fn().mockResolvedValue({ data: null, error: null })
         };
-      })
+      }),
+      rpc: jest.fn().mockResolvedValue({ data: null, error: null })
     }))
   };
 });

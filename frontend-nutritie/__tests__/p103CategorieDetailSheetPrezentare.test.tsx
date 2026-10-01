@@ -65,10 +65,7 @@ jest.mock('../components/MasaCard', () => ({
   MasaCard: () => null,
 }));
 
-jest.mock('lucide-react-native', () => ({
-  X: () => null,
-  PlusCircle: () => null,
-}));
+jest.mock('lucide-react-native', () => new Proxy({}, { get: () => () => null }));
 
 const categorieBruta = (totaluri: Partial<CategorieMasaGrupata>): CategorieMasaGrupata => ({
   id: 'pranz',

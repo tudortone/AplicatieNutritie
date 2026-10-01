@@ -2,7 +2,7 @@
 
 const { valideazaMasa } = require('../utils/validareMese');
 const createProfilRouter = require('../routes/profil');
-const createUserRouter = require('../routes/user');
+const { mapGoogleSubscription } = require('../services/billing/googleSubscriptionState');
 
 describe('Audit hardening — validare si fail-closed', () => {
   test('pastreaza precizia zecimala a macro-urilor', () => {
@@ -26,16 +26,23 @@ describe('Audit hardening — validare si fail-closed', () => {
     expect(createProfilRouter.numarStrict('70.5')).toBe(70.5);
   });
 
-  test('un entitlement marcat activ dar expirat ramane fail-closed', () => {
-    expect(createUserRouter.entitlementEsteActiv({
-      active: true,
-      expires_date: '2020-01-01T00:00:00Z',
-    }, Date.parse('2026-08-06T00:00:00Z'))).toBe(false);
+  test('un abonament Google activ dar expirat ramane fail-closed', () => {
+    expect(mapGoogleSubscription({
+      subscriptionState: 'SUBSCRIPTION_STATE_ACTIVE',
+      lineItems: [{ productId: 'premium_monthly', expiryTime: '2020-01-01T00:00:00Z' }],
+    }, {
+      allowedProductIds: ['premium_monthly'],
+      nowMs: Date.parse('2026-08-06T00:00:00Z'),
+    }).entitled).toBe(false);
   });
 
-  test('un entitlement cu expirare viitoare este activ chiar fara campul active', () => {
-    expect(createUserRouter.entitlementEsteActiv({
-      expires_date: '2026-09-01T00:00:00Z',
-    }, Date.parse('2026-08-06T00:00:00Z'))).toBe(true);
+  test('un abonament Google pending ramane blocat chiar cu expirare viitoare', () => {
+    expect(mapGoogleSubscription({
+      subscriptionState: 'SUBSCRIPTION_STATE_PENDING',
+      lineItems: [{ productId: 'premium_monthly', expiryTime: '2026-09-01T00:00:00Z' }],
+    }, {
+      allowedProductIds: ['premium_monthly'],
+      nowMs: Date.parse('2026-08-06T00:00:00Z'),
+    }).entitled).toBe(false);
   });
 });

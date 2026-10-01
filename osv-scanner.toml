@@ -135,11 +135,6 @@ vulnerability.ignore = true
 reason = "Backlog Expo SDK 54 -> upgrade expo@57"
 
 [[PackageOverrides]]
-name = "react-native-purchases"
-vulnerability.ignore = true
-reason = "Backlog Expo SDK 54 -> upgrade expo@57"
-
-[[PackageOverrides]]
 name = "react-native-reanimated"
 vulnerability.ignore = true
 reason = "Backlog Expo SDK 54 -> upgrade expo@57"

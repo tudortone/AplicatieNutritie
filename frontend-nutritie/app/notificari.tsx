@@ -19,10 +19,12 @@ import { useNotificationBanner, type AppNotification } from '../context/Notifica
 import { useTheme } from '../context/ThemeContext';
 import { ConfirmSheet } from '../components/ui/ConfirmSheet';
 import { isValidActionRoute } from '../lib/actionRoutes';
+import { useTranslation } from 'react-i18next';
 
 export default function NotificariScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { t, i18n } = useTranslation();
   const { notifications, markAllRead, clearAll } = useNotificationBanner();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
@@ -52,7 +54,8 @@ export default function NotificariScreen() {
   };
 
   const renderItem = ({ item }: { item: AppNotification }) => {
-    const timeFormatted = new Date(item.createdAt).toLocaleTimeString('ro-RO', {
+    const localeTag = ({ ro: 'ro-RO', en: 'en-US', fr: 'fr-FR', de: 'de-DE' } as const)[i18n.language as 'ro' | 'en' | 'fr' | 'de'] || 'en-US';
+    const timeFormatted = new Date(item.createdAt).toLocaleTimeString(localeTag, {
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -82,7 +85,7 @@ export default function NotificariScreen() {
           onPress={handlePress}
           disabled={!canOpen}
           accessibilityRole={canOpen ? 'button' : undefined}
-          accessibilityLabel={canOpen ? `${item.title}. ${item.actionLabel || 'Deschide'}` : item.title}
+          accessibilityLabel={canOpen ? `${item.title}. ${item.actionLabel || t('notificationCenter.open')}` : item.title}
           accessibilityState={{ disabled: !canOpen }}
         >
           <View style={[styles.iconContainer, { backgroundColor: getIconBg(item.type) }]}>
@@ -130,7 +133,7 @@ export default function NotificariScreen() {
             router.back();
           }}
           accessibilityRole="button"
-          accessibilityLabel="Înapoi"
+          accessibilityLabel={t('common.back')}
           hitSlop={8}
           style={({ pressed }) => [
             styles.headerButton,
@@ -140,14 +143,14 @@ export default function NotificariScreen() {
           <ArrowLeft size={20} color={colors.textPrimary} />
         </Pressable>
 
-        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>Notificări</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>{t('notificationCenter.title')}</Text>
 
         <View style={styles.headerActions}>
           <Pressable
             onPress={markAllRead}
             disabled={!hasNotifications}
             accessibilityRole="button"
-            accessibilityLabel="Marchează toate notificările ca citite"
+            accessibilityLabel={t('notificationCenter.markAllReadA11y')}
             accessibilityState={{ disabled: !hasNotifications }}
             style={({ pressed }) => [
               styles.headerButton,
@@ -164,7 +167,7 @@ export default function NotificariScreen() {
             onPress={() => setShowClearConfirm(true)}
             disabled={!hasNotifications}
             accessibilityRole="button"
-            accessibilityLabel="Șterge toate notificările"
+            accessibilityLabel={t('notificationCenter.clearAllA11y')}
             accessibilityState={{ disabled: !hasNotifications }}
             style={({ pressed }) => [
               styles.headerButton,
@@ -194,9 +197,9 @@ export default function NotificariScreen() {
             <View style={[styles.emptyIconBg, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
               <Bell size={40} color={colors.textTertiary} />
             </View>
-            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Nicio notificare</Text>
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('notificationCenter.emptyTitle')}</Text>
             <Text maxFontSizeMultiplier={1.3} style={[styles.emptyText, { color: colors.textSecondary }]}>
-              Evenimentele și recompensele din aplicație vor apărea aici.
+              {t('notificationCenter.emptyMessage')}
             </Text>
           </Animated.View>
         }
@@ -204,9 +207,9 @@ export default function NotificariScreen() {
 
       <ConfirmSheet
         visible={showClearConfirm}
-        title="Ștergi toate notificările?"
-        message="Această acțiune elimină întregul istoric de notificări și nu poate fi anulată."
-        confirmLabel="Șterge toate"
+        title={t('notificationCenter.clearTitle')}
+        message={t('notificationCenter.clearMessage')}
+        confirmLabel={t('notificationCenter.clearConfirm')}
         onCancel={() => setShowClearConfirm(false)}
         onConfirm={() => {
           setShowClearConfirm(false);

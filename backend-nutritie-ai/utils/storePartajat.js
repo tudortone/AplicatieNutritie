@@ -367,6 +367,29 @@ function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
           logWarnThrottled(`[Redis] del esuat (${codEroare(err)}).`);
         }
       },
+      // P1-12: compare-and-delete ATOMIC (eliberare de zălog deținută de proprietar).
+      // Un `del` simplu are un defect clasic de lock distribuit: proprietarul A își
+      // depășește TTL-ul, B revendică aceeași cheie, apoi curățenia întârziată a lui A
+      // rulează și șterge zălogul LUI B — iar un al treilea apelant poate porni o a doua
+      // execuție plătită. Scriptul rulează pe server, deci citirea și ștergerea sunt o
+      // singură operație: nu există fereastră între verificare și ștergere.
+      async delIfMatch(key, value) {
+        const finala = cheieFinala(key);
+        const asteptat = JSON.stringify(value);
+        const local = rezerva.get(finala);
+        if (local !== null && JSON.stringify(local) === asteptat) rezerva.del(finala);
+        if (!client.isReady) return true;
+        try {
+          const rezultat = await client.eval(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+            { keys: [finala], arguments: [asteptat] },
+          );
+          return Number(rezultat) === 1;
+        } catch (err) {
+          logWarnThrottled(`[Redis] delIfMatch esuat (${codEroare(err)}).`);
+          return false;
+        }
+      },
     };
   }
 
@@ -386,6 +409,16 @@ function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
     },
     async del(key) {
       rezerva.del(cheieFinala(key));
+    },
+    // Fără Redis nu există concurență între procese, dar păstrăm aceeași semantică:
+    // ștergem doar dacă valoarea stocată este chiar a proprietarului care eliberează.
+    async delIfMatch(key, value) {
+      const finala = cheieFinala(key);
+      const curent = rezerva.get(finala);
+      if (curent === null) return false;
+      if (JSON.stringify(curent) !== JSON.stringify(value)) return false;
+      rezerva.del(finala);
+      return true;
     },
   };
 }

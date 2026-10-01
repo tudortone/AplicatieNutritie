@@ -14,6 +14,7 @@
 
 const Sentry = require('@sentry/node');
 const { inregistreazaUtilizareAdmin } = require('./clientUtilizator');
+const { rezumatEroareSigur } = require('./sentrySanitize');
 
 async function reconciliaCrediteConsumate({ supabaseAdmin } = {}) {
   if (!supabaseAdmin) {
@@ -27,7 +28,10 @@ async function reconciliaCrediteConsumate({ supabaseAdmin } = {}) {
 
   const { data, error } = await supabaseAdmin.rpc('reconcilia_credite_consumate');
   if (error) {
-    console.error('[Reconciliere credite] RPC esuat:', error.message);
+    console.error('[Reconciliere credite]', rezumatEroareSigur(error, {
+      operation: 'reconcile_credits',
+      provider: 'supabase',
+    }));
     // H3: mișcarea de bani trebuie să fie vizibilă — fail-loud în Sentry,
     // ca pattern-ul M2 din gdpr.js (nu o înghițim cu un console.log).
     try {
@@ -43,11 +47,6 @@ async function reconciliaCrediteConsumate({ supabaseAdmin } = {}) {
   }
 
   const randuri = Array.isArray(data) ? data : [];
-  for (const r of randuri) {
-    console.log(
-      `[Reconciliere credite] Restituit credit: user=${r.user_id} consum=${r.event_id} refund=${r.refund_event_id} sold=${r.sold_nou}`
-    );
-  }
   if (randuri.length > 0) {
     console.log(`[Reconciliere credite] ${randuri.length} credit(e) restituite in acest tick.`);
   }

@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, { Layout } from 'react-native-reanimated';
-import { Clock, Pencil, Trash2, Lock } from 'lucide-react-native';
+import { Clock, Pencil, Trash2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -10,11 +10,13 @@ import { Masa } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { usePremium } from '../context/PremiumContext';
 import { useTranslation } from 'react-i18next';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { obtinePozaMasaThumb, parseAlimente } from '../lib/mealUtils';
+import { PremiumPhotoPreview } from './jurnal/PremiumPhotoPreview';
 
 interface MasaCardProps {
   masa: Masa;
-  onPress: (masa: Masa) => void;
+  onPress: (masa: Masa, alimentIdx?: number) => void;
   onEdit: (masa: Masa) => void;
   onDelete: (masa: Masa) => void;
   /** Când false, blocul foto e ascuns (comutatorul „afișare poze” din jurnal). */
@@ -31,16 +33,16 @@ export const MasaCard = React.memo(function MasaCard({
   const { colors } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
-  const { isPremium } = usePremium();
-  const alimenteSubList = useMemo(() => parseAlimente(masa), [masa.alimente]);
+  const reduceMotion = useReducedMotion();
+  const { isPremium, hasFullAccess } = usePremium();
+  const hasAccess = hasFullAccess || isPremium;
+  const alimenteSubList = useMemo(() => parseAlimente(masa), [masa]);
   // REMED-018: thumbnail ImageKit (w-480) în locul rezoluției full pe card.
   const pozaUrl = obtinePozaMasaThumb(masa);
 
-  // BUG-023: layout spring doar pe iOS. Pe Android spring-ul pe orice schimbare
-  // de listă (add/delete/edit) e fragil și scump cu multe mese; sistemul deja
-  // animă adăugările, iar aici spring-ul repornea pe toate cardurile vizibile.
+  // BUG-023: layout spring doar pe iOS când reduceMotion e fals.
   return (
-    <Animated.View layout={Platform.OS === 'ios' ? Layout.springify() : undefined} style={styles.cardContainer}>
+    <Animated.View layout={Platform.OS === 'ios' && !reduceMotion ? Layout.springify() : undefined} style={styles.cardContainer}>
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={() => {
@@ -123,8 +125,16 @@ export const MasaCard = React.memo(function MasaCard({
                 ]}
               >
                 {alimenteSubList.map((al, subIdx) => (
-                  <View
+                  <TouchableOpacity
                     key={al.id || `${masa.id}-al-${subIdx}`}
+                    activeOpacity={0.7}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      try {
+                        Haptics.selectionAsync();
+                      } catch {}
+                      onPress(masa, subIdx);
+                    }}
                     style={[
                       styles.subItemRow,
                       subIdx < alimenteSubList.length - 1 && {
@@ -132,6 +142,12 @@ export const MasaCard = React.memo(function MasaCard({
                         borderBottomColor: 'rgba(255,255,255,0.04)',
                       },
                     ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('jurnal.editIngredientA11y', {
+                      nume: al.nume,
+                      grame: al.grame || 100,
+                      kcal: al.calorii,
+                    })}
                   >
                     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <View style={[styles.subItemDot, { backgroundColor: colors.accent }]} />
@@ -148,11 +164,16 @@ export const MasaCard = React.memo(function MasaCard({
                           {al.grame}g
                         </Text>
                       ) : null}
-                      <Text style={[styles.subItemCal, { color: colors.accent }]}>
+                      <Text
+                        style={[styles.subItemCal, { color: colors.accent }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.75}
+                      >
                         {al.calorii} kcal
                       </Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             )}
@@ -163,10 +184,15 @@ export const MasaCard = React.memo(function MasaCard({
                   colors={[colors.accent + '25', 'rgba(0,0,0,0)']}
                   style={styles.cardStatBg}
                 >
-                  <Text style={[styles.cardStatValue, { color: colors.accent }]}>
+                  <Text
+                    style={[styles.cardStatValue, { color: colors.accent }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.6}
+                  >
                     {masa.calorii || 0}
                   </Text>
-                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]}>kcal</Text>
+                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>kcal</Text>
                 </LinearGradient>
               </View>
               <View style={styles.cardStatItem}>
@@ -174,10 +200,15 @@ export const MasaCard = React.memo(function MasaCard({
                   colors={[colors.accentSecondary + '25', 'rgba(0,0,0,0)']}
                   style={styles.cardStatBg}
                 >
-                  <Text style={[styles.cardStatValue, { color: colors.accentSecondary }]}>
+                  <Text
+                    style={[styles.cardStatValue, { color: colors.accentSecondary }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.6}
+                  >
                     {masa.proteine || 0}g
                   </Text>
-                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]}>
+                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>
                     {t('jurnal.macroProtein')}
                   </Text>
                 </LinearGradient>
@@ -187,11 +218,16 @@ export const MasaCard = React.memo(function MasaCard({
                   colors={[colors.accentTertiary + '1A', 'rgba(0,0,0,0)']}
                   style={styles.cardStatBg}
                 >
-                  <Text style={[styles.cardStatValue, { color: colors.accentTertiary }]}>
+                  <Text
+                    style={[styles.cardStatValue, { color: colors.accentTertiary }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.6}
+                  >
                     {masa.carbohidrati != null ? masa.carbohidrati : '—'}
                     {masa.carbohidrati != null ? 'g' : ''}
                   </Text>
-                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]}>
+                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>
                     {t('jurnal.macroCarbs')}
                   </Text>
                 </LinearGradient>
@@ -201,11 +237,16 @@ export const MasaCard = React.memo(function MasaCard({
                   colors={[colors.warning + '1A', 'rgba(0,0,0,0)']}
                   style={styles.cardStatBg}
                 >
-                  <Text style={[styles.cardStatValue, { color: colors.warning }]}>
+                  <Text
+                    style={[styles.cardStatValue, { color: colors.warning }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.6}
+                  >
                     {masa.grasimi != null ? masa.grasimi : '—'}
                     {masa.grasimi != null ? 'g' : ''}
                   </Text>
-                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]}>
+                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>
                     {t('jurnal.macroFats')}
                   </Text>
                 </LinearGradient>
@@ -215,11 +256,16 @@ export const MasaCard = React.memo(function MasaCard({
                   colors={[colors.success + '1A', 'rgba(0,0,0,0)']}
                   style={styles.cardStatBg}
                 >
-                  <Text style={[styles.cardStatValue, { color: colors.success }]}>
+                  <Text
+                    style={[styles.cardStatValue, { color: colors.success }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.6}
+                  >
                     {masa.fibre != null ? masa.fibre : '—'}
                     {masa.fibre != null ? 'g' : ''}
                   </Text>
-                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]}>
+                  <Text style={[styles.cardStatLabel, { color: colors.textSecondary }]} numberOfLines={1}>
                     {t('jurnal.macroFiber')}
                   </Text>
                 </LinearGradient>
@@ -227,7 +273,7 @@ export const MasaCard = React.memo(function MasaCard({
             </View>
 
             {afisarePoze && pozaUrl ? (
-              isPremium ? (
+              hasAccess ? (
                 <TouchableOpacity
                   onPress={() => {
                     try {
@@ -248,36 +294,10 @@ export const MasaCard = React.memo(function MasaCard({
                   />
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    router.push('/paywall' as never);
-                  }}
-                  activeOpacity={0.95}
-                  style={styles.imageBottomContainer}
-                  accessibilityRole="imagebutton"
-                  accessibilityLabel={t('jurnal.unlockMealPhotos')}
-                >
-                  <Image
-                    source={{ uri: pozaUrl }}
-                    style={styles.imageBottom}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                  />
-                  <View
-                    style={[
-                      StyleSheet.absoluteFill,
-                      { backgroundColor: 'rgba(9, 12, 14, 0.72)' },
-                    ]}
-                  />
-                  <View style={styles.lockOverlay}>
-                    <View style={styles.lockBadge}>
-                      <Lock size={14} color={colors.textPrimary} />
-                      <Text style={styles.lockBadgeText}>{t('jurnal.mealPhotosPremium')}</Text>
-                    </View>
-                    <Text style={styles.lockCta}>{t('jurnal.unlockPremium')}</Text>
-                  </View>
-                </TouchableOpacity>
+                <PremiumPhotoPreview
+                  variant="card"
+                  onPressPaywall={() => router.push('/paywall' as never)}
+                />
               )
             ) : null}
           </View>
@@ -318,32 +338,6 @@ const styles = StyleSheet.create({
   imageBottom: {
     width: '100%',
     height: 160,
-  },
-  lockOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  lockBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  lockBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  lockCta: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-    textDecorationLine: 'underline',
   },
   cardGrad: {
     padding: 16,
@@ -428,7 +422,7 @@ const styles = StyleSheet.create({
   },
   cardStats: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 4,
   },
   cardStatItem: {
     flex: 1,
@@ -437,15 +431,17 @@ const styles = StyleSheet.create({
   },
   cardStatBg: {
     paddingVertical: 8,
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     alignItems: 'center',
   },
   cardStatValue: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
+    includeFontPadding: false,
+    textAlign: 'center',
   },
   cardStatLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     textTransform: 'uppercase',
   },

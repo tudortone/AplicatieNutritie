@@ -10,16 +10,34 @@ const fetchOriginal = global.fetch;
 // Stub controlabil pentru `fetch`: rutează către ImageKit / Clerk pe baza URL-ului
 // și memorează apelurile pentru assert. Statusurile pot fi mutate între apeluri
 // pentru a simula eșec + retry (idempotent, 404 = deja șters / deja șters).
-function creeazaFetchStub({ imagini = 200, clerk = 200 } = {}) {
+function creeazaFetchStub({ imagini = 200, clerk = 200, userId = 'supabase-id' } = {}) {
   const stub = {
     imagini,
     clerk,
+    // Proprietarul fisierelor pe care le modeleaza stub-ul (vezi ramura /details).
+    userId,
     imaginiApeluri: [],
     clerkApeluri: [],
   };
   global.fetch = async (url, opts) => {
     const u = String(url);
     if (u.includes('api.imagekit.io')) {
+      // F-03: inainte de a sterge un fisier individual, backendul intreaba
+      // ImageKit care este calea REALA a fisierului si accepta stergerea doar
+      // daca ea contine id-ul utilizatorului care isi sterge contul (un fileId
+      // venit din JSONB scris de client nu e dovada de proprietate).
+      // Stub-ul modeleaza fisiere care APARTIN utilizatorului testat.
+      const detalii = u.match(/\/files\/([^/]+)\/details$/);
+      if (detalii) {
+        stub.imaginiApeluri.push({ url: u, opts, tip: 'details' });
+        if (stub.imagini === 404) return raspuns(404);
+        const fileId = decodeURIComponent(detalii[1]);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ filePath: `/mancare/${stub.userId}/${fileId}.jpg` }),
+        };
+      }
       stub.imaginiApeluri.push({ url: u, opts });
       return raspuns(stub.imagini);
     }
@@ -62,6 +80,19 @@ function creeazaSupabaseAdminFake({ clerkUserId = 'clerk-123', outboxId = 'outbo
       return { data: null, error: null };
     },
     from(tabela) {
+      const emptyBillingQuery = {
+        select: () => emptyBillingQuery,
+        eq: () => emptyBillingQuery,
+        order: () => emptyBillingQuery,
+        range: async () => ({ data: [], error: null }),
+        delete: () => ({
+          eq: async (col, val) => {
+            apeluri.push({ tabela, tip: 'delete', eq: [col, val] });
+            return { error: null };
+          },
+        }),
+      };
+      if (tabela === 'google_play_subscriptions') return emptyBillingQuery;
       return {
         select: () => ({
           eq: (col, val) => ({
@@ -78,6 +109,12 @@ function creeazaSupabaseAdminFake({ clerkUserId = 'clerk-123', outboxId = 'outbo
           },
         }),
         delete: () => ({
+          // F-07: curatarea tabelelor dead-letter sterge dupa mai multe
+          // identitati simultan (`app_user_id in (supabaseId, clerkId)`).
+          in: async (col, val) => {
+            apeluri.push({ tabela, tip: 'delete', in: [col, val] });
+            return { error: null };
+          },
           eq: async (col, val) => {
             apeluri.push({ tabela, tip: 'delete', eq: [col, val] });
             return { error: null };
@@ -220,11 +257,30 @@ describe('GDPR ImageKit', () => {
       // AMBELE foldere ImageKit
       const foldere = stub.imaginiApeluri.map((a) => JSON.parse(a.opts.body).folderPath);
       expect(foldere.sort()).toEqual(['/mancare/supabase-id/', '/meals/supabase-id/']);
-      // N-03: șterse EXACT toate tabelele user-scoped din lista unică
+      // N-03: șterse EXACT toate tabelele user-scoped din lista unică...
+      // F-07: ...plus tabelele dead-letter (`credite_esuate`,
+      // `clerk_webhook_esuate`), care rețin PII în `payload jsonb` și nu au FK
+      // către auth.users, deci nu erau curățate nici de cascadă, nici de listă.
       const sterse = admin.apeluri.filter((a) => a.tip === 'delete').map((a) => a.tabela);
-      expect(sterse.sort()).toEqual([...TABELE_CU_RLS_UTILIZATOR].sort());
+      expect(sterse.sort()).toEqual(
+        [
+          ...TABELE_CU_RLS_UTILIZATOR,
+          'google_play_subscriptions',
+          'credite_esuate',
+          'clerk_webhook_esuate',
+        ].sort(),
+      );
       // la final: deleteUser (ordinea corecta — DB -> Clerk -> ImageKit -> auth.ireversibil)
       expect(admin.apeluri.some((a) => a.tip === 'deleteUser' && a.userId === 'supabase-id')).toBe(true);
+      const finalizare = admin.apeluri.find(
+        (a) => a.tip === 'update' && a.tabela === 'gdpr_deletions' && a.payload.status === 'completed',
+      );
+      expect(finalizare.payload).toEqual(expect.objectContaining({
+        user_id: 'outbox-abc',
+        clerk_user_id: null,
+        file_ids: [],
+        last_error: null,
+      }));
     });
 
     test('N-OUTBOX: rpc outbox întoarce null (fără rând outbox) → 503 fail-closed, nimic nu se șterge', async () => {
@@ -251,7 +307,17 @@ describe('GDPR ImageKit', () => {
     test('N-04: persisteaza fileIds extrași din mese în outbox INAINTE de ștergerea mesei', async () => {
       const evenimente = [];
       const fetchSalvat = global.fetch;
-      global.fetch = jest.fn(async () => ({ ok: true, status: 200 }));
+      // F-03: verificarea de proprietate cere `response.json()` pentru
+      // `/files/<id>/details`; fisierele apartin utilizatorului testat ('u-n4').
+      global.fetch = jest.fn(async (url) => {
+        const detalii = String(url).match(/\/files\/([^/]+)\/details$/);
+        return {
+          ok: true,
+          status: 200,
+          json: async () =>
+            detalii ? { filePath: `/mancare/u-n4/${decodeURIComponent(detalii[1])}.jpg` } : {},
+        };
+      });
 
       const admin = {
         evenimente,
@@ -268,6 +334,19 @@ describe('GDPR ImageKit', () => {
           return { data: 'outbox-n4-test', error: null };
         },
         from(tabela) {
+          const emptyBillingQuery = {
+            select: () => emptyBillingQuery,
+            eq: () => emptyBillingQuery,
+            order: () => emptyBillingQuery,
+            range: async () => ({ data: [], error: null }),
+            delete: () => ({
+              eq: async () => {
+                evenimente.push({ tabela, tip: 'delete' });
+                return { error: null };
+              },
+            }),
+          };
+          if (tabela === 'google_play_subscriptions') return emptyBillingQuery;
           return {
             select(coloane) {
               if (tabela === 'mese' && coloane === 'alimente') {
@@ -301,6 +380,11 @@ describe('GDPR ImageKit', () => {
             }),
             delete: () => ({
               eq: async () => {
+                evenimente.push({ tabela, tip: 'delete' });
+                return { error: null };
+              },
+              // F-07: curatarea dead-letter (`app_user_id in (...)`).
+              in: async () => {
                 evenimente.push({ tabela, tip: 'delete' });
                 return { error: null };
               },
@@ -385,6 +469,11 @@ describe('GDPR ImageKit', () => {
             }),
             delete: () => ({
               eq: async () => {
+                evenimente.push({ tabela, tip: 'delete' });
+                return { error: null };
+              },
+              // F-07: curatarea dead-letter (`app_user_id in (...)`).
+              in: async () => {
                 evenimente.push({ tabela, tip: 'delete' });
                 return { error: null };
               },

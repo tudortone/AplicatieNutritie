@@ -2,14 +2,15 @@ import React from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import Animated, { FadeInDown } from 'react-native-reanimated'
+import { useTranslation } from 'react-i18next'
 
 import EcranPas from '../../components/onboarding/EcranPas'
 import { useOnboarding } from '../../context/OnboardingContext'
 import { useTheme } from '../../context/ThemeContext'
 import { ETICHETE_DIETA } from '../../lib/onboarding'
 
-function formateazaData(d: Date): string {
-	return d.toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' })
+function formateazaData(d: Date, lang: string): string {
+	return d.toLocaleDateString(lang || 'ro', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 function Rand({ eticheta, valoare }: { eticheta: string; valoare: string }) {
@@ -23,6 +24,7 @@ function Rand({ eticheta, valoare }: { eticheta: string; valoare: string }) {
 }
 
 export default function PasPlan() {
+	const { t, i18n } = useTranslation()
 	const { date, plan } = useOnboarding()
 	const { colors } = useTheme()
 
@@ -31,8 +33,8 @@ export default function PasPlan() {
 		return (
 			<EcranPas
 				pas="/onboarding/plan"
-				titlu="Mai avem nevoie de cateva raspunsuri"
-				subtitlu="Intoarce-te si completeaza pasii ramasi ca sa putem calcula planul."
+				titlu={t('onboarding.planMissingAnswersTitle')}
+				subtitlu={t('onboarding.planMissingAnswersSub')}
 				poateContinua={false}
 			>
 				<View />
@@ -41,22 +43,22 @@ export default function PasPlan() {
 	}
 
 	const macro = [
-		{ eticheta: 'Proteine', valoare: `${plan.proteineG} g`, culoare: colors.accent },
-		{ eticheta: 'Carbohidrati', valoare: `${plan.carbohidratiG} g`, culoare: colors.accentSecondary },
-		{ eticheta: 'Grasimi', valoare: `${plan.grasimiG} g`, culoare: colors.success },
+		{ eticheta: t('nutrition.protein'), valoare: `${plan.proteineG} g`, culoare: colors.accent },
+		{ eticheta: t('nutrition.carbs'), valoare: `${plan.carbohidratiG} g`, culoare: colors.accentSecondary },
+		{ eticheta: t('nutrition.fats'), valoare: `${plan.grasimiG} g`, culoare: colors.success },
 	]
 
 	return (
 		<EcranPas
 			pas="/onboarding/plan"
-			titlu="Planul tău este gata"
+			titlu={t('onboarding.planReadyTitle')}
 			subtitlu={
 				date.scop === 'mentinere'
-					? 'Atât îți trebuie zilnic ca să îți menții greutatea actuală.'
-					: `Estimarea noastră ca să ajungi la ${date.greutateTintaKg?.toFixed(1)} kg.`
+					? t('onboarding.planMaintainSubtitle')
+					: t('onboarding.planTargetSubtitle', { target: date.greutateTintaKg?.toFixed(1) })
 			}
 			poateContinua
-			etichetaButon="Salvează planul și continuă"
+			etichetaButon={t('onboarding.planSaveButton')}
 		>
 			<Animated.View entering={FadeInDown.duration(500)}>
 				<LinearGradient
@@ -65,9 +67,9 @@ export default function PasPlan() {
 					end={{ x: 1, y: 1 }}
 					style={styles.cardPrincipal}
 				>
-					<Text style={[styles.etichetaMare, { color: colors.background }]}>Calorii zilnice</Text>
+					<Text style={[styles.etichetaMare, { color: colors.background }]}>{t('onboarding.planDailyCalories')}</Text>
 					<Text style={[styles.calorii, { color: colors.background }]}>{plan.calorii}</Text>
-					<Text style={[styles.etichetaMare, { color: colors.background }]}>kcal pe zi</Text>
+					<Text style={[styles.etichetaMare, { color: colors.background }]}>{t('onboarding.planKcalPerDay')}</Text>
 				</LinearGradient>
 			</Animated.View>
 
@@ -85,28 +87,32 @@ export default function PasPlan() {
 			</View>
 
 			<View style={[styles.detalii, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-				<Rand eticheta="Metabolism bazal" valoare={`${plan.bmr} kcal`} />
-				<Rand eticheta="Consum total estimat" valoare={`${plan.tdee} kcal`} />
+				<Rand eticheta={t('onboarding.planBmr')} valoare={`${plan.bmr} kcal`} />
+				<Rand eticheta={t('onboarding.planTdee')} valoare={`${plan.tdee} kcal`} />
 				<Rand
-					eticheta={plan.ajustare < 0 ? 'Deficit zilnic' : plan.ajustare > 0 ? 'Surplus zilnic' : 'Ajustare'}
-					valoare={plan.ajustare === 0 ? 'fara' : `${Math.abs(plan.ajustare)} kcal`}
+					eticheta={
+						plan.ajustare < 0
+							? t('onboarding.planDeficit')
+							: plan.ajustare > 0
+								? t('onboarding.planSurplus')
+								: t('onboarding.planAdjustment')
+					}
+					valoare={plan.ajustare === 0 ? t('onboarding.planNone') : `${Math.abs(plan.ajustare)} kcal`}
 				/>
-				<Rand eticheta="Stil alimentar" valoare={date.dieta ? ETICHETE_DIETA[date.dieta].titlu : '-'} />
+				<Rand eticheta={t('onboarding.planDietStyle')} valoare={date.dieta ? ETICHETE_DIETA[date.dieta].titlu : '-'} />
 				{plan.dataEstimata ? (
-					<Rand eticheta="Estimare atingere obiectiv" valoare={formateazaData(plan.dataEstimata)} />
+					<Rand eticheta={t('onboarding.planEstimatedDate')} valoare={formateazaData(plan.dataEstimata, i18n.language)} />
 				) : null}
 			</View>
 
 			{plan.limitatLaMinim ? (
 				<Text style={[styles.avertizare, { color: colors.danger }]}>
-					Am limitat deficitul ca sa nu cobori sub pragul sigur de calorii. Obiectivul va fi atins
-					putin mai lent, dar mai sanatos.
+					{t('onboarding.planLimitWarning')}
 				</Text>
 			) : null}
 
 			<Text style={[styles.disclaimer, { color: colors.textSecondary }]}>
-				Sunt estimari orientative, nu sfat medical. Consulta un specialist daca ai o afectiune
-				sau urmezi un tratament.
+				{t('onboarding.planDisclaimer')}
 			</Text>
 		</EcranPas>
 	)

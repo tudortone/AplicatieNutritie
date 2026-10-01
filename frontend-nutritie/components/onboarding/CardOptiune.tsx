@@ -10,6 +10,8 @@ export type CardOptiuneProps = {
 	detaliu?: string
 	/** Pictograma afisata in stanga. */
 	pictograma?: React.ReactNode
+	accentIcon?: boolean
+	pictogramaTestID?: string
 	selectat: boolean
 	laSelectare: () => void
 }
@@ -19,6 +21,8 @@ export default function CardOptiune({
 	titlu,
 	detaliu,
 	pictograma,
+	accentIcon = false,
+	pictogramaTestID,
 	selectat,
 	laSelectare,
 }: CardOptiuneProps) {
@@ -36,16 +40,37 @@ export default function CardOptiune({
 			style={[
 				styles.card,
 				{
-					backgroundColor: colors.cardBg,
+					backgroundColor: selectat && accentIcon ? colors.accent + '0D' : colors.cardBg,
 					borderColor: selectat ? colors.accent : colors.cardBorder,
 					borderWidth: selectat ? 2 : 1,
+					padding: accentIcon ? 16 : 18,
+					gap: accentIcon ? 13 : 14,
+					minHeight: accentIcon ? 86 : undefined,
 				},
 			]}
 			accessibilityRole="radio"
 			accessibilityState={{ selected: selectat }}
 			accessibilityLabel={detaliu ? `${titlu}. ${detaliu}` : titlu}
 		>
-			{pictograma ? <View style={styles.pictograma}>{pictograma}</View> : null}
+			{pictograma ? (
+				<View testID={pictogramaTestID} style={[
+					styles.pictograma,
+					accentIcon && {
+						width: 42,
+						height: 42,
+						borderRadius: 14,
+						backgroundColor: selectat ? colors.accent + '24' : colors.accent + '12',
+						borderWidth: 1,
+						borderColor: selectat ? colors.accent + '66' : colors.accent + '2A',
+					},
+				]}>
+					{React.isValidElement(pictograma)
+						? React.cloneElement(pictograma as React.ReactElement<{ color?: string }>, {
+							color: accentIcon ? colors.accent : undefined,
+						})
+						: pictograma}
+				</View>
+			) : null}
 
 			<View style={styles.text}>
 				<Text style={[styles.titlu, { color: colors.textPrimary }]}>{titlu}</Text>
@@ -74,12 +99,13 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		alignItems: 'center',
 		borderRadius: 18,
-		padding: 18,
+		padding: 16,
 		marginBottom: 12,
-		gap: 14,
+		gap: 13,
+		minHeight: 86,
 	},
-	pictograma: { width: 28, alignItems: 'center' },
-	text: { flex: 1 },
+	pictograma: { width: 28, alignItems: 'center', justifyContent: 'center' },
+	text: { flex: 1, minWidth: 0 },
 	titlu: { fontSize: 16, fontWeight: '700' },
 	detaliu: { fontSize: 13, marginTop: 3, lineHeight: 18 },
 	bifa: {

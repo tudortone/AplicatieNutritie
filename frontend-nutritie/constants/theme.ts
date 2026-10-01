@@ -163,9 +163,9 @@ export const themes: Record<ThemeName, ThemeColors> = {
 };
 
 export const themeDisplayNames: Record<ThemeName, string> = {
-  midnight: '🌙 Midnight Neon',
-  ocean: '🌊 Ocean Breeze',
-  sunset: '🌅 Sunset Blaze',
+  midnight: 'Midnight Neon',
+  ocean: 'Ocean Breeze',
+  sunset: 'Sunset Blaze',
 };
 
 export function getThemeColors(name: ThemeName): ThemeColors {

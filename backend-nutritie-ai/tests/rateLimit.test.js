@@ -17,6 +17,9 @@ const {
   logWarnThrottled,
 } = require('../utils/storePartajat');
 const { creeazaContorPartajat } = require('../utils/contorPartajat');
+const express = require('express');
+const request = require('supertest');
+const { creeazaLimitatoare } = require('../utils/rateLimit');
 
 const ENV_INSTANTE = 'INSTANTE_ASTEPTATE';
 const clientNeconectat = () => ({ isReady: false, on: jest.fn() });
@@ -150,5 +153,24 @@ describe('L-03 — throttling de loguri unificat (contorPartajat reutilizează l
   test('helperul partajat e expus de storePartajat (unică implementare L-03)', () => {
     expect(typeof logWarnThrottled).toBe('function');
     expect(creeazaContorPartajat({})).toBeDefined();
+  });
+});
+
+describe('P0-BILLING-01 — limiter billing dupa identitate verificata', () => {
+  test('separa utilizatorii de pe acelasi IP si limiteaza burst-ul aceluiasi cont', async () => {
+    const { billingLimiter } = creeazaLimitatoare();
+    expect(typeof billingLimiter).toBe('function');
+    const app = express();
+    app.set('trust proxy', 1);
+    app.get('/billing', (req, _res, next) => {
+      req.user = { id: req.headers['x-test-user'] };
+      next();
+    }, billingLimiter, (_req, res) => res.json({ ok: true }));
+
+    for (let i = 0; i < 30; i += 1) {
+      expect((await request(app).get('/billing').set('X-Test-User', 'user-a')).statusCode).toBe(200);
+    }
+    expect((await request(app).get('/billing').set('X-Test-User', 'user-a')).statusCode).toBe(429);
+    expect((await request(app).get('/billing').set('X-Test-User', 'user-b')).statusCode).toBe(200);
   });
 });

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInUp, FadeOutDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp, FadeOut, FadeOutDown } from 'react-native-reanimated';
 import { Sparkles, X, Plus, Check, Clock, Utensils, Refrigerator } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../context/ThemeContext';
 import { useCamara } from '../hooks/useCamara';
 // REMED-002: traducerile modalei trec prin i18n (chei chat.recipeGen.*).
 import { useTranslation } from 'react-i18next';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 const { height } = Dimensions.get('window');
 
@@ -20,7 +21,7 @@ const INGREDIENTE_PREDEFINITE = [
 
 // REMED-002: `value` (RO) rămâne pentru prompt-ul AI; eticheta afișată trece
 // prin i18n. Numele ingredientelor rămân RO (sunt input funcțional pentru AI).
-const TIPURI_MASA: ReadonlyArray<{ value: string; labelKey: string }> = [
+const TIPURI_MASA: readonly { value: string; labelKey: string }[] = [
   { value: 'Orice', labelKey: 'chat.recipeGen.tipMasa.any' },
   { value: 'Micul dejun', labelKey: 'chat.recipeGen.tipMasa.breakfast' },
   { value: 'Prânz', labelKey: 'chat.recipeGen.tipMasa.lunch' },
@@ -28,7 +29,7 @@ const TIPURI_MASA: ReadonlyArray<{ value: string; labelKey: string }> = [
   { value: 'Gustare', labelKey: 'chat.recipeGen.tipMasa.snack' },
 ];
 
-const TIMP_PREPARARE: ReadonlyArray<{ value: string; labelKey: string }> = [
+const TIMP_PREPARARE: readonly { value: string; labelKey: string }[] = [
   { value: 'Rapid (< 15 min)', labelKey: 'chat.recipeGen.timp.rapid' },
   { value: 'Mediu (< 30 min)', labelKey: 'chat.recipeGen.timp.mediu' },
   { value: 'Fără limită', labelKey: 'chat.recipeGen.timp.nolimit' },
@@ -50,6 +51,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
   proteineRamase,
 }) => {
   const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
   const { produse } = useCamara();
   // REMED-002: traduceri OPȚIONALE pe ecranul de generare — prompt-ul trimis
   // modelului rămâne RO, doar etichetele UI se schimbă cu limba.
@@ -106,7 +108,11 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
-        <Animated.View entering={FadeInUp.duration(400).springify()} exiting={FadeOutDown.duration(300)} style={[styles.modalCard, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
+        <Animated.View
+          entering={reduceMotion ? FadeIn.duration(150) : FadeInUp.duration(400).springify()}
+          exiting={reduceMotion ? FadeOut.duration(100) : FadeOutDown.duration(300)}
+          style={[styles.modalCard, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}
+        >
           <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
           
           <View style={styles.header}>
