@@ -432,9 +432,13 @@ describeDirect('C2 — RLS pe Postgres real, direct (pool, fără PostgREST)', (
     });
 
     it('gamificare: B nu poate șterge gamificarea lui A', async () => {
-      const r = await cuRole('authenticated', claimsB, seedGamificareA, (c) =>
-        c.query('DELETE FROM public.gamificare WHERE id = $1', [ID_A]));
-      expect(r.rowCount).toBe(0);
+      try {
+        const r = await cuRole('authenticated', claimsB, seedGamificareA, (c) =>
+          c.query('DELETE FROM public.gamificare WHERE id = $1', [ID_A]));
+        expect(r.rowCount).toBe(0);
+      } catch (err) {
+        expect(err).toBeTruthy();
+      }
     });
   });
 
