@@ -1,6 +1,6 @@
 'use strict';
 
-const { spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 
 function binJest() {
@@ -25,25 +25,36 @@ function escapeazaComanda(text) {
     .replace(/\n/g, '%0A');
 }
 
-const result = spawnSync(process.execPath, [binJest(), '--forceExit', ...process.argv.slice(2)], {
+const child = spawn(process.execPath, [binJest(), '--forceExit', ...process.argv.slice(2)], {
   cwd: process.cwd(),
   env: process.env,
-  encoding: 'utf8',
-  maxBuffer: 50 * 1024 * 1024,
+  stdio: ['inherit', 'pipe', 'pipe'],
 });
 
-if (result.stdout) process.stdout.write(result.stdout);
-if (result.stderr) process.stderr.write(result.stderr);
+let capturedOutput = '';
 
-const exitCode = typeof result.status === 'number' ? result.status : 1;
-if (exitCode !== 0 && (process.env.GITHUB_ACTIONS === 'true' || process.env.CI === 'true')) {
-  const allOutput = `${result.error?.message || ''}\n${result.stdout || ''}\n${result.stderr || ''}`;
-  const failLines = allOutput.split('\n').filter(l => l.includes('FAIL') || l.includes('●') || l.includes('Error:'));
-  const shortSummary = failLines.length > 0 ? failLines.slice(0, 20).join(' ') : 'Jest tests failed with non-zero exit code';
-  const diagnostic = sanitizeaza(shortSummary).slice(0, 4000);
-  process.stdout.write(
-    `\n::error file=package.json,line=17,title=Jest test failure::${escapeazaComanda(diagnostic)}\n`,
-  );
-}
+child.stdout.on('data', (chunk) => {
+  capturedOutput += chunk.toString('utf8');
+  process.stdout.write(chunk);
+});
 
-process.exitCode = exitCode;
+child.stderr.on('data', (chunk) => {
+  capturedOutput += chunk.toString('utf8');
+  process.stderr.write(chunk);
+});
+
+child.on('close', (code) => {
+  const exitCode = typeof code === 'number' ? code : 1;
+  if (exitCode !== 0 && (process.env.GITHUB_ACTIONS === 'true' || process.env.CI === 'true')) {
+    const lines = capturedOutput.split('\n');
+    const failSuites = lines.filter(l => l.includes('FAIL '));
+    const failTests = lines.filter(l => l.trim().startsWith('● ') && !l.includes('● Console'));
+    const relevant = [...failSuites, ...failTests];
+    const summary = relevant.length > 0 ? relevant.slice(0, 20).join('\n') : 'Jest tests failed with non-zero exit code';
+    const diagnostic = sanitizeaza(summary).slice(0, 4000);
+    process.stdout.write(
+      `\n::error file=package.json,line=17,title=Jest test failure::${escapeazaComanda(diagnostic)}\n`,
+    );
+  }
+  process.exit(exitCode);
+});
