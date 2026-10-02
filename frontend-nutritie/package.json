@@ -14,7 +14,7 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:ci": "jest --ci --runInBand --forceExit --passWithNoTests=false",
+    "test:ci": "node scripts/runJestWithAnnotations.js --ci --runInBand --passWithNoTests=false",
     "audit:gate": "node scripts/auditGate.js",
     "permissions:verify": "node scripts/verifyAndroidReleasePermissions.js",
     "anatomy:verify": "node scripts/verifyAnatomy.mjs",
