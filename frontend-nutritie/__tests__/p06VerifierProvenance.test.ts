@@ -287,7 +287,9 @@ describe('P0-06 Verifier Provenance & XML Parsing (Unit Regression)', () => {
       expect((simulatedEnv as any).Path).toBeUndefined();
     });
 
-    it('REAL SUBPROCESS: buildReleaseVerifierEnv allows npx/npm/node to be resolved on Windows when input env only has Path', () => {
+    (process.platform === 'win32' ? it : it.skip)(
+      'REAL SUBPROCESS: buildReleaseVerifierEnv allows npx/npm/node to be resolved on Windows when input env only has Path',
+      () => {
       // Simulate real Windows environment where inherited search path is keyed strictly as 'Path'
       const systemPath = process.env.Path || process.env.PATH || '';
       expect(systemPath).toBeTruthy();
