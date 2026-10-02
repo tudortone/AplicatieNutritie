@@ -21,7 +21,7 @@
     },
     "android": {
       "package": "com.totsrl.getflo",
-      "versionCode": 15,
+      "versionCode": 16,
       "icon": "./assets/images/icon.png",
       "allowBackup": false,
       "permissions": [
