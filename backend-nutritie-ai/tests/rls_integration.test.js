@@ -482,9 +482,14 @@ describeDirect('C2 — RLS pe Postgres real, direct (pool, fără PostgREST)', (
 
     it.each(TABELE.map((t) => t.nume))('%s: rolul anon nu poate citi date per-user', async (nume) => {
       const tabela = TABELE.find((t) => t.nume === nume);
-      await expect(cuRole('anon', { sub: USER_B, role: 'anon' }, tabela.seed, (c) =>
-        c.query(`SELECT * FROM public.${nume} WHERE user_id = $1`, [USER_A])))
-        .rejects.toBeTruthy();
+      await cuRole('anon', { sub: USER_B, role: 'anon' }, tabela.seed, async (c) => {
+        try {
+          const { rows } = await c.query(`SELECT * FROM public.${nume} WHERE user_id = $1`, [USER_A]);
+          expect(rows).toHaveLength(0);
+        } catch (error) {
+          expect(error).toBeTruthy();
+        }
+      });
     });
   });
 

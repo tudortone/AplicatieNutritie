@@ -1,0 +1,204 @@
+[
+  {
+    "nume": "M 30a 80kg 180cm moderat slabire",
+    "intrare": {
+      "gen": "masculin",
+      "varsta": 30,
+      "greutateKg": 80,
+      "inaltimeCm": 180,
+      "activitate": "moderat",
+      "scop": "slabire"
+    },
+    "asteptat": {
+      "bmr": 1780,
+      "tdee": 2759,
+      "calorii": 2209,
+      "proteineG": 166,
+      "carbohidratiG": 221,
+      "grasimiG": 74,
+      "limitatLaMinim": false
+    }
+  },
+  {
+    "nume": "F 25a 60kg 165cm sedentar slabire",
+    "intrare": {
+      "gen": "feminin",
+      "varsta": 25,
+      "greutateKg": 60,
+      "inaltimeCm": 165,
+      "activitate": "sedentar",
+      "scop": "slabire"
+    },
+    "asteptat": {
+      "bmr": 1345,
+      "tdee": 1614,
+      "calorii": 1200,
+      "proteineG": 90,
+      "carbohidratiG": 120,
+      "grasimiG": 40,
+      "limitatLaMinim": true
+    }
+  },
+  {
+    "nume": "M 40a 95kg 185cm intens masa",
+    "intrare": {
+      "gen": "masculin",
+      "varsta": 40,
+      "greutateKg": 95,
+      "inaltimeCm": 185,
+      "activitate": "intens",
+      "scop": "masa"
+    },
+    "asteptat": {
+      "bmr": 1911,
+      "tdee": 3297,
+      "calorii": 3847,
+      "proteineG": 289,
+      "carbohidratiG": 385,
+      "grasimiG": 128,
+      "limitatLaMinim": false
+    }
+  },
+  {
+    "nume": "F 35a 70kg 170cm moderat mentinere",
+    "intrare": {
+      "gen": "feminin",
+      "varsta": 35,
+      "greutateKg": 70,
+      "inaltimeCm": 170,
+      "activitate": "moderat",
+      "scop": "mentinere"
+    },
+    "asteptat": {
+      "bmr": 1427,
+      "tdee": 2211,
+      "calorii": 2211,
+      "proteineG": 166,
+      "carbohidratiG": 221,
+      "grasimiG": 74,
+      "limitatLaMinim": false
+    }
+  },
+  {
+    "nume": "prag minim F 18a 40kg 150cm sedentar slabire",
+    "intrare": {
+      "gen": "feminin",
+      "varsta": 18,
+      "greutateKg": 40,
+      "inaltimeCm": 150,
+      "activitate": "sedentar",
+      "scop": "slabire"
+    },
+    "asteptat": {
+      "bmr": 1087,
+      "tdee": 1304,
+      "calorii": 1200,
+      "proteineG": 90,
+      "carbohidratiG": 120,
+      "grasimiG": 40,
+      "limitatLaMinim": true
+    }
+  },
+  {
+    "nume": "varsta minima M 13a 45kg 155cm usor mentinere",
+    "intrare": {
+      "gen": "masculin",
+      "varsta": 13,
+      "greutateKg": 45,
+      "inaltimeCm": 155,
+      "activitate": "usor",
+      "scop": "mentinere"
+    },
+    "asteptat": {
+      "bmr": 1359,
+      "tdee": 1868,
+      "calorii": 1868,
+      "proteineG": 140,
+      "carbohidratiG": 187,
+      "grasimiG": 62,
+      "limitatLaMinim": false
+    }
+  },
+  {
+    "nume": "varsta maxima F 100a 50kg 150cm sedentar mentinere",
+    "intrare": {
+      "gen": "feminin",
+      "varsta": 100,
+      "greutateKg": 50,
+      "inaltimeCm": 150,
+      "activitate": "sedentar",
+      "scop": "mentinere"
+    },
+    "asteptat": {
+      "bmr": 777,
+      "tdee": 932,
+      "calorii": 1200,
+      "proteineG": 90,
+      "carbohidratiG": 120,
+      "grasimiG": 40,
+      "limitatLaMinim": true
+    }
+  },
+  {
+    "nume": "extrem greutate M 100a 250kg 230cm foarte_intens masa",
+    "intrare": {
+      "gen": "masculin",
+      "varsta": 100,
+      "greutateKg": 250,
+      "inaltimeCm": 230,
+      "activitate": "foarte_intens",
+      "scop": "masa"
+    },
+    "asteptat": {
+      "bmr": 3443,
+      "tdee": 6541,
+      "calorii": 7091,
+      "proteineG": 532,
+      "carbohidratiG": 709,
+      "grasimiG": 236,
+      "limitatLaMinim": false
+    }
+  },
+  {
+    "nume": "keto M 30a 80kg 180cm moderat slabire",
+    "intrare": {
+      "gen": "masculin",
+      "varsta": 30,
+      "greutateKg": 80,
+      "inaltimeCm": 180,
+      "activitate": "moderat",
+      "scop": "slabire",
+      "dieta": "keto"
+    },
+    "asteptat": {
+      "bmr": 1780,
+      "tdee": 2759,
+      "calorii": 2209,
+      "proteineG": 138,
+      "carbohidratiG": 39,
+      "grasimiG": 167,
+      "limitatLaMinim": false
+    }
+  },
+  {
+    "nume": "vegana F 28a 62kg 168cm usor masa",
+    "intrare": {
+      "gen": "feminin",
+      "varsta": 28,
+      "greutateKg": 62,
+      "inaltimeCm": 168,
+      "activitate": "usor",
+      "scop": "masa",
+      "dieta": "vegana"
+    },
+    "asteptat": {
+      "bmr": 1369,
+      "tdee": 1882,
+      "calorii": 2432,
+      "proteineG": 134,
+      "carbohidratiG": 304,
+      "grasimiG": 76,
+      "limitatLaMinim": false
+    }
+  }
+]

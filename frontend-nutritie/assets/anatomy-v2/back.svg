@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 500" role="img" aria-labelledby="title">
+  <title id="title">GetFlow original back anatomy model</title>
+  <path id="silhouette_back" fill="#20252B" d="M110 12C88 12 76 28 78 50c1 13 7 24 15 31-20 8-36 25-42 50l-14 65c-3 15 2 24 11 26l14-2-1 83 12 154c1 18 12 30 24 30 9 0 13-8 13-21 0 13 4 21 13 21 12 0 23-12 24-30l12-154-1-83 14 2c9-2 14-11 11-26l-14-65c-6-25-22-42-42-50 8-7 14-18 15-31 2-22-10-38-32-38Z"/>
+  <path id="traps_back_center" data-muscle="traps" data-view="back" data-side="center" fill="#525C66" d="M91 82l19 13 19-13 10 54-29 24-29-24Z"/>
+  <path id="rear_delts_back_left" data-muscle="rear_delts" data-view="back" data-side="left" fill="#525C66" d="M64 108c7-8 15-12 22-9l-6 43-16-1Z"/>
+  <path id="rear_delts_back_right" data-muscle="rear_delts" data-view="back" data-side="right" fill="#525C66" d="M156 108c-7-8-15-12-22-9l6 43 16-1Z"/>
+  <path id="side_delts_back_left" data-muscle="side_delts" data-view="back" data-side="left" fill="#525C66" d="M54 121c3-8 7-14 11-18l-1 39-10 18Z"/>
+  <path id="side_delts_back_right" data-muscle="side_delts" data-view="back" data-side="right" fill="#525C66" d="M166 121c-3-8-7-14-11-18l1 39 10 18Z"/>
+  <path id="lats_back_left" data-muscle="lats" data-view="back" data-side="left" fill="#525C66" d="M77 142l31 19-6 86-28-35Z"/>
+  <path id="lats_back_right" data-muscle="lats" data-view="back" data-side="right" fill="#525C66" d="M143 142l-31 19 6 86 28-35Z"/>
+  <path id="lower_back_back_center" data-muscle="lower_back" data-view="back" data-side="center" fill="#525C66" d="M103 164h14l8 92-15 25-15-25Z"/>
+  <path id="triceps_back_left" data-muscle="triceps" data-view="back" data-side="left" fill="#525C66" d="M53 151l12-5 5 52-14 7Z"/>
+  <path id="triceps_back_right" data-muscle="triceps" data-view="back" data-side="right" fill="#525C66" d="M167 151l-12-5-5 52 14 7Z"/>
+  <path id="forearms_back_left" data-muscle="forearms" data-view="back" data-side="left" fill="#525C66" d="M55 208l15-5 5 65-13 11Z"/>
+  <path id="forearms_back_right" data-muscle="forearms" data-view="back" data-side="right" fill="#525C66" d="M165 208l-15-5-5 65 13 11Z"/>
+  <path id="glutes_back_left" data-muscle="glutes" data-view="back" data-side="left" fill="#525C66" d="M76 263l33 19-4 48-31-18Z"/>
+  <path id="glutes_back_right" data-muscle="glutes" data-view="back" data-side="right" fill="#525C66" d="M144 263l-33 19 4 48 31-18Z"/>
+  <path id="hamstrings_back_left" data-muscle="hamstrings" data-view="back" data-side="left" fill="#525C66" d="M77 329l28 5-2 61-24-1Z"/>
+  <path id="hamstrings_back_right" data-muscle="hamstrings" data-view="back" data-side="right" fill="#525C66" d="M143 329l-28 5 2 61 24-1Z"/>
+  <path id="calves_back_left" data-muscle="calves" data-view="back" data-side="left" fill="#525C66" d="M80 402h22l-5 70-17-4Z"/>
+  <path id="calves_back_right" data-muscle="calves" data-view="back" data-side="right" fill="#525C66" d="M140 402h-22l5 70 17-4Z"/>
+</svg>

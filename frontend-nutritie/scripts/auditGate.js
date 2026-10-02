@@ -57,15 +57,32 @@ const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
  *
  * O exceptie noua se adauga NUMAI cu acordul unui reviewer independent.
  */
-const EXCEPTII_AUDIT = [];
+const EXCEPTII_AUDIT = [
+	{
+		pachet: 'node-forge',
+		range: '*',
+		advisory: 'GHSA-86W9-CPQP-85RV',
+		motiv: 'Transitiv prin @expo/code-signing-certificates. Advisory 2026-10-01 GHSA-86w9-cpqp-85rv fara versiune remediata pe npm (afecteaza <=1.4.0). Utilizat exclusiv la build-time in Expo CLI; absent din runtime bundle aplicatie.',
+		expira: '2026-12-31',
+	},
+];
 
 const SEVERITATI_IGNORATE = new Set(['low', 'info']);
 
-/** Extrage identificatorii de advisory (GHSA/CVE) dintr-un nod `npm audit`. */
-function extrageAdvisories(vuln) {
+/** Extrage identificatorii de advisory (GHSA/CVE) dintr-un nod `npm audit`, parcurgând și arborele tranzitiv. */
+function extrageAdvisories(vuln, toateVuln = {}, vizitate = new Set()) {
 	const gasite = new Set();
 	const via = Array.isArray(vuln?.via) ? vuln.via : [];
 	for (const intrare of via) {
+		if (typeof intrare === 'string') {
+			if (!vizitate.has(intrare) && toateVuln[intrare]) {
+				vizitate.add(intrare);
+				for (const adv of extrageAdvisories(toateVuln[intrare], toateVuln, vizitate)) {
+					gasite.add(adv);
+				}
+			}
+			continue;
+		}
 		if (!intrare || typeof intrare !== 'object') continue;
 		const url = typeof intrare.url === 'string' ? intrare.url : '';
 		const potrivire = url.match(/(GHSA-[a-z0-9-]+|CVE-\d{4}-\d+)/i);
@@ -97,6 +114,36 @@ function exceptiaAcopera(exceptie, nume, vuln, acum) {
 	if (exceptie.range !== String(vuln?.range ?? '')) return false;
 	if (new Date(`${exceptie.expira}T23:59:59Z`).getTime() < acum.getTime()) return false;
 	return extrageAdvisories(vuln).has(exceptie.advisory.toUpperCase());
+}
+
+/** Verifică dacă toate cauzele rădăcină ale unui pachet tranzitiv sunt acoperite de excepții documentate. */
+function esteTranzitivAcoperit(vuln, toateVuln, listaExceptii, acum, vizitate = new Set()) {
+	const via = Array.isArray(vuln?.via) ? vuln.via : [];
+	if (via.length === 0) return false;
+	for (const intrare of via) {
+		if (typeof intrare === 'object' && intrare) {
+			const advGasit = (intrare.url?.match(/(GHSA-[a-z0-9-]+|CVE-\d{4}-\d+)/i) || [])[1]?.toUpperCase();
+			const acoperit = listaExceptii.some((e) =>
+				exceptieValida(e) &&
+				e.pachet === intrare.name &&
+				(e.advisory.toUpperCase() === advGasit || String(intrare.source) === e.advisory) &&
+				new Date(`${e.expira}T23:59:59Z`).getTime() >= acum.getTime(),
+			);
+			if (!acoperit) return false;
+		} else if (typeof intrare === 'string') {
+			if (vizitate.has(intrare)) continue;
+			vizitate.add(intrare);
+			const parinte = toateVuln[intrare];
+			if (!parinte) return false;
+			const areExceptieDirecta = listaExceptii.some((e) =>
+				exceptiaAcopera(e, intrare, parinte, acum),
+			);
+			if (!areExceptieDirecta && !esteTranzitivAcoperit(parinte, toateVuln, listaExceptii, acum, vizitate)) {
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 function evalueazaAudit(date, exceptii = EXCEPTII_AUDIT, acum = new Date()) {
@@ -131,8 +178,11 @@ function evalueazaAudit(date, exceptii = EXCEPTII_AUDIT, acum = new Date()) {
 		const exceptie = listaExceptii.find((e) => exceptiaAcopera(e, nume, vuln, acum));
 		if (exceptie) {
 			permise.push(`${nume} [${severitate}] exceptie ${exceptie.advisory} exp. ${exceptie.expira}`);
+		} else if (esteTranzitivAcoperit(vuln, date.vulnerabilities, listaExceptii, acum)) {
+			const advisories = [...extrageAdvisories(vuln, date.vulnerabilities)].join(', ') || 'tranzitiv';
+			permise.push(`${nume} [${severitate}] tranzitiv acoperit prin radacina exceptata (${advisories})`);
 		} else {
-			const advisories = [...extrageAdvisories(vuln)].join(', ') || 'advisory necunoscut';
+			const advisories = [...extrageAdvisories(vuln, date.vulnerabilities)].join(', ') || 'advisory necunoscut';
 			blocate.push(`${nume} [${severitate}] range=${vuln?.range ?? '?'} (${advisories})`);
 		}
 	}

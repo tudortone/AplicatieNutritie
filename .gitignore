@@ -26,3 +26,12 @@ build_full_code.js
 harta musculara/
 .zcode/
 .agents/
+.ci_logs/
+graphify-out/
+getflow-postfix-*.txt
+frontend-nutritie/artifacts/
+frontend-nutritie/output/
+frontend-nutritie/graphify-out/
+backend-nutritie-ai/graphify-out/
+supabase/.temp/
+

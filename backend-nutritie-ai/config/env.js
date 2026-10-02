@@ -134,7 +134,7 @@ function incarcaConfig() {
 		console.warn(
 			'REDIS_URL lipseste: rate-limiting-ul e per-proces. Acceptabil doar pe o singura instanta.',
 		);
-	const admobRewardedAdUnitId = process.env.ADMOB_REWARDED_AD_UNIT_ID;
+	}
 	// P0-BILLING-01: Google Play este singura autoritate comerciala pentru Android.
 	// Configuratia este obligatorie si validata la boot; nu acceptam produse sau
 	// package names implicite in productie.
@@ -341,11 +341,6 @@ function incarcaConfig() {
 		playIntegrity: Object.freeze({
 			mode: playIntegrityMode,
 			packageName: process.env.GOOGLE_PLAY_PACKAGE_NAME || null,
-		}),
-		admob: Object.freeze({
-			rewardedAdUnitId: admobRewardedAdUnitId,
-			rewardedAmount: admobRewardedAmount,
-			rewardedItem: admobRewardedItem,
 		}),
 		imagekit: Object.freeze({
 			publicKey: process.env.IMAGEKIT_PUBLIC_KEY || null,

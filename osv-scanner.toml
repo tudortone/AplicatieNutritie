@@ -148,3 +148,9 @@ reason = "Backlog Expo SDK 54 -> upgrade expo@57"
 name = "xcode"
 vulnerability.ignore = true
 reason = "Backlog Expo SDK 54 -> upgrade expo@57"
+
+[[PackageOverrides]]
+name = "node-forge"
+vulnerability.ignore = true
+reason = "Advisory 2026-10-01 GHSA-86w9-cpqp-85rv: node-forge prin @expo/code-signing-certificates fara versiune remediata (afecteaza <=1.4.0). Folosit doar la build-time CLI, ne-inclus in bundle-ul runtime al aplicatiei."
+

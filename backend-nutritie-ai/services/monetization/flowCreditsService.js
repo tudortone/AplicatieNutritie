@@ -25,6 +25,47 @@ function createFlowCreditsService({ repo, now = () => new Date() } = {}) {
     getBalance({ userId } = {}) {
       return repo.getBalance({ userId: requiredString(userId, 'INVALID_USER'), now: serverNow() });
     },
+    reservePhoto({ userId, logicalAnalysisId, entitlement } = {}) {
+      if (typeof repo.reservePhoto !== 'function') throw new TypeError('reservePhoto is not supported by repo');
+      return repo.reservePhoto({
+        userId: requiredString(userId, 'INVALID_USER'),
+        logicalAnalysisId: requiredString(logicalAnalysisId, 'INVALID_ANALYSIS_ID'),
+        now: serverNow(),
+        entitlement: entitlement || null,
+      });
+    },
+    commitPhoto({ userId, reservationId } = {}) {
+      if (typeof repo.settlePhoto !== 'function') throw new TypeError('settlePhoto is not supported by repo');
+      return repo.settlePhoto({
+        userId: requiredString(userId, 'INVALID_USER'),
+        reservationId: requiredString(reservationId, 'INVALID_RESERVATION_ID'),
+        action: 'commit',
+      });
+    },
+    releasePhoto({ userId, reservationId } = {}) {
+      if (typeof repo.settlePhoto !== 'function') throw new TypeError('settlePhoto is not supported by repo');
+      return repo.settlePhoto({
+        userId: requiredString(userId, 'INVALID_USER'),
+        reservationId: requiredString(reservationId, 'INVALID_RESERVATION_ID'),
+        action: 'release',
+      });
+    },
+    grantRewardVerified({ userId, rewardEventId } = {}) {
+      if (typeof repo.grantReward !== 'function') throw new TypeError('grantReward is not supported by repo');
+      return repo.grantReward({
+        userId: requiredString(userId, 'INVALID_USER'),
+        eventId: requiredString(rewardEventId, 'INVALID_EVENT_ID'),
+        now: serverNow(),
+      });
+    },
+    grantPackVerified({ userId, purchaseEventId, productId } = {}) {
+      if (typeof repo.grantPack !== 'function') throw new TypeError('grantPack is not supported by repo');
+      return repo.grantPack({
+        userId: requiredString(userId, 'INVALID_USER'),
+        eventId: requiredString(purchaseEventId, 'INVALID_EVENT_ID'),
+        productId: requiredString(productId, 'INVALID_PRODUCT_ID'),
+      });
+    },
   });
 }
 

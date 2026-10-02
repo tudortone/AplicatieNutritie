@@ -1,0 +1,23 @@
+- generic [ref=f4e11]:
+  - generic [ref=f4e12]:
+    - button "Back" [ref=f4e13] [cursor=pointer]
+    - generic [ref=f4e16]:
+      - generic [ref=f4e17]: Anatomy V2
+      - generic [ref=f4e18]: Isolated GetFlow preview
+  - generic [ref=f4e21]:
+    - generic [ref=f4e23]:
+      - generic [ref=f4e24]: NEUTRAL
+      - generic [ref=f4e25]: Anatomy V2
+      - generic [ref=f4e26]: Tap a muscle group for details.
+    - generic [ref=f4e27]:
+      - generic [ref=f4e28]:
+        - generic [ref=f4e29]:
+          - button "Show front view" [ref=f4e30] [cursor=pointer]:
+            - generic [ref=f4e31]: Front
+          - button "Show back view" [active] [ref=f4e32] [cursor=pointer]:
+            - generic [ref=f4e33]: Back
+        - img "Back muscle anatomy" [ref=f4e137]
+      - region [ref=f4e127]:
+        - generic [ref=f4e128]: No data
+        - generic [ref=f4e131]: Lower level
+        - generic [ref=f4e134]: Higher level

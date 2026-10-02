@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 500" role="img" aria-labelledby="title">
+  <title id="title">GetFlow original front anatomy model</title>
+  <path id="silhouette_front" fill="#20252B" d="M110 12C88 12 76 28 78 50c1 13 7 24 15 31-20 8-36 25-42 50l-14 65c-3 15 2 24 11 26l14-2-1 83 12 154c1 18 12 30 24 30 9 0 13-8 13-21 0 13 4 21 13 21 12 0 23-12 24-30l12-154-1-83 14 2c9-2 14-11 11-26l-14-65c-6-25-22-42-42-50 8-7 14-18 15-31 2-22-10-38-32-38Z"/>
+  <path id="upper_chest_front_left" data-muscle="upper_chest" data-view="front" data-side="left" fill="#525C66" d="M82 104c8-9 17-13 27-13v24c-12 0-21 3-29 8Z"/>
+  <path id="upper_chest_front_right" data-muscle="upper_chest" data-view="front" data-side="right" fill="#525C66" d="M138 104c-8-9-17-13-27-13v24c12 0 21 3 29 8Z"/>
+  <path id="chest_front_left" data-muscle="chest" data-view="front" data-side="left" fill="#525C66" d="M79 126c9-7 19-10 30-10v45c-16-1-27-8-33-20Z"/>
+  <path id="chest_front_right" data-muscle="chest" data-view="front" data-side="right" fill="#525C66" d="M141 126c-9-7-19-10-30-10v45c16-1 27-8 33-20Z"/>
+  <path id="front_delts_front_left" data-muscle="front_delts" data-view="front" data-side="left" fill="#525C66" d="M64 111c7-9 13-12 20-10l-6 42-14-2Z"/>
+  <path id="front_delts_front_right" data-muscle="front_delts" data-view="front" data-side="right" fill="#525C66" d="M156 111c-7-9-13-12-20-10l6 42 14-2Z"/>
+  <path id="side_delts_front_left" data-muscle="side_delts" data-view="front" data-side="left" fill="#525C66" d="M54 121c3-8 7-14 11-18l-1 39-10 18Z"/>
+  <path id="side_delts_front_right" data-muscle="side_delts" data-view="front" data-side="right" fill="#525C66" d="M166 121c-3-8-7-14-11-18l1 39 10 18Z"/>
+  <path id="biceps_front_left" data-muscle="biceps" data-view="front" data-side="left" fill="#525C66" d="M53 151l12-5 5 52-14 7Z"/>
+  <path id="biceps_front_right" data-muscle="biceps" data-view="front" data-side="right" fill="#525C66" d="M167 151l-12-5-5 52 14 7Z"/>
+  <path id="forearms_front_left" data-muscle="forearms" data-view="front" data-side="left" fill="#525C66" d="M55 208l15-5 5 65-13 11Z"/>
+  <path id="forearms_front_right" data-muscle="forearms" data-view="front" data-side="right" fill="#525C66" d="M165 208l-15-5-5 65 13 11Z"/>
+  <path id="abs_front_center" data-muscle="abs" data-view="front" data-side="center" fill="#525C66" d="M94 166h32l-3 99-13 17-13-17Z"/>
+  <path id="obliques_front_left" data-muscle="obliques" data-view="front" data-side="left" fill="#525C66" d="M78 161l14 6 3 98-18-21Z"/>
+  <path id="obliques_front_right" data-muscle="obliques" data-view="front" data-side="right" fill="#525C66" d="M142 161l-14 6-3 98 18-21Z"/>
+  <path id="hip_flexors_front_left" data-muscle="hip_flexors" data-view="front" data-side="left" fill="#525C66" d="M82 263l27 21-17 29-15-13Z"/>
+  <path id="hip_flexors_front_right" data-muscle="hip_flexors" data-view="front" data-side="right" fill="#525C66" d="M138 263l-27 21 17 29 15-13Z"/>
+  <path id="adductors_front_left" data-muscle="adductors" data-view="front" data-side="left" fill="#525C66" d="M94 305l15-17-4 103-15-5Z"/>
+  <path id="adductors_front_right" data-muscle="adductors" data-view="front" data-side="right" fill="#525C66" d="M126 305l-15-17 4 103 15-5Z"/>
+  <path id="quads_front_left" data-muscle="quads" data-view="front" data-side="left" fill="#525C66" d="M77 307l15-4 12 90-25 2Z"/>
+  <path id="quads_front_right" data-muscle="quads" data-view="front" data-side="right" fill="#525C66" d="M143 307l-15-4-12 90 25 2Z"/>
+  <path id="calves_front_left" data-muscle="calves" data-view="front" data-side="left" fill="#525C66" d="M80 402h22l-5 70-17-4Z"/>
+  <path id="calves_front_right" data-muscle="calves" data-view="front" data-side="right" fill="#525C66" d="M140 402h-22l5 70 17-4Z"/>
+</svg>
+

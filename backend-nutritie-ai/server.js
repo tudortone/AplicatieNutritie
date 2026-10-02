@@ -148,16 +148,6 @@ const fetchCuTimeoutSupabase = (input, init = {}) => {
 };
 const supabase = createClient(config.supabase.url, config.supabase.anonKey, { global: { fetch: fetchCuTimeoutSupabase } });
 const supabaseAdmin = createClient(config.supabase.url, config.supabase.serviceRoleKey, { global: { fetch: fetchCuTimeoutSupabase } });
-<<<<<<< Updated upstream
-const flowCreditsService = createFlowCreditsService({
-  repo: createFlowCreditsRepo({ supabaseAdmin, rewardLimit: 5 }),
-});
-const rewardedService = createRewardedService({
-  repo: createRewardedRepo({ supabaseAdmin, dailyLimit: 5 }),
-  flowCredits: flowCreditsService,
-});
-const checkAiUsageQuota = creeazaCheckAiUsageQuota({ supabaseAdmin });
-=======
 const googleBillingRepo = createGoogleBillingRepo({ supabaseAdmin });
 const flowCreditsService = createFlowCreditsService({
   repo: createFlowCreditsRepo({
@@ -200,7 +190,6 @@ const playIntegrityGuard = config.playIntegrity.mode === 'off'
     }),
   });
 const checkAiUsageQuota = creeazaCheckAiUsageQuota({ supabaseAdmin, billingService: googleBillingService });
->>>>>>> Stashed changes
 // P-012: limitator dedicat webhook-urilor (Clerk/Svix). Se monteaza pe calea
 // webhook-urilor INAINTE de router (si INAINTE de preAuthLimiter, care altfel nu
 // se aplica), ca burst-urile legitime Clerk sa treaca dar traficul evadat sa fie
@@ -457,16 +446,6 @@ const rewardedR = createRewardedRouter({
     expectedRewardItem: config.admob.rewardedItem,
   }),
 });
-const rewardedR = createRewardedRouter({
-  requireAuth,
-  generalLimiter,
-  rewardedService,
-  verifier: createAdmobSsvVerifier({
-    expectedAdUnit: config.admob.rewardedAdUnitId,
-    expectedRewardAmount: config.admob.rewardedAmount,
-    expectedRewardItem: config.admob.rewardedItem,
-  }),
-});
 const statusR = createStatusRouter({
   getProviderStatus: serviciuCascada.getProviderStatus,
   getAiStatistici,
@@ -484,10 +463,7 @@ const gdprR = createGdprRouter({
 // /api/v1 = prefix canonic
 app.use('/api/v1', statusR);
 app.use('/api/v1', aiR);
-<<<<<<< Updated upstream
-=======
 app.use('/api/v1', photoFlowR);
->>>>>>> Stashed changes
 app.use('/api/v1', rewardedR);
 app.use('/api/v1', barcodeR);
 app.use('/api/v1', profilR);
@@ -510,10 +486,7 @@ app.use('/api', (req, res, next) => {
 });
 app.use('/api', statusR);
 app.use('/api', aiR);
-<<<<<<< Updated upstream
-=======
 app.use('/api', photoFlowR);
->>>>>>> Stashed changes
 app.use('/api', rewardedR);
 app.use('/api', barcodeR);
 app.use('/api', profilR);
