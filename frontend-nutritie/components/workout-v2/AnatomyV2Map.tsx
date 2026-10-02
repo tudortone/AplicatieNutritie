@@ -23,9 +23,12 @@ import { AnatomyV2WebMap } from './AnatomyV2WebMap';
 export interface AnatomyV2MapProps {
   mode: AnatomyV2DisplayMode;
   initialView?: AnatomyV2View;
+  view?: AnatomyV2View;
+  hideToggle?: boolean;
   selectedMuscle?: V2MuscleId | null;
   onSelectMuscle?: (muscleId: V2MuscleId) => void;
   width?: number;
+  testID?: string;
 }
 
 function visualFor(
@@ -82,13 +85,17 @@ function colorWithOpacity(color: string, opacity: number): string {
 function AnatomyV2MapBase({
   mode,
   initialView = 'front',
+  view: controlledView,
+  hideToggle = false,
   selectedMuscle = null,
   onSelectMuscle,
   width = 220,
+  testID = 'anatomy-v2-map',
 }: AnatomyV2MapProps) {
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const [view, setView] = useState<AnatomyV2View>(initialView);
+  const [internalView, setInternalView] = useState<AnatomyV2View>(initialView);
+  const view = controlledView ?? internalView;
   const selectedSlugs = useMemo(
     () => sourceFragmentsForCanonicalMuscle(selectedMuscle, view),
     [selectedMuscle, view],
@@ -120,27 +127,29 @@ function AnatomyV2MapBase({
   }, [onSelectMuscle, view]);
 
   return (
-    <View style={styles.root} testID="anatomy-v2-map">
-      <View style={[styles.toggle, { borderColor: colors.border, backgroundColor: colors.surfaceBg }]}>
-        {(['front', 'back'] as const).map((item) => {
-          const selected = view === item;
-          return (
-            <Pressable
-              key={item}
-              testID={`anatomy-v2-${item}`}
-              accessibilityRole="button"
-              accessibilityLabel={t(`workoutV2.anatomy.show${item === 'front' ? 'Front' : 'Back'}`)}
-              accessibilityState={{ selected }}
-              onPress={() => setView(item)}
-              style={[styles.toggleButton, selected && { backgroundColor: colors.accent }]}
-            >
-              <Text style={[styles.toggleText, { color: selected ? colors.background : colors.textSecondary }]}>
-                {t(`workoutV2.anatomy.${item}`)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+    <View style={styles.root} testID={testID}>
+      {!hideToggle && (
+        <View style={[styles.toggle, { borderColor: colors.border, backgroundColor: colors.surfaceBg }]}>
+          {(['front', 'back'] as const).map((item) => {
+            const selected = view === item;
+            return (
+              <Pressable
+                key={item}
+                testID={`anatomy-v2-${item}`}
+                accessibilityRole="button"
+                accessibilityLabel={t(`workoutV2.anatomy.show${item === 'front' ? 'Front' : 'Back'}`)}
+                accessibilityState={{ selected }}
+                onPress={() => setInternalView(item)}
+                style={[styles.toggleButton, selected && { backgroundColor: colors.accent }]}
+              >
+                <Text style={[styles.toggleText, { color: selected ? colors.background : colors.textSecondary }]}>
+                  {t(`workoutV2.anatomy.${item}`)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
       <View style={{ width, maxWidth: '100%' }}>
         {Platform.OS === 'web' ? (
           <AnatomyV2WebMap

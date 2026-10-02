@@ -31,11 +31,12 @@ describe('Workout V2 canonical muscle taxonomy', () => {
     expect(v2RegionId('lower_back', 'back', 'center')).toBe('lower_back:back:center');
   });
 
-  it('does not couple the production BodyMap to Anatomy V2', () => {
+  it('renders the approved Anatomy V2 map in BodyMap while rejecting separate geometric files', () => {
     const source = readFileSync(
       resolve(__dirname, '../components/fitness/BodyMap.tsx'),
       'utf8',
     );
+    expect(source).toContain('AnatomyV2Map');
     expect(source).toContain("from './anatomyFront'");
     expect(source).toContain("from './anatomyBack'");
     expect(source).not.toContain('anatomyV2Front');

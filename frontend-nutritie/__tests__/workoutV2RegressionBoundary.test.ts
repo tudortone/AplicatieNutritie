@@ -7,7 +7,9 @@ describe('Workout V2 production boundary', () => {
   it('keeps production anatomy as the fallback and preview free of external persistence', () => {
     const productionBodyMap = readFileSync(resolve(root, 'components/fitness/BodyMap.tsx'), 'utf8');
     const experience = readFileSync(resolve(root, 'components/workout-v2/WorkoutV2Experience.tsx'), 'utf8');
-    expect(productionBodyMap).not.toContain('AnatomyV2Map');
+    expect(productionBodyMap).toContain('AnatomyV2Map');
+    expect(productionBodyMap).not.toContain('anatomyV2Front');
+    expect(productionBodyMap).not.toContain('anatomyV2Back');
     expect(experience).not.toContain('supabase');
     expect(experience).not.toContain('AsyncStorage');
     expect(experience).not.toContain('getflow:workout-v2');

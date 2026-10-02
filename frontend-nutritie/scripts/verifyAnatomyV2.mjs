@@ -68,8 +68,12 @@ for (const required of ['react-native-body-parts-anatomy', 'react-native-body-hi
 }
 
 const productionBodyMap = await text(root, 'components/fitness/BodyMap.tsx');
-if (productionBodyMap.includes('react-native-body-parts-anatomy') || productionBodyMap.includes('AnatomyV2Map')) {
-  throw new Error('Production BodyMap was coupled to Workout V2 preview');
+if (!productionBodyMap.includes('AnatomyV2Map')) {
+  throw new Error('Production BodyMap must render approved AnatomyV2Map');
+}
+if (productionBodyMap.includes('anatomyV2Front') || productionBodyMap.includes('anatomyV2Back')) {
+  throw new Error('Rejected geometric preview remains active in BodyMap');
 }
 
-process.stdout.write('ANATOMY V2 PIPELINE OK: audited package 1.2.0; front/back published anatomy; 19 canonical IDs accounted for; production isolated\n');
+process.stdout.write('ANATOMY V2 PIPELINE OK: audited package 1.2.0; front/back published anatomy; 19 canonical IDs accounted for; production unified\n');
+
