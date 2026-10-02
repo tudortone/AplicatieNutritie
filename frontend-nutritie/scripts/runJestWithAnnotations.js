@@ -37,10 +37,12 @@ if (result.stderr) process.stderr.write(result.stderr);
 
 const exitCode = typeof result.status === 'number' ? result.status : 1;
 if (exitCode !== 0 && (process.env.GITHUB_ACTIONS === 'true' || process.env.CI === 'true')) {
-  const diagnostic = sanitizeaza(`${result.error?.message || ''}\n${result.stdout || ''}\n${result.stderr || ''}`)
-    .slice(-14000);
+  const allOutput = `${result.error?.message || ''}\n${result.stdout || ''}\n${result.stderr || ''}`;
+  const failLines = allOutput.split('\n').filter(l => l.includes('FAIL') || l.includes('●') || l.includes('Error:'));
+  const shortSummary = failLines.length > 0 ? failLines.slice(0, 20).join(' ') : 'Jest tests failed with non-zero exit code';
+  const diagnostic = sanitizeaza(shortSummary).slice(0, 4000);
   process.stdout.write(
-    `\n::error file=frontend-nutritie/package.json,line=17,title=Jest test failure::${escapeazaComanda(diagnostic)}\n`,
+    `\n::error file=package.json,line=17,title=Jest test failure::${escapeazaComanda(diagnostic)}\n`,
   );
 }
 
