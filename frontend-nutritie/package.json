@@ -24,7 +24,7 @@
     "pre-submit": "node scripts/preSubmissionCheck.js"
   },
   "dependencies": {
-    "@expo/app-integrity": "^57.0.2",
+    "@expo/app-integrity": "0.1.10",
     "@expo/vector-icons": "^15.0.3",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-async-storage/async-storage": "2.2.0",
