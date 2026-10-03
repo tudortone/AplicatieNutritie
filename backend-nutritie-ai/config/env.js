@@ -78,6 +78,21 @@ function urlPublicSigur(valoare, protocoale) {
 	}
 }
 
+function redisProductieSigur(valoare) {
+	if (urlPublicSigur(valoare, ['rediss:'])) return true;
+	try {
+		const url = new URL(String(valoare || ''));
+		return url.protocol === 'redis:' &&
+			/^red-[a-z0-9]+$/.test(url.hostname.toLowerCase()) &&
+			url.port === '6379' &&
+			(url.pathname === '' || url.pathname === '/') &&
+			!url.search &&
+			!url.hash;
+	} catch {
+		return false;
+	}
+}
+
 function parePlaceholder(valoare) {
 	return /(?:\[redacted\]|placeholder|change[-_ ]?me|de[-_ ]completat|key[-_ ]de[-_ ]test|(?:^|[_-])dummy(?:$|[_-])|(?:^|[_-])test(?:$|[_-]))/i
 		.test(String(valoare || ''));
@@ -246,8 +261,8 @@ function incarcaConfig() {
 		if (!urlPublicSigur(process.env.SENTRY_DSN, ['https:']) || !/^https:\/\/[^@\s/]+@[^/\s]+\/.+/.test(process.env.SENTRY_DSN)) {
 			opreste('SENTRY_DSN trebuie sa fie DSN-ul HTTPS complet din Sentry.');
 		}
-		if (!urlPublicSigur(process.env.REDIS_URL, ['rediss:'])) {
-			opreste('REDIS_URL trebuie sa foloseasca rediss:// in productie.');
+		if (!redisProductieSigur(process.env.REDIS_URL)) {
+			opreste('REDIS_URL trebuie sa foloseasca rediss:// sau URL-ul intern Render redis://red-...:6379.');
 		}
 		if (origini.some((origine) => !urlPublicSigur(origine, ['https:']))) {
 			opreste('CORS_ORIGINS poate contine numai origini HTTPS publice in productie.');

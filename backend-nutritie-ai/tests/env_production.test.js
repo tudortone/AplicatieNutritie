@@ -125,4 +125,10 @@ describe('configuratia backend de productie', () => {
     expect(pornesteConfig({ REDIS_URL: 'redis://redis.nutriai.ro:6379' }).status).not.toBe(0);
     expect(pornesteConfig({ GDPR_WORKER_ACTIV: '0' }).status).not.toBe(0);
   });
+
+  test('accepta URL-ul Redis intern Render numai pe reteaua privata si portul canonic', () => {
+    expect(pornesteConfig({ REDIS_URL: 'redis://red-abc123def456:6379' }).status).toBe(0);
+    expect(pornesteConfig({ REDIS_URL: 'redis://red-abc123def456:6380' }).status).not.toBe(0);
+    expect(pornesteConfig({ REDIS_URL: 'redis://red-abc123def456.example.com:6379' }).status).not.toBe(0);
+  });
 });
