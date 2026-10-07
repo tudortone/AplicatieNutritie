@@ -25,7 +25,6 @@ import { BodyMap } from '../../components/fitness/BodyMap';
 import { computeDailyMuscleIntensity, normalizeMuscleLoadToIntensity } from '../../lib/fitnessEngine';
 import { useExercitii } from '../../hooks/useExercitii';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
-import { FlowIcon } from '../../components/ui/FlowIcon';
 import { useGamificareData } from '../../context/GamificareContext';
 import { StreakBottomSheet, StreakBottomSheetRef } from '../../components/gamification/StreakBottomSheet';
 import { PressableScale } from '../../components/ui/PressableScale';
@@ -37,7 +36,7 @@ import { anatomyMapSize, singleAnatomyMapWidth } from '../../lib/anatomyLayout';
 import { FlowCreditsPill } from '../../components/FlowCreditsPill';
 import { WaterIntakeCard } from '../../components/home/WaterIntakeCard';
 import { PhotoJobStatusCard } from '../../components/photo/PhotoJobStatusCard';
-import { calculateDailyWaterTargetMl, glassesToMilliliters } from '../../lib/hydration';
+import { calculateDailyWaterTargetMl } from '../../lib/hydration';
 
 const AnimatedRingCircle = Animated.createAnimatedComponent(Circle);
 
@@ -129,26 +128,34 @@ export default function HomeScreen() {
   const { unreadCount } = useNotificationBannerData();
   const { streak } = useGamificareData();
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
+  const pendingMealSheetOpenRef = useRef(false);
   const streakSheetRef = useRef<StreakBottomSheetRef>(null);
   const [dataSelectata, setDataSelectata] = useState<Date>(() => new Date());
   const [weightModalVisible, setWeightModalVisible] = useState(false);
   const [greutateTinta, setGreutateTinta] = useState(70);
   const [stepGoalEdit, setStepGoalEdit] = useState(false);
   const [stepGoalInput, setStepGoalInput] = useState('');
+  const [completedStepsInput, setCompletedStepsInput] = useState('');
 
   // HOME-TOUCH-001 / REMED-029: foaia Adaugă masă se montează DOAR la prima deschidere
   // pentru a preveni interceptarea atingerilor pe Home de către containerul/backdrop-ul
   // BottomSheet-ului nemontat complet.
   const [mealSheetMounted, setMealSheetMounted] = useState(false);
-  const [mealSheetOpenNonce, setMealSheetOpenNonce] = useState(0);
   const deschideAddMeal = React.useCallback(() => {
-    setMealSheetOpenNonce((n) => n + 1);
+    if (addMealSheetRef.current) {
+      addMealSheetRef.current.open();
+      return;
+    }
+    pendingMealSheetOpenRef.current = true;
     setMealSheetMounted(true);
   }, []);
-  useEffect(() => {
-    if (!mealSheetMounted) return;
-    addMealSheetRef.current?.open();
-  }, [mealSheetMounted, mealSheetOpenNonce]);
+  const setAddMealSheetRef = React.useCallback((instance: AddMealBottomSheetRef | null) => {
+    addMealSheetRef.current = instance;
+    if (instance && pendingMealSheetOpenRef.current) {
+      pendingMealSheetOpenRef.current = false;
+      instance.open();
+    }
+  }, []);
 
   // BUG-001: cursorul zilei nu mai e inghetat la mount. Cand ziua locala se
   // schimba (miezul noptii, background peste miezul noptii, restart), sarim la
@@ -175,8 +182,8 @@ export default function HomeScreen() {
     optimisticAddMeal,
   } = useMeseAzi(dataSelectata);
   const { t, i18n } = useTranslation();
-  const { pahare, loading: waterLoading, adaugaPahar, scadePahar } = useApa();
-  const { steps, activeCalories, stepGoal, isEnabled, isAvailable, setNewStepGoal, toggleSync, refreshSteps, addManualSteps } = useHealthSync();
+  const { consumedMl, loading: waterLoading, adaugaPahar, scadePahar, setConsumedMl } = useApa();
+  const { steps, activeCalories, stepGoal, isEnabled, isAvailable, platformName, setNewStepGoal, toggleSync, refreshSteps, addManualSteps, setCompletedSteps } = useHealthSync();
   const { totalCaloriiArse, antrenamente, refresh: refreshAntrenamente } = useAntrenamente();
   const { exercitii } = useExercitii();
   const [viewSideHome, setViewSideHome] = useState<'front' | 'back'>('front');
@@ -298,6 +305,16 @@ export default function HomeScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
+  const handleSetCompletedSteps = async () => {
+    const parsed = parseInt(completedStepsInput.replace(/[^\d]/g, ''), 10);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 200000) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+    await setCompletedSteps(parsed);
+    setCompletedStepsInput(String(parsed));
+  };
+
   const dailyIntensityHome = React.useMemo(() => {
     const hasServerLoad = (antrenamente ?? []).some(
       (w) => w.muscle_load && Object.keys(w.muscle_load).length > 0
@@ -361,25 +378,9 @@ export default function HomeScreen() {
   const procentCalorii = Math.min((caloriiConsumate / safeCaloriiTinta) * 100, 100);
   const procentProteine = Math.min((proteineConsumate / safeProteineTinta) * 100, 100);
   const waterTargetMl = calculateDailyWaterTargetMl(greutateIntrodusaKg);
-  const waterConsumedMl = glassesToMilliliters(pahare);
+  const waterConsumedMl = consumedMl;
 
   const calState = getCalorieState(caloriiConsumate, bugetCaloricNet, colors.accent, colors.accentSecondary, t);
-
-  const userName = user?.email ? user.email.split('@')[0] : t('home.friend');
-  const capitalizedName = userName.charAt(0).toUpperCase() + userName.slice(1);
-
-  const getSalut = () => {
-    const ora = new Date().getHours();
-    if (ora >= 5 && ora < 12) return t('home.greetingMorning');
-    if (ora >= 12 && ora < 18) return t('home.greetingDay');
-    if (ora >= 18 && ora < 23) return t('home.greetingEvening');
-    return t('home.greetingNight');
-  };
-  const getGreetingIcon = () => {
-    const ora = new Date().getHours();
-    if (ora >= 5 && ora < 18) return 'sun';
-    return 'moon';
-  };
 
   const sfatAles = React.useMemo(() => {
     const sfaturi = [
@@ -424,7 +425,10 @@ export default function HomeScreen() {
 
       <ScrollView 
         showsVerticalScrollIndicator={false} 
-        contentContainerStyle={[s.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom, paddingHorizontal: horizontalPadding }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+        contentContainerStyle={[s.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom, paddingHorizontal: horizontalPadding, width: '100%', maxWidth: isTablet ? 800 : 560, alignSelf: 'center' }]}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={() => refresh(false, true)} tintColor={colors.accent} colors={[colors.accent]} />
         }
@@ -457,36 +461,14 @@ export default function HomeScreen() {
 
         {/* Header */}
         <Animated.View style={s.header}>
-          <View style={s.headerLeft}>
-            <View style={s.greetingRow}>
-              <Text style={[s.greeting, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{getSalut()}, {capitalizedName}!</Text>
-              <FlowIcon name={getGreetingIcon()} size={20} color={colors.accent} />
-            </View>
-            <View style={s.greetingSubRow}>
-              <Text style={[s.greetingSub, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.3}>{t('home.greetingSubtitle')}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 }}>
-                <FlowIcon name={calState.iconName} size={14} color={calState.ringColor} />
-                <Text style={[s.caloriiInline, { color: calState.ringColor }]} numberOfLines={1} ellipsizeMode="tail" maxFontSizeMultiplier={1.3}>{calState.mesaj}</Text>
-              </View>
-            </View>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View testID="home-header-actions" style={[s.headerActions, isCompact && s.headerActionsCompact]}>
             <FlowCreditsPill />
             <TouchableOpacity
               onPress={() => router.push('/notificari' as any)}
               accessibilityRole="button"
               accessibilityLabel={unreadCount > 0 ? t('home.notificationsUnreadA11y', { count: unreadCount }) : t('home.notificationsA11y')}
               hitSlop={6}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.1)',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
+              style={s.notificationButton}
             >
               <Bell size={18} color={colors.textPrimary} />
               {unreadCount > 0 ? (
@@ -587,7 +569,7 @@ export default function HomeScreen() {
                     </Text>
                     <Text style={[s.macroUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3} numberOfLines={1}>/ {proteineTinta || 150}g</Text>
                   </View>
-                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>{t('nutrition.protein')}</Text>
+                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{t('nutrition.protein')}</Text>
                   <View style={s.macroBarBg}>
                     <LinearGradient
                       colors={proteineConsumate > (proteineTinta || 150) ? [colors.danger, colors.danger + 'CC'] : colors.accentSecondaryGradient}
@@ -615,7 +597,7 @@ export default function HomeScreen() {
                     </Text>
                     <Text style={[s.macroUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3} numberOfLines={1}>/ {carbiTinta || 250}g</Text>
                   </View>
-                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>{t('nutrition.carbs')}</Text>
+                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{t('home.carbsShort')}</Text>
                   <View style={s.macroBarBg}>
                     <LinearGradient
                       colors={totalCarbohidrati > (carbiTinta || 250) ? [colors.danger, colors.danger + 'CC'] : [colors.accentTertiary, colors.accentTertiary + 'AA']}
@@ -643,7 +625,7 @@ export default function HomeScreen() {
                     </Text>
                     <Text style={[s.macroUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3} numberOfLines={1}>/ {grasimiTinta || 70}g</Text>
                   </View>
-                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>{t('nutrition.fats')}</Text>
+                  <Text style={[s.macroLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{t('nutrition.fats')}</Text>
                   <View style={s.macroBarBg}>
                     <LinearGradient
                       colors={totalGrasimi > (grasimiTinta || 70) ? [colors.danger, colors.danger + 'CC'] : [colors.warning, colors.warning + 'AA']}
@@ -735,6 +717,7 @@ export default function HomeScreen() {
           loading={waterLoading}
           onAddGlass={adaugaPahar}
           onRemoveGlass={scadePahar}
+          onSetConsumedMl={(ml) => { void setConsumedMl(ml); }}
           onAddWeight={() => setWeightModalVisible(true)}
         />
 
@@ -753,8 +736,8 @@ export default function HomeScreen() {
                     <Text style={[s.healthTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{t('home.stepsTitle')}</Text>
                     <Text style={[s.healthSub, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
                       {isEnabled && isAvailable
-                        ? t('home.stepsSource', { calories: activeCalories })
-                        : t('home.stepsSourceOffline')}
+                        ? t('home.stepsSource', { provider: platformName, calories: activeCalories })
+                        : t('home.stepsSourceOffline', { provider: platformName })}
                     </Text>
                   </View>
                 </View>
@@ -820,12 +803,24 @@ export default function HomeScreen() {
                     </View>
                   </View>
                   <View style={[s.manualAddRow, { borderColor: colors.cardBorder }]}>
-                    <Text style={[s.manualAddHint, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>{t('home.stepsAddManual')}</Text>
+                    <TextInput
+                      testID="steps-completed-input"
+                      value={completedStepsInput}
+                      onFocus={() => setCompletedStepsInput(String(steps))}
+                      onChangeText={(value) => setCompletedStepsInput(value.replace(/[^\d]/g, '').slice(0, 6))}
+                      onSubmitEditing={handleSetCompletedSteps}
+                      keyboardType="number-pad"
+                      selectTextOnFocus
+                      placeholder={String(steps)}
+                      placeholderTextColor={colors.textTertiary}
+                      accessibilityLabel={t('home.stepsCompletedInputA11y')}
+                      style={[s.completedStepsInput, { color: colors.textPrimary, borderColor: colors.cardBorder }]}
+                    />
+                    <TouchableOpacity onPress={handleSetCompletedSteps} style={[s.manualAddBtn, { backgroundColor: colors.accent, borderColor: colors.accent }]} accessibilityRole="button" accessibilityLabel={t('home.stepsSetCompletedA11y')}>
+                      <Text style={[s.manualAddBtnText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{t('home.stepsSet')}</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => addManualSteps(500)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel={t('home.stepsAdd500A11y')} hitSlop={6}>
                       <Text style={[s.manualAddBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>+500</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => addManualSteps(1000)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel={t('home.stepsAdd1000A11y')} hitSlop={6}>
-                      <Text style={[s.manualAddBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>+1000</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -845,12 +840,24 @@ export default function HomeScreen() {
                     <Text style={[s.connectBtnText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{t('home.stepsActivate')}</Text>
                   </TouchableOpacity>
                   <View style={[s.manualAddRow, { borderColor: colors.cardBorder, marginTop: 10 }]}>
-                    <Text style={[s.manualAddHint, { color: colors.textTertiary }]} maxFontSizeMultiplier={1.3}>{t('home.stepsAddManual')}</Text>
+                    <TextInput
+                      testID="steps-completed-input-offline"
+                      value={completedStepsInput}
+                      onFocus={() => setCompletedStepsInput(String(steps))}
+                      onChangeText={(value) => setCompletedStepsInput(value.replace(/[^\d]/g, '').slice(0, 6))}
+                      onSubmitEditing={handleSetCompletedSteps}
+                      keyboardType="number-pad"
+                      selectTextOnFocus
+                      placeholder={String(steps)}
+                      placeholderTextColor={colors.textTertiary}
+                      accessibilityLabel={t('home.stepsCompletedInputA11y')}
+                      style={[s.completedStepsInput, { color: colors.textPrimary, borderColor: colors.cardBorder }]}
+                    />
+                    <TouchableOpacity onPress={handleSetCompletedSteps} style={[s.manualAddBtn, { backgroundColor: colors.accent, borderColor: colors.accent }]} accessibilityRole="button" accessibilityLabel={t('home.stepsSetCompletedA11y')}>
+                      <Text style={[s.manualAddBtnText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{t('home.stepsSet')}</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => addManualSteps(500)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel={t('home.stepsAdd500A11y')} hitSlop={6}>
                       <Text style={[s.manualAddBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>+500</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => addManualSteps(1000)} style={[s.manualAddBtn, { borderColor: colors.accent + '55' }]} accessibilityRole="button" accessibilityLabel={t('home.stepsAdd1000A11y')} hitSlop={6}>
-                      <Text style={[s.manualAddBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>+1000</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -936,7 +943,7 @@ export default function HomeScreen() {
 
       {/* Reusable Gorhom Bottom Sheet for adding meals - lazy mounted (REMED-029/HOME-TOUCH-001) */}
       {mealSheetMounted ? (
-        <AddMealBottomSheet ref={addMealSheetRef} onSuccess={refresh} onMasaCreata={optimisticAddMeal} />
+        <AddMealBottomSheet ref={setAddMealSheetRef} onSuccess={refresh} onMasaCreata={optimisticAddMeal} />
       ) : null}
       <StreakBottomSheet ref={streakSheetRef} />
       {/* BUG-004: greutatea se editează direct pe Home, fără navigare la Profil */}
@@ -968,14 +975,10 @@ const s = StyleSheet.create({
   eroareBtnText: { fontSize: 13, fontWeight: '800' },
 
   // Header
-  header: { width: '100%', maxWidth: 680, alignSelf: 'center', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 },
-  headerLeft: { flex: 1, paddingRight: 12 },
-  greetingRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 6 },
-  greeting: { fontSize: 22, fontWeight: '900', letterSpacing: -0.3, flexShrink: 1 },
-  greetingEmoji: { fontSize: 22 },
-  greetingSubRow: { flexDirection: 'row', alignItems: 'center', marginTop: 5, flexWrap: 'wrap' },
-  greetingSub: { fontSize: 13, fontWeight: '500' },
-  caloriiInline: { fontSize: 13, fontWeight: '800' },
+  header: { width: '100%', maxWidth: 680, alignSelf: 'center', alignItems: 'flex-end', marginBottom: 20 },
+  headerActions: { width: '100%', maxWidth: '100%', minWidth: 0, flexShrink: 1, flexDirection: 'row', flexWrap: 'nowrap', justifyContent: 'flex-end', alignItems: 'center', gap: 10 },
+  headerActionsCompact: { gap: 6 },
+  notificationButton: { width: 44, height: 44, flexShrink: 0, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
   streakBadge: { borderRadius: 20, overflow: 'hidden' },
   streakGrad: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, gap: 6 },
   streakText: { fontWeight: '800', fontSize: 13 },
@@ -1055,7 +1058,8 @@ const s = StyleSheet.create({
   healthCalories: { fontSize: 13, fontWeight: '800' },
   healthOfflineBox: { backgroundColor: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)' },
   healthOfflineText: { fontSize: 13, lineHeight: 18, textAlign: 'center' },
-  manualAddRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
+  manualAddRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
+  completedStepsInput: { minWidth: 92, flexGrow: 1, height: 42, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, fontSize: 15, fontWeight: '800' },
   manualAddHint: { fontSize: 12, fontWeight: '600', flex: 1 },
   manualAddBtn: { minWidth: 56, height: 34, borderRadius: 10, borderWidth: 1, paddingHorizontal: 10, justifyContent: 'center', alignItems: 'center' },
   manualAddBtnText: { fontSize: 13, fontWeight: '900' },

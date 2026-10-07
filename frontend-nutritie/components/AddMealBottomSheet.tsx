@@ -187,6 +187,12 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
       }, 150);
     }, [formSectionY, gramajSectionY]);
 
+    const resetScrollToTop = useCallback(() => {
+      if (scrollViewRef.current && typeof scrollViewRef.current.scrollTo === 'function') {
+        scrollViewRef.current.scrollTo({ y: 0, animated: false });
+      }
+    }, []);
+
     const handleGramajChange = useCallback((newGrameStr: string) => {
       setGrame(newGrameStr);
       try {
@@ -291,6 +297,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
     useImperativeHandle(ref, () => ({
       open: (masaToEdit?: Masa | null, defaultCategory?: TipMasa, fotoUrl?: string) => {
+        resetScrollToTop();
         // P1-01: o deschidere nouă a sheet-ului începe o ACȚIUNE nouă. Identitatea
         // precedentă nu se refolosește — altfel a doua masă, adăugată deliberat,
         // s-ar ciocni pe cheia primară cu prima și nu s-ar mai scrie.
@@ -361,6 +368,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         }
       },
       openWithItem: (item) => {
+        resetScrollToTop();
         const defaultGr = item.gramajDefault || 100;
         alimenteOriginaleRef.current = null;
         setEditingMasaId(null);
@@ -692,6 +700,11 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         snapPoints={snapPoints}
         onChange={setSheetIndex}
         enablePanDownToClose
+        enableContentPanningGesture
+        enableHandlePanningGesture
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+        android_keyboardInputMode="adjustResize"
         backdropComponent={renderBackdrop}
         backgroundStyle={{
           backgroundColor: colors.background,
@@ -708,7 +721,11 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         <BottomSheetScrollView
           ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          nestedScrollEnabled
+          scrollEnabled
+          showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>
@@ -1422,6 +1439,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 160,
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',

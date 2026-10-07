@@ -90,8 +90,8 @@ export function FlowCreditsModalHost() {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'flex-end' },
-  sheet: { maxHeight: '88%', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'flex-end', alignItems: 'center' },
+  sheet: { maxHeight: '88%', width: '100%', maxWidth: 540, alignSelf: 'center', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1 },
   content: { padding: 24, paddingBottom: 36 },
   close: { position: 'absolute', right: 18, top: 18, zIndex: 2, padding: 8 },
   heroIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(204,255,0,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },

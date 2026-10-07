@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import {
   Check,
   Crown,
@@ -33,6 +34,7 @@ import { useNotify } from '../hooks/useNotify';
 import { getLegalUrls } from '../lib/legalUrls';
 import { useTranslation } from 'react-i18next';
 import type { BillingOffer, BillingProduct } from '../lib/billing/types';
+import { getBillingUnavailableMessageKey } from '../lib/billing/billingUnavailableCopy';
 import {
   CONFIGURED_BASE_PLANS,
   resolvePlanOffer,
@@ -334,6 +336,7 @@ export default function PaywallScreen() {
     !purchasesAvailable ||
     operation.status === 'unavailable' ||
     (!monthlyOffer && !annualOffer);
+  const unavailableMessageKey = getBillingUnavailableMessageKey(operation.code);
 
   const isActionDisabled =
     buying != null ||
@@ -380,6 +383,53 @@ export default function PaywallScreen() {
           <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
             {t('paywall.subtitle')}
           </Text>
+        </View>
+
+        <View
+          testID="paywall-meal-preview"
+          style={[styles.mealPreview, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+        >
+          <Image
+            testID="paywall-meal-image"
+            source={require('../assets/images/paywall-meal-preview.webp')}
+            style={styles.mealPreviewImage}
+            contentFit="cover"
+            transition={180}
+            accessibilityLabel={t('paywall.preview.imageA11y')}
+          />
+          <LinearGradient
+            colors={['rgba(5,7,7,0.02)', 'rgba(5,7,7,0.96)']}
+            style={styles.mealPreviewShade}
+          />
+          <View style={styles.mealPreviewCopy}>
+            <View style={[styles.exampleBadge, { backgroundColor: colors.accent }]}>
+              <Check size={12} color={colors.background} strokeWidth={3} />
+              <Text style={[styles.exampleBadgeText, { color: colors.background }]}>
+                {t('paywall.preview.label')}
+              </Text>
+            </View>
+            <Text style={[styles.mealPreviewTitle, { color: colors.textPrimary }]}>
+              {t('paywall.preview.meal')}
+            </Text>
+            <View style={styles.mealPreviewStats}>
+              {[
+                ['540', t('paywall.preview.calories')],
+                ['42 g', t('paywall.preview.protein')],
+                ['56 g', t('paywall.preview.carbs')],
+                ['18 g', t('paywall.preview.fat')],
+              ].map(([value, label]) => (
+                <View key={label} style={styles.mealPreviewStat}>
+                  <Text style={[styles.mealPreviewStatValue, { color: colors.textPrimary }]}>{value}</Text>
+                  <Text
+                    numberOfLines={2}
+                    style={[styles.mealPreviewStatLabel, { color: colors.textSecondary }]}
+                  >
+                    {label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
         </View>
 
         {/* Feature List */}
@@ -493,7 +543,7 @@ export default function PaywallScreen() {
               {t('paywall.states.unavailable_title')}
             </Text>
             <Text style={[styles.unavailableMessage, { color: colors.textSecondary }]}>
-              {t('paywall.states.unavailable_message')}
+              {t(unavailableMessageKey)}
             </Text>
             <Pressable
               testID="retry-button"
@@ -805,6 +855,9 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: 20,
     paddingBottom: 40,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
   },
   hero: {
     alignItems: 'center',
@@ -838,6 +891,70 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 320,
     lineHeight: 20,
+  },
+  mealPreview: {
+    minHeight: 224,
+    borderRadius: 22,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  mealPreviewImage: {
+    width: '100%',
+    height: 224,
+  },
+  mealPreviewShade: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mealPreviewCopy: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    bottom: 13,
+  },
+  exampleBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    marginBottom: 7,
+  },
+  exampleBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.2,
+  },
+  mealPreviewTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    marginBottom: 9,
+  },
+  mealPreviewStats: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  mealPreviewStat: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 5,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: 'rgba(10,14,14,0.78)',
+    alignItems: 'center',
+  },
+  mealPreviewStatValue: {
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  mealPreviewStatLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    marginTop: 2,
+    minHeight: 22,
+    textAlign: 'center',
   },
   features: {
     gap: 10,

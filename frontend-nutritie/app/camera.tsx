@@ -303,7 +303,9 @@ export default function CameraScreen() {
       }
       setPhotoPhase('failed');
       setScanError(
-        error instanceof Error
+        error instanceof PhotoApiError
+          ? t('camera.genericScanError')
+          : error instanceof Error
             ? error.message
             : t('camera.genericScanError'),
       );
@@ -811,7 +813,7 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.topHeader, { top: insets.top + 10 }]}>
+      <View style={[styles.topHeader, { top: insets.top + 10, left: Math.max(20, insets.left), right: Math.max(20, insets.right) }]}>
         {/* Furnizorul nu este selectat de client: backendul/Trigger păstrează
             Gemini ca autoritate Photo AI și aplică retry-ul bounded. */}
         <View style={styles.aiSelectorContainer}>

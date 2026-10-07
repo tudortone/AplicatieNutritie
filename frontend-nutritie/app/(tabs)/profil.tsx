@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
+  View, Text, StyleSheet, TextInput, TouchableOpacity, Modal,
   ScrollView, RefreshControl, Alert, ActivityIndicator, Platform, Switch, Image, Linking, Share,
   useWindowDimensions,
 } from 'react-native';
@@ -97,6 +97,17 @@ export default function ProfilScreen() {
 
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [languageModalVisible, setLanguageModalVisible] = useState(false);
+  const [languageQuery, setLanguageQuery] = useState('');
+  const [achievementsModalVisible, setAchievementsModalVisible] = useState(false);
+
+  const normalizedLanguageQuery = languageQuery.trim().toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const sortedLanguages = [...SUPPORTED_LANGUAGES].sort((a, b) => new Intl.Collator(i18n.language || 'en').compare(LANGUAGE_NAMES[a].label, LANGUAGE_NAMES[b].label));
+  const filteredLanguages = sortedLanguages.filter((lang) => {
+    const label = LANGUAGE_NAMES[lang].label.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return !normalizedLanguageQuery || label.includes(normalizedLanguageQuery) || lang.includes(normalizedLanguageQuery);
+  });
+  const sortedAchievements = [...INSIGNE_LIST].sort((a, b) => t(a.numeI18n, { defaultValue: a.nume }).localeCompare(t(b.numeI18n, { defaultValue: b.nume }), i18n.language || 'en'));
 
   const stergereContDefinitiva = () => {
     setDeleteAccountModalVisible(true);
@@ -599,38 +610,32 @@ export default function ProfilScreen() {
               {t('profile.languageSection')}
             </Text>
           </View>
-          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 28 }}>
-            {SUPPORTED_LANGUAGES.map((langKey) => {
-              const isSelected = (i18n.language || 'ro').startsWith(langKey);
-              const langInfo = LANGUAGE_NAMES[langKey];
-              return (
-                <TouchableOpacity
-                  key={langKey}
-                  style={[
-                    styles.themeCard,
-                    {
-                      backgroundColor: isSelected ? colors.accent + '20' : colors.surfaceBg,
-                      borderColor: isSelected ? colors.accent : 'rgba(255,255,255,0.08)',
-                    },
-                    isSelected && { borderWidth: 2 },
-                  ]}
-                  onPress={() => {
-                    try { Haptics.selectionAsync(); } catch {}
-                    changeLanguage(langKey);
-                  }}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
-                  accessibilityLabel={`${t('profile.languageTitle')}: ${langInfo.label}`}
-                >
-                  <Text style={{ fontSize: 22, marginBottom: 4 }}>{langInfo.flag}</Text>
-                  <Text style={[styles.themeNameText, { color: isSelected ? colors.accent : colors.textPrimary }]}>
-                    {langInfo.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <TouchableOpacity
+            testID="profile-language-trigger"
+            style={[styles.inputRow, { marginBottom: 28, backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, borderWidth: 1, borderRadius: 16, padding: 14 }]}
+            onPress={() => { setLanguageQuery(''); setLanguageModalVisible(true); }}
+            accessibilityRole="button"
+            accessibilityLabel={t('profile.languageTitle')}
+          >
+            <Text style={{ fontSize: 22 }}>{LANGUAGE_NAMES[(i18n.language || 'en').split('-')[0] as keyof typeof LANGUAGE_NAMES]?.flag || '🌐'}</Text>
+            <Text style={[styles.inputLabel, { flex: 1, color: colors.textPrimary }]}>{LANGUAGE_NAMES[(i18n.language || 'en').split('-')[0] as keyof typeof LANGUAGE_NAMES]?.label || t('profile.languageTitle')}</Text>
+            <ChevronRight size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <Modal visible={languageModalVisible} transparent animationType="slide" onRequestClose={() => setLanguageModalVisible(false)}>
+            <View style={styles.modalBackdrop}>
+              <View style={[styles.selectionSheet, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+                <View style={styles.modalTitleRow}><Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('profile.languageTitle')}</Text><TouchableOpacity onPress={() => setLanguageModalVisible(false)} accessibilityLabel={t('common.close')}><Text style={{ color: colors.textSecondary, fontSize: 24 }}>×</Text></TouchableOpacity></View>
+                <TextInput value={languageQuery} onChangeText={setLanguageQuery} placeholder={t('profile.searchLanguages')} placeholderTextColor={colors.textTertiary} style={[styles.modalSearch, { color: colors.textPrimary, borderColor: colors.cardBorder }]} autoCorrect={false} />
+                <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8 }}>
+                  {filteredLanguages.length === 0 ? <Text style={{ color: colors.textSecondary, paddingVertical: 16 }}>{t('profile.noLanguagesFound')}</Text> : filteredLanguages.map((langKey) => {
+                    const selected = (i18n.language || 'en').startsWith(langKey);
+                    return <TouchableOpacity key={langKey} style={[styles.languageOption, { borderColor: selected ? colors.accent : colors.cardBorder, backgroundColor: selected ? colors.accent + '18' : colors.surfaceBg }]} onPress={() => { void changeLanguage(langKey); setLanguageModalVisible(false); }}><Text style={{ fontSize: 22 }}>{LANGUAGE_NAMES[langKey].flag}</Text><Text style={{ color: colors.textPrimary, fontWeight: '700', flex: 1 }}>{LANGUAGE_NAMES[langKey].label}</Text>{selected && <CheckCircle2 size={18} color={colors.accent} />}</TouchableOpacity>;
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
         </Animated.View>
 
         {/* Notifications section */}
@@ -895,6 +900,21 @@ export default function ProfilScreen() {
               );
             })}
           </View>
+          <TouchableOpacity
+            testID="profile-view-all-achievements"
+            style={[styles.secondaryAction, { borderColor: colors.cardBorder, marginBottom: 24 }]}
+            onPress={() => setAchievementsModalVisible(true)}
+            accessibilityRole="button"
+          >
+            <Text style={{ color: colors.accent, fontWeight: '800' }}>{t('profile.viewAllAchievements')}</Text>
+            <ChevronRight size={18} color={colors.accent} />
+          </TouchableOpacity>
+          <Modal visible={achievementsModalVisible} transparent animationType="slide" onRequestClose={() => setAchievementsModalVisible(false)}>
+            <View style={styles.modalBackdrop}><View style={[styles.selectionSheet, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
+              <View style={styles.modalTitleRow}><Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('profile.viewAllAchievements')}</Text><TouchableOpacity onPress={() => setAchievementsModalVisible(false)} accessibilityLabel={t('common.close')}><Text style={{ color: colors.textSecondary, fontSize: 24 }}>×</Text></TouchableOpacity></View>
+              <ScrollView contentContainerStyle={{ gap: 10 }}>{sortedAchievements.map((insign) => <AchievementCard key={insign.id} id={insign.id} name={t(insign.numeI18n, { defaultValue: insign.nume })} requirement={t(insign.conditieI18n, { defaultValue: insign.conditie })} unlocked={insigne.includes(insign.id)} width="100%" />)}</ScrollView>
+            </View></View>
+          </Modal>
         </Animated.View>
 
         {/* Targets section */}
@@ -1153,6 +1173,13 @@ export default function ProfilScreen() {
 }
 
 const styles = StyleSheet.create({
+  modalBackdrop: { flex: 1, justifyContent: 'flex-end', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.55)' },
+  selectionSheet: { maxHeight: '82%', width: '100%', maxWidth: 540, alignSelf: 'center', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, padding: 20, gap: 14 },
+  modalTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modalTitle: { fontSize: 20, fontWeight: '800' },
+  modalSearch: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, fontSize: 16 },
+  languageOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
+  secondaryAction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 13, borderWidth: 1, borderRadius: 14 },
   container: { flex: 1 },
   glowTop: { position: 'absolute', top: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.04 },
   glowBottom: { position: 'absolute', bottom: 50, right: -80, width: 280, height: 280, borderRadius: 140, opacity: 0.05 },

@@ -37,9 +37,9 @@ import { idOperatieNoua } from '../../lib/idUtils';
 import { pushOfflineMealVerificat, type MasaOfflinePayload } from '../../lib/offlineQueue';
 import { marcheazaMeseModificate } from '../../lib/freshnessMese';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import KeyboardAwareScreen, { useContentBottomPadding } from '@/components/ui/KeyboardAwareScreen';
+import KeyboardAwareScreen from '@/components/ui/KeyboardAwareScreen';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
-import { parseMealProposal, extractTextWithoutMealProposal, type MealProposal } from '../../lib/parseMealProposal';
+import { parseMealProposal, extractTextWithoutMealProposal, formatMealProposalForChat, containsStructuredMealProtocol, type MealProposal } from '../../lib/parseMealProposal';
 import { MealSaveSuccessModal, type MealSuccessData } from '../../components/ui/MealSaveSuccessModal';
 import { FlowIcon } from '../../components/ui/FlowIcon';
 // REMED-006: categoriile de masă aparțin lib/mealUtils (read-only) — aici doar le citim;
@@ -253,7 +253,6 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const { tabBarHeight } = useResponsiveLayout();
   const reduceMotion = useReducedMotion();
-  const contentBottomPadding = useContentBottomPadding();
   const [chatInput, setChatInput] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
   const [recipeModalVisible, setRecipeModalVisible] = useState(false);
@@ -582,7 +581,10 @@ export default function ChatScreen() {
         setProposalCategory(null);
         // Păstrăm explicația și pașii rețetei, eliminând doar blocul tehnic JSON
         const textCurat = extractTextWithoutMealProposal(date?.raspuns || raspunsText);
-        raspunsText = textCurat || t('chat.foodsIdentified');
+        raspunsText = textCurat || formatMealProposalForChat(parsed, i18n.language || 'en');
+      } else if (containsStructuredMealProtocol(raspunsText)) {
+        adaugaMesaj(buleMesaj('ai', t('chat.errorResponseProcessing'), true));
+        return;
       }
 
       adaugaMesaj(buleMesaj('ai', raspunsText));
@@ -894,22 +896,18 @@ export default function ChatScreen() {
           <View style={styles.headerMainRow}>
             <View style={styles.headerIdentity}>
               <View style={[styles.aiAvatar, { borderColor: colors.accentSecondary + '44' }]}>
-                <LinearGradient colors={colors.accentSecondaryGradient} style={styles.aiAvatarGradient}>
-                  {/* REMED-013: avatarul e decorativ (inițiale); textul trece pe un
-                      chip întunecat ca contrastul să nu depindă de gradient. */}
-                  <View style={styles.aiAvatarChip}>
-                    <Text style={styles.aiAvatarText}>NC</Text>
-                  </View>
-                </LinearGradient>
+                <Image
+                  testID="coach-avatar"
+                  source={require('../../assets/coach/getflow-coach-avatar.png')}
+                  style={styles.aiAvatarImage}
+                  resizeMode="cover"
+                  accessible={false}
+                />
               </View>
               <View style={styles.aiMeta}>
                 <Text style={[styles.title, { color: colors.textPrimary }]}>{t('chat.coachLabel')}</Text>
                 <View style={styles.coachMetaRow}>
                   <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.aiSubtitle, { color: colors.textSecondary }]}>{t('chat.coachSubtitle')}</Text>
-                  <View style={styles.onlineRow}>
-                    <View style={[styles.onlineDot, { backgroundColor: colors.accent }]} />
-                    <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.onlineText, { color: colors.accent }]}>{t('chat.onlineNow')}</Text>
-                  </View>
                 </View>
               </View>
             </View>
@@ -954,9 +952,11 @@ export default function ChatScreen() {
           onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
           style={styles.chatScroll}
           contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: 'flex-end',
             paddingHorizontal: 16,
             paddingTop: 10,
-            paddingBottom: contentBottomPadding,
+            paddingBottom: 10,
           }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -1344,7 +1344,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   outerContainer: { flex: 1 },
-  container: { flex: 1 },
+  container: { flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center' },
   glowTop: { position: 'absolute', top: -100, right: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.06 },
   glowBottom: { position: 'absolute', bottom: 100, left: -80, width: 280, height: 280, borderRadius: 140, opacity: 0.04 },
 
@@ -1369,23 +1369,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   aiAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
     marginRight: 8,
   },
-  aiAvatarGradient: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aiAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '900',
-  },
+  aiAvatarImage: { width: '100%', height: '100%' },
   aiMeta: {
     flex: 1,
     minWidth: 0,
@@ -1413,9 +1404,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   title: { fontSize: 16, fontWeight: '800', letterSpacing: -0.2 },
-  onlineRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 0, gap: 4 },
-  onlineDot: { width: 6, height: 6, borderRadius: 3 },
-  onlineText: { fontSize: 10, fontWeight: '700' },
   contextChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1609,13 +1597,6 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontWeight: '900',
-  },
-  // REMED-013: chip întunecat în spatele inițialelor avatarului (decorativ).
-  aiAvatarChip: {
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
   },
   // REMED-027: oră discretă sub textul bulei, fără să concureze cu conținutul.
   bubbleTime: {

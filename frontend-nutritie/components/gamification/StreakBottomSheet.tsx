@@ -42,17 +42,39 @@ export const StreakBottomSheet = forwardRef<StreakBottomSheetRef>((_, ref) => {
       animationType={reduceMotion ? 'none' : 'slide'}
       transparent
     >
-      <Pressable style={styles.backdrop} onPress={() => setVisible(false)}>
-        <Pressable style={[styles.sheet, { backgroundColor: colors.background, borderColor: colors.cardBorder }]} onPress={(e) => e.stopPropagation()}>
-        <View style={styles.indicatorWrap}>
-          <View style={[styles.indicator, { backgroundColor: colors.overlayStrong }]} />
+      <View style={styles.backdrop}>
+        <Pressable
+          testID="streak-sheet-backdrop"
+          style={styles.backdropTouchable}
+          onPress={() => setVisible(false)}
+        />
+        <View
+          testID="streak-sheet"
+          style={[styles.sheet, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}
+        >
+        <View testID="streak-sheet-header" style={styles.sheetHeader}>
+          <View style={styles.indicatorWrap}>
+            <View style={[styles.indicator, { backgroundColor: colors.overlayStrong }]} />
+          </View>
+
+          <TouchableOpacity
+            testID="streak-sheet-close"
+            style={styles.closeBtn}
+            onPress={() => setVisible(false)}
+            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+            accessibilityRole="button"
+          >
+            <X size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.closeBtn} onPress={() => setVisible(false)}>
-          <X size={20} color={colors.textSecondary} />
-        </TouchableOpacity>
-
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          testID="streak-sheet-scroll"
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+        >
           {/* Header Card */}
           <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(400)}>
             <LinearGradient colors={colors.accentGradient} style={styles.headerGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
@@ -121,8 +143,8 @@ export const StreakBottomSheet = forwardRef<StreakBottomSheetRef>((_, ref) => {
             })}
           </View>
         </ScrollView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 });
@@ -130,11 +152,14 @@ export const StreakBottomSheet = forwardRef<StreakBottomSheetRef>((_, ref) => {
 StreakBottomSheet.displayName = 'StreakBottomSheet';
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, maxHeight: '82%', paddingHorizontal: 20 },
-  indicatorWrap: { alignItems: 'center', paddingVertical: 12 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', alignItems: 'center' },
+  backdropTouchable: { ...StyleSheet.absoluteFillObject },
+  sheet: { borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, height: '82%', width: '100%', maxWidth: 540, alignSelf: 'center', paddingHorizontal: 20, overflow: 'hidden' },
+  sheetHeader: { height: 52, alignItems: 'center', justifyContent: 'center' },
+  indicatorWrap: { alignItems: 'center', justifyContent: 'center' },
   indicator: { width: 44, height: 5, borderRadius: 3 },
-  closeBtn: { position: 'absolute', top: 16, right: 20, zIndex: 10, padding: 6 },
+  closeBtn: { position: 'absolute', top: 4, right: 0, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  scroll: { flex: 1 },
   content: { paddingBottom: 32, gap: 16 },
   headerGrad: { borderRadius: 24, padding: 24, alignItems: 'center' },
   flameIconWrap: { marginBottom: 8 },
