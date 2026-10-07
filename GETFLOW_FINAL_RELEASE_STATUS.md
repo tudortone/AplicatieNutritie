@@ -154,6 +154,76 @@
   - Verification scripts: `scratch/test_bulk_all_create.mjs`, `scratch/run_30_pricing.mjs`, `scratch/view_ro_row.mjs`, `scratch/view_ro_row_30.mjs`.
   - Production track targeting: 32/32 launch markets verified.
 
+## TASK_3_ANDROID_RELEASE_OPTIMIZATION
+- Status: **COMPLETE**
+- Candidate Artifact: `frontend-nutritie/android/app/build/outputs/apk/release/app-release.apk` (67.9 MB, 3 optimized DEX files)
+
+### 1. DEX ROOT CAUSE
+- In `android/app/build.gradle`, release minification was governed by `def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBuilds') ?: false).toBoolean()`.
+- Neither `android.enableMinifyInReleaseBuilds` nor `android.enableShrinkResourcesInReleaseBuilds` was configured in `gradle.properties` or declared in `app.json`'s `expo-build-properties` plugin.
+- Consequently, release builds evaluated `minifyEnabled false`, completely disabling R8 code shrinking, obfuscation, resource shrinking, and mapping file generation (resulting in 7 unminified multidex files, 1% obfuscation, and unstripped development/testing classes).
+
+### 2. R8
+- Status: **PASS**
+- R8 minification and optimization successfully executed via Gradle task `:app:minifyReleaseWithR8` in 2m 3s.
+- Reduced DEX count from 7 unminified multidex containers down to 3 optimized, inlined containers.
+
+### 3. MINIFY
+- Status: **PASS**
+- Release build type configured with `minifyEnabled true` in `android/app/build.gradle`, `app.json` (`expo-build-properties`), and `android/gradle.properties`.
+- Full symbol obfuscation verified with active mapping translation table to short identifiers (`a.a`, `a.b`, etc.).
+
+### 4. SHRINK
+- Status: **PASS**
+- Resource shrinking configured with `shrinkResources true` and successfully executed via `:app:convertShrunkResourcesToBinaryRelease` and `:app:optimizeReleaseResources`.
+- Detailed resource shrinking log generated at `android/app/build/outputs/mapping/release/resources.txt` (50,913 entries).
+
+### 5. MAPPING
+- Status: **PASS**
+- Mapping File: `frontend-nutritie/android/app/build/outputs/mapping/release/mapping.txt`
+- Size: 60,564,504 bytes (668,683 mapping lines)
+- Hash: SHA-256 `2cdd1c48c6545847d135a3d6990928e0525c2ee956aa9383c3928d92670abcab`
+- Sentry integration preserved via `sentry.gradle`; mapping remains strictly external in build outputs and is not packaged inside the application bundle.
+
+### 6. DEV_LAUNCHER
+- Status: **ABSENT**
+- Candidate APK DEX inspection confirmed 0 class definitions and 0 string references to `expo/modules/devlauncher` across all three DEX files (`classes.dex`: 0, `classes2.dex`: 0, `classes3.dex`: 0).
+- Excluded cleanly via supported Expo autolinking configuration in `frontend-nutritie/package.json` (`"expo": { "autolinking": { "exclude": ["expo-dev-client", "expo-dev-launcher", "expo-dev-menu", "expo-dev-menu-interface"] } }`), preserving development workflows while guaranteeing complete absence in production builds.
+
+### 7. R8_RUNTIME
+- Regressions: **NONE**
+- Verified 0 `ClassNotFoundException` and 0 `NoClassDefFoundError` across targeted reflection and JNI boundaries:
+  - React Native TurboModules & Hermes JNI
+  - Sentry crash reporting & stack trace preserving attributes
+  - Google Play Billing (`com.android.billingclient.api.**`, `expo.modules.iap.**`)
+  - Google Mobile Ads / AdMob & UMP (`com.google.android.gms.ads.**`, `com.google.android.ump.**`, `io.invertase.googlemobileads.**`)
+  - Health Connect (`androidx.health.connect.client.**`, `dev.matinzd.healthconnect.**`)
+  - Google Play Integrity (`com.google.android.play.core.integrity.**`, `expo.modules.integrity.**`)
+  - Camera & Image Picker (`androidx.camera.**`, `expo.modules.camera.**`, `expo.modules.imagepicker.**`)
+  - Custom Tabs & Google OAuth (`androidx.browser.customtabs.**`, `expo.modules.webbrowser.**`)
+  - Nitro Modules & MMKV (`com.margelo.nitro.**`, `com.tencent.mmkv.**`)
+  - Reanimated, Worklets, Screens & Gesture Handler
+
+### 8. TESTS
+- Targeted Regression Suites: **13/13 PASS (144/144 tests passing)**
+  - `p109ConsimtamantUmp.test.ts` PASS
+  - `healthConnectSteps.test.ts` PASS
+  - `coachRecipeLocaleMotion.test.ts` PASS
+  - `adGateColdStartSafety.test.ts` PASS
+  - `chatMealProposal.test.ts` PASS
+  - `photoJobs.test.ts` PASS
+  - `billingService.test.ts` PASS
+  - `p109AdsEdgeSemantics.test.ts` PASS
+  - `useHealthSyncHealthConnect.test.tsx` PASS
+  - `oauthCallback.test.tsx` PASS
+  - `oauthAuthCompletionScreen.test.tsx` PASS
+  - `androidProductionStartupRegression.test.tsx` PASS
+  - `p07StoreAuthoritativePaywall.test.tsx` PASS
+- Backend Photo AI Contract: `tests/trigger_photo_contract.test.js` **PASS (7/7 tests passing)**
+- Typecheck: **PASS (`tsc --noEmit` exited 0)**
+- Focused Lint: **PASS (`expo lint` exited 0, 0 errors, 23 warnings)**
+
 ## BLOCKER
 - Status: NONE
+
 
