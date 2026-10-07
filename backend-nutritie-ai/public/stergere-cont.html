@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ștergere Cont și Date Personale — GetFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090C0E;
+      --card-bg: rgba(22, 28, 36, 0.7);
+      --accent: #10B981;
+      --danger: #EF4444;
+      --text: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --border: rgba(255, 255, 255, 0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1.5rem;
+      padding: 3rem 2.5rem;
+      backdrop-filter: blur(12px);
+    }
+    .nav-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      margin-bottom: 2rem;
+    }
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2.2rem;
+      margin-bottom: 0.5rem;
+      color: #FFF;
+    }
+    .date { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
+    h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.35rem;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+      color: var(--accent);
+    }
+    p, ul, ol { color: #D1D5DB; margin-bottom: 1rem; font-size: 1rem; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    .card-highlight {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    .card-danger {
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/index.html" class="nav-back">&larr; Înapoi la pagina principală</a>
+    
+    <h1>Ștergere Cont și Date Personale</h1>
+    <div class="date">Conformitate Google Play & GDPR (Articolul 17 — Dreptul la Ștergere)</div>
+
+    <p>La <strong>GetFlow</strong>, respectăm pe deplin dreptul dvs. de a vă controla și șterge datele cu caracter personal. Puteți iniția ștergerea definitivă a contului și a tuturor datelor asociate în orice moment, fără costuri și fără proceduri birocratice.</p>
+
+    <div class="card-highlight">
+      <h3 style="color: #FFF; margin-bottom: 0.5rem;">Metoda 1: Inițiere directă din aplicație (Flux durabil)</h3>
+      <p>Dacă aveți aplicația instalată pe telefon:</p>
+      <ol style="padding-left: 1.5rem; color: #D1D5DB; margin-bottom: 0.5rem;">
+        <li>Deschideți aplicația <strong>GetFlow</strong> pe dispozitivul dvs. Android.</li>
+        <li>Navigați la ecranul <strong>Profil</strong> (pictograma de profil din bara de navigare).</li>
+        <li>Derulați până la secțiunea <strong>Date & Confidențialitate</strong>.</li>
+        <li>Apăsați butonul <strong>Șterge contul definitiv</strong> și confirmați acțiunea în fereastra de dialog.</li>
+      </ol>
+      <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0;"><strong>Cum funcționează:</strong> Cererea dvs. declanșează un flux securizat și durabil de ștergere pe server. Serverul invalidează imediat sesiunea, elimină datele din baza de date și programează curățarea fișierelor multimedia din CDN printr-un worker dedicat de outbox. Nu promitem o ștergere instantanee la nivel de rețea, dar procesul garantează că datele sunt șterse complet și ireversibil, cu reluare automată în caz de eroare de rețea, fără a afișa un succes fals.</p>
+    </div>
+
+    <div class="card-danger">
+      <h3 style="color: #FFF; margin-bottom: 0.5rem;">Metoda 2: Solicitare externă prin e-mail (Dacă ați dezinstalat aplicația)</h3>
+      <p>Conform cerințelor Google Play privind datele utilizatorilor, dacă nu mai aveți acces la aplicație sau ați dezinstalat-o, puteți solicita ștergerea contului trimițând un mesaj direct către echipa de suport:</p>
+      <p><strong>E-mail suport:</strong> <a href="mailto:tudortone9@gmail.com" style="color: var(--accent);">tudortone9@gmail.com</a></p>
+      <p><strong>Subiect recomandat:</strong> Solicitare ștergere cont GetFlow</p>
+      <p>Vă rugăm să expediați mesajul de pe adresa de e-mail asociată contului dvs. GetFlow (sau să menționați adresa de e-mail a contului în corpul mesajului) pentru a vă putea verifica identitatea. Echipa noastră va procesa cererea și vă va confirma finalizarea ștergerii definitive.</p>
+    </div>
+
+    <h2>Ce categorii de date sunt șterse definitiv?</h2>
+    <ul>
+      <li><strong>Date de profil și autentificare:</strong> Adresa de e-mail, numele, identificatorul de cont Supabase și jetoanele de sesiune.</li>
+      <li><strong>Date biometrice și nutriționale:</strong> Înălțime, greutate curentă, greutate țintă, sex, vârstă, nivel de activitate fizică și necesar caloric.</li>
+      <li><strong>Jurnalul alimentar:</strong> Toate mesele înregistrate, denumirile produselor, gramajele, caloriile și defalcarea pe macronuțrienți.</li>
+      <li><strong>Fișiere multimedia (imagini cu mesele):</strong> Toate fotografiile încărcate pe CDN-ul ImageKit asociate contului dvs.</li>
+      <li><strong>Jurnalul de fitness și forță:</strong> Istoricul de antrenamente, exerciții, repetări, serii și tonaj.</li>
+      <li><strong>Balanța și istoricul Creditelor Flow:</strong> Toate jetoanele de credite AI și tranzacțiile de credit asociate contului.</li>
+      <li><strong>Date stocate local pe dispozitiv:</strong> Datele din AsyncStorage și memoria cache a telefonului sunt eliminate la deconectare/ștergere.</li>
+    </ul>
+
+    <h2>Păstrarea tehnică minimă a registrului de procesare</h2>
+    <p>Pentru a asigura integritatea operațiunii și prevenirea stărilor inconsistente în caz de întrerupere a conexiunii, backend-ul poate menține temporar o înregistrare tehnică de audit privind starea procesării (status, timestamp și număr de încercări ale workerului de outbox). Această înregistrare tehnică este complet securizată, nu este expusă public și este purificată la finalizarea tuturor pașilor. Nu promitem un termen fix neverificat de retenție; datele de identificare personală sunt eliminate în cel mai scurt timp tehnic posibil.</p>
+
+    <h2>Abonamente active pe Google Play</h2>
+    <p><strong>Atenție:</strong> Ștergerea contului GetFlow nu anulează automat un abonament recurent activ pe Google Play. Google impune ca abonamentele să fie anulate direct de către utilizator din contul său Google:</p>
+    <ol>
+      <li>Deschideți aplicația <strong>Google Play Store</strong> pe telefon.</li>
+      <li>Apăsați pe pictograma de profil din colțul dreapta-sus.</li>
+      <li>Navigați la <strong>Plăți și abonamente</strong> &rarr; <strong>Abonamente</strong>.</li>
+      <li>Selectați <strong>GetFlow</strong> și apăsați pe <strong>Anulați abonamentul</strong>.</li>
+    </ol>
+
+    <footer>
+      &copy; 2026 GetFlow. Toate drepturile rezervate.
+    </footer>
+  </div>
+</body>
+</html>

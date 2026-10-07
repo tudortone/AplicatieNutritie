@@ -497,6 +497,40 @@ app.use('/api/user', gdprR);
 app.use('/api/user', userR);
 app.use('/api/billing/google', billingGoogleR);
 
+// --- Rute Publice Documente Legale și Politică de Confidențialitate ---
+const path = require('path');
+const fs = require('fs');
+
+const calePublic = fs.existsSync(path.join(__dirname, 'public'))
+  ? path.join(__dirname, 'public')
+  : path.join(__dirname, '../public');
+
+const trimiteDocumentLegal = (numeFisier, tipContinut = 'text/html; charset=utf-8') => (_req, res) => {
+  const caleFisier = path.join(calePublic, numeFisier);
+  if (!fs.existsSync(caleFisier)) {
+    return res.status(404).json({ eroare: `Documentul legal ${numeFisier} nu a fost găsit.` });
+  }
+  res.setHeader('Content-Type', tipContinut);
+  if (tipContinut.startsWith('text/html')) {
+    res.setHeader('Content-Security-Policy', "default-src 'self'; font-src 'self' https: data:; style-src 'self' https: 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;");
+  }
+  return res.sendFile(caleFisier);
+};
+
+app.get('/privacy', trimiteDocumentLegal('politica-de-confidentialitate.html'));
+app.get('/politica-de-confidentialitate', trimiteDocumentLegal('politica-de-confidentialitate.html'));
+app.get('/politica-de-confidentialitate.html', trimiteDocumentLegal('politica-de-confidentialitate.html'));
+app.get('/privacy.html', trimiteDocumentLegal('politica-de-confidentialitate.html'));
+app.get('/terms', trimiteDocumentLegal('termeni-si-conditii.html'));
+app.get('/termeni-si-conditii', trimiteDocumentLegal('termeni-si-conditii.html'));
+app.get('/termeni-si-conditii.html', trimiteDocumentLegal('termeni-si-conditii.html'));
+app.get('/stergere-cont', trimiteDocumentLegal('stergere-cont.html'));
+app.get('/stergere-cont.html', trimiteDocumentLegal('stergere-cont.html'));
+app.get('/delete-account', trimiteDocumentLegal('stergere-cont.html'));
+app.get('/app-ads.txt', trimiteDocumentLegal('app-ads.txt', 'text/plain; charset=utf-8'));
+app.get('/', trimiteDocumentLegal('index.html'));
+app.use(express.static(calePublic));
+
 app.use((_req, res) => {
   res.status(404).json({ eroare: 'Ruta solicitată nu există (404).' });
 });

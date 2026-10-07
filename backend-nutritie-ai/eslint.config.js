@@ -13,7 +13,7 @@ const noServiceRoleBypass = createNoServiceRoleBypassRule(TABELE_CU_RLS_UTILIZAT
 
 module.exports = [
   {
-    ignores: ["node_modules/**", "coverage/**"]
+    ignores: ["node_modules/**", "coverage/**", ".trigger/**", "public/**"]
   },
   {
     files: ["**/*.js"],
