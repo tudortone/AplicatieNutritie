@@ -300,5 +300,70 @@
 - Typecheck: `tsc --noEmit` exited 0 (PASS)
 - Lint: `expo lint` exited 0 (0 errors, 23 warnings) (PASS)
 
+## TASK_5_GOOGLE_PLAY_POLICY_REJECTION_REMEDIATION
+- Status: **COMPLETE**
+- POLICY_GATE: **PASS**
+- Rejection Date: 7 Oct 2026 (com.totsrl.getflo, Developer ID `5706745523362579439`, App ID `4974041252997171498`)
+
+### 1. REVIEWER_EVIDENCE_ANALYSIS
+- **Issue 1 (User Data / Privacy Policy)**:
+  - Google Rejection: "Privacy policy rejected / revalidation - Data retention policy not specified. Your app's privacy policy does not disclose its data retention practices. State your data retention practices in your policy, or explicitly state in your policy that you do not store or retain user data."
+  - Reviewer Evidence Screenshot: `scratch/PRIVACY_POLICY-7920.png` (406 KB) showing old `telegra.ph` URL `https://telegra.ph/Politica-de-Confidentialitate--GetFlow-08-27` lacking data retention practices.
+- **Issue 2 (Unusable Functionality Policy)**:
+  - Google Rejection: "Violation of unusable functionality policy - Unresponsive UI elements, such as buttons or icons."
+  - Reviewer Evidence Screenshot: `scratch/IN_APP_EXPERIENCE-6305.png` (53.5 KB) showing `/onboarding/data-nasterii` (DOB step: "When were you born? Age changes how many calories your body burns at rest. 1 January 1995. You are 31 years old.") with red rectangle drawn around the bottom action button. The button was rendered in disabled/loading state (dim green with `ActivityIndicator`) and unresponsive to touch.
+
+### 2. ROOT_CAUSE_DIAGNOSIS
+- **Privacy Policy**:
+  - Outdated unhosted URL on `telegra.ph` completely lacked data retention periods, account deletion schedule, media purge lifecycle, Health Connect data scope, and ephemeral AI processing statements.
+- **Unusable Functionality**:
+  1. `frontend-nutritie/components/onboarding/EcranPas.tsx`:
+     - `apasareInCursRef.current` and state `apasareInCurs` were set to `true` on tap. When `router.push(urmator)` succeeded or took time, `apasareInCurs` was never reset to `false`. Any subsequent touch hit line 148 (`if (... || apasareInCursRef.current) return`), permanently disabling the button.
+     - `protectieNavigare` was initialized to `true` on mount if coming from a previous step within 700ms, causing the button to mount in disabled state with `styles.butonInactiv` (opacity 0.4) and replace `{textButon}` with `<ActivityIndicator color={colors.background} />` (appearing as a frozen dark arc on dim green).
+  2. `frontend-nutritie/app/onboarding/data-nasterii.tsx`:
+     - Wheel column `Coloana` lacked `onScrollEndDrag` (only handled `onMomentumScrollEnd`), so non-fling drags on Android stopped without committing the selection.
+     - `laContinuare()` only checked `date.dataNasterii === null` instead of ensuring the on-screen selected date was persisted.
+
+### 3. REMEDIATION_IMPLEMENTATION
+- **Privacy Policy & Public Hosting**:
+  - Created and updated `public/politica-de-confidentialitate.html` and `public/privacy.html` with explicit bilingual (EN/RO) Data Retention section:
+    - Active accounts: data retained while account is active.
+    - Account deletion: permanent and irreversible purge within 30 days of deletion request.
+    - Meal photos: stored on ImageKit CDN, purged upon meal or account deletion.
+    - Health Connect: daily aggregated steps (`android.permission.health.READ_STEPS`) read-only local display, never persisted on external servers.
+    - Ephemeral AI: Google Gemini meal queries processed ephemerally, never used for model training.
+    - Diagnostic logs: Sentry crash logs retained maximum 90 days with all PII scrubbed.
+    - Google Play Billing: purchase tokens retained for subscription duration and statutory accounting.
+  - Mounted public static routes in `backend-nutritie-ai/server.js`: `/privacy`, `/politica-de-confidentialitate`, `/terms`, `/stergere-cont`, `/app-ads.txt`.
+  - Added unit test suite `backend-nutritie-ai/tests/legal_routes.test.js` (5/5 tests PASS).
+  - Deployed live to Render production (`https://nutritie-backend-ai.onrender.com/privacy` - HTTP 200, valid SSL).
+  - Updated Google Play Console Privacy Policy URL via Chrome CDP to `https://nutritie-backend-ai.onrender.com/privacy`.
+  - Verified Play Console Publishing Overview acknowledges: "Adresa URL a politicii de confidențialitate a fost setată la https://nutritie-backend-ai.onrender.com/privacy".
+  - Updated `frontend-nutritie/.env` and `frontend-nutritie/eas.json` to point to the live HTTPS endpoints.
+- **Unresponsive Button & Wheel Drag**:
+  - `frontend-nutritie/components/onboarding/EcranPas.tsx`:
+    - Added failsafe auto-recovery timer (1200ms) to reset `apasareInCurs` and `apasareInCursRef.current` so the button can never get permanently stuck.
+    - Decoupled `protectieNavigare` from button disabled and loading spinner states.
+    - Unlocked locks and cancelled timers in `useFocusEffect`.
+    - Wrapped navigation in try/catch with fallback to `router.replace`.
+  - `frontend-nutritie/app/onboarding/data-nasterii.tsx`:
+    - Added `onScrollEndDrag` alongside `onMomentumScrollEnd`.
+    - Guaranteed synchronous persistence of selected birthdate on continue.
+
+### 4. VERIFICATION_RESULTS
+- Frontend Reviewer Path Suite: `__tests__/reproduceReviewerPath.test.tsx` (5/5 PASS)
+  - `renders PasDataNasterii with enabled Continue button and labels` (PASS)
+  - `navigates from PasDataNasterii to /onboarding/inaltime when Continue is pressed` (PASS)
+  - `supports wheel adjustments via onScrollEndDrag on Android` (PASS)
+  - `recovers button interactivity after failsafe timeout if screen remains in view` (PASS)
+  - `renders PasInaltime and navigates to /onboarding/greutate` (PASS)
+- Backend Legal Routes Suite: `tests/legal_routes.test.js` (5/5 PASS)
+- Frontend Typecheck: `tsc --noEmit` exited 0 (PASS)
+- Frontend Lint: `npx expo lint` exited 0 (PASS, 0 errors)
+- Backend Lint: `npm run lint` exited 0 (PASS, 0 errors, 0 warnings)
+- Public HTTPS Endpoint Live: `https://nutritie-backend-ai.onrender.com/privacy` returns HTTP 200 with complete data retention statement.
+- Google Play Console Status: Privacy Policy URL successfully updated and recognized in Publishing Overview.
+
+
 
 
