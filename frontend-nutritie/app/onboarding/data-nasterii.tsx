@@ -1,8 +1,5 @@
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
-	NativeScrollEvent,
-	NativeSyntheticEvent,
-	Platform,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -21,7 +18,7 @@ import { useTranslation } from 'react-i18next'
 const INALTIME_RAND = 46
 
 /** O coloana din selectorul de data, cu snap pe randuri si suport touch + click + mouse wheel. */
-function Coloana({
+export function Coloana({
 	valori,
 	etichete,
 	selectat,
@@ -38,10 +35,13 @@ function Coloana({
 }) {
 	const { colors } = useTheme()
 	const refScroll = useRef<ScrollView>(null)
-	const timerDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const indice = Math.max(0, valori.indexOf(selectat))
+	const [indiceVizual, setIndiceVizual] = useState(indice)
+	const indiceVizualRef = useRef(indice)
 
 	useEffect(() => {
+		indiceVizualRef.current = indice
+		setIndiceVizual(indice)
 		const timer = setTimeout(() => {
 			refScroll.current?.scrollTo({ y: indice * INALTIME_RAND, animated: false })
 		}, 50)
@@ -60,13 +60,11 @@ function Coloana({
 		}
 	}
 
-	const laDerulareWeb = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-		if (Platform.OS === 'web') {
-			const y = e.nativeEvent.contentOffset.y
-			if (timerDebounce.current) clearTimeout(timerDebounce.current)
-			timerDebounce.current = setTimeout(() => {
-				actualizeazaIndice(y)
-			}, 60)
+	const actualizeazaSelectiaVizuala = (y: number) => {
+		const urmatorul = Math.min(Math.max(Math.round(y / INALTIME_RAND), 0), valori.length - 1)
+		if (urmatorul !== indiceVizualRef.current) {
+			indiceVizualRef.current = urmatorul
+			setIndiceVizual(urmatorul)
 		}
 	}
 
@@ -80,8 +78,13 @@ function Coloana({
 				decelerationRate="fast"
 				contentContainerStyle={{ paddingVertical: INALTIME_RAND * 2 }}
 				scrollEventThrottle={16}
-				onScroll={laDerulareWeb}
+				onScroll={(e) => actualizeazaSelectiaVizuala(e.nativeEvent.contentOffset.y)}
+				onScrollEndDrag={(e) => {
+					actualizeazaSelectiaVizuala(e.nativeEvent.contentOffset.y)
+					actualizeazaIndice(e.nativeEvent.contentOffset.y)
+				}}
 				onMomentumScrollEnd={(e) => {
+					actualizeazaSelectiaVizuala(e.nativeEvent.contentOffset.y)
 					actualizeazaIndice(e.nativeEvent.contentOffset.y)
 				}}
 				accessible
@@ -99,7 +102,7 @@ function Coloana({
 				}}
 			>
 				{valori.map((v, i) => {
-					const activ = v === selectat
+					const activ = i === indiceVizual
 					const eticheta = etichete ? etichete[i] : String(v)
 					return (
 						<TouchableOpacity
@@ -210,7 +213,12 @@ export default function PasDataNasterii() {
 			subtitlu={t('onboarding.birthdateSubtitle')}
 			poateContinua
 			laContinuare={() => {
-				if (date.dataNasterii === null) seteaza({})
+				const luna = String(curent.luna + 1).padStart(2, '0')
+				const zi = String(curent.zi).padStart(2, "0")
+				const valoare = curent.an + "-" + luna + "-" + zi
+				if (date.dataNasterii !== valoare) {
+					actualizeaza({ dataNasterii: valoare })
+				}
 			}}
 		>
 			<View style={[styles.roataWrap, { borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}>

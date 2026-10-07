@@ -24,7 +24,6 @@ import { pasiActivi, pasulUrmator, type PasOnboarding } from './pasi'
 import {
 	anuleazaProtectieNavigare,
 	incepeProtectieNavigare,
-	protectieNavigareRamasa,
 } from '../../lib/onboardingNavigationGuard'
 
 export type EcranPasProps = {
@@ -69,7 +68,7 @@ export default function EcranPas({
 	const textInapoi = t('onboarding.back')
 	const apasareInCursRef = useRef(false)
 	const [apasareInCurs, setApasareInCurs] = useState(false)
-	const [protectieNavigare, setProtectieNavigare] = useState(() => protectieNavigareRamasa() > 0)
+	const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
 	// Stabilizare referențială: pasiActivi alocă un nou array, deci îl memoizăm după date.scop
 	const pasi = useMemo(() => pasiActivi(date.scop), [date.scop])
@@ -80,6 +79,10 @@ export default function EcranPas({
 	// NAV-BACK-001: navigare „Înapoi” logică și sigură.
 	// Depinde doar de valori semantice stabile (router, pasAnterior), NU de array-ul nou alocat pasi.
 	const handleBack = useCallback(() => {
+		if (safetyTimerRef.current) {
+			clearTimeout(safetyTimerRef.current)
+			safetyTimerRef.current = null
+		}
 		anuleazaProtectieNavigare()
 		apasareInCursRef.current = false
 		setApasareInCurs(false)
@@ -105,14 +108,9 @@ export default function EcranPas({
 	//    - rerender-urile cauzate de busy-state (setApasareInCurs) NU declanșează cleanup/re-entry!
 	useFocusEffect(
 		useCallback(() => {
-			if (apasareInCursRef.current) {
-				apasareInCursRef.current = false
-				setApasareInCurs(false)
-			}
-			if (protectieNavigareRamasa() > 0) {
-				anuleazaProtectieNavigare()
-				setProtectieNavigare(false)
-			}
+			apasareInCursRef.current = false
+			setApasareInCurs(false)
+			anuleazaProtectieNavigare()
 
 			let backSubscription: { remove: () => void } | null = null
 			if (Platform.OS === 'android') {
@@ -130,33 +128,48 @@ export default function EcranPas({
 					backSubscription.remove()
 					backSubscription = null
 				}
+				if (safetyTimerRef.current) {
+					clearTimeout(safetyTimerRef.current)
+					safetyTimerRef.current = null
+				}
 			}
 		}, [handleBack, pasAnterior, router])
 	)
 
 	useEffect(() => {
-		const ramas = protectieNavigareRamasa()
-		if (ramas <= 0) {
-			return
+		return () => {
+			if (safetyTimerRef.current) {
+				clearTimeout(safetyTimerRef.current)
+				safetyTimerRef.current = null
+			}
 		}
-		setProtectieNavigare(true)
-		const timer = setTimeout(() => setProtectieNavigare(false), ramas)
-		return () => clearTimeout(timer)
-	}, [pas])
+	}, [])
 
 	const apasa = async () => {
-		if (!poateContinua || seIncarca || apasareInCursRef.current || !incepeProtectieNavigare()) return
+		if (!poateContinua || seIncarca || apasareInCursRef.current) return
 		apasareInCursRef.current = true
 		setApasareInCurs(true)
 		try {
 			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
 		} catch {}
 
+		if (safetyTimerRef.current) {
+			clearTimeout(safetyTimerRef.current)
+		}
+		// Failsafe timer (1200ms) ca sa nu ramana NICIODATA blocat butonul daca router.push intarzie,
+		// ecranul nu se demonteaza imediat, sau utilizatorul re-incearca
+		safetyTimerRef.current = setTimeout(() => {
+			apasareInCursRef.current = false
+			setApasareInCurs(false)
+			anuleazaProtectieNavigare()
+		}, 1200)
+
 		try {
 			if (laContinuare) {
 				const rezultat = await laContinuare()
 				// Un pas care navigheaza singur returneaza false ca sa nu mergem de doua ori.
 				if (rezultat === false) {
+					if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current)
 					anuleazaProtectieNavigare()
 					apasareInCursRef.current = false
 					setApasareInCurs(false)
@@ -165,13 +178,22 @@ export default function EcranPas({
 			}
 
 			const urmator = pasulUrmator(pas, date.scop)
-			if (urmator) router.push(urmator as any)
-			else {
+			if (urmator) {
+				incepeProtectieNavigare()
+				try {
+					router.push(urmator as any)
+				} catch (navErr) {
+					console.warn('[Onboarding] router.push a esuat, fallback pe replace:', navErr)
+					router.replace(urmator as any)
+				}
+			} else {
+				if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current)
 				anuleazaProtectieNavigare()
 				apasareInCursRef.current = false
 				setApasareInCurs(false)
 			}
 		} catch (eroare) {
+			if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current)
 			anuleazaProtectieNavigare()
 			apasareInCursRef.current = false
 			setApasareInCurs(false)
@@ -232,11 +254,11 @@ export default function EcranPas({
 			<View style={styles.subsol}>
 				<TouchableOpacity
 					onPress={apasa}
-					disabled={!poateContinua || seIncarca || apasareInCurs || protectieNavigare}
-					style={[styles.buton, (!poateContinua || seIncarca || apasareInCurs || protectieNavigare) && styles.butonInactiv]}
+					disabled={!poateContinua || seIncarca || apasareInCurs}
+					style={[styles.buton, (!poateContinua || seIncarca || apasareInCurs) && styles.butonInactiv]}
 					accessibilityRole="button"
 					accessibilityLabel={textButon}
-					accessibilityState={{ disabled: !poateContinua || seIncarca || apasareInCurs || protectieNavigare, busy: seIncarca || apasareInCurs || protectieNavigare }}
+					accessibilityState={{ disabled: !poateContinua || seIncarca || apasareInCurs, busy: seIncarca || apasareInCurs }}
 				>
 					<LinearGradient
 						colors={colors.accentGradient}
@@ -244,7 +266,7 @@ export default function EcranPas({
 						end={{ x: 1, y: 0 }}
 						style={styles.butonGrad}
 					>
-						{seIncarca || apasareInCurs || protectieNavigare ? (
+						{seIncarca || apasareInCurs ? (
 							<ActivityIndicator color={colors.background} />
 						) : (
 							<>
