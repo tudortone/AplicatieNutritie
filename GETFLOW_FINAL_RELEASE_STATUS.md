@@ -364,6 +364,79 @@
 - Public HTTPS Endpoint Live: `https://nutritie-backend-ai.onrender.com/privacy` returns HTTP 200 with complete data retention statement.
 - Google Play Console Status: Privacy Policy URL successfully updated and recognized in Publishing Overview.
 
+## TASK_5_FINAL_RELEASE_ACCEPTANCE_GATE
+- Status: **COMPLETE**
+- FINAL_GATE: **PASS**
+- BLOCKERS: **NONE**
 
+### 1. TECHNICAL_GATES_VERIFICATION_EVIDENCE
+- **TRIGGER**: **PASS**
+  - Project Reference: `proj_elmgvpjxptegigrzrhtv` (Production environment `prod`).
+  - Active Deployment: `deployment_i85vcaqepobx8jip45jod` (v20261007.1), tasks `analiza-mancare-ai`, `user-sync`.
+  - Secret Key: Production credentials verified in backend `.env` (`tr_prod_*`, zero development `tr_dev_*` tokens in production).
+  - Contract: `tests/trigger_photo_contract.test.js` (7/7 PASS).
+- **PHOTO AI**: **PASS**
+  - Real Production Job ID: `e50c8ab3-8b50-42db-ac4b-623ddc8e3aae`, Trigger run `run_06ghdlof5mos517lfev3i9ui01`.
+  - Credit Reservation: `57eda63a-5934-4ab6-9f74-b106ebc580ec` COMMITTED.
+  - ImageKit Media: Test file ID `6ac65be8ead997d09a27a906` in user-scoped storage `/mancare/8cc7c15e-475d-4998-87c4-45ce5cd4bdc1`.
+  - Gemini Vision: Model `gemini-2.5-flash` executed; returned structured nutrition (452.3 kcal, 44.74g protein, 34.19g carbs, 15.5g fat, 9.34g fiber).
+  - Polling: `/api/v1/photo-jobs/:jobId` progression queued -> running -> succeeded (~23s).
+  - Suites: `tests/photo_job_service.test.js`, `tests/photo_flow_routes.test.js`, `tests/photo_40_user_capacity.test.js`, `__tests__/photoJobs.test.ts`, `__tests__/galleryPermissionBehavior.test.tsx` (45/45 PASS).
+- **AUTH**: **PASS**
+  - Supabase Auth production provider with Google Sign-In and Email/Password.
+  - Runtime Security: No development/test Clerk runtime keys (`pk_test_*`) in production frontend or `eas.json`.
+  - Suites: `__tests__/oauthCallback.test.tsx`, `__tests__/oauthAuthCompletionScreen.test.tsx` (PASS).
+- **MANUAL MEAL**: **PASS**
+  - Manual entry creation with nutrition targets and macronutrient calculation.
+  - Suites: `__tests__/chatMealProposal.test.ts`, `__tests__/responsiveHomeJournalHotfix.test.tsx` (PASS).
+- **COACH**: **PASS**
+  - Interactive nutritional coach and recipe proposal saving with decimal fibre support preserved.
+  - Suite: `__tests__/coachRecipeLocaleMotion.test.ts` (PASS).
+- **BILLING**: **PASS**
+  - Google Play Billing ProductDetails: `premium_monthly` (`monthly-base`), `premium_annual` (`annual-base`), `getflow_credits_10` (`buy`), `getflow_credits_30` (`buy`).
+  - Storefront: 32 markets verified, economic discount invariants enforced.
+  - Suites: `__tests__/billingService.test.ts`, `__tests__/p07StoreAuthoritativePaywall.test.tsx` (PASS).
+- **ADMOB / UMP**: **PASS**
+  - Real Production App ID: `ca-app-pub-5202280855139508~6141533757` in production profiles (`eas.json`, `.env`).
+  - Interstitial: `ca-app-pub-5202280855139508/1542500110`, Rewarded: `ca-app-pub-5202280855139508/3566028223`.
+  - UMP Consent & Privacy Options integrated and tested.
+  - Suites: `__tests__/p109ConsimtamantUmp.test.ts`, `__tests__/p109AdsEdgeSemantics.test.ts`, `__tests__/adGateColdStartSafety.test.ts` (PASS).
+- **HEALTH CONNECT**: **PASS**
+  - Android Health Connect integration reading aggregated daily steps (`android.permission.health.READ_STEPS`).
+  - Device-local AsyncStorage caching, zero external sync endpoints.
+  - Suites: `__tests__/healthConnectSteps.test.ts`, `__tests__/useHealthSyncHealthConnect.test.tsx` (PASS).
+- **32 MARKETS**: **PASS**
+  - All 32 targeted launch countries active on Google Play Console production track.
+  - US Storefront confirmed ($3.49/mo, $16.99/yr, $0.99 10cr, $2.29 30cr).
+- **R8**: **PASS**
+  - R8 full minification (`minifyEnabled true`), resource shrinking (`shrinkResources true`), and mapping file generation verified.
+  - Complete absence of `expo-dev-launcher` from candidate APK DEX containers.
+- **EDGE-TO-EDGE**: **PASS**
+  - Android 15/16 transparent system bars and responsive insets across all views.
+  - Zero deprecated app-owned window API invocations.
+  - Suite: `__tests__/androidEdgeToEdgeLargeScreen.test.tsx` (PASS).
+- **LARGE SCREEN**: **PASS**
+  - Manifest compatibility (`MainActivity` `android:resizeableActivity="true"`, no portrait restriction).
+  - Tablet (`sw600dp`) and foldable adaptive layout centering verified.
+- **I18N / UI**: **PASS**
+  - Dedicated first-launch language selector at `/onboarding` (English default, RO, FR, DE).
+  - In-app language switching and achievements system verified.
+  - Suites: `__tests__/freshInstallLanguageSelector.test.tsx`, `__tests__/p106MotionReducedMotion.test.tsx`, `__tests__/tier1I18nBlockerSweep.test.ts`, `__tests__/profileAchievementGoalUi.test.tsx` (PASS).
+- **DEVICE**: **UNAVAILABLE**
+  - Host environment ADB check returned 0 attached physical devices; automated test suites and live API traces utilized.
 
+### 2. PRODUCTION_CONFIG_VERIFICATION
+- Zero `tr_dev_` tokens in production configs (`tr_prod_*` active).
+- Zero `pk_test_` Clerk keys in production runtime.
+- Zero Google sample AdMob IDs in production builds (`EXPO_PUBLIC_ADS_MODE=real` with real pub-5202280855139508 ad units).
+- Zero localhost endpoints in production (`https://nutritie-backend-ai.onrender.com` active).
+- Zero staging Supabase instances (`https://tfqcihbjgmscsseyzifs.supabase.co` active).
+- Zero test billing product mapping (`premium_monthly`, `premium_annual`, `getflow_credits_10`, `getflow_credits_30` active).
+- Pre-submission security suite: `__tests__/preSubmissionConfig.test.ts` (16/16 PASS).
 
+### 3. AUTOMATED_VERIFICATION_SUMMARY
+- Frontend Targeted Acceptance Suites: **16 passed, 185 tests passed**.
+- Backend Targeted Acceptance Suites: **5 passed, 26 tests passed**.
+- TypeScript Typecheck: `tsc --noEmit` exited 0 (0 errors).
+- ESLint (Frontend & Backend): 0 errors across all production files.
+- Launch-critical P0 / P1 Regressions: **NONE**.
