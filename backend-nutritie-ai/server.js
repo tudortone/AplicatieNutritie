@@ -208,10 +208,12 @@ const webhooksLimiter = rateLimit({
 // ca Svix sa prime bytes-urile brute netransformate. O singura periere webhooksR.
 const webhooksR = createWebhooksRouter({ supabaseAdmin, config });
 const webhooksGooglePlayR = createGooglePlayWebhookRouter({
-  verifier: createGooglePubsubVerifier({
-    audience: config.googlePlay.pubsubAudience,
-    serviceAccountEmail: config.googlePlay.pubsubServiceAccountEmail,
-  }),
+  verifier: (config.googlePlay.pubsubAudience && config.googlePlay.pubsubServiceAccountEmail)
+    ? createGooglePubsubVerifier({
+        audience: config.googlePlay.pubsubAudience,
+        serviceAccountEmail: config.googlePlay.pubsubServiceAccountEmail,
+      })
+    : { verifyRequest: async () => { throw new Error('Pub/Sub unconfigured'); } },
   repo: googleBillingRepo,
   billingService: googleBillingService,
   googlePlayConfig: config.googlePlay,
@@ -601,3 +603,5 @@ if (require.main === module) {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
+
+module.exports = app;
