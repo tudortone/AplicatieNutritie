@@ -30,7 +30,7 @@ jest.mock('expo-router', () => ({
     canGoBack: () => true,
     replace: jest.fn(),
   }),
-  useFocusEffect: (cb: any) => cb(),
+  useFocusEffect: (callback: any) => require('react').useEffect(callback, [callback]),
 }));
 
 jest.mock('../context/OnboardingContext', () => ({
