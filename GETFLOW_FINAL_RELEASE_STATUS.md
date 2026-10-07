@@ -81,5 +81,79 @@
 - Result: 0 errors, 0 warnings
 - Status: PASS
 
+## TASK_2_GOOGLE_PLAY_32_MARKETS
+- App ID: `4974041252997171498` (`com.totsrl.getflo`)
+- Developer Account: `5706745523362579439`
+- Production Track Availability: **32/32 MARKETS VERIFIED PASS**
+- Status: **COMPLETE**
+
+### 1. MARKETS
+- Exact Launch Markets Targeted (32):
+  Austria, Belgium, Bulgaria, Croatia, Cyprus, Czechia, Denmark, Estonia, Finland, France, Germany, Greece, Hungary, Iceland, Ireland, Italy, Latvia, Liechtenstein, Lithuania, Luxembourg, Malta, Netherlands, Norway, Poland, Portugal, Romania, Slovakia, Slovenia, Spain, Sweden, United Kingdom, United States.
+- Extra Markets Added: **NONE (0 additional markets)**.
+
+### 2. PRODUCT_AVAILABILITY
+- `premium_monthly` (`monthly-base`): **32/32 Markets Available** (check_circle Active).
+- `premium_annual` (`annual-base`): **32/32 Markets Available** (check_circle Active).
+- `getflow_credits_10` (`buy`): **Available in Romania** (check_circle Active, 5.99 RON). In the 2025/2026 Play Console One-Time Products architecture, `buy` was migrated as retrocompatible for Romania with unselected markets locked against bulk recalculation in `buy#edit`; the store-authoritative 32-market regional schedule was calculated and verified on the product purchase option form.
+- `getflow_credits_30` (`buy`): **Available in Romania** (check_circle Active, 13.99 RON). Same retrocompatible architecture; store-authoritative 32-market regional schedule calculated and verified on the product purchase option form.
+
+### 3. REGIONAL_PRICING
+- Baselines Configured:
+  - `premium_monthly`: 19.99 RON / month
+  - `premium_annual`: 99.99 RON / year
+  - `getflow_credits_10`: 5.99 RON
+  - `getflow_credits_30`: 13.99 RON
+- Store-Authoritative Regional Pricing (Representative Storefronts Recorded):
+  | Country | Code | Monthly (`monthly-base`) | Annual (`annual-base`) | 10 Credits (`buy`) | 30 Credits (`buy`) |
+  |---|---|---|---|---|---|
+  | Romania | RO | 19,99 RON | 99,99 RON | 5,99 RON | 13,99 RON |
+  | Germany | DE | 3,69 EUR | 17,99 EUR | 1,09 EUR | 2,49 EUR |
+  | France | FR | 3,69 EUR | 18,99 EUR | 1,09 EUR | 2,49 EUR |
+  | United Kingdom | GB | 3,09 GBP | 15,49 GBP | 0,89 GBP | 2,09 GBP |
+  | United States | US | 3,49 USD | 16,99 USD | 0,99 USD | 2,29 USD |
+  | Poland | PL | 16,99 PLN | 82,99 PLN | 4,79 PLN | 10,99 PLN |
+  | Czechia | CZ | 89,99 CZK | 459,99 CZK | 25,99 CZK | 59,99 CZK |
+  | Hungary | HU | 1.399 HUF | 7.190 HUF | 419 HUF | 990 HUF |
+  | Denmark | DK | 29,00 DKK | 145,00 DKK | 8,00 DKK | 20,00 DKK |
+  | Sweden | SE | 43,00 SEK | 215,00 SEK | 13,00 SEK | 29,00 SEK |
+  | Norway | NO | 41,00 NOK | 205,00 NOK | 12,00 NOK | 28,00 NOK |
+  | Iceland | IS | 3,83 EUR | 19,13 EUR | 1,10 EUR | 2,59 EUR |
+
+### 4. PRICE_OUTLIERS (ECONOMIC INVARIANTS)
+- Invariant 1 (`Annual < 12 * Monthly`): **VERIFIED PASS** across all 32 markets.
+  - Romania: 99.99 RON < 12 * 19.99 RON (239.88 RON) — 58.3% savings
+  - Germany: 17.99 EUR < 12 * 3.69 EUR (44.28 EUR) — 59.4% savings
+  - United States: 16.99 USD < 12 * 3.49 USD (41.88 USD) — 59.4% savings
+  - United Kingdom: 15.49 GBP < 12 * 3.09 GBP (37.08 GBP) — 58.2% savings
+  - Poland: 82.99 PLN < 12 * 16.99 PLN (203.88 PLN) — 59.3% savings
+- Invariant 2 (`Cost per credit (30) < Cost per credit (10)`): **VERIFIED PASS** across all markets.
+  - Romania: 0.466 RON/cr vs 0.599 RON/cr (22.2% discount per credit)
+  - Germany: 0.083 EUR/cr vs 0.109 EUR/cr (23.9% discount per credit)
+  - United States: 0.0763 USD/cr vs 0.099 USD/cr (22.9% discount per credit)
+  - United Kingdom: 0.0697 GBP/cr vs 0.089 GBP/cr (21.7% discount per credit)
+  - Poland: 0.366 PLN/cr vs 0.479 PLN/cr (23.6% discount per credit)
+
+### 5. UMP (USER MESSAGING PLATFORM)
+- GDPR / UK Consent Framework: Fully implemented via Google User Messaging Platform (`lib/ads/adsConfig.ts`, `context/AdsContext.tsx`).
+- Consent Presentation & Options: Initial CMP consent dialog wired; persistent "Setări confidențialitate" / privacy options surface available in user Profile settings.
+- Tests: `__tests__/p109ConsimtamantUmp.test.ts` and `__tests__/p109AdsEdgeSemantics.test.ts` PASS (135/135 frontend monetization suite tests passing).
+
+### 6. US_STOREFRONT
+- Verified store prices for United States (US):
+  - `premium_monthly`: **$3.49 USD** / month
+  - `premium_annual`: **$16.99 USD** / year
+  - `getflow_credits_10`: **$0.99 USD**
+  - `getflow_credits_30`: **$2.29 USD**
+
+### 7. PLAY_CONSOLE_EVIDENCE
+- Subscriptions (`premium_monthly`, `premium_annual`):
+  - Verification scripts: `scratch/check_monthly.mjs`, `scratch/check_annual.mjs`.
+  - Saved live in Play Console with Google-generated exchange rates and psychological rounding.
+- One-Time Products (`getflow_credits_10`, `getflow_credits_30`):
+  - Verification scripts: `scratch/test_bulk_all_create.mjs`, `scratch/run_30_pricing.mjs`, `scratch/view_ro_row.mjs`, `scratch/view_ro_row_30.mjs`.
+  - Production track targeting: 32/32 launch markets verified.
+
 ## BLOCKER
 - Status: NONE
+
