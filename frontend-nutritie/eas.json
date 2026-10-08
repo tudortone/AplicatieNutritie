@@ -20,7 +20,7 @@
     "production": {
       "node": "22.20.0",
       "channel": "production",
-      "autoIncrement": true,
+      "autoIncrement": false,
       "environment": "production",
       "env": {
         "EXPO_PUBLIC_APP_ENV": "production",
