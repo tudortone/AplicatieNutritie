@@ -5,9 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Privacy Policy / Politică de Confidențialitate — GetFlow</title>
   <meta name="description" content="Official Privacy Policy and Data Retention Statement for GetFlow - Nutrition & Fitness Tracker app by T.O.T. Software S.R.L.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #090C0E;
@@ -22,7 +19,7 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       background-color: var(--bg);
       color: var(--text);
       line-height: 1.7;
@@ -77,7 +74,6 @@
       color: #090C0E;
     }
     h1 {
-      font-family: 'Outfit', sans-serif;
       font-size: 2.3rem;
       margin-bottom: 0.5rem;
       color: #FFF;
@@ -91,15 +87,13 @@
       padding-bottom: 1rem;
     }
     h2 {
-      font-family: 'Outfit', sans-serif;
-      font-size: 1.4rem;
+      font-size: 1.35rem;
       margin-top: 2.2rem;
       margin-bottom: 0.85rem;
       color: var(--accent);
       letter-spacing: -0.01em;
     }
     h3 {
-      font-family: 'Outfit', sans-serif;
       font-size: 1.15rem;
       margin-top: 1.2rem;
       margin-bottom: 0.5rem;
@@ -144,79 +138,93 @@
       <h1>Privacy Policy & Data Retention Practices</h1>
       <div class="meta-info">
         <strong>App:</strong> GetFlow — Nutrition & Fitness Tracker (<code>com.totsrl.getflo</code>)<br>
-        <strong>Developer:</strong> T.O.T. Software S.R.L. | <strong>Contact:</strong> <a href="mailto:tudortone9@gmail.com">tudortone9@gmail.com</a><br>
+        <strong>Data Controller:</strong> T.O.T. Software S.R.L. | <strong>Official Support:</strong> <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a><br>
         <strong>Effective Date:</strong> October 2026
       </div>
 
-      <p>This Privacy Policy explains how <strong>GetFlow</strong> ("we", "our", or "the App"), developed by <strong>T.O.T. Software S.R.L.</strong>, collects, uses, processes, stores, and retains your personal data in full compliance with the European Union General Data Protection Regulation (GDPR - Regulation EU 2016/679) and Google Play Developer Policy requirements.</p>
+      <p>This Privacy Policy explains how <strong>GetFlow</strong> ("we", "our", or "the App"), developed and operated by <strong>T.O.T. Software S.R.L.</strong>, collects, processes, protects, and retains your personal and health-related data in full compliance with the European Union General Data Protection Regulation (GDPR - Regulation EU 2016/679), UK GDPR, the EU AI Act (Regulation EU 2024/1689), United States state privacy and consumer health data laws (including the Washington My Health My Data Act, Nevada SB 370, CCPA/CPRA), the FTC Health Breach Notification Rule, and Google Play Developer Policies.</p>
 
-      <h2>1. Information We Collect</h2>
-      <p>To provide personalized nutrition planning, meal tracking, artificial intelligence features, and fitness monitoring, GetFlow collects the following categories of data:</p>
+      <h2>1. Age Requirement: Adults Only (18+)</h2>
+      <p><strong>GetFlow is strictly designed and offered exclusively to individuals who are at least 18 years of age.</strong> We do not offer our services to minors, nor do we knowingly collect or solicit personal data or health metrics from anyone under the age of 18. If we become aware that personal data of a person under 18 has been collected, we will take immediate steps to permanently delete such information from our systems.</p>
+
+      <h2>2. Categories of Information We Collect</h2>
+      <p>To provide personalized nutritional tracking, workout planning, AI meal analysis, and fitness metrics, GetFlow processes the following data categories:</p>
       <ul>
-        <li><strong>Account and Identification Data:</strong> Email address, name/display nickname, and unique user ID. On Android production builds, supported authentication methods are <em>Google Sign-In</em> and <em>Email/Password</em> secured by Supabase Auth.</li>
-        <li><strong>Physical & Nutritional Profile:</strong> Age, gender, height, current weight, target weight, physical activity level, daily caloric targets, and macronutrient targets (proteins, carbohydrates, fats, fiber).</li>
-        <li><strong>Food Journal & Meal Photos:</strong> Photos of meals captured via camera or selected from device gallery, uploaded strictly for nutritional estimation and food logging. Media is securely transmitted via TLS/HTTPS to our dedicated ImageKit CDN storage.</li>
-        <li><strong>Workout & Fitness Records:</strong> Exercise logs, sets, repetitions, weight values, and muscle tracking for interactive anatomical heatmaps.</li>
-        <li><strong>Physical Activity & Daily Steps (Health Connect):</strong> Daily aggregated step counts read via Android Health Connect (<code>android.permission.health.READ_STEPS</code>). This data is read-only and displayed locally to support activity tracking.</li>
-        <li><strong>Purchases & Subscriptions:</strong> Purchase tokens, Premium subscription status, and Flow Credits balances processed securely through Google Play Billing. GetFlow never collects or stores credit card numbers or financial account details.</li>
-        <li><strong>Technical Crash Diagnostics:</strong> Anonymized crash and performance diagnostics transmitted to Sentry. All Personally Identifiable Information (PII) is automatically scrubbed and redacted prior to transmission.</li>
+        <li><strong>Account Identifiers:</strong> Email address, display nickname, and unique system user ID (UUID) secured via Supabase Auth (supporting Google Sign-In and Email/Password).</li>
+        <li><strong>Physical & Nutritional Profile:</strong> Age, biological sex, height, current weight, target weight, activity level, daily calorie goals, and macronutrient targets (proteins, carbohydrates, fats, fiber).</li>
+        <li><strong>Food Journal & Meal Media:</strong> Food photos captured via camera or gallery for nutritional analysis, timestamp, meal names, and portion sizes. Meal photos are stored securely on our dedicated ImageKit CDN infrastructure.</li>
+        <li><strong>Workout & Fitness History:</strong> Workout sessions, exercises, sets, repetitions, weights, and muscle group tracking for anatomical heatmaps.</li>
+        <li><strong>Activity & Steps (Health Connect):</strong> Daily aggregated step counts read from Google Health Connect (<code>android.permission.health.READ_STEPS</code>). This data is read-only and processed locally on your device.</li>
+        <li><strong>Subscriptions & Flow Credits:</strong> Google Play Billing purchase tokens, subscription entitlement status (monthly/annual), and credit balances. We never receive or store bank card or financial account numbers.</li>
+        <li><strong>Technical Diagnostics:</strong> Crash telemetry and performance logs via Sentry. Personally Identifiable Information (PII) is automatically sanitized and redacted before transmission.</li>
+      </ul>
+
+      <h2>3. Legal Bases for Processing (GDPR & UK GDPR)</h2>
+      <p>We process your personal data under the following legal bases:</p>
+      <ul>
+        <li><strong>Performance of Contract (Article 6(1)(b) GDPR):</strong> Creating and managing your account, delivering application features, and fulfilling subscription benefits.</li>
+        <li><strong>Explicit Consent (Article 9(2)(a) GDPR):</strong> Processing special category health and fitness data (dietary intake, body metrics, fitness logs). You grant this explicit consent upon account registration and may withdraw it at any time by deleting your account or contacting us.</li>
+        <li><strong>Legal Compliance (Article 6(1)(c) GDPR):</strong> Complying with statutory accounting, tax, and regulatory obligations.</li>
+        <li><strong>Legitimate Interests (Article 6(1)(f) GDPR):</strong> Preventing fraudulent access, maintaining network security, and debugging crashes.</li>
       </ul>
 
       <div class="callout-box">
-        <h3>2. Data Retention and Deletion Practices</h3>
+        <h3>4. Data Retention and Deletion Practices</h3>
         <p>In accordance with Google Play User Data policies, our explicit data retention and disposal practices are defined as follows:</p>
         <ul>
-          <li><strong>Active Account Data:</strong> Your account profile, nutrition preferences, dietary logs, and workout history are stored and maintained for as long as your account remains active, ensuring uninterrupted tracking of your progress.</li>
-          <li><strong>Permanent Account Deletion (30-Day Purge):</strong> You may request permanent deletion of your account at any time either inside the app (<em>Profile &rarr; Data & Privacy &rarr; Delete Account Permanently</em>) or by sending an email to <a href="mailto:tudortone9@gmail.com">tudortone9@gmail.com</a>. Upon receiving a deletion request, all personal identifiers, profile records, dietary logs, workout entries, and credit balances are permanently and irreversibly purged from our Supabase databases within <strong>30 calendar days</strong>.</li>
-          <li><strong>Meal Photo Media Purging:</strong> Food photos stored on ImageKit CDN are retained while your account remains active. When you delete your account, all associated media files and meal photographs are permanently removed from ImageKit storage.</li>
-          <li><strong>Health Connect Step Data:</strong> Step counts retrieved via Google Health Connect are cached locally on your device for immediate display; they are not permanently stored on external database servers and can be wiped instantly by clearing app storage or uninstalling the app.</li>
-          <li><strong>Ephemeral AI Queries:</strong> Images and text queries sent to Google Gemini for AI meal recognition are processed ephemerally solely to return the immediate nutritional analysis. GetFlow does not retain your food pictures to train public AI models.</li>
-          <li><strong>Diagnostic Log Retention:</strong> Anonymized crash reports on Sentry are retained for a maximum rolling window of <strong>90 days</strong>, after which they are automatically purged.</li>
+          <li><strong>Active Account Data:</strong> Stored while your account remains active to provide continuous progress tracking.</li>
+          <li><strong>Permanent Account Deletion (30-Day Purge):</strong> You may permanently delete your account at any time in-app (<em>Profile &rarr; Data & Privacy &rarr; Delete Account Permanently</em>) or by emailing <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a>. Upon request, all personal identifiers, profile data, dietary logs, fitness history, and credits are permanently and irreversibly purged from our database within <strong>30 calendar days</strong>.</li>
+          <li><strong>Meal Photo Cleanup:</strong> When you delete your account, all associated food images stored on ImageKit CDN are permanently removed.</li>
+          <li><strong>Health Connect Step Data:</strong> Cached locally on your device for immediate display; never transmitted to our external databases and can be cleared instantly via device settings or app uninstall.</li>
+          <li><strong>Ephemeral AI Queries:</strong> Images and text queries sent to Google Gemini for AI meal recognition are processed ephemerally solely to return nutritional analysis. Google does not use your food images to train foundation models under commercial API developer terms.</li>
+          <li><strong>Diagnostics Retention:</strong> Anonymized crash logs on Sentry are retained for a rolling maximum of <strong>90 days</strong> before automated deletion.</li>
         </ul>
       </div>
 
-      <h2>3. Google Health Connect Policy Disclosure</h2>
-      <p>GetFlow's use of information received from Google Health Connect adheres to the <a href="https://support.google.com/googleplay/android-developer/answer/9888379" target="_blank" rel="noopener">Health Connect Permissions Policy</a>, including the Limited Use requirements:</p>
+      <h2>5. Google Health Connect Policy Disclosure</h2>
+      <p>GetFlow's use of data received from Google Health Connect adheres to the Google Health Connect Permissions Policy, including Limited Use requirements:</p>
       <ul>
         <li>We only request read access to daily step counts (<code>android.permission.health.READ_STEPS</code>).</li>
-        <li>Health Connect data is used solely to display your daily step progress alongside your nutrition targets.</li>
-        <li>We never sell, rent, or transfer Health Connect data to third-party data brokers or advertising platforms.</li>
-        <li>We never use Health Connect data to serve targeted advertising or determine creditworthiness.</li>
+        <li>Health Connect step data is used exclusively to display daily activity progress alongside nutrition goals.</li>
+        <li>We never sell, rent, or transfer Health Connect data to third-party data brokers, ad networks, or credit agencies.</li>
+        <li>Health Connect data is never used for advertising, personalized marketing, or profiling.</li>
       </ul>
 
-      <h2>4. Third-Party Service Providers</h2>
-      <p>We do not sell personal information. We partner exclusively with vetted infrastructure providers bound by strict confidentiality and data protection agreements:</p>
+      <h2>6. United States Consumer Health Data & State Privacy Notice</h2>
+      <p>This section applies to residents of Washington (under the Washington My Health My Data Act, RCW 19.373), Nevada (under Nevada SB 370), California (under CCPA/CPRA), Connecticut, Texas, Virginia, and other US states with enacted privacy laws:</p>
       <ul>
-        <li><strong>Supabase Inc.:</strong> Primary relational database hosted in the European Union (Germany), secured with Row Level Security (RLS) policies and end-to-end encryption.</li>
-        <li><strong>Google LLC:</strong>
-          <ul>
-            <li><em>Google Play Billing:</em> In-app purchases and subscriptions management.</li>
-            <li><em>Google Play Integrity API:</em> Application security and anti-abuse verification.</li>
-            <li><em>Google AdMob &amp; Google UMP:</em> Privacy-compliant banner and interstitial ads for free-tier users, subject to explicit consent.</li>
-            <li><em>Google Cloud / Gemini API:</em> Vision AI for ephemeral nutritional estimation.</li>
-          </ul>
-        </li>
-        <li><strong>ImageKit:</strong> Secure image storage and CDN distribution for meal photographs.</li>
-        <li><strong>Functional Software, Inc. (Sentry):</strong> Application error tracking with automated PII sanitization.</li>
+        <li><strong>Consumer Health Data Collected:</strong> Nutritional intake, body measurements, physical fitness logs, and daily step counts.</li>
+        <li><strong>Purpose of Processing:</strong> Exclusively to provide fitness and nutrition tracking requested by you.</li>
+        <li><strong>No Sale or Behavioral Sharing:</strong> GetFlow does <strong>NOT</strong> sell personal or consumer health data, and does <strong>NOT</strong> share such data for cross-context behavioral advertising.</li>
+        <li><strong>No Geofencing:</strong> GetFlow does not use geofencing technology around healthcare facilities.</li>
+        <li><strong>Your US Rights:</strong> You have the right to know, access, correct, and delete your consumer health data, and withdraw previously given consent. To exercise your rights, email <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a>.</li>
       </ul>
 
-      <h2>5. Security of Your Data</h2>
-      <p>All network communications between the GetFlow mobile app and backend endpoints are strictly encrypted using TLS 1.3 (HTTPS). Data access in the database is strictly partitioned per user using Supabase Row Level Security (RLS), preventing any unauthorized cross-account access.</p>
+      <h2>7. FTC Health Breach Notification Rule Compliance</h2>
+      <p>GetFlow is a direct-to-consumer health and wellness application and vendor of personal health records (PHRs) subject to the Federal Trade Commission (FTC) Health Breach Notification Rule (16 CFR Part 318). GetFlow is not a covered entity or business associate under HIPAA. In the unlikely event of an unauthorized acquisition of unsecured identifiable health data, GetFlow will notify affected individuals and the FTC in accordance with statutory requirements without unreasonable delay.</p>
 
-      <h2>6. Your Rights and Account Deletion</h2>
-      <p>Under GDPR and Google Play policies, you have the right to access, rectify, export, and delete your personal data. You can exercise these rights via:</p>
-      <ol>
-        <li><strong>In-App:</strong> Go to <em>Profile &rarr; Data & Privacy &rarr; Delete Account Permanently</em>.</li>
-        <li><strong>Web / Email:</strong> Visit our public <a href="/stergere-cont.html">Account Deletion Page</a> or email us directly at <a href="mailto:tudortone9@gmail.com">tudortone9@gmail.com</a>.</li>
-      </ol>
+      <h2>8. AI Transparency & Safety (EU AI Act Art. 50)</h2>
+      <p>GetFlow Coach is an artificial intelligence assistant designed to offer general nutrition and fitness suggestions. It is <strong>NOT</strong> a medical doctor, licensed dietitian, or healthcare professional. Coach suggestions are for informational and educational purposes only and do not constitute clinical medical advice or diagnosis.</p>
 
-      <h2>7. Health & Nutritional Disclaimer</h2>
-      <p>GetFlow is an informational fitness and nutrition logging tool. It is <strong>NOT</strong> a medical device and does <strong>NOT</strong> provide medical diagnoses, treatment, or clinical recommendations. Always consult a qualified physician or healthcare provider before undertaking any diet, fasting, or intensive fitness routine.</p>
+      <h2>9. European Accessibility Act (Directive EU 2019/882)</h2>
+      <p>T.O.T. Software S.R.L. is a microenterprise under European Commission Recommendation 2003/361/EC (employing fewer than 10 persons with annual turnover under EUR 2,000,000), qualifying for the statutory microenterprise exemption under Article 4(5) of Directive (EU) 2019/882. Regardless of exemption, GetFlow adheres to high accessibility standards, including scalable text, screen reader labels, and reduced motion settings.</p>
 
-      <h2>8. Contact Information</h2>
-      <p>If you have any questions, requests, or privacy inquiries, please contact our data protection team directly:</p>
-      <p><strong>Email:</strong> <a href="mailto:tudortone9@gmail.com">tudortone9@gmail.com</a><br>
-      <strong>Company:</strong> T.O.T. Software S.R.L.</p>
+      <h2>10. Third-Party Service Providers (Subprocessors)</h2>
+      <p>We work exclusively with vetted infrastructure providers bound by Data Processing Addenda (DPAs) and Standard Contractual Clauses (SCCs):</p>
+      <ul>
+        <li><strong>Supabase Inc.:</strong> Core database hosted in the European Union (Frankfurt, Germany) with Row Level Security.</li>
+        <li><strong>Google LLC:</strong> Gemini API (ephemeral vision analysis), Google Play Billing, Google Play Integrity, and AdMob/UMP (with strict consent). EU-U.S. Data Privacy Framework certified.</li>
+        <li><strong>ImageKit:</strong> Secure image CDN and media storage.</li>
+        <li><strong>Trigger.dev Inc.:</strong> Background execution orchestration.</li>
+        <li><strong>Functional Software, Inc. (Sentry):</strong> Error diagnostics with PII scrubbing. EU-U.S. DPF certified.</li>
+        <li><strong>Render Services Inc.:</strong> Backend API hosting. EU-U.S. DPF certified.</li>
+      </ul>
+
+      <h2>11. Contact Information</h2>
+      <p>For any questions, requests, or to exercise your GDPR or US privacy rights:</p>
+      <p><strong>Email:</strong> <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a><br>
+      <strong>Company:</strong> T.O.T. Software S.R.L.<br>
+      <strong>Country:</strong> Romania, European Union</p>
     </div>
 
     <!-- ROMANIAN CONTENT -->
@@ -224,79 +232,74 @@
       <h1>Politică de Confidențialitate și Păstrare a Datelor</h1>
       <div class="meta-info">
         <strong>Aplicație:</strong> GetFlow — Nutriție & Fitness (<code>com.totsrl.getflo</code>)<br>
-        <strong>Dezvoltator:</strong> T.O.T. Software S.R.L. | <strong>Contact:</strong> <a href="mailto:tudortone9@gmail.com">tudortone9@gmail.com</a><br>
+        <strong>Operator de date:</strong> T.O.T. Software S.R.L. | <strong>E-mail suport oficial:</strong> <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a><br>
         <strong>Data intrării în vigoare:</strong> Octombrie 2026
       </div>
 
-      <p>Această Politică de Confidențialitate explică modul în care aplicația mobilă <strong>GetFlow</strong> (denumită în continuare „Aplicația”), dezvoltată de <strong>T.O.T. Software S.R.L.</strong>, colectează, utilizează, prelucrează, stochează și păstrează datele dvs. cu caracter personal în conformitate cu Regulamentul General privind Protecția Datelor (GDPR - Regulamentul UE 2016/679) și cerințele politicilor Google Play.</p>
+      <p>Această Politică de Confidențialitate explică modul în care aplicația <strong>GetFlow</strong>, dezvoltată și operată de <strong>T.O.T. Software S.R.L.</strong>, colectează, prelucrează, protejează și păstrează datele dvs. personale și de sănătate/fitness în conformitate cu Regulamentul General privind Protecția Datelor (GDPR - Regulamentul UE 2016/679), Legea UE privind Inteligența Artificială (Regulamentul UE 2024/1689), normele privind protecția datelor din SUA și cerințele Google Play.</p>
 
-      <h2>1. Datele pe care le colectăm</h2>
-      <p>Pentru a furniza serviciile de jurnal nutrițional, asistență nutrițională inteligentă și monitorizare a activității fizice, colectăm următoarele categorii de date:</p>
+      <h2>1. Cerință de Vârstă: Exclusiv Adulți (18+)</h2>
+      <p><strong>GetFlow este destinat exclusiv persoanelor care au împlinit vârsta de 18 ani.</strong> Nu oferim servicii minorilor și nu colectăm cu bună știință date cu caracter personal sau indicatori de sănătate de la persoane sub 18 ani. În cazul identificării datelor unui minor, acestea vor fi șterse definitiv și imediat din sistemele noastre.</p>
+
+      <h2>2. Categorii de Date Colectate</h2>
+      <p>Pentru a asigura funcționarea jurnalului nutrițional, analiza meselor cu AI și planificarea antrenamentelor, prelucrăm următoarele date:</p>
       <ul>
-        <li><strong>Informații de cont și autentificare:</strong> Adresa de e-mail, numele de profil și identificatorul unic de utilizator. În cadrul aplicației Android pentru producție, metodele de autentificare disponibile sunt <em>Autentificarea cu Google (Google Sign-In)</em> și <em>Autentificarea cu e-mail și parolă</em> securizată prin Supabase Auth.</li>
-        <li><strong>Date nutriționale și de profil fizic:</strong> Vârstă, sex, înălțime, greutate curentă, greutate țintă, nivel de activitate fizică, necesar caloric zilnic și obiective de macronuțrienți (proteine, carbohidrați, grăsimi, fibre).</li>
-        <li><strong>Fotografii ale meselor (Media / Cameră):</strong> Fotografii ale mâncării capturate cu camera sau selectate voluntar din galerie, utilizate exclusiv pentru analiza nutrițională automată și înregistrarea în jurnalul alimentar. Încărcarea se realizează prin canal criptat HTTPS către serviciul de stocare securizat ImageKit.</li>
-        <li><strong>Jurnal de antrenamente și activitate:</strong> Exercițiile fizice efectuate, seriile, repetările, greutățile ridicate și istoricul muscular pentru reprezentarea hărții anatomice.</li>
-        <li><strong>Activitate fizică și pași zilnici (Health Connect):</strong> Numărul zilnic de pași agregați citit prin intermediul Google Health Connect (<code>android.permission.health.READ_STEPS</code>). Aceste date sunt doar de citire și sunt afișate local pentru a sprijini monitorizarea activității.</li>
-        <li><strong>Informații despre achiziții și abonamente:</strong> Tokenuri de achiziție, starea abonamentului Premium și balanța de Credite Flow, gestionate și verificate prin Google Play Billing. GetFlow nu colectează și nu stochează niciodată numere de card bancar sau date financiare sensibile.</li>
-        <li><strong>Diagnostic tehnic și telemetrie:</strong> Rapoarte anonimizate de erori (crash diagnostics) transmise către Sentry pentru stabilitatea aplicației. Datele cu caracter personal identificabile (PII) sunt filtrate și eliminate automat înainte de transmitere.</li>
+        <li><strong>Date de cont:</strong> Adresă de e-mail, pseudonim afișat și identificator unic de cont (UUID) gestionate prin Supabase Auth.</li>
+        <li><strong>Profil fizic și nutrițional:</strong> Vârstă, sex biologic, înălțime, greutate curentă, greutate țintă, nivel de activitate, obiective calorice și macronuțrienți (proteine, carbohidrați, grăsimi, fibre).</li>
+        <li><strong>Jurnal alimentar și fotografii ale meselor:</strong> Poze cu mâncarea realizate cu camera foto sau selectate din galerie, denumiri de alimente, gramaje și estimări nutritive. Imaginile sunt stocate securizat pe CDN-ul dedicat ImageKit.</li>
+        <li><strong>Jurnal de fitness și antrenamente:</strong> Sesiuni de exerciții, serii, repetări, greutăți utilizate și grupe musculare lucrate pentru harta anatomică.</li>
+        <li><strong>Activitate fizică și pași (Health Connect):</strong> Numărul zilnic de pași agregați citit prin Google Health Connect (<code>android.permission.health.READ_STEPS</code>), procesat exclusiv local pe telefon.</li>
+        <li><strong>Abonamente și Credite Flow:</strong> Jetoane de achiziție Google Play Billing, starea abonamentului Premium (lunar/anual) și balanța de credite. Nu colectăm date bancare sau numere de card.</li>
+        <li><strong>Diagnostic tehnic:</strong> Jurnale de eroare transmise către Sentry, anonimizate complet de orice date PII înainte de expediere.</li>
+      </ul>
+
+      <h2>3. Temeiul Legal al Prelucrării (GDPR)</h2>
+      <p>Prelucrăm datele dvs. în baza:</p>
+      <ul>
+        <li><strong>Executării contractului (Art. 6(1)(b) GDPR):</strong> Furnizarea serviciilor aplicației și gestionarea contului.</li>
+        <li><strong>Consimțământului explicit (Art. 9(2)(a) GDPR):</strong> Prelucrarea datelor speciale privind sănătatea și nutriția (greutate, mese, calorii, antrenamente). Puteți retrage consimțământul oricând prin ștergerea contului.</li>
+        <li><strong>Obligațiilor legale (Art. 6(1)(c) GDPR):</strong> Conformitatea cu legislația financiar-fiscală.</li>
+        <li><strong>Interesului legitim (Art. 6(1)(f) GDPR):</strong> Securitatea cibernetică și prevenirea abuzurilor.</li>
       </ul>
 
       <div class="callout-box">
-        <h3>2. Practici de Păstrare și Ștergere a Datelor (Retenția Datelor)</h3>
-        <p>În conformitate cu politicile Google Play privind datele utilizatorilor, practicile noastre explicite privind păstrarea și eliminarea datelor sunt următoarele:</p>
+        <h3>4. Păstrarea și Ștergerea Datelor (Retenție)</h3>
+        <p>Practicile noastre explicite de retenție a datelor:</p>
         <ul>
-          <li><strong>Datele Contului Activ:</strong> Informațiile de profil, preferințele nutriționale, mesele salvate și jurnalul de fitness sunt păstrate pe întreaga durată în care contul dvs. rămâne activ, pentru a asigura continuitatea monitorizării.</li>
-          <li><strong>Ștergerea Definitivă a Contului (Termen de 30 de Zile):</strong> Puteți solicita ștergerea definitivă a contului în orice moment, fie direct din aplicație (<em>Profil &rarr; Date & Confidențialitate &rarr; Șterge contul definitiv</em>), fie prin solicitare la <a href="mailto:tudortone9@gmail.com">tudortone9@gmail.com</a>. La primirea cererii, toate datele de identificare, înregistrările din profil, jurnalul alimentar, datele de fitness și creditele asociate sunt eliminate permanent și ireversibil din bazele de date Supabase în termen de maximum <strong>30 de zile calendaristice</strong>.</li>
-          <li><strong>Eliminarea Imaginilor cu Mese:</strong> Fotografiile încărcate pe CDN-ul ImageKit sunt păstrate pe durata activității contului. Când vă ștergeți contul, toate fișierele foto asociate sunt eliminate definitiv din spațiul de stocare ImageKit.</li>
-          <li><strong>Datele Health Connect:</strong> Pașii preluați prin Google Health Connect sunt păstrați local în memoria cache a dispozitivului; aceștia nu sunt persistați pe serverele backend externe și pot fi șterși oricând prin ștergerea datelor aplicației sau dezinstalare.</li>
-          <li><strong>Procesare Efemeră AI:</strong> Imaginile și textul transmise către modelele Google Gemini pentru recunoașterea meselor sunt prelucrate efemer strict pentru a furniza analiza nutrițională imediată. GetFlow nu stochează și nu folosește fotografiile meselor dvs. pentru antrenarea modelelor publice de inteligență artificială.</li>
-          <li><strong>Păstrarea Jurnalelor de Diagnostic:</strong> Rapoartele tehnice de eroare transmise către Sentry sunt păstrate pentru o perioadă de maximum <strong>90 de zile</strong>, după care sunt șterse automat.</li>
+          <li><strong>Conturi Active:</strong> Datele sunt păstrate pe durata activității contului pentru asigurarea istoricului de progres.</li>
+          <li><strong>Ștergerea Definitivă a Contului (Termen Maxim de 30 de Zile):</strong> Puteți șterge contul oricând din aplicație (<em>Profil &rarr; Date & Confidențialitate &rarr; Șterge contul definitiv</em>) sau scriind la <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a>. Toate datele de profil, mesele, antrenamentele și creditele sunt șterse permanent și ireversibil în maximum <strong>30 de zile calendaristice</strong>.</li>
+          <li><strong>Curățarea Imaginilor cu Mâncare:</strong> La ștergerea contului, toate pozele asociate de pe CDN-ul ImageKit sunt eliminate definitiv.</li>
+          <li><strong>Datele Health Connect:</strong> Stocate exclusiv local pe telefon; nu sunt trimise pe serverele noastre și pot fi șterse prin curățarea stocării aplicației.</li>
+          <li><strong>Procesare Efemeră AI:</strong> Pozele transmise la Google Gemini sunt procesate efemer strict pentru estimarea nutrițională. Google nu utilizează fotografiile pentru antrenarea modelelor de bază.</li>
+          <li><strong>Jurnale Tehnice:</strong> Rapoartele de eroare Sentry sunt păstrate maximum <strong>90 de zile</strong>, după care sunt eliminate automat.</li>
         </ul>
       </div>
 
-      <h2>3. Declarație privind Politica Google Health Connect</h2>
-      <p>Utilizarea datelor primite prin Google Health Connect respectă <a href="https://support.google.com/googleplay/android-developer/answer/9888379" target="_blank" rel="noopener">Politica de Permisiuni Health Connect</a>, inclusiv cerințele de Utilizare Limitată:</p>
+      <h2>5. Declarație Google Health Connect</h2>
+      <p>Utilizarea datelor primite prin Google Health Connect respectă cerințele de Utilizare Limitată:</p>
       <ul>
-        <li>Solicităm exclusiv acces de citire pentru pașii zilnici agregați (<code>android.permission.health.READ_STEPS</code>).</li>
-        <li>Datele sunt utilizate strict pentru a vă afișa progresul zilnic alături de obiectivele nutriționale.</li>
-        <li>Nu vindem, nu închiriem și nu transferăm datele Health Connect către brokeri de date terți sau rețele publicitare.</li>
-        <li>Nu folosim datele Health Connect pentru reclame direcționate sau evaluarea solvabilității.</li>
+        <li>Solicităm exclusiv permisiunea de citire a pașilor zilnici (<code>android.permission.health.READ_STEPS</code>).</li>
+        <li>Datele sunt utilizate strict pentru afișarea pașilor alături de obiectivele nutriționale.</li>
+        <li>Nu vindem și nu transferăm datele Health Connect către agenții publicitare sau brokeri de date.</li>
       </ul>
 
-      <h2>4. Furnizori Terți de Servicii</h2>
-      <p>GetFlow nu vinde datele personale. Colaborăm exclusiv cu furnizori tehnici de încredere, protejați prin acorduri de confidențialitate:</p>
-      <ul>
-        <li><strong>Supabase Inc.:</strong> Baza de date primară găzduită în Uniunea Europeană (Germania), protejată prin politici Row Level Security (RLS) și criptare la nivel de rând.</li>
-        <li><strong>Google LLC:</strong>
-          <ul>
-            <li><em>Google Play Billing:</em> Gestionarea plăților și a abonamentelor.</li>
-            <li><em>Google Play Integrity API:</em> Verificarea integrității și prevenirea fraudelor.</li>
-            <li><em>Google AdMob &amp; Google UMP:</em> Reclame banner și interstițiale conforme pentru utilizatorii gratuiți.</li>
-            <li><em>Google Cloud / Gemini API:</em> Modele de viziune computerizată pentru analiza efemeră a meselor.</li>
-          </ul>
-        </li>
-        <li><strong>ImageKit:</strong> CDN și stocare securizată pentru fotografiile meselor din jurnal.</li>
-        <li><strong>Functional Software, Inc. (Sentry):</strong> Monitorizarea tehnică a erorilor și a crash-urilor aplicației, cu filtrare automată a datelor PII.</li>
-      </ul>
+      <h2>6. Notificare privind Datele de Sănătate ale Consumatorilor (SUA)</h2>
+      <p>Pentru utilizatorii din statele americane (Washington MHMDA, Nevada SB 370, California CCPA/CPRA): GetFlow colectează date nutriționale și de fitness strict pentru furnizarea serviciului solicitat. GetFlow <strong>NU</strong> vinde aceste date și <strong>NU</strong> le partajează în scopuri publicitare comportamentale. Nu utilizăm delimitări geografice (geofencing) în jurul unităților medicale.</p>
 
-      <h2>5. Securitatea Datelor</h2>
-      <p>Toate comunicațiile dintre aplicația GetFlow și serverele backend se realizează exclusiv prin protocoale securizate criptate SSL/TLS 1.3 (HTTPS). Datele sunt izolate per utilizator prin politici stricte de securitate RLS (Row Level Security) în baza de date Supabase, împiedicând accesul neautorizat.</p>
+      <h2>7. Conformitate cu Regula FTC privind Notificarea Breșelor de Sănătate</h2>
+      <p>GetFlow este o aplicație directă către consumator supusă Regulii FTC privind Notificarea Breșelor de Date de Sănătate (16 CFR Partea 318). GetFlow nu este o entitate acoperită de HIPAA. În eventualitatea unei breșe care afectează date de sănătate necriptate, GetFlow va notifica utilizatorii afectați și FTC în termenele legale.</p>
 
-      <h2>6. Drepturile Dvs. și Ștergerea Contului</h2>
-      <p>În conformitate cu GDPR și politicile Google Play, beneficiați de dreptul de acces, rectificare, portabilitate și ștergere definitivă a datelor dvs. personale („dreptul de a fi uitat”). Puteți exercita aceste drepturi:</p>
-      <ol>
-        <li><strong>Direct din aplicație:</strong> Accesați ecranul <em>Profil &rarr; Date & Confidențialitate &rarr; Șterge contul definitiv</em>.</li>
-        <li><strong>Web / E-mail:</strong> Accesați pagina publică <a href="/stergere-cont.html">Ștergere Cont</a> sau trimiteți o cerere la <a href="mailto:tudortone9@gmail.com">tudortone9@gmail.com</a>.</li>
-      </ol>
+      <h2>8. Transparență Inteligență Artificială (Legea UE privind IA Art. 50)</h2>
+      <p>GetFlow Coach este un asistent de inteligență artificială. <strong>NU</strong> este medic, nutriționist sau dietetician autorizat. Sugestiile generate au caracter orientativ și educativ și nu constituie recomandări medicale sau diagnostice.</p>
 
-      <h2>7. Declinare de Responsabilitate Medicală</h2>
-      <p>GetFlow este un instrument informativ de monitorizare nutrițională și de fitness. <strong>NU</strong> este un dispozitiv medical și <strong>NU</strong> oferă sfaturi, diagnostic sau tratamente medicale. Consultați întotdeauna un medic specialist înainte de a începe un regim alimentar sau un program intensiv de exerciții.</p>
+      <h2>9. Directiva Europeană privind Accesibilitatea (Directiva UE 2019/882)</h2>
+      <p>T.O.T. Software S.R.L. se încadrează în categoria microîntreprinderilor (sub 10 angajați și cifră de afaceri sub 2 milioane EUR), beneficiind de scutirea legală prevăzută la Art. 4(5) din Directiva (UE) 2019/882. Totuși, aplicația implementează cele mai bune practici de accesibilitate mobilă.</p>
 
-      <h2>8. Date de Contact</h2>
-      <p>Pentru orice întrebare, solicitare de exercitare a drepturilor GDPR sau nelămurire legată de această politică de confidențialitate, ne puteți contacta direct:</p>
-      <p><strong>E-mail suport:</strong> <a href="mailto:tudortone9@gmail.com">tudortone9@gmail.com</a><br>
-      <strong>Companie:</strong> T.O.T. Software S.R.L.</p>
+      <h2>10. Date de Contact</h2>
+      <p>Pentru orice solicitare privind confidențialitatea sau exercitarea drepturilor:</p>
+      <p><strong>E-mail suport oficial:</strong> <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a><br>
+      <strong>Companie:</strong> T.O.T. Software S.R.L.<br>
+      <strong>Țară:</strong> România, Uniunea Europeană</p>
     </div>
 
     <footer>
@@ -324,7 +327,6 @@
         document.documentElement.lang = 'en';
       }
     }
-    // Auto-detect hash
     if (window.location.hash === '#ro') {
       switchLang('ro');
     }

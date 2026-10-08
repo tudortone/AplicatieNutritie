@@ -9,7 +9,7 @@ describe('Legal Documents & Public Static Routes', () => {
     expect(res.text).toContain('Data Retention and Deletion Practices');
     expect(res.text).toContain('android.permission.health.READ_STEPS');
     expect(res.text).toContain('30 calendar days');
-    expect(res.text).toContain('tudortone9@gmail.com');
+    expect(res.text).toContain('supportgetflow@gmail.com');
   });
 
   test('GET /politica-de-confidentialitate returns 200 HTML', async () => {

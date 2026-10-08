@@ -15,7 +15,7 @@ import { getLegalUrls } from '../lib/legalUrls';
 
 // Operator și suport: configurabile prin variabile de mediu fără date fabricate.
 const OPERATOR_NAME = process.env.EXPO_PUBLIC_LEGAL_OPERATOR_NAME?.trim() || null;
-const EMAIL_SUPORT = process.env.EXPO_PUBLIC_SUPPORT_EMAIL?.trim() || 'tudortone9@gmail.com';
+const EMAIL_SUPORT = process.env.EXPO_PUBLIC_SUPPORT_EMAIL?.trim() || 'supportgetflow@gmail.com';
 
 export default function LegalScreen() {
   const insets = useSafeAreaInsets();

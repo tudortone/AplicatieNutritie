@@ -1,12 +1,10 @@
 <!DOCTYPE html>
-<html lang="ro">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Termeni și Condiții — GetFlow</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <title>Terms of Service / Termeni și Condiții — GetFlow</title>
+  <meta name="description" content="Official Terms of Service for GetFlow Nutrition & Fitness Tracker by T.O.T. Software S.R.L.">
   <style>
     :root {
       --bg: #090C0E;
@@ -18,7 +16,7 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       background-color: var(--bg);
       color: var(--text);
       line-height: 1.7;
@@ -33,6 +31,14 @@
       padding: 3rem 2.5rem;
       backdrop-filter: blur(12px);
     }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
     .nav-back {
       display: inline-flex;
       align-items: center;
@@ -40,25 +46,47 @@
       color: var(--accent);
       text-decoration: none;
       font-weight: 600;
-      margin-bottom: 2rem;
+    }
+    .lang-switcher {
+      display: inline-flex;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      padding: 3px;
+      gap: 4px;
+    }
+    .lang-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 6px 16px;
+      border-radius: 9999px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
+    }
+    .lang-btn.active {
+      background: var(--accent);
+      color: #090C0E;
     }
     h1 {
-      font-family: 'Outfit', sans-serif;
       font-size: 2.2rem;
       margin-bottom: 0.5rem;
       color: #FFF;
     }
     .date { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
     h2 {
-      font-family: 'Outfit', sans-serif;
       font-size: 1.35rem;
       margin-top: 2rem;
       margin-bottom: 0.75rem;
       color: #10B981;
     }
-    p, ul { color: #D1D5DB; margin-bottom: 1rem; font-size: 1rem; }
-    ul { padding-left: 1.5rem; }
+    p, ul, ol { color: #D1D5DB; margin-bottom: 1rem; font-size: 1rem; }
+    ul, ol { padding-left: 1.5rem; }
     li { margin-bottom: 0.5rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
     footer {
       text-align: center;
       margin-top: 3rem;
@@ -69,34 +97,104 @@
 </head>
 <body>
   <div class="container">
-    <a href="/index.html" class="nav-back">&larr; Înapoi la pagina principală</a>
+    <div class="top-bar">
+      <a href="/" class="nav-back">&larr; GetFlow Home</a>
+      <div class="lang-switcher">
+        <button id="btn-en" class="lang-btn active" onclick="switchLang('en')">English</button>
+        <button id="btn-ro" class="lang-btn" onclick="switchLang('ro')">Română</button>
+      </div>
+    </div>
     
-    <h1>Termeni și Condiții de Utilizare</h1>
-    <div class="date">Ultima actualizare: 3 August 2026</div>
+    <!-- ENGLISH TERMS -->
+    <div id="content-en">
+      <h1>Terms of Service</h1>
+      <div class="date">Effective Date: October 2026 | Developer: T.O.T. Software S.R.L.</div>
 
-    <p>Prin descărcarea, accesarea sau utilizarea aplicației <strong>GetFlow</strong>, sunteți de acord să respectați acești Termeni și Condiții.</p>
+      <p>Welcome to <strong>GetFlow</strong>. By downloading, accessing, or using GetFlow, you agree to be bound by these Terms of Service. If you do not agree, please do not use the application.</p>
 
-    <h2>1. Declinarea Răspunderii Medicale</h2>
-    <p><strong>Aplicația GetFlow nu furnizează sfaturi medicale.</strong> Informațiile, estimările calorice și sugestiile nutriționale generate de sistemele de Inteligență Artificială au scop exclusiv informativ și educațional. Acestea nu înlocuiesc consultul, diagnosticul sau tratamentul medical de specialitate. Consultați un medic sau un nutriționist autorizat înainte de a începe orice dietă strictă sau program intensiv de antrenament.</p>
+      <h2>1. Age Requirement: Adults Only (18+)</h2>
+      <p>GetFlow is intended exclusively for users who are at least 18 years of age. By creating an account or using the app, you confirm and warrant that you are at least 18 years old.</p>
 
-    <h2>2. Contul de Utilizator</h2>
-    <p>Sunteți responsabil pentru păstrarea confidențialității datelor de acces la contul dvs. și pentru toate activitățile desfășurate în cadrul acestuia. Ne rezervăm dreptul de a suspenda conturile care încalcă termenii de utilizare.</p>
+      <h2>2. Medical & AI Disclaimers</h2>
+      <p><strong>GetFlow is an informational wellness and fitness tool, NOT a medical device.</strong> GetFlow Coach is an artificial intelligence assistant. Estimates, calorie calculations, and nutritional recommendations are for educational and fitness purposes only and do not constitute medical advice, diagnosis, or clinical treatment. Always consult a licensed physician or healthcare professional before embarking on any diet or fitness program.</p>
 
-    <h2>3. Servicii Premium și Abonamente</h2>
-    <p>Aplicația oferă opțional abonamente Premium gestionate prin magazinul de aplicații (Apple App Store / Google Play Store). Plățile și anulările se efectuează conform termenilor magazinului respectiv de aplicații.</p>
+      <h2>3. Subscriptions & Billing (Google Play)</h2>
+      <p>GetFlow offers optional auto-renewing subscriptions (<code>premium_monthly</code> and <code>premium_annual</code>) and consumable Flow Credit packs:</p>
+      <ul>
+        <li><strong>Billing:</strong> Purchases and subscriptions are processed directly through Google Play Billing. Payment is charged to your Google account at confirmation of purchase.</li>
+        <li><strong>Automatic Renewal:</strong> Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current billing cycle.</li>
+        <li><strong>Easy Cancellation:</strong> You can manage or cancel your subscription at any time directly through Google Play: visit <a href="https://play.google.com/store/account/subscriptions" target="_blank" rel="noopener">Google Play Subscriptions</a> or on your Android device (<em>Google Play Store &rarr; Profile &rarr; Payments & Subscriptions &rarr; Subscriptions</em>). You are never required to contact support to cancel.</li>
+      </ul>
 
-    <h2>4. Proprietate Intelectuală</h2>
-    <p>Toate elementele vizuale, designul hărții musculare, logo-urile și codul sursă al aplicației GetFlow sunt proprietatea exclusivă a dezvoltatorilor și sunt protejate de legile privind drepturile de autor.</p>
+      <h2>4. Consumer Statutory Rights (32 Launch Markets)</h2>
+      <p>Nothing in these Terms limits, excludes, or impairs any mandatory statutory consumer rights or statutory cancellation/withdrawal rights provided under European Union law (including Directive 2011/83/EU on Consumer Rights), UK law (including the Consumer Rights Act 2015), or applicable local consumer protection legislation in your jurisdiction of residence. If any provision of these Terms is deemed contrary to mandatory local consumer law, that law shall govern for consumers in that jurisdiction.</p>
 
-    <h2>5. Modificări ale Termenilor</h2>
-    <p>Ne rezervăm dreptul de a actualiza acești termeni în orice moment. Modificările vor fi publicate pe această pagină cu data actualizării.</p>
+      <h2>5. Intellectual Property</h2>
+      <p>All software code, visual designs, muscle heatmaps, trademarks, and content within GetFlow are the exclusive intellectual property of T.O.T. Software S.R.L. and protected by copyright and intellectual property treaties.</p>
 
-    <h2>6. Contact</h2>
-    <p>Pentru orice întrebare privind acești termeni, ne puteți scrie la <strong>tudortone9@gmail.com</strong>.</p>
+      <h2>6. Contact Us</h2>
+      <p>For questions or support regarding these Terms, contact us at: <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a>.</p>
+    </div>
+
+    <!-- ROMANIAN TERMS -->
+    <div id="content-ro" style="display: none;">
+      <h1>Termeni și Condiții de Utilizare</h1>
+      <div class="date">Data intrării în vigoare: Octombrie 2026 | Dezvoltator: T.O.T. Software S.R.L.</div>
+
+      <p>Prin descărcarea, accesarea sau utilizarea aplicației <strong>GetFlow</strong>, sunteți de acord să respectați acești Termeni și Condiții. Dacă nu sunteți de acord, vă rugăm să nu utilizați aplicația.</p>
+
+      <h2>1. Cerință de Vârstă: Exclusiv Adulți (18+)</h2>
+      <p>GetFlow este destinat exclusiv persoanelor care au împlinit vârsta de 18 ani. Prin crearea contului sau utilizarea aplicației, confirmați că aveți cel puțin 18 ani.</p>
+
+      <h2>2. Declinarea Răspunderii Medicale și Asistentul AI</h2>
+      <p><strong>Aplicația GetFlow nu furnizează sfaturi medicale și nu este un dispozitiv medical.</strong> Asistentul GetFlow Coach este un sistem de inteligență artificială. Informațiile, estimările calorice și sugestiile nutriționale au scop exclusiv informativ și educațional. Consultați întotdeauna un medic specialist înainte de a începe un regim alimentar sau un program de antrenament.</p>
+
+      <h2>3. Abonamente și Plăți (Google Play)</h2>
+      <p>GetFlow oferă opțional abonamente Premium cu reînnoire automată (lunar și anual) și pachete de Credite Flow:</p>
+      <ul>
+        <li><strong>Procesarea Plăților:</strong> Plățile sunt gestionate exclusiv prin Google Play Billing, fiind debitate din contul dvs. Google.</li>
+        <li><strong>Reînnoire Automată:</strong> Abonamentele se reînnoiesc automat dacă nu sunt anulate cu cel puțin 24 de ore înainte de expirarea perioadei curente.</li>
+        <li><strong>Anulare Simplă:</strong> Puteți anula abonamentul în orice moment direct din contul Google Play accesând <a href="https://play.google.com/store/account/subscriptions" target="_blank" rel="noopener">Abonamente Google Play</a> sau din telefon (<em>Google Play Store &rarr; Profil &rarr; Plăți și abonamente &rarr; Abonamente</em>). Nu este necesară trimiterea unui e-mail către suport pentru anulare.</li>
+      </ul>
+
+      <h2>4. Drepturile Legale ale Consumatorilor</h2>
+      <p>Nicio clauză din acești Termeni nu limitează sau exclude drepturile legale obligatorii ale consumatorilor prevăzute de legislația Uniunii Europene (Directiva 2011/83/UE privind drepturile consumatorilor) sau legislația națională aplicabilă în țara dvs. de reședință.</p>
+
+      <h2>5. Proprietate Intelectuală</h2>
+      <p>Toate elementele vizuale, hărțile musculare, logo-urile și codul sursă al aplicației GetFlow sunt proprietatea exclusivă a T.O.T. Software S.R.L. și sunt protejate de legislația drepturilor de autor.</p>
+
+      <h2>6. Date de Contact</h2>
+      <p>Pentru orice întrebare, ne puteți contacta la: <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a>.</p>
+    </div>
 
     <footer>
-      &copy; 2026 GetFlow. Toate drepturile rezervate.
+      &copy; 2026 GetFlow (T.O.T. Software S.R.L.). All rights reserved / Toate drepturile rezervate.
     </footer>
   </div>
+
+  <script>
+    function switchLang(lang) {
+      const enDiv = document.getElementById('content-en');
+      const roDiv = document.getElementById('content-ro');
+      const btnEn = document.getElementById('btn-en');
+      const btnRo = document.getElementById('btn-ro');
+      if (lang === 'ro') {
+        enDiv.style.display = 'none';
+        roDiv.style.display = 'block';
+        btnEn.classList.remove('active');
+        btnRo.classList.add('active');
+        document.documentElement.lang = 'ro';
+      } else {
+        roDiv.style.display = 'none';
+        enDiv.style.display = 'block';
+        btnRo.classList.remove('active');
+        btnEn.classList.add('active');
+        document.documentElement.lang = 'en';
+      }
+    }
+    if (window.location.hash === '#ro') {
+      switchLang('ro');
+    }
+  </script>
 </body>
 </html>

@@ -51,7 +51,7 @@ import { finalizeConfirmedAccountDeletion } from '../../lib/accountDeletion';
 import { buildCompleteUserExport, fetchServerGdprExport } from '../../lib/gdprExport';
 
 // Adresa oficiala de suport pentru sesizari si suport utilizatori.
-const EMAIL_SUPORT = process.env.EXPO_PUBLIC_SUPPORT_EMAIL?.trim() || 'tudortone9@gmail.com';
+const EMAIL_SUPORT = process.env.EXPO_PUBLIC_SUPPORT_EMAIL?.trim() || 'supportgetflow@gmail.com';
 
 const MEAL_REMINDER_LABEL_KEYS: Record<string, string> = {
   reminder_mic_dejun: 'chat.recipeGen.tipMasa.breakfast',
@@ -448,6 +448,15 @@ export default function ProfilScreen() {
           : 'Politica de Confidențialitate nu este momentan disponibilă.',
         type: 'warning',
       });
+    }
+  };
+
+  const deschideAbonamenteGooglePlay = async () => {
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
+    try {
+      await Linking.openURL('https://play.google.com/store/account/subscriptions');
+    } catch {
+      Alert.alert(t('common.error'), t('alerts.mesaje.conexiuneServerEsueaza'));
     }
   };
 
@@ -1010,6 +1019,26 @@ export default function ProfilScreen() {
           </View>
           <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 24 }]}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
+              {/* Gestionează / Anulează abonamentul în Google Play */}
+              <TouchableOpacity
+                style={[styles.inputRow, { alignItems: 'center' }]}
+                onPress={deschideAbonamenteGooglePlay}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.manageSubscriptionA11y')}
+              >
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <Crown size={18} color={colors.accent} />
+                </View>
+                <View style={[styles.inputContent, { flex: 1 }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>{t('profile.manageSubscription')}</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{t('profile.manageSubscriptionDesc')}</Text>
+                </View>
+                <ChevronRight size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <View style={styles.separator} />
+
               <TouchableOpacity
                 style={[styles.inputRow, { alignItems: 'center' }]}
                 onPress={() => router.push('/legal' as never)}

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
+	Alert,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -169,7 +170,7 @@ export default function PasDataNasterii() {
 
 	const anCurent = new Date().getFullYear()
 	const anMin = anCurent - LIMITE_ONBOARDING.varsta.max
-	const anMax = anCurent - LIMITE_ONBOARDING.varsta.min
+	const anMax = anCurent - 18
 
 	// Robust date parsing (fara deviere de fus orar UTC)
 	const curent = useMemo(() => {
@@ -204,21 +205,31 @@ export default function PasDataNasterii() {
 		actualizeaza({ dataNasterii: `${nou.an}-${luna}-${String(zi).padStart(2, '0')}` })
 	}
 
-	const varsta = date.dataNasterii ? calculeazaVarsta(date.dataNasterii) : 25
+	const valoareDataCurenta = `${curent.an}-${String(curent.luna + 1).padStart(2, '0')}-${String(curent.zi).padStart(2, '0')}`
+	const varsta = calculeazaVarsta(valoareDataCurenta)
+	const esteMajor = varsta >= 18
 
 	return (
 		<EcranPas
 			pas="/onboarding/data-nasterii"
 			titlu={t('onboarding.birthdateTitle')}
 			subtitlu={t('onboarding.birthdateSubtitle')}
-			poateContinua
+			poateContinua={esteMajor}
 			laContinuare={() => {
+				if (!esteMajor) {
+					Alert.alert(
+						t('onboarding.birthdateUnderageTitle', { defaultValue: 'Vârstă minimă obligatorie' }),
+						t('onboarding.birthdateUnderageMsg', { defaultValue: 'GetFlow este destinat exclusiv utilizatorilor care au împlinit vârsta de 18 ani.' }),
+					)
+					return false
+				}
 				const luna = String(curent.luna + 1).padStart(2, '0')
 				const zi = String(curent.zi).padStart(2, "0")
 				const valoare = curent.an + "-" + luna + "-" + zi
 				if (date.dataNasterii !== valoare) {
 					actualizeaza({ dataNasterii: valoare })
 				}
+				return true
 			}}
 		>
 			<View style={[styles.roataWrap, { borderColor: colors.cardBorder, backgroundColor: colors.cardBg }]}>
@@ -237,12 +248,26 @@ export default function PasDataNasterii() {
 				</View>
 			</View>
 
-			<Text style={[styles.varsta, { color: colors.textSecondary }]}>{t('onboarding.birthdateAge', { varsta })}</Text>
+			<Text style={[styles.varsta, { color: esteMajor ? colors.textSecondary : colors.danger }]}>
+				{t('onboarding.birthdateAge', { varsta })}
+			</Text>
+			{!esteMajor && (
+				<Text style={[styles.avertismentMinor, { color: colors.danger }]}>
+					{t('onboarding.birthdateUnderageMsg', { defaultValue: 'GetFlow este destinat exclusiv utilizatorilor de minimum 18 ani.' })}
+				</Text>
+			)}
 		</EcranPas>
 	)
 }
 
 const styles = StyleSheet.create({
+	avertismentMinor: {
+		textAlign: 'center',
+		marginTop: 8,
+		fontSize: 13,
+		fontWeight: '600',
+		paddingHorizontal: 20,
+	},
 	roataWrap: {
 		height: INALTIME_RAND * 5,
 		borderRadius: 22,
