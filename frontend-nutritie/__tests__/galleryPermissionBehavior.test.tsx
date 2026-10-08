@@ -356,7 +356,13 @@ jest.mock('../lib/userDataCleanup', () => ({
 import CameraScreen from '../app/camera';
 import ProfilScreen from '../app/(tabs)/profil';
 import { aboneazaLaModificariMese } from '../lib/freshnessMese';
-import { clearActivePhotoJob, recoverPhotoJob, submitPhotoJob, waitForPhotoJob } from '../lib/photoJobs';
+import {
+  clearActivePhotoJob,
+  recoverPhotoJob,
+  submitPhotoJob,
+  waitForPhotoJob,
+  PhotoApiError,
+} from '../lib/photoJobs';
 
 const originalFetch = global.fetch;
 
@@ -518,6 +524,23 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       expect(view.getByText('camera.fiber')).toBeTruthy();
       expect(view.queryByText('camera.addExtraProduct')).toBeNull();
       expect(view.getByTestId('camera-add-journal-btn').props.accessibilityLabel).toBe('camera.addToJournal');
+    });
+
+    it('PHOTO FAILURE: maps backend Photo API failures through the active locale', async () => {
+      Platform.OS = 'android';
+      (submitPhotoJob as jest.Mock).mockRejectedValueOnce(
+        new PhotoApiError(503, 'PHOTO_SERVICE_UNAVAILABLE'),
+      );
+      mockLaunchImageLibrary.mockResolvedValueOnce({
+        canceled: false,
+        assets: [{ uri: 'file:///meal-failure.jpg' }],
+      });
+
+      const view = await render(<CameraScreen />);
+      await act(async () => fireEvent.press(view.getByTestId('gallery-button')));
+
+      await waitFor(() => expect(view.getByText('camera.genericScanError')).toBeTruthy());
+      expect(view.queryByText('PHOTO_SERVICE_UNAVAILABLE')).toBeNull();
     });
 
     it('PHOTO RESULT: blocks journal save and exposes review guidance for implausible 3180g output', async () => {

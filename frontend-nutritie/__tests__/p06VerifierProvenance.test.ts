@@ -24,7 +24,7 @@ describe('P0-06 Verifier Provenance & XML Parsing (Unit Regression)', () => {
       const xmlWithComments = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.totsrl.getflo">
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" />
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     
     <!-- Commented permission example that regex mistakenly parses: -->
     <!-- <uses-permission android:name="android.permission.RECORD_AUDIO" /> -->
@@ -50,7 +50,7 @@ describe('P0-06 Verifier Provenance & XML Parsing (Unit Regression)', () => {
     it('RED TEST: counts real structural <uses-permission> elements accurately', () => {
       const xml = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.totsrl.getflo">
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" />
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -71,7 +71,7 @@ describe('P0-06 Verifier Provenance & XML Parsing (Unit Regression)', () => {
     it('RED TEST: does NOT silently substitute targetSdkVersion when compileSdkVersion is absent from manifest', () => {
       const xmlWithoutCompileSdk = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.totsrl.getflo">
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" />
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.CAMERA" />
 </manifest>`;
 
@@ -85,7 +85,7 @@ describe('P0-06 Verifier Provenance & XML Parsing (Unit Regression)', () => {
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.totsrl.getflo"
     android:compileSdkVersion="36">
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" />
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.CAMERA" />
 </manifest>`;
 
@@ -241,7 +241,7 @@ describe('P0-06 Verifier Provenance & XML Parsing (Unit Regression)', () => {
             fs.mkdirSync(manifestDir, { recursive: true });
             fs.writeFileSync(
               path.join(manifestDir, 'AndroidManifest.xml'),
-              '<manifest package="com.totsrl.getflo"><uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" /><uses-permission android:name="android.permission.CAMERA" /></manifest>'
+              '<manifest package="com.totsrl.getflo"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" /><uses-permission android:name="android.permission.CAMERA" /></manifest>'
             );
             return '[ExpoRootProject] Using compileSdk: 36';
           }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 let mockWidth = 320;
@@ -13,6 +13,7 @@ let mockWaterGlasses = 0;
 let mockWaterAdd = jest.fn();
 let mockWaterRemove = jest.fn();
 let mockModalCurrentWeight: number | null = null;
+let mockAddMealOpen = jest.fn();
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
@@ -70,7 +71,15 @@ jest.mock('../hooks/useMeseAzi', () => ({
     refresh: jest.fn(), optimisticDeleteMeal: jest.fn(), optimisticAddMeal: jest.fn(),
   }),
 }));
-jest.mock('../components/AddMealBottomSheet', () => ({ AddMealBottomSheet: () => null }));
+jest.mock('../components/AddMealBottomSheet', () => {
+  const ReactMock = jest.requireActual<typeof React>('react');
+  return {
+    AddMealBottomSheet: ReactMock.forwardRef((_props: unknown, ref: React.Ref<unknown>) => {
+      ReactMock.useImperativeHandle(ref, () => ({ open: mockAddMealOpen, close: jest.fn() }));
+      return null;
+    }),
+  };
+});
 jest.mock('../components/MonthCalendar', () => ({ MonthCalendar: () => null }));
 jest.mock('../components/MealDetailsModal', () => ({ MealDetailsSheet: () => null }));
 jest.mock('../components/jurnal/CategorieDetailSheet', () => ({ CategorieDetailSheet: () => null }));
@@ -86,8 +95,8 @@ jest.mock('../context/NotificationBannerContext', () => ({
   useNotificationBannerData: () => ({ unreadCount: 0 }),
 }));
 jest.mock('../context/GamificareContext', () => ({ useGamificareData: () => ({ streak: 1 }) }));
-jest.mock('../hooks/useApa', () => ({ useApa: () => ({ pahare: mockWaterGlasses, tinta: 8, loading: false, adaugaPahar: mockWaterAdd, scadePahar: mockWaterRemove }) }));
-jest.mock('../hooks/useHealthSync', () => ({ useHealthSync: () => ({ steps: 0, activeCalories: 0, stepGoal: 10000, isEnabled: false, isAvailable: false, setNewStepGoal: jest.fn(), toggleSync: jest.fn(), refreshSteps: jest.fn(), addManualSteps: jest.fn() }) }));
+jest.mock('../hooks/useApa', () => ({ useApa: () => ({ consumedMl: mockWaterGlasses * 250, pahare: mockWaterGlasses, tinta: 8, loading: false, adaugaPahar: mockWaterAdd, scadePahar: mockWaterRemove, setConsumedMl: jest.fn() }) }));
+jest.mock('../hooks/useHealthSync', () => ({ useHealthSync: () => ({ steps: 0, activeCalories: 0, stepGoal: 10000, isEnabled: false, isAvailable: false, setNewStepGoal: jest.fn(), toggleSync: jest.fn(), refreshSteps: jest.fn(), addManualSteps: jest.fn(), setCompletedSteps: jest.fn() }) }));
 jest.mock('../hooks/useAntrenamente', () => ({ useAntrenamente: () => ({ totalCaloriiArse: 0, antrenamente: [], refresh: jest.fn() }) }));
 jest.mock('../hooks/useExercitii', () => ({ useExercitii: () => ({ exercitii: [] }) }));
 jest.mock('../components/FlowCreditsPill', () => ({ FlowCreditsPill: () => null }));
@@ -123,19 +132,18 @@ describe('GetFlow responsive Home and Journal production surfaces', () => {
     mockWaterAdd = jest.fn();
     mockWaterRemove = jest.fn();
     mockModalCurrentWeight = null;
+    mockAddMealOpen = jest.fn();
   });
 
   test.each([
     [320, 568], [360, 640], [360, 800], [375, 812], [390, 844], [412, 915],
-  ])('Journal keeps safe, shrinkable header actions at %ix%i', async (width, height) => {
+  ])('Journal keeps a safe header with one visibility action and one central Add meal CTA at %ix%i', async (width, height) => {
     mockWidth = width;
     mockHeight = height;
     const view = await render(<HistoryScreen />);
-    const add = view.getByLabelText('jurnal.addMealHeaderA11y');
+    expect(view.queryByLabelText('jurnal.addMealHeaderA11y')).toBeNull();
     const hide = view.getByLabelText('jurnal.hidePhotos');
-    const headerRow = add.parent?.parent;
-    expect(StyleSheet.flatten(headerRow?.props.style)).toEqual(expect.objectContaining({ minWidth: 0, maxWidth: '100%' }));
-    expect(StyleSheet.flatten(add.props.style)).toEqual(expect.objectContaining({ flexShrink: 1 }));
+    expect(view.getAllByLabelText('jurnal.addMeal')).toHaveLength(1);
     const safeContent = view.getByTestId('journal-content-safe-area');
     const safeStyle = StyleSheet.flatten(safeContent.props.style);
     expect(safeStyle.paddingLeft).toBeGreaterThan(16);
@@ -161,13 +169,36 @@ describe('GetFlow responsive Home and Journal production surfaces', () => {
 
     const home = await render(<HomeScreen />);
     expect(home.getByText(resources[locale].nutrition.protein)).toBeTruthy();
-    expect(home.getByText(resources[locale].nutrition.carbs)).toBeTruthy();
+    expect(home.getByText(resources[locale].home.carbsShort)).toBeTruthy();
     expect(home.getByText(resources[locale].nutrition.fats)).toBeTruthy();
     expect(home.getByText(resources[locale].home.waterTargetMl)).toBeTruthy();
     expect(home.getByText(resources[locale].home.waterTargetValue)).toBeTruthy();
 
     const journal = await render(<HistoryScreen />);
     expect(journal.getByText(resources[locale].jurnal.yourJournal)).toBeTruthy();
+  });
+
+  test.each([[320, 568], [360, 640]])('Home uses a compact action rail without truncated greeting copy at %ix%i', async (width, height) => {
+    mockWidth = width;
+    mockHeight = height;
+    const view = await render(<HomeScreen />);
+
+    expect(view.queryByText('home.greetingMorning')).toBeNull();
+    expect(view.queryByText('home.greetingSubtitle')).toBeNull();
+    expect(StyleSheet.flatten(view.getByTestId('home-header-actions').props.style)).toEqual(
+      expect.objectContaining({ minWidth: 0, maxWidth: '100%', flexShrink: 1 }),
+    );
+    const carbs = view.getByText('home.carbsShort');
+    expect(carbs.props.numberOfLines).toBe(1);
+    expect(carbs.props.adjustsFontSizeToFit).toBe(true);
+  });
+
+  test('Home opens Add meal on the first press after its lazy mount', async () => {
+    const view = await render(<HomeScreen />);
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('home.addManualA11y'));
+    });
+    expect(mockAddMealOpen).toHaveBeenCalledTimes(1);
   });
 
   test.each([1, 1.2, 1.4])('Home calorie headline stays on one line at 320px and fontScale %s', async (fontScale) => {

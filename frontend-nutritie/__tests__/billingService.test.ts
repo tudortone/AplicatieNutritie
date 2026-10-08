@@ -144,6 +144,32 @@ describe('GooglePlayBillingService — limita nativa generica', () => {
     }]);
   });
 
+  test('pastreaza cauza configuratiei backend cand catalogul public lipseste', async () => {
+    const { service, backend } = harness();
+    backend.getCatalog.mockRejectedValue(Object.assign(new Error('Not found'), {
+      code: 'BILLING_BACKEND_CONFIGURATION',
+    }));
+
+    await expect(service.getProducts()).resolves.toEqual([]);
+
+    expect(service.getState()).toEqual({
+      status: 'unavailable',
+      code: 'BILLING_BACKEND_CONFIGURATION',
+    });
+  });
+
+  test('distinge un catalog Play eligibil care nu returneaza niciun ProductDetails', async () => {
+    const { service, adapter } = harness();
+    (adapter.fetchSubscriptions as jest.Mock).mockResolvedValue([]);
+
+    await expect(service.getProducts()).resolves.toEqual([]);
+
+    expect(service.getState()).toEqual({
+      status: 'unavailable',
+      code: 'PRODUCTS_NOT_RETURNED',
+    });
+  });
+
   test('trimite offer token si hash-ul contului, niciodata UUID-ul brut', async () => {
     const { service, adapter } = harness();
     const [product] = await service.getProducts();

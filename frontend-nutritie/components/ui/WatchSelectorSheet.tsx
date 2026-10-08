@@ -6,7 +6,7 @@ import { Watch, CheckCircle2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '../../context/ThemeContext';
-import { useHealthSync, HEALTH_PROVIDERS, HealthProvider } from '../../hooks/useHealthSync';
+import { useHealthSync, getHealthProvidersForPlatform, HealthProvider } from '../../hooks/useHealthSync';
 import { useTranslation } from 'react-i18next';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { FlowIcon } from './FlowIcon';
@@ -23,6 +23,9 @@ export const WatchSelectorSheet = forwardRef<WatchSelectorSheetRef>((_, ref) => 
   const { selectedProvider, setProvider } = useHealthSync();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const snapPoints = useMemo(() => ['58%'], []);
+  const supportedProviders = getHealthProvidersForPlatform(
+    Platform.OS === 'android' ? 'android' : Platform.OS === 'ios' ? 'ios' : 'web',
+  );
   // REMED-010 (Android BackHandler): urmărim index-ul (BottomSheetModal) ca să
   // închidem sheet-ul cu back DOAR când e deschis (>= 0).
   const [sheetIndex, setSheetIndex] = useState(-1);
@@ -92,16 +95,16 @@ export const WatchSelectorSheet = forwardRef<WatchSelectorSheetRef>((_, ref) => 
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
-            {t('profile.watch_selector_title', 'Selectează Ceasul / Dispozitivul')}
+            {t('profile.watch_selector_title')}
           </Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            {t('profile.watch_selector_sub', 'Alege eticheta pentru sursa ta de pași (sincronizare externă: în curând)')}
+            {t('profile.watch_selector_sub')}
           </Text>
         </View>
       </View>
 
       <BottomSheetScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-        {HEALTH_PROVIDERS.map((p, index) => {
+        {supportedProviders.map((p, index) => {
           const active = selectedProvider === p.id;
           return (
             <Animated.View key={p.id} entering={reduceMotion ? undefined : FadeInDown.duration(350).delay(index * 30)}>
@@ -127,7 +130,9 @@ export const WatchSelectorSheet = forwardRef<WatchSelectorSheetRef>((_, ref) => 
                     {p.name}
                   </Text>
                   <Text style={[styles.itemDesc, { color: colors.textSecondary }]}>
-                    {p.description}
+                    {t(p.id === 'health_connect'
+                      ? 'profile.healthConnectDescription'
+                      : 'profile.phoneSensorDescription')}
                   </Text>
                 </View>
 
@@ -142,7 +147,9 @@ export const WatchSelectorSheet = forwardRef<WatchSelectorSheetRef>((_, ref) => 
         })}
         <View style={{ paddingHorizontal: 4, paddingTop: 8 }}>
           <Text style={{ fontSize: 12, lineHeight: 16, color: colors.textTertiary }}>
-            Integrarea reală cu Google Fit, Garmin, Fitbit etc. va veni într-o versiune viitoare. Până atunci, pașii provin din senzorul telefonului și din adăugarea manuală.
+            {t(Platform.OS === 'android'
+              ? 'profile.healthConnectInfo'
+              : 'profile.phoneSensorInfo')}
           </Text>
         </View>
       </BottomSheetScrollView>

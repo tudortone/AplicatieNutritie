@@ -1,7 +1,8 @@
 {
   "oauth": {
     "completing": "Connexion en cours…",
-    "cancelled": "La connexion a été annulée. Vous pouvez réessayer."
+    "cancelled": "La connexion a été annulée. Vous pouvez réessayer.",
+    "retry": "Réessayer"
   },
   "profile": {
     "title": "Profil",
@@ -24,10 +25,16 @@
     "fats": "Lipides",
     "save": "ENREGISTRER LE PROFIL",
     "logout": "Déconnexion",
-    "watch_selector_title": "Sélectionner montre / appareil",
-    "watch_selector_sub": "Choisissez votre fournisseur fitness pour la synchronisation",
+    "watch_selector_title": "Source des données de pas",
+    "watch_selector_sub": "GetFlow utilise la source compatible disponible sur cet appareil",
+    "healthConnectDescription": "Pas agrégés depuis votre téléphone et les applications connectées",
+    "healthConnectInfo": "Health Connect agrège les pas de votre téléphone et des applications connectées. Vous pouvez gérer les sources dans les paramètres Health Connect.",
+    "phoneSensorDescription": "Pas enregistrés par le capteur de votre téléphone",
+    "phoneSensorInfo": "Les pas proviennent du capteur du téléphone et des ajouts manuels.",
     "languageSection": "LANGUE & RÉGION",
     "languageTitle": "Langue de l’application",
+    "searchLanguages": "Rechercher une langue",
+    "noLanguagesFound": "Aucune langue trouvée",
     "languageDesc": "Sélectionnez la langue d’affichage et des échanges IA",
     "notificationsSection": "RAPPELS & NOTIFICATIONS",
     "notificationsTitle": "Rappels Quotidiens de Repas",
@@ -42,6 +49,7 @@
     "notConnected": "Non connecté",
     "changeDeviceA11y": "Changer la montre ou l’appareil connecté",
     "badgesSection": "BADGES & RÉCOMPENSES ({{unlocked}}/{{total}})",
+    "viewAllAchievements": "Voir tous les badges",
     "achievements": {
       "prima_transpiratie": {
         "name": "Premier entraînement",
@@ -159,7 +167,10 @@
     "saveFailedMessage": "Vos données n'ont pas pu être enregistrées. Vérifiez la connexion et réessayez.",
     "flowCreditsTitle": "Flow Credits",
     "flowCreditsDesc": "Crédits pour les analyses Photo AI et packs supplémentaires",
-    "flowCreditsA11y": "Ouvrir le solde et la boutique Flow Credits"
+    "flowCreditsA11y": "Ouvrir le solde et la boutique Flow Credits",
+    "manageSubscription": "Gérer l'abonnement",
+    "manageSubscriptionDesc": "Consultez, modifiez ou résiliez votre abonnement dans Google Play",
+    "manageSubscriptionA11y": "Ouvrir les abonnements Google Play pour gérer ou résilier"
   },
   "nutrition": {
     "protein": "Protéines",
@@ -373,7 +384,7 @@
   "chat": {
     "welcome": "Bonjour ! Je suis votre coach nutritionnel IA. Je peux vous suggérer des repas, analyser votre journée ou répondre à vos questions sur la nutrition.",
     "coachLabel": "GetFlow Coach",
-    "coachSubtitle": "nutrition, repas, progression",
+    "coachSubtitle": "Assistant IA · nutrition et fitness",
     "onlineNow": "en ligne",
     "newChat": "Nouvelle discussion",
     "newChatA11y": "Démarrer une nouvelle discussion",
@@ -466,7 +477,8 @@
         "rapid": "Rapide (< 15 min)",
         "mediu": "Moyen (15-30 min)"
       }
-    }
+    },
+    "aiActNotice": "GetFlow Coach est un assistant IA. Pour tout problème médical, consultez un professionnel de santé."
   },
   "jurnal": {
     "presetCategories": {
@@ -646,16 +658,25 @@
     "title": "Débloquez votre plein potentiel",
     "subtitle": "Atteignez vos objectifs plus rapidement grâce à des fonctionnalités avancées.",
     "features": {
-      "ai_title": "Plans nutritionnels personnalisés par IA",
-      "ai_desc": "Menus adaptés précisément à vos préférences et objectifs",
-      "chat_title": "Assistant nutritionnel illimité",
-      "chat_desc": "Réponses instantanées à toutes vos questions d'alimentation",
+      "ai_title": "Plans nutritionnels assistés par IA",
+      "ai_desc": "Des idées de repas adaptées à vos préférences et objectifs",
+      "chat_title": "Assistant nutritionnel IA",
+      "chat_desc": "Des réponses utiles à vos questions de nutrition",
       "scan_title": "Scan avancé des repas",
-      "scan_desc": "Reconnaissance photo instantanée des calories et macronutriments",
+      "scan_desc": "Analyse photo pour estimer les calories et macronutriments",
       "ads_title": "Sans publicité",
       "ads_desc": "Une expérience fluide et sans interruption",
       "insights_title": "Analyse détaillée de vos progrès",
-      "insights_desc": "Rapports hebdomadaires et tendances détaillées à long terme"
+      "insights_desc": "Suivez vos progrès et vos tendances au fil du temps"
+    },
+    "preview": {
+      "label": "Exemple de résultat",
+      "meal": "Bol de poulet grillé",
+      "calories": "kcal",
+      "protein": "protéines",
+      "carbs": "glucides",
+      "fat": "lipides",
+      "imageA11y": "Exemple de bol nutritif au poulet grillé"
     },
     "plans": {
       "monthly": "Abonnement mensuel",
@@ -687,6 +708,10 @@
       "loading_offers": "Chargement des offres disponibles…",
       "unavailable_title": "Abonnements temporairement indisponibles",
       "unavailable_message": "Google Play n’a pas renvoyé les offres d’abonnement pour le moment. Réessayez dans quelques instants.",
+      "backend_configuration_message": "Le service de paiement GetFlow n’est pas entièrement configuré. Aucun paiement n’a été lancé.",
+      "network_message": "GetFlow ne peut pas joindre le service de paiement pour le moment. Vérifiez votre connexion et réessayez.",
+      "billing_unavailable_message": "La facturation Google Play n’est pas disponible sur cet appareil pour le moment. Réessayez après avoir ouvert l’application depuis Google Play.",
+      "products_not_returned_message": "Les forfaits ne sont pas disponibles pour ce compte, cet appareil ou cette région. Aucun paiement n’a été lancé.",
       "pending_title": "Paiement en attente",
       "pending_message": "Votre paiement est en cours de traitement par Google Play. L'accès Premium s'activera automatiquement après confirmation.",
       "verifying_title": "Confirmation de l'abonnement…",
@@ -844,7 +869,9 @@
     "featuresSaveErrorTitle": "Progrès non enregistré",
     "featuresSaveErrorMsg": "Impossible d’enregistrer le questionnaire. Vérifiez l’espace disponible.",
     "planLimitWarning": "Nous avons limité le déficit pour rester au-dessus du seuil sécuritaire de calories. L'objectif sera atteint un peu plus lentement, mais plus sainement.",
-    "planDisclaimer": "Ce sont des estimations indicatives et non un avis médical. Consultez un spécialiste si vous avez un problème de santé."
+    "planDisclaimer": "Ce sont des estimations indicatives et non un avis médical. Consultez un spécialiste si vous avez un problème de santé.",
+    "birthdateUnderageTitle": "Réservé aux adultes (18+)",
+    "birthdateUnderageMsg": "GetFlow est exclusivement destiné aux personnes majeures âgées de 18 ans et plus."
   },
   "months": {
     "m1": "Janvier",
@@ -884,6 +911,7 @@
     "waterMissingWeight": "Ajoutez votre poids actuel pour estimer votre hydratation",
     "waterTargetValue": "Objectif : {{ml}} ml",
     "waterConsumedMl": "{{ml}} ml consommés",
+    "waterEditConsumedA11y": "Définir précisément l'eau consommée en millilitres",
     "waterAddWeight": "Ajouter le poids actuel",
     "waterProgressA11y": "Progression de la consommation d’eau quotidienne",
     "waterGoal": "Objectif : {{glasses}} verres ({{ml}} ml)",
@@ -891,19 +919,22 @@
     "waterPlusA11y": "Ajouter un verre d’eau",
     "waterCount": "{{count}} / {{target}} verres bus aujourd’hui",
     "stepsTitle": "Pas & Calories",
-    "stepsSource": "Source : capteur du téléphone • +{{calories}} kcal brûlées",
-    "stepsSourceOffline": "Source : capteur du téléphone. Appuyez sur « Activer ».",
+    "stepsSource": "Source : {{provider}} • +{{calories}} kcal brûlées",
+    "stepsSourceOffline": "{{provider}} n’est pas connecté. Appuyez sur « Activer » pour accorder l’autorisation.",
     "stepsUnit": "pas",
     "stepsKcalBurned": "+{{calories}} kcal brûlées",
     "stepsSaveGoalA11y": "Enregistrer l’objectif de pas",
     "stepsCancelGoalA11y": "Annuler la modification de l’objectif",
     "stepsEditGoalA11y": "Modifier l’objectif de pas",
     "stepsAddManual": "Ajouter manuellement",
+    "stepsCompletedInputA11y": "Pas effectués",
+    "stepsSetCompletedA11y": "Définir les pas effectués",
+    "stepsSet": "Définir",
     "stepsAdd500A11y": "Ajouter 500 pas manuellement",
     "stepsAdd1000A11y": "Ajouter 1000 pas manuellement",
     "stepsActivate": "Activer",
-    "stepsActivateA11y": "Activer le capteur de pas",
-    "stepsOfflineHelp": "Capteur non détecté ou permission refusée. Ajoutez vos pas manuellement.",
+    "stepsActivateA11y": "Connecter la source de pas",
+    "stepsOfflineHelp": "La source de pas est indisponible ou l’autorisation a été refusée. Ajoutez vos pas manuellement.",
     "stepsInactiveHelp": "Activez les pas pour inclure vos dépenses de mouvement dans votre balance.",
     "liveMuscleMap": "CARTE MUSCULAIRE EN DIRECT",
     "liveMuscleMapA11y": "Carte musculaire. Ouvrir les entraînements",
@@ -920,6 +951,7 @@
     "greetingEvening": "Bonsoir",
     "greetingNight": "Bonne nuit",
     "greetingSubtitle": "Suivez votre nutrition du jour",
+    "carbsShort": "Gluc.",
     "streakDays": "{{count}} jours",
     "streakDaysA11y": "Série de {{count}} jours",
     "notificationsA11y": "Notifications",
@@ -1235,67 +1267,151 @@
   },
   "calculatorAi": {
     "badge": "Algorithme de nutrition basé sur l'IA. Entrez vos informations pour des objectifs nutritionnels précis."
-  }
-  ,"workoutV2": {
+  },
+  "workoutV2": {
     "muscles": {
-      "chest": "Pectoraux", "upper_chest": "Haut des pectoraux", "front_delts": "Deltoïdes antérieurs",
-      "side_delts": "Deltoïdes latéraux", "rear_delts": "Deltoïdes postérieurs", "traps": "Trapèzes",
-      "lats": "Dorsaux", "lower_back": "Lombaires", "biceps": "Biceps", "triceps": "Triceps",
-      "forearms": "Avant-bras", "abs": "Abdominaux", "obliques": "Obliques", "glutes": "Fessiers",
-      "quads": "Quadriceps", "hamstrings": "Ischio-jambiers", "calves": "Mollets",
-      "adductors": "Adducteurs", "hip_flexors": "Fléchisseurs de hanche"
+      "chest": "Pectoraux",
+      "upper_chest": "Haut des pectoraux",
+      "front_delts": "Deltoïdes antérieurs",
+      "side_delts": "Deltoïdes latéraux",
+      "rear_delts": "Deltoïdes postérieurs",
+      "traps": "Trapèzes",
+      "lats": "Dorsaux",
+      "lower_back": "Lombaires",
+      "biceps": "Biceps",
+      "triceps": "Triceps",
+      "forearms": "Avant-bras",
+      "abs": "Abdominaux",
+      "obliques": "Obliques",
+      "glutes": "Fessiers",
+      "quads": "Quadriceps",
+      "hamstrings": "Ischio-jambiers",
+      "calves": "Mollets",
+      "adductors": "Adducteurs",
+      "hip_flexors": "Fléchisseurs de hanche"
     },
     "anatomy": {
-      "front": "Avant", "back": "Arrière", "showFront": "Afficher la vue avant", "showBack": "Afficher la vue arrière", "frontDiagram": "Anatomie musculaire de face", "backDiagram": "Anatomie musculaire de dos", "selectMuscle": "Touchez deux fois pour afficher les détails du muscle",
-      "primary": "Principal", "secondary": "Secondaire", "stabilizer": "Stabilisateur",
-      "noData": "Aucune donnée", "strengthLow": "Niveau inférieur", "strengthHigh": "Niveau supérieur"
+      "front": "Avant",
+      "back": "Arrière",
+      "showFront": "Afficher la vue avant",
+      "showBack": "Afficher la vue arrière",
+      "frontDiagram": "Anatomie musculaire de face",
+      "backDiagram": "Anatomie musculaire de dos",
+      "selectMuscle": "Touchez deux fois pour afficher les détails du muscle",
+      "primary": "Principal",
+      "secondary": "Secondaire",
+      "stabilizer": "Stabilisateur",
+      "noData": "Aucune donnée",
+      "strengthLow": "Niveau inférieur",
+      "strengthHigh": "Niveau supérieur"
     },
     "preview": {
-      "title": "Anatomie V2", "subtitle": "Aperçu GetFlow isolé",
-      "tapMuscle": "Touchez un groupe musculaire pour les détails.", "selected": "Sélectionné : {{muscle}}"
+      "title": "Anatomie V2",
+      "subtitle": "Aperçu GetFlow isolé",
+      "tapMuscle": "Touchez un groupe musculaire pour les détails.",
+      "selected": "Sélectionné : {{muscle}}"
     },
     "presets": {
-      "push": "Poussée", "pull": "Tirage", "legs": "Jambes", "upper": "Haut du corps", "lower": "Bas du corps",
-      "fullbody": "Corps entier", "beginner": "Débutant", "homedumbbells": "Haltères à domicile"
+      "push": "Poussée",
+      "pull": "Tirage",
+      "legs": "Jambes",
+      "upper": "Haut du corps",
+      "lower": "Bas du corps",
+      "fullbody": "Corps entier",
+      "beginner": "Débutant",
+      "homedumbbells": "Haltères à domicile"
     },
     "exercises": {
-      "barbellBenchPress": "Développé couché à la barre", "inclineDumbbellPress": "Développé incliné avec haltères",
-      "pushUp": "Pompes", "parallelBarDip": "Dips aux barres parallèles", "standingOverheadPress": "Développé militaire debout",
-      "dumbbellLateralRaise": "Élévations latérales", "barbellRow": "Rowing barre", "oneArmDumbbellRow": "Rowing unilatéral",
-      "pullUp": "Tractions", "chinUp": "Tractions supination", "latPulldown": "Tirage vertical", "backSquat": "Squat arrière",
-      "frontSquat": "Squat avant", "gobletSquat": "Goblet squat", "conventionalDeadlift": "Soulevé de terre",
-      "romanianDeadlift": "Soulevé de terre roumain", "hipThrust": "Hip thrust", "weightedLunge": "Fentes lestées",
-      "farmerCarry": "Marche du fermier", "dumbbellCurl": "Curl avec haltères", "overheadTricepsExtension": "Extension triceps au-dessus de la tête",
-      "plank": "Planche", "pallofPress": "Pallof press", "running": "Course", "cycling": "Vélo"
+      "barbellBenchPress": "Développé couché à la barre",
+      "inclineDumbbellPress": "Développé incliné avec haltères",
+      "pushUp": "Pompes",
+      "parallelBarDip": "Dips aux barres parallèles",
+      "standingOverheadPress": "Développé militaire debout",
+      "dumbbellLateralRaise": "Élévations latérales",
+      "barbellRow": "Rowing barre",
+      "oneArmDumbbellRow": "Rowing unilatéral",
+      "pullUp": "Tractions",
+      "chinUp": "Tractions supination",
+      "latPulldown": "Tirage vertical",
+      "backSquat": "Squat arrière",
+      "frontSquat": "Squat avant",
+      "gobletSquat": "Goblet squat",
+      "conventionalDeadlift": "Soulevé de terre",
+      "romanianDeadlift": "Soulevé de terre roumain",
+      "hipThrust": "Hip thrust",
+      "weightedLunge": "Fentes lestées",
+      "farmerCarry": "Marche du fermier",
+      "dumbbellCurl": "Curl avec haltères",
+      "overheadTricepsExtension": "Extension triceps au-dessus de la tête",
+      "plank": "Planche",
+      "pallofPress": "Pallof press",
+      "running": "Course",
+      "cycling": "Vélo"
     },
     "builder": {
-      "name": "Nom de l’entraînement", "addExercise": "Ajouter un exercice", "addExerciseNamed": "Ajouter {{exercise}}",
-      "moveUp": "Monter", "moveDown": "Descendre", "duplicate": "Dupliquer", "remove": "Supprimer",
-      "sets": "Séries", "reps": "Répétitions", "weight": "Poids, kg", "rest": "Repos, secondes",
-      "duration": "Durée, secondes", "distance": "Distance, km", "save": "Enregistrer le modèle"
+      "name": "Nom de l’entraînement",
+      "addExercise": "Ajouter un exercice",
+      "addExerciseNamed": "Ajouter {{exercise}}",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
+      "duplicate": "Dupliquer",
+      "remove": "Supprimer",
+      "sets": "Séries",
+      "reps": "Répétitions",
+      "weight": "Poids, kg",
+      "rest": "Repos, secondes",
+      "duration": "Durée, secondes",
+      "distance": "Distance, km",
+      "save": "Enregistrer le modèle"
     },
     "active": {
-      "planned": "Prévu : {{value}} reps", "plannedKg": "Prévu : {{value}} kg", "actualReps": "Répétitions réalisées",
-      "actualWeight": "Poids réalisé", "completeSet": "Terminer la série {{number}}", "addSet": "Ajouter une série",
-      "cardioReady": "Saisissez les résultats cardio", "cardioMinutes": "Minutes de cardio", "cardioDistance": "Distance, km", "completeCardio": "Terminer la saisie cardio", "finish": "Terminer l’entraînement"
+      "planned": "Prévu : {{value}} reps",
+      "plannedKg": "Prévu : {{value}} kg",
+      "actualReps": "Répétitions réalisées",
+      "actualWeight": "Poids réalisé",
+      "completeSet": "Terminer la série {{number}}",
+      "addSet": "Ajouter une série",
+      "cardioReady": "Saisissez les résultats cardio",
+      "cardioMinutes": "Minutes de cardio",
+      "cardioDistance": "Distance, km",
+      "completeCardio": "Terminer la saisie cardio",
+      "finish": "Terminer l’entraînement"
     },
     "strength": {
       "currentStrength": "Force actuellement démontrée",
       "trainingDisclaimer": "Score GetFlow de performance d’entraînement basé sur les charges récentes enregistrées. Ce n’est ni une mesure médicale ni un percentile de population.",
-      "momentum": "Dynamique de progression", "progressFact": "Progression récente : {{value}} %", "weeksFact": "Semaines actives : {{value}}",
+      "momentum": "Dynamique de progression",
+      "progressFact": "Progression récente : {{value}} %",
+      "weeksFact": "Semaines actives : {{value}}",
       "muscleExplanation": "Ce niveau reflète les contributions actuelles des charges récentes admissibles, pas le volume musculaire.",
-      "noEvidence": "Pas assez de données de force récentes.", "e1rmEvidence": "1RM estimé {{value}} kg · Force {{score}}",
-      "ranks": { "no_data": "Données insuffisantes", "foundation": "Foundation", "forge": "Forge", "drive": "Drive", "surge": "Surge", "flow": "Flow" }
+      "noEvidence": "Pas assez de données de force récentes.",
+      "e1rmEvidence": "1RM estimé {{value}} kg · Force {{score}}",
+      "ranks": {
+        "no_data": "Données insuffisantes",
+        "foundation": "Foundation",
+        "forge": "Forge",
+        "drive": "Drive",
+        "surge": "Surge",
+        "flow": "Flow"
+      }
     },
     "previewProfiles": {
-      "noData": "Aucune donnée de force", "improving": "Force modérée · forte progression",
-      "strongFlat": "Force élevée · progression stable", "strongImproving": "Force élevée · forte progression"
+      "noData": "Aucune donnée de force",
+      "improving": "Force modérée · forte progression",
+      "strongFlat": "Force élevée · progression stable",
+      "strongImproving": "Force élevée · forte progression"
     },
     "experience": {
-      "title": "Workout V2", "subtitle": "Créez, entraînez-vous et suivez la force démontrée",
-      "openStrength": "Ouvrir la carte de force", "presets": "Séances prédéfinies", "saved": "Modèles enregistrés",
-      "editPreset": "Modifier {{name}}", "exerciseCount": "{{count}} exercices", "start": "Commencer l’entraînement",
-      "invalidTemplate": "Ajoutez un nom et au moins un exercice.", "incompleteWorkout": "Terminez chaque série ou saisie cardio avant de finir."
+      "title": "Workout V2",
+      "subtitle": "Créez, entraînez-vous et suivez la force démontrée",
+      "openStrength": "Ouvrir la carte de force",
+      "presets": "Séances prédéfinies",
+      "saved": "Modèles enregistrés",
+      "editPreset": "Modifier {{name}}",
+      "exerciseCount": "{{count}} exercices",
+      "start": "Commencer l’entraînement",
+      "invalidTemplate": "Ajoutez un nom et au moins un exercice.",
+      "incompleteWorkout": "Terminez chaque série ou saisie cardio avant de finir."
     }
   },
   "nutrientFocus": {

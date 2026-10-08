@@ -971,8 +971,8 @@ export default function ChatScreen() {
                 <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.introTitle, { color: colors.textPrimary }]}>
                   {t('chat.emptyTitle')}
                 </Text>
-                <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={[styles.introSubtitle, { color: colors.textSecondary }]}>
-                  {t('chat.emptySubtitle')}
+                <Text numberOfLines={3} maxFontSizeMultiplier={1.3} style={[styles.introSubtitle, { color: colors.textSecondary }]}>
+                  {t('chat.aiActNotice')}
                 </Text>
               </View>
             </View>

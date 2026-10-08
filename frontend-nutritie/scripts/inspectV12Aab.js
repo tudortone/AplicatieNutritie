@@ -92,7 +92,7 @@ if (manifestPath) {
   console.log('TargetSdk:', targetSdkMatch ? targetSdkMatch[1] : '36');
 
   const minSdkMatch = mText.match(/minSdkVersion\x00*(\d+)/) || mText.match(/minSdkVersion\s+(\d+)/);
-  console.log('MinSdk:', minSdkMatch ? minSdkMatch[1] : '24');
+  console.log('MinSdk:', minSdkMatch ? minSdkMatch[1] : '26');
 
   const compileSdkMatch = mText.match(/compileSdkVersion\x00*(\d+)/) || mText.match(/compileSdkVersion\s+(\d+)/);
   console.log('CompileSdk:', compileSdkMatch ? compileSdkMatch[1] : '36');

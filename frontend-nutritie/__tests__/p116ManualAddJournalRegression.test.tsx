@@ -27,6 +27,8 @@ let mockExistingRowInDb: Record<string, unknown> | null = null;
 const mockOfflineQueue: unknown[] = [];
 let mockLanguage = 'en';
 let mockWindow = { width: 390, height: 844, scale: 1, fontScale: 1 };
+let mockAddMealScrollTo = jest.fn();
+let mockAddMealScrollProps: Record<string, unknown> = {};
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
@@ -138,7 +140,11 @@ jest.mock('@gorhom/bottom-sheet', () => {
     __esModule: true,
     default: Sheet,
     BottomSheetView: ({ children }: any) => R.createElement(View, null, children),
-    BottomSheetScrollView: ({ children }: any) => R.createElement(View, null, children),
+    BottomSheetScrollView: R.forwardRef(({ children, ...props }: any, ref: any) => {
+      mockAddMealScrollProps = props;
+      R.useImperativeHandle(ref, () => ({ scrollTo: mockAddMealScrollTo }));
+      return R.createElement(View, props, children);
+    }),
     BottomSheetBackdrop: () => null,
     BottomSheetTextInput: require('react-native').TextInput,
   };
@@ -157,11 +163,28 @@ describe('P1-16 — Manual Add Food to Journal Regression Tests', () => {
     mockOfflineQueue.length = 0;
     mockLanguage = 'en';
     mockWindow = { width: 390, height: 844, scale: 1, fontScale: 1 };
+    mockAddMealScrollTo = jest.fn();
+    mockAddMealScrollProps = {};
     freshnessSignals = [];
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     unsubscribeFreshness = aboneazaLaModificariMese((userId) => {
       freshnessSignals.push(userId);
     });
+  });
+
+  test('Add meal always reopens at the top and keeps Android nested scrolling enabled', async () => {
+    const ref = React.createRef<any>();
+    await render(<AddMealBottomSheet ref={ref} />);
+
+    await act(async () => {
+      ref.current.open();
+    });
+    expect(mockAddMealScrollTo).toHaveBeenCalledWith({ y: 0, animated: false });
+    expect(mockAddMealScrollProps).toEqual(expect.objectContaining({
+      nestedScrollEnabled: true,
+      scrollEnabled: true,
+      showsVerticalScrollIndicator: false,
+    }));
   });
 
   afterEach(() => {

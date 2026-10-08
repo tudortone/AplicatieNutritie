@@ -3,27 +3,40 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { localDayKey } from '../lib/dateUtils';
 
-const keyForToday = () => `apa_${localDayKey()}`;
+const legacyKeyForToday = () => `apa_${localDayKey()}`;
+const mlKeyForToday = () => `apa_ml_${localDayKey()}`;
+const GLASS_ML = 250;
+const MAX_DAILY_ML = 20000;
 
 export function useApa() {
-  const [pahare, setPahareState] = useState(0);
+  const [consumedMl, setConsumedMlState] = useState(0);
   const tinta = 8;
   const [loading, setLoading] = useState(true);
   const operationRef = useRef<Promise<number>>(Promise.resolve(0));
-  // Ref pentru valoarea curenta (evita closure invechit)
-  // in .catch(() => pahare) din lantul de operatii.
-  const pahareRef = useRef(pahare);
-  pahareRef.current = pahare;
+  const consumedMlRef = useRef(consumedMl);
+  consumedMlRef.current = consumedMl;
 
   const loadApa = useCallback(async () => {
     setLoading(true);
     try {
-      const stored = await AsyncStorage.getItem(keyForToday());
-      const parsed = Number.parseInt(stored || '0', 10);
-      setPahareState(Number.isFinite(parsed) && parsed > 0 ? parsed : 0);
+      const exactStored = await AsyncStorage.getItem(mlKeyForToday());
+      if (exactStored !== null) {
+        const parsed = Number.parseInt(exactStored, 10);
+        setConsumedMlState(Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, MAX_DAILY_ML) : 0);
+        return;
+      }
+
+      // Migrare compatibilă cu versiunile care persistau doar numărul de pahare.
+      const legacyStored = await AsyncStorage.getItem(legacyKeyForToday());
+      const legacyGlasses = Number.parseInt(legacyStored || '0', 10);
+      const migratedMl = Number.isFinite(legacyGlasses) && legacyGlasses > 0
+        ? Math.min(legacyGlasses * GLASS_ML, MAX_DAILY_ML)
+        : 0;
+      await AsyncStorage.setItem(mlKeyForToday(), String(migratedMl));
+      setConsumedMlState(migratedMl);
     } catch (error) {
       console.error('[Apă] Citirea consumului a eșuat:', error);
-      setPahareState(0);
+      setConsumedMlState(0);
     } finally {
       setLoading(false);
     }
@@ -31,39 +44,50 @@ export function useApa() {
 
   useEffect(() => { loadApa(); }, [loadApa]);
 
-  const update = useCallback((delta: number) => {
+  const setConsumedMl = useCallback((value: number) => {
+    const next = Math.min(MAX_DAILY_ML, Math.max(0, Math.round(Number.isFinite(value) ? value : 0)));
+    consumedMlRef.current = next;
+    setConsumedMlState(next);
     const operation = operationRef.current.then(async () => {
-      const key = keyForToday();
-      const stored = await AsyncStorage.getItem(key);
-      const current = Math.max(0, Number.parseInt(stored || '0', 10) || 0);
-      const next = Math.max(0, current + delta);
-      await AsyncStorage.setItem(key, String(next));
-      setPahareState(next);
+      await AsyncStorage.setItem(mlKeyForToday(), String(next));
       return next;
     });
-    operationRef.current = operation.catch(() => pahareRef.current);
+    operationRef.current = operation.catch(() => consumedMlRef.current);
     return operation;
   }, []);
+
+  const update = useCallback((deltaMl: number) => {
+    return setConsumedMl(consumedMlRef.current + deltaMl);
+  }, [setConsumedMl]);
 
   const adaugaPahar = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
-      return await update(1);
+      return await update(GLASS_ML);
     } catch (error) {
       console.error('[Apă] Salvarea consumului a eșuat:', error);
-      return pahare;
+      return consumedMl;
     }
   };
 
   const scadePahar = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
-      return await update(-1);
+      return await update(-GLASS_ML);
     } catch (error) {
       console.error('[Apă] Scăderea consumului a eșuat:', error);
-      return pahare;
+      return consumedMl;
     }
   };
 
-  return { pahare, tinta, loading, adaugaPahar, scadePahar, reload: loadApa };
+  return {
+    consumedMl,
+    pahare: consumedMl / GLASS_ML,
+    tinta,
+    loading,
+    adaugaPahar,
+    scadePahar,
+    setConsumedMl,
+    reload: loadApa,
+  };
 }

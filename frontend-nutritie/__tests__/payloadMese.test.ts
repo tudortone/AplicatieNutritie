@@ -207,6 +207,36 @@ describe('BUG-007 — rețete: fără auto-add, adăugare explicită normalizat�
     expect(rows[1].nume).toBe('Sare (100g)');
     expect(rows[1].tip_masa).toBe('pranz');
   });
+
+  it('păstrează nutrienții zecimali și normalizează nutrienții opționali lipsă la zero', () => {
+    const [decimal, missing] = construiesteRinduriMasaChat({
+      user_id: 'u1',
+      meal_type: 'lunch',
+      now: ZI,
+      items: [
+        { name: 'Salată', qty: 125, unit: 'g', kcal: 46.5, protein_g: 2.5, carbs_g: 7, fat_g: 0.3, fiber_g: 0.3 },
+        { name: 'Apă', qty: 250, unit: 'ml' },
+      ],
+    });
+
+    expect(decimal).toEqual(expect.objectContaining({
+      calorii: 46.5,
+      proteine: 2.5,
+      grasimi: 0.3,
+      fibre: 0.3,
+    }));
+    expect(missing).toEqual(expect.objectContaining({
+      calorii: 0,
+      proteine: 0,
+      carbohidrati: 0,
+      grasimi: 0,
+      fibre: 0,
+    }));
+    for (const value of [decimal.calorii, decimal.proteine, decimal.carbohidrati, decimal.grasimi, decimal.fibre]) {
+      expect(typeof value).toBe('number');
+      expect(Number.isFinite(value)).toBe(true);
+    }
+  });
 });
 
 describe('BUG-007 — tip_masa invalid', () => {

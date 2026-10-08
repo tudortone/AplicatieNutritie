@@ -4,7 +4,6 @@ import { BlurView } from 'expo-blur';
 import Animated, {
   FadeIn,
   FadeOut,
-  SlideInDown,
   SlideOutDown,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -93,7 +92,7 @@ export function ConfirmSheet({
           accessibilityLabel={t('chat.confirmSheet.a11yClose')}
         />
         <Animated.View
-          entering={reduceMotion ? FadeIn.duration(120) : SlideInDown.springify().damping(20)}
+          entering={FadeIn.duration(reduceMotion ? 120 : 220)}
           exiting={reduceMotion ? FadeOut.duration(100) : SlideOutDown.duration(180)}
           style={[styles.sheetWrap, { paddingBottom: Math.max(insets.bottom, 12) }]}
         >

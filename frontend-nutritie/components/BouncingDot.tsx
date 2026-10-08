@@ -18,29 +18,29 @@ interface BouncingDotProps {
 
 export default function BouncingDot({ delay, color }: BouncingDotProps) {
   const { colors } = useTheme();
-  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(0.35);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (reduceMotion) {
-      translateY.value = 0;
+      opacity.value = 0.7;
       return;
     }
-    translateY.value = withDelay(
+    opacity.value = withDelay(
       delay,
       withRepeat(
         withSequence(
-          withTiming(-5, { duration: 300 }),
-          withTiming(0, { duration: 300 })
+          withTiming(1, { duration: 450 }),
+          withTiming(0.35, { duration: 450 })
         ),
         -1,
         true
       )
     );
-  }, [delay, translateY, reduceMotion]);
+  }, [delay, opacity, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
+    opacity: opacity.value,
   }));
 
   return (

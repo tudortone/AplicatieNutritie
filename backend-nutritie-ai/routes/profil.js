@@ -40,8 +40,8 @@ function createProfilRouter({ requireAuth, generalLimiter }) {
       const g = numarStrict(greutate);
       const i = numarStrict(inaltime);
 
-      if (v === null || !Number.isInteger(v) || v < 10 || v > 100) {
-        return res.status(400).json({ eroare: 'Vârsta trebuie să fie un număr valid între 10 și 100 ani.' });
+      if (v === null || !Number.isInteger(v) || v < 18 || v > 100) {
+        return res.status(400).json({ eroare: 'Vârsta trebuie să fie un număr valid între 18 și 100 ani.' });
       }
       if (g === null || g < 30 || g > 300) {
         return res.status(400).json({ eroare: 'Greutatea trebuie să fie un număr valid între 30 și 300 kg.' });

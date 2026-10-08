@@ -9,6 +9,7 @@ import { useCamara } from '../hooks/useCamara';
 // REMED-002: traducerile modalei trec prin i18n (chei chat.recipeGen.*).
 import { useTranslation } from 'react-i18next';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { buildRecipePrompt } from '../lib/coachRecipePrompt';
 
 const { height } = Dimensions.get('window');
 
@@ -53,9 +54,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
   const { produse } = useCamara();
-  // REMED-002: traduceri OPȚIONALE pe ecranul de generare — prompt-ul trimis
-  // modelului rămâne RO, doar etichetele UI se schimbă cu limba.
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [ingredienteSelectate, setIngredienteSelectate] = useState<string[]>(['Ouă', 'Roșii', 'Brânză / Telemea']);
   const [inputCustom, setInputCustom] = useState('');
   const [tipMasa, setTipMasa] = useState('Orice');
@@ -95,7 +94,14 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    const prompt = `Am în casă următoarele ingrediente disponibile în cămară: ${ingredienteSelectate.join(', ')}. Te rog să îmi generezi o rețetă delicioasă și sănătoasă potrivită pentru ${tipMasa === 'Orice' ? 'orice masă a zilei' : tipMasa.toLowerCase()}, cu timp de preparare ${timp.toLowerCase()}. Țintele mele nutriționale rămase pentru astăzi sunt de aproximativ ${Math.max(caloriiRamase, 300)} kcal și ${Math.max(proteineRamase, 15)}g proteine. Include: 1) Numele rețetei, 2) Ingredientele exacte și cantități, 3) Modul de preparare pas cu pas pe scurt, 4) Valorile nutriționale estimate (Calorii, Proteine, Carbohidrați, Grăsimi).`;
+    const prompt = buildRecipePrompt({
+      ingredients: ingredienteSelectate,
+      mealType: tipMasa,
+      prepTime: timp,
+      caloriesRemaining: caloriiRamase,
+      proteinRemaining: proteineRamase,
+      locale: i18n.language,
+    });
 
     onGenerate(prompt);
     onClose();
@@ -109,7 +115,7 @@ export const RecipeGeneratorModal: React.FC<RecipeGeneratorModalProps> = ({
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
         <Animated.View
-          entering={reduceMotion ? FadeIn.duration(150) : FadeInUp.duration(400).springify()}
+          entering={reduceMotion ? FadeIn.duration(150) : FadeInUp.duration(320)}
           exiting={reduceMotion ? FadeOut.duration(100) : FadeOutDown.duration(300)}
           style={[styles.modalCard, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}
         >

@@ -1,11 +1,20 @@
 'use strict';
 
-jest.mock('@trigger.dev/sdk/v3', () => ({ task: (definition) => definition }));
+jest.mock('@trigger.dev/sdk/v3', () => ({
+  task: (definition) => definition,
+  defineConfig: (definition) => definition,
+}));
 jest.mock('@google/generative-ai', () => ({ GoogleGenerativeAI: class {} }));
 
 const triggerModule = require('../src/trigger/analiza-mancare-ai');
+const triggerConfig = require('../trigger.config');
 
 describe('Trigger/Gemini Photo production contract', () => {
+  test('targets the existing GetFlow Trigger.dev project', () => {
+    expect(triggerConfig.project).toBe('proj_elmgvpjxptegigrzrhtv');
+    expect(triggerConfig.dirs).toEqual(['src/trigger']);
+  });
+
   test('uses the existing primary Gemini model and bounds provider calls per run', () => {
     expect(typeof triggerModule._test.construiesteIncercariGemini).toBe('function');
     const attempts = triggerModule._test.construiesteIncercariGemini({

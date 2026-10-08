@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, act, fireEvent } from '@testing-library/react-native';
+import { render, act, fireEvent, waitFor } from '@testing-library/react-native';
 import { Keyboard, Platform, StyleSheet } from 'react-native';
 
 import ChatScreen from '../app/(tabs)/chat';
@@ -63,6 +63,8 @@ jest.mock('../lib/parseMealProposal', () => ({
     items: [{ name: 'Iaurt grecesc', qty: 200, unit: 'g', protein_g: 15, carbs_g: 6, fat_g: 7, fiber_g: 0, kcal: 150 }],
   } : null),
   extractTextWithoutMealProposal: (t: string) => t,
+  containsStructuredMealProtocol: () => false,
+  formatMealProposalForChat: () => 'REȚETĂ FORMATATĂ',
 }));
 
 jest.mock('../context/AuthContext', () => ({
@@ -344,6 +346,6 @@ describe('P1-02 — turul AI: eșecurile nu devin răspunsuri complete', () => {
     mockAreoPropunere = false; // răspuns text simplu, fără propunere de masă
     await trimiteIntrebare({ ok: true, status: 200, json: async () => ({ raspuns: 'Somonul e bogat in omega-3.' }) });
 
-    expect(mockAds.maybeShowInterstitial).toHaveBeenCalled();
+    await waitFor(() => expect(mockAds.maybeShowInterstitial).toHaveBeenCalled());
   });
 });

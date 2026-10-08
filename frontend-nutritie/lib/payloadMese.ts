@@ -217,11 +217,11 @@ export interface ItemPropunere {
   name: string;
   qty: number;
   unit: string;
-  kcal: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-  fiber_g: number;
+  kcal?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  fiber_g?: number;
 }
 
 // Extrage un număr dintr-o valoare cu unități ("200 kcal", "30 g") sau liberă.
@@ -265,11 +265,11 @@ export function construiesteRinduriMasaChat(params: {
       id: idMasaDinOperatie(user_id, `${idOperatie}#${index}`),
       user_id,
       nume: `${item.name} (${qty}${item.unit || 'g'})`,
-      calorii: clampValoare(Math.round(laNumarStrict(item.kcal)), LIMITE_DB_MESE.calorii),
+      calorii: clampValoare(laNumarStrict(item.kcal), LIMITE_DB_MESE.calorii),
       proteine: clampValoare(laNumarStrict(item.protein_g), LIMITE_DB_MESE.proteine),
       carbohidrati: clampValoare(laNumarStrict(item.carbs_g), LIMITE_DB_MESE.carbohidrati),
       grasimi: clampValoare(laNumarStrict(item.fat_g), LIMITE_DB_MESE.grasimi),
-      fibre: clampValoare(Math.round(laNumarStrict(item.fiber_g)), LIMITE_DB_MESE.fibre),
+      fibre: clampValoare(laNumarStrict(item.fiber_g), LIMITE_DB_MESE.fibre),
       data: zi,
       ora,
       tip_masa: tip,

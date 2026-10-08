@@ -131,3 +131,61 @@ export function extractTextWithoutMealProposal(text: any): string {
   }
   return text.trim();
 }
+
+/** Detectează protocol structurat invalid care nu trebuie expus în UI. */
+export function containsStructuredMealProtocol(text: unknown): boolean {
+  if (typeof text !== 'string') return false;
+  const trimmed = text.trim();
+  return /^```(?:json)?\s*\{/i.test(trimmed)
+    || (/^\{[\s\S]*$/m.test(trimmed) && /"(?:type|items|meal_type)"\s*:/i.test(trimmed))
+    || /"type"\s*:\s*"MEAL_PROPOSAL"/i.test(trimmed);
+}
+
+type SupportedChatLocale = 'ro' | 'en' | 'fr' | 'de';
+
+const RECIPE_COPY: Record<SupportedChatLocale, {
+  ingredients: string;
+  preparation: string;
+  nutrition: string;
+  unavailable: string;
+  protein: string;
+  carbs: string;
+  fat: string;
+}> = {
+  ro: { ingredients: 'Ingrediente', preparation: 'Mod de preparare', nutrition: 'Valori estimate', unavailable: 'Pașii de preparare nu au fost furnizați. Cere regenerarea rețetei.', protein: 'proteine', carbs: 'carbohidrați', fat: 'grăsimi' },
+  en: { ingredients: 'Ingredients', preparation: 'Preparation', nutrition: 'Estimated nutrition', unavailable: 'Preparation steps were not supplied. Ask Coach to regenerate the recipe.', protein: 'protein', carbs: 'carbs', fat: 'fat' },
+  fr: { ingredients: 'Ingrédients', preparation: 'Préparation', nutrition: 'Valeurs estimées', unavailable: "Les étapes de préparation n'ont pas été fournies. Demandez au Coach de régénérer la recette.", protein: 'protéines', carbs: 'glucides', fat: 'lipides' },
+  de: { ingredients: 'Zutaten', preparation: 'Zubereitung', nutrition: 'Geschätzte Nährwerte', unavailable: 'Die Zubereitungsschritte fehlen. Bitte den Coach, das Rezept neu zu erstellen.', protein: 'Protein', carbs: 'Kohlenhydrate', fat: 'Fett' },
+};
+
+/**
+ * Fail-safe presentation for a structured-only AI recipe response. It exposes
+ * human-readable recipe content without leaking the internal JSON contract.
+ */
+export function formatMealProposalForChat(proposal: MealProposal, locale: string): string {
+  const normalized = String(locale || 'en').toLowerCase().split(/[-_]/)[0] as SupportedChatLocale;
+  const copy = RECIPE_COPY[normalized] || RECIPE_COPY.en;
+  const title = proposal.nume?.trim() || proposal.items[0]?.name || 'Recipe';
+  const ingredients = proposal.items.map((item) =>
+    `• ${item.name} — ${item.qty} ${item.unit}${item.kcal > 0 ? ` (${Math.round(item.kcal)} kcal)` : ''}`,
+  );
+  const rawSteps = proposal.preparare
+    ? proposal.preparare.split(/\r?\n/).map((step) => step.trim()).filter(Boolean)
+    : [];
+  const numberedSteps = rawSteps.map((step, index) =>
+    `${index + 1}. ${step.replace(/^\d+[.)]\s*/, '')}`,
+  );
+  const totals = proposal.totals;
+
+  return [
+    title,
+    '',
+    `${copy.ingredients}:`,
+    ...ingredients,
+    '',
+    `${copy.preparation}:`,
+    ...(numberedSteps.length > 0 ? numberedSteps : [copy.unavailable]),
+    '',
+    `${copy.nutrition}: ${Math.round(totals.kcal)} kcal · ${Math.round(totals.protein_g)} g ${copy.protein} · ${Math.round(totals.carbs_g)} g ${copy.carbs} · ${Math.round(totals.fat_g)} g ${copy.fat}`,
+  ].join('\n');
+}

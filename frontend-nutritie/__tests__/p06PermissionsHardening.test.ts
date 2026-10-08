@@ -104,6 +104,7 @@ describe('P0-06: Android media and microphone permission hardening', () => {
     it('ACTIVITY_RECOGNITION permission is preserved in android.permissions for step counting', () => {
       const appJson = readAppJson();
       expect(appJson.expo.android.permissions).toContain('android.permission.ACTIVITY_RECOGNITION');
+      expect(appJson.expo.android.permissions).toContain('android.permission.health.READ_STEPS');
     });
 
     it('expo-image-picker photosPermission message is preserved for gallery image selection', () => {
@@ -124,6 +125,7 @@ describe('P0-06: Android media and microphone permission hardening', () => {
 
       expect(resolvedConfig.android.permissions).toEqual([
         'android.permission.ACTIVITY_RECOGNITION',
+        'android.permission.health.READ_STEPS',
         'android.permission.CAMERA',
       ]);
 
@@ -249,8 +251,9 @@ describe('P0-06: Android media and microphone permission hardening', () => {
     package="com.totsrl.getflo"
     android:versionCode="1"
     android:versionName="1.0.0">
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" />
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
@@ -283,7 +286,7 @@ describe('P0-06: Android media and microphone permission hardening', () => {
 
       // Package and SDK checks
       expect(parsed.package).toBe('com.totsrl.getflo');
-      expect(parsed.minSdkVersion).toBe('24');
+      expect(parsed.minSdkVersion).toBe('26');
       expect(parsed.targetSdkVersion).toBe('36');
       expect(parsed.compileSdkVersion).toBe('36');
 
@@ -302,6 +305,7 @@ describe('P0-06: Android media and microphone permission hardening', () => {
         expect.arrayContaining([
           'android.permission.CAMERA',
           'android.permission.ACTIVITY_RECOGNITION',
+          'android.permission.health.READ_STEPS',
           'android.permission.INTERNET',
           'android.permission.USE_BIOMETRIC',
           'android.permission.USE_FINGERPRINT',
@@ -310,7 +314,7 @@ describe('P0-06: Android media and microphone permission hardening', () => {
       );
 
       // Element count must accurately reflect active XML permissions without comments
-      expect(parsed.permissions).toHaveLength(20);
+      expect(parsed.permissions).toHaveLength(21);
     });
   });
 });

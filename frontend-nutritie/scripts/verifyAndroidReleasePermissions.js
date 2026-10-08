@@ -26,7 +26,7 @@ const { execSync } = require('child_process');
 const { DOMParser } = require('@xmldom/xmldom');
 
 const EXPECTED_PACKAGE = 'com.totsrl.getflo';
-const EXPECTED_MIN_SDK = '24';
+const EXPECTED_MIN_SDK = '26';
 const EXPECTED_TARGET_SDK = '36';
 const EXPECTED_COMPILE_SDK = '36';
 
@@ -41,11 +41,13 @@ const FORBIDDEN_PERMISSIONS = [
 
 const REQUIRED_PERMISSIONS = [
   'android.permission.CAMERA',
+  'android.permission.health.READ_STEPS',
 ];
 
 const APP_DIRECT_PERMISSIONS = [
   'android.permission.CAMERA',
   'android.permission.ACTIVITY_RECOGNITION',
+  'android.permission.health.READ_STEPS',
   'android.permission.INTERNET',
   'android.permission.USE_BIOMETRIC',
   'android.permission.USE_FINGERPRINT',
@@ -434,17 +436,24 @@ function runDisposableReleaseManifestMerge(options = {}) {
     const javaHome = resolveJavaHome();
     const androidHome = resolveAndroidHome();
     const childEnv = buildReleaseVerifierEnv(process.env, { javaHome, androidHome });
+    const quoteCommandPath = (value) => `"${String(value).replace(/"/g, '\\"')}"`;
+    const nodeExecutable = quoteCommandPath(process.execPath);
+    const npmCli = process.env.npm_execpath;
+    if (!npmCli) {
+      throw new Error('npm_execpath is unavailable; cannot prove the npm subprocess uses the requested Node runtime.');
+    }
 
     // Install lockfile-consistent dependencies via npm ci
     console.log(`[P0-06] Installing lockfile-consistent dependencies via npm ci...`);
-    execFn('npm ci --prefer-offline --no-audit --ignore-scripts', {
+    execFn(`${nodeExecutable} ${quoteCommandPath(npmCli)} ci --prefer-offline --no-audit --ignore-scripts`, {
       cwd: tmpDir,
       stdio: options.silent ? 'ignore' : 'inherit',
       env: childEnv,
     });
 
-    console.log(`[P0-06] Running npx expo prebuild --platform android --no-install...`);
-    execFn('npx expo prebuild --platform android --no-install', {
+    const expoCli = path.join(tmpDir, 'node_modules', 'expo', 'bin', 'cli');
+    console.log(`[P0-06] Running Expo prebuild with the verified Node runtime...`);
+    execFn(`${nodeExecutable} ${quoteCommandPath(expoCli)} prebuild --platform android --no-install`, {
       cwd: tmpDir,
       stdio: options.silent ? 'ignore' : 'inherit',
       env: childEnv,

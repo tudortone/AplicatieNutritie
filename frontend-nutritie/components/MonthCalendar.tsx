@@ -9,6 +9,7 @@ import {
   Platform,
   UIManager,
   GestureResponderEvent,
+  LayoutChangeEvent,
 } from 'react-native';
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Calendar } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -60,6 +61,7 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
   );
   const [showYearMonthPicker, setShowYearMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(selectedDate.getFullYear());
+  const [compactWidth, setCompactWidth] = useState<number | null>(null);
 
   const markedSet = useMemo(() => new Set(markedDates), [markedDates]);
 
@@ -104,6 +106,10 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
 
   const handleSelectDate = useCallback(
     (d: Date) => {
+      const candidate = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+      if (candidate > todayStart) return;
       try {
         Haptics.selectionAsync();
       } catch {}
@@ -139,6 +145,12 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
   }, [triggerAnimation]);
 
   const goToNextWeek = useCallback(() => {
+    const today = new Date();
+    const next = new Date(weekAnchor);
+    next.setDate(next.getDate() + 7);
+    const nextWeekStart = getWeekDays(next)[0];
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (nextWeekStart.getTime() > todayStart.getTime()) return;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {}
@@ -148,7 +160,7 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
       d.setDate(d.getDate() + 7);
       return d;
     });
-  }, [triggerAnimation]);
+  }, [triggerAnimation, weekAnchor]);
 
   // Month navigation (expanded view)
   const goToPrevMonth = useCallback(() => {
@@ -160,12 +172,17 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
   }, [triggerAnimation]);
 
   const goToNextMonth = useCallback(() => {
+    const today = new Date();
+    if (
+      currentMonth.getFullYear() > today.getFullYear() ||
+      (currentMonth.getFullYear() === today.getFullYear() && currentMonth.getMonth() >= today.getMonth())
+    ) return;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch {}
     triggerAnimation();
     setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-  }, [triggerAnimation]);
+  }, [triggerAnimation, currentMonth]);
 
   // Swipe gesture detection on compact days strip
   const touchStartXRef = useRef(0);
@@ -190,6 +207,29 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
 
   // 7 days of the currently active week
   const weekDays = useMemo(() => getWeekDays(weekAnchor), [weekAnchor]);
+  const compactDayCount = useMemo(() => {
+    if (compactWidth === null) return 7;
+    return Math.max(3, Math.min(7, Math.floor((compactWidth - 84) / 44)));
+  }, [compactWidth]);
+  const visibleWeekDays = useMemo(() => {
+    if (compactDayCount >= weekDays.length) return weekDays;
+    const selectedIndex = weekDays.findIndex((day) => isSameDay(day, selectedDate));
+    const focusIndex = selectedIndex >= 0 ? selectedIndex : Math.floor(weekDays.length / 2);
+    const maxStart = weekDays.length - compactDayCount;
+    const start = Math.max(0, Math.min(maxStart, focusIndex - Math.floor(compactDayCount / 2)));
+    return weekDays.slice(start, start + compactDayCount);
+  }, [compactDayCount, selectedDate, weekDays]);
+  const todayForNavigation = new Date();
+  const nextWeekStart = new Date(weekDays[0]);
+  nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+  const nextWeekDisabled = nextWeekStart.getTime() > new Date(
+    todayForNavigation.getFullYear(),
+    todayForNavigation.getMonth(),
+    todayForNavigation.getDate(),
+  ).getTime();
+  const nextMonthDisabled =
+    currentMonth.getFullYear() > todayForNavigation.getFullYear() ||
+    (currentMonth.getFullYear() === todayForNavigation.getFullYear() && currentMonth.getMonth() >= todayForNavigation.getMonth());
   const isSelectedDateToday = isSameDay(selectedDate, new Date());
 
   // Weekday initials for expanded month grid
@@ -222,6 +262,7 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
       const isToday = isSameDay(cellDate, today);
       const dayKey = localDayKey(cellDate);
       const hasMeals = markedSet.has(dayKey);
+      const isFuture = cellDate.getTime() > new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
 
       const cellA11yLabel = `${t('jurnal.selectDateA11y', {
         date: formatFullDate(cellDate, localeTag),
@@ -240,10 +281,11 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
             isToday && !isSelected && { borderWidth: 2, borderColor: colors.accent, borderRadius: 14 },
           ]}
           onPress={() => handleSelectDate(cellDate)}
+          disabled={isFuture}
           activeOpacity={0.7}
           hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           accessibilityRole="button"
-          accessibilityState={{ selected: isSelected }}
+          accessibilityState={{ selected: isSelected, disabled: isFuture }}
           accessibilityLabel={cellA11yLabel}
         >
           <Text
@@ -251,6 +293,7 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
               styles.gridDayNumber,
               { color: isSelected ? colors.background : colors.textPrimary },
               isToday && !isSelected && { color: colors.accent, fontWeight: '900' },
+              isFuture && { opacity: 0.35 },
             ]}
           >
             {day}
@@ -311,6 +354,7 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
         >
           {years.map((yr) => {
             const isYearSelected = yr === pickerYear;
+            const isFutureYear = yr > new Date().getFullYear();
             return (
               <TouchableOpacity
                 key={`year-${yr}`}
@@ -322,14 +366,15 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
                   },
                 ]}
                 onPress={() => setPickerYear(yr)}
+                disabled={isFutureYear}
                 accessibilityRole="button"
-                accessibilityState={{ selected: isYearSelected }}
+                accessibilityState={{ selected: isYearSelected, disabled: isFutureYear }}
                 accessibilityLabel={`${yr}`}
               >
                 <Text
                   style={[
                     styles.pickerChipText,
-                    { color: isYearSelected ? colors.background : colors.textPrimary },
+                    { color: isYearSelected ? colors.background : colors.textPrimary, opacity: isFutureYear ? 0.35 : 1 },
                   ]}
                 >
                   {yr}
@@ -347,6 +392,8 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
             const isCurMonth =
               mIdx === currentMonth.getMonth() && pickerYear === currentMonth.getFullYear();
             const mName = formatMonthName(mIdx, pickerYear, localeTag);
+            const now = new Date();
+            const isFutureMonth = pickerYear > now.getFullYear() || (pickerYear === now.getFullYear() && mIdx > now.getMonth());
             return (
               <TouchableOpacity
                 key={`month-${mIdx}`}
@@ -362,14 +409,15 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
                   setCurrentMonth(new Date(pickerYear, mIdx, 1));
                   setShowYearMonthPicker(false);
                 }}
+                disabled={isFutureMonth}
                 accessibilityRole="button"
-                accessibilityState={{ selected: isCurMonth }}
+                accessibilityState={{ selected: isCurMonth, disabled: isFutureMonth }}
                 accessibilityLabel={`${mName} ${pickerYear}`}
               >
                 <Text
                   style={[
                     styles.monthChipText,
-                    { color: isCurMonth ? colors.background : colors.textPrimary },
+                    { color: isCurMonth ? colors.background : colors.textPrimary, opacity: isFutureMonth ? 0.35 : 1 },
                   ]}
                 >
                   {mName.substring(0, 3)}
@@ -480,6 +528,7 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
         <View
           testID="compact-calendar-strip"
           style={styles.compactRow}
+          onLayout={(event: LayoutChangeEvent) => setCompactWidth(event.nativeEvent.layout.width)}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
         >
@@ -497,11 +546,13 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
 
           {/* 7 Days Strip */}
           <View style={styles.compactDaysContainer}>
-            {weekDays.map((d) => {
+            {visibleWeekDays.map((d) => {
               const isSelected = isSameDay(d, selectedDate);
               const isToday = isSameDay(d, new Date());
               const dayKey = localDayKey(d);
               const hasMeals = markedSet.has(dayKey);
+              const now = new Date();
+              const isFuture = d.getTime() > new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
               const weekdayStr = formatWeekdayShort(d, localeTag);
 
               const dayA11yLabel = `${t('jurnal.selectDateA11y', {
@@ -530,10 +581,11 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
                     },
                   ]}
                   onPress={() => handleSelectDate(d)}
+                  disabled={isFuture}
                   activeOpacity={0.7}
                   hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
+                  accessibilityState={{ selected: isSelected, disabled: isFuture }}
                   accessibilityLabel={dayA11yLabel}
                 >
                   <Text
@@ -544,7 +596,8 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
                           ? colors.background
                           : isToday
                           ? colors.accent
-                          : colors.textTertiary,
+                        : colors.textTertiary,
+                        opacity: isFuture ? 0.35 : 1,
                       },
                     ]}
                   >
@@ -560,6 +613,7 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
                           ? colors.accent
                           : colors.textPrimary,
                         fontWeight: isSelected || isToday ? '900' : '700',
+                        opacity: isFuture ? 0.35 : 1,
                       },
                     ]}
                   >
@@ -584,12 +638,14 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
           <TouchableOpacity
             testID="next-week-btn"
             onPress={goToNextWeek}
+            disabled={nextWeekDisabled}
             style={[styles.navArrowBtn, { backgroundColor: colors.overlayLight, borderColor: colors.cardBorder }]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
+            accessibilityState={{ disabled: nextWeekDisabled }}
             accessibilityLabel={t('jurnal.nextWeek', { defaultValue: 'Săptămâna următoare' })}
           >
-            <ChevronRight size={18} color={colors.accent} />
+            <ChevronRight size={18} color={nextWeekDisabled ? colors.textTertiary : colors.accent} />
           </TouchableOpacity>
         </View>
       )}
@@ -632,12 +688,14 @@ export const MonthCalendar: React.FC<MonthCalendarProps> = React.memo(
             <TouchableOpacity
               testID="next-month-btn"
               onPress={goToNextMonth}
+              disabled={nextMonthDisabled}
               style={[styles.navArrowBtn, { backgroundColor: colors.overlayLight, borderColor: colors.cardBorder }]}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityRole="button"
+              accessibilityState={{ disabled: nextMonthDisabled }}
               accessibilityLabel={t('jurnal.nextMonth', { defaultValue: 'Luna următoare' })}
             >
-              <ChevronRight size={18} color={colors.accent} />
+              <ChevronRight size={18} color={nextMonthDisabled ? colors.textTertiary : colors.accent} />
             </TouchableOpacity>
           </View>
 

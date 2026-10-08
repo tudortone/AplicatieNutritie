@@ -368,6 +368,19 @@ describe('P0-07 Store-Authoritative Google Play Paywall', () => {
     expect(getByText('Abonamente indisponibile temporar')).toBeTruthy();
   });
 
+  test('11a. missing backend catalog route is not mislabeled as an empty Google Play response', async () => {
+    mockPremiumState.operation = {
+      status: 'unavailable',
+      code: 'BILLING_BACKEND_CONFIGURATION',
+    };
+    mockPremiumState.subscriptionPackages = [];
+
+    const { getByText, queryByText } = await render(<PaywallScreen />);
+
+    expect(getByText('Serviciul de plată GetFlow nu este configurat complet. Nu a fost inițiată nicio plată.')).toBeTruthy();
+    expect(queryByText('Google Play nu a returnat momentan ofertele de abonament. Reîncearcă în câteva momente.')).toBeNull();
+  });
+
   test('12. retry product query invokes refreshProducts', async () => {
     mockPremiumState.purchasesAvailable = false;
     const { getByTestId } = await render(<PaywallScreen />);
@@ -577,5 +590,24 @@ describe('P0-07 Store-Authoritative Google Play Paywall', () => {
 
     expect(getByText('Jahresabonnement')).toBeTruthy();
     expect(getByText('Monatsabonnement')).toBeTruthy();
+  });
+
+  test('26. renders an original saved-meal preview without replacing store prices', async () => {
+    const { getByTestId, getByText } = await render(<PaywallScreen />);
+    expect(getByTestId('paywall-meal-preview')).toBeTruthy();
+    expect(getByTestId('paywall-meal-image')).toBeTruthy();
+    expect(getByText('Exemplu de rezultat')).toBeTruthy();
+    expect(getByText('Bol cu pui la grătar')).toBeTruthy();
+    expect(getByText('carbohidrați').props.numberOfLines).toBe(2);
+    expect(getByText('29,99 RON')).toBeTruthy();
+    expect(getByText('199,99 RON')).toBeTruthy();
+  });
+
+  test.each(['ro', 'en', 'fr', 'de'])('27. %s premium claims do not promise unlimited Coach access', async (locale) => {
+    await act(async () => {
+      await i18n.changeLanguage(locale);
+    });
+    const { queryByText } = await render(<PaywallScreen />);
+    expect(queryByText(/unlimited|nelimitat|illimité|unbegrenzt/i)).toBeNull();
   });
 });

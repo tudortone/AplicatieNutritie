@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Droplet, Minus, Plus, Scale } from 'lucide-react-native';
@@ -12,6 +12,7 @@ export interface WaterIntakeCardProps {
   loading: boolean;
   onAddGlass: () => void;
   onRemoveGlass: () => void;
+  onSetConsumedMl: (ml: number) => void | Promise<void>;
   onAddWeight: () => void;
 }
 
@@ -21,6 +22,7 @@ export function WaterIntakeCard({
   loading,
   onAddGlass,
   onRemoveGlass,
+  onSetConsumedMl,
   onAddWeight,
 }: WaterIntakeCardProps) {
   const { colors } = useTheme();
@@ -29,6 +31,25 @@ export function WaterIntakeCard({
   const progressPercent = hasTarget
     ? Math.min(Math.max((consumedMl / targetMl) * 100, 0), 100)
     : 0;
+  const [draftMl, setDraftMl] = React.useState(String(consumedMl));
+  const draftMlRef = React.useRef(String(consumedMl));
+  const editingRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!editingRef.current) {
+      const next = String(consumedMl);
+      draftMlRef.current = next;
+      setDraftMl(next);
+    }
+  }, [consumedMl]);
+
+  const commitConsumedMl = React.useCallback(() => {
+    const parsed = Number.parseInt(draftMlRef.current.replace(/[^\d]/g, ''), 10);
+    const next = Number.isFinite(parsed) ? Math.min(20000, Math.max(0, parsed)) : consumedMl;
+    editingRef.current = false;
+    setDraftMl(String(next));
+    if (next !== consumedMl) void onSetConsumedMl(next);
+  }, [consumedMl, onSetConsumedMl]);
 
   return (
     <View
@@ -118,17 +139,30 @@ export function WaterIntakeCard({
         ) : null}
 
         <View style={styles.footer}>
-          <Text
+          <View
             testID="water-consumed-ml"
             accessibilityLabel={t('home.waterConsumedMl', { ml: consumedMl })}
-            style={[styles.consumed, { color: colors.textPrimary }]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.75}
-            maxFontSizeMultiplier={1.3}
+            style={styles.consumed}
           >
-            <Text style={{ fontSize: 22, fontWeight: '900', color: colors.accentTertiary }}>{consumedMl}</Text> ml
-          </Text>
+            <TextInput
+              testID="water-consumed-input"
+              accessibilityLabel={t('home.waterEditConsumedA11y')}
+              value={draftMl}
+              onFocus={() => { editingRef.current = true; }}
+              onChangeText={(value) => {
+                const next = value.replace(/[^\d]/g, '').slice(0, 5);
+                draftMlRef.current = next;
+                setDraftMl(next);
+              }}
+              onBlur={commitConsumedMl}
+              onSubmitEditing={commitConsumedMl}
+              keyboardType="number-pad"
+              selectTextOnFocus
+              maxLength={5}
+              style={[styles.consumedInput, { color: colors.accentTertiary, borderColor: colors.accentTertiary + '55' }]}
+            />
+            <Text style={[styles.consumedUnit, { color: colors.textPrimary }]}>ml</Text>
+          </View>
           {hasTarget ? (
             <Text
               testID="water-target-ml"
@@ -178,7 +212,9 @@ const styles = StyleSheet.create({
   progressTrack: { width: '100%', height: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 5, overflow: 'hidden', marginBottom: 12 },
   progressFill: { height: '100%', borderRadius: 5 },
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  consumed: { fontSize: 14, fontWeight: '700' },
+  consumed: { minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  consumedInput: { minWidth: 72, height: 42, paddingHorizontal: 9, paddingVertical: 4, borderWidth: 1, borderRadius: 10, fontSize: 22, fontWeight: '900', textAlign: 'center' },
+  consumedUnit: { fontSize: 14, fontWeight: '700' },
   target: { fontSize: 13, fontWeight: '800' },
   addWeightButton: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 6 },
   addWeightText: { fontSize: 13, fontWeight: '800' },

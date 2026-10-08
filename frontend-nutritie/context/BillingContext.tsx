@@ -78,9 +78,18 @@ async function billingFetch<T>(
       signal: controller.signal,
     });
     if (!response.ok) throw Object.assign(new Error('Billing backend unavailable.'), {
+      code: response.status === 404
+        ? 'BILLING_BACKEND_CONFIGURATION'
+        : 'BILLING_BACKEND_UNAVAILABLE',
       status: response.status,
     });
     return await response.json() as T;
+  } catch (error) {
+    if (typeof error === 'object' && error && 'code' in error) throw error;
+    throw Object.assign(new Error('Billing network unavailable.'), {
+      code: 'BILLING_NETWORK',
+      cause: error,
+    });
   } finally {
     clearTimeout(timeout);
   }

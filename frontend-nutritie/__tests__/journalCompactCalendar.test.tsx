@@ -104,6 +104,36 @@ describe('GetFlow Journal Compact 7-Day Calendar UX', () => {
     expect(todayPill.props.accessibilityState.selected).toBe(true);
   });
 
+  it('disables future days and never emits a future journal selection', async () => {
+    jest.useFakeTimers();
+    try {
+      // Keep tomorrow inside the rendered Monday-Sunday strip. Using the real
+      // clock makes this assertion disappear whenever the suite runs on Sunday.
+      const today = new Date(2026, 9, 1, 12);
+      jest.setSystemTime(today);
+      const tomorrow = new Date(2026, 9, 2, 12);
+      const onSelectDate = jest.fn();
+      const view = await render(<MonthCalendar selectedDate={today} onSelectDate={onSelectDate} />);
+
+      const futurePill = view.getByTestId(`compact-day-${localDayKey(tomorrow)}`);
+      expect(futurePill.props.accessibilityState.disabled).toBe(true);
+      await fireEvent.press(futurePill);
+      expect(onSelectDate).not.toHaveBeenCalled();
+      expect(view.getByTestId('next-week-btn').props.accessibilityState.disabled).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('reduces visible compact days when measured width cannot fit seven pills and two arrows', async () => {
+    const fixedDate = new Date(2026, 8, 30);
+    const view = await render(<MonthCalendar selectedDate={fixedDate} onSelectDate={jest.fn()} />);
+    const strip = view.getByTestId('compact-calendar-strip');
+
+    await fireEvent(strip, 'layout', { nativeEvent: { layout: { width: 320, height: 60, x: 0, y: 0 } } });
+    expect(view.getAllByTestId(/^compact-day-/)).toHaveLength(5);
+  });
+
   // Test 3: Tap a day to select calls onSelectDate
   it('allows tapping a day to select it', async () => {
     const baseDate = new Date(2026, 8, 28); // Monday Sep 28, 2026
@@ -142,32 +172,30 @@ describe('GetFlow Journal Compact 7-Day Calendar UX', () => {
   });
 
   // Test 5: Next and Previous week navigation
-  it('navigates previous and next week in compact mode', async () => {
-    const fixedDate = new Date(2026, 8, 30); // Sep 30, 2026 (week Sep 28 - Oct 4)
+  it('navigates previous and next week in compact mode without crossing today', async () => {
+    const fixedDate = new Date(2026, 8, 23); // safely before the current week
     const onSelectDate = jest.fn();
 
     const view = await render(
       <MonthCalendar selectedDate={fixedDate} onSelectDate={onSelectDate} />
     );
 
-    // Initial week should contain Sep 28
-    expect(view.getByTestId('compact-day-2026-09-28')).toBeTruthy();
+    expect(view.getByTestId('compact-day-2026-09-21')).toBeTruthy();
 
     // Click next week
     const nextWeekBtn = view.getByTestId('next-week-btn');
     await fireEvent.press(nextWeekBtn);
 
     // New week should be Oct 5 - Oct 11
-    expect(await view.findByTestId('compact-day-2026-10-05')).toBeTruthy();
-    expect(view.queryByTestId('compact-day-2026-09-28')).toBeNull();
+    expect(await view.findByTestId('compact-day-2026-09-28')).toBeTruthy();
+    expect(view.queryByTestId('compact-day-2026-09-21')).toBeNull();
 
     // Click prev week twice
     const prevWeekBtn = view.getByTestId('prev-week-btn');
     await fireEvent.press(prevWeekBtn);
     await fireEvent.press(prevWeekBtn);
 
-    // Week should now be Sep 21 - Sep 27
-    expect(await view.findByTestId('compact-day-2026-09-21')).toBeTruthy();
+    expect(await view.findByTestId('compact-day-2026-09-14')).toBeTruthy();
   });
 
   // Test 6: Expand to full month calendar and collapse back
@@ -200,8 +228,8 @@ describe('GetFlow Journal Compact 7-Day Calendar UX', () => {
   });
 
   // Test 7: Month navigation in expanded view
-  it('supports previous and next month navigation in expanded calendar', async () => {
-    const fixedDate = new Date(2026, 8, 15); // Sep 15, 2026
+  it('supports previous and next month navigation in expanded calendar without crossing the current month', async () => {
+    const fixedDate = new Date(2026, 7, 15); // Aug 15, 2026
     const onSelectDate = jest.fn();
 
     const view = await render(
@@ -209,22 +237,21 @@ describe('GetFlow Journal Compact 7-Day Calendar UX', () => {
     );
 
     expect(view.getByTestId('expanded-calendar-container')).toBeTruthy();
-    // September has Sep 15
-    expect(view.getByTestId('month-day-2026-09-15')).toBeTruthy();
+    expect(view.getByTestId('month-day-2026-08-15')).toBeTruthy();
 
-    // Navigate to next month (October)
+    // Navigate to September
     const nextMonthBtn = view.getByTestId('next-month-btn');
     await fireEvent.press(nextMonthBtn);
 
-    expect(await view.findByTestId('month-day-2026-10-15')).toBeTruthy();
-    expect(view.queryByTestId('month-day-2026-09-15')).toBeNull();
+    expect(await view.findByTestId('month-day-2026-09-15')).toBeTruthy();
+    expect(view.queryByTestId('month-day-2026-08-15')).toBeNull();
 
-    // Navigate back to August
+    // Navigate back to July
     const prevMonthBtn = view.getByTestId('prev-month-btn');
     await fireEvent.press(prevMonthBtn);
     await fireEvent.press(prevMonthBtn);
 
-    expect(await view.findByTestId('month-day-2026-08-15')).toBeTruthy();
+    expect(await view.findByTestId('month-day-2026-07-15')).toBeTruthy();
   });
 
   // Test 8: Selecting date in full calendar updates selection & synchronizes compact view
@@ -242,7 +269,7 @@ describe('GetFlow Journal Compact 7-Day Calendar UX', () => {
 
     const view = await render(<Harness />);
 
-    // In expanded view, navigate to October and select Oct 20
+    // In expanded view, navigate to October; future selection must remain blocked.
     await fireEvent.press(view.getByTestId('next-month-btn'));
     const oct20Cell = await view.findByTestId('month-day-2026-10-20');
     await fireEvent.press(oct20Cell);
@@ -250,16 +277,14 @@ describe('GetFlow Journal Compact 7-Day Calendar UX', () => {
     // Collapse back to compact view
     await fireEvent.press(view.getByTestId('calendar-collapse-handle'));
 
-    // Compact view should now display the week containing Oct 20 (Oct 19 - Oct 25)
+    // The selected date remains September 15 because October 20 is in the future.
     expect(await view.findByTestId('compact-calendar-strip')).toBeTruthy();
-    const compactOct20 = await view.findByTestId('compact-day-2026-10-20');
-    expect(compactOct20).toBeTruthy();
-    expect(compactOct20.props.accessibilityState.selected).toBe(true);
+    expect(await view.findByTestId('compact-day-2026-09-15')).toBeTruthy();
   });
 
   // Test 9: Swipe gesture navigation on compact strip
   it('navigates weeks via horizontal swipe gesture', async () => {
-    const fixedDate = new Date(2026, 8, 30);
+    const fixedDate = new Date(2026, 8, 23);
     const onSelectDate = jest.fn();
 
     const view = await render(
@@ -272,13 +297,13 @@ describe('GetFlow Journal Compact 7-Day Calendar UX', () => {
     await fireEvent(strip, 'touchStart', { nativeEvent: { pageX: 200, pageY: 100 } });
     await fireEvent(strip, 'touchEnd', { nativeEvent: { pageX: 100, pageY: 100 } });
 
-    expect(await view.findByTestId('compact-day-2026-10-05')).toBeTruthy();
+    expect(await view.findByTestId('compact-day-2026-09-28')).toBeTruthy();
 
     // Swipe right (go back to previous week)
     await fireEvent(strip, 'touchStart', { nativeEvent: { pageX: 100, pageY: 100 } });
     await fireEvent(strip, 'touchEnd', { nativeEvent: { pageX: 220, pageY: 100 } });
 
-    expect(await view.findByTestId('compact-day-2026-09-28')).toBeTruthy();
+    expect(await view.findByTestId('compact-day-2026-09-21')).toBeTruthy();
   });
 
   // Test 10: Multi-locale support (RO, EN, FR, DE) with zero hardcoding

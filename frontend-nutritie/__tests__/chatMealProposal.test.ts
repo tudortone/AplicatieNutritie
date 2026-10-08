@@ -1,4 +1,4 @@
-import { parseMealProposal, extractTextWithoutMealProposal } from '../lib/parseMealProposal';
+import { parseMealProposal, extractTextWithoutMealProposal, formatMealProposalForChat, containsStructuredMealProtocol } from '../lib/parseMealProposal';
 
 describe('Phase B: Chat Advisory First & MEAL_PROPOSAL Handling', () => {
   it('extracts conversational recipe text while cleanly removing the MEAL_PROPOSAL JSON', () => {
@@ -55,5 +55,54 @@ Poftă bună!
     expect(parsed?.type).toBe('MEAL_PROPOSAL');
     expect(parsed?.items[0].name).toBe('Ouă');
     expect(parsed?.totals.protein_g).toBe(19);
+  });
+
+  it('turns a JSON-only recipe proposal into readable, numbered recipe copy', () => {
+    const proposal = parseMealProposal({
+      type: 'MEAL_PROPOSAL',
+      nume: 'Protein bowl',
+      items: [
+        { name: 'Chicken', qty: 150, unit: 'g', kcal: 248, protein_g: 46, carbs_g: 0, fat_g: 5 },
+        { name: 'Rice', qty: 120, unit: 'g', kcal: 156, protein_g: 3, carbs_g: 34, fat_g: 0 },
+      ],
+      preparare: ['Cook the rice.', 'Grill the chicken.', 'Serve together.'],
+      totals: { kcal: 404, protein_g: 49, carbs_g: 34, fat_g: 5 },
+    });
+
+    expect(proposal).not.toBeNull();
+    const text = formatMealProposalForChat(proposal!, 'en');
+    expect(text).toContain('Protein bowl');
+    expect(text).toContain('Ingredients');
+    expect(text).toContain('Chicken — 150 g');
+    expect(text).toContain('1. Cook the rice.');
+    expect(text).toContain('2. Grill the chicken.');
+    expect(text).toContain('404 kcal');
+    expect(text).not.toContain('MEAL_PROPOSAL');
+    expect(text).not.toContain('protein_g');
+  });
+
+  it('detects malformed structured protocol so it cannot leak into a chat bubble', () => {
+    const malformed = '{"type":"MEAL_PROPOSAL","meal_type":"pranz","items":[';
+    expect(parseMealProposal(malformed)).toBeNull();
+    expect(containsStructuredMealProtocol(malformed)).toBe(true);
+    expect(containsStructuredMealProtocol('A normal nutrition answer.')).toBe(false);
+  });
+
+  test.each([
+    ['ro', 'Ingrediente', 'Mod de preparare'],
+    ['en', 'Ingredients', 'Preparation'],
+    ['fr', 'Ingrédients', 'Préparation'],
+    ['de', 'Zutaten', 'Zubereitung'],
+  ])('formats structured recipe presentation in current %s locale', (locale, ingredients, preparation) => {
+    const proposal = parseMealProposal({
+      type: 'MEAL_PROPOSAL', meal_type: 'pranz', nume: 'Bowl',
+      items: [{ name: 'Rice', qty: 100, unit: 'g', kcal: 130, protein_g: 2.5, carbs_g: 28, fat_g: 0.3, fiber_g: 0.3 }],
+      preparare: ['Cook.', 'Serve.'],
+      totals: { kcal: 130, protein_g: 2.5, carbs_g: 28, fat_g: 0.3 },
+    })!;
+    const visible = formatMealProposalForChat(proposal, locale);
+    expect(visible).toContain(ingredients);
+    expect(visible).toContain(preparation);
+    expect(visible).not.toContain('MEAL_PROPOSAL');
   });
 });

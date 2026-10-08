@@ -20,10 +20,16 @@
     "fats": "Grăsimi",
     "save": "SALVEAZĂ PROFIL",
     "logout": "Deconectare",
-    "watch_selector_title": "Selectează Ceasul / Dispozitivul",
-    "watch_selector_sub": "Alege furnizorul de fitness pentru sincronizarea datelor",
+    "watch_selector_title": "Sursa datelor de pași",
+    "watch_selector_sub": "GetFlow folosește sursa compatibilă disponibilă pe acest dispozitiv",
+    "healthConnectDescription": "Pași agregați din telefon și aplicațiile conectate",
+    "healthConnectInfo": "Health Connect agregă pașii telefonului și ai aplicațiilor conectate. Poți gestiona sursele în setările Health Connect.",
+    "phoneSensorDescription": "Pași înregistrați de senzorul telefonului",
+    "phoneSensorInfo": "Pașii provin din senzorul telefonului și din adăugarea manuală.",
     "languageSection": "LIMBĂ & REGIUNE",
     "languageTitle": "Limba Aplicației",
+    "searchLanguages": "Caută limbi",
+    "noLanguagesFound": "Nu am găsit limbi",
     "languageDesc": "Alege limba preferată pentru interfață și conversațiile cu AI",
     "notificationsSection": "REMINDERE & NOTIFICĂRI",
     "notificationsTitle": "Remindere Zilnice de Masă",
@@ -38,6 +44,7 @@
     "notConnected": "Neconectat",
     "changeDeviceA11y": "Schimbă ceasul sau echipamentul conectat",
     "badgesSection": "INSIGNE & RECOMPENSE ({{unlocked}}/{{total}})",
+    "viewAllAchievements": "Vezi toate insignele",
     "achievements": {
       "prima_transpiratie": {
         "name": "Prima Transpirație",
@@ -155,7 +162,10 @@
     "saveFailedMessage": "Nu s-au putut salva datele. Verifică conexiunea și încearcă din nou.",
     "flowCreditsTitle": "Flow Credits",
     "flowCreditsDesc": "Credite pentru analize Photo AI și pachete suplimentare",
-    "flowCreditsA11y": "Deschide soldul și magazinul Flow Credits"
+    "flowCreditsA11y": "Deschide soldul și magazinul Flow Credits",
+    "manageSubscription": "Gestionează abonamentul",
+    "manageSubscriptionDesc": "Vezi, modifică sau anulează abonamentul în Google Play",
+    "manageSubscriptionA11y": "Deschide abonamentele Google Play pentru gestionare sau anulare"
   },
   "nutrition": {
     "protein": "Proteine",
@@ -360,7 +370,7 @@
   "chat": {
     "welcome": "Bună! Sunt asistentul tău nutrițional AI. Îți pot sugera mese, analiza dieta de azi sau răspunde la orice întrebare despre nutriție.",
     "coachLabel": "GetFlow Coach",
-    "coachSubtitle": "nutriție, mese, progres",
+    "coachSubtitle": "Asistent AI · nutriție & fitness",
     "onlineNow": "online acum",
     "newChat": "Chat nou",
     "newChatA11y": "Începe o conversație nouă de chat",
@@ -453,7 +463,8 @@
         "mediu": "Mediu (< 30 min)",
         "nolimit": "Fără limită"
       }
-    }
+    },
+    "aiActNotice": "GetFlow Coach este un asistent de inteligență artificială. Pentru aspecte medicale, consultați întotdeauna un medic specialist."
   },
   "jurnal": {
     "presetCategories": {
@@ -623,7 +634,8 @@
   },
   "oauth": {
     "completing": "Finalizare conectare…",
-    "cancelled": "Conectarea a fost anulată. Poți încerca din nou."
+    "cancelled": "Conectarea a fost anulată. Poți încerca din nou.",
+    "retry": "Reîncearcă"
   },
   "access": {
     "testerTitle": "Acces de tester activ",
@@ -646,16 +658,25 @@
     "title": "Deblochează potențialul tău maxim",
     "subtitle": "Atinge-ți obiectivele mai rapid cu funcții inteligente avansate.",
     "features": {
-      "ai_title": "Planuri Nutriționale Personalizate AI",
-      "ai_desc": "Meniuri adaptate exact preferințelor și obiectivelor tale",
-      "chat_title": "Asistent Nutrițional Nelimitat",
-      "chat_desc": "Răspunsuri instantanee la orice întrebare despre alimentație",
+      "ai_title": "Planuri nutriționale asistate de AI",
+      "ai_desc": "Idei de meniuri adaptate preferințelor și obiectivelor tale",
+      "chat_title": "Asistent nutrițional AI",
+      "chat_desc": "Răspunsuri utile pentru întrebările tale despre nutriție",
       "scan_title": "Scanare Avansată a Mâncării",
-      "scan_desc": "Recunoaștere foto instantanee a caloriilor și macro-nutrienților",
+      "scan_desc": "Analiză foto pentru estimarea caloriilor și nutrienților principali",
       "ads_title": "Fără Reclame",
       "ads_desc": "O experiență fluidă și neîntreruptă",
       "insights_title": "Analiză Detaliată a Progresului",
-      "insights_desc": "Rapoarte săptămânale și tendințe pe termen lung"
+      "insights_desc": "Urmărește progresul și tendințele în timp"
+    },
+    "preview": {
+      "label": "Exemplu de rezultat",
+      "meal": "Bol cu pui la grătar",
+      "calories": "kcal",
+      "protein": "proteine",
+      "carbs": "carbohidrați",
+      "fat": "grăsimi",
+      "imageA11y": "Exemplu de bol nutritiv cu pui la grătar"
     },
     "plans": {
       "monthly": "Abonament Lunar",
@@ -687,6 +708,10 @@
       "loading_offers": "Se încarcă ofertele disponibile…",
       "unavailable_title": "Abonamente indisponibile temporar",
       "unavailable_message": "Google Play nu a returnat momentan ofertele de abonament. Reîncearcă în câteva momente.",
+      "backend_configuration_message": "Serviciul de plată GetFlow nu este configurat complet. Nu a fost inițiată nicio plată.",
+      "network_message": "GetFlow nu poate contacta momentan serviciul de plată. Verifică internetul și reîncearcă.",
+      "billing_unavailable_message": "Google Play Billing nu este disponibil momentan pe acest dispozitiv. Reîncearcă după ce deschizi aplicația din Google Play.",
+      "products_not_returned_message": "Planurile nu sunt disponibile pentru acest cont, dispozitiv sau regiune. Nu a fost inițiată nicio plată.",
       "pending_title": "Plată în așteptare",
       "pending_message": "Plata ta este în curs de procesare prin Google Play. Accesul Premium va fi activat automat după confirmare.",
       "verifying_title": "Se confirmă abonamentul…",
@@ -844,7 +869,9 @@
     "featuresSaveErrorTitle": "Progres nesalvat",
     "featuresSaveErrorMsg": "Nu am putut salva finalizarea chestionarului. Verifică spațiul disponibil și încearcă din nou.",
     "planLimitWarning": "Am limitat deficitul ca să nu cobori sub pragul sigur de calorii. Obiectivul va fi atins puțin mai lent, dar mai sănătos.",
-    "planDisclaimer": "Sunt estimări orientative, nu sfat medical. Consultă un specialist dacă ai o afecțiune sau urmezi un tratament."
+    "planDisclaimer": "Sunt estimări orientative, nu sfat medical. Consultă un specialist dacă ai o afecțiune sau urmezi un tratament.",
+    "birthdateUnderageTitle": "Exclusiv pentru adulți (18+)",
+    "birthdateUnderageMsg": "GetFlow este destinat exclusiv persoanelor care au împlinit vârsta de 18 ani."
   },
   "months": {
     "m1": "Ianuarie",
@@ -884,6 +911,7 @@
     "waterMissingWeight": "Adaugă greutatea actuală pentru estimarea hidratării",
     "waterTargetValue": "Obiectiv: {{ml}} ml",
     "waterConsumedMl": "{{ml}} ml consumați",
+    "waterEditConsumedA11y": "Setează exact apa consumată în mililitri",
     "waterAddWeight": "Adaugă greutatea actuală",
     "waterProgressA11y": "Progresul consumului zilnic de apă",
     "waterGoal": "Obiectiv: {{glasses}} pahare ({{ml}} ml)",
@@ -891,19 +919,22 @@
     "waterPlusA11y": "Adaugă un pahar de apă",
     "waterCount": "{{count}} / {{target}} pahare băute azi",
     "stepsTitle": "Pași & Calorii",
-    "stepsSource": "Sursă: senzorul telefonului • +{{calories}} kcal arse",
-    "stepsSourceOffline": "Sursă: senzorul telefonului (Pedometer). Atinge „Activează\" pentru a cere permisiunea.",
+    "stepsSource": "Sursă: {{provider}} • +{{calories}} kcal arse",
+    "stepsSourceOffline": "{{provider}} nu este conectat. Atinge „Activează\" pentru a acorda permisiunea.",
     "stepsUnit": "pași",
     "stepsKcalBurned": "+{{calories}} kcal arse",
     "stepsSaveGoalA11y": "Salvează obiectivul de pași",
     "stepsCancelGoalA11y": "Anulează editarea obiectivului",
     "stepsEditGoalA11y": "Modifică obiectivul de pași",
     "stepsAddManual": "Adaugă manual",
+    "stepsCompletedInputA11y": "Pași efectuați",
+    "stepsSetCompletedA11y": "Setează pașii efectuați",
+    "stepsSet": "Setează",
     "stepsAdd500A11y": "Adaugă 500 de pași manual",
     "stepsAdd1000A11y": "Adaugă 1000 de pași manual",
     "stepsActivate": "Activează",
-    "stepsActivateA11y": "Activează senzorul de pași",
-    "stepsOfflineHelp": "Senzorul nu e detectat sau permisiunea nu a fost acordată. Poți oricând adăuga pașii manual mai jos.",
+    "stepsActivateA11y": "Conectează sursa de pași",
+    "stepsOfflineHelp": "Sursa de pași nu este disponibilă sau permisiunea nu a fost acordată. Poți adăuga pașii manual mai jos.",
     "stepsInactiveHelp": "Activează pașii pentru a adăuga caloriile arse din mișcare în balanța ta de dietă — sau adaugă-i manual.",
     "liveMuscleMap": "HARTĂ MUSCULARĂ LIVE",
     "liveMuscleMapA11y": "Hartă musculară live. Deschide antrenamentele",
@@ -920,6 +951,7 @@
     "greetingEvening": "Bună seara",
     "greetingNight": "Noapte bună",
     "greetingSubtitle": "Urmărește-ți nutriția de astăzi",
+    "carbsShort": "Carb.",
     "streakDays": "{{count}} zile",
     "streakDaysA11y": "Seria de {{count}} zile",
     "notificationsA11y": "Notificări",
@@ -1238,66 +1270,148 @@
   },
   "workoutV2": {
     "muscles": {
-      "chest": "Piept", "upper_chest": "Piept superior", "front_delts": "Deltoizi anteriori",
-      "side_delts": "Deltoizi laterali", "rear_delts": "Deltoizi posteriori", "traps": "Trapez",
-      "lats": "Dorsali", "lower_back": "Lombari", "biceps": "Biceps", "triceps": "Triceps",
-      "forearms": "Antebrațe", "abs": "Abdomen", "obliques": "Oblici", "glutes": "Fesieri",
-      "quads": "Cvadriceps", "hamstrings": "Ischiogambieri", "calves": "Gambe",
-      "adductors": "Adductori", "hip_flexors": "Flexori de șold"
+      "chest": "Piept",
+      "upper_chest": "Piept superior",
+      "front_delts": "Deltoizi anteriori",
+      "side_delts": "Deltoizi laterali",
+      "rear_delts": "Deltoizi posteriori",
+      "traps": "Trapez",
+      "lats": "Dorsali",
+      "lower_back": "Lombari",
+      "biceps": "Biceps",
+      "triceps": "Triceps",
+      "forearms": "Antebrațe",
+      "abs": "Abdomen",
+      "obliques": "Oblici",
+      "glutes": "Fesieri",
+      "quads": "Cvadriceps",
+      "hamstrings": "Ischiogambieri",
+      "calves": "Gambe",
+      "adductors": "Adductori",
+      "hip_flexors": "Flexori de șold"
     },
     "anatomy": {
-      "front": "Față", "back": "Spate", "showFront": "Arată vederea din față", "showBack": "Arată vederea din spate", "frontDiagram": "Anatomie musculară din față", "backDiagram": "Anatomie musculară din spate", "selectMuscle": "Atinge de două ori pentru detaliile grupei musculare",
-      "primary": "Principal", "secondary": "Secundar", "stabilizer": "Stabilizator",
-      "noData": "Fără date", "strengthLow": "Nivel redus", "strengthHigh": "Nivel ridicat"
+      "front": "Față",
+      "back": "Spate",
+      "showFront": "Arată vederea din față",
+      "showBack": "Arată vederea din spate",
+      "frontDiagram": "Anatomie musculară din față",
+      "backDiagram": "Anatomie musculară din spate",
+      "selectMuscle": "Atinge de două ori pentru detaliile grupei musculare",
+      "primary": "Principal",
+      "secondary": "Secundar",
+      "stabilizer": "Stabilizator",
+      "noData": "Fără date",
+      "strengthLow": "Nivel redus",
+      "strengthHigh": "Nivel ridicat"
     },
     "preview": {
-      "title": "Anatomy V2", "subtitle": "Previzualizare izolată GetFlow",
-      "tapMuscle": "Atinge o grupă musculară pentru detalii.", "selected": "Selectat: {{muscle}}"
+      "title": "Anatomy V2",
+      "subtitle": "Previzualizare izolată GetFlow",
+      "tapMuscle": "Atinge o grupă musculară pentru detalii.",
+      "selected": "Selectat: {{muscle}}"
     },
     "presets": {
-      "push": "Push", "pull": "Pull", "legs": "Picioare", "upper": "Partea superioară",
-      "lower": "Partea inferioară", "fullbody": "Tot corpul", "beginner": "Începător",
+      "push": "Push",
+      "pull": "Pull",
+      "legs": "Picioare",
+      "upper": "Partea superioară",
+      "lower": "Partea inferioară",
+      "fullbody": "Tot corpul",
+      "beginner": "Începător",
       "homedumbbells": "Acasă cu gantere"
     },
     "exercises": {
-      "barbellBenchPress": "Împins la bancă cu bara", "inclineDumbbellPress": "Împins înclinat cu gantere",
-      "pushUp": "Flotări", "parallelBarDip": "Dips la paralele", "standingOverheadPress": "Împins deasupra capului",
-      "dumbbellLateralRaise": "Ridicări laterale cu gantere", "barbellRow": "Ramat cu bara",
-      "oneArmDumbbellRow": "Ramat cu gantera", "pullUp": "Tracțiuni", "chinUp": "Tracțiuni cu priză inversă",
-      "latPulldown": "Tracțiuni la helcometru", "backSquat": "Genuflexiuni cu bara", "frontSquat": "Genuflexiuni frontale",
-      "gobletSquat": "Genuflexiuni Goblet", "conventionalDeadlift": "Îndreptări", "romanianDeadlift": "Îndreptări românești",
-      "hipThrust": "Împins de șold", "weightedLunge": "Fandări cu greutate", "farmerCarry": "Mersul fermierului",
-      "dumbbellCurl": "Flexii cu gantere", "overheadTricepsExtension": "Extensii triceps deasupra capului",
-      "plank": "Planșă", "pallofPress": "Pallof press", "running": "Alergare", "cycling": "Ciclism"
+      "barbellBenchPress": "Împins la bancă cu bara",
+      "inclineDumbbellPress": "Împins înclinat cu gantere",
+      "pushUp": "Flotări",
+      "parallelBarDip": "Dips la paralele",
+      "standingOverheadPress": "Împins deasupra capului",
+      "dumbbellLateralRaise": "Ridicări laterale cu gantere",
+      "barbellRow": "Ramat cu bara",
+      "oneArmDumbbellRow": "Ramat cu gantera",
+      "pullUp": "Tracțiuni",
+      "chinUp": "Tracțiuni cu priză inversă",
+      "latPulldown": "Tracțiuni la helcometru",
+      "backSquat": "Genuflexiuni cu bara",
+      "frontSquat": "Genuflexiuni frontale",
+      "gobletSquat": "Genuflexiuni Goblet",
+      "conventionalDeadlift": "Îndreptări",
+      "romanianDeadlift": "Îndreptări românești",
+      "hipThrust": "Împins de șold",
+      "weightedLunge": "Fandări cu greutate",
+      "farmerCarry": "Mersul fermierului",
+      "dumbbellCurl": "Flexii cu gantere",
+      "overheadTricepsExtension": "Extensii triceps deasupra capului",
+      "plank": "Planșă",
+      "pallofPress": "Pallof press",
+      "running": "Alergare",
+      "cycling": "Ciclism"
     },
     "builder": {
-      "name": "Numele antrenamentului", "addExercise": "Adaugă exercițiu", "addExerciseNamed": "Adaugă {{exercise}}",
-      "moveUp": "Mută în sus", "moveDown": "Mută în jos", "duplicate": "Duplică", "remove": "Elimină",
-      "sets": "Seturi", "reps": "Repetări", "weight": "Greutate, kg", "rest": "Pauză, secunde",
-      "duration": "Durată, secunde", "distance": "Distanță, km", "save": "Salvează șablonul"
+      "name": "Numele antrenamentului",
+      "addExercise": "Adaugă exercițiu",
+      "addExerciseNamed": "Adaugă {{exercise}}",
+      "moveUp": "Mută în sus",
+      "moveDown": "Mută în jos",
+      "duplicate": "Duplică",
+      "remove": "Elimină",
+      "sets": "Seturi",
+      "reps": "Repetări",
+      "weight": "Greutate, kg",
+      "rest": "Pauză, secunde",
+      "duration": "Durată, secunde",
+      "distance": "Distanță, km",
+      "save": "Salvează șablonul"
     },
     "active": {
-      "planned": "Plan: {{value}} rep", "plannedKg": "Plan: {{value}} kg", "actualReps": "Repetări efectuate",
-      "actualWeight": "Greutate efectuată", "completeSet": "Finalizează setul {{number}}", "addSet": "Adaugă set",
-      "cardioReady": "Completează valorile cardio", "cardioMinutes": "Minute cardio", "cardioDistance": "Distanță, km", "completeCardio": "Finalizează înregistrarea cardio", "finish": "Finalizează antrenamentul"
+      "planned": "Plan: {{value}} rep",
+      "plannedKg": "Plan: {{value}} kg",
+      "actualReps": "Repetări efectuate",
+      "actualWeight": "Greutate efectuată",
+      "completeSet": "Finalizează setul {{number}}",
+      "addSet": "Adaugă set",
+      "cardioReady": "Completează valorile cardio",
+      "cardioMinutes": "Minute cardio",
+      "cardioDistance": "Distanță, km",
+      "completeCardio": "Finalizează înregistrarea cardio",
+      "finish": "Finalizează antrenamentul"
     },
     "strength": {
       "currentStrength": "Forță demonstrată în prezent",
       "trainingDisclaimer": "Scor GetFlow de performanță la antrenament, bazat pe ridicările recente înregistrate. Nu este o măsură medicală sau o percentilă populațională.",
-      "momentum": "Momentum de progres", "progressFact": "Progres recent: {{value}}%", "weeksFact": "Săptămâni active: {{value}}",
+      "momentum": "Momentum de progres",
+      "progressFact": "Progres recent: {{value}}%",
+      "weeksFact": "Săptămâni active: {{value}}",
       "muscleExplanation": "Nivelul reflectă contribuțiile actuale ale ridicărilor eligibile recente, nu dimensiunea musculară.",
-      "noEvidence": "Nu există suficiente dovezi recente din antrenamente.", "e1rmEvidence": "1RM estimat {{value}} kg · Forță {{score}}",
-      "ranks": { "no_data": "Date insuficiente", "foundation": "Foundation", "forge": "Forge", "drive": "Drive", "surge": "Surge", "flow": "Flow" }
+      "noEvidence": "Nu există suficiente dovezi recente din antrenamente.",
+      "e1rmEvidence": "1RM estimat {{value}} kg · Forță {{score}}",
+      "ranks": {
+        "no_data": "Date insuficiente",
+        "foundation": "Foundation",
+        "forge": "Forge",
+        "drive": "Drive",
+        "surge": "Surge",
+        "flow": "Flow"
+      }
     },
     "previewProfiles": {
-      "noData": "Fără date de forță", "improving": "Forță redusă · progres puternic",
-      "strongFlat": "Forță ridicată · progres stabil", "strongImproving": "Forță ridicată · progres puternic"
+      "noData": "Fără date de forță",
+      "improving": "Forță redusă · progres puternic",
+      "strongFlat": "Forță ridicată · progres stabil",
+      "strongImproving": "Forță ridicată · progres puternic"
     },
     "experience": {
-      "title": "Workout V2", "subtitle": "Construiește, antrenează-te și urmărește forța demonstrată",
-      "openStrength": "Deschide harta forței", "presets": "Antrenamente prestabilite", "saved": "Șabloane salvate",
-      "editPreset": "Editează {{name}}", "exerciseCount": "{{count}} exerciții", "start": "Începe antrenamentul",
-      "invalidTemplate": "Adaugă un nume și cel puțin un exercițiu.", "incompleteWorkout": "Finalizează toate seturile sau valorile cardio înainte de încheiere."
+      "title": "Workout V2",
+      "subtitle": "Construiește, antrenează-te și urmărește forța demonstrată",
+      "openStrength": "Deschide harta forței",
+      "presets": "Antrenamente prestabilite",
+      "saved": "Șabloane salvate",
+      "editPreset": "Editează {{name}}",
+      "exerciseCount": "{{count}} exerciții",
+      "start": "Începe antrenamentul",
+      "invalidTemplate": "Adaugă un nume și cel puțin un exercițiu.",
+      "incompleteWorkout": "Finalizează toate seturile sau valorile cardio înainte de încheiere."
     }
   },
   "nutrientFocus": {

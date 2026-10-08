@@ -186,16 +186,18 @@ describe('GetFlow Coach Premium Minimal Redesign Suite', () => {
   });
 
   describe('1. Header Presentation', () => {
-    test('renders compact GetFlow Coach identity with online indicator and new chat action', async () => {
+    test('renders compact GetFlow Coach identity without a fake presence indicator', async () => {
       const view = await render(<ChatScreen />);
 
       const header = view.getByTestId('coach-compact-header');
       expect(header).toBeTruthy();
       expect(StyleSheet.flatten(header.props.style)).toEqual(expect.objectContaining({ paddingBottom: 8 }));
 
-      // Identity & Status
+      // Identity, without a permanent fake online state.
       expect(view.getByText('GetFlow Coach')).toBeTruthy();
-      expect(view.getByText(mockResources.en.chat.onlineNow)).toBeTruthy();
+      expect(view.queryByText(mockResources.en.chat.onlineNow)).toBeNull();
+      expect(view.getByTestId('coach-avatar').props.source).toBeTruthy();
+      expect(view.queryByText('NC')).toBeNull();
 
       // New Chat button
       const newChatBtn = view.getByLabelText(mockResources.en.chat.newChatA11y);
@@ -225,6 +227,10 @@ describe('GetFlow Coach Premium Minimal Redesign Suite', () => {
       // History surface has flex: 1 taking most of the vertical viewport
       const history = view.getByTestId('coach-history-surface');
       expect(StyleSheet.flatten(history.props.style)).toEqual(expect.objectContaining({ flex: 1 }));
+      expect(StyleSheet.flatten(history.props.contentContainerStyle)).toEqual(expect.objectContaining({
+        flexGrow: 1,
+        justifyContent: 'flex-end',
+      }));
     });
   });
 

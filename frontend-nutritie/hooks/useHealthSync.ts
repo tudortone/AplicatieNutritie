@@ -3,7 +3,12 @@ import { Platform, AppState, AppStateStatus } from 'react-native';
 import { Pedometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import * as HealthConnect from 'react-native-health-connect';
 import { ziLocalDeAzi, mergePașiTotal, adaugaPașiManual } from '../lib/healthSteps';
+import {
+  createHealthConnectStepProvider,
+  type HealthConnectStepsApi,
+} from '../lib/healthConnectSteps';
 
 const HEALTH_SYNC_ENABLED_KEY = 'health_sync_enabled';
 const STEP_GOAL_KEY = 'health_step_goal';
@@ -14,6 +19,7 @@ const HEALTH_PROVIDER_KEY = 'health_sync_provider';
 const STEPS_TOTAL_KEY_PREFIX = 'steps_total_';
 
 export type HealthProvider =
+  | 'health_connect'
   | 'google_fit'
   | 'samsung_health'
   | 'apple_health'
@@ -32,6 +38,7 @@ export interface HealthProviderInfo {
 }
 
 export const HEALTH_PROVIDERS: HealthProviderInfo[] = [
+  { id: 'health_connect', name: 'Health Connect', icon: 'heart', description: 'Sursa Android pentru pași agregați din telefon și aplicațiile conectate' },
   { id: 'apple_health', name: 'Apple Health / Apple Watch', icon: 'apple', description: 'Integrare cu Apple Watch și HealthKit' },
   { id: 'garmin', name: 'Garmin Connect', icon: 'watch', description: 'Sincronizare cu ceasuri și ciclocomputere Garmin' },
   { id: 'samsung_health', name: 'Samsung Health / Galaxy Watch', icon: 'circle', description: 'Conectare cu ceasuri Galaxy și Samsung Health' },
@@ -42,6 +49,11 @@ export const HEALTH_PROVIDERS: HealthProviderInfo[] = [
   { id: 'smartwatch', name: 'Brățară / Smartwatch General', icon: 'watch', description: 'Brățări de fitness generice' },
   { id: 'general', name: 'Fără Ceas (Senzor Telefon)', icon: 'smartphone', description: 'Pedometer intern pe telefon' },
 ];
+
+export function getHealthProvidersForPlatform(platform: 'android' | 'ios' | 'web') {
+  const supportedId: HealthProvider = platform === 'android' ? 'health_connect' : 'general';
+  return HEALTH_PROVIDERS.filter((provider) => provider.id === supportedId);
+}
 
 export interface HealthSyncState {
   isAvailable: boolean;
@@ -57,10 +69,12 @@ export interface HealthSyncState {
   toggleSync: (enable: boolean) => Promise<boolean>;
   setNewStepGoal: (goal: number) => Promise<void>;
   addManualSteps: (amount: number) => Promise<void>;
+  setCompletedSteps: (total: number) => Promise<void>;
   refreshSteps: () => Promise<void>;
 }
 
 export function useHealthSync(): HealthSyncState {
+  const healthConnectProvider = useMemoHealthConnectProvider();
   const [isAvailable, setIsAvailable] = useState<boolean>(false);
   const [isEnabled, setIsEnabled] = useState<boolean>(true);
   const [steps, setSteps] = useState<number>(0);
@@ -68,7 +82,7 @@ export function useHealthSync(): HealthSyncState {
   const [stepGoal, setStepGoal] = useState<number>(10000);
   const [loading, setLoading] = useState<boolean>(true);
   const [weight, setWeight] = useState<number>(75);
-  const [selectedProvider, setSelectedProvider] = useState<HealthProvider>(Platform.OS === 'ios' ? 'apple_health' : 'google_fit');
+  const [selectedProvider, setSelectedProvider] = useState<HealthProvider>(Platform.OS === 'android' ? 'health_connect' : 'general');
 
   const subscriptionRef = useRef<Pedometer.Subscription | null>(null);
   const appState = useRef(AppState.currentState);
@@ -83,6 +97,7 @@ export function useHealthSync(): HealthSyncState {
   // valoare cumulativă ca să calculăm delta reală; `null` = următorul eveniment
   // re-stabilește linia de bază (după o citire autoritativă sau repornire watch).
   const lastWatchStepsRef = useRef<number | null>(null);
+  const sensorStepsRef = useRef<number | null>(null);
   // Oglindă sincronă a totalului afișat, ca flushSteps/addManualSteps să persiste
   // valoarea corectă fără a depinde de ordinea rulării efectelor React.
   const stepsRef = useRef(0);
@@ -126,10 +141,17 @@ export function useHealthSync(): HealthSyncState {
 
       let sensorSteps = 0;
       let citireSenzorOk = false;
-      // Android: getStepCountAsync nu este suportat (NotSupportedException), deci
-      // citirea „de la miezul nopții" se face doar pe iOS. Pe Android restaurăm
-      // totalul persistat al zilei și continuăm acumularea din watch-ul live.
-      if (sensorAvailable && Platform.OS === 'ios') {
+      if (sensorAvailable && Platform.OS === 'android' && healthConnectProvider) {
+        try {
+          const aggregated = await healthConnectProvider.readToday();
+          if (aggregated !== null) {
+            sensorSteps = aggregated;
+            citireSenzorOk = true;
+          }
+        } catch (err) {
+          if (__DEV__) console.debug('[useHealthSync] Health Connect indisponibil:', err);
+        }
+      } else if (sensorAvailable && Platform.OS === 'ios') {
         const end = new Date();
         const start = new Date();
         start.setHours(0, 0, 0, 0);
@@ -145,6 +167,7 @@ export function useHealthSync(): HealthSyncState {
       }
 
       if (citireSenzorOk) {
+        sensorStepsRef.current = sensorSteps;
         // Citirea autoritativă (de la miezul nopții) devine sursa totalului afișat.
         // Resetăm linia de bază a watch-ului și buffer-ul: pașii deja incluși aici
         // nu trebuie adunați de două ori de următoarele evenimente watch.
@@ -152,6 +175,7 @@ export function useHealthSync(): HealthSyncState {
         stepBufferRef.current = 0;
         lastStepFlushRef.current = 0;
       }
+      if (!citireSenzorOk) sensorStepsRef.current = null;
 
       // Pașii totali: pe iOS senzorul + manualul; pe Android totalul persistat
       // (senzor live + manual), restaurat la fiecare deschidere/revenire.
@@ -166,10 +190,13 @@ export function useHealthSync(): HealthSyncState {
     } catch (e) {
       console.error('Eroare citire pași azi:', e);
     }
-  }, [isAvailable, weight, persistaTotalPași]);
+  }, [healthConnectProvider, isAvailable, weight, persistaTotalPași]);
 
   // 3. Monitorizare în timp real a pașilor (dacă aplicația este deschisă)
   const startWatchingSteps = useCallback(() => {
+    // Android folosește totalul agregat Health Connect, care include pașii din
+    // fundal și deduplicarea platformei. Adăugarea Pedometer ar dubla valorile.
+    if (Platform.OS === 'android') return;
     if (subscriptionRef.current) {
       subscriptionRef.current.remove();
       subscriptionRef.current = null;
@@ -217,20 +244,27 @@ export function useHealthSync(): HealthSyncState {
   const initHealth = useCallback(async () => {
     setLoading(true);
     try {
-      // BUG-005: nu mai cerem permisiunea OS la fiecare boot (prompt repetat).
-      // Verificăm doar hardware-ul și permisiunea DEJA acordată; promptul OS se
-      // afișează abia la primul toggle explicit (toggleSync). Ambele condiții:
-      // senzor prezent ȘI permisiune acordată — fără prompt, fără fals „activ".
       let available = false;
-      try {
-        const [permResult, hardware] = await Promise.all([
-          Pedometer.getPermissionsAsync(),
-          Pedometer.isAvailableAsync(),
-        ]);
-        available = permResult.granted && hardware;
-      } catch {
-        // Nu putem confirma permisiunea — fail-safe: indisponibil.
-        available = false;
+      if (Platform.OS === 'android') {
+        try {
+          available = Boolean(
+            healthConnectProvider &&
+            await healthConnectProvider.initialize() &&
+            await healthConnectProvider.hasReadPermission()
+          );
+        } catch {
+          available = false;
+        }
+      } else {
+        try {
+          const [permResult, hardware] = await Promise.all([
+            Pedometer.getPermissionsAsync(),
+            Pedometer.isAvailableAsync(),
+          ]);
+          available = permResult.granted && hardware;
+        } catch {
+          available = false;
+        }
       }
       setIsAvailable(available);
 
@@ -249,18 +283,21 @@ export function useHealthSync(): HealthSyncState {
 
       // Citim furnizorul ales de fitness
       const storedProvider = await AsyncStorage.getItem(HEALTH_PROVIDER_KEY);
-      if (storedProvider) setSelectedProvider(storedProvider as HealthProvider);
-
+      const supportedProvider = Platform.OS === 'android' ? 'health_connect' : 'general';
+      setSelectedProvider(supportedProvider);
+      if (storedProvider !== supportedProvider) {
+        await AsyncStorage.setItem(HEALTH_PROVIDER_KEY, supportedProvider);
+      }
       if (enabled && available) {
         await fetchStepsToday(available, parseInt(storedWeight || '75', 10));
-        startWatchingSteps();
+        if (Platform.OS !== 'android') startWatchingSteps();
       }
     } catch (e) {
       console.error('Eroare inițializare HealthSync:', e);
     } finally {
       setLoading(false);
     }
-  }, [fetchStepsToday, startWatchingSteps]);
+  }, [fetchStepsToday, healthConnectProvider, startWatchingSteps]);
 
   useEffect(() => {
     initHealth();
@@ -286,7 +323,7 @@ export function useHealthSync(): HealthSyncState {
       } else if (aRevenitInAplicatie) {
         if (isEnabled) {
           fetchStepsToday();
-          startWatchingSteps();
+          if (Platform.OS !== 'android') startWatchingSteps();
         }
       }
       appState.current = nextAppState;
@@ -301,15 +338,29 @@ export function useHealthSync(): HealthSyncState {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       if (enable) {
         let avail = isAvailable;
-        try {
-          const permResult = await Pedometer.requestPermissionsAsync();
-          avail = permResult.granted && (await Pedometer.isAvailableAsync());
-          setIsAvailable(avail);
-        } catch {}
+        if (Platform.OS === 'android') {
+          try {
+            avail = Boolean(
+              healthConnectProvider &&
+              await healthConnectProvider.initialize() &&
+              await healthConnectProvider.requestReadPermission()
+            );
+          } catch {
+            avail = false;
+          }
+        } else {
+          try {
+            const permResult = await Pedometer.requestPermissionsAsync();
+            avail = permResult.granted && (await Pedometer.isAvailableAsync());
+          } catch {
+            avail = false;
+          }
+        }
+        setIsAvailable(avail);
         setIsEnabled(true);
         await AsyncStorage.setItem(HEALTH_SYNC_ENABLED_KEY, 'true');
         await fetchStepsToday(avail);
-        startWatchingSteps();
+        if (Platform.OS !== 'android') startWatchingSteps();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         return true;
       } else {
@@ -340,8 +391,14 @@ export function useHealthSync(): HealthSyncState {
   const setProvider = async (provider: HealthProvider) => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      setSelectedProvider(provider);
-      await AsyncStorage.setItem(HEALTH_PROVIDER_KEY, provider);
+      const availableProviders = getHealthProvidersForPlatform(
+        Platform.OS === 'android' ? 'android' : Platform.OS === 'ios' ? 'ios' : 'web',
+      );
+      const supportedProvider = availableProviders.some((item) => item.id === provider)
+        ? provider
+        : availableProviders[0].id;
+      setSelectedProvider(supportedProvider);
+      await AsyncStorage.setItem(HEALTH_PROVIDER_KEY, supportedProvider);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
       console.error('Eroare salvare furnizor fitness:', e);
@@ -371,6 +428,27 @@ export function useHealthSync(): HealthSyncState {
     }
   };
 
+  // Setare exactă a totalului finalizat. Dacă există o citire autoritativă,
+  // valoarea manuală reprezintă doar diferența peste pașii furnizați de telefon.
+  const setCompletedSteps = async (total: number) => {
+    if (!Number.isFinite(total)) return;
+    const requestedTotal = Math.min(200000, Math.max(0, Math.round(total)));
+    try {
+      const todayStr = ziLocalDeAzi();
+      const sensorSteps = sensorStepsRef.current;
+      const safeTotal = sensorSteps === null ? requestedTotal : Math.max(sensorSteps, requestedTotal);
+      const manualSteps = sensorSteps === null ? safeTotal : Math.max(0, safeTotal - sensorSteps);
+      await AsyncStorage.setItem(`${MANUAL_STEPS_KEY_PREFIX}${todayStr}`, String(manualSteps));
+      stepsRef.current = safeTotal;
+      setSteps(safeTotal);
+      setActiveCalories(Math.round(safeTotal * 0.04 * (weightRef.current / 70)));
+      await persistaTotalPași(safeTotal, todayStr);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      console.error('Eroare setare pași finalizați:', e);
+    }
+  };
+
   const refreshSteps = useCallback(async () => {
     await fetchStepsToday();
   }, [fetchStepsToday]);
@@ -389,6 +467,16 @@ export function useHealthSync(): HealthSyncState {
     toggleSync,
     setNewStepGoal,
     addManualSteps,
+    setCompletedSteps,
     refreshSteps,
   };
+}
+
+function useMemoHealthConnectProvider() {
+  const providerRef = useRef(
+    Platform.OS === 'android'
+      ? createHealthConnectStepProvider(HealthConnect as unknown as HealthConnectStepsApi)
+      : null,
+  );
+  return providerRef.current;
 }

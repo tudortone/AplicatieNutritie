@@ -19,10 +19,10 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   X,
   AlertCircle,
@@ -146,7 +146,11 @@ export const NutrientFocusDetailModal: React.FC<NutrientFocusDetailModalProps> =
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        testID="nutrient-focus-detail-safe-area"
+        edges={['top', 'bottom', 'left', 'right']}
+        style={[styles.safeArea, { backgroundColor: colors.background }]}
+      >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}

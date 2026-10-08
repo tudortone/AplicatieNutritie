@@ -203,7 +203,9 @@ export function createGooglePlayBillingService(deps: BillingDependencies) {
         const auth = requireAuth(await deps.getAuthSnapshot());
         const catalog = await deps.backend.getCatalog(auth);
         if (!Array.isArray(catalog.productIds) || catalog.productIds.length === 0) {
-          throw new Error('Empty billing catalog.');
+          throw Object.assign(new Error('Empty billing catalog.'), {
+            code: 'PRODUCT_CATALOG_EMPTY',
+          });
         }
         const allowed = new Set(catalog.productIds);
         creditProductIds.clear();
@@ -212,14 +214,16 @@ export function createGooglePlayBillingService(deps: BillingDependencies) {
         const safeProducts = nativeProducts.filter((product) => allowed.has(product.id));
         products.clear();
         for (const product of safeProducts) products.set(product.id, product);
-        publish({ status: 'idle' });
+        publish(safeProducts.length > 0
+          ? { status: 'idle' }
+          : { status: 'unavailable', code: 'PRODUCTS_NOT_RETURNED' });
         return safeProducts.map((product) => ({
           ...product,
           offers: product.offers.map((offer) => ({ ...offer })),
         }));
-      } catch {
+      } catch (error) {
         products.clear();
-        publish({ status: 'unavailable' });
+        publish({ status: 'unavailable', code: publicCode(error, 'PRODUCT_QUERY_FAILED') });
         return [];
       }
     },

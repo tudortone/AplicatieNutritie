@@ -17,9 +17,9 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Switch,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   X,
   Check,
@@ -135,7 +135,11 @@ export const NutrientFocusSettingsModal: React.FC<NutrientFocusSettingsModalProp
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <SafeAreaView
+        testID="nutrient-focus-settings-safe-area"
+        edges={['top', 'bottom', 'left', 'right']}
+        style={[styles.safeArea, { backgroundColor: colors.background }]}
+      >
         {/* Header */}
         <View style={[styles.header, { borderColor: colors.cardBorder }]}>
           <View>

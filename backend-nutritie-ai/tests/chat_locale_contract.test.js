@@ -44,7 +44,23 @@ describe('P1-16: Chat & Vision Locale Contract & Meal Proposal Verification', ()
       expect(promptRo).toContain('"mic_dejun", "pranz", "cina", "gustare"');
 
       const promptDef = construiesteSystemPromptChat({});
-      expect(promptDef).toContain('Limba selectată în aplicație: ROMÂNĂ.');
+      expect(promptDef).toContain('Selected Application Language: ENGLISH.');
+    });
+
+    it('normalizes regional app locales before selecting the response language', () => {
+      expect(construiesteSystemPromptChat({ limba: 'en-US' })).toContain('Selected Application Language: ENGLISH.');
+      expect(construiesteSystemPromptChat({ limba: 'fr-FR' })).toContain("Langue sélectionnée dans l'application : FRANÇAIS.");
+      expect(construiesteSystemPromptChat({ limba: 'de-DE' })).toContain('Ausgewählte App-Sprache: DEUTSCH.');
+      expect(construiesteSystemPromptChat({ limba: 'ro-RO' })).toContain('Limba selectată în aplicație: ROMÂNĂ.');
+    });
+
+    it.each([
+      ['en', 'For recipe requests, provide a human-readable recipe'],
+      ['fr', 'Pour toute demande de recette, fournis une recette lisible'],
+      ['de', 'Gib bei Rezeptanfragen ein gut lesbares Rezept aus'],
+      ['ro', 'Pentru cererile de rețete, oferă o rețetă ușor de citit'],
+    ])('requires a localized, step-by-step recipe instead of raw JSON in %s', (limba, contract) => {
+      expect(construiesteSystemPromptChat({ limba })).toContain(contract);
     });
   });
 

@@ -69,7 +69,7 @@ describe('AI Text Models & Contracts (RC-001, RC-003, RC-004, CORR-003)', () => 
       });
 
       const serviciu = creeazaServiciuCuConfig();
-      await serviciu.ruleazaChat({ mesaj: 'Ce imi recomanzi pentru masa de pranz?' });
+      await serviciu.ruleazaChat({ mesaj: 'Ce imi recomanzi pentru masa de pranz?', limba: 'ro' });
 
       expect(promptCapturat).toContain('REGULA JURNAL ALIMENTAR DIN CHAT:');
       expect(promptCapturat).toContain('"type": "MEAL_PROPOSAL"');

@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
   withSequence,
   runOnJS,
@@ -39,7 +38,6 @@ export const MealSaveSuccessModal: React.FC<MealSaveSuccessModalProps> = ({
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
-  const scale = useSharedValue(reduceMotion ? 1 : 0.8);
   const opacity = useSharedValue(reduceMotion ? 1 : 0);
 
   useEffect(() => {
@@ -55,7 +53,6 @@ export const MealSaveSuccessModal: React.FC<MealSaveSuccessModalProps> = ({
     } catch {}
 
     if (reduceMotion) {
-      scale.value = 1;
       opacity.value = 1;
       const timer = setTimeout(() => {
         onDismiss();
@@ -68,27 +65,19 @@ export const MealSaveSuccessModal: React.FC<MealSaveSuccessModalProps> = ({
       onDismiss();
     }, 750);
 
-    // 2. Animație curată de intrare & ieșire (total ~650ms)
-    scale.value = withSequence(
-      withSpring(1, { damping: 14, stiffness: 220, mass: 0.8 }),
-      withTiming(1, { duration: 400 }),
-      withTiming(0.95, { duration: 150 }, (finished) => {
-        if (finished) {
-          runOnJS(onDismiss)();
-        }
-      })
-    );
+    // Tranziție calmă exclusiv prin fade; fără bounce/spring sau scalare.
     opacity.value = withSequence(
       withTiming(1, { duration: 120 }),
       withTiming(1, { duration: 420 }),
-      withTiming(0, { duration: 150 })
+      withTiming(0, { duration: 150 }, (finished) => {
+        if (finished) runOnJS(onDismiss)();
+      })
     );
 
     return () => clearTimeout(safetyTimer);
-  }, [visible, data, reduceMotion, onDismiss, scale, opacity]);
+  }, [visible, data, reduceMotion, onDismiss, opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
     opacity: opacity.value,
   }));
 

@@ -23,7 +23,7 @@ describe('P0-06 Permissions Verifier CLI & Integration Scenarios', () => {
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.totsrl.getflo">
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" />
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 </manifest>`;
@@ -51,7 +51,7 @@ describe('P0-06 Permissions Verifier CLI & Integration Scenarios', () => {
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.totsrl.getflo">
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" />
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.INTERNET" />
 </manifest>`;
     fs.writeFileSync(tmpManifest, xml, 'utf8');
@@ -78,7 +78,7 @@ describe('P0-06 Permissions Verifier CLI & Integration Scenarios', () => {
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.totsrl.getflo">
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" />
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.CAMERA" />
 </manifest>`;
     fs.writeFileSync(tmpManifest, xml, 'utf8');
@@ -105,8 +105,9 @@ describe('P0-06 Permissions Verifier CLI & Integration Scenarios', () => {
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.totsrl.getflo">
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" />
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Comments with fake permissions must be ignored -->
     <!-- <uses-permission android:name="android.permission.RECORD_AUDIO" /> -->
@@ -122,7 +123,7 @@ describe('P0-06 Permissions Verifier CLI & Integration Scenarios', () => {
       expect(res.status).toBe(0);
       const combined = (res.stdout || '') + (res.stderr || '');
       expect(combined).toContain('POLICY: PASS');
-      expect(combined).toContain('ACTIVE PERMISSIONS: 2');
+      expect(combined).toContain('ACTIVE PERMISSIONS: 3');
       expect(combined).toContain('✅ ABSENT : android.permission.RECORD_AUDIO');
       expect(combined).not.toContain('❌ PRESENT: android.permission.RECORD_AUDIO');
     } finally {
@@ -164,7 +165,7 @@ describe('P0-06 Permissions Verifier CLI & Integration Scenarios', () => {
             fs.mkdirSync(manifestDir, { recursive: true });
             fs.writeFileSync(
               path.join(manifestDir, 'AndroidManifest.xml'),
-              '<manifest package="com.totsrl.getflo"><uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" /><uses-permission android:name="android.permission.CAMERA" /></manifest>'
+              '<manifest package="com.totsrl.getflo"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" /><uses-permission android:name="android.permission.CAMERA" /></manifest>'
             );
             return '[ExpoRootProject] Using compileSdk: 36';
           }
@@ -217,7 +218,7 @@ describe('P0-06 Permissions Verifier CLI & Integration Scenarios', () => {
             fs.mkdirSync(manifestDir, { recursive: true });
             fs.writeFileSync(
               path.join(manifestDir, 'AndroidManifest.xml'),
-              '<manifest package="com.totsrl.getflo"><uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" /><uses-permission android:name="android.permission.CAMERA" /></manifest>'
+              '<manifest package="com.totsrl.getflo"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" /><uses-permission android:name="android.permission.CAMERA" /></manifest>'
             );
             return '[ExpoRootProject] Using compileSdk: 36';
           }

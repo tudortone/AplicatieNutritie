@@ -97,4 +97,21 @@ describe('Centralized Internationalization (i18n) — RO, EN, FR, DE', () => {
     expect(i18n.t('alerts.titluri.eroare')).toBe('Fehler');
     expect(i18n.t('profile.save')).toBe('PROFIL SPEICHERN');
   });
+
+  it.each([
+    ['ro', ro],
+    ['en', en],
+    ['fr', fr],
+    ['de', de],
+  ] as const)('provides localized Health Connect source copy in %s', (_locale, resources) => {
+    expect(resources.profile.healthConnectDescription).toEqual(expect.any(String));
+    expect(resources.profile.healthConnectInfo).toEqual(expect.any(String));
+    expect(resources.profile.phoneSensorDescription).toEqual(expect.any(String));
+    expect(resources.profile.phoneSensorInfo).toEqual(expect.any(String));
+
+    expect(resources.profile.healthConnectDescription.trim()).not.toBe('');
+    expect(resources.profile.healthConnectInfo.trim()).not.toBe('');
+    expect(resources.profile.phoneSensorDescription.trim()).not.toBe('');
+    expect(resources.profile.phoneSensorInfo.trim()).not.toBe('');
+  });
 });

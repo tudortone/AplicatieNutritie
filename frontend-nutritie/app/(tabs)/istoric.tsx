@@ -468,15 +468,6 @@ export default function HistoryScreen() {
             >
               {afisarePoze ? <Eye size={18} color={colors.accent} /> : <EyeOff size={18} color={colors.textSecondary} />}
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.addBtnHeader, isVeryCompact && styles.addBtnHeaderCompact, { backgroundColor: colors.accent + '20', borderColor: colors.accent + '40' }]}
-              onPress={() => deschideAddMeal()}
-              accessibilityRole="button"
-              accessibilityLabel={t('jurnal.addMealHeaderA11y')}
-            >
-              <PlusCircle size={18} color={colors.accent} />
-              <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.addBtnHeaderText, { color: colors.accent }]}>{t('jurnal.addShort')}</Text>
-            </TouchableOpacity>
           </View>
         </View>
         
@@ -648,8 +639,6 @@ export default function HistoryScreen() {
                 icon="utensils"
                 title={t('jurnal.empty.title')}
                 subtitle={t('jurnal.empty.subtitle')}
-                actionLabel={t('jurnal.empty.action')}
-                onAction={() => deschideAddMeal()}
               />
             )
           }

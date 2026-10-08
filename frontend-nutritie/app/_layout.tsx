@@ -197,15 +197,10 @@ function RootNavigator() {
   const incarcaProfilServer = useCallback(async () => {
     if (!profilServerMountedRef.current) return;
     const token = session?.access_token;
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL;
     if (!session || !token) return;
     const owner = session.user.id;
     const request = ++profilRequestRef.current;
     const isCurrent = () => profilServerMountedRef.current && profilOwnerRef.current === owner && request === profilRequestRef.current;
-    if (!apiUrl) {
-      setProfilVerificatPentru(owner);
-      return;
-    }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     try {
@@ -347,7 +342,7 @@ function RootNavigator() {
 
   useEffect(() => {
     if (loadingAuth) return;
-    const inAuth = segments[0] === 'auth';
+    const inAuth = segments[0] === 'auth' || pathname.startsWith('/auth');
     // Callback-ul deține schimbul PKCE și așteaptă AuthContext. Nu îl evacuăm
     // spre onboarding/tabs pe baza unei sesiuni vechi sau încă inexistente.
     if (pathname === '/auth/callback') return;
@@ -411,7 +406,7 @@ function RootNavigator() {
     if (inAuth || inOnboarding) router.replace('/(tabs)');
   }, [session, loadingAuth, storageReady, profilVerificatPentru, isOnboardingDone, setOnboardingDone, profilServer, profilServerDate, segments, pathname, router]);
 
-  if (loadingAuth && pathname !== '/auth/callback') return <AppSplashScreen isReady={false} />;
+  if (loadingAuth && !storageReady && pathname !== '/auth/callback' && pathname !== '/auth/complete') return <AppSplashScreen isReady={false} />;
   const push = { animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, gestureEnabled: true } as const;
 
   return <ThemeProvider value={appDarkTheme}>

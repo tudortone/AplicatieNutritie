@@ -122,8 +122,9 @@ function estePropunereMasaValida(parsed) {
 
 const REGEX_MEAL_LOG_MULTILINGUAL = /(?:am m[aâ]ncat|am consumat|am servit|am b[aă]ut|logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa|i ate|i had|i drank|log meal|add to diary|log food|record meal|add meal|j'ai mang[eé]|j'ai bu|enregistre|ajouter au journal|ich habe gegessen|ich habe getrunken|mahlzeit loggen|zum tagebuch hinzuf[uü]gen)(?=[\s.,!?;:'"()[\]{}]|$)/iu;
 
-function construiesteSystemPromptChat({ limba = 'ro', calCons = 0, calTinta = 2000, protCons = 0, protTinta = 150 }) {
-  const target = (limba || 'ro').toLowerCase();
+function construiesteSystemPromptChat({ limba = 'en', calCons = 0, calTinta = 2000, protCons = 0, protTinta = 150 }) {
+  const localePrimar = String(limba || 'en').trim().toLowerCase().split(/[-_]/)[0];
+  const target = ['ro', 'en', 'fr', 'de'].includes(localePrimar) ? localePrimar : 'en';
 
   if (target === 'en') {
     return `You are a friendly, professional, and empathetic nutrition assistant for the GetFlow app.
@@ -146,6 +147,7 @@ Formatting & style instructions:
 1. Use relevant emojis at the start of sentences or key ideas.
 2. Structure your response with bullet points if offering more than 2 suggestions or meal options.
 3. Respond concisely, clearly, and to the point (maximum 6-8 sentences if user requests detailed explanations).
+For recipe requests, provide a human-readable recipe with a clear title, exact ingredients and quantities, numbered step-by-step preparation, and an estimated nutrition summary. Never expose raw JSON for a recipe request unless the user explicitly asks to log/save food.
 4. FOOD LOGGING RULE: If the user mentions that they ate, consumed, or want to log a meal/food (e.g., "I ate 200g chicken breast and rice", "log a salad"), DO NOT confirm and DO NOT claim anything has been saved! Respond STRICTLY and EXCLUSIVELY with a valid JSON object in this exact format:
 {
   "type": "MEAL_PROPOSAL",
@@ -182,6 +184,7 @@ Instructions de mise en forme :
 1. Utilise des emojis pertinents.
 2. Structure la réponse avec des puces si tu donnes plus de 2 suggestions.
 3. Réponds de façon concise et claire.
+Pour toute demande de recette, fournis une recette lisible avec un titre clair, les ingrédients et quantités exacts, une préparation numérotée étape par étape et un résumé nutritionnel estimé. N'affiche jamais de JSON brut pour une recette, sauf si l'utilisateur demande explicitement d'enregistrer le repas.
 4. RÈGLE JOURNAL ALIMENTAIRE : Si l'utilisateur mentionne avoir mangé ou souhaite enregistrer un repas, réponds STRICTEMENT avec un objet JSON :
 {
   "type": "MEAL_PROPOSAL",
@@ -218,6 +221,7 @@ Formatierungshinweise:
 1. Nutze passende Emojis.
 2. Strukturiere mit Aufzählungspunkten bei mehr als 2 Vorschlägen.
 3. Antworte prägnant und klar.
+Gib bei Rezeptanfragen ein gut lesbares Rezept aus: mit klarem Titel, genauen Zutaten und Mengen, nummerierten Zubereitungsschritten und einer geschätzten Nährwertübersicht. Zeige bei Rezeptanfragen niemals rohes JSON, außer der Nutzer möchte das Essen ausdrücklich protokollieren.
 4. MAHLZEIT-LOGGING REGEL: Wenn der Nutzer angibt, etwas gegessen zu haben oder loggen möchte, antworte NUR mit JSON:
 {
   "type": "MEAL_PROPOSAL",
@@ -252,6 +256,7 @@ Instrucțiuni de formatare și stil:
 1. Folosește emoji-uri relevante la începutul propozițiilor sau ideilor importante.
 2. Structurează răspunsul cu bullet points dacă oferi mai mult de 2 sugestii sau opțiuni de mese.
 3. Răspunde concis, clar și la obiect. Poți folosi maximum 6-8 propoziții dacă utilizatorul cere explicații detaliate sau planuri de mese.
+Pentru cererile de rețete, oferă o rețetă ușor de citit, cu titlu clar, ingrediente și cantități exacte, preparare numerotată pas cu pas și un rezumat nutrițional estimat. Nu afișa JSON brut pentru o cerere de rețetă, decât dacă utilizatorul cere explicit înregistrarea mesei.
 4. REGULA JURNAL ALIMENTAR DIN CHAT: Dacă utilizatorul menționează că a mâncat, a consumat sau dorește să înregistreze o masă/un aliment (ex: "am mâncat 200g piept de pui și orez", "loghează o salată"), NU confirma și NU declara nimic salvat! Răspunde STRICT și EXCLUSIV cu un obiect JSON valid exact în formatul:
 {
   "type": "MEAL_PROPOSAL",
