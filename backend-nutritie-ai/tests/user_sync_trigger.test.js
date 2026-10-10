@@ -7,7 +7,7 @@ const adminFake = {
   from(tabela) {
     return {
       upsert: async (payload, options) => {
-        apeluri.push({ tabela, tip: 'upsert', payload, onConflict: options?.onConflict });
+        apeluri.push({ tabela, tip: 'upsert', payload, onConflict: options?.onConflict, ignoreDuplicates: options?.ignoreDuplicates });
         return { error: null };
       },
       update: (payload) => ({
@@ -36,7 +36,7 @@ const adminFake = {
   },
 };
 
-describe('user-sync Trigger task — persistenta reala (nu doar raspuns)', () => {
+describe('user-sync Trigger task — containment pentru evenimente Clerk și joburi aflate în coadă', () => {
   let executa;
 
   beforeAll(() => {
@@ -48,95 +48,36 @@ describe('user-sync Trigger task — persistenta reala (nu doar raspuns)', () =>
     apeluri = [];
   });
 
-  test('user.created -> upsert in profil cu coloanele reale', async () => {
-    const rezultat = await executa({
-      admin: adminFake,
-      action: 'user.created',
-      clerkUserId: 'user_123',
-      supabaseUserId: '11111111-1111-4111-8111-111111111111',
-      email: 'a@b.c',
-      meta: { calorii_tinta: 2200, proteine_tinta: 160 },
-    });
+  test.each(['user.created', 'user.updated', 'user.deleted'])(
+    '%s vechi/reîncercat rămâne fără side effect indiferent de identity claims',
+    async (action) => {
+      const rezultat = await executa({
+        admin: adminFake,
+        action,
+        clerkUserId: 'clerk_legacy',
+        supabaseUserId: '11111111-1111-4111-8111-111111111111',
+        email: 'victim@example.test',
+        meta: { nume: 'spoofed', calorii_tinta: 9999 },
+        data: { external_id: '11111111-1111-4111-8111-111111111111' },
+      });
 
-    expect(rezultat.status).toBe('completed');
-    const upserturi = apeluri.filter((a) => a.tabela === 'profil' && a.tip === 'upsert');
-    expect(upserturi.length).toBe(1);
-    expect(upserturi[0].onConflict).toBe('user_id');
-    // Coloanele scrise trebuie sa fie cele reale din migrarea 0001, nu greutate_kg.
-    const rand = upserturi[0].payload;
-    expect(rand.calorii_tinta).toBe(2200);
-    expect(rand.proteine_tinta).toBe(160);
-    expect('greutate_kg' in rand).toBe(false);
-    expect('greutate_tinta_kg' in rand).toBe(false);
-  });
+      expect(rezultat.status).toBe('ignored');
+      expect(rezultat.motiv).toBe(action === 'user.deleted'
+        ? 'CLERK_DELETE_NOT_SUPABASE_AUTHORITY'
+        : 'CLERK_SYNC_REQUIRES_VERIFIED_ACCOUNT_LINK');
+      expect(apeluri).toEqual([]);
+    },
+  );
 
-  test('user.updated -> update in profil pe user_id', async () => {
-    const rezultat = await executa({
-      admin: adminFake,
-      action: 'user.updated',
-      clerkUserId: 'user_123',
-      supabaseUserId: '11111111-1111-4111-8111-111111111111',
-      meta: { nume: 'Test User' },
-    });
-
-    expect(rezultat.status).toBe('completed');
-    const updateuri = apeluri.filter((a) => a.tabela === 'profil' && a.tip === 'update');
-    expect(updateuri.length).toBe(1);
-    expect(updateuri[0].eq).toEqual(['user_id', '11111111-1111-4111-8111-111111111111']);
-    expect(updateuri[0].payload.nume).toBe('Test User');
-  });
-
-  test('user.updated cu payload-ul real Clerk nu reseteaza profilul la valorile implicite', async () => {
-    const rezultat = await executa({
-      admin: adminFake,
-      action: 'user.updated',
-      clerkUserId: 'user_123',
-      data: {
-        first_name: 'Ada',
-        last_name: 'Popescu',
-        email_addresses: [{ email_address: 'ada@example.test' }],
-        public_metadata: {
-          greutate: 64,
-          calorii_tinta: 2300,
-          proteine_tinta: 140,
-        },
-      },
-    });
-
-    expect(rezultat.status).toBe('completed');
-    const updateuri = apeluri.filter((a) => a.tabela === 'profil' && a.tip === 'update');
-    expect(updateuri).toHaveLength(1);
-    expect(updateuri[0].payload).toMatchObject({
-      nume: 'Ada Popescu',
-      greutate: 64,
-      calorii_tinta: 2300,
-      proteine_tinta: 140,
-    });
-  });
-
-  test('user.deleted -> sterge pe tabelele GDPR', async () => {
-    const rezultat = await executa({
-      admin: adminFake,
-      action: 'user.deleted',
-      clerkUserId: 'user_123',
-      supabaseUserId: '11111111-1111-4111-8111-111111111111',
-    });
-    expect(rezultat.status).toBe('completed');
-    const stergeri = apeluri
-      .filter((a) => a.tip === 'delete')
-      .filter((a) => ['mese', 'antrenamente', 'profil', 'barcode_estimari_utilizator'].includes(a.tabela));
-    expect(stergeri.length).toBe(4);
-  });
-
-  test('user.deleted fara supabaseUserId, mapare lipsa -> deja purjat (idempotent)', async () => {
-    const rezultat = await executa({
-      admin: adminFake,
-      action: 'user.deleted',
-      clerkUserId: 'user_nemapat',
-    });
-    expect(rezultat.status).toBe('completed');
-    expect(rezultat.alreadyPurged).toBe(true);
-    expect(apeluri.filter((a) => a.tip === 'delete').length).toBe(0);
+  test('identități lipsă sau contradictorii nu citesc maparea și nu modifică profilul', async () => {
+    for (const claims of [
+      { action: 'user.updated', clerkUserId: 'unmapped' },
+      { action: 'user.updated', clerkUserId: 'mapped', supabaseUserId: 'victim-a', data: { external_id: 'victim-b' } },
+      { action: 'user.created', clerkUserId: 'legacy', email: 'victim@example.test' },
+    ]) {
+      expect((await executa({ admin: adminFake, ...claims })).status).toBe('ignored');
+    }
+    expect(apeluri).toEqual([]);
   });
 
   test('actiune necunoscuta -> ignored', async () => {

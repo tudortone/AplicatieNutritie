@@ -69,6 +69,90 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/HealthStatus' }
 
+  # Public legal and publisher-verification documents served by the backend.
+  # These aliases intentionally resolve to the same static documents.
+  /app-ads.txt:
+    get:
+      summary: Publisher verification file
+      security: []
+      responses:
+        '200':
+          description: Ad publisher verification record
+          content:
+            text/plain:
+              schema: { type: string }
+        '404': { description: Document not found }
+  /privacy:
+    get:
+      summary: Privacy policy (English alias)
+      security: []
+      responses:
+        '200': { description: Privacy policy HTML, content: { text/html: { schema: { type: string } } } }
+        '404': { description: Document not found }
+  /privacy.html:
+    get:
+      summary: Privacy policy HTML alias
+      security: []
+      responses:
+        '200': { description: Privacy policy HTML, content: { text/html: { schema: { type: string } } } }
+        '404': { description: Document not found }
+  /politica-de-confidentialitate:
+    get:
+      summary: Privacy policy (Romanian alias)
+      security: []
+      responses:
+        '200': { description: Privacy policy HTML, content: { text/html: { schema: { type: string } } } }
+        '404': { description: Document not found }
+  /politica-de-confidentialitate.html:
+    get:
+      summary: Privacy policy HTML (Romanian alias)
+      security: []
+      responses:
+        '200': { description: Privacy policy HTML, content: { text/html: { schema: { type: string } } } }
+        '404': { description: Document not found }
+  /terms:
+    get:
+      summary: Terms of service (English alias)
+      security: []
+      responses:
+        '200': { description: Terms HTML, content: { text/html: { schema: { type: string } } } }
+        '404': { description: Document not found }
+  /termeni-si-conditii:
+    get:
+      summary: Terms of service (Romanian alias)
+      security: []
+      responses:
+        '200': { description: Terms HTML, content: { text/html: { schema: { type: string } } } }
+        '404': { description: Document not found }
+  /termeni-si-conditii.html:
+    get:
+      summary: Terms HTML (Romanian alias)
+      security: []
+      responses:
+        '200': { description: Terms HTML, content: { text/html: { schema: { type: string } } } }
+        '404': { description: Document not found }
+  /delete-account:
+    get:
+      summary: Account deletion information (English alias)
+      security: []
+      responses:
+        '200': { description: Account deletion instructions HTML, content: { text/html: { schema: { type: string } } } }
+        '404': { description: Document not found }
+  /stergere-cont:
+    get:
+      summary: Account deletion information (Romanian alias)
+      security: []
+      responses:
+        '200': { description: Account deletion instructions HTML, content: { text/html: { schema: { type: string } } } }
+        '404': { description: Document not found }
+  /stergere-cont.html:
+    get:
+      summary: Account deletion instructions HTML (Romanian alias)
+      security: []
+      responses:
+        '200': { description: Account deletion instructions HTML, content: { text/html: { schema: { type: string } } } }
+        '404': { description: Document not found }
+
   # Suprafața canonică /api/v1.
   /api/v1/ai-status: { $ref: '#/components/pathItems/AiStatus' }
   /api/v1/imagekit-auth: { $ref: '#/components/pathItems/ImageKitAuth' }
@@ -76,6 +160,7 @@ paths:
   /api/v1/analiza-foto: { $ref: '#/components/pathItems/AnalizaFoto' }
   /api/v1/analizeaza-mancare-structurat: { $ref: '#/components/pathItems/AnalizaFoto' }
   /api/v1/chat: { $ref: '#/components/pathItems/Chat' }
+  /api/v1/feedback: { $ref: '#/components/pathItems/Feedback' }
   /api/v1/log-food-from-chat: { $ref: '#/components/pathItems/LogFoodChat' }
   /api/v1/log-food: { $ref: '#/components/pathItems/LogFoodChat' }
   /api/v1/log-food-chat: { $ref: '#/components/pathItems/LogFoodChat' }
@@ -127,6 +212,9 @@ paths:
   /api/chat:
     $ref: '#/components/pathItems/Chat'
     x-legacy-alias: { canonical: /api/v1/chat, sunset: '2026-09-30T00:00:00Z' }
+  /api/feedback:
+    $ref: '#/components/pathItems/Feedback'
+    x-legacy-alias: { canonical: /api/v1/feedback, sunset: '2026-09-30T00:00:00Z' }
   /api/log-food-from-chat:
     $ref: '#/components/pathItems/LogFoodChat'
     x-legacy-alias: { canonical: /api/v1/log-food-from-chat, sunset: '2026-09-30T00:00:00Z' }
@@ -328,6 +416,20 @@ components:
       required: [raspuns]
       properties:
         raspuns: { type: string }
+      additionalProperties: false
+    FeedbackRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 2000 }
+      additionalProperties: false
+    FeedbackReceipt:
+      type: object
+      required: [id, createdAt, deliveryStatus]
+      properties:
+        id: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        deliveryStatus: { type: string, enum: [not_configured, pending, sent, failed] }
       additionalProperties: false
     LogFoodRequest:
       type: object
@@ -845,6 +947,25 @@ components:
                   oneOf:
                     - { $ref: '#/components/schemas/ChatError' }
                     - { $ref: '#/components/schemas/Error' }
+    Feedback:
+      post:
+        summary: Trimite feedback pentru salvare privată
+        description: Necesită autentificare; mesajul este salvat în inboxul privat. Confirmarea nu înseamnă că a fost trimis un email.
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeedbackRequest' }
+        responses:
+          <<: *authLimited
+          '201':
+            description: Feedback salvat durabil
+            content:
+              application/json:
+                schema: { $ref: '#/components/schemas/FeedbackReceipt' }
+          '400': { $ref: '#/components/responses/BadRequest' }
+          '413': { $ref: '#/components/responses/BodyTooLarge' }
+          '503': { $ref: '#/components/responses/ServiceUnavailable' }
     LogFoodChat:
       post:
         summary: Generează MEAL_PROPOSAL din conversație

@@ -215,11 +215,17 @@ describe('P0-08 — schema REALA respecta invariantii de securitate', () => {
     expect(rele.map((f) => f.nume)).toEqual([]);
   });
 
-  it('o singura functie este apelabila de client, si nu accepta argumente de identitate', () => {
+  it('functiile apelabile de client sunt explicit limitate si nu accepta argumente de identitate', () => {
     const clientCallable = rezultat.functii.filter((f) => f.grantClient);
-    expect(clientCallable.map((f) => f.nume)).toEqual(['public.sincronizeaza_gamificare_sigur']);
-    // Zero argumente => nu exista suprafata de forjare a identitatii.
-    expect(clientCallable[0].argumente.trim()).toBe('');
+    expect(clientCallable.map((f) => f.nume).sort()).toEqual([
+      'public.sincronizeaza_gamificare_sigur',
+      'public.submit_user_feedback',
+    ]);
+    const faraArgumenteIdentitate = clientCallable.find((f) => f.nume === 'public.sincronizeaza_gamificare_sigur');
+    const feedbackSubmit = clientCallable.find((f) => f.nume === 'public.submit_user_feedback');
+    expect(faraArgumenteIdentitate.argumente.trim()).toBe('');
+    expect(feedbackSubmit.argumente).toMatch(/p_message\s+text/i);
+    expect(feedbackSubmit.argumente).not.toMatch(/user_id|email|owner/i);
   });
 
   it('nicio vizualizare (view) nu poate ocoli RLS — nu exista views', () => {

@@ -48,6 +48,7 @@ const TABELE_SERVER_ONLY = Object.freeze([
   'clerk_webhook_esuate',
   'google_play_subscriptions',
   'google_play_rtdn_events',
+  'user_feedback',
 ]);
 
 describe('Supabase 30 Octombrie Data API Grants Hardening — Schema Assurance', () => {

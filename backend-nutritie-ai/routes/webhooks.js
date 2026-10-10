@@ -1,54 +1,16 @@
 'use strict';
 
 /**
- * P-08: Handler Clerk webhooks — fix deblocare >1000 utilizatori + tratare erori tranzitorii/permanente & dead-letter.
+ * Clerk webhooks are accepted only for signature verification and minimal,
+ * idempotent reconciliation records. Supabase Auth remains canonical for mobile.
  */
 
 const express = require('express');
-const crypto = require('crypto');
 const { Webhook } = require('svix');
-const { tasks } = require('@trigger.dev/sdk/v3');
 const Sentry = require('@sentry/node');
-const {
-  inregistreazaUtilizareAdmin,
-  TABELE_CU_RLS_UTILIZATOR,
-} = require('../utils/clientUtilizator');
-const { CODURI_TABELA_INEXISTENTA } = require('../utils/gdprServices');
-const { pseudonimizeaza, rezumatEroareSigur } = require('../utils/sentrySanitize');
+const { rezumatEroareSigur } = require('../utils/sentrySanitize');
 
-class EroareTranzitorie extends Error {
-  constructor(mesaj, cauza) {
-    super(mesaj);
-    this.name = 'EroareTranzitorie';
-    this.tranzitorie = true;
-    this.cauza = cauza;
-  }
-}
-
-const CODURI_PERMANENTE = new Set([
-  '23505', // unique_violation
-  '23502', // not_null_violation
-  '23503', // foreign_key_violation
-  '23514', // check_violation
-  '22P02', // invalid_text_representation
-  '22001', // string_data_right_truncation
-]);
-
-function estePermanent(err) {
-  return !!(err && err.code && CODURI_PERMANENTE.has(err.code));
-}
-
-// M4: unsafe_metadata vine din Clerk (setat de client, nesemnalizat) și ocolește
-// sanitizeRequest — valori absurde (negative, 1e15, NaN) ajungeau brute în `profil`.
-// Clampăm la intervalele plauzibile ale aplicației, aliniate cu validarea din
-// routes/profil.js:36-55 (greutate 30-300) și default-urile din frontend.
-function numarClampat(valoare, min, max, implicit) {
-  const numar = Number(valoare);
-  if (!Number.isFinite(numar)) return implicit;
-  return Math.min(Math.max(numar, min), max);
-}
-
-async function inregistreazaWebhookEsuat({ supabaseAdmin, clerkUserId, type, motiv, payload }) {
+async function inregistreazaWebhookEsuat({ supabaseAdmin, clerkUserId, type, motiv, externalIdPresent }) {
   const alerteazaEsecDeadLetter = (detaliu, exceptie) => {
     const rezumat = rezumatEroareSigur(exceptie || { code: detaliu }, {
       operation: `dead_letter_${type || 'unknown'}`,
@@ -66,7 +28,7 @@ async function inregistreazaWebhookEsuat({ supabaseAdmin, clerkUserId, type, mot
         Sentry.captureMessage('CLERK_WEBHOOK_DEAD_LETTER_WRITE_FAILED');
       });
     } catch {
-      // Sentry indisponibil
+      // Sentry indisponibil.
     }
   };
 
@@ -80,100 +42,20 @@ async function inregistreazaWebhookEsuat({ supabaseAdmin, clerkUserId, type, mot
       clerk_user_id: clerkUserId,
       event_type: type,
       motiv,
-      payload: payload ? (typeof payload === 'object' ? payload : { data: payload }) : null,
+      // Nu păstrăm email, nume, metadata sau payload-ul original.
+      payload: { external_id_present: Boolean(externalIdPresent) },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }, { onConflict: 'clerk_user_id,event_type' });
 
-    // PostgREST NU aruncă excepții: erorile de bază de date vin în `error`.
-    // Fără ramura asta, o tabelă lipsă sau o politică RLS ar trece complet tăcut
-    // pe lângă alerte, iar singurul semnal ar fi un 500 fără cauză în log.
     if (error) {
       alerteazaEsecDeadLetter(error.code || 'FARA_COD', error);
       return false;
     }
-
     return true;
-  } catch (e) {
-    alerteazaEsecDeadLetter(e?.code || e?.name || 'EXCEPTION', e);
+  } catch (error) {
+    alerteazaEsecDeadLetter(error?.code || error?.name || 'EXCEPTION', error);
     return false;
-  }
-}
-
-/**
- * Determină un id de utilizator Supabase REAL pentru un eveniment Clerk.
- */
-async function determinareSauCreareSupabaseUser({ supabaseAdmin, externalId, email }) {
-  // 1. external_id dat și valid în auth.users → îl folosim direct.
-  if (externalId) {
-    try {
-      const { data, error } = await supabaseAdmin.auth.admin.getUserById(externalId);
-      if (!error && data?.user) return data.user.id;
-    } catch (e) {
-      if (!estePermanent(e)) {
-        throw new EroareTranzitorie('Căutare getUserById eșuată', e);
-      }
-    }
-  }
-
-  // 2. RPC `get_auth_user_by_email` fără paginare.
-  if (email) {
-    try {
-      const { data: rpcData, error: rpcError } = await supabaseAdmin
-        .rpc('get_auth_user_by_email', { p_email: email });
-      if (rpcError) {
-        if (!estePermanent(rpcError)) {
-          throw new EroareTranzitorie('RPC get_auth_user_by_email eșuat', rpcError);
-        }
-      } else if (Array.isArray(rpcData) && rpcData.length > 0) {
-        return rpcData[0].id;
-      }
-    } catch (e) {
-      if (e instanceof EroareTranzitorie) throw e;
-      if (!estePermanent(e)) {
-        throw new EroareTranzitorie('RPC get_auth_user_by_email indisponibil', e);
-      }
-    }
-  }
-
-  if (!email) return null;
-
-  try {
-    const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      email_confirm: true,
-      password: crypto.randomUUID().replace(/-/g, '') + 'Aa1!',
-    });
-
-    if (error) {
-      if (
-        error.code === '23505' ||
-        (error.message && error.message.toLowerCase().includes('already exists'))
-      ) {
-        try {
-          const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({
-            perPage: 50,
-          });
-          if (!listErr && Array.isArray(listData?.users)) {
-            const gasit = listData.users.find(
-              (u) => u.email && u.email.toLowerCase() === email.toLowerCase(),
-            );
-            if (gasit) return gasit.id;
-          }
-        } catch (e) {
-          throw new EroareTranzitorie('listUsers eșuat pe fallback email deja existent', e);
-        }
-      } else if (!estePermanent(error)) {
-        throw new EroareTranzitorie('createUser eșuat', error);
-      }
-      return null;
-    }
-
-    if (!data?.user) return null;
-    return data.user.id;
-  } catch (e) {
-    if (e instanceof EroareTranzitorie) throw e;
-    throw new EroareTranzitorie('Eroare internă la determinareSauCreareSupabaseUser', e);
   }
 }
 
@@ -182,32 +64,28 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
 
   router.post('/clerk', express.raw({ type: 'application/json' }), async (req, res) => {
     const webhookSecret = config.clerkWebhookSecret;
-
     if (!webhookSecret) {
-      console.error('[Webhook Clerk] Secret-ul CLERK_WEBHOOK_SECRET nu este configurat pe server.');
+      console.error('[Webhook Clerk] Secret-ul de semnare nu este configurat pe server.');
       return res.status(500).json({ eroare: 'Configurație webhook incompletă pe server.' });
     }
 
-    const svix_id = req.headers['svix-id'];
-    const svix_timestamp = req.headers['svix-timestamp'];
-    const svix_signature = req.headers['svix-signature'];
-
-    if (!svix_id || !svix_timestamp || !svix_signature) {
+    const svixId = req.headers['svix-id'];
+    const svixTimestamp = req.headers['svix-timestamp'];
+    const svixSignature = req.headers['svix-signature'];
+    if (!svixId || !svixTimestamp || !svixSignature) {
       return res.status(400).json({ eroare: 'Antete Svix lipsă.' });
     }
 
     const payload = req.body instanceof Buffer ? req.body.toString('utf8') : JSON.stringify(req.body);
-    const wh = new Webhook(webhookSecret);
     let evt;
-
     try {
-      evt = wh.verify(payload, {
-        'svix-id': svix_id,
-        'svix-timestamp': svix_timestamp,
-        'svix-signature': svix_signature,
+      evt = new Webhook(webhookSecret).verify(payload, {
+        'svix-id': svixId,
+        'svix-timestamp': svixTimestamp,
+        'svix-signature': svixSignature,
       });
-    } catch (err) {
-      console.error('[Webhook Clerk]', rezumatEroareSigur(err, {
+    } catch (error) {
+      console.error('[Webhook Clerk]', rezumatEroareSigur(error, {
         operation: 'verify_signature',
         provider: 'clerk',
       }));
@@ -216,180 +94,39 @@ function createWebhooksRouter({ supabaseAdmin, config }) {
 
     const { type, data } = evt;
     const clerkUserId = data?.id;
-
     if (!clerkUserId) {
       return res.status(400).json({ eroare: 'Payload-ul nu conține id utilizator.' });
     }
 
-    try {
-      if (type === 'user.created') {
-        const email = data.email_addresses?.[0]?.email_address || null;
-        const meta = data.unsafe_metadata || data.public_metadata || {};
-
-        const { data: mapareExistent } = await supabaseAdmin
-          .from('clerk_user_map')
-          .select('supabase_user_id')
-          .eq('clerk_user_id', clerkUserId)
-          .maybeSingle();
-
-        let supabaseUserId = mapareExistent?.supabase_user_id;
-
-        if (!supabaseUserId) {
-          supabaseUserId = await determinareSauCreareSupabaseUser({
-            supabaseAdmin,
-            externalId: data.external_id,
-            email,
-          });
-
-          if (!supabaseUserId) {
-            const scrisDl = await inregistreazaWebhookEsuat({
-              supabaseAdmin,
-              clerkUserId,
-              type,
-              motiv: 'USER_ID_NEDETERMINAT',
-              payload: data,
-            });
-            if (scrisDl) {
-              console.warn('[Webhook Clerk] userId Supabase nedeterminat, salvat în dead-letter:', pseudonimizeaza(clerkUserId));
-              return res.status(200).json({
-                ok: false,
-                type,
-                avertisment: 'userId Supabase nedeterminat — înregistrat pentru intervenție manuală.',
-              });
-            }
-            return res.status(500).json({ eroare: 'Nu s-a putut scrie în dead-letter.', cod: 'DEAD_LETTER_WRITE_FAILED' });
-          }
-
-          await supabaseAdmin.from('clerk_user_map').upsert({
-            clerk_user_id: clerkUserId,
-            supabase_user_id: supabaseUserId,
-          });
-        }
-
-        await supabaseAdmin.from('profil').upsert({
-          user_id: supabaseUserId,
-          nume: `${data.first_name || ''} ${data.last_name || ''}`.trim() || null,
-          greutate: numarClampat(meta.greutate, 30, 300, null),
-          calorii_tinta: numarClampat(meta.calorii_tinta, 500, 10000, 2000),
-          proteine_tinta: numarClampat(meta.proteine_tinta, 20, 600, 150),
-          carbi_tinta: numarClampat(meta.carbi_tinta, 20, 1000, 250),
-          grasimi_tinta: numarClampat(meta.grasimi_tinta, 5, 300, 70),
-          updated_at: new Date().toISOString(),
-        });
-        // C1-S4: upsert admin pe `profil` (service_role, fara JWT Supabase — webhook Clerk).
-        inregistreazaUtilizareAdmin();
-
-        if (config.triggerSecretKey) {
-          try {
-            await tasks.trigger('user-sync', { action: 'user.created', clerkUserId, supabaseUserId, email, meta });
-          } catch (e) {
-            console.warn('[Webhook Clerk]', rezumatEroareSigur(e, {
-              operation: 'trigger_user_created',
-              provider: 'trigger_dev',
-            }));
-          }
-        }
-      } else if (type === 'user.updated') {
-        const { data: mapare } = await supabaseAdmin
-          .from('clerk_user_map')
-          .select('supabase_user_id')
-          .eq('clerk_user_id', clerkUserId)
-          .maybeSingle();
-
-        if (mapare?.supabase_user_id) {
-          await supabaseAdmin.from('profil').update({
-            nume: `${data.first_name || ''} ${data.last_name || ''}`.trim() || null,
-            updated_at: new Date().toISOString(),
-          }).eq('user_id', mapare.supabase_user_id);
-          // C1-S4: update admin pe `profil` (service_role, fara JWT Supabase — webhook Clerk).
-          inregistreazaUtilizareAdmin();
-        }
-
-        if (config.triggerSecretKey) {
-          try {
-            await tasks.trigger('user-sync', { action: 'user.updated', clerkUserId, data });
-          } catch (e) {
-            console.warn('[Webhook Clerk]', rezumatEroareSigur(e, {
-              operation: 'trigger_user_updated',
-              provider: 'trigger_dev',
-            }));
-          }
-        }
-      } else if (type === 'user.deleted') {
-        const { data: mapare } = await supabaseAdmin
-          .from('clerk_user_map')
-          .select('supabase_user_id')
-          .eq('clerk_user_id', clerkUserId)
-          .maybeSingle();
-
-        const supabaseUserId = mapare?.supabase_user_id;
-
-        if (supabaseUserId) {
-          // H4: ștergem TOATE tabelele user-scoped, nu doar mese/antrenamente/profil.
-          // Înainte, user.deleted lăsa PII orfan în produse_camara, gamificare,
-          // workout_logs, ai_jobs, credite_ai, audit_log, barcode_estimari_utilizator.
-          // Refolosim TABELE_CU_RLS_UTILIZATOR (sursa de adevăr, ca routes/gdpr.js),
-          // cu toleranță la tabele inexistente pe medii parțial migrate.
-          const sterge = async (tabela) => {
-            const rezultat = await supabaseAdmin.from(tabela).delete().eq('user_id', supabaseUserId);
-            const eroare = rezultat?.error;
-            if (eroare && !CODURI_TABELA_INEXISTENTA.has(eroare.code)) throw eroare;
-          };
-          await Promise.all(TABELE_CU_RLS_UTILIZATOR.map((tabela) => sterge(tabela)));
-          await supabaseAdmin.from('clerk_user_map').delete().eq('clerk_user_id', clerkUserId);
-          // C1-S4: stergere admin pe tabele de utilizator (service_role, fara JWT Supabase — webhook Clerk).
-          inregistreazaUtilizareAdmin();
-        }
-
-        if (config.triggerSecretKey) {
-          try {
-            await tasks.trigger('user-sync', { action: 'user.deleted', clerkUserId, supabaseUserId });
-          } catch (e) {
-            console.warn('[Webhook Clerk]', rezumatEroareSigur(e, {
-              operation: 'trigger_user_deleted',
-              provider: 'trigger_dev',
-            }));
-          }
-        }
-      }
-
+    if (!['user.created', 'user.updated', 'user.deleted'].includes(type)) {
       return res.json({ ok: true, type });
-    } catch (err) {
-      console.error('[Webhook Clerk]', rezumatEroareSigur(err, {
-        operation: `process_${type || 'unknown'}`,
-        provider: 'clerk',
-      }));
-
-      try {
-        Sentry.withScope((scope) => {
-          scope.setLevel('error');
-          scope.setTag('webhook', 'clerk');
-          scope.setTag('webhook.event_type', String(type));
-          scope.setTag('webhook.are_user_id', String(!!clerkUserId));
-          scope.setFingerprint(['clerk-webhook', String(type)]);
-          Sentry.captureException(err);
-        });
-      } catch {
-        // Sentry indisponibil
-      }
-
-      if (estePermanent(err)) {
-        return res.status(200).json({
-          ok: false,
-          type,
-          avertisment: 'Eroare permanentă la procesarea webhook-ului.',
-        });
-      }
-
-      return res.status(500).json({
-        eroare: 'Eroare tranzitorie de infrastructură la procesarea webhook-ului.',
-      });
     }
+
+    // external_id, email and historical mappings are not proof that the Clerk
+    // principal owns a Supabase Auth UUID. Disable every cross-provider profile
+    // mutation until an authenticated account-link flow exists. This also makes
+    // duplicate/retried deliveries harmless and preserves Supabase sign-in/data.
+    const motiv = type === 'user.deleted'
+      ? 'CLERK_DELETE_NOT_SUPABASE_AUTHORITY'
+      : 'CLERK_SYNC_REQUIRES_VERIFIED_ACCOUNT_LINK';
+    const saved = await inregistreazaWebhookEsuat({
+      supabaseAdmin,
+      clerkUserId,
+      type,
+      motiv,
+      externalIdPresent: typeof data?.external_id === 'string' && data.external_id.length > 0,
+    });
+    if (!saved) {
+      return res.status(500).json({ eroare: 'Nu s-a putut scrie în dead-letter.', cod: 'DEAD_LETTER_WRITE_FAILED' });
+    }
+    return res.status(200).json({
+      ok: false,
+      type,
+      avertisment: 'Sincronizarea Clerk nu este activată fără asociere de cont verificată — eveniment înregistrat pentru reconciliere.',
+    });
   });
 
   return router;
 }
 
 module.exports = createWebhooksRouter;
-module.exports.determinareSauCreareSupabaseUser = determinareSauCreareSupabaseUser;
-module.exports.EroareTranzitorie = EroareTranzitorie;

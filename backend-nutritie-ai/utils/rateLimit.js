@@ -140,7 +140,16 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 		message: mesaj('Prea multe cereri de verificare Google Play. Incearca intr-un minut.'),
 	});
 
-	return { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter, billingLimiter };
+	const feedbackLimiter = rateLimit({
+		...comun,
+		...cuStorePropriu('rl:feedback:'),
+		windowMs: 60 * 60 * 1000,
+		max: 5,
+		keyGenerator: cheieIdentitateVerificata,
+		message: mesaj('Ai trimis prea multe mesaje de feedback. Încearcă din nou mai târziu.'),
+	});
+
+	return { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter, billingLimiter, feedbackLimiter };
 }
 
 module.exports = {

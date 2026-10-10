@@ -56,6 +56,7 @@ const createUserRouter = require('./routes/user');
 const createBillingGoogleRouter = require('./routes/billingGoogle');
 const createPhotoFlowRouter = require('./routes/photoFlow');
 const createRewardedRouter = require('./routes/rewarded');
+const createFeedbackRouter = require('./routes/feedback');
 const createGooglePlayWebhookRouter = require('./routes/webhooksGooglePlay');
 const createWebhooksRouter = require('./routes/webhooks');
 const createMeseRepo = require('./repositories/meseRepo');
@@ -259,7 +260,7 @@ app.use((req, res, next) => {
 app.use(idempotencyMiddleware);
 
 const storePartajat = creeazaStoreRateLimit({ url: config.redisUrl });
-const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter, billingLimiter } = creeazaLimitatoare({
+const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter, billingLimiter, feedbackLimiter } = creeazaLimitatoare({
   store: storePartajat?.store,
   avertizeazaFaraStore: config.esteProductie,
 });
@@ -462,6 +463,11 @@ const gdprR = createGdprRouter({
   contextDate,
   profilRepo: createProfilRepo(),
 });
+const feedbackR = createFeedbackRouter({
+  requireAuth,
+  feedbackLimiter,
+  contextDate,
+});
 // /api/v1 = prefix canonic
 app.use('/api/v1', statusR);
 app.use('/api/v1', aiR);
@@ -470,6 +476,7 @@ app.use('/api/v1', rewardedR);
 app.use('/api/v1', barcodeR);
 app.use('/api/v1', profilR);
 app.use('/api/v1', meseR);
+app.use('/api/v1', feedbackR);
 app.use('/api/v1/user', gdprR);
 app.use('/api/v1/user', userR);
 app.use('/api/v1/billing/google', billingGoogleR);
@@ -493,6 +500,7 @@ app.use('/api', rewardedR);
 app.use('/api', barcodeR);
 app.use('/api', profilR);
 app.use('/api', meseR);
+app.use('/api', feedbackR);
 app.use('/api/user', gdprR);
 app.use('/api/user', userR);
 app.use('/api/billing/google', billingGoogleR);

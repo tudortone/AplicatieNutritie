@@ -157,7 +157,7 @@ const STATUSURI_CANONICE = {
 };
 
 describe('contractul OpenAPI urmareste runtime-ul Express', () => {
-  const document = yaml.safeLoad(fs.readFileSync(CALE_OPENAPI, 'utf8'));
+  const document = yaml.load(fs.readFileSync(CALE_OPENAPI, 'utf8'));
 
   test('documenteaza exact toate combinatiile explicite metoda + cale', () => {
     expect([...inventarOpenApi(document)].sort()).toEqual([...inventarExpress()].sort());
