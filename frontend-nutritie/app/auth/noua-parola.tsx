@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
+import { passwordRecoveryErrorKey } from '../../lib/passwordRecoveryErrors';
 
 // H1: ecranul de finalizare a resetării parolei. Supabase redirecționează din
 // emailul de resetare în `app/auth/callback.tsx` cu `type=recovery`; după ce
@@ -43,11 +44,14 @@ export default function NouaParolaScreen() {
     if (verificat.current) return;
     verificat.current = true;
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        Alert.alert(t('alerts.titluri.eroareAutentificare'), t('alerts.mesaje.sesiuneExpirata'));
-        router.replace('/auth');
+      try {
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (!sessionError && data.session) return;
+      } catch {
+        // Treat an unavailable session as invalid; never expose provider details.
       }
+      Alert.alert(t('alerts.titluri.eroareAutentificare'), t('alerts.mesaje.sesiuneExpirata'));
+      router.replace('/auth');
     })();
   }, [router, t]);
 
@@ -67,7 +71,7 @@ export default function NouaParolaScreen() {
     try {
       const { error: eroare } = await supabase.auth.updateUser({ password: parola });
       if (eroare) {
-        setError(eroare.message);
+        setError(t(passwordRecoveryErrorKey(eroare)));
         try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
         return;
       }
@@ -77,9 +81,8 @@ export default function NouaParolaScreen() {
         t('authNewPassword.successChanged'),
         [{ text: t('alerts.butoane.super'), onPress: () => router.replace('/(tabs)') }],
       );
-    } catch (e: any) {
-      console.error("Update password error:", e);
-      setError(e?.message || t('alerts.mesaje.conexiuneServerEsueaza'));
+    } catch {
+      setError(t(passwordRecoveryErrorKey(null)));
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
     } finally {
       setLoading(false);
@@ -136,7 +139,7 @@ export default function NouaParolaScreen() {
                 onPress={() => setShowPassword(!showPassword)}
                 style={{ padding: 14, marginRight: 2 }}
                 accessibilityRole="button"
-                accessibilityLabel={showPassword ? 'Ascunde parola' : 'Arată parola'}
+                accessibilityLabel={t(showPassword ? 'authNewPassword.hidePassword' : 'authNewPassword.showPassword')}
               >
                 {showPassword ? <EyeOff size={18} color={colors.textSecondary} /> : <Eye size={18} color={colors.textSecondary} />}
               </TouchableOpacity>
@@ -169,7 +172,7 @@ export default function NouaParolaScreen() {
                 onPress={() => setShowConfirmare(!showConfirmare)}
                 style={{ padding: 14, marginRight: 2 }}
                 accessibilityRole="button"
-                accessibilityLabel={showConfirmare ? 'Ascunde parola' : 'Arată parola'}
+                accessibilityLabel={t(showConfirmare ? 'authNewPassword.hidePassword' : 'authNewPassword.showPassword')}
               >
                 {showConfirmare ? <EyeOff size={18} color={colors.textSecondary} /> : <Eye size={18} color={colors.textSecondary} />}
               </TouchableOpacity>

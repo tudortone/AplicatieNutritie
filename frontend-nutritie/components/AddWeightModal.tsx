@@ -14,7 +14,7 @@ interface AddWeightModalProps {
   onClose: () => void;
   onSave: (greutate: number) => void;
   greutateCurenta: number | null;
-  greutateTinta?: number;
+  greutateTinta?: number | null;
   onSaveTinta?: (tinta: number) => void;
   initialTab?: 'curenta' | 'tinta';
 }
@@ -24,7 +24,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
   onClose,
   onSave,
   greutateCurenta,
-  greutateTinta = 70,
+  greutateTinta = null,
   onSaveTinta,
   initialTab = 'curenta',
 }) => {
@@ -38,14 +38,14 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
   useEffect(() => {
     if (visible) {
       setActiveTab(initialTab);
-      setInputVal(initialTab === 'curenta' ? greutateCurenta?.toString() ?? '' : greutateTinta.toString());
+      setInputVal(initialTab === 'curenta' ? greutateCurenta?.toString() ?? '' : greutateTinta?.toString() ?? '');
     }
   }, [visible, initialTab, greutateCurenta, greutateTinta]);
 
   const handleTabSwitch = (tab: 'curenta' | 'tinta') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveTab(tab);
-    setInputVal(tab === 'curenta' ? greutateCurenta?.toString() ?? '' : greutateTinta.toString());
+    setInputVal(tab === 'curenta' ? greutateCurenta?.toString() ?? '' : greutateTinta?.toString() ?? '');
   };
 
   const handleSave = () => {
@@ -66,8 +66,10 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
 
   const adaugaRaport = (diff: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const baza = activeTab === 'curenta' ? greutateCurenta ?? 0 : greutateTinta;
-    const curent = parseFloat(inputVal.replace(',', '.')) || baza;
+    const baza = activeTab === 'curenta' ? greutateCurenta : greutateTinta;
+    const inputNumeric = parseFloat(inputVal.replace(',', '.'));
+    const curent = Number.isFinite(inputNumeric) ? inputNumeric : baza;
+    if (curent === null || curent === undefined || curent < 30 || curent > 250) return;
     const nou = Math.round((curent + diff) * 10) / 10;
     setInputVal(nou.toString());
   };
@@ -130,7 +132,7 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
                 <View style={styles.tabContent}>
                   <Target size={14} color={activeTab === 'tinta' ? colors.textOnAccent : colors.textSecondary} />
                   <Text style={[styles.tabText, { color: activeTab === 'tinta' ? colors.textOnAccent : colors.textSecondary }]}>
-                    Țintă ({greutateTinta} kg)
+                    Țintă ({greutateTinta ?? '—'} kg)
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -156,16 +158,16 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
 
             {/* Quick +/- adjustment buttons */}
             <View style={styles.quickButtons}>
-              <TouchableOpacity testID="weight-adjust-minus-05" accessibilityState={{ disabled: activeTab === 'curenta' && !canAdjustCurrentWeight }} disabled={activeTab === 'curenta' && !canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: activeTab === 'curenta' && !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(-0.5)}>
+              <TouchableOpacity testID="weight-adjust-minus-05" accessibilityState={{ disabled: !canAdjustCurrentWeight }} disabled={!canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(-0.5)}>
                 <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>−0.5</Text>
               </TouchableOpacity>
-              <TouchableOpacity accessibilityState={{ disabled: activeTab === 'curenta' && !canAdjustCurrentWeight }} disabled={activeTab === 'curenta' && !canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: activeTab === 'curenta' && !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(-0.1)}>
+              <TouchableOpacity accessibilityState={{ disabled: !canAdjustCurrentWeight }} disabled={!canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(-0.1)}>
                 <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>−0.1</Text>
               </TouchableOpacity>
-              <TouchableOpacity accessibilityState={{ disabled: activeTab === 'curenta' && !canAdjustCurrentWeight }} disabled={activeTab === 'curenta' && !canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: activeTab === 'curenta' && !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(0.1)}>
+              <TouchableOpacity accessibilityState={{ disabled: !canAdjustCurrentWeight }} disabled={!canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(0.1)}>
                 <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>+0.1</Text>
               </TouchableOpacity>
-              <TouchableOpacity accessibilityState={{ disabled: activeTab === 'curenta' && !canAdjustCurrentWeight }} disabled={activeTab === 'curenta' && !canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: activeTab === 'curenta' && !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(0.5)}>
+              <TouchableOpacity accessibilityState={{ disabled: !canAdjustCurrentWeight }} disabled={!canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(0.5)}>
                 <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>+0.5</Text>
               </TouchableOpacity>
             </View>

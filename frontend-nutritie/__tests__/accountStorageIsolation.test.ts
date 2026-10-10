@@ -21,6 +21,7 @@ import {
   type MasaOfflinePayload,
 } from '../lib/offlineQueue';
 import { LANGUAGE_STORAGE_KEY } from '../i18n';
+import { clearJournalCache, getCachedJournalDay, setCachedJournalDay } from '../lib/journalCache';
 
 type StorageMock = typeof AsyncStorage & {
   __store: () => Record<string, string>;
@@ -100,6 +101,7 @@ describe('P0-02 — cross-account local persistence boundary', () => {
     jest.clearAllMocks();
     await AsyncStorage.clear();
     await clearOfflineQueue();
+    clearJournalCache();
   });
 
   test('1. A state is inaccessible after logout and B login', async () => {
@@ -240,5 +242,27 @@ describe('P0-02 — cross-account local persistence boundary', () => {
     expect(await AsyncStorage.getItem(PENDING_DELETED_USER_KEY)).toBeNull();
     expect(await AsyncStorage.getItem(userStorageKey('user-A', `apa_${DAY}`))).toBeNull();
     expect(await AsyncStorage.getItem(ACTIVE_LOCAL_USER_KEY)).toBeNull();
+  });
+
+  test('13. an in-memory meal cache cannot survive an account switch', async () => {
+    await prepareLocalDataForUser('user-A');
+    setCachedJournalDay(DAY, [MEAL_A as never]);
+    expect(getCachedJournalDay(DAY)).toHaveLength(1);
+
+    await prepareLocalDataForUser('user-B');
+    expect(getCachedJournalDay(DAY)).toBeUndefined();
+  });
+
+  test('14. nutrient preferences stay with their owner after logout and account switch', async () => {
+    const key = '@getflow_nutrient_focus_prefs_v1';
+    await prepareLocalDataForUser('user-A');
+    await AsyncStorage.setItem(key, JSON.stringify({ activePreset: 'sports' }));
+
+    await clearLocalUserData();
+    await prepareLocalDataForUser('user-B');
+    expect(await AsyncStorage.getItem(key)).toBeNull();
+
+    await prepareLocalDataForUser('user-A');
+    expect(await AsyncStorage.getItem(key)).toBe(JSON.stringify({ activePreset: 'sports' }));
   });
 });

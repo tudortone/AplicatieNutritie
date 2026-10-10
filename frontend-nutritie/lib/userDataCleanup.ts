@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { purgeLocalImageDrafts } from './imageOptimizer';
+import { clearJournalCache } from './journalCache';
 
 /**
  * P0-02 local account boundary.
@@ -54,6 +55,7 @@ export const USER_BOUND_EXACT_KEYS = new Set([
   'nutriai_tip_closed_date', 'jurnal_poze_activate',
   'nutriai_camara_local_v3', 'nutriai_pantry_expiry_notif_enabled',
   'exercitii_recente', 'ascundeCardHealth',
+  '@getflow_nutrient_focus_prefs_v1',
 ]);
 
 export const USER_BOUND_PREFIXES = [
@@ -152,6 +154,9 @@ async function snapshotWorkspace(userId: string): Promise<void> {
 }
 
 async function clearWorkspace(): Promise<void> {
+  // Meal cache keys contain only a date. It must never outlive the active
+  // account boundary, even when the incoming account has no saved meals.
+  clearJournalCache();
   const keys = await currentWorkspaceKeys();
   if (keys.length > 0) await AsyncStorage.multiRemove(keys);
 }
