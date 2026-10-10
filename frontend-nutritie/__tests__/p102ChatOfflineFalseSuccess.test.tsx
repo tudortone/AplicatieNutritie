@@ -427,6 +427,10 @@ describe('Coach suggestion → explicit Journal confirmation', () => {
     expect((global.fetch as jest.Mock).mock.calls.length).toBe(requests);
     expect(view.getByText('chat.suggestion.confirmTitle')).toBeTruthy();
     expect(mockInserted).toHaveLength(0);
+    await act(async () => { fireEvent.press(view.getByLabelText('alerts.butoane.anuleaza')); });
+    await send(view, 'Adaugă această masă în jurnal');
+    expect((global.fetch as jest.Mock).mock.calls.length).toBe(requests);
+    expect(view.getByText('chat.suggestion.confirmTitle')).toBeTruthy();
   });
 
   test('two suggestions keep independent actions; ambiguous command asks for selection', async () => {

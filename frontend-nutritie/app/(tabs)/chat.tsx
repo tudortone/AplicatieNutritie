@@ -425,6 +425,7 @@ export default function ChatScreen() {
       if (!activ) return;
       try {
         const saved = await AsyncStorage.getItem(storageKey);
+        if (!activ) return;
         let parsed: ChatMessage[] | null = null;
         if (saved) {
           try {

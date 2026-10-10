@@ -364,18 +364,6 @@
     "open": "Deschide",
     "openResult": "Deschide rezultatul Photo AI",
     "retry": "Reîncearcă",
-    "suggestion": {
-      "suggestedMeal": "Sugestie de masă", "saved": "Salvată", "pending": "Așteaptă sincronizarea offline",
-      "details": "Ingrediente și detalii", "completeValues": "Verifică și completează valorile lipsă. Cantitățile trebuie să fie în grame; nimic nu a fost salvat încă.",
-      "chooseMeal": "Ce masă dorești să adaugi? Apasă Adaugă în Jurnal pe cardul ei.",
-      "noMeal": "Nu găsesc o sugestie de masă de adăugat. Cere-mi mai întâi o idee de masă.",
-      "confirmTitle": "Verifică înainte de salvare", "estimateNotice": "Valorile AI sunt estimări. Verifică-le și modifică-le înainte de salvare.",
-      "mealName": "Numele mesei", "date": "Data (AAAA-LL-ZZ)", "category": "Categoria mesei",
-      "ingredient": "Ingredient", "quantity": "Cantitate (g)", "unit": "Unitate (g)",
-      "calories": "Calorii (kcal)", "protein": "Proteine (g)", "carbs": "Carbohidrați (g)", "fat": "Grăsimi (g)", "fiber": "Fibre (g)",
-      "total": "Total", "confirmSave": "Confirmă și salvează", "saveFailed": "Masa nu a fost salvată. Verifică conexiunea și încearcă din nou.",
-      "openJournal": "Deschide Jurnalul"
-    },
     "retrying": "Reiau analiza în siguranță..."
   },
   "authNewPassword": {
@@ -499,6 +487,18 @@
         "mediu": "Mediu (< 30 min)",
         "nolimit": "Fără limită"
       }
+    },
+    "suggestion": {
+      "suggestedMeal": "Sugestie de masă", "saved": "Salvată", "pending": "Așteaptă sincronizarea offline",
+      "details": "Ingrediente și detalii", "completeValues": "Verifică și completează valorile lipsă. Cantitățile trebuie să fie în grame; nimic nu a fost salvat încă.",
+      "chooseMeal": "Ce masă dorești să adaugi? Apasă Adaugă în Jurnal pe cardul ei.",
+      "noMeal": "Nu găsesc o sugestie de masă de adăugat. Cere-mi mai întâi o idee de masă.",
+      "confirmTitle": "Verifică înainte de salvare", "estimateNotice": "Valorile AI sunt estimări. Verifică-le și modifică-le înainte de salvare.",
+      "mealName": "Numele mesei", "date": "Data (AAAA-LL-ZZ)", "category": "Categoria mesei",
+      "ingredient": "Ingredient", "quantity": "Cantitate (g)", "unit": "Unitate (g)",
+      "calories": "Calorii (kcal)", "protein": "Proteine (g)", "carbs": "Carbohidrați (g)", "fat": "Grăsimi (g)", "fiber": "Fibre (g)",
+      "total": "Total", "confirmSave": "Confirmă și salvează", "saveFailed": "Masa nu a fost salvată. Verifică conexiunea și încearcă din nou.",
+      "openJournal": "Deschide Jurnalul"
     },
     "aiActNotice": "GetFlow Coach este un asistent de inteligență artificială. Pentru aspecte medicale, consultați întotdeauna un medic specialist."
   },
