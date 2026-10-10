@@ -1,0 +1,22 @@
+{
+  "ro": {
+    "title": "GetFlow",
+    "shortDescription": "Scanează mâncarea cu AI, monitorizează caloriile și antrenează-te inteligent.",
+    "fullDescription": "GetFlow te ajută să urmărești alimentația, mesele și progresul zilnic într-un singur loc.\n\nÎnregistrează mesele în Jurnal și folosește analiza foto cu AI pentru estimări nutriționale. Rezultatele foto sunt orientative: verifică ingredientele și porțiile înainte de salvare.\n\nSetează obiective personale și urmărește caloriile și macronutrienții pe parcursul zilei. Consultă progresul și activitatea fizică.\n\nÎntreabă Coach despre nutriție sau cere idei de rețete. Unele funcții depind de conexiune și de disponibilitatea contului.\n\nGetFlow este o aplicație de nutriție și wellness, nu un dispozitiv medical. Informațiile și estimările sunt orientative și nu înlocuiesc sfatul unui profesionist calificat."
+  },
+  "en": {
+    "title": "GetFlow",
+    "shortDescription": "Scan food with AI, track calories and train with purpose.",
+    "fullDescription": "GetFlow brings meal tracking and everyday progress together in one place.\n\nRecord meals in your Journal and use AI photo analysis for nutrition estimates. Photo results are estimates—review ingredients and portions before saving.\n\nSet personal goals and follow calories and macronutrients throughout the day. Check your progress and physical activity.\n\nAsk Coach nutrition questions or explore recipe ideas. Some features depend on connectivity and account availability.\n\nGetFlow is a nutrition and wellness app, not a medical device. Information and estimates are for general guidance and do not replace advice from a qualified professional."
+  },
+  "fr": {
+    "title": "GetFlow",
+    "shortDescription": "Analysez vos repas par IA, suivez vos calories et entraînez-vous.",
+    "fullDescription": "GetFlow réunit le suivi des repas et de la progression quotidienne dans une seule application.\n\nEnregistrez vos repas dans le Journal et utilisez l’analyse photo par IA pour obtenir des estimations nutritionnelles. Ces résultats sont indicatifs : vérifiez les ingrédients et les portions avant l’enregistrement.\n\nDéfinissez des objectifs personnels et suivez les calories et les macronutriments au fil de la journée. Consultez votre progression et votre activité physique.\n\nPosez à Coach des questions sur la nutrition ou découvrez des idées de recettes. Certaines fonctions dépendent de la connexion et de la disponibilité du compte.\n\nGetFlow est une application de nutrition et de bien-être, pas un dispositif médical. Les informations et estimations sont indicatives et ne remplacent pas l’avis d’un professionnel qualifié."
+  },
+  "de": {
+    "title": "GetFlow",
+    "shortDescription": "Erkenne Lebensmittel per KI, behalte Kalorien im Blick und trainiere gezielt.",
+    "fullDescription": "GetFlow vereint Mahlzeiten-Tracking und täglichen Fortschritt an einem Ort.\n\nErfasse Mahlzeiten im Journal und nutze die KI-Fotoanalyse für Ernährungsschätzungen. Fotoergebnisse sind Schätzungen: Prüfe Zutaten und Portionen vor dem Speichern.\n\nLege persönliche Ziele fest und verfolge Kalorien und Makronährstoffe im Tagesverlauf. Behalte Fortschritt und körperliche Aktivität im Blick.\n\nStelle Coach Fragen zur Ernährung oder entdecke Rezeptideen. Einige Funktionen hängen von der Verbindung und der Verfügbarkeit deines Kontos ab.\n\nGetFlow ist eine Ernährungs- und Wellness-App, kein Medizinprodukt. Informationen und Schätzungen dienen der allgemeinen Orientierung und ersetzen keine Beratung durch qualifiziertes Fachpersonal."
+  }
+}

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920" role="img" aria-label="ȘABLON DE CAPTURĂ GOOGLE PLAY 2 — NOT READY">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#071018"/><stop offset="0.58" stop-color="#0A111C"/><stop offset="1" stop-color="#101426"/></linearGradient>
+    <radialGradient id="limeGlow"><stop stop-color="#B8FF21" stop-opacity=".18"/><stop offset="1" stop-color="#B8FF21" stop-opacity="0"/></radialGradient>
+    <radialGradient id="purpleGlow"><stop stop-color="#8F58E8" stop-opacity=".16"/><stop offset="1" stop-color="#8F58E8" stop-opacity="0"/></radialGradient>
+    <linearGradient id="slot" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#151E2A"/><stop offset="1" stop-color="#0D1420"/></linearGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="60"/></filter>
+    <style>
+      .brand{font:700 38px Inter,Arial,sans-serif;letter-spacing:-1px;fill:#F5F7FA}
+      .label{font:700 18px Inter,Arial,sans-serif;letter-spacing:3px;fill:#B8FF21}
+      .headline{font:700 56px Inter,Arial,sans-serif;letter-spacing:-1.6px;fill:#F5F7FA}
+      .subhead{font:400 27px Inter,Arial,sans-serif;fill:#A5AFBD}
+      .slot-title{font:700 30px Inter,Arial,sans-serif;letter-spacing:1px;fill:#D5DCE6}
+      .slot-copy{font:400 23px Inter,Arial,sans-serif;fill:#8693A4}
+      .notready{font:700 20px Inter,Arial,sans-serif;letter-spacing:1.5px;fill:#10151A}
+      .index{font:700 18px Inter,Arial,sans-serif;letter-spacing:2px;fill:#8C97A6}
+    </style>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#bg)"/>
+  <circle cx="965" cy="95" r="330" fill="url(#limeGlow)" filter="url(#soft)"/>
+  <circle cx="54" cy="1700" r="370" fill="url(#purpleGlow)" filter="url(#soft)"/>
+  <path d="M64 0h8v1920h-8z" fill="#B8FF21" opacity=".85"/>
+  <g transform="translate(96 85)">
+    <circle cx="31" cy="31" r="31" fill="#B8FF21" opacity=".12"/>
+    <path d="M20 39c1-13 11-22 25-25-1 14-9 25-25 25Zm3 2c9 1 17 7 19 18-10-1-18-7-19-18Z" fill="none" stroke="#B8FF21" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="79" y="43" class="brand">GetFlow</text>
+  </g>
+  <text x="96" y="219" class="label">ȘABLON DE CAPTURĂ GOOGLE PLAY</text>
+  <text x="92" y="302" class="headline">Ziua ta, pe scurt</text>
+  <text x="96" y="387" class="subhead">O privire rapidă asupra caloriilor și</text><text x="96" y="425" class="subhead">macronutrienților zilei.</text>
+  <text x="96" y="521" class="index">02 / 08</text>
+  <rect x="78" y="568" width="924" height="1180" rx="62" fill="#111A27" stroke="#526070" stroke-opacity=".65" stroke-width="3"/>
+  <rect x="99" y="589" width="882" height="1138" rx="46" fill="url(#slot)"/>
+  <rect x="134" y="626" width="812" height="1064" rx="34" fill="none" stroke="#B8FF21" stroke-opacity=".66" stroke-width="3" stroke-dasharray="14 13"/>
+  <g transform="translate(492 973)" fill="none" stroke="#B8FF21" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity=".9">
+    <rect x="-54" y="-54" width="108" height="108" rx="26"/>
+    <path d="M-23 3h46M0-20v46"/>
+  </g>
+  <text x="540" y="1098" class="slot-title" text-anchor="middle">CAPTURĂ REALĂ DIN APLICAȚIE</text>
+  <text x="540" y="1150" class="slot-copy" text-anchor="middle">home-dashboard</text>
+  <text x="540" y="1212" class="slot-copy" text-anchor="middle">Înlocuiește zona conturată cu o captură din versiunea</text><text x="540" y="1248" class="slot-copy" text-anchor="middle">GetFlow publicată acum.</text>
+  <rect x="96" y="1774" width="888" height="78" rx="39" fill="#B8FF21"/>
+  <text x="540" y="1825" class="notready" text-anchor="middle">NEPREGĂTIT PENTRU PLAY CONSOLE</text>
+  <text x="96" y="1890" class="index">GETFLOW · STORE ARTWORK TEMPLATE</text>
+</svg>
