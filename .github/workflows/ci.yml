@@ -2,7 +2,7 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'ci-integration/*' ]
   # PR-uri pe main: rulează aceleași verificări (audit, scan-uri, RLS) înainte de merge,
   # astfel încât un review să poată vedea gate-urile verzi/roșii fără să fie nevoie de merge.
   pull_request:
