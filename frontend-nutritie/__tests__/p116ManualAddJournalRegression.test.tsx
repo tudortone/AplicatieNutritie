@@ -29,6 +29,7 @@ let mockLanguage = 'en';
 let mockWindow = { width: 390, height: 844, scale: 1, fontScale: 1 };
 let mockAddMealScrollTo = jest.fn();
 let mockAddMealScrollProps: Record<string, unknown> = {};
+let mockAddMealInitialIndex = -1;
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
@@ -129,6 +130,7 @@ jest.mock('@gorhom/bottom-sheet', () => {
   const { View } = require('react-native');
   const R = require('react');
   const Sheet = R.forwardRef((props: any, ref: any) => {
+    mockAddMealInitialIndex = props.index;
     R.useImperativeHandle(ref, () => ({
       snapToIndex: jest.fn(),
       close: jest.fn(),
@@ -165,6 +167,7 @@ describe('P1-16 — Manual Add Food to Journal Regression Tests', () => {
     mockWindow = { width: 390, height: 844, scale: 1, fontScale: 1 };
     mockAddMealScrollTo = jest.fn();
     mockAddMealScrollProps = {};
+    mockAddMealInitialIndex = -1;
     freshnessSignals = [];
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     unsubscribeFreshness = aboneazaLaModificariMese((userId) => {
@@ -185,6 +188,61 @@ describe('P1-16 — Manual Add Food to Journal Regression Tests', () => {
       scrollEnabled: true,
       showsVerticalScrollIndicator: false,
     }));
+  });
+
+  test('first mount opens at a real snap point without a pre-layout imperative expand', async () => {
+    await render(<AddMealBottomSheet openOnMount />);
+    // Gorhom ignores expand() while its detents/layout are unresolved. An
+    // initial index is applied by the sheet after layout instead.
+    expect(mockAddMealInitialIndex).toBe(1);
+  });
+
+  test('name suggestions do not create a competing vertical scroll owner', async () => {
+    const view = await render(<AddMealBottomSheet />);
+    await act(async () => {
+      fireEvent.changeText(view.getByLabelText('jurnal.mealName'), 'pui');
+    });
+    const nestedVerticalScrolls = view.root?.queryAll(
+      (node) => /ScrollView/.test(node.type) && node.props.horizontal !== true,
+    );
+    expect(nestedVerticalScrolls).toHaveLength(0);
+  });
+
+  test('large preset categories render a bounded first batch and expose the rest on demand', async () => {
+    const view = await render(<AddMealBottomSheet />);
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Category: Prânz'));
+    });
+    expect(view.queryAllByTestId(/^food-preset-/)).toHaveLength(20);
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('jurnal.showMoreResults'));
+    });
+    expect(view.queryAllByTestId(/^food-preset-/)).toHaveLength(40);
+  });
+
+  test('closing manual entry releases delayed scroll/highlight work', async () => {
+    jest.useFakeTimers();
+    const timerSpy = jest.spyOn(global, 'setTimeout');
+    const clearSpy = jest.spyOn(global, 'clearTimeout');
+    try {
+      const ref = React.createRef<any>();
+      const view = await render(<AddMealBottomSheet ref={ref} />);
+      await act(async () => {
+        ref.current.openWithItem({
+          nume: 'Orez', calorii: 120, proteine: 2, carbohidrati: 25, grasimi: 0,
+        });
+      });
+      const delayedScrollCall = timerSpy.mock.calls.findIndex((call) => call[1] === 350);
+      expect(delayedScrollCall).toBeGreaterThanOrEqual(0);
+      const delayedScrollTimer = timerSpy.mock.results[delayedScrollCall].value;
+      await view.unmount();
+      expect(clearSpy).toHaveBeenCalledWith(delayedScrollTimer);
+    } finally {
+      timerSpy.mockRestore();
+      clearSpy.mockRestore();
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
   });
 
   afterEach(() => {

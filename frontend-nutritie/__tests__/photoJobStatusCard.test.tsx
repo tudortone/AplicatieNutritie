@@ -22,6 +22,7 @@ jest.mock('../context/ThemeContext', () => ({
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('lucide-react-native', () => ({ Camera: () => null, CheckCircle2: () => null, AlertTriangle: () => null, LoaderCircle: () => null }));
+jest.mock('../hooks/useReducedMotion', () => ({ useReducedMotion: () => false }));
 jest.mock('../lib/photoJobs', () => ({ recoverPhotoJob: jest.fn() }));
 
 const pointer = {
@@ -40,8 +41,9 @@ describe('PhotoJobStatusCard durable discoverability', () => {
     (recoverPhotoJob as jest.Mock).mockResolvedValue({ job: { id: 'job-1', status: 'running' }, pointer });
     const view = await render(<PhotoJobStatusCard />);
 
-    await waitFor(() => expect(view.getByTestId('photo-job-status-processing')).toBeTruthy());
+    await waitFor(() => expect(view.getByTestId('home-photo-analysis-processing')).toBeTruthy());
     expect(view.getByText('photoJob.backgroundTitle')).toBeTruthy();
+    expect(view.getByTestId('photo-job-scanning-ring')).toBeTruthy();
     fireEvent.press(view.getByTestId('photo-job-open'));
     expect(mockPush).toHaveBeenCalledWith('/camera');
   });
@@ -53,9 +55,9 @@ describe('PhotoJobStatusCard durable discoverability', () => {
     });
     const view = await render(<PhotoJobStatusCard />);
 
-    await waitFor(() => expect(view.getByTestId('photo-job-status-completed')).toBeTruthy());
+    await waitFor(() => expect(view.getByTestId('home-photo-analysis-completed')).toBeTruthy());
     expect(view.getByText('photoJob.completedTitle')).toBeTruthy();
-    expect(view.queryByTestId('photo-job-spinner')).toBeNull();
+    expect(view.queryByTestId('photo-job-scanning-ring')).toBeNull();
   });
 
   it('keeps a failed job visible with a retry path and no infinite spinner', async () => {
@@ -65,9 +67,9 @@ describe('PhotoJobStatusCard durable discoverability', () => {
     });
     const view = await render(<PhotoJobStatusCard />);
 
-    await waitFor(() => expect(view.getByTestId('photo-job-status-failed')).toBeTruthy());
+    await waitFor(() => expect(view.getByTestId('home-photo-analysis-failed')).toBeTruthy());
     expect(view.getByText('photoJob.failedTitle')).toBeTruthy();
-    expect(view.queryByTestId('photo-job-spinner')).toBeNull();
+    expect(view.queryByTestId('photo-job-scanning-ring')).toBeNull();
     fireEvent.press(view.getByTestId('photo-job-open'));
     expect(mockPush).toHaveBeenCalledWith('/camera');
   });

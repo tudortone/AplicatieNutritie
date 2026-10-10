@@ -1,5 +1,5 @@
 import { verificaReluareMasa } from './payloadMese';
-import { marcheazaMeseModificate } from './freshnessMese';
+import { anuntaMasaSalvataVerificat, marcheazaMeseModificate } from './freshnessMese';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const OFFLINE_QUEUE_KEY_LEGACY = '@nutri_offline_meals_queue';
@@ -258,6 +258,7 @@ export async function processOfflineQueue(
   }
 
   let queue = await getOfflineQueue(activeUid);
+  const queueSnapshot = [...queue];
   if (queue.length === 0) {
     return { procesate: 0, esuate: 0 };
   }
@@ -405,7 +406,15 @@ export async function processOfflineQueue(
   // schimbat — emitem o SINGURĂ invalidare pentru toată reluarea, ca ecranele
   // deschise (Home) să se împrospăteze fără repornirea aplicației. Nu emitem
   // nimic dacă nu s-a procesat nimic real.
-  if (procesate > 0) marcheazaMeseModificate(activeUid);
+  if (procesate > 0) {
+    marcheazaMeseModificate(activeUid);
+    const salvate = queueSnapshot.filter((masa) => sincronizate.has(masa.id));
+    anuntaMasaSalvataVerificat(
+      activeUid,
+      salvate.map((masa) => masa.id),
+      [...new Set(salvate.map((masa) => String(masa.data ?? masa.created_at ?? '').slice(0, 10)))],
+    );
+  }
 
   return { procesate, esuate };
 }

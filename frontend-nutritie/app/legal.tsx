@@ -7,6 +7,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { getLegalUrls } from '../lib/legalUrls';
+import { SUPPORT_EMAIL } from '../constants/support';
 
 // ATENȚIE: conținutul juridic este informativ și principalul document obligatoriu
 // (Termenii și Politica de Confidențialitate) se deschide extern din documentele
@@ -15,7 +16,7 @@ import { getLegalUrls } from '../lib/legalUrls';
 
 // Operator și suport: configurabile prin variabile de mediu fără date fabricate.
 const OPERATOR_NAME = process.env.EXPO_PUBLIC_LEGAL_OPERATOR_NAME?.trim() || null;
-const EMAIL_SUPORT = process.env.EXPO_PUBLIC_SUPPORT_EMAIL?.trim() || 'supportgetflow@gmail.com';
+const EMAIL_SUPORT = SUPPORT_EMAIL;
 
 export default function LegalScreen() {
   const insets = useSafeAreaInsets();

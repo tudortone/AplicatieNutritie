@@ -37,7 +37,10 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 
 jest.mock('../supabase', () => ({
   supabase: {
-    auth: { getUser: jest.fn(async () => ({ data: { user: mockUtilizator }, error: null })) },
+    auth: {
+      getUser: jest.fn(async () => ({ data: { user: mockUtilizator }, error: null })),
+      onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })),
+    },
     from: jest.fn(() => {
       let userId = '';
       const c: Record<string, unknown> = {

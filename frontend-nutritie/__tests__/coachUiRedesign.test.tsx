@@ -222,7 +222,7 @@ describe('GetFlow Coach Premium Minimal Redesign Suite', () => {
 
       // Intro title and subtitle are present
       expect(view.getByText(mockResources.en.chat.emptyTitle)).toBeTruthy();
-      expect(view.getByText(mockResources.en.chat.emptySubtitle)).toBeTruthy();
+      expect(view.getByText(mockResources.en.chat.aiActNotice)).toBeTruthy();
 
       // History surface has flex: 1 taking most of the vertical viewport
       const history = view.getByTestId('coach-history-surface');

@@ -323,7 +323,11 @@ describe('P0-05: Cross-Layer Parity & Real Pre-Submit Entrypoint', () => {
           cwd: path.resolve(__dirname, '..'),
           env: prodEnvFixture,
           encoding: 'utf8',
-          timeout: 360000,
+          // The real entrypoint runs the full Jest suite and a disposable
+          // Android Gradle manifest merge. On Windows/Node 22 this verified
+          // path can exceed six minutes even when every child gate succeeds.
+          timeout: 900000,
+          maxBuffer: 16 * 1024 * 1024,
         });
 
       const output = `${result.stdout || ''}\n${result.stderr || ''}`;
@@ -373,7 +377,7 @@ describe('P0-05: Cross-Layer Parity & Real Pre-Submit Entrypoint', () => {
         expect(output).toContain(engineCerut);
         expect(result.status).not.toBe(0);
       }
-    }, 360000);
+    }, 900000);
   });
 
   describe('EAS.json Production Environment Binding', () => {

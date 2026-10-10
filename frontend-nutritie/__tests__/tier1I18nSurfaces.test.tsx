@@ -190,10 +190,14 @@ describe('Tier 1 i18n — production callers', () => {
       expect(view.queryByLabelText(resources[locale].profile[key])).toBeNull();
     }
     expect(view.queryByText(resources[locale].profile.howItWorksDesc)).toBeNull();
-    const contact = within(view.getByTestId('profile-contact-section'));
+    const feedback = within(view.getByTestId('profile-feedback-section'));
+    const support = within(view.getByTestId('profile-support-email-footer'));
     const dataPrivacy = within(view.getByTestId('profile-data-privacy-section'));
-    expect(contact.getByLabelText(resources[locale].profile.contactUsA11y)).toBeTruthy();
-    expect(contact.queryByLabelText(resources[locale].profile.termsA11y)).toBeNull();
+    expect(feedback.getByLabelText(resources[locale].profile.sendFeedbackA11y)).toBeTruthy();
+    expect(support.getByLabelText(resources[locale].profile.supportEmailOpenA11y)).toBeTruthy();
+    expect(support.getByLabelText(resources[locale].profile.supportEmailCopyA11y)).toBeTruthy();
+    expect(support.getByText('supportgetflow@gmail.com')).toBeTruthy();
+    expect(support.queryByLabelText(resources[locale].profile.termsA11y)).toBeNull();
     expect(dataPrivacy.getByLabelText(resources[locale].profile.termsA11y)).toBeTruthy();
     expect(dataPrivacy.getByLabelText(resources[locale].profile.exportDataA11y)).toBeTruthy();
     expect(dataPrivacy.getByLabelText(resources[locale].profile.deleteAccountA11y)).toBeTruthy();

@@ -83,6 +83,7 @@ export function useMeseAzi(dataSelectata?: Date) {
   const [eroareFetch, setEroareFetch] = useState<string | null>(null);
 
   const userRef = useRef<User | null>(null);
+  const authUserIdRef = useRef<string | null | undefined>(undefined);
   const targetsLoadedRef = useRef(false);
   const activeDateKeyRef = useRef(dateKey);
   const reqIdRef = useRef(0);
@@ -148,7 +149,16 @@ export function useMeseAzi(dataSelectata?: Date) {
 
         if (isStale()) return;
         if (userError || !fetchedUser) {
+          authUserIdRef.current = null;
+          userRef.current = null;
+          setUser(null);
+          setMese([]);
           setGreutateIntrodusaKg(null);
+          setCaloriiTinta(2000);
+          setProteineTinta(150);
+          setCarbiTinta(250);
+          setGrasimiTinta(70);
+          setGreutate(75);
           setLoading(false);
           setEroareFetch(userError ? userError.message : null);
           return;
@@ -158,6 +168,7 @@ export function useMeseAzi(dataSelectata?: Date) {
           clearJournalCache();
           targetsLoadedRef.current = false;
         }
+        authUserIdRef.current = fetchedUser.id;
         userRef.current = fetchedUser;
         const currentUser = fetchedUser;
         setUser(fetchedUser);
@@ -261,6 +272,41 @@ export function useMeseAzi(dataSelectata?: Date) {
       reqIdRef.current++;
       abortControllerRef.current?.abort();
     };
+  }, [fetchData]);
+
+  // Invalidate in-flight reads at the Auth boundary. The Journal cache is
+  // date-keyed, so retaining either its contents or the hook's previous state
+  // across A→B/logout could briefly expose the previous account's meals.
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      const nextUserId = nextSession?.user?.id ?? null;
+      if (authUserIdRef.current === undefined) {
+        authUserIdRef.current = nextUserId;
+        return;
+      }
+      if (authUserIdRef.current === nextUserId) return;
+
+      authUserIdRef.current = nextUserId;
+      reqIdRef.current++;
+      abortControllerRef.current?.abort();
+      clearJournalCache();
+      userRef.current = null;
+      targetsLoadedRef.current = false;
+      hasLoadedDateRef.current = null;
+      setUser(null);
+      setMese([]);
+      setCaloriiTinta(2000);
+      setProteineTinta(150);
+      setCarbiTinta(250);
+      setGrasimiTinta(70);
+      setGreutate(75);
+      setGreutateIntrodusaKg(null);
+      setEroareFetch(null);
+      setLoading(Boolean(nextUserId));
+
+      if (nextUserId) void fetchData(true, true);
+    });
+    return () => subscription.unsubscribe();
   }, [fetchData]);
 
   // Deterministic invalidation signal on verified mutations (AddMealBottomSheet, Photo AI, Coach, deletion, quantity)

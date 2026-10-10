@@ -174,6 +174,14 @@ const translations: Record<string, string> = {
   'jurnal.macroFats': 'Grăsimi',
   'jurnal.macroFiber': 'Fibre',
   'jurnal.mealA11y': 'Masa {{nume}}, {{kcal}} kcal',
+  'jurnal.ingredientsSection': 'Ingrediente',
+  'jurnal.ingredientDetails': 'Ingrediente',
+  'jurnal.expandIngredients': 'Vezi ingredientele',
+  'jurnal.collapseIngredients': 'Ascunde ingredientele',
+  'jurnal.showIngredients': 'Vezi ingredientele',
+  'jurnal.hideIngredients': 'Ascunde ingredientele',
+  'jurnal.ingredientCount': '{{count}} ingrediente',
+  'chat.mealCategory.pranz': 'Prânz',
   'jurnal.editMeal': 'Editează masa',
   'jurnal.deleteMeal': 'Șterge masa',
 };
@@ -184,6 +192,7 @@ jest.mock('react-i18next', () => ({
       let res = translations[key] || key;
       if (options?.nume) res = res.replace('{{nume}}', options.nume);
       if (options?.kcal !== undefined) res = res.replace('{{kcal}}', String(options.kcal));
+      if (options?.count !== undefined) res = res.replace('{{count}}', String(options.count));
       return res;
     },
   }),
@@ -238,6 +247,29 @@ describe('GetFlow Premium Meal Photo Locked Experience Redesign', () => {
     await cleanup();
   });
 
+  it('uses the localized meal category instead of the generated ingredient title and expands details on demand', async () => {
+    const generatedTitleMeal = {
+      ...sampleMealWithPhoto,
+      nume: 'Salam uscat tip cabanos (120g), Ouă ochiuri (80g), Bacon crocant (15g)',
+      alimente: [
+        ...(sampleMealWithPhoto.alimente ?? []),
+        { nume: 'Ouă ochiuri', grame: 80, calorii: 130, proteine: 8, carbohidrati: 1, grasimi: 10, fibre: 0 },
+      ],
+    };
+
+    const screen = await render(
+      <MasaCard masa={generatedTitleMeal} onPress={jest.fn()} onEdit={jest.fn()} onDelete={jest.fn()} />
+    );
+
+    expect(screen.getByText('Prânz')).toBeTruthy();
+    expect(screen.queryByText(generatedTitleMeal.nume)).toBeNull();
+    expect(screen.queryByText('Ouă ochiuri')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Vezi ingredientele'));
+    expect(screen.getByText('Ingrediente')).toBeTruthy();
+    expect(screen.getByText('Ouă ochiuri')).toBeTruthy();
+    expect(screen.getByText('80g')).toBeTruthy();
+  });
+
   describe('1. Free User Behavior', () => {
     it('free user → real image is NOT rendered (user photo URI completely absent from DOM)', async () => {
       mockCurrentPremiumState.hasFullAccess = false;
@@ -279,6 +311,8 @@ describe('GetFlow Premium Meal Photo Locked Experience Redesign', () => {
         />
       );
 
+      await fireEvent.press(screen.getByLabelText('Vezi ingredientele'));
+
       // Premium preview surface is mounted
       const preview = screen.getByTestId('premium-photo-preview');
       expect(preview).toBeTruthy();
@@ -319,6 +353,8 @@ describe('GetFlow Premium Meal Photo Locked Experience Redesign', () => {
         />
       );
 
+      await fireEvent.press(screen.getByLabelText('Vezi ingredientele'));
+
       const cta = screen.getByTestId('premium-photo-unlock-cta');
       fireEvent.press(cta);
 
@@ -341,6 +377,8 @@ describe('GetFlow Premium Meal Photo Locked Experience Redesign', () => {
           afisarePoze={true}
         />
       );
+
+      await fireEvent.press(screen.getByLabelText('Vezi ingredientele'));
 
       const cta = screen.getByTestId('premium-photo-unlock-cta');
       fireEvent.press(cta);
@@ -365,6 +403,8 @@ describe('GetFlow Premium Meal Photo Locked Experience Redesign', () => {
           afisarePoze={true}
         />
       );
+
+      await fireEvent.press(screen.getByLabelText('Vezi ingredientele'));
 
       // Premium preview must NOT be rendered
       expect(screen.queryByTestId('premium-photo-preview')).toBeNull();
@@ -393,6 +433,8 @@ describe('GetFlow Premium Meal Photo Locked Experience Redesign', () => {
         />
       );
 
+      await fireEvent.press(screen.getByLabelText('Vezi ingredientele'));
+
       const imageButton = screen.getByLabelText('Vezi poza mesei și detaliile');
       fireEvent.press(imageButton);
 
@@ -419,22 +461,25 @@ describe('GetFlow Premium Meal Photo Locked Experience Redesign', () => {
         );
       }
 
-      const { rerender, queryByTestId, getAllByTestId, queryAllByTestId } = await render(
+      const screen = await render(
         <TestHost isPremium={false} />
       );
 
-      expect(queryByTestId('premium-photo-preview')).toBeTruthy();
-      expect(queryAllByTestId('expo-image-mock').length).toBe(0);
+      await fireEvent.press(screen.getByLabelText('Vezi ingredientele'));
+
+      expect(screen.queryByTestId('premium-photo-preview')).toBeTruthy();
+      expect(screen.queryAllByTestId('expo-image-mock').length).toBe(0);
 
       // 2. User upgrades to Premium or switches to subscribed account
       mockCurrentPremiumState.hasFullAccess = true;
       mockCurrentPremiumState.isPremium = true;
       mockCurrentPremiumState.accessTier = 'premium';
 
-      await rerender(<TestHost isPremium={true} />);
+      await screen.rerender(<TestHost isPremium={true} />);
 
-      expect(queryByTestId('premium-photo-preview')).toBeNull();
-      const images = getAllByTestId('expo-image-mock');
+      await fireEvent.press(screen.getByLabelText('Vezi ingredientele'));
+      expect(screen.queryByTestId('premium-photo-preview')).toBeNull();
+      const images = screen.getAllByTestId('expo-image-mock');
       expect(images.length).toBe(1);
       expect(images[0].props.source.uri).toContain('user_salmon_lunch_secret');
 
@@ -443,10 +488,12 @@ describe('GetFlow Premium Meal Photo Locked Experience Redesign', () => {
       mockCurrentPremiumState.isPremium = false;
       mockCurrentPremiumState.accessTier = 'free';
 
-      await rerender(<TestHost isPremium={false} />);
+      await screen.rerender(<TestHost isPremium={false} />);
 
-      expect(queryByTestId('premium-photo-preview')).toBeTruthy();
-      expect(queryAllByTestId('expo-image-mock').length).toBe(0);
+      await fireEvent.press(screen.getByLabelText('Vezi ingredientele'));
+
+      expect(screen.queryByTestId('premium-photo-preview')).toBeTruthy();
+      expect(screen.queryAllByTestId('expo-image-mock').length).toBe(0);
     });
   });
 

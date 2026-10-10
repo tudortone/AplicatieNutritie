@@ -1,7 +1,7 @@
 import type { AlimentScanat } from '../components/food/FoodScanSuccessModal';
 import type { TipMasa } from '../types';
 import { localDayKey } from './dateUtils';
-import { generareUuidDeterminist, idMasaDinOperatie, idOperatieNoua } from './idUtils';
+import { idMasaDinOperatie, idOperatieNoua } from './idUtils';
 import { normalizeazaNutrient } from './nutritionTotals';
 import { LIMITE_DB_MESE, clampValoare, getTipMasaDupaOra, normalizeTipMasa } from './mealUtils';
 

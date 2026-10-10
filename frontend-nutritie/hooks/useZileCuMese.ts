@@ -11,6 +11,7 @@ export function useZileCuMese() {
   const [zileCuMese, setZileCuMese] = useState<string[]>([]);
   const isMountedRef = useRef(true);
   const reqIdRef = useRef(0);
+  const authUserIdRef = useRef<string | null | undefined>(undefined);
 
   const fetchZileCuMese = useCallback(async () => {
     const myReqId = ++reqIdRef.current;
@@ -20,14 +21,24 @@ export function useZileCuMese() {
       const {
         data: { user: currentUser },
       } = await supabase.auth.getUser();
-      if (isStale() || !currentUser) return;
+      if (isStale()) return;
+      const currentUserId = currentUser?.id ?? null;
+      if (authUserIdRef.current === undefined) authUserIdRef.current = currentUserId;
+      if (!currentUserId) {
+        setZileCuMese([]);
+        return;
+      }
+      if (authUserIdRef.current !== currentUserId) {
+        authUserIdRef.current = currentUserId;
+        setZileCuMese([]);
+      }
 
       const startDeVerificat = new Date();
       startDeVerificat.setDate(startDeVerificat.getDate() - 90);
       const { data: toateMesele } = await supabase
         .from('mese')
         .select('created_at')
-        .eq('user_id', currentUser.id)
+        .eq('user_id', currentUserId)
         .gte('created_at', startDeVerificat.toISOString());
 
       if (isStale()) return;
@@ -54,6 +65,23 @@ export function useZileCuMese() {
       isMountedRef.current = false;
       reqIdRef.current++;
     };
+  }, [fetchZileCuMese]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      const nextUserId = nextSession?.user?.id ?? null;
+      if (authUserIdRef.current === undefined) {
+        authUserIdRef.current = nextUserId;
+        return;
+      }
+      if (authUserIdRef.current === nextUserId) return;
+
+      authUserIdRef.current = nextUserId;
+      reqIdRef.current++;
+      setZileCuMese([]);
+      if (nextUserId) void fetchZileCuMese();
+    });
+    return () => subscription.unsubscribe();
   }, [fetchZileCuMese]);
 
   return { zileCuMese, refreshZileCuMese: fetchZileCuMese };

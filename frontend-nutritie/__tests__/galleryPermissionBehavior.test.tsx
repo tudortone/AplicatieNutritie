@@ -518,6 +518,7 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
 
       await waitFor(() => expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy());
       expect(waitForPhotoJob).toHaveBeenCalled();
+      expect(mockRouter.replace).toHaveBeenCalledWith('/(tabs)');
       expect(view.getByText('camera.detectedMeal')).toBeTruthy();
       expect(view.getAllByText('Chicken').length).toBeGreaterThanOrEqual(1);
       expect(view.getByText('chat.mealCategory.cina')).toBeTruthy();
@@ -594,7 +595,7 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       expect(clearActivePhotoJob).toHaveBeenCalledWith(mockUser.id, 'failed-job-1');
     });
 
-    it('PHOTO BACKGROUND NAVIGATION: leaving after durable submission preserves the job and credit identity', async () => {
+    it('PHOTO BACKGROUND NAVIGATION: returns Home after durable submission and preserves the job', async () => {
       Platform.OS = 'android';
       mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///meal.jpg' }] });
       (waitForPhotoJob as jest.Mock).mockImplementationOnce(() => new Promise(() => {}));
@@ -603,10 +604,8 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       await act(async () => fireEvent.press(view.getByTestId('gallery-button')));
       await waitFor(() => expect(submitPhotoJob).toHaveBeenCalled());
 
-      await act(async () => fireEvent.press(view.getByLabelText('common.close')));
-
+      expect(mockRouter.replace).toHaveBeenCalledWith('/(tabs)');
       expect(clearActivePhotoJob).not.toHaveBeenCalled();
-      expect(mockRouter.back).toHaveBeenCalledTimes(1);
     });
 
     it('CAMERA DATA CONTRACT: a structured RLS error is not queued or reported as an offline save', async () => {

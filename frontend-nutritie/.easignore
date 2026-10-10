@@ -33,6 +33,10 @@ coverage/
 /artifacts/
 /graphify-out/
 /output/
+/.playwright-cli/
+/.tmp/
+/.claude/
+/.qa*/
 
 # Local agent/tool metadata in the Git root is not mobile build input.
 /.agents/

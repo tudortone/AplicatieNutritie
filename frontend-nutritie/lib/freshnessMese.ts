@@ -28,8 +28,18 @@
  */
 
 type AscultatorMese = (userId: string) => void;
+export interface VerifiedMealSaveEvent {
+  userId: string;
+  mealIds: readonly string[];
+  dayKeys: readonly string[];
+  revision: number;
+}
+type AscultatorSalvare = (event: VerifiedMealSaveEvent) => void;
 
 const ascultatori = new Set<AscultatorMese>();
+const ascultatoriSalvare = new Set<AscultatorSalvare>();
+const salvateEmise = new Set<string>();
+let revisionSalvare = 0;
 
 /**
  * Anunță că setul canonic de mese al utilizatorului s-a schimbat.
@@ -52,4 +62,45 @@ export function marcheazaMeseModificate(userId: string): void {
 export function aboneazaLaModificariMese(ascultator: AscultatorMese): () => void {
   ascultatori.add(ascultator);
   return () => { ascultatori.delete(ascultator); };
+}
+
+/**
+ * Emits an animation-only signal after a new meal is verified on the server.
+ * It intentionally carries no nutrition values: consumers must refresh from
+ * the canonical meals store before presenting updated totals.
+ */
+export function anuntaMasaSalvataVerificat(
+  userId: string,
+  mealIds: readonly string[],
+  dayKeys: readonly string[],
+): void {
+  if (!userId.trim()) return;
+  const ids = [...new Set(mealIds.filter((id) => typeof id === 'string' && id.trim() && id !== 'undefined' && id !== 'null'))];
+  if (ids.length === 0) return;
+  const freshIds = ids.filter((id) => {
+    const key = `${userId}:${id}`;
+    if (salvateEmise.has(key)) return false;
+    salvateEmise.add(key);
+    return true;
+  });
+  if (freshIds.length === 0) return;
+  while (salvateEmise.size > 500) {
+    const oldest = salvateEmise.values().next().value;
+    if (oldest === undefined) break;
+    salvateEmise.delete(oldest);
+  }
+  const event: VerifiedMealSaveEvent = {
+    userId,
+    mealIds: freshIds,
+    dayKeys: [...new Set(dayKeys.filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day)))],
+    revision: ++revisionSalvare,
+  };
+  for (const listener of [...ascultatoriSalvare]) {
+    try { listener(event); } catch { /* A visual subscriber cannot block persistence. */ }
+  }
+}
+
+export function aboneazaLaMeseSalvateVerificat(listener: AscultatorSalvare): () => void {
+  ascultatoriSalvare.add(listener);
+  return () => { ascultatoriSalvare.delete(listener); };
 }

@@ -29,6 +29,7 @@ jest.mock('../supabase', () => ({
         data: { user: mockUser },
         error: null,
       })),
+      onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })),
       getSession: jest.fn(async () => ({
         data: { session: { user: mockUser } },
         error: null,

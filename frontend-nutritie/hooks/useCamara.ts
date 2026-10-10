@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import type { ProdusScanat } from '../lib/openfoodfacts';
@@ -205,7 +205,6 @@ export function useCamara() {
       is_congelat: options?.isCongelat || false,
     };
 
-    let savedRemote = false;
     if (user) {
       try {
         const payload = {
@@ -237,7 +236,6 @@ export function useCamara() {
           console.warn('[Camara] Insert produs in Supabase esuat:', error.message ?? error);
         }
         if (!error && data) {
-          savedRemote = true;
           nouProdus.id = data.id;
         }
       } catch {}

@@ -33,7 +33,7 @@ import { getTipMasaDupaOra, MEAL_CATEGORIES, CATEGORIE_ICONA, getMealCategoryLab
 import { FlowIcon, resolveFlowIconName } from './ui/FlowIcon';
 import { pushOfflineMealVerificat, MasaOfflinePayload } from '../lib/offlineQueue';
 import { construiestePayloadMasaManuala, esteEroareDuplicate, decideRezultatInsertMasa } from '../lib/payloadMese';
-import { marcheazaMeseModificate } from '../lib/freshnessMese';
+import { anuntaMasaSalvataVerificat, marcheazaMeseModificate } from '../lib/freshnessMese';
 import { idOperatieNoua } from '../lib/idUtils';
 import { foodPresets, categories, FoodPreset, getPresetDisplayName } from '../constants/foodPresets';
 import { getQuickPortionLabel } from '../i18n/quickPortions';
@@ -57,6 +57,8 @@ export interface AddMealBottomSheetRef {
 }
 
 interface AddMealBottomSheetProps {
+  /** Start at the expanded detent when the sheet is lazy-mounted by a first tap. */
+  openOnMount?: boolean;
   onSuccess?: () => void;
   // S10 (U-09): apelat DUPĂ ce insertul a reușit, cu rândul creat (id real).
   // Permite jurnalului să facă o adăugare optimistă instant + reconciliere,
@@ -75,7 +77,7 @@ interface BaseNutrition {
 }
 
 export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBottomSheetProps>(
-  ({ onSuccess, onMasaCreata, onPantryUsed }, ref) => {
+  ({ openOnMount = false, onSuccess, onMasaCreata, onPantryUsed }, ref) => {
     const { colors } = useTheme();
     const { t, i18n } = useTranslation();
     const { user } = useAuth();
@@ -83,6 +85,19 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const { adaugaProgres } = useGamificareActions();
     const bottomSheetRef = useRef<BottomSheet>(null);
     const scrollViewRef = useRef<any>(null);
+    const scrollTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+    const clearScrollTimers = useCallback(() => {
+      scrollTimersRef.current.forEach((timer) => clearTimeout(timer));
+      scrollTimersRef.current.clear();
+    }, []);
+    const scheduleScrollWork = useCallback((callback: () => void, delayMs: number) => {
+      const timer = setTimeout(() => {
+        scrollTimersRef.current.delete(timer);
+        callback();
+      }, delayMs);
+      scrollTimersRef.current.add(timer);
+    }, []);
+    useEffect(() => clearScrollTimers, [clearScrollTimers]);
     const [formSectionY, setFormSectionY] = useState<number>(0);
     const [gramajSectionY, setGramajSectionY] = useState<number>(0);
     const [highlightGramaj, setHighlightGramaj] = useState(false);
@@ -134,6 +149,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [visiblePresetCount, setVisiblePresetCount] = useState(20);
     const [aiEstimating, setAiEstimating] = useState(false);
     const [productSearchModalVisible, setProductSearchModalVisible] = useState(false);
     const [successModalData, setSuccessModalData] = useState<MealSuccessData | null>(null);
@@ -164,6 +180,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     // e folosit și pentru numărul afișat în antet și pentru lista de 10.
     const presetsNume = useMemo(() => {
       const q = nume.trim().toLowerCase();
+      if (q.length < 2) return [];
       return foodPresets.filter((p) => {
         const nRo = p.nume.toLowerCase();
         const nEn = (p.nume_en || '').toLowerCase();
@@ -172,9 +189,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     }, [nume]);
 
     const scrollToGramajSection = useCallback(() => {
+      clearScrollTimers();
       setHighlightGramaj(true);
-      setTimeout(() => setHighlightGramaj(false), 2000);
-      setTimeout(() => {
+      scheduleScrollWork(() => setHighlightGramaj(false), 2000);
+      scheduleScrollWork(() => {
         if (scrollViewRef.current && typeof scrollViewRef.current.scrollTo === 'function') {
           const targetY = Math.max(0, formSectionY + gramajSectionY - 20);
           try {
@@ -185,7 +203,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           } catch {}
         }
       }, 150);
-    }, [formSectionY, gramajSectionY]);
+    }, [clearScrollTimers, formSectionY, gramajSectionY, scheduleScrollWork]);
 
     const resetScrollToTop = useCallback(() => {
       if (scrollViewRef.current && typeof scrollViewRef.current.scrollTo === 'function') {
@@ -297,7 +315,9 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
     useImperativeHandle(ref, () => ({
       open: (masaToEdit?: Masa | null, defaultCategory?: TipMasa, fotoUrl?: string) => {
+        clearScrollTimers();
         resetScrollToTop();
+        setVisiblePresetCount(20);
         // P1-01: o deschidere nouă a sheet-ului începe o ACȚIUNE nouă. Identitatea
         // precedentă nu se refolosește — altfel a doua masă, adăugată deliberat,
         // s-ar ciocni pe cheia primară cu prima și nu s-ar mai scrie.
@@ -368,7 +388,9 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         }
       },
       openWithItem: (item) => {
+        clearScrollTimers();
         resetScrollToTop();
+        setVisiblePresetCount(20);
         const defaultGr = item.gramajDefault || 100;
         alimenteOriginaleRef.current = null;
         setEditingMasaId(null);
@@ -402,7 +424,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             bottomSheetRef.current?.snapToIndex(0);
           } catch {}
         }
-        setTimeout(() => {
+        scheduleScrollWork(() => {
           scrollToGramajSection();
         }, 350);
       },
@@ -660,6 +682,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           // Semnalul împrospătează determinist toți consumatorii canonici — Home nu
           // mai depinde de throttle-ul de 5s al refresh-ului la focus.
           marcheazaMeseModificate(user.id);
+          if (!editingMasaId) anuntaMasaSalvataVerificat(user.id, [String(payload.id)], [String(payload.data).slice(0, 10)]);
 
           // P1-16: Notificare IMEDIATĂ pe calea canonică de salvare (fără întârziere modal Reanimated)!
           if (masaCreata) {
@@ -696,7 +719,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
       <>
       <BottomSheet
         ref={bottomSheetRef}
-        index={-1}
+        index={openOnMount ? 1 : -1}
         snapPoints={snapPoints}
         onChange={setSheetIndex}
         enablePanDownToClose
@@ -825,7 +848,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                 placeholder={t('jurnal.searchPlaceholder')}
                 placeholderTextColor={colors.textTertiary}
                 value={searchQuery}
-                onChangeText={setSearchQuery}
+                onChangeText={(value) => {
+                  setVisiblePresetCount(20);
+                  setSearchQuery(value);
+                }}
                 selectionColor={colors.accent}
               />
 
@@ -849,7 +875,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                           gap: 6
                         }
                       ]}
-                      onPress={() => setSelectedCategory(prev => prev === cat.id ? null : cat.id)}
+                      onPress={() => {
+                        setVisiblePresetCount(20);
+                        setSelectedCategory(prev => prev === cat.id ? null : cat.id);
+                      }}
                       activeOpacity={0.8}
                       accessibilityRole="button"
                       accessibilityLabel={`${t('jurnal.category')}: ${labelTradus}`}
@@ -918,9 +947,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
               {/* Presets grid */}
               <View style={styles.presetsGrid}>
-                {filteredPresets.map((preset, index) => (
+                {filteredPresets.slice(0, visiblePresetCount).map((preset, index) => (
                   <TouchableOpacity
                     key={`${preset.id}-${index}`}
+                    testID={`food-preset-${preset.id}`}
                     style={[styles.presetCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                     onPress={() => applyPreset(preset)}
                     activeOpacity={0.8}
@@ -938,6 +968,18 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   </TouchableOpacity>
                 ))}
               </View>
+              {filteredPresets.length > visiblePresetCount && (
+                <TouchableOpacity
+                  onPress={() => setVisiblePresetCount((count) => count + 20)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('jurnal.showMoreResults', { count: filteredPresets.length - visiblePresetCount })}
+                  style={[styles.showMorePresets, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                >
+                  <Text style={{ color: colors.accent, fontWeight: '700' }}>
+                    {t('jurnal.showMoreResults', { count: filteredPresets.length - visiblePresetCount })}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -1009,13 +1051,13 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             )}
 
             {!editingMasaId && nume.trim().length >= 2 && (
-              <View style={{ marginTop: 8, marginBottom: 12, backgroundColor: colors.surfaceBg, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder, overflow: 'hidden', maxHeight: 220 }}>
+              <View style={{ marginTop: 8, marginBottom: 12, backgroundColor: colors.surfaceBg, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder, overflow: 'hidden' }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 4, textTransform: 'uppercase' }}>
                   {t('jurnal.autoSuggestions', { count: presetsNume.length })}
                 </Text>
-                <ScrollView nestedScrollEnabled style={{ maxHeight: 180 }}>
+                <View>
                   {presetsNume
-                    .slice(0, 10)
+                    .slice(0, 4)
                     .map((preset, index) => (
                       <TouchableOpacity
                         key={`${preset.id}-sug-${index}`}
@@ -1043,7 +1085,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       </TouchableOpacity>
                     </View>
                   )}
-                </ScrollView>
+                </View>
               </View>
             )}
 
@@ -1499,6 +1541,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
     justifyContent: 'space-between',
+  },
+  showMorePresets: {
+    minHeight: 44,
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
   },
   presetCard: {
     width: '48%',

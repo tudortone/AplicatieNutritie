@@ -21,7 +21,7 @@
     },
     "android": {
       "package": "com.totsrl.getflo",
-      "versionCode": 23,
+      "versionCode": 29,
       "icon": "./assets/images/icon.png",
       "allowBackup": false,
       "permissions": [
@@ -87,6 +87,7 @@
       ],
       "expo-secure-store",
       "react-native-health-connect",
+      "./plugins/withAndroidR8OptimizedProguard",
       [
         "expo-build-properties",
         {

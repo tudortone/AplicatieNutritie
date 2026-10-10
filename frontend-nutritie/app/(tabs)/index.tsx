@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Platform, TextInput, type StyleProp, type ViewStyle } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Platform, TextInput, type StyleProp, type ViewStyle } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { Easing, FadeInDown, useAnimatedProps, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { FadeInDown, useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Footprints, Dumbbell, Bell, RotateCcw, X, AlertCircle } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
@@ -35,8 +35,10 @@ import { TARGETURI_PENDING_KEY } from '../../lib/sincronizeazaTargeturi';
 import { anatomyMapSize, singleAnatomyMapWidth } from '../../lib/anatomyLayout';
 import { FlowCreditsPill } from '../../components/FlowCreditsPill';
 import { WaterIntakeCard } from '../../components/home/WaterIntakeCard';
-import { PhotoJobStatusCard } from '../../components/photo/PhotoJobStatusCard';
+import { HomePhotoAnalysisIndicator } from '../../components/photo/PhotoJobStatusCard';
 import { calculateDailyWaterTargetMl } from '../../lib/hydration';
+import { aboneazaLaMeseSalvateVerificat } from '../../lib/freshnessMese';
+import { decideCalorieRingUpdate } from '../../lib/mealRingAnimation';
 
 const AnimatedRingCircle = Animated.createAnimatedComponent(Circle);
 
@@ -50,46 +52,45 @@ function CardBackdrop({ style, children }: { style?: StyleProp<ViewStyle>; child
   return <View style={style}>{children}</View>;
 }
 
-function RingProgress({ procent, color, bgColor, radius = 52, strokeWidth = 11 }: { procent: number; color: string; bgColor: string; radius?: number; strokeWidth?: number }) {
+function RingProgress({ procent, color, bgColor, saveRevision, radius = 52, strokeWidth = 11 }: { procent: number; color: string; bgColor: string; saveRevision: number; radius?: number; strokeWidth?: number }) {
   const circumference = 2 * Math.PI * radius;
   const fill = Math.min(Math.max(procent, 0), 100);
-  const progress = useSharedValue(0);
-  const rotation = useSharedValue(0);
+  const progress = useSharedValue(fill / 100);
   const prevFill = useRef(fill);
+  const prevSaveRevision = useRef(saveRevision);
+  const verifiedSavePending = useRef(false);
   const reduceMotion = useReducedMotion();
 
-  // Când se adaugă o masă, inelul se rotește până la noul nivel (spring) și dă un mic wiggle.
+  // Initial hydration and ordinary data refreshes set the ring directly. Only a
+  // verified save event may animate a later authoritative total change.
   useEffect(() => {
-    if (reduceMotion) {
-      progress.value = fill / 100;
-      rotation.value = 0;
-      prevFill.current = fill;
-      return;
+    if (saveRevision !== prevSaveRevision.current) {
+      verifiedSavePending.current = true;
+      prevSaveRevision.current = saveRevision;
     }
-    progress.value = withSpring(fill / 100, { damping: 16, stiffness: 120, mass: 0.7 });
-    if (fill > prevFill.current) {
-      rotation.value = withSequence(
-        withTiming(2.5, { duration: 90, easing: Easing.out(Easing.quad) }),
-        withTiming(-2.5, { duration: 150 }),
-        withTiming(1.5, { duration: 130 }),
-        withTiming(0, { duration: 170 }),
-      );
+    const update = decideCalorieRingUpdate({
+      previousPercent: prevFill.current,
+      nextPercent: fill,
+      verifiedSavePending: verifiedSavePending.current,
+      reducedMotion: reduceMotion,
+    });
+    if (update !== 'unchanged') {
+      progress.value = update === 'animate'
+        ? withTiming(fill / 100, { duration: 420 })
+        : fill / 100;
+      verifiedSavePending.current = false;
     }
     prevFill.current = fill;
-  }, [fill, progress, rotation, reduceMotion]);
+  }, [fill, progress, reduceMotion, saveRevision]);
 
   const animatedProps = useAnimatedProps(() => ({
     // Reanimated 4 + Fabric arunca "Loss of precision" pe valori fractionare
     // transmise prin useAnimatedProps; rotunjim la intreg — imperceptibil pe inel.
     strokeDashoffset: Math.round(circumference * (1 - progress.value)),
   }));
-  const ringStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
-
   return (
     <View style={{ width: (radius + strokeWidth) * 2, height: (radius + strokeWidth) * 2, justifyContent: 'center', alignItems: 'center' }}>
-      <Animated.View style={[StyleSheet.absoluteFill, ringStyle, { alignItems: 'center', justifyContent: 'center' }]}>
+      <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
         <Svg width={(radius + strokeWidth) * 2} height={(radius + strokeWidth) * 2}>
           <Circle
             cx={radius + strokeWidth}
@@ -113,7 +114,7 @@ function RingProgress({ procent, color, bgColor, radius = 52, strokeWidth = 11 }
             origin={`${radius + strokeWidth}, ${radius + strokeWidth}`}
           />
         </Svg>
-      </Animated.View>
+      </View>
       <View style={{ position: 'absolute', alignItems: 'center' }}>
         <Text style={{ fontSize: 20, fontWeight: '900', color: color }}>{Math.round(fill)}%</Text>
       </View>
@@ -128,7 +129,7 @@ export default function HomeScreen() {
   const { unreadCount } = useNotificationBannerData();
   const { streak } = useGamificareData();
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
-  const pendingMealSheetOpenRef = useRef(false);
+  const homeScrollRef = useRef<ScrollView>(null);
   const streakSheetRef = useRef<StreakBottomSheetRef>(null);
   const [dataSelectata, setDataSelectata] = useState<Date>(() => new Date());
   const [weightModalVisible, setWeightModalVisible] = useState(false);
@@ -136,6 +137,7 @@ export default function HomeScreen() {
   const [stepGoalEdit, setStepGoalEdit] = useState(false);
   const [stepGoalInput, setStepGoalInput] = useState('');
   const [completedStepsInput, setCompletedStepsInput] = useState('');
+  const [verifiedMealSaveRevision, setVerifiedMealSaveRevision] = useState(0);
 
   // HOME-TOUCH-001 / REMED-029: foaia Adaugă masă se montează DOAR la prima deschidere
   // pentru a preveni interceptarea atingerilor pe Home de către containerul/backdrop-ul
@@ -146,16 +148,22 @@ export default function HomeScreen() {
       addMealSheetRef.current.open();
       return;
     }
-    pendingMealSheetOpenRef.current = true;
+    // Gorhom ignores expand() until its first layout/detents are measured.
+    // The lazy-mounted sheet starts at index 1, so one tap works cold too.
     setMealSheetMounted(true);
   }, []);
-  const setAddMealSheetRef = React.useCallback((instance: AddMealBottomSheetRef | null) => {
-    addMealSheetRef.current = instance;
-    if (instance && pendingMealSheetOpenRef.current) {
-      pendingMealSheetOpenRef.current = false;
-      instance.open();
-    }
-  }, []);
+
+  // A normal foreground return while Home is still the active route restores the
+  // top of the feed. This is deliberately scoped to the focused Home screen; it
+  // never replaces routes or interrupts OAuth, sheets, forms, or deep links.
+  useFocusEffect(useCallback(() => {
+    const scrollToTop = () => homeScrollRef.current?.scrollTo({ y: 0, animated: !reduceMotion });
+    scrollToTop();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') scrollToTop();
+    });
+    return () => subscription.remove();
+  }, [reduceMotion]));
 
   // BUG-001: cursorul zilei nu mai e inghetat la mount. Cand ziua locala se
   // schimba (miezul noptii, background peste miezul noptii, restart), sarim la
@@ -181,6 +189,11 @@ export default function HomeScreen() {
     refresh,
     optimisticAddMeal,
   } = useMeseAzi(dataSelectata);
+  useEffect(() => aboneazaLaMeseSalvateVerificat((event) => {
+    if (event.userId !== user?.id) return;
+    if (event.dayKeys.length > 0 && !event.dayKeys.includes(localDayKey(dataSelectata))) return;
+    setVerifiedMealSaveRevision(event.revision);
+  }), [dataSelectata, user?.id]);
   const { t, i18n } = useTranslation();
   const { consumedMl, loading: waterLoading, adaugaPahar, scadePahar, setConsumedMl } = useApa();
   const { steps, activeCalories, stepGoal, isEnabled, isAvailable, platformName, setNewStepGoal, toggleSync, refreshSteps, addManualSteps, setCompletedSteps } = useHealthSync();
@@ -423,7 +436,8 @@ export default function HomeScreen() {
       <View pointerEvents="none" style={[s.glowTop, { backgroundColor: colors.accent }]} />
       <View pointerEvents="none" style={[s.glowBottom, { backgroundColor: colors.accentSecondary }]} />
 
-      <ScrollView 
+      <ScrollView
+        ref={homeScrollRef}
         showsVerticalScrollIndicator={false} 
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -508,6 +522,8 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
+        <HomePhotoAnalysisIndicator />
+
         {/* Main calorie ring card */}
         <Animated.View style={[s.ringCard, { maxWidth: contentMaxWidth, borderColor: colors.cardBorder }]}>
           <CardBackdrop style={s.ringCardBlur}>
@@ -548,6 +564,7 @@ export default function HomeScreen() {
                   procent={procentCalorii} 
                   color={calState.ringColor} 
                   bgColor="rgba(255,255,255,0.06)" 
+                  saveRevision={verifiedMealSaveRevision}
                   radius={ringRadius}
                   strokeWidth={ringStroke}
                 />
@@ -639,8 +656,6 @@ export default function HomeScreen() {
             </LinearGradient>
           </CardBackdrop>
         </Animated.View>
-
-        <PhotoJobStatusCard />
 
         {/* Camera scan CTA (Principal) */}
         <Animated.View>
@@ -943,7 +958,7 @@ export default function HomeScreen() {
 
       {/* Reusable Gorhom Bottom Sheet for adding meals - lazy mounted (REMED-029/HOME-TOUCH-001) */}
       {mealSheetMounted ? (
-        <AddMealBottomSheet ref={setAddMealSheetRef} onSuccess={refresh} onMasaCreata={optimisticAddMeal} />
+        <AddMealBottomSheet ref={addMealSheetRef} openOnMount onSuccess={refresh} onMasaCreata={optimisticAddMeal} />
       ) : null}
       <StreakBottomSheet ref={streakSheetRef} />
       {/* BUG-004: greutatea se editează direct pe Home, fără navigare la Profil */}

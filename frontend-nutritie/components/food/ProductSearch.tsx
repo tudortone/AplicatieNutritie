@@ -109,6 +109,12 @@ export function ProductSearch({
       console.warn('Eroare citire custom_foods local:', e);
     }
 
+    // Local matches should be usable even when the pantry/API is slow or
+    // offline. Remote sources can enrich this same query later; stale queries
+    // must never overwrite results for newer input.
+    if (!isMountedRef.current || searchSeqRef.current !== seq) return;
+    setResults(list.slice(0, 30));
+
     // B2) Produse salvate anterior din Supabase (dacă user-ul e autentificat)
     if (session?.user?.id) {
       try {
@@ -259,7 +265,7 @@ export function ProductSearch({
         <ManualProductForm
           initialBarcode={initialBarcode}
           initialName={query}
-          onSave={(prod, gr) => {
+          onSave={(prod) => {
             setIsManualMode(false);
             searchCombined(query);
             setSelectedProductForDetail(prod);

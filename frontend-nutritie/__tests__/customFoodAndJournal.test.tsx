@@ -132,6 +132,7 @@ jest.mock('expo-haptics', () => ({
 const mockMarcheazaMeseModificate = jest.fn();
 jest.mock('../lib/freshnessMese', () => ({
   marcheazaMeseModificate: (userId: string) => mockMarcheazaMeseModificate(userId),
+  anuntaMasaSalvataVerificat: jest.fn(),
   aboneazaLaModificariMese: jest.fn(() => () => {}),
 }));
 

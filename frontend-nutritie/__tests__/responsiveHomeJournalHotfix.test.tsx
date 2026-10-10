@@ -14,6 +14,7 @@ let mockWaterAdd = jest.fn();
 let mockWaterRemove = jest.fn();
 let mockModalCurrentWeight: number | null = null;
 let mockAddMealOpen = jest.fn();
+let mockAddMealOpenOnMount = false;
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
@@ -74,7 +75,8 @@ jest.mock('../hooks/useMeseAzi', () => ({
 jest.mock('../components/AddMealBottomSheet', () => {
   const ReactMock = jest.requireActual<typeof React>('react');
   return {
-    AddMealBottomSheet: ReactMock.forwardRef((_props: unknown, ref: React.Ref<unknown>) => {
+    AddMealBottomSheet: ReactMock.forwardRef((props: { openOnMount?: boolean }, ref: React.Ref<unknown>) => {
+      mockAddMealOpenOnMount = props.openOnMount === true;
       ReactMock.useImperativeHandle(ref, () => ({ open: mockAddMealOpen, close: jest.fn() }));
       return null;
     }),
@@ -133,6 +135,7 @@ describe('GetFlow responsive Home and Journal production surfaces', () => {
     mockWaterRemove = jest.fn();
     mockModalCurrentWeight = null;
     mockAddMealOpen = jest.fn();
+    mockAddMealOpenOnMount = false;
   });
 
   test.each([
@@ -198,7 +201,7 @@ describe('GetFlow responsive Home and Journal production surfaces', () => {
     await act(async () => {
       fireEvent.press(view.getByLabelText('home.addManualA11y'));
     });
-    expect(mockAddMealOpen).toHaveBeenCalledTimes(1);
+    expect(mockAddMealOpenOnMount).toBe(true);
   });
 
   test.each([1, 1.2, 1.4])('Home calorie headline stays on one line at 320px and fontScale %s', async (fontScale) => {

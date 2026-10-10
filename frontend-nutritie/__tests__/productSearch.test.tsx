@@ -10,6 +10,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 const mockFetch = jest.fn();
+let mockSupabasePending = false;
 
 jest.mock('../context/AuthContext', () => ({
   useAuth: () => ({
@@ -39,8 +40,9 @@ jest.mock('../supabase', () => {
   query.select = () => query;
   query.eq = () => query;
   query.limit = () => query;
-  query.ilike = async () => rezultat;
-  query.then = (resolve: (value: typeof rezultat) => unknown) => Promise.resolve(rezultat).then(resolve);
+  query.ilike = () => mockSupabasePending ? new Promise<typeof rezultat>(() => {}) : Promise.resolve(rezultat);
+  query.then = (resolve: (value: typeof rezultat) => unknown) =>
+    (mockSupabasePending ? new Promise<typeof rezultat>(() => {}) : Promise.resolve(rezultat)).then(resolve);
   return { supabase: { from: () => query } };
 });
 
@@ -56,6 +58,7 @@ describe('ProductSearch — catalog extern autentificat', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockSupabasePending = false;
     await changeLanguage('ro');
     global.fetch = mockFetch;
     mockFetch.mockResolvedValue({
@@ -95,6 +98,16 @@ describe('ProductSearch — catalog extern autentificat', () => {
         headers: { Authorization: 'Bearer token-valid', Accept: 'application/json' },
       }),
     );
+  });
+
+  test('shows matching local foods while the remote pantry is still pending', async () => {
+    mockSupabasePending = true;
+    const ecran = await render(<ProductSearch onSelectProductWithGrams={jest.fn()} />);
+    await fireEvent.changeText(
+      ecran.getByPlaceholderText('Caută produs, brand sau aliment...'),
+      'banana',
+    );
+    await waitFor(() => expect(ecran.getByText('Banană proaspătă')).toBeTruthy());
   });
 
   test('expune actiunile critice cititorului de ecran', async () => {

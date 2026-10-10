@@ -36,7 +36,7 @@ import {
   clampValoare,
   LIMITE_DB_MESE,
 } from '../../lib/mealUtils';
-import { marcheazaMeseModificate } from '../../lib/freshnessMese';
+import { anuntaMasaSalvataVerificat, marcheazaMeseModificate } from '../../lib/freshnessMese';
 import { useNotificationBanner } from '../../context/NotificationBannerContext';
 import { FlowIcon } from '../ui/FlowIcon';
 import { NutriScoreBadge } from './NutriScoreBadge';
@@ -243,6 +243,7 @@ export const FoodProductDetailModal: React.FC<FoodProductDetailModalProps> = ({
 
       // Invalidăm cache-ul jurnalului pentru reîmprospătare instantanee
       marcheazaMeseModificate(effectiveUserId);
+      anuntaMasaSalvataVerificat(effectiveUserId, [String(payload.id)], [String(payload.data).slice(0, 10)]);
 
       // Confirmare vizuală
       setSuccessData({

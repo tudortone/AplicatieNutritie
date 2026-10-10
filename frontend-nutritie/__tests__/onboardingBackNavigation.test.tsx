@@ -14,6 +14,7 @@ jest.mock('react-i18next', () => ({
 type NavigationContextType = {
   stack: string[];
   push: (route: string) => void;
+  replace: (route: string) => void;
   back: () => void;
   canGoBack: () => boolean;
   currentRoute: string;
@@ -44,9 +45,9 @@ jest.mock('expo-router', () => {
           push: nav.push,
           back: nav.back,
           canGoBack: nav.canGoBack,
-          replace: nav.push,
+          replace: nav.replace,
         };
-      }, [nav?.push, nav?.back, nav?.canGoBack]);
+      }, [nav?.push, nav?.back, nav?.canGoBack, nav?.replace]);
     },
     // Realist: reproduce comportamentul @react-navigation/core useFocusEffect
     // Rularea depinde de [isFocused, effect] - schimbarea identității callback-ului
@@ -102,11 +103,13 @@ function NavigationHarness({
   routes,
   onStackChange,
   onPush,
+  onReplace,
 }: {
   initialRoute?: string;
   routes: Record<string, React.ComponentType<{ route: string }>>;
   onStackChange?: (stack: string[]) => void;
   onPush?: (route: string) => void;
+  onReplace?: (route: string) => void;
 }) {
   const [stack, setStack] = useState<string[]>([initialRoute]);
 
@@ -132,17 +135,30 @@ function NavigationHarness({
     });
   }, [onStackChange]);
 
+  const replace = useCallback(
+    (route: string) => {
+      onReplace?.(route);
+      setStack((prev) => {
+        const next = [...prev.slice(0, -1), route];
+        onStackChange?.(next);
+        return next;
+      });
+    },
+    [onReplace, onStackChange]
+  );
+
   const canGoBack = useCallback(() => stack.length > 1, [stack.length]);
 
   const navValue = React.useMemo<NavigationContextType>(
     () => ({
       stack,
       push,
+      replace,
       back,
       canGoBack,
       currentRoute: stack[stack.length - 1],
     }),
-    [stack, push, back, canGoBack]
+    [stack, push, replace, back, canGoBack]
   );
 
   return (
@@ -417,11 +433,12 @@ describe('P0-01 — Onboarding navigation state survives Back regression tests',
     consoleErrorSpy.mockRestore();
   });
 
-  // TEST E: REAL ROUTER FAILURE (router.push throws synchronously -> lock clears -> retry succeeds)
-  it('TEST E: router.push throwing releases locks and allows successful retry without stuck spinner', async () => {
+  // TEST E: REAL ROUTER FAILURE (router.push throws synchronously -> router.replace fallback navigates)
+  it('TEST E: router.push failure uses replace fallback and leaves no stuck submission lock', async () => {
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     let shouldThrowOnPush = true;
     let pushCount = 0;
+    const replace = jest.fn();
 
     function Step1() {
       return (
@@ -452,32 +469,21 @@ describe('P0-01 — Onboarding navigation state survives Back regression tests',
           }
           pushCount++;
         }}
+        onReplace={replace}
       />
     );
 
     const continueBtn = view.getByRole('button', { name: 'Continuă' });
 
-    // Prima apăsare: router.push aruncă eroare
-    await fireEvent.press(continueBtn);
-
-    // Ecranul curent rămâne vizibil
-    expect(view.queryByText('Pas 2')).toBeNull();
-    expect(view.getByText('Pasul 1')).toBeTruthy();
-
-    // Controalele trebuie re-activate fără spinner blocat
-    await waitFor(() => {
-      expect(continueBtn.props.accessibilityState.disabled).toBe(false);
-      expect(continueBtn.props.accessibilityState.busy).toBe(false);
-    });
-
-    // A doua apăsare: reîncercarea reușește
+    // Prima apăsare: router.push aruncă, iar fallback-ul router.replace navighează.
     await fireEvent.press(continueBtn);
 
     await waitFor(() => {
       expect(view.getByText('Pas 2')).toBeTruthy();
     });
 
-    expect(pushCount).toBe(1);
+    expect(pushCount).toBe(0);
+    expect(replace).toHaveBeenCalledWith('/onboarding/greutate-tinta');
     consoleErrorSpy.mockRestore();
   });
 

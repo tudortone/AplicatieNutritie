@@ -3,7 +3,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, Modal,
   ScrollView, RefreshControl, Alert, ActivityIndicator, Platform, Switch, Image, Linking, Share,
-  useWindowDimensions,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
@@ -13,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Save, LogOut, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Camera, CheckCircle2, User, Pencil, Crown, Mail, FileText, Watch, Globe, Download } from 'lucide-react-native';
+import { Save, LogOut, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Camera, CheckCircle2, User, Pencil, Crown, FileText, Watch, Globe, Download, Award } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
@@ -35,7 +34,6 @@ import { useGamificareData } from '../../context/GamificareContext';
 import KeyboardAwareScreen from '../../components/ui/KeyboardAwareScreen';
 import { INSIGNE_LIST } from '../../constants/insigne';
 import AchievementCard from '../../components/gamification/AchievementCard';
-import { getAchievementGridColumns } from '../../lib/achievementLayout';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { FeedbackModal } from '../../components/ui/FeedbackModal';
 import { DeleteAccountModal } from '../../components/ui/DeleteAccountModal';
@@ -45,13 +43,12 @@ import { API_URL } from '../../constants/config';
 import { API_PREFIX } from '../../lib/api';
 import { getLegalUrls } from '../../lib/legalUrls';
 import { salveazaTargeturiPending, stergeTargeturiPending, citesteTargeturiPending } from '../../lib/sincronizeazaTargeturi';
-import { clearOfflineQueue } from '../../lib/offlineQueue';
+import { logoutPreservingUserData } from '../../lib/accountLogout';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { finalizeConfirmedAccountDeletion } from '../../lib/accountDeletion';
 import { buildCompleteUserExport, fetchServerGdprExport } from '../../lib/gdprExport';
+import { SupportEmailFooter } from '../../components/ui/SupportEmailFooter';
 
-// Adresa oficiala de suport pentru sesizari si suport utilizatori.
-const EMAIL_SUPORT = process.env.EXPO_PUBLIC_SUPPORT_EMAIL?.trim() || 'supportgetflow@gmail.com';
 
 const MEAL_REMINDER_LABEL_KEYS: Record<string, string> = {
   reminder_mic_dejun: 'chat.recipeGen.tipMasa.breakfast',
@@ -62,12 +59,6 @@ const MEAL_REMINDER_LABEL_KEYS: Record<string, string> = {
 export default function ProfilScreen() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
-  const { width: windowWidth, fontScale } = useWindowDimensions();
-  const achievementColumns = getAchievementGridColumns(windowWidth, fontScale);
-  const [achievementGridWidth, setAchievementGridWidth] = useState(0);
-  const achievementCardWidth = achievementColumns === 2 && achievementGridWidth > 0
-    ? (achievementGridWidth - 10) / 2
-    : '100%';
   const { colors, themeName, setTheme } = useTheme();
   const { enabled: notificationsEnabled, toggleReminders, isExpoGo } = useNotifications();
   const { isSupported, biometricType, isEnabled, toggleBiometric } = useBiometrics();
@@ -107,7 +98,11 @@ export default function ProfilScreen() {
     const label = LANGUAGE_NAMES[lang].label.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     return !normalizedLanguageQuery || label.includes(normalizedLanguageQuery) || lang.includes(normalizedLanguageQuery);
   });
-  const sortedAchievements = [...INSIGNE_LIST].sort((a, b) => t(a.numeI18n, { defaultValue: a.nume }).localeCompare(t(b.numeI18n, { defaultValue: b.nume }), i18n.language || 'en'));
+  const sortedAchievements = [...INSIGNE_LIST].sort((a, b) => new Intl.Collator(i18n.language || 'en').compare(
+    t(a.numeI18n, { defaultValue: a.nume }),
+    t(b.numeI18n, { defaultValue: b.nume }),
+  ));
+  const unlockedAchievementCount = INSIGNE_LIST.filter((achievement) => insigne.includes(achievement.id)).length;
 
   const stergereContDefinitiva = () => {
     setDeleteAccountModalVisible(true);
@@ -362,32 +357,14 @@ export default function ProfilScreen() {
   const confirmDeconectare = async () => {
     setIsLoggingOut(true);
     try {
-      // Ștergem toate datele utilizatorului din AsyncStorage
-      const allKeys = await AsyncStorage.getAllKeys();
-      const userKeys = allKeys.filter(k =>
-        k.startsWith('chat_history_') ||
-        ['greutate', 'greutateTinta', 'caloriiTinta', 'proteineTinta',
-         'carbiTinta', 'grasimiTinta', 'targeturi_pending_sync',
-         'nume_profil', 'greutate_istoric',
-         'sex', 'varsta', 'inaltime', 'nivel_activitate', 'obiectiv',
-         'current_workout_session', 'nutriai_workouts', 'gamificare_v1',
-         'notificari_v1', 'nutriai_theme', 'favorite_foods',
-         'health_sync_enabled', 'health_step_goal', 'health_sync_provider',
-         'nutriai_tip_closed_date', 'avatar_url', 'onboarding_done',
-         'chat_history'].includes(k)
-      );
-      if (userKeys.length > 0) {
-        await AsyncStorage.multiRemove(userKeys);
-      }
-      // TASK-16: la logout anulăm reminderele contului anterior, ca să nu
-      // se mai declanșeze sub contul următor. Consimțământul rămâne persistat
-      // la nivel de dispozitiv (nu e legat de cont).
-      await cancelManagedReminders();
-      // BUG-067: coada offline e globală (nu scoped pe cont) — dacă rămâne
-      // după logout, payload-urile contului A s-ar procesa sub sesiunea B
-      // (payload invalid / date private expuse). O golim explicit la logout.
-      await clearOfflineQueue();
-      await supabase.auth.signOut();
+      // Coada offline, istoricul și preferințele contului sunt păstrate în
+      // namespace-ul lui de AuthContext, nu șterse înainte de sign-out.
+      await logoutPreservingUserData({
+        signOut: () => supabase.auth.signOut(),
+        cancelReminders: cancelManagedReminders,
+      });
+    } catch {
+      showBanner({ title: t('alerts.titluri.eroare'), message: t('alerts.mesaje.conexiuneServerEsueaza'), type: 'error' });
     } finally {
       setIsLoggingOut(false);
       setShowLogoutConfirm(false);
@@ -418,19 +395,6 @@ export default function ProfilScreen() {
       }
     }
     await toggleReminders(val);
-  };
-
-  const abreSuport = async () => {
-    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
-    if (!EMAIL_SUPORT) {
-      showBanner({
-        title: t('alerts.titluri.contacteazaNe'),
-        message: t('alerts.mesaje.suportNeconfigurat'),
-        type: 'warning',
-      });
-      return;
-    }
-    await Linking.openURL(`mailto:${EMAIL_SUPORT}`);
   };
 
   // Deschide un document legal oficial (Termeni / Confidențialitate) în
@@ -885,42 +849,28 @@ export default function ProfilScreen() {
 
         {/* Secțiune Insigne & Gamificare */}
         <Animated.View>
-          <Text maxFontSizeMultiplier={1.3} style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-            {t('profile.badgesSection', { unlocked: insigne.length, total: INSIGNE_LIST.length })}
-          </Text>
-
-          <View
-            onLayout={(event) => setAchievementGridWidth(event.nativeEvent.layout.width)}
-            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}
-          >
-            {INSIGNE_LIST.map((insign) => {
-              const unlocked = insigne.includes(insign.id);
-              const name = t(insign.numeI18n, { defaultValue: insign.nume });
-              const requirement = t(insign.conditieI18n, { defaultValue: insign.conditie });
-              return (
-                <AchievementCard
-                  key={insign.id}
-                  id={insign.id}
-                  name={name}
-                  requirement={requirement}
-                  unlocked={unlocked}
-                  width={achievementCardWidth}
-                />
-              );
-            })}
-          </View>
           <TouchableOpacity
-            testID="profile-view-all-achievements"
-            style={[styles.secondaryAction, { borderColor: colors.cardBorder, marginBottom: 24 }]}
+            testID="profile-achievements-summary"
+            style={[styles.achievementSummary, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
             onPress={() => setAchievementsModalVisible(true)}
             accessibilityRole="button"
+            accessibilityLabel={t('profile.badgesSection', { unlocked: unlockedAchievementCount, total: INSIGNE_LIST.length })}
+            accessibilityHint={t('profile.viewAllAchievements')}
           >
-            <Text style={{ color: colors.accent, fontWeight: '800' }}>{t('profile.viewAllAchievements')}</Text>
+            <View style={[styles.achievementSummaryIcon, { backgroundColor: colors.accent + '20' }]}>
+              <Award size={20} color={colors.accent} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 14 }}>
+                {t('profile.badgesSection', { unlocked: unlockedAchievementCount, total: INSIGNE_LIST.length })}
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 3 }}>{t('profile.viewAllAchievements')}</Text>
+            </View>
             <ChevronRight size={18} color={colors.accent} />
           </TouchableOpacity>
-          <Modal visible={achievementsModalVisible} transparent animationType="slide" onRequestClose={() => setAchievementsModalVisible(false)}>
-            <View style={styles.modalBackdrop}><View style={[styles.selectionSheet, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-              <View style={styles.modalTitleRow}><Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('profile.viewAllAchievements')}</Text><TouchableOpacity onPress={() => setAchievementsModalVisible(false)} accessibilityLabel={t('common.close')}><Text style={{ color: colors.textSecondary, fontSize: 24 }}>×</Text></TouchableOpacity></View>
+          <Modal visible={achievementsModalVisible} transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={() => setAchievementsModalVisible(false)}>
+            <View style={styles.modalBackdrop}><View style={[styles.selectionSheet, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder, paddingBottom: Math.max(scrollPaddingBottom, 20) }]}>
+              <View style={styles.modalTitleRow}><Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('profile.viewAllAchievements')}</Text><TouchableOpacity onPress={() => setAchievementsModalVisible(false)} accessibilityRole="button" accessibilityLabel={t('common.close')}><Text style={{ color: colors.textSecondary, fontSize: 24 }}>×</Text></TouchableOpacity></View>
               <ScrollView contentContainerStyle={{ gap: 10 }}>{sortedAchievements.map((insign) => <AchievementCard key={insign.id} id={insign.id} name={t(insign.numeI18n, { defaultValue: insign.nume })} requirement={t(insign.conditieI18n, { defaultValue: insign.conditie })} unlocked={insigne.includes(insign.id)} width="100%" />)}</ScrollView>
             </View></View>
           </Modal>
@@ -964,33 +914,14 @@ export default function ProfilScreen() {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Contact */}
-        <Animated.View testID="profile-contact-section">
+        {/* Feedback entry remains; the old oversized contact card is replaced by a compact support footer below. */}
+        <Animated.View testID="profile-feedback-section">
           <View style={styles.sectionHeaderRow}>
-            <Mail size={16} color={colors.accent} />
-            <Text maxFontSizeMultiplier={1.3} style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>{t('profile.contactSection')}</Text>
+            <Sparkles size={16} color={colors.accent} />
+            <Text maxFontSizeMultiplier={1.3} style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>{t('profile.feedbackSection')}</Text>
           </View>
           <BlurView intensity={20} tint="dark" style={[styles.card, { borderColor: colors.cardBorder, marginBottom: 24, marginTop: 12 }]}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.cardGrad}>
-              <TouchableOpacity
-                style={[styles.inputRow, { alignItems: 'center' }]}
-                onPress={abreSuport}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={t('profile.contactUsA11y')}
-              >
-                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
-                  <Mail size={18} color={colors.accent} />
-                </View>
-                <View style={[styles.inputContent, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>{t('profile.contactUs')}</Text>
-                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                    {EMAIL_SUPORT ? t('profile.contactUsDescEmail', { email: EMAIL_SUPORT }) : t('profile.contactUsDescGeneric')}
-                  </Text>
-                </View>
-                <ChevronRight size={18} color={colors.textSecondary} />
-              </TouchableOpacity>
-              <View style={styles.separator} />
               <TouchableOpacity
                 style={[styles.inputRow, { alignItems: 'center' }]}
                 onPress={() => setFeedbackVisible(true)}
@@ -1156,6 +1087,7 @@ export default function ProfilScreen() {
             <Text style={[styles.logoutText, { color: colors.danger }]}>{t('profile.logout')}</Text>
           </TouchableOpacity>
         </Animated.View>
+        <SupportEmailFooter />
       </ScrollView>
 
       <FeedbackModal visible={feedbackVisible} onClose={() => setFeedbackVisible(false)} />
@@ -1209,6 +1141,8 @@ const styles = StyleSheet.create({
   modalSearch: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, fontSize: 16 },
   languageOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   secondaryAction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 13, borderWidth: 1, borderRadius: 14 },
+  achievementSummary: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72, padding: 14, borderWidth: 1, borderRadius: 18, marginBottom: 24 },
+  achievementSummaryIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   container: { flex: 1 },
   glowTop: { position: 'absolute', top: -100, left: -80, width: 300, height: 300, borderRadius: 150, opacity: 0.04 },
   glowBottom: { position: 'absolute', bottom: 50, right: -80, width: 280, height: 280, borderRadius: 140, opacity: 0.05 },

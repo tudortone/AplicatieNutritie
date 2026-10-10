@@ -1,11 +1,18 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Modal, Pressable } from 'react-native';
-import * as Sentry from '@sentry/react-native';
+import React, { useRef, useState } from 'react';
+import { Alert, Linking, StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Modal, Pressable } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { X, Send, MessageSquare, CheckCircle2, AlertCircle } from 'lucide-react-native';
+import { X, Send, MessageSquare, CheckCircle2, AlertCircle, Mail } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../context/AuthContext';
+import { submitFeedback } from '../../lib/feedback';
+import { buildSupportMailto, SUPPORT_EMAIL } from '../../constants/support';
+
+// The production RPC migration and endpoint have not passed the live release gate.
+// Keep submissions disabled until that dependency is deployed and verified.
+const FEEDBACK_SUBMISSION_ENABLED = false;
 
 export interface FeedbackModalProps {
   visible: boolean;
@@ -14,84 +21,107 @@ export interface FeedbackModalProps {
 
 export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
+  const { session } = useAuth();
   const [mesaj, setMesaj] = useState('');
   const [seIncarca, setSeIncarca] = useState(false);
-  const [trimis, setTrimis] = useState(false);
+  const [salvat, setSalvat] = useState(false);
   const [eroare, setEroare] = useState<string | null>(null);
+  const submissionInFlight = useRef(false);
 
-  // Sanitize feedback-ul ÎNAINTE de trimitere: eliminăm textul brut sensibil
-  // (JWT, email, telefon) și limităm lungimea — NU trimitem niciodată date raw.
-  const sanitizeFeedback = (value: string): string =>
-    value
-      .trim()
-      .slice(0, 2000)
-      .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[JWT_REDACTED]')
-      .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[EMAIL_REDACTED]')
-      .replace(/\+?\d[\d\s().-]{7,}\d/g, '[PHONE_REDACTED]');
+  const inchide = () => {
+    if (seIncarca) return;
+    setMesaj('');
+    setSalvat(false);
+    setEroare(null);
+    onClose();
+  };
+
+  const deschideEmailSuport = async () => {
+    try {
+      await Linking.openURL(buildSupportMailto());
+    } catch {
+      Alert.alert(t('profile.supportEmailLabel'), t('profile.supportEmailOpenFailed'));
+    }
+  };
 
   const trimiteFeedback = async () => {
+    if (submissionInFlight.current || seIncarca) return;
+    if (!mesaj.trim()) {
+      setEroare(t('profile.feedbackValidation'));
+      return;
+    }
+    submissionInFlight.current = true;
     setEroare(null);
     setSeIncarca(true);
 
     try {
-      const sanitized = sanitizeFeedback(mesaj);
-      if (!sanitized) {
-        setSeIncarca(false);
-        return;
-      }
-
-      // Trimitem doar mesajul sanitizat prin API-ul Sentry (nu text raw).
-      Sentry.captureFeedback({ message: sanitized });
-
+      await submitFeedback(mesaj, session?.access_token);
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-      setTrimis(true);
-      setTimeout(() => {
-        setTrimis(false);
-        setMesaj('');
-        setSeIncarca(false);
-        setEroare(null);
-        onClose();
-      }, 1500);
-    } catch {
+      setSalvat(true);
+    } catch (error) {
+      setEroare(error instanceof Error && error.message === 'FEEDBACK_INVALID'
+        ? t('profile.feedbackValidation')
+        : t('profile.feedbackSubmitFailed'));
+    } finally {
+      submissionInFlight.current = false;
       setSeIncarca(false);
-      setEroare('Nu s-a putut trimite feedback-ul. Te rugăm să încerci din nou.');
     }
   };
 
   return (
     <Modal
       visible={visible}
-      onRequestClose={onClose}
+      onRequestClose={inchide}
       animationType="fade"
       transparent
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={styles.backdrop} onPress={inchide}>
         <Pressable style={[styles.card, { backgroundColor: colors.background, borderColor: colors.cardBorder }]} onPress={(e) => e.stopPropagation()}>
         <View style={styles.header}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={[styles.iconBg, { backgroundColor: colors.accent + '20' }]}>
               <MessageSquare size={20} color={colors.accent} />
             </View>
-            <Text style={[styles.titlu, { color: colors.textPrimary }]}>Feedback & Raportare Erori</Text>
+          <Text style={[styles.titlu, { color: colors.textPrimary }]}>{t('profile.feedbackTitle')}</Text>
           </View>
 
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+          <TouchableOpacity onPress={inchide} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel={t('common.close')}>
             <X size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
-        {trimis ? (
+        {!FEEDBACK_SUBMISSION_ENABLED ? (
+          <View style={styles.unavailableBox}>
+            <Text accessibilityRole="alert" style={[styles.subtitlu, { color: colors.textSecondary }]}>
+              {t('profile.feedbackTemporarilyUnavailable')}
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.feedbackContactSupport')}
+              onPress={() => { void deschideEmailSuport(); }}
+              style={[styles.supportButton, { borderColor: colors.cardBorder }]}
+              testID="feedback-contact-support"
+            >
+              <Mail size={17} color={colors.accent} />
+              <Text style={[styles.btnText, { color: colors.accent }]}>{SUPPORT_EMAIL}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : salvat ? (
           <View style={styles.succesBox}>
             <CheckCircle2 size={48} color={colors.success} />
-            <Text style={[styles.succesTitlu, { color: colors.textPrimary }]}>Îți mulțumim!</Text>
+            <Text style={[styles.succesTitlu, { color: colors.textPrimary }]}>{t('profile.feedbackSavedTitle')}</Text>
             <Text style={[styles.succesSub, { color: colors.textSecondary }]}>
-              Mesajul tău a fost trimis către echipa GetFlow.
+              {t('profile.feedbackSavedMessage')}
             </Text>
+            <TouchableOpacity onPress={inchide} accessibilityRole="button" style={styles.dismissButton}>
+              <Text style={[styles.btnText, { color: colors.accent }]}>{t('common.close')}</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
             <Text style={[styles.subtitlu, { color: colors.textSecondary }]}>
-              Spune-ne cum putem îmbunătăți aplicația sau raportează o problemă întâmpinată.
+              {t('profile.feedbackDescription')}
             </Text>
 
             <TextInput
@@ -110,16 +140,20 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
               textAlignVertical="top"
               value={mesaj}
               onChangeText={setMesaj}
+              maxLength={2000}
+              accessibilityLabel={t('profile.feedbackInputA11y')}
+              accessibilityHint={t('profile.feedbackInputHint')}
+              testID="feedback-message-input"
             />
 
             <Text style={[styles.notaSansibilitate, { color: colors.textSecondary }]}>
-              Nu include parole, date medicale, informații de plată sau tokenuri.
+              {t('profile.feedbackPrivacyNote')}
             </Text>
 
             {eroare ? (
               <View style={[styles.errorBox, { backgroundColor: colors.danger + '18', borderColor: colors.danger + '40' }]}>
                 <AlertCircle size={16} color={colors.danger} />
-                <Text style={[styles.errorText, { color: colors.danger }]}>{eroare}</Text>
+                <Text accessibilityRole="alert" style={[styles.errorText, { color: colors.danger }]}>{eroare}</Text>
               </View>
             ) : null}
 
@@ -127,13 +161,14 @@ export function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
               style={[styles.btn, (!mesaj.trim() || seIncarca) && { opacity: 0.5 }]}
               onPress={trimiteFeedback}
               disabled={!mesaj.trim() || seIncarca}
+              testID="feedback-submit"
             >
               <LinearGradient colors={colors.accentGradient} style={styles.btnGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                 {seIncarca ? (
                   <ActivityIndicator color={colors.background} />
                 ) : (
                   <>
-                    <Text style={[styles.btnText, { color: colors.background }]}>Trimite Feedback</Text>
+                    <Text style={[styles.btnText, { color: colors.background }]}>{t('profile.feedbackSubmit')}</Text>
                     <Send size={18} color={colors.background} />
                   </>
                 )}
@@ -155,6 +190,8 @@ const styles = StyleSheet.create({
   titlu: { fontSize: 17, fontWeight: '800' },
   closeBtn: { padding: 4 },
   subtitlu: { fontSize: 13, lineHeight: 18 },
+  unavailableBox: { gap: 12 },
+  supportButton: { minHeight: 48, borderWidth: 1, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 12 },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -177,4 +214,5 @@ const styles = StyleSheet.create({
   succesBox: { alignItems: 'center', paddingVertical: 24, gap: 12 },
   succesTitlu: { fontSize: 20, fontWeight: '900' },
   succesSub: { fontSize: 13, textAlign: 'center' },
+  dismissButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16 },
 });

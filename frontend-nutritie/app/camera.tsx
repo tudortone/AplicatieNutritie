@@ -23,7 +23,7 @@ import { useAuth } from '@/context/AuthContext';
 import { MEAL_CATEGORIES, CATEGORIE_ICONA, getTipMasaDupaOra, insereazaMasaCuPoza } from '../lib/mealUtils';
 import { clasificaRezultatInsertMasa, construiestePayloadMasaCamera, esteEroareDuplicate, eliminaAlimentScanat, verificaReluareMasa } from '../lib/payloadMese';
 import { idOperatieNoua } from '@/lib/idUtils';
-import { marcheazaMeseModificate } from '@/lib/freshnessMese';
+import { anuntaMasaSalvataVerificat, marcheazaMeseModificate } from '@/lib/freshnessMese';
 import { GramInput } from '../components/ui/GramInput';
 import { type AlimentScanat } from '@/components/food/FoodScanSuccessModal';
 import type { TipMasa } from '../types';
@@ -260,6 +260,12 @@ export default function CameraScreen() {
         draftUri: draftPersistentUri,
         savedAt: Date.now(),
       };
+      // Jobul și pointerul local sunt deja confirmate durabil. Lăsăm ecranul
+      // Camerei să se demonteze (anulând polling-ul local); Home recuperează
+      // starea din backend, iar rezultatul poate fi reluat ulterior din status.
+      setPhotoPhase('background');
+      setSeIncarca(false);
+      router.replace('/(tabs)');
       const completed = await waitForPhotoJob({
         token: session.access_token,
         userId: session.user.id,
@@ -317,7 +323,7 @@ export default function CameraScreen() {
         if (isMountedRef.current) setSeIncarca(false);
       }
     }
-  }, [applyPhotoJobResult, flowCredits, i18n.language, session?.access_token, session?.user?.id, t]);
+  }, [applyPhotoJobResult, flowCredits, i18n.language, router, session?.access_token, session?.user?.id, t]);
 
   // Un job Photo AI este recuperabil după închiderea aplicației. Analiza rămâne
   // în Trigger; acest ecran doar reia polling-ul și reconstruiește review-ul.
@@ -660,6 +666,7 @@ export default function CameraScreen() {
             currentPhotoJobIdRef.current = null;
           }
           marcheazaMeseModificate(session.user.id); // P1-04: date canonice noi
+          anuntaMasaSalvataVerificat(session.user.id, [String(payload.id)], [String(payload.data).slice(0, 10)]);
           setSaveSuccessData({
             nume: payload.nume || (rezultat.length === 1 ? rezultat[0].nume : `${rezultat.length} alimente`),
             calorii: Math.round(totalCalculat.calorii),
@@ -683,6 +690,7 @@ export default function CameraScreen() {
       }
       // P1-04: persistare dovedită → invalidare deterministă a datelor canonice.
       marcheazaMeseModificate(session.user.id);
+      anuntaMasaSalvataVerificat(session.user.id, [String(payload.id)], [String(payload.data).slice(0, 10)]);
 
       setSaveSuccessData({
         nume: payload.nume || (rezultat.length === 1 ? rezultat[0].nume : `${rezultat.length} alimente`),

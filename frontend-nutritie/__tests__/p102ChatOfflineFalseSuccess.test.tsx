@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, act, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, act, fireEvent, waitFor, cleanup } from '@testing-library/react-native';
 import { Keyboard, Platform, StyleSheet } from 'react-native';
 
 import ChatScreen from '../app/(tabs)/chat';
@@ -25,6 +25,12 @@ import ChatScreen from '../app/(tabs)/chat';
  */
 
 const UTILIZATOR = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
+let mockActiveUserId = UTILIZATOR.id;
+let mockInsertMode: 'offline' | 'success' | 'server' | 'pending' = 'offline';
+let mockPendingInsertResolve: ((result: { error: null }) => void) | null = null;
+const mockInserted: unknown[] = [];
+const mockRefresh = jest.fn();
+const mockFreshness = { mark: jest.fn(), announce: jest.fn() };
 
 let mockPersistatOffline = true;
 const mockEnqueue: unknown[] = [];
@@ -46,10 +52,21 @@ jest.mock('../lib/offlineQueue', () => ({
 jest.mock('../supabase', () => ({
   supabase: {
     from: () => ({
-      insert: async () => { throw new Error('Network request failed'); },
+      insert: async (payload: unknown) => {
+        mockInserted.push(payload);
+        if (mockInsertMode === 'offline') throw new Error('Network request failed');
+        if (mockInsertMode === 'server') return { error: { code: '42501', message: 'private backend detail' } };
+        if (mockInsertMode === 'pending') return new Promise<{ error: null }>((resolve) => { mockPendingInsertResolve = resolve; });
+        return { error: null };
+      },
       select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
     }),
   },
+}));
+jest.mock('../lib/freshnessMese', () => ({
+  marqueazaMeseModificate: (...args: unknown[]) => mockFreshness.mark(...args),
+  marcheazaMeseModificate: (...args: unknown[]) => mockFreshness.mark(...args),
+  anuntaMasaSalvataVerificat: (...args: unknown[]) => mockFreshness.announce(...args),
 }));
 
 // Propunerea AI este controlabilă: fluxul de jurnal are nevoie de una, iar
@@ -68,7 +85,7 @@ jest.mock('../lib/parseMealProposal', () => ({
 }));
 
 jest.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ session: { user: UTILIZATOR, access_token: 'tok' }, user: UTILIZATOR }),
+  useAuth: () => ({ session: { user: { id: mockActiveUserId }, access_token: 'tok' }, user: { id: mockActiveUserId } }),
 }));
 jest.mock('../context/ThemeContext', () => ({
   useTheme: () => ({ colors: new Proxy({}, { get: () => '#fff' }), theme: 'dark' }),
@@ -80,7 +97,7 @@ jest.mock('../context/AdsContext', () => ({ useAds: () => mockAds }));
 jest.mock('../hooks/useMeseAzi', () => ({
   useMeseAzi: () => ({
     mese: [], totalCalorii: 0, totalProteine: 0, totalGrasimi: 0, totalCarbohidrati: 0,
-    totalFibre: 0, caloriiTinta: 2000, proteineTinta: 150, refresh: jest.fn(),
+    totalFibre: 0, caloriiTinta: 2000, proteineTinta: 150, refresh: mockRefresh,
     loading: false, numarMese: 0, meseGrupate: {}, categoriiMeseList: [],
   }),
 }));
@@ -144,6 +161,26 @@ jest.mock('../components/ui/ConfirmSheet', () => {
     : null);
   return { __esModule: true, default: Sheet, ConfirmSheet: Sheet };
 });
+// Keep the real screen/save path; replace only the native Modal shell so a
+// pending Android Modal does not hide later test renders in Jest's host tree.
+jest.mock('../components/coach/CoachMealConfirmModal', () => {
+  const { View, Text, TextInput, Pressable } = require('react-native');
+  const R = require('react');
+  const { validateCoachMealDraft } = require('../lib/coachMealDraft');
+  return { CoachMealConfirmModal: ({ visible, draft, saving, onChange, onCancel, onConfirm }: any) => {
+    if (!visible || !draft) return null;
+    const item = draft.items[0];
+    return R.createElement(View, null,
+      R.createElement(Text, null, 'chat.suggestion.confirmTitle'),
+      R.createElement(TextInput, { value: draft.name, accessibilityLabel: 'chat.suggestion.mealName', onChangeText: (name: string) => onChange({ ...draft, name }) }),
+      R.createElement(TextInput, { value: item.quantity, accessibilityLabel: 'chat.suggestion.quantity 1', onChangeText: (quantity: string) => onChange({ ...draft, items: [{ ...item, quantity }] }) }),
+      R.createElement(TextInput, { value: item.calories, accessibilityLabel: 'chat.suggestion.calories 1', onChangeText: (calories: string) => onChange({ ...draft, items: [{ ...item, calories }] }) }),
+      R.createElement(Pressable, { accessibilityRole: 'button', accessibilityLabel: 'chat.mealCategory.gustare', onPress: () => onChange({ ...draft, category: 'gustare' }) }),
+      R.createElement(Pressable, { accessibilityRole: 'button', accessibilityLabel: 'alerts.butoane.anuleaza', onPress: onCancel }),
+      R.createElement(Pressable, { accessibilityRole: 'button', accessibilityLabel: 'chat.suggestion.confirmSave', disabled: saving || !validateCoachMealDraft(draft), onPress: onConfirm }),
+    );
+  } };
+});
 jest.mock('@/components/ui/KeyboardAwareScreen', () => {
   const { View } = require('react-native');
   const R = require('react');
@@ -166,7 +203,10 @@ jest.mock('lucide-react-native', () => new Proxy({}, { get: () => () => null }))
 const raspunsChatOk = {
   ok: true,
   status: 200,
-  json: async () => ({ raspuns: 'MEAL_PROPOSAL' }),
+  json: async () => ({
+    type: 'MEAL_PROPOSAL', nume: 'Iaurt grecesc', meal_type: 'gustare',
+    items: [{ name: 'Iaurt grecesc', qty: 200, unit: 'g', protein_g: 15, carbs_g: 6, fat_g: 7, fiber_g: 0, kcal: 150 }],
+  }),
 };
 
 async function trimiteMesajSiSalveaza() {
@@ -177,13 +217,21 @@ async function trimiteMesajSiSalveaza() {
   await act(async () => { fireEvent.changeText(input, 'am mancat un iaurt'); });
   await act(async () => { fireEvent.press(utile.getByLabelText('chat.sendA11y')); });
 
-  // Propunerea apare într-un ConfirmSheet; confirmarea cere o categorie aleasă.
+  // Cardul nu scrie nimic; deschide formularul editabil și confirmă explicit.
+  await act(async () => { fireEvent.press(utile.getByLabelText('chat.addToJournal')); });
   await act(async () => { fireEvent.press(utile.getByLabelText('chat.mealCategory.gustare')); });
-  await act(async () => { fireEvent.press(utile.getByLabelText('CONFIRMA_PROPUNERE')); });
+  await act(async () => { fireEvent.press(utile.getByLabelText('chat.suggestion.confirmSave')); });
   return utile;
 }
 
 beforeEach(() => {
+  mockActiveUserId = UTILIZATOR.id;
+  mockInsertMode = 'offline';
+  mockPendingInsertResolve = null;
+  mockInserted.length = 0;
+  mockRefresh.mockClear();
+  mockFreshness.mark.mockClear();
+  mockFreshness.announce.mockClear();
   mockEnqueue.length = 0;
   mockPersistatOffline = true;
   mockAreoPropunere = true;
@@ -195,6 +243,8 @@ beforeEach(() => {
   mockChatLocale = 'en';
   mockResolveChatTranslations = false;
 });
+
+afterEach(() => cleanup());
 
 describe('P1-02 — chat: confirmarea offline trebuie să fie adevărată', () => {
   test('1. persistarea pe disc EȘUEAZĂ → NICIO confirmare de salvare', async () => {
@@ -348,4 +398,127 @@ describe('P1-02 — turul AI: eșecurile nu devin răspunsuri complete', () => {
 
     await waitFor(() => expect(mockAds.maybeShowInterstitial).toHaveBeenCalled());
   });
+});
+
+describe('Coach suggestion → explicit Journal confirmation', () => {
+  async function send(view: Awaited<ReturnType<typeof render>>, message: string) {
+    await act(async () => { fireEvent.changeText(view.getByTestId('chat-input'), message); });
+    await act(async () => { fireEvent.press(view.getByTestId('send-button')); });
+  }
+
+  test('top Add action requires confirmation; Cancel does not save', async () => {
+    global.fetch = jest.fn(async () => raspunsChatOk) as never;
+    const view = await render(<ChatScreen />);
+    await send(view, 'am mancat un iaurt');
+    expect(view.getByLabelText('chat.addToJournal')).toBeTruthy();
+    expect(mockInserted).toHaveLength(0);
+    await act(async () => { fireEvent.press(view.getByLabelText('chat.addToJournal')); });
+    expect(view.getByText('chat.suggestion.confirmTitle')).toBeTruthy();
+    await act(async () => { fireEvent.press(view.getByLabelText('alerts.butoane.anuleaza')); });
+    expect(mockInserted).toHaveLength(0);
+  });
+
+  test('bare save command opens the last single suggestion without another AI request', async () => {
+    global.fetch = jest.fn(async () => raspunsChatOk) as never;
+    const view = await render(<ChatScreen />);
+    await send(view, 'am mancat un iaurt');
+    const requests = (global.fetch as jest.Mock).mock.calls.length;
+    await send(view, 'Adaugă în jurnal');
+    expect((global.fetch as jest.Mock).mock.calls.length).toBe(requests);
+    expect(view.getByText('chat.suggestion.confirmTitle')).toBeTruthy();
+    expect(mockInserted).toHaveLength(0);
+  });
+
+  test('two suggestions keep independent actions; ambiguous command asks for selection', async () => {
+    global.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => ({
+      raspuns: 'Two lunch ideas', suggestions: [
+        { name: 'Rice bowl', items: [{ name: 'Rice', qty: 100, unit: 'g', kcal: 130, protein_g: 3, carbs_g: 28, fat_g: 1, fiber_g: 1 }] },
+        { name: 'Bean bowl', items: [{ name: 'Beans', qty: 100, unit: 'g', kcal: 120, protein_g: 7, carbs_g: 20, fat_g: 1, fiber_g: 6 }] },
+      ],
+    }) })) as never;
+    const view = await render(<ChatScreen />);
+    await send(view, 'Suggest meal ideas');
+    expect(view.getAllByLabelText('chat.addToJournal')).toHaveLength(2);
+    await send(view, 'Add this meal to my food diary');
+    expect(view.getByText('chat.suggestion.chooseMeal')).toBeTruthy();
+    await act(async () => { fireEvent.press(view.getAllByLabelText('chat.addToJournal')[1]); });
+    expect(view.getByDisplayValue('Bean bowl')).toBeTruthy();
+    expect(mockInserted).toHaveLength(0);
+  });
+
+  test('missing nutrition opens an editable draft but disables saving', async () => {
+    global.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => ({
+      type: 'MEAL_PROPOSAL', name: 'Soup', items: [{ name: 'Soup' }],
+    }) })) as never;
+    const view = await render(<ChatScreen />);
+    await send(view, 'am mancat supa');
+    await act(async () => { fireEvent.press(view.getByLabelText('chat.addToJournal')); });
+    expect(view.getByLabelText('chat.suggestion.confirmSave').props.accessibilityState?.disabled ?? view.getByLabelText('chat.suggestion.confirmSave').props.disabled).toBe(true);
+    expect(mockInserted).toHaveLength(0);
+  });
+
+  test.each(['ro', 'en', 'fr', 'de'])('suggestion CTA resolves in %s without a raw key', async (locale) => {
+    mockChatLocale = locale;
+    mockResolveChatTranslations = true;
+    const resources: Record<string, any> = {
+      ro: require('../i18n/locales/ro.json'), en: require('../i18n/locales/en.json'),
+      fr: require('../i18n/locales/fr.json'), de: require('../i18n/locales/de.json'),
+    };
+    global.fetch = jest.fn(async () => raspunsChatOk) as never;
+    const view = await render(<ChatScreen />);
+    await send(view, 'am mancat un iaurt');
+    expect(view.getByLabelText(resources[locale].chat.addToJournal)).toBeTruthy();
+    expect(view.getByText(resources[locale].chat.suggestion.details)).toBeTruthy();
+  });
+
+  test('edited values save as one user-owned meal and notify Home/Journal', async () => {
+    mockInsertMode = 'success';
+    global.fetch = jest.fn(async () => raspunsChatOk) as never;
+    const view = await render(<ChatScreen />);
+    await send(view, 'am mancat un iaurt');
+    await act(async () => { fireEvent.press(view.getByLabelText('chat.addToJournal')); });
+    await act(async () => { fireEvent.changeText(view.getByLabelText('chat.suggestion.quantity 1'), '250'); });
+    await act(async () => { fireEvent.changeText(view.getByLabelText('chat.suggestion.calories 1'), '180'); });
+    await act(async () => { fireEvent.press(view.getByLabelText('chat.suggestion.confirmSave')); });
+    expect(mockInserted).toHaveLength(1);
+    const payload = mockInserted[0] as Record<string, any>;
+    expect(payload.user_id).toBe(UTILIZATOR.id);
+    expect(payload.calorii).toBe(180);
+    expect(payload.alimente).toEqual([expect.objectContaining({ grame: 250, calorii: 180 })]);
+    expect(mockFreshness.mark).toHaveBeenCalledWith(UTILIZATOR.id);
+    expect(mockFreshness.announce).toHaveBeenCalledWith(UTILIZATOR.id, [payload.id], [payload.data]);
+    expect(mockRefresh).toHaveBeenCalled();
+    expect(view.getByLabelText('chat.suggestion.openJournal')).toBeTruthy();
+  });
+
+  test('server rejection retains the draft and never shows success', async () => {
+    mockInsertMode = 'server';
+    global.fetch = jest.fn(async () => raspunsChatOk) as never;
+    const view = await render(<ChatScreen />);
+    await send(view, 'am mancat un iaurt');
+    await act(async () => { fireEvent.press(view.getByLabelText('chat.addToJournal')); });
+    await act(async () => { fireEvent.press(view.getByLabelText('chat.suggestion.confirmSave')); });
+    expect(view.getByText('chat.suggestion.confirmTitle')).toBeTruthy();
+    expect(view.queryByText('CONFIRMARE_SUCCES')).toBeNull();
+    expect(mockFreshness.mark).not.toHaveBeenCalled();
+  });
+
+  test('double tap and account switch during pending insert cannot duplicate or mark the new account saved', async () => {
+    mockInsertMode = 'pending';
+    global.fetch = jest.fn(async () => raspunsChatOk) as never;
+    const view = await render(<ChatScreen />);
+    await send(view, 'am mancat un iaurt');
+    await act(async () => { fireEvent.press(view.getByLabelText('chat.addToJournal')); });
+    act(() => {
+      fireEvent.press(view.getByLabelText('chat.suggestion.confirmSave'));
+      fireEvent.press(view.getByLabelText('chat.suggestion.confirmSave'));
+    });
+    expect(mockInserted).toHaveLength(1);
+    mockActiveUserId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    view.rerender(<ChatScreen />);
+    await act(async () => { mockPendingInsertResolve?.({ error: null }); });
+    expect(view.queryByText('CONFIRMARE_SUCCES')).toBeNull();
+    expect(mockFreshness.mark).not.toHaveBeenCalled();
+  });
+
 });

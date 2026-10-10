@@ -20,6 +20,8 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { useTranslation } from 'react-i18next';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { FlowIcon } from '../../components/ui/FlowIcon';
+import { calculateConservativeWeightProjection, latestMeasuredWeightKg, normalizeWeightHistory } from '../../lib/weightProjection';
+import { isValidBodyWeightKg } from '../../lib/profileWeight';
 
 interface ZiStatistica {
   data: string;
@@ -81,7 +83,7 @@ const AnimatedTrendArrow = ({ isLoss, color }: { isLoss: boolean; color: string 
 export default function StatisticiScreen() {
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { scrollPaddingTop, scrollPaddingBottom, horizontalPadding } = useResponsiveLayout();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'calorii' | 'greutate'>('calorii');
@@ -92,8 +94,8 @@ export default function StatisticiScreen() {
   const [zileInTinta, setZileInTinta] = useState(0);
 
   // Weight Tab States
-  const [greutateCurenta, setGreutateCurenta] = useState(75.0);
-  const [greutateTinta, setGreutateTinta] = useState(70.0);
+  const [greutateCurenta, setGreutateCurenta] = useState<number | null>(null);
+  const [greutateTinta, setGreutateTinta] = useState<number | null>(null);
   const [istoricGreutate, setIstoricGreutate] = useState<{ data: string; ziNume: string; greutate: number }[]>([]);
   const [zileChart, setZileChart] = useState<'7' | '30'>('7');
   const [modalGreutateVisible, setModalGreutateVisible] = useState(false);
@@ -208,38 +210,38 @@ export default function StatisticiScreen() {
       }
 
       // 4. Încarcă greutatea curentă și istoricul din AsyncStorage
+      const todayKey = localDayKey(new Date());
       const storedGreutate = await AsyncStorage.getItem('greutate');
-      const wParsed = storedGreutate ? parseFloat(storedGreutate) : NaN;
-      const Wc = Number.isFinite(wParsed) && wParsed > 0 ? wParsed : 75.0;
-      setGreutateCurenta(Wc);
+      const profileWeight = userMeta.greutate;
+      const storedWeightNumber = storedGreutate ? Number.parseFloat(storedGreutate) : null;
+      const storedIstoric = userMeta.greutate_istoric ?? await AsyncStorage.getItem('greutate_istoric');
+      let rawHistory: unknown = storedIstoric;
+      if (typeof storedIstoric === 'string') {
+        try { rawHistory = JSON.parse(storedIstoric); } catch { rawHistory = null; }
+      }
+      const normalizedHistory = normalizeWeightHistory(rawHistory, todayKey);
+      const historyForUi = normalizedHistory.map((entry) => ({
+        data: entry.date,
+        ziNume: new Date(`${entry.date}T12:00:00`).toLocaleDateString(i18n.language || 'ro', { weekday: 'short' }).slice(0, 3),
+        greutate: entry.weightKg,
+      }));
+      setIstoricGreutate(historyForUi);
+      const latestRecorded = latestMeasuredWeightKg(normalizedHistory);
+      const profileWeightNumber = typeof profileWeight === 'number' ? profileWeight : Number(profileWeight);
+      const resolvedCurrent = latestRecorded ?? (isValidBodyWeightKg(profileWeightNumber)
+        ? profileWeightNumber
+        : isValidBodyWeightKg(storedWeightNumber) ? storedWeightNumber : null);
+      setGreutateCurenta(resolvedCurrent);
 
       const storedTinta = await AsyncStorage.getItem('greutateTinta');
-      const tintaParsed = storedTinta ? parseFloat(storedTinta) : NaN;
-      setGreutateTinta(Number.isFinite(tintaParsed) && tintaParsed > 0 ? tintaParsed : 70.0);
-
-      const storedIstoric = userMeta.greutate_istoric || await AsyncStorage.getItem('greutate_istoric');
-      if (storedIstoric) {
-        try {
-          const parsed = typeof storedIstoric === 'string' ? JSON.parse(storedIstoric) : storedIstoric;
-          setIstoricGreutate(parsed);
-        } catch {}
-      } else {
-        const d = new Date();
-        const dataStr = localDayKey(d);
-        const ziNume = d.toLocaleDateString('ro-RO', { weekday: 'short' }).slice(0, 3);
-        const initData = [{ data: dataStr, ziNume, greutate: Wc }];
-        setIstoricGreutate(initData);
-        await AsyncStorage.setItem('greutate_istoric', JSON.stringify(initData));
-        if (user) {
-          await supabase.auth.updateUser({ data: { greutate_istoric: initData } });
-        }
-      }
+      const targetValue = userMeta.greutateTinta ?? (storedTinta ? Number.parseFloat(storedTinta) : null);
+      setGreutateTinta(isValidBodyWeightKg(targetValue) ? targetValue : null);
     } catch (e) {
       console.error('Eroare neașteptată în statistici:', e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [i18n.language]);
 
   const salveazaGreutate = async (nouaValoare: number) => {
     try {
@@ -288,25 +290,12 @@ export default function StatisticiScreen() {
   };
 
   const calculPredicieAI = () => {
-    const diferenta = greutateCurenta - greutateTinta;
-    if (Math.abs(diferenta) < 0.2) return { text: "Felicitări! Ai atins deja sau ești extrem de aproape de greutatea țintă!", dataEst: "Azi", saptamani: 0 };
-    
-    // FIT-006: deficit REAL, pozitiv doar când media consumată e sub țintă
-    // (max(0, ...)); fără fallback-ul hardcodat de 450 kcal când nu există deficit.
-    const deficit = medieCalorii > 0 ? Math.max(0, caloriiTinta - medieCalorii) : 0;
-    const kgPerSaptamana = Math.max(0.2, (deficit * 7) / 7700);
-    const saptamaniNecesare = Math.max(1, Math.round(Math.abs(diferenta) / kgPerSaptamana));
-    const zileNecesare = saptamaniNecesare * 7;
-    
-    const d = new Date();
-    d.setDate(d.getDate() + zileNecesare);
-    const dataEst = d.toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' });
-    
-    return {
-      text: `Menținând deficitul tău caloric mediu (estimat la ~${Math.round(deficit)} kcal/zi), ritmul tău de slăbire este de ~${kgPerSaptamana.toFixed(1)} kg/săptămână.`,
-      dataEst,
-      saptamani: saptamaniNecesare
-    };
+    if (!greutateTinta) return { status: 'unavailable' as const, reason: 'missing_target' };
+    return calculateConservativeWeightProjection({
+      history: istoricGreutate.map((entry) => ({ date: entry.data, weightKg: entry.greutate })),
+      targetWeightKg: greutateTinta,
+      asOfDate: localDayKey(new Date()),
+    });
   };
 
   useFocusRefresh(
@@ -321,7 +310,7 @@ export default function StatisticiScreen() {
 
   // Stări „fără date” pentru zona de grafice: afișăm EmptyState în loc de bare goale.
   const areDateCalorii = zile.some((z) => z.calorii > 0);
-  const areDateGreutate = istoricGreutate.some((z) => Number(z.greutate) > 0);
+  const areDateGreutate = istoricGreutate.some((z) => isValidBodyWeightKg(Number(z.greutate)));
 
   if (loading) {
     return (
@@ -389,12 +378,12 @@ export default function StatisticiScreen() {
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setModalInitialTab('curenta'); setModalGreutateVisible(true); }}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={`Greutatea curentă, ${greutateCurenta} kg. Modifică`}
+                accessibilityLabel={`${t('statistici.weightProjection.measured')}, ${greutateCurenta ?? '—'} kg`}
               >
                 <LinearGradient colors={[colors.accentSecondary + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
                   <Scale size={20} color={colors.accentSecondary} />
-                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{greutateCurenta} kg</Text>
-                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>Curentă</Text>
+                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{greutateCurenta === null ? '—' : `${greutateCurenta} kg`}</Text>
+                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>{t('statistici.weightProjection.measured')}</Text>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -403,23 +392,31 @@ export default function StatisticiScreen() {
                 onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setModalInitialTab('tinta'); setModalGreutateVisible(true); }}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={`Greutatea țintă, ${greutateTinta} kg. Modifică`}
+                accessibilityLabel={`${t('statistici.weightProjection.goal')}, ${greutateTinta ?? '—'} kg`}
               >
                 <LinearGradient colors={[colors.accent + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
                   <Target size={20} color={colors.accent} />
-                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{greutateTinta} kg</Text>
-                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>Țintă</Text>
+                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{greutateTinta === null ? '—' : `${greutateTinta} kg`}</Text>
+                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>{t('statistici.weightProjection.goal')}</Text>
                 </LinearGradient>
               </TouchableOpacity>
 
               <View style={[styles.summaryBox, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
                 <LinearGradient colors={[colors.warning + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
-                  <AnimatedTrendArrow isLoss={greutateCurenta >= greutateTinta} color={colors.warning} />
+                  {greutateCurenta !== null && greutateTinta !== null ? (
+                    <AnimatedTrendArrow isLoss={greutateCurenta >= greutateTinta} color={colors.warning} />
+                  ) : <Scale size={20} color={colors.warning} />}
                   <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
-                    {Math.abs(Math.round((greutateCurenta - greutateTinta) * 10) / 10)} kg
+                    {greutateCurenta !== null && greutateTinta !== null
+                      ? `${Math.abs(Math.round((greutateCurenta - greutateTinta) * 10) / 10)} kg`
+                      : '—'}
                   </Text>
                   <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>
-                    {greutateCurenta >= greutateTinta ? 'Rămas de slăbit' : 'Rămas de pus'}
+                    {greutateCurenta === null || greutateTinta === null
+                      ? t('statistici.weightProjection.setBoth')
+                      : t(greutateCurenta >= greutateTinta
+                        ? 'statistici.weightProjection.remainingLoss'
+                        : 'statistici.weightProjection.remainingGain')}
                   </Text>
                 </LinearGradient>
               </View>
@@ -443,7 +440,9 @@ export default function StatisticiScreen() {
                       <FlowIcon name="scale" size={16} color={colors.accentSecondary} />
                       <Text style={[styles.recordTitle, { color: colors.textPrimary }]}>Modifică Greutatea Curentă sau Țintă</Text>
                     </View>
-                    <Text style={[styles.recordSub, { color: colors.textSecondary }]}>Adaugă greutatea curentă sau modifică obiectivul tău de {greutateTinta} kg</Text>
+                    <Text style={[styles.recordSub, { color: colors.textSecondary }]}>
+                      {t('statistici.weightProjection.addMeasurement', { target: greutateTinta !== null ? ` · ${greutateTinta} kg` : '' })}
+                    </Text>
                   </View>
                 </LinearGradient>
               </PressableScale>
@@ -560,7 +559,7 @@ export default function StatisticiScreen() {
               </BlurView>
             </Animated.View>
 
-            {/* AI Prediction Card */}
+            {/* Conservative estimate from recorded measurements only */}
             <Animated.View style={[styles.predictCard, { borderColor: colors.accent + '40' }]}>
               <BlurView intensity={20} tint="dark" style={styles.predictBlur}>
                 <LinearGradient colors={[colors.accent + '15', 'rgba(0,0,0,0)']} style={styles.predictGrad}>
@@ -571,9 +570,9 @@ export default function StatisticiScreen() {
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <FlowIcon name="brain" size={16} color={colors.accent} />
-                        <Text style={[styles.predictTitle, { color: colors.textPrimary }]}>Predicție GetFlow</Text>
+                        <Text style={[styles.predictTitle, { color: colors.textPrimary }]}>{t('statistici.weightProjection.title')}</Text>
                       </View>
-                      <Text style={[styles.predictSub, { color: colors.textSecondary }]}>Algoritm bazat pe ritmul și deficitul tău caloric</Text>
+                      <Text style={[styles.predictSub, { color: colors.textSecondary }]}>{t('statistici.weightProjection.disclaimer')}</Text>
                     </View>
                   </View>
 
@@ -581,16 +580,26 @@ export default function StatisticiScreen() {
                     const predictie = calculPredicieAI();
                     return (
                       <>
-                        <View style={[styles.predictBox, { backgroundColor: 'rgba(0,0,0,0.2)', borderColor: 'rgba(255,255,255,0.04)' }]}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                            <FlowIcon name="target" size={14} color={colors.accent} />
-                            <Text style={[styles.predictDate, { color: colors.accent }]}>{predictie.dataEst}</Text>
-                          </View>
-                          <Text style={[styles.predictWeeks, { color: colors.textSecondary }]}>În aproximativ {predictie.saptamani} săptămâni</Text>
-                        </View>
-                        <Text style={[styles.predictText, { color: colors.textSecondary }]}>
-                          {predictie.text}
-                        </Text>
+                        {predictie.status === 'estimated' ? (
+                          <>
+                            <View style={[styles.predictBox, { backgroundColor: 'rgba(0,0,0,0.2)', borderColor: 'rgba(255,255,255,0.04)' }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                                <FlowIcon name="target" size={14} color={colors.accent} />
+                                <Text style={[styles.predictDate, { color: colors.accent }]}>{new Date(`${predictie.targetDate}T12:00:00`).toLocaleDateString(i18n.language, { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+                              </View>
+                              <Text style={[styles.predictWeeks, { color: colors.textSecondary }]}>
+                                {t('statistici.weightProjection.weeklyChange', { amount: predictie.weeklyChangeKg })}
+                              </Text>
+                            </View>
+                            <Text style={[styles.predictText, { color: colors.textSecondary }]}>
+                              {t('statistici.weightProjection.basedOnMeasurements', { date: new Date(`${predictie.lastMeasurementDate}T12:00:00`).toLocaleDateString(i18n.language, { day: 'numeric', month: 'long' }) })}
+                            </Text>
+                          </>
+                        ) : (
+                          <Text style={[styles.predictText, { color: colors.textSecondary }]}>
+                            {t(`statistici.weightProjection.${predictie.reason === 'goal_already_reached' ? 'goalReached' : predictie.reason === 'no_progress_toward_goal' ? 'noReliableTrend' : 'insufficientData'}`)}
+                          </Text>
+                        )}
                       </>
                     );
                   })()}

@@ -5,7 +5,7 @@ import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import 'react-native-reanimated';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, ActivityIndicator, LogBox } from 'react-native';
+import { AppState, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
@@ -20,7 +20,6 @@ import * as SplashScreen from 'expo-splash-screen';
 import { AppSplashScreen } from '../components/ui/AppSplashScreen';
 import { canAccessWorkoutV2PreviewWithoutSession } from '../lib/workout-v2/featureFlag';
 
-void SplashScreen.preventAutoHideAsync().catch(() => {});
 import { NotificationBannerProvider } from '../context/NotificationBannerContext';
 import { GamificareProvider } from '../context/GamificareContext';
 import { PremiumProvider } from '../context/PremiumContext';
@@ -41,6 +40,7 @@ import {
   cancelManagedReminders,
 } from '../lib/notificationConsent';
 import { processOfflineQueue, type SupabaseMinimalClient } from '../lib/offlineQueue';
+import { resolveNotificationDestination, shouldReturnFromNotificationsOnResume } from '../lib/resumeNavigation';
 import { sincronizeazaTargeturiLocale } from '../lib/sincronizeazaTargeturi';
 import { supabase } from '../supabase';
 import {
@@ -52,6 +52,7 @@ import {
 } from '../lib/telemetryPrivacy';
 import '../i18n';
 
+void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // DSN-ul Sentry are forma https://<cheiePublica>@o<org>.ingest.<regiune>.sentry.io/<proiect>.
 // Fara segmentul `@` (cheia publica), SDK-ul arunca "Invalid Sentry Dsn" la fiecare boot.
@@ -176,6 +177,8 @@ function RootNavigator() {
   // pentru a detecta /auth/noua-parola. `useSegments()` cu typedRoutes poate
   // returna tuple (ex. `[string]`) la care accesul pe index pica la typecheck.
   const pathname = usePathname();
+  const appStateRef = useRef(AppState.currentState);
+  const explicitNotificationTapRef = useRef(false);
 
   // Verificare server-side a existentei profilului complet. `necunoscut` = inca
   // necunoscut sau eroare de retea — in acest caz gate-ul se comporta ca inainte
@@ -240,20 +243,44 @@ function RootNavigator() {
     return () => { active = false; };
   }, [syncFromAsyncStorage]);
 
-  // Tap pe o notificare push din fundal/terminat → deschide ecranul /notificari.
-  // Foreground-ul (banner in-app) e deja acoperit în NotificationBannerContext;
-  // aici doar răspunsul la notificare în timp ce aplicația NU e în prim-plan.
+  // A notification response is an explicit user action. Honor its validated
+  // in-app destination; ordinary foreground resumes are handled separately.
   // Guard Expo Go identic cu cel din NotificationBannerContext (SDK 53+ nu
   // suportă push remote pe Android în Expo Go).
   useEffect(() => {
     if (Constants.appOwnership === 'expo') return;
     try {
-      const subscription = Notifications.addNotificationResponseReceivedListener(() => {
-        router.push('/notificari');
+      const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+        explicitNotificationTapRef.current = true;
+        router.push(resolveNotificationDestination(response.notification.request.content.data));
       });
       return () => subscription.remove();
     } catch {}
   }, [router]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const previousAppState = appStateRef.current;
+      appStateRef.current = nextAppState;
+      if (nextAppState === 'background') {
+        explicitNotificationTapRef.current = false;
+        return;
+      }
+      if (!shouldReturnFromNotificationsOnResume({
+        previousAppState,
+        nextAppState,
+        pathname,
+        explicitNotificationTapPending: explicitNotificationTapRef.current,
+        navigatorReady: storageReady,
+        authLoading: loadingAuth,
+        authenticated: !!session,
+        onboardingComplete: isOnboardingDone,
+        locked: isLocked,
+      })) return;
+      router.replace('/(tabs)');
+    });
+    return () => subscription.remove();
+  }, [isLocked, isOnboardingDone, loadingAuth, pathname, router, session, storageReady]);
 
   useEffect(() => {
     // TASK-16: fără auto-programare la login. Doar aducem notificările în

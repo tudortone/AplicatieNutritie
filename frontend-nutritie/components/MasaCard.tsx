@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, { Layout } from 'react-native-reanimated';
-import { Clock, Pencil, Trash2 } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Clock, Pencil, Trash2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -36,9 +36,14 @@ export const MasaCard = React.memo(function MasaCard({
   const reduceMotion = useReducedMotion();
   const { isPremium, hasFullAccess } = usePremium();
   const hasAccess = hasFullAccess || isPremium;
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
   const alimenteSubList = useMemo(() => parseAlimente(masa), [masa]);
   // REMED-018: thumbnail ImageKit (w-480) în locul rezoluției full pe card.
   const pozaUrl = obtinePozaMasaThumb(masa);
+  const mealCategory = masa.tip_masa
+    ? t(`chat.mealCategory.${masa.tip_masa}`, { defaultValue: t('jurnal.mealRecorded') })
+    : t('jurnal.mealRecorded');
+  const hasExpandableDetails = alimenteSubList.length > 0 || (afisarePoze && Boolean(pozaUrl));
 
   // BUG-023: layout spring doar pe iOS când reduceMotion e fals.
   return (
@@ -52,7 +57,7 @@ export const MasaCard = React.memo(function MasaCard({
           onPress(masa);
         }}
         accessibilityRole="button"
-        accessibilityLabel={t('jurnal.mealA11y', { nume: masa.nume, kcal: masa.calorii || 0 })}
+        accessibilityLabel={t('jurnal.mealA11y', { nume: mealCategory, kcal: masa.calorii || 0 })}
       >
         <View
           style={[
@@ -63,7 +68,9 @@ export const MasaCard = React.memo(function MasaCard({
           <View style={styles.cardGrad}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitleRow}>
-                <Text style={[styles.cardName, { color: colors.textPrimary }]}>{masa.nume}</Text>
+                <Text style={[styles.cardName, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {mealCategory}
+                </Text>
                 <View style={styles.timeBadgeContainer}>
                   <View style={styles.timeBadge}>
                     <Clock size={12} color={colors.textSecondary} />
@@ -117,13 +124,36 @@ export const MasaCard = React.memo(function MasaCard({
               </View>
             </View>
 
-            {alimenteSubList && alimenteSubList.length > 0 && (
+            {hasExpandableDetails && (
+              <TouchableOpacity
+                testID={`meal-details-toggle-${masa.id}`}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  setDetailsExpanded((expanded) => !expanded);
+                }}
+                style={[styles.detailsToggle, { borderColor: colors.cardBorder }]}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: detailsExpanded }}
+                accessibilityLabel={t(detailsExpanded ? 'jurnal.hideIngredients' : 'jurnal.showIngredients')}
+              >
+                <Text style={[styles.detailsToggleText, { color: colors.accent }]}>
+                  {detailsExpanded ? t('jurnal.hideIngredients') : t('jurnal.showIngredients')}
+                  {alimenteSubList.length > 0 ? ` · ${t('jurnal.ingredientCount', { count: alimenteSubList.length })}` : ''}
+                </Text>
+                {detailsExpanded ? <ChevronUp size={17} color={colors.accent} /> : <ChevronDown size={17} color={colors.accent} />}
+              </TouchableOpacity>
+            )}
+
+            {detailsExpanded && alimenteSubList.length > 0 && (
               <View
                 style={[
                   styles.subItemsContainer,
                   { borderColor: colors.cardBorder, backgroundColor: 'rgba(0,0,0,0.18)' },
                 ]}
               >
+                <Text style={[styles.ingredientsHeading, { color: colors.textSecondary }]}>
+                  {t('jurnal.ingredientDetails')}
+                </Text>
                 {alimenteSubList.map((al, subIdx) => (
                   <TouchableOpacity
                     key={al.id || `${masa.id}-al-${subIdx}`}
@@ -272,7 +302,7 @@ export const MasaCard = React.memo(function MasaCard({
               </View>
             </View>
 
-            {afisarePoze && pozaUrl ? (
+            {detailsExpanded && afisarePoze && pozaUrl ? (
               hasAccess ? (
                 <TouchableOpacity
                   onPress={() => {
@@ -361,6 +391,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.3,
   },
+  detailsToggle: {
+    minHeight: 42,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  detailsToggleText: { fontSize: 12, fontWeight: '700' },
   timeBadgeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -397,6 +437,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     marginBottom: 12,
   },
+  ingredientsHeading: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase', paddingTop: 8, paddingBottom: 2 },
   subItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
