@@ -1,19 +1,5 @@
 'use strict';
 
-jest.mock('@clerk/express', () => ({
-  verifyToken: jest.fn(),
-}));
-
-/**
- * C1-S1: contractul favorizează calea Supabase (RLS). Un token Supabase valid
- * trebuie rezolvat ca `provider: 'supabase'` — singura cale pe care clientul cu
- * RLS se poate construi. Token-urile Clerk sunt WEBHOOK ONLY și nu sunt acceptate
- * ca bearer fallback pe endpointurile ordinare.
- *
- * Aceste teste nu ating rețeaua: `rezolvaIdentitate` primește obiectele `supabase`
- * și `supabaseAdmin` prin injecție de dependență, deci simulăm doar fake-uri.
- */
-
 const { rezolvaIdentitate, EroareIdentitate, citesteExpiraLaMs } = require('../utils/identitate');
 
 const UUID = '11111111-1111-4111-8111-111111111111';
@@ -41,12 +27,7 @@ function getUserEroare(error) {
 }
 
 describe('identitate (C1-S1 supabase-first)', () => {
-  it('TASK-001: un bearer respins de Supabase nu este acceptat prin Clerk pe endpointuri ordinare', async () => {
-    const clerk = require('@clerk/express');
-    clerk.verifyToken.mockResolvedValueOnce({
-      sub: 'user_clerk_123',
-      email: 'legacy@example.com',
-    });
+  it('TASK-001: un bearer respins de Supabase nu este acceptat pe endpointuri ordinare', async () => {
     const query = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
@@ -58,12 +39,10 @@ describe('identitate (C1-S1 supabase-first)', () => {
     const supabaseAdmin = { from: jest.fn(() => query) };
 
     await expect(rezolvaIdentitate({
-      token: 'jwt-clerk-valid',
+      token: 'jwt-respins-de-gotrue',
       supabase: supabaseCon(getUserEroare({ status: 401, message: 'invalid' })),
       supabaseAdmin,
-      clerkSecretKey: 'sk_secret',
     })).rejects.toMatchObject({ status: 401, cod: 'TOKEN_INVALID' });
-    expect(clerk.verifyToken).not.toHaveBeenCalled();
     expect(supabaseAdmin.from).not.toHaveBeenCalled();
   });
 

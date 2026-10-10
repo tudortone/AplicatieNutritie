@@ -18,7 +18,6 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@clerk/express": "^2.1.49",
     "@google/generative-ai": "^0.24.1",
     "@sentry/node": "^10.69.0",
     "@supabase/supabase-js": "^2.109.0",

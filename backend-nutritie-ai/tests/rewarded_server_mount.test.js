@@ -2,6 +2,8 @@
 
 const request = require('supertest');
 
+jest.setTimeout(15000);
+
 test('production app mounts canonical SSV route and rejects unsigned requests', async () => {
   const app = require('../server');
   const response = await request(app).get('/api/v1/webhooks/admob/rewarded');

@@ -223,15 +223,8 @@ function incarcaConfig() {
 	) {
 		opreste('GOOGLE_PLAY_PUBSUB_SERVICE_ACCOUNT_EMAIL trebuie sa fie un cont de serviciu Google valid.');
 	}
-	// S4-07: fara cheile Clerk, autentificarea raspunde 401 din identitate.js la
-	// prima cerere, iar fara ImageKit, pozele 500 in webhooks/ai. Fail-fast la
-	// boot, aliniat cu GEMINI/REDIS/Google Play de mai sus.
-	if (esteProductie && (!process.env.CLERK_SECRET_KEY || !clerkWebhookSecret)) {
-		opreste(
-			'CLERK_SECRET_KEY si CLERK_WEBHOOK_SIGNING_SECRET sunt obligatorii in productie ' +
-				'(autentificare + webhook-uri Clerk).',
-		);
-	}
+	// Clerk este retras; Supabase Auth este autoritatea unica canonica.
+	// Cheile nu mai sunt obligatorii la boot in productie.
 	if (
 		esteProductie &&
 		(!process.env.IMAGEKIT_PUBLIC_KEY || !process.env.IMAGEKIT_PRIVATE_KEY || !process.env.IMAGEKIT_URL_ENDPOINT)
@@ -267,10 +260,10 @@ function incarcaConfig() {
 		if (origini.some((origine) => !urlPublicSigur(origine, ['https:']))) {
 			opreste('CORS_ORIGINS poate contine numai origini HTTPS publice in productie.');
 		}
-		if (!process.env.CLERK_SECRET_KEY.startsWith('sk_live_')) {
+		if (process.env.CLERK_SECRET_KEY && !process.env.CLERK_SECRET_KEY.startsWith('sk_live_')) {
 			opreste('CLERK_SECRET_KEY trebuie sa fie cheia sk_live_ a instantei Clerk de productie.');
 		}
-		if (!clerkWebhookSecret.startsWith('whsec_')) {
+		if (clerkWebhookSecret && !clerkWebhookSecret.startsWith('whsec_')) {
 			opreste('CLERK_WEBHOOK_SIGNING_SECRET trebuie sa fie secretul whsec_ al webhook-ului Clerk.');
 		}
 		if (!process.env.TRIGGER_SECRET_KEY.startsWith('tr_prod_')) {
