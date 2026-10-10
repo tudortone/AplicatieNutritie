@@ -4,8 +4,8 @@
 **Repository:** `tudortone/AplicatieNutritie` (GetFlow)  
 **Package:** `com.totsrl.getflo`  
 **Integration Branch:** `ci-integration/verified-fixes`  
-**Integration HEAD Commit:** `dbe9b5a` (`fix(auth): retire @clerk/express dependency and make Clerk credentials optional on boot`)  
-**Latest CI Run ID:** `38070531135` (Triggered on integration branch commit `fdaef1d`)
+**Integration HEAD Commit:** `af1c4c1` (`feat(coach): integrate verified AI Coach to Journal flow, locale namespace alignment, and regression tests`)  
+**Latest CI Run ID:** `38073819381` (Triggered on integration branch commit `9a35568`)
 
 ---
 
@@ -46,7 +46,7 @@ SENTRY MONITORING:
 VERIFIED & PRESERVED (Frontend and backend SDKs active, enterprise health-data scrubbing enforced, recommendation KEEP)
 
 INTEGRATION BRANCH:
-ci-integration/verified-fixes (HEAD commit: dbe9b5a)
+ci-integration/verified-fixes (HEAD commit: af1c4c1)
 
 SAFE TO MERGE:
 NO (Pending Product Owner formal risk authorization of build-time braces advisory before merge to main)
@@ -97,7 +97,7 @@ OWNER ACTION REQUIRED:
 ## 3. PRIORITY 2: INTEGRATION BRANCH VERIFICATION
 
 - **Branch Name:** `ci-integration/verified-fixes`
-- **HEAD Commit:** `dbe9b5a`
+- **HEAD Commit:** `af1c4c1`
 - **Peer Agent Integration (GPT-6 Luna & GPT-6 Sol):** All modified files and peer unit tests created by peer agents were preserved, reviewed, and committed into clean logical groups:
   - `19d5058`: Backend dependency security fixes (`compression@1.8.2`, `proxy-addr@2.0.8`, `js-yaml@4.3.2`).
   - `18875e3`: Clerk webhook containment, Trigger worker hardening, user feedback schema & RLS.
@@ -106,6 +106,8 @@ OWNER ACTION REQUIRED:
   - `fdaef1d`: CI repair report and leaked secret remediation ledger.
   - `61cb252`: Documentation update on verified DeepSeek revocation and green Secret Scanning.
   - `dbe9b5a`: Clerk retirement (`@clerk/express` removal, optional boot credentials, test cleanup).
+  - `9a35568`: Clerk retirement architecture and Sentry operational audit reports.
+  - `af1c4c1`: Final Luna handoff: verified AI Coach to Journal flow, locale namespace alignment, and regression tests.
 - **Remote `main` Protection:** Zero automatic merges to `main` have occurred. `origin/main` remains clean at `bf7ca4c`.
 
 ---

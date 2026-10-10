@@ -4,7 +4,8 @@
 **Repository:** `tudortone/AplicatieNutritie` (GetFlow)  
 **Package:** `com.totsrl.getflo`  
 **Integration Branch:** `ci-integration/verified-fixes`  
-**Integration Head Commit:** `dbe9b5a` (`fix(auth): retire @clerk/express dependency and make Clerk credentials optional on boot`)  
+**Integration Head Commit:** `af1c4c1` (`feat(coach): integrate verified AI Coach to Journal flow, locale namespace alignment, and regression tests`)  
+**Clerk Retirement Commit:** `dbe9b5a` (`fix(auth): retire @clerk/express dependency and make Clerk credentials optional on boot`)  
 **Previous Integration Commit:** `61cb252` (`docs(ci): record verified DeepSeek revocation and green Secret Scanning in CI`)  
 **Production Commit (Render):** `f0d066c977df863de584b4fc4eb52d74a1778349` (Vulnerable uncontained Clerk webhook handler)
 
@@ -76,7 +77,7 @@ GITHUB ACTIONS:
 Integration branch ci-integration/verified-fixes: Secret Scanning PASS, Backend PASS, RLS PASS, Frontend Lint/Typecheck PASS; Audit Gate FAIL on upstream braces advisory
 
 INTEGRATION BRANCH:
-ci-integration/verified-fixes (HEAD commit dbe9b5a)
+ci-integration/verified-fixes (HEAD commit af1c4c1)
 
 REQUIRES NEW AAB:
 NO for backend Clerk retirement; YES if including frontend UX polish, R8 Proguard optimizations, and Romanian/English localizations
