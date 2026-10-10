@@ -51,6 +51,35 @@ export function normalizeTipMasa(val?: string | null): TipMasa {
   return alias[v] || 'gustare';
 }
 
+/**
+ * Parses a meal category only when the supplied text names one unambiguously.
+ * This deliberately returns null for missing or conflicting labels: callers can
+ * then use their own editable fallback rather than claiming the user chose one.
+ */
+export function parseExplicitTipMasa(value: unknown): TipMasa | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const text = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!text) return null;
+
+  const labels: Readonly<Record<TipMasa, readonly string[]>> = {
+    mic_dejun: ['breakfast', 'mic dejun', 'micul dejun', 'petit dejeuner', 'fruhstuck', 'fruehstueck'],
+    pranz: ['lunch', 'pranz', 'pranzul', 'masa de pranz', 'dejeuner', 'mittagessen'],
+    cina: ['dinner', 'supper', 'souper', 'cina', 'masa de seara', 'diner', 'abendessen'],
+    gustare: ['snack', 'gustare', 'gustari', 'collation', 'gouter', 'zwischenmahlzeit'],
+  };
+  const matches = (Object.entries(labels) as Array<[TipMasa, readonly string[]]>)
+    .filter(([, aliases]) => aliases.some((alias) => ` ${text} `.includes(` ${alias} `)))
+    .map(([category]) => category);
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export interface CategorieMasaMeta {
   id: TipMasa;
   label: string;

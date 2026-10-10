@@ -3,6 +3,7 @@ import {
   inferCanonicalMealType,
   normalizePhotoResultItems,
 } from '../lib/photoResultQuality';
+import { localDayKey } from '../lib/dateUtils';
 
 const normalMeal = [
   {
@@ -81,9 +82,26 @@ describe('Photo AI automatic meal classification', () => {
       .toBe('pranz');
   });
 
+  test('recognizes explicit compound meal labels before consulting local time', () => {
+    expect(inferCanonicalMealType({ aiMealType: 'Evening snack', capturedAt: new Date(2026, 8, 25, 20, 0) }))
+      .toBe('gustare');
+    expect(inferCanonicalMealType({ aiMealType: 'Gustare la 23:00', capturedAt: new Date(2026, 8, 25, 23, 30) }))
+      .toBe('gustare');
+    expect(inferCanonicalMealType({ aiMealType: 'Breakfast at 20:00', capturedAt: new Date(2026, 8, 25, 20, 0) }))
+      .toBe('mic_dejun');
+  });
+
   test('falls back to the capture time when the AI suggestion is absent or unknown', () => {
     expect(inferCanonicalMealType({ capturedAt: new Date('2026-09-25T08:00:00') })).toBe('mic_dejun');
     expect(inferCanonicalMealType({ aiMealType: 'unknown', capturedAt: new Date('2026-09-25T13:00:00') }))
       .toBe('pranz');
+  });
+
+  test.each([
+    [new Date(2026, 9, 3, 23, 30), '2026-10-03'],
+    [new Date(2026, 9, 4, 0, 15), '2026-10-04'],
+  ])('uses device-local meal time and date at midnight boundaries (%s)', (localTime, expectedDate) => {
+    expect(inferCanonicalMealType({ aiMealType: 'unknown', capturedAt: localTime })).toBe('cina');
+    expect(localDayKey(localTime)).toBe(expectedDate);
   });
 });

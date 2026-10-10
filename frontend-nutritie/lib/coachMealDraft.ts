@@ -1,6 +1,6 @@
 import type { TipMasa } from '../types';
 import { localDayKey } from './dateUtils';
-import { LIMITE_DB_MESE } from './mealUtils';
+import { LIMITE_DB_MESE, parseExplicitTipMasa } from './mealUtils';
 
 export interface CoachMealIngredient {
   name: string;
@@ -24,7 +24,6 @@ export interface CoachMealDraft {
   date: string;
 }
 
-const categories: TipMasa[] = ['mic_dejun', 'pranz', 'cina', 'gustare'];
 const numeric = (value: unknown): string => {
   if (value === null || value === undefined || value === '') return '';
   const result = Number(value);
@@ -45,7 +44,7 @@ function parseJson(value: unknown): Record<string, unknown> | null {
   try { return object(JSON.parse(value.slice(start, end + 1))); } catch { return null; }
 }
 
-function makeDraft(raw: unknown, explanation: string): CoachMealDraft | null {
+function makeDraft(raw: unknown, explanation: string, userText: string): CoachMealDraft | null {
   const item = object(raw);
   if (!item || !Array.isArray(item.items) || item.items.length === 0) return null;
   const ingredients = item.items.map((entry): CoachMealIngredient | null => {
@@ -63,14 +62,17 @@ function makeDraft(raw: unknown, explanation: string): CoachMealDraft | null {
     };
   }).filter((value): value is CoachMealIngredient => value !== null);
   if (ingredients.length === 0) return null;
-  const category = nonempty(item.meal_type);
+  // The user's explicit wording is stronger than the model's inferred label.
+  // Structured output is retained only when the user's text has no single
+  // unambiguous category; no time-based preference is fabricated for Coach.
+  const category = parseExplicitTipMasa(userText) ?? parseExplicitTipMasa(item.meal_type);
   const steps = item.preparare ?? item.mod_de_preparare ?? item.steps;
   return {
     name: nonempty(item.name, item.nume, item.title, item.titlu) || ingredients[0].name,
     explanation,
     preparation: Array.isArray(steps) ? steps.filter((s) => typeof s === 'string').join('\n') : nonempty(steps),
     imageUrl: nonempty(item.imageUrl, item.imagine_url, item.photo_url) || undefined,
-    category: categories.includes(category as TipMasa) ? category as TipMasa : null,
+    category,
     items: ingredients,
     calories: totalFor(ingredients, 'calories'),
     date: '',
@@ -121,7 +123,7 @@ export function extractCoachMealDrafts(response: unknown, prompt: string): Coach
     : Array.isArray(raw?.meals) ? raw.meals
       : Array.isArray(raw?.meal_suggestions) ? raw.meal_suggestions
         : raw ? [raw] : [];
-  const structured = candidates.map((candidate) => makeDraft(candidate, explanation)).filter((draft): draft is CoachMealDraft => !!draft);
+  const structured = candidates.map((candidate) => makeDraft(candidate, explanation, prompt)).filter((draft): draft is CoachMealDraft => !!draft);
   if (structured.length > 0) return structured;
 
   // Free-form output is never assigned nutrition. Only an explicit food/recipe
@@ -133,8 +135,9 @@ export function extractCoachMealDrafts(response: unknown, prompt: string): Coach
     .map((line) => line.replace(/^#{1,3}\s+/, '').replace(/^[-*]\s*/, '').replace(/^(?:Breakfast|Lunch|Dinner|Snack|Mic dejun|Prânz|Cină|Gustare|Petit-déjeuner|Déjeuner|Dîner|Collation|Frühstück|Mittagessen|Abendessen)\s*:\s*/iu, '').trim())
     .filter((line) => line.length >= 3 && line.length <= 80);
   if (headings.length === 0) return [];
+  const explicitCategory = parseExplicitTipMasa(prompt);
   return headings.slice(0, 6).map((name) => ({
-    name, explanation: '', preparation: '', category: null,
+    name, explanation: '', preparation: '', category: explicitCategory,
     items: [{ name, quantity: '', unit: 'g', calories: '', protein: '', carbs: '', fat: '', fiber: '' }],
     calories: '', date: '',
   }));

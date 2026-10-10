@@ -89,6 +89,21 @@ describe('P1-03 — ziua logică este ziua LOCALĂ, deterministă', () => {
     expect(miezulNoptii.getTime()).toBeGreaterThan(sfarsitPrecedent);
     expect(miezulNoptii.getTime()).toBe(startNou);
   });
+
+  test.each([
+    new Date(2026, 2, 29, 12), // spring-forward date in DST-observing zones
+    new Date(2026, 9, 25, 12), // fall-back date in DST-observing zones
+  ])('8. local-day window respects daylight-saving transition (%s)', (date) => {
+    const start = new Date(startOfLocalDayISO(date));
+    const end = new Date(endOfLocalDayISO(date));
+    const nextLocalMidnight = new Date(end.getTime() + 1);
+    const expectedHours = 24 - (start.getTimezoneOffset() - nextLocalMidnight.getTimezoneOffset()) / 60;
+
+    expect(localDayKey(start)).toBe(localDayKey(date));
+    expect(localDayKey(end)).toBe(localDayKey(date));
+    expect(end.getTime() - start.getTime() + 1).toBe(expectedHours * 60 * 60 * 1000);
+    expect([23, 24, 25]).toContain(expectedHours);
+  });
 });
 
 describe('P1-03 — locale afectează DOAR afișarea, niciodată aritmetica', () => {

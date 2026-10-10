@@ -1,5 +1,5 @@
 import type { TipMasa } from '../types';
-import { getTipMasaDupaOra } from './mealUtils';
+import { getTipMasaDupaOra, parseExplicitTipMasa } from './mealUtils';
 
 export interface PhotoResultItem {
   nume: string;
@@ -169,23 +169,6 @@ export function evaluatePhotoMealQuality(items: readonly PhotoResultItem[]): Pho
   };
 }
 
-const MEAL_TYPE_ALIASES: Readonly<Record<string, TipMasa>> = Object.freeze({
-  micdejun: 'mic_dejun', breakfast: 'mic_dejun', fruhstuck: 'mic_dejun', petitdejeuner: 'mic_dejun',
-  pranz: 'pranz', lunch: 'pranz', dejeuner: 'pranz', mittagessen: 'pranz',
-  cina: 'cina', dinner: 'cina', diner: 'cina', abendessen: 'cina',
-  gustare: 'gustare', snack: 'gustare', collation: 'gustare', zwischenmahlzeit: 'gustare',
-});
-
-function mealAlias(value: unknown): TipMasa | null {
-  if (typeof value !== 'string') return null;
-  const normalized = value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z]/g, '');
-  return MEAL_TYPE_ALIASES[normalized] || null;
-}
-
 export function inferCanonicalMealType({
   aiMealType,
   capturedAt = new Date(),
@@ -193,5 +176,5 @@ export function inferCanonicalMealType({
   aiMealType?: unknown;
   capturedAt?: Date;
 }): TipMasa {
-  return mealAlias(aiMealType) || getTipMasaDupaOra(capturedAt);
+  return parseExplicitTipMasa(aiMealType) || getTipMasaDupaOra(capturedAt);
 }

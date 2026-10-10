@@ -7,6 +7,7 @@ import {
   eliminaAlimentScanat,
   adaugaAlimentScanat,
   construiesteRinduriMasaChat,
+  construiestePayloadMasaManuala,
 } from '../lib/payloadMese';
 import { normalizeTipMasa, LIMITE_DB_MESE, getTipMasaDupaOra } from '../lib/mealUtils';
 import { parseMealProposal } from '../lib/parseMealProposal';
@@ -56,6 +57,33 @@ describe('BUG-014 — scan → editare gramaj → salvare', () => {
     expect(payload.data).toBe('2026-08-10');
     expect((payload as unknown as Record<string, unknown>).ora).toBe('12:30:00');
     expect((payload as unknown as Record<string, unknown>).created_at).toBe(ZI.toISOString());
+  });
+
+  it('camera canonical payload preserves the category explicitly selected in review', () => {
+    const { payload } = construiestePayloadMasaCamera({
+      user_id: 'u1',
+      rezultat: [aliment()],
+      now: new Date(2026, 7, 10, 20, 30),
+      tip_masa: 'gustare',
+      idOperatie: 'OP-CAMERA-EXPLICIT-CATEGORY',
+    });
+
+    expect(payload.tip_masa).toBe('gustare');
+  });
+
+  it.each([
+    [new Date(2026, 9, 3, 23, 30), '2026-10-03', '23:30:00'],
+    [new Date(2026, 9, 4, 0, 15), '2026-10-04', '00:15:00'],
+  ])('canonical save preserves the explicitly selected local meal date/time (%s)', (now, date, time) => {
+    const payload = construiestePayloadMasaManuala({
+      user_id: 'u1', idOperatie: 'OP-LOCAL-MEAL-DATE', nume: 'Snack',
+      calorii: 100, proteine: 5, carbohidrati: 12, grasimi: 2, fibre: 1,
+      tip_masa: 'gustare', now,
+    });
+
+    expect(payload.data).toBe(date);
+    expect(payload.ora).toBe(time);
+    expect(payload.tip_masa).toBe('gustare');
   });
 
   it('1. editarea gramajului se reflecta in payload (grame, kcal, macro, nume)', () => {

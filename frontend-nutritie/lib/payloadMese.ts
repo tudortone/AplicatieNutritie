@@ -73,6 +73,8 @@ export function construiestePayloadMasaCamera(params: {
   user_id: string;
   rezultat: AlimentScanat[];
   now: Date;
+  /** Explicit choice from the editable Photo AI review; time is fallback only. */
+  tip_masa?: TipMasa;
   poza?: PozaScan;
   /** Id-ul acțiunii logice de salvare, generat o singură dată la apăsarea butonului. */
   idOperatie?: string;
@@ -101,7 +103,7 @@ export function construiestePayloadMasaCamera(params: {
       grasimi: clampValoare(totalGrasimi, LIMITE_DB_MESE.grasimi),
       carbohidrati: clampValoare(totalCarbohidrati, LIMITE_DB_MESE.carbohidrati),
       fibre: clampValoare(totalFibre, LIMITE_DB_MESE.fibre),
-      tip_masa: normalizeTipMasa(getTipMasaDupaOra(now)),
+      tip_masa: normalizeTipMasa(params.tip_masa || getTipMasaDupaOra(now)),
       alimente,
       data: localDayKey(now),
       ora: now.toTimeString().slice(0, 8),

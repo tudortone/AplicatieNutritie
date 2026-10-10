@@ -628,12 +628,10 @@ export default function CameraScreen() {
       user_id: session.user.id,
       rezultat,
       now,
+      tip_masa: tipMasaSelectat,
       poza: { url: imageKitUrlRef.current, fileId: imageKitFileIdRef.current },
     }).payload;
-    // REMED-009: tipul mesei = alegerea utilizatorului din chip-uri (implicit
-    // sugestia după oră). Introducem prin insereazaMasaCuPoza ca poza plus
-    // fallback-ul la scheme vechi (fără imagine_url) să fie reutilizate.
-    const payload = { ...payloadInitial, tip_masa: tipMasaSelectat };
+    const payload = { ...payloadInitial };
 
     try {
       const { error } = await insereazaMasaCuPoza(supabase, payload);

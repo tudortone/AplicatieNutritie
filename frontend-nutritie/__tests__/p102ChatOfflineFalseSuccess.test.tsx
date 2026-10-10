@@ -173,9 +173,11 @@ jest.mock('../components/coach/CoachMealConfirmModal', () => {
     return R.createElement(View, null,
       R.createElement(Text, null, 'chat.suggestion.confirmTitle'),
       R.createElement(TextInput, { value: draft.name, accessibilityLabel: 'chat.suggestion.mealName', onChangeText: (name: string) => onChange({ ...draft, name }) }),
+      R.createElement(TextInput, { value: draft.date, accessibilityLabel: 'chat.suggestion.date', onChangeText: (date: string) => onChange({ ...draft, date }) }),
       R.createElement(TextInput, { value: item.quantity, accessibilityLabel: 'chat.suggestion.quantity 1', onChangeText: (quantity: string) => onChange({ ...draft, items: [{ ...item, quantity }] }) }),
       R.createElement(TextInput, { value: item.calories, accessibilityLabel: 'chat.suggestion.calories 1', onChangeText: (calories: string) => onChange({ ...draft, items: [{ ...item, calories }] }) }),
       R.createElement(Pressable, { accessibilityRole: 'button', accessibilityLabel: 'chat.mealCategory.gustare', onPress: () => onChange({ ...draft, category: 'gustare' }) }),
+      R.createElement(Pressable, { accessibilityRole: 'button', accessibilityLabel: 'chat.mealCategory.cina', onPress: () => onChange({ ...draft, category: 'cina' }) }),
       R.createElement(Pressable, { accessibilityRole: 'button', accessibilityLabel: 'alerts.butoane.anuleaza', onPress: onCancel }),
       R.createElement(Pressable, { accessibilityRole: 'button', accessibilityLabel: 'chat.suggestion.confirmSave', disabled: saving || !validateCoachMealDraft(draft), onPress: onConfirm }),
     );
@@ -478,15 +480,22 @@ describe('Coach suggestion → explicit Journal confirmation', () => {
   test('edited values save as one user-owned meal and notify Home/Journal', async () => {
     mockInsertMode = 'success';
     global.fetch = jest.fn(async () => raspunsChatOk) as never;
+    const selectedDate = new Date();
+    selectedDate.setDate(selectedDate.getDate() - 1);
+    const selectedDateKey = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
     const view = await render(<ChatScreen />);
     await send(view, 'am mancat un iaurt');
     await act(async () => { fireEvent.press(view.getByLabelText('chat.addToJournal')); });
+    await act(async () => { fireEvent.press(view.getByLabelText('chat.mealCategory.cina')); });
+    await act(async () => { fireEvent.changeText(view.getByLabelText('chat.suggestion.date'), selectedDateKey); });
     await act(async () => { fireEvent.changeText(view.getByLabelText('chat.suggestion.quantity 1'), '250'); });
     await act(async () => { fireEvent.changeText(view.getByLabelText('chat.suggestion.calories 1'), '180'); });
     await act(async () => { fireEvent.press(view.getByLabelText('chat.suggestion.confirmSave')); });
     expect(mockInserted).toHaveLength(1);
     const payload = mockInserted[0] as Record<string, any>;
     expect(payload.user_id).toBe(UTILIZATOR.id);
+    expect(payload.tip_masa).toBe('cina');
+    expect(payload.data).toBe(selectedDateKey);
     expect(payload.calorii).toBe(180);
     expect(payload.alimente).toEqual([expect.objectContaining({ grame: 250, calorii: 180 })]);
     expect(mockFreshness.mark).toHaveBeenCalledWith(UTILIZATOR.id);
