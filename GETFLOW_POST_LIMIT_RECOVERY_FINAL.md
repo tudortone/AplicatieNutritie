@@ -3,7 +3,8 @@
 Date: 2026-10-11
 Repository: `tudortone/AplicatieNutritie`
 Branch: `ci-integration/verified-fixes`
-Workspace HEAD: `f199e9e480e28df1578b89ce2ffcfa1f84312dec`
+Starting workspace HEAD: `f199e9e480e28df1578b89ce2ffcfa1f84312dec`
+Recovery source commit: `fbf4e0741f102f37f6bcfc009383a4a9c0a2793b`
 
 ## Executive result
 
@@ -79,7 +80,7 @@ Task-related untracked additions include `frontend-nutritie/__tests__/flowCredit
 
 ## Git/commit status
 
-The selected 36 task-related source, test, and corrected B2 diagnostic-report paths were committed locally as `fbf4e07` (`fix: finalize verified GetFlow recovery changes`) on `ci-integration/verified-fixes`. This recovery report is a separate documentation-only follow-up. No push was attempted. Other dirty tracked and untracked work—including `GETFLOW_AUTONOMOUS_TASK_LEDGER.md`, `GETFLOW_FINAL_RELEASE_STATUS.md`, and `osv-scanner.toml`—was intentionally not staged or changed by the source commit.
+The selected 36 task-related source, test, and corrected B2 diagnostic-report paths were committed locally as `fbf4e0741f102f37f6bcfc009383a4a9c0a2793b` (`fix: finalize verified GetFlow recovery changes`) on `ci-integration/verified-fixes`. This recovery report is versioned in a separate documentation-only follow-up commit. No push was attempted. Other dirty tracked and untracked work—including `GETFLOW_AUTONOMOUS_TASK_LEDGER.md`, `GETFLOW_FINAL_RELEASE_STATUS.md`, and `osv-scanner.toml`—was intentionally not staged or changed by the source commit.
 
 ## Verdict and next owner actions
 
