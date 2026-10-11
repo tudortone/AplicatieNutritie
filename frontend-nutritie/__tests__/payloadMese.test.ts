@@ -8,6 +8,7 @@ import {
   adaugaAlimentScanat,
   construiesteRinduriMasaChat,
   construiestePayloadMasaManuala,
+  raspunsInsertMasaConfirmat,
 } from '../lib/payloadMese';
 import { normalizeTipMasa, LIMITE_DB_MESE, getTipMasaDupaOra } from '../lib/mealUtils';
 import { parseMealProposal } from '../lib/parseMealProposal';
@@ -111,6 +112,37 @@ describe('BUG-014 — scan → editare gramaj → salvare', () => {
     expect(['mic_dejun', 'pranz', 'cina', 'gustare']).toContain(payload.tip_masa);
     expect(payload.tip_masa).toBe(getTipMasaDupaOra(ZI));
     expect(payload.data).toBe('2026-08-10');
+  });
+});
+
+describe('photo meal insert persistence response', () => {
+  const { payload: payloadGenerat } = construiestePayloadMasaCamera({
+    user_id: 'user-a',
+    rezultat: [aliment()],
+    now: ZI,
+    tip_masa: 'gustare',
+    idOperatie: 'OP-RESPONSE-CONFIRMATION',
+  });
+  const payload: Record<string, unknown> = { ...payloadGenerat };
+
+  it('accepts only one returned row matching owner, date, category and canonical nutrition', () => {
+    expect(raspunsInsertMasaConfirmat([{ ...payload }], payload)).toBe(true);
+    expect(raspunsInsertMasaConfirmat([], payload)).toBe(false);
+    expect(raspunsInsertMasaConfirmat([{ ...payload, user_id: 'user-b' }], payload)).toBe(false);
+    expect(raspunsInsertMasaConfirmat([{ ...payload, data: '2026-08-11' }], payload)).toBe(false);
+    expect(raspunsInsertMasaConfirmat([{ ...payload, tip_masa: 'cina' }], payload)).toBe(false);
+    expect(raspunsInsertMasaConfirmat([{ ...payload, calorii: Number(payload.calorii) + 1 }], payload)).toBe(false);
+  });
+
+  it('does not confirm a replay when ingredients or saved photo/time differ despite equal totals', () => {
+    const alimente = payload.alimente as Array<Record<string, unknown>>;
+    expect(raspunsInsertMasaConfirmat([{ ...payload, alimente: [{ ...alimente[0], nume: 'Alt ingredient' }] }], payload)).toBe(false);
+    expect(raspunsInsertMasaConfirmat([{ ...payload, alimente: [{ ...alimente[0], grame: 999 }] }], payload)).toBe(false);
+    expect(raspunsInsertMasaConfirmat([{ ...payload, alimente: [{ ...alimente[0], imageUrl: 'https://different.example/photo.jpg' }] }], payload)).toBe(false);
+    const payloadCuImagineUrl = { ...payload, imagine_url: 'https://getflow.example/photo.jpg' };
+    expect(raspunsInsertMasaConfirmat([{ ...payloadCuImagineUrl, imagine_url: 'https://different.example/photo.jpg' }], payloadCuImagineUrl)).toBe(false);
+    expect(raspunsInsertMasaConfirmat([{ ...payload, ora: '23:59:59' }], payload)).toBe(false);
+    expect(raspunsInsertMasaConfirmat([{ ...payload, created_at: '2026-08-10T22:00:00.000Z' }], payload)).toBe(false);
   });
 });
 

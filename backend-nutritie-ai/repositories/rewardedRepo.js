@@ -10,6 +10,17 @@ function createRewardedRepo({ supabaseAdmin, dailyLimit = 5 } = {}) {
       if (error) throw error;
       return { id, userId, expiresAt };
     },
+    async getIntentStatus({ intentId, userId }) {
+      const { data, error } = await supabaseAdmin
+        .from('flow_reward_intents')
+        .select('status,expires_at')
+        .eq('id', intentId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      return { status: data.status, expiresAt: data.expires_at };
+    },
     async grantVerified({ intentId, customDataHash, transactionId, now }) {
       const { data, error } = await supabaseAdmin.rpc('grant_flow_reward_ssv', {
         p_intent_id: intentId,

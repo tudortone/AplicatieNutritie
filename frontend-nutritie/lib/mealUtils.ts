@@ -187,13 +187,10 @@ export async function insereazaMasaCuPoza(
   payload: Record<string, unknown>,
 ): Promise<{ data: any; error: any }> {
   const payloadCurat = { ...payload };
-  // Schema Postgres pentru tabela 'mese' folosește id de tip bigint auto-increment.
-  // Trimiterea unui string UUID provoacă 22P02: invalid input syntax for type bigint.
-  if (payloadCurat.id !== undefined && (typeof payloadCurat.id === 'string' && isNaN(Number(payloadCurat.id)))) {
-    delete payloadCurat.id;
-  }
-  // .select() face ca PostgREST să răspundă cu rândul creat (cu id real și
-  // created_at), nu doar ok — necesar pentru adăugarea optimistă în jurnal (S10).
+  // Schema canonică `mese.id` este UUID. Păstrăm ID-ul determinist trimis de
+  // aplicație pentru ca retry-ul aceleiași acțiuni să nu creeze un al doilea rând.
+  // `.select()` cere rândul creat; apelantul trebuie să verifice reprezentarea
+  // înainte de a afișa succesul.
   const prima = await client.from('mese').insert(payloadCurat).select();
   if (prima.error && SEMNALE_COLOANA_LIPSA.test(String(prima.error.message))) {
     const faraPoza = { ...payloadCurat };

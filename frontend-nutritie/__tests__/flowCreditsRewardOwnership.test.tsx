@@ -1,0 +1,120 @@
+import React from 'react';
+import { Text } from 'react-native';
+import { act, render, waitFor } from '@testing-library/react-native';
+
+let mockSessionUserId = 'user-a';
+let holdBalanceForUserB = false;
+let resolveBalanceForUserB: ((value: object) => void) | null = null;
+const mockShowRewardedAdWithSsv = jest.fn();
+const mockBillingState = {
+  operation: { status: 'idle' },
+  creditProducts: [],
+  purchaseCredits: jest.fn(),
+};
+const mockPremiumState = { hasFullAccess: false, isPremium: false };
+
+jest.mock('../lib/api', () => ({ buildApiUrl: (path: string) => path }));
+jest.mock('../lib/ads/adsService', () => ({ showRewardedAdWithSsv: (...args: unknown[]) => mockShowRewardedAdWithSsv(...args) }));
+jest.mock('../lib/playIntegrityNative', () => ({ getPlayIntegrityHeaders: jest.fn(async () => ({})) }));
+jest.mock('../context/BillingContext', () => ({ useBilling: () => mockBillingState }));
+jest.mock('../context/PremiumContext', () => ({ usePremium: () => mockPremiumState }));
+jest.mock('../supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: jest.fn(async () => ({ data: { session: { access_token: `token-${mockSessionUserId}`, user: { id: mockSessionUserId } } } })),
+    },
+  },
+}));
+
+const { FlowCreditsProvider, useFlowCredits } = require('../context/FlowCreditsContext') as typeof import('../context/FlowCreditsContext');
+type FlowCreditsValue = ReturnType<typeof useFlowCredits>;
+let latest: FlowCreditsValue | null = null;
+
+function Probe() {
+  latest = useFlowCredits();
+  return <Text testID="credits-state">{`${latest.rewardState}|${latest.balance.total}`}</Text>;
+}
+
+function response(body: object) {
+  return Promise.resolve({ ok: true, status: 200, json: async () => body });
+}
+
+describe('Flow Credits rewarded operation ownership', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSessionUserId = 'user-a';
+    latest = null;
+    holdBalanceForUserB = false;
+    resolveBalanceForUserB = null;
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === '/flow-credits') {
+        if (mockSessionUserId === 'user-b' && holdBalanceForUserB) {
+          return new Promise((resolve) => {
+            resolveBalanceForUserB = (body) => { resolve(response(body)); };
+          });
+        }
+        return response({ total: mockSessionUserId === 'user-a' ? 8 : 2, rewardedGrantsRemaining: 3 });
+      }
+      if (path === '/rewarded/intents') return response({ intentId: 'intent-a', ssv: { userId: 'intent-a', customData: 'opaque' } });
+      if (path === '/rewarded/intents/intent-a') return response({ status: 'PENDING' });
+      throw new Error(`Unexpected request ${path}`);
+    }) as jest.Mock;
+    mockShowRewardedAdWithSsv.mockResolvedValue('earned-awaiting-server');
+  });
+
+  test('account switching while the native ad is open cancels old-account polling and UI state', async () => {
+    let resolveAd!: (value: 'earned-awaiting-server') => void;
+    mockShowRewardedAdWithSsv.mockReturnValueOnce(new Promise(resolve => { resolveAd = resolve; }));
+    const fetchMock = global.fetch as jest.Mock;
+    const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|8'));
+
+    let operation!: ReturnType<FlowCreditsValue['watchRewarded']>;
+    await act(async () => {
+      operation = latest!.watchRewarded();
+      await waitFor(() => expect(mockShowRewardedAdWithSsv).toHaveBeenCalledTimes(1));
+    });
+
+    mockSessionUserId = 'user-b';
+    await act(async () => {
+      view.rerender(<FlowCreditsProvider appUserId="user-b"><Probe /></FlowCreditsProvider>);
+    });
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|2'));
+
+    await act(async () => {
+      resolveAd('earned-awaiting-server');
+      await expect(operation).resolves.toBe('unavailable');
+    });
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/rewarded/intents/intent-a')).toBe(false);
+    expect(view.getByTestId('credits-state').props.children).toBe('idle|2');
+  });
+
+  test('does not send an account A balance request with account B’s Supabase session', async () => {
+    mockSessionUserId = 'user-b';
+    const fetchMock = global.fetch as jest.Mock;
+    const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+    await waitFor(() => expect(latest?.loading).toBe(false));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(view.getByTestId('credits-state').props.children).toBe('idle|0');
+  });
+
+  test('never renders account A credits while account B balance refresh is pending', async () => {
+    const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|8'));
+
+    holdBalanceForUserB = true;
+    mockSessionUserId = 'user-b';
+    await act(async () => {
+      view.rerender(<FlowCreditsProvider appUserId="user-b"><Probe /></FlowCreditsProvider>);
+    });
+
+    expect(view.getByTestId('credits-state').props.children).toBe('idle|0');
+    await waitFor(() => expect(resolveBalanceForUserB).toEqual(expect.any(Function)));
+    await act(async () => {
+      resolveBalanceForUserB?.({ total: 2, rewardedGrantsRemaining: 1 });
+    });
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|2'));
+  });
+});

@@ -312,6 +312,7 @@
     "pendingDraftTitle": "Image en attente",
     "pendingDraftMessage": "Il reste une photo non analysée de votre session précédente. Souhaitez-vous reprendre l'analyse ?",
     "resumeAnalysis": "Reprendre l'analyse",
+    "pendingPhotoSaveLocked": "Votre repas vérifié est conservé pour une nouvelle tentative sécurisée. La catégorie et les ingrédients restent verrouillés jusqu’à confirmation de l’enregistrement.",
     "permissionTitle": "Autorisation Caméra",
     "permissionSubtitle": "GetFlow a besoin d'accéder à votre caméra pour analyser les repas dans votre assiette.",
     "permissionDeniedPermanent": "L'accès à la caméra a été refusé. Ouvrez les paramètres de votre appareil pour autoriser la caméra.",

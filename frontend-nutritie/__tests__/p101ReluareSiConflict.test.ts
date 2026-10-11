@@ -45,13 +45,13 @@ const payload = (idOperatie: string, peste: Partial<typeof NUTRITIE> & { nume?: 
 
 /** Client Supabase minimal care întoarce un rând persistat cunoscut. */
 function clientCuRand(rand: Record<string, unknown> | null, eroare: unknown = null) {
+  const query = {
+    eq: () => query,
+    maybeSingle: async () => ({ data: rand, error: eroare }),
+  };
   return {
     from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({ data: rand, error: eroare }),
-        }),
-      }),
+      select: () => query,
     }),
   } as never;
 }
@@ -112,6 +112,14 @@ describe('P1-01 — verificarea reluării pe 23505 (Blocant 1)', () => {
     const rezultat = await verificaReluareMasa(clientCuRand(null), p);
 
     expect(rezultat.tip).toBe('necunoscut');
+  });
+
+  test('8. rândul are alt proprietar sau altă zi → CONFLICT, nu succes la readback', async () => {
+    const trimis = payload('OP-1');
+    expect((await verificaReluareMasa(clientCuRand({ ...trimis, user_id: 'user-b' }), trimis)).tip)
+      .toBe('conflict_continut');
+    expect((await verificaReluareMasa(clientCuRand({ ...trimis, data: '2000-01-01' }), trimis)).tip)
+      .toBe('conflict_continut');
   });
 });
 

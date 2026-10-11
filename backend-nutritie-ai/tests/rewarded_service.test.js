@@ -24,4 +24,27 @@ describe('rewarded service', () => {
     expect(repo.grantVerified).toHaveBeenCalledWith(expect.objectContaining({ intentId: USER, transactionId: 'tx-1', customDataHash: expect.stringMatching(/^[a-f0-9]{64}$/) }));
     expect(JSON.stringify(repo.grantVerified.mock.calls)).not.toContain('opaque-secret');
   });
+
+  test('returns owner-scoped status without exposing SSV secrets', async () => {
+    const repo = {
+      createIntent: jest.fn(),
+      grantVerified: jest.fn(),
+      getIntentStatus: jest.fn(async ({ intentId, userId }) => ({ id: intentId, userId, status: 'GRANTED', expiresAt: '2030-01-01T00:10:00.000Z' })),
+    };
+    const service = createRewardedService({ repo, flowCredits: { getBalance: jest.fn() } });
+    const status = await service.getIntentStatus({ intentId: 'intent-1', userId: USER });
+    expect(status).toEqual({ status: 'GRANTED' });
+    expect(repo.getIntentStatus).toHaveBeenCalledWith({ intentId: 'intent-1', userId: USER });
+    expect(status).not.toHaveProperty('customDataHash');
+    expect(status).not.toHaveProperty('transactionId');
+  });
+
+  test('reports a pending owner-scoped intent as expired after its deadline', async () => {
+    const repo = {
+      createIntent: jest.fn(), grantVerified: jest.fn(),
+      getIntentStatus: jest.fn(async () => ({ status: 'PENDING', expiresAt: '2029-12-31T23:59:59.000Z' })),
+    };
+    const service = createRewardedService({ repo, flowCredits: { getBalance: jest.fn() }, now: () => new Date('2030-01-01T00:00:00Z') });
+    await expect(service.getIntentStatus({ intentId: 'intent-1', userId: USER })).resolves.toEqual({ status: 'EXPIRED' });
+  });
 });

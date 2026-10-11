@@ -62,6 +62,7 @@ import {
   initializeAdsSdk,
   showPreloadedInterstitial,
   preloadInterstitial,
+  refreshAdsAfterConsentChange,
   isInterstitialReady,
   adsAvailable,
   __resetAdsServiceForTests,
@@ -217,6 +218,53 @@ describe('P1-09 Mandatory Test Matrix — UMP Consent Lifecycle (1–5)', () => 
     });
     const opened = await showAdsPrivacyOptionsForm();
     expect(opened).toBe(true);
+  });
+
+  test('no interstitial is loaded before UMP permits ad requests', () => {
+    preloadInterstitial();
+    expect(mockInterstitialInstance.load).not.toHaveBeenCalled();
+  });
+
+  test('a loaded interstitial is discarded when privacy options revoke ad requests', async () => {
+    await resolveAdsConsent();
+    preloadInterstitial();
+    mockInterstitialInstance.loaded = true;
+    expect(isInterstitialReady()).toBe(true);
+
+    mockAdsConsent.showPrivacyOptionsForm.mockResolvedValue({
+      canRequestAds: false,
+      privacyOptionsRequirementStatus: 'NOT_REQUIRED',
+    });
+    await showAdsPrivacyOptionsForm();
+    await refreshAdsAfterConsentChange();
+
+    expect(getCanRequestAds()).toBe(false);
+    expect(isInterstitialReady()).toBe(false);
+  });
+
+  test('a changed personalization choice reloads with a non-personalized request', async () => {
+    await resolveAdsConsent();
+    await initializeAdsSdk();
+    mockInterstitialInstance.loaded = true;
+    mockAdsConsent.getUserChoices.mockResolvedValue({ selectPersonalisedAds: false });
+    mockAdsConsent.showPrivacyOptionsForm.mockResolvedValue({
+      canRequestAds: true,
+      privacyOptionsRequirementStatus: 'NOT_REQUIRED',
+    });
+
+    await showAdsPrivacyOptionsForm();
+    await refreshAdsAfterConsentChange();
+
+    const interstitialFactory = (require('react-native-google-mobile-ads') as any).InterstitialAd.createForAdRequest;
+    expect(interstitialFactory).toHaveBeenLastCalledWith(expect.any(String), { requestNonPersonalizedAdsOnly: true });
+  });
+
+  test('a synchronous interstitial load failure clears the cached ad so a later attempt can retry', async () => {
+    await resolveAdsConsent();
+    mockInterstitialInstance.load.mockImplementationOnce(() => { throw new Error('load failed'); });
+    preloadInterstitial();
+    preloadInterstitial();
+    expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -510,6 +558,8 @@ describe('P1-09 Mandatory Test Matrix — Critical UX Surfaces & Failures (20–
       const shown = showPreloadedInterstitial();
       expect(shown).toBe(true);
     }).not.toThrow();
+    await Promise.resolve();
+    expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(2);
   });
 });
 

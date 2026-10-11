@@ -49,10 +49,15 @@ function clientCu(randuri: Record<string, unknown>[], eroareCitire: unknown = nu
   return {
     from: () => ({
       select: () => ({
-        eq: (_c: string, valoare: string) => ({
-          maybeSingle: async () => ({
-            data: eroareCitire ? null : (index.get(valoare) ?? null),
-            error: eroareCitire,
+        eq: (_idColumn: string, valoare: string) => ({
+          eq: (_ownerColumn: string, ownerId: string) => ({
+            maybeSingle: async () => {
+              const rand = index.get(valoare) ?? null;
+              return {
+                data: eroareCitire || rand?.user_id !== ownerId ? null : rand,
+                error: eroareCitire,
+              };
+            },
           }),
         }),
       }),

@@ -58,7 +58,15 @@ function creeazaBazaDate() {
       // trebuie să modeleze această citire, altfel contractul nu e exercitat.
       select: () => ({
         eq: (_coloana: string, valoare: string) => ({
-          maybeSingle: async () => ({ data: randuri.get(valoare) ?? null, error: null }),
+          eq: (_ownerColumn: string, ownerValue: string) => ({
+            maybeSingle: async () => {
+              const rand = randuri.get(valoare) ?? null;
+              return {
+                data: rand?.user_id === ownerValue ? rand : null,
+                error: null,
+              };
+            },
+          }),
         }),
       }),
       insert: async (rand: Record<string, unknown>) => {
@@ -82,15 +90,21 @@ function creeazaBazaDate() {
 
 const NUTRITIE = { calorii: 320, proteine: 24, grasimi: 12, carbohidrati: 28, fibre: 3 };
 
-const payloadOfflineDin = (payload: { id: string; user_id: string; nume: string }): MasaOfflinePayload => ({
+const payloadOfflineDin = (payload: {
+  id: string;
+  user_id: string;
+  nume: string;
+  data?: string;
+  created_at?: string;
+}): MasaOfflinePayload => ({
   id: payload.id,
   user_id: payload.user_id,
   nume: payload.nume,
   ...NUTRITIE,
   tip_masa: 'pranz',
   alimente: [],
-  data: '2026-09-16',
-  created_at: '2026-09-16T12:00:00.000Z',
+  data: payload.data ?? '2026-09-16',
+  created_at: payload.created_at ?? '2026-09-16T12:00:00.000Z',
 });
 
 beforeEach(async () => {

@@ -20,8 +20,8 @@ import { Scan, Zap, Trash2, Image as ImageIcon, ChevronDown, AlertTriangle } fro
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { MEAL_CATEGORIES, CATEGORIE_ICONA, getTipMasaDupaOra, insereazaMasaCuPoza } from '../lib/mealUtils';
-import { clasificaRezultatInsertMasa, construiestePayloadMasaCamera, esteEroareDuplicate, eliminaAlimentScanat, verificaReluareMasa } from '../lib/payloadMese';
+import { MEAL_CATEGORIES, CATEGORIE_ICONA, getTipMasaDupaOra, insereazaMasaCuPoza, normalizeTipMasa } from '../lib/mealUtils';
+import { clasificaRezultatInsertMasa, construiestePayloadMasaCamera, esteEroareDuplicate, eliminaAlimentScanat, raspunsInsertMasaConfirmat, verificaReluareMasa } from '../lib/payloadMese';
 import { idOperatieNoua } from '@/lib/idUtils';
 import { anuntaMasaSalvataVerificat, marcheazaMeseModificate } from '@/lib/freshnessMese';
 import { GramInput } from '../components/ui/GramInput';
@@ -39,7 +39,9 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { MealSaveSuccessModal, type MealSuccessData } from '../components/ui/MealSaveSuccessModal';
 import {
   clearActivePhotoJob,
-  recoverPhotoJob,
+  hasPendingPhotoSave,
+  recoverPhotoJobForCamera,
+  savePhotoJobSaveAttempt,
   submitPhotoJob,
   waitForPhotoJob,
   PhotoApiError,
@@ -51,6 +53,46 @@ import {
   inferCanonicalMealType,
   normalizePhotoResultItems,
 } from '@/lib/photoResultQuality';
+
+function restorePhotoMealItems(
+  items: AlimentScanat[],
+  savePayload?: Record<string, unknown> | null,
+): AlimentScanat[] {
+  const savedItems = savePayload?.alimente;
+  if (!Array.isArray(savedItems)) return items;
+  return savedItems.map((saved) => {
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) {
+      throw new PhotoApiError(500, 'INVALID_PENDING_MEAL_SAVE_DRAFT');
+    }
+    const record = saved as Record<string, unknown>;
+    const grams = Number(record.grame);
+    const name = typeof record.nume === 'string' ? record.nume.trim() : '';
+    const nutrientFields = ['calorii', 'proteine', 'carbohidrati', 'grasimi', 'fibre'] as const;
+    if (!name || !Number.isFinite(grams) || grams <= 0
+      || nutrientFields.some((field) => !Number.isFinite(Number(record[field])))) {
+      throw new PhotoApiError(500, 'INVALID_PENDING_MEAL_SAVE_DRAFT');
+    }
+    const per100 = (field: typeof nutrientFields[number]) => Number(record[field]) * 100 / grams;
+    return {
+      nume: name,
+      estimare_grame: grams,
+      calorii_per_100g: per100('calorii'),
+      proteine_per_100g: per100('proteine'),
+      carbohidrati_per_100g: per100('carbohidrati'),
+      grasimi_per_100g: per100('grasimi'),
+      fibre_per_100g: per100('fibre'),
+    };
+  });
+}
+
+function photoMealDraftMatches(
+  current: Record<string, unknown>,
+  saved: Record<string, unknown>,
+): boolean {
+  const fields = ['user_id', 'nume', 'calorii', 'proteine', 'grasimi', 'carbohidrati', 'fibre', 'tip_masa'];
+  return fields.every((field) => String(current[field] ?? '') === String(saved[field] ?? ''))
+    && JSON.stringify(current.alimente) === JSON.stringify(saved.alimente);
+}
 
 
 export default function CameraScreen() {
@@ -72,6 +114,7 @@ export default function CameraScreen() {
   ], [t]);
 
   const { session } = useAuth();
+  const sessionUserId = session?.user?.id ?? null;
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   
@@ -85,6 +128,10 @@ export default function CameraScreen() {
   const [scanStepIndex, setScanStepIndex] = useState(0);
   const [mealCorrectionOpen, setMealCorrectionOpen] = useState(false);
   const [recoveryChecked, setRecoveryChecked] = useState(false);
+  const [recoveryBlocked, setRecoveryBlocked] = useState(false);
+  const [pendingPhotoSaveLocked, setPendingPhotoSaveLocked] = useState(false);
+  const [recoveryAttempt, setRecoveryAttempt] = useState(0);
+  const [photoStateOwnerId, setPhotoStateOwnerId] = useState<string | null>(sessionUserId);
   const [photoPhase, setPhotoPhase] = useState<'idle' | 'uploading' | 'processing' | 'background' | 'retrying' | 'completed' | 'failed'>('idle');
   const [failedPhotoJob, setFailedPhotoJob] = useState<{ job: PhotoJob; pointer: ActivePhotoJobPointer } | null>(null);
   // REMED-009: categoria mesei scanate — implicit = sugestia după oră, dar
@@ -100,6 +147,11 @@ export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
   // P1-01: identitatea acțiunii de salvare în jurnal (nu a analizei AI).
   const idOperatieSalvareRef = useRef<string | null>(null);
+  const pendingPhotoSavePayloadRef = useRef<Record<string, unknown> | null>(null);
+  const sessionUserIdRef = useRef<string | null>(sessionUserId);
+  sessionUserIdRef.current = sessionUserId;
+  const photoStateOwnerIdRef = useRef<string | null>(sessionUserId);
+  const accountGenerationRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
   // URL-ul pozei incarcate pe ImageKit CDN dupa un scan reusit (salvat in alimente JSONB).
@@ -115,6 +167,44 @@ export default function CameraScreen() {
   // U-03: garanteaza ca dialogul de recuperare a draft-ului apare o singura data
   // pe sesiunea ecranului, chiar daca efectul se re-executa la schimbarea tokenului.
   const draftPromptAfisatRef = useRef(false);
+
+  const isPhotoOwnerCurrent = useCallback((userId: string, generation: number) => (
+    sessionUserIdRef.current === userId
+    && photoStateOwnerIdRef.current === userId
+    && accountGenerationRef.current === generation
+  ), []);
+
+  // A camera screen can survive a Supabase Auth change. Clear every transient
+  // photo/save reference before exposing the next account's screen, and make
+  // every in-flight callback from the prior account stale immediately.
+  useEffect(() => {
+    if (photoStateOwnerIdRef.current === sessionUserId) return;
+    photoStateOwnerIdRef.current = sessionUserId;
+    accountGenerationRef.current += 1;
+    uploadGenerationRef.current += 1;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    imageKitUrlRef.current = null;
+    imageKitFileIdRef.current = null;
+    currentPhotoJobIdRef.current = null;
+    draftCurrentUriRef.current = null;
+    idOperatieSalvareRef.current = null;
+    pendingPhotoSavePayloadRef.current = null;
+    draftPromptAfisatRef.current = false;
+    setPhotoStateOwnerId(sessionUserId);
+    setRezultat([]);
+    setTipMasaSelectat(getTipMasaDupaOra(new Date()));
+    setMealCorrectionOpen(false);
+    setIsSavingDiary(false);
+    setScanError(null);
+    setPhotoPhase('idle');
+    setFailedPhotoJob(null);
+    setSaveSuccessData(null);
+    setRecoveryBlocked(false);
+    setPendingPhotoSaveLocked(false);
+    setRecoveryChecked(false);
+    setSeIncarca(false);
+  }, [sessionUserId]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -148,6 +238,7 @@ export default function CameraScreen() {
 
   const updateIngredient = useCallback(
     (index: number, patch: Partial<AlimentScanat>) => {
+      if (pendingPhotoSavePayloadRef.current) return;
       setRezultat((current) =>
         current.map((ingredient, itemIndex) =>
           itemIndex === index ? { ...ingredient, ...patch } : ingredient,
@@ -159,11 +250,18 @@ export default function CameraScreen() {
 
   // BUG-015: eliminarea unui singur aliment detectat greșit, fără să dispară restul.
   const stergeIngredient = useCallback((index: number) => {
+    if (pendingPhotoSavePayloadRef.current) return;
     setRezultat((current) => eliminaAlimentScanat(current, index));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 
-  const applyPhotoJobResult = useCallback((job: PhotoJob, pointer?: ActivePhotoJobPointer | null) => {
+  const applyPhotoJobResult = useCallback((
+    job: PhotoJob,
+    pointer: ActivePhotoJobPointer | null | undefined,
+    ownerId: string,
+    generation: number,
+  ) => {
+    if (!isPhotoOwnerCurrent(ownerId, generation) || (pointer && pointer.userId !== ownerId)) return;
     if (!job.result?.success || !Array.isArray(job.result.items)) {
       throw new PhotoApiError(502, 'INVALID_PHOTO_JOB_RESULT');
     }
@@ -173,27 +271,62 @@ export default function CameraScreen() {
     imageKitUrlRef.current = pointer?.imageUrl || job.imageUrl || imageKitUrlRef.current;
     imageKitFileIdRef.current = pointer?.imageFileId || job.imageFileId || imageKitFileIdRef.current;
     currentPhotoJobIdRef.current = job.id;
+    idOperatieSalvareRef.current = pointer?.saveOperationId || null;
+    pendingPhotoSavePayloadRef.current = pointer?.savePayload || null;
+    setPendingPhotoSaveLocked(Boolean(pointer?.savePayload));
     const capturedAt = pointer?.savedAt ? new Date(pointer.savedAt) : new Date();
-    setTipMasaSelectat(inferCanonicalMealType({
-      aiMealType: job.result.tipMasa,
-      capturedAt,
-    }));
+    setTipMasaSelectat(pointer?.savePayload?.tip_masa
+      ? normalizeTipMasa(String(pointer.savePayload.tip_masa))
+      : inferCanonicalMealType({ aiMealType: job.result.tipMasa, capturedAt }));
     setMealCorrectionOpen(false);
-    setRezultat(normalized);
+    setRezultat(restorePhotoMealItems(normalized, pointer?.savePayload));
     setPhotoPhase('completed');
     setFailedPhotoJob(null);
-  }, []);
+  }, [isPhotoOwnerCurrent]);
 
   const analizeazaImaginea = useCallback(async (imageUri: string, isRetry = false) => {
+    if (pendingPhotoSavePayloadRef.current) {
+      Alert.alert(
+        t('alerts.titluri.eroareSalvare'),
+        t('alerts.mesaje.problemaNecunoscutaConectare'),
+      );
+      return;
+    }
     if (!session?.access_token || !session.user.id) {
       setScanError(t('alerts.mesaje.sesiuneExpirata'));
       return;
     }
+    const ownerId = session.user.id;
+    const accountGeneration = accountGenerationRef.current;
+    if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+    let hasPendingSave: boolean;
+    try {
+      hasPendingSave = await hasPendingPhotoSave(ownerId);
+    } catch {
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+      Alert.alert(
+        t('alerts.titluri.eroareSalvare'),
+        t('alerts.mesaje.problemaNecunoscutaConectare'),
+      );
+      return;
+    }
+    if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+    if (hasPendingSave) {
+      Alert.alert(
+        t('alerts.titluri.eroareSalvare'),
+        t('alerts.mesaje.problemaNecunoscutaConectare'),
+      );
+      return;
+    }
     abortControllerRef.current?.abort();
     uploadGenerationRef.current += 1;
+    const uploadGeneration = uploadGenerationRef.current;
     imageKitUrlRef.current = null;
     imageKitFileIdRef.current = null;
     currentPhotoJobIdRef.current = null;
+    idOperatieSalvareRef.current = null;
+    pendingPhotoSavePayloadRef.current = null;
+    setPendingPhotoSaveLocked(false);
     setFailedPhotoJob(null);
 
     const controller = new AbortController();
@@ -205,9 +338,10 @@ export default function CameraScreen() {
     let timeoutDepasit = false;
     let activePointer: ActivePhotoJobPointer | null = null;
     const backgroundId = setTimeout(() => {
-      if (!controller.signal.aborted) setPhotoPhase('background');
+      if (!controller.signal.aborted && isPhotoOwnerCurrent(ownerId, accountGeneration)) setPhotoPhase('background');
     }, 15000);
     const timeoutId = setTimeout(() => {
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       timeoutDepasit = true;
       setPhotoPhase('background');
       controller.abort();
@@ -215,7 +349,9 @@ export default function CameraScreen() {
 
     try {
       const imagineOptimizata = await optimizeImageBeforeUpload(imageUri);
-      const draftPersistentUri = await saveLocalImageDraft(imagineOptimizata.uri, session.user.id);
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+      const draftPersistentUri = await saveLocalImageDraft(imagineOptimizata.uri, ownerId);
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       draftCurrentUriRef.current = draftPersistentUri;
 
       const amprentaBaza = await amprentaOperatieFoto(
@@ -223,6 +359,7 @@ export default function CameraScreen() {
         'auto',
         i18n.language || 'ro',
       );
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       const amprentaOperatie = isRetry
         ? `${amprentaBaza}:retry:${idOperatieNoua()}`
         : amprentaBaza;
@@ -233,14 +370,15 @@ export default function CameraScreen() {
         controller.signal,
         { skipOptimization: true },
       );
-      if (controller.signal.aborted || uploadGenerationRef.current === 0) return;
+      if (controller.signal.aborted || uploadGenerationRef.current !== uploadGeneration
+        || !isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       imageKitUrlRef.current = uploaded.url;
       imageKitFileIdRef.current = uploaded.fileId;
       setPhotoPhase(isRetry ? 'retrying' : 'processing');
 
       const submitted = await submitPhotoJob({
         token: session.access_token,
-        userId: session.user.id,
+        userId: ownerId,
         imageUrl: uploaded.url,
         imageFileId: uploaded.fileId,
         analysisId: amprentaOperatie,
@@ -250,9 +388,12 @@ export default function CameraScreen() {
         draftUri: draftPersistentUri,
         signal: controller.signal,
       });
+      if (controller.signal.aborted || uploadGenerationRef.current !== uploadGeneration
+        || !isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       currentPhotoJobIdRef.current = submitted.id;
+      idOperatieSalvareRef.current = null;
       activePointer = {
-        userId: session.user.id,
+        userId: ownerId,
         jobId: submitted.id,
         imageUrl: uploaded.url,
         imageFileId: uploaded.fileId,
@@ -268,19 +409,20 @@ export default function CameraScreen() {
       router.replace('/(tabs)');
       const completed = await waitForPhotoJob({
         token: session.access_token,
-        userId: session.user.id,
+        userId: ownerId,
         jobId: submitted.id,
         signal: controller.signal,
       });
-      applyPhotoJobResult(completed, activePointer);
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+      applyPhotoJobResult(completed, activePointer, ownerId, accountGeneration);
 
-      await discardLocalImageDraft(draftPersistentUri, session.user.id).catch(() => {});
+      await discardLocalImageDraft(draftPersistentUri, ownerId).catch(() => {});
       if (draftCurrentUriRef.current === draftPersistentUri) draftCurrentUriRef.current = null;
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      void flowCredits.refresh();
+      if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void flowCredits.refresh();
     } catch (error) {
-      if (abortControllerRef.current !== controller) return;
+      if (abortControllerRef.current !== controller || !isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       if (error instanceof PhotoApiError && (
         error.code === 'FLOW_CREDITS_EXHAUSTED'
         || error.code === 'FLOW_CREDITS_UNAVAILABLE'
@@ -323,7 +465,7 @@ export default function CameraScreen() {
         if (isMountedRef.current) setSeIncarca(false);
       }
     }
-  }, [applyPhotoJobResult, flowCredits, i18n.language, router, session?.access_token, session?.user?.id, t]);
+  }, [applyPhotoJobResult, flowCredits, i18n.language, isPhotoOwnerCurrent, router, session?.access_token, session?.user?.id, t]);
 
   // Un job Photo AI este recuperabil după închiderea aplicației. Analiza rămâne
   // în Trigger; acest ecran doar reia polling-ul și reconstruiește review-ul.
@@ -332,11 +474,67 @@ export default function CameraScreen() {
     const controller = new AbortController();
     const token = session.access_token;
     const userId = session.user.id;
+    const accountGeneration = accountGenerationRef.current;
 
     const recover = async () => {
       try {
-        const active = await recoverPhotoJob({ token, userId, signal: controller.signal });
-        if (!active || controller.signal.aborted) return;
+        const active = await recoverPhotoJobForCamera({ token, userId, signal: controller.signal });
+        if (!active || controller.signal.aborted || !isPhotoOwnerCurrent(userId, accountGeneration)) return;
+        if (active.missingJob) {
+          const pointer = active.pointer;
+          const payload = pointer.savePayload;
+          if (!payload || pointer.userId !== userId || payload.user_id !== userId
+            || !pointer.saveOperationId || typeof payload.id !== 'string') {
+            throw new PhotoApiError(500, 'INVALID_PENDING_MEAL_SAVE_DRAFT');
+          }
+
+          const snapshotItems = restorePhotoMealItems([], payload);
+          if (snapshotItems.length === 0) throw new PhotoApiError(500, 'INVALID_PENDING_MEAL_SAVE_DRAFT');
+
+          currentPhotoJobIdRef.current = pointer.jobId;
+          imageKitUrlRef.current = typeof payload.imagine_url === 'string'
+            ? payload.imagine_url
+            : pointer.imageUrl || null;
+          imageKitFileIdRef.current = pointer.imageFileId || null;
+          idOperatieSalvareRef.current = pointer.saveOperationId;
+          pendingPhotoSavePayloadRef.current = payload;
+          setPendingPhotoSaveLocked(true);
+          setTipMasaSelectat(normalizeTipMasa(String(payload.tip_masa || '')));
+          setMealCorrectionOpen(false);
+          setRezultat(snapshotItems);
+          setPhotoPhase('completed');
+          setFailedPhotoJob(null);
+
+          // Read only this owner's exact UUID before offering the retry. A
+          // verified existing row completes recovery; an unknown result leaves
+          // the original snapshot available for an explicit idempotent retry.
+          const reconciliation = await verificaReluareMasa(supabase as never, payload as never);
+          if (controller.signal.aborted || !isPhotoOwnerCurrent(userId, accountGeneration)) return;
+          if (reconciliation.tip === 'reluare_confirmata') {
+            await clearActivePhotoJob(userId, pointer.jobId).catch(() => {});
+            if (!isPhotoOwnerCurrent(userId, accountGeneration)) return;
+            currentPhotoJobIdRef.current = null;
+            idOperatieSalvareRef.current = null;
+            pendingPhotoSavePayloadRef.current = null;
+            setPendingPhotoSaveLocked(false);
+            setRezultat([]);
+            marcheazaMeseModificate(userId);
+            anuntaMasaSalvataVerificat(userId, [String(payload.id)], [String(payload.data).slice(0, 10)]);
+            setSaveSuccessData({
+              nume: typeof payload.nume === 'string' ? payload.nume : `${snapshotItems.length} alimente`,
+              calorii: Math.round(Number(payload.calorii) || 0),
+              proteine: Math.round((Number(payload.proteine) || 0) * 10) / 10,
+              carbohidrati: Math.round((Number(payload.carbohidrati) || 0) * 10) / 10,
+              grasimi: Math.round((Number(payload.grasimi) || 0) * 10) / 10,
+              tip_masa: normalizeTipMasa(String(payload.tip_masa || '')),
+              isOffline: false,
+            });
+          } else if (reconciliation.tip === 'conflict_continut') {
+            setRecoveryBlocked(true);
+            setScanError(t('alerts.mesaje.conflictOperatieMasa'));
+          }
+          return;
+        }
         currentPhotoJobIdRef.current = active.job.id;
         imageKitUrlRef.current = active.pointer.imageUrl || active.job.imageUrl || null;
         imageKitFileIdRef.current = active.pointer.imageFileId || active.job.imageFileId || null;
@@ -352,17 +550,25 @@ export default function CameraScreen() {
           : await waitForPhotoJob({
             token, userId, jobId: active.job.id, signal: controller.signal,
           });
-        if (!controller.signal.aborted) applyPhotoJobResult(completed, active.pointer);
+        if (!controller.signal.aborted && isPhotoOwnerCurrent(userId, accountGeneration)) {
+          applyPhotoJobResult(completed, active.pointer, userId, accountGeneration);
+        }
+        if (controller.signal.aborted || !isPhotoOwnerCurrent(userId, accountGeneration)) return;
         if (active.pointer.draftUri) {
           await discardLocalImageDraft(active.pointer.draftUri, userId).catch(() => {});
         }
       } catch (error) {
-        if (!controller.signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) {
+        if (!controller.signal.aborted && isPhotoOwnerCurrent(userId, accountGeneration)
+          && !(error instanceof DOMException && error.name === 'AbortError')) {
           setPhotoPhase('failed');
           setScanError(t('camera.genericScanError'));
+          setRecoveryBlocked(error instanceof PhotoApiError && (
+            error.code === 'INVALID_PENDING_MEAL_SAVE_DRAFT'
+            || error.code === 'CORRUPT_ACTIVE_PHOTO_JOB_POINTER'
+          ));
         }
       } finally {
-        if (!controller.signal.aborted) {
+        if (!controller.signal.aborted && isPhotoOwnerCurrent(userId, accountGeneration)) {
           setSeIncarca(false);
           setRecoveryChecked(true);
         }
@@ -370,34 +576,42 @@ export default function CameraScreen() {
     };
     void recover();
     return () => controller.abort();
-  }, [applyPhotoJobResult, session?.access_token, session?.user.id, t]);
+  }, [applyPhotoJobResult, isPhotoOwnerCurrent, recoveryAttempt, session?.access_token, session?.user.id, t]);
 
   const retryFailedPhotoJob = useCallback(async () => {
     if (!failedPhotoJob || !session?.user.id) return;
+    const ownerId = session.user.id;
+    const accountGeneration = accountGenerationRef.current;
+    if (!isPhotoOwnerCurrent(ownerId, accountGeneration)
+      || failedPhotoJob.pointer.userId !== ownerId) return;
     const retryUri = failedPhotoJob.pointer.draftUri || failedPhotoJob.pointer.localImageUri;
     if (!retryUri) {
       setFailedPhotoJob(null);
       setPhotoPhase('idle');
       return;
     }
-    await clearActivePhotoJob(session.user.id, failedPhotoJob.job.id).catch(() => {});
+    await clearActivePhotoJob(ownerId, failedPhotoJob.job.id).catch(() => {});
+    if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
     setFailedPhotoJob(null);
     await analizeazaImaginea(retryUri, true);
-  }, [analizeazaImaginea, failedPhotoJob, session?.user.id]);
+  }, [analizeazaImaginea, failedPhotoJob, isPhotoOwnerCurrent, session?.user.id]);
 
   // U-03: recuperarea draft-urilor neanalizate.
   //
   // Efectul stă DUPĂ `analizeazaImaginea` intenționat: referirea ei în dep array
   // înaintea declarației `const` ar arunca ReferenceError (temporal dead zone).
   useEffect(() => {
-    if (!recoveryChecked) return;
+    if (!recoveryChecked || scanError) return;
     if (draftPromptAfisatRef.current) return;
     if (!session?.access_token || !session.user.id || seIncarca || rezultat.length > 0) return;
     draftPromptAfisatRef.current = true;
+    const ownerId = session.user.id;
+    const accountGeneration = accountGenerationRef.current;
 
-    listPendingDrafts(session.user.id)
+    listPendingDrafts(ownerId)
       .then((pending) => {
-        if (pending.length === 0 || !isMountedRef.current) return;
+        if (pending.length === 0 || !isMountedRef.current
+          || !isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
         const ultimulDraft = pending[pending.length - 1];
         Alert.alert(
           t('camera.pendingDraftTitle'),
@@ -407,12 +621,14 @@ export default function CameraScreen() {
               text: t('alerts.butoane.anuleaza'),
               style: 'destructive',
               onPress: () => {
-                discardLocalImageDraft(ultimulDraft, session.user.id).catch(() => {});
+                if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+                discardLocalImageDraft(ultimulDraft, ownerId).catch(() => {});
               },
             },
             {
               text: t('camera.resumeAnalysis'),
               onPress: () => {
+                if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
                 analizeazaImaginea(ultimulDraft);
               },
             },
@@ -420,9 +636,12 @@ export default function CameraScreen() {
         );
       })
       .catch(() => {});
-  }, [session?.access_token, session?.user.id, analizeazaImaginea, recoveryChecked, rezultat.length, seIncarca, t]);
+  }, [isPhotoOwnerCurrent, session?.access_token, session?.user.id, analizeazaImaginea, recoveryChecked, rezultat.length, scanError, seIncarca, t]);
 
   const anuleazaScanarea = useCallback(() => {
+    // A prior save response may be ambiguous. Keep its exact payload and job
+    // pointer recoverable instead of allowing a rescan to overwrite the retry key.
+    if (pendingPhotoSavePayloadRef.current) return;
     if (draftCurrentUriRef.current && session?.user.id) {
       discardLocalImageDraft(draftCurrentUriRef.current, session.user.id).catch(() => {});
       draftCurrentUriRef.current = null;
@@ -442,6 +661,8 @@ export default function CameraScreen() {
     setPhotoPhase('idle');
     setFailedPhotoJob(null);
     idOperatieSalvareRef.current = null;
+    pendingPhotoSavePayloadRef.current = null;
+    setPendingPhotoSaveLocked(false);
   }, [session?.user.id]);
 
   const lasaAnalizaInFundal = useCallback(() => {
@@ -492,6 +713,9 @@ export default function CameraScreen() {
   }, [navigation, rezultat.length, seIncarca, anuleazaScanarea, lasaAnalizaInFundal, t]);
 
   const trimiteCorectieText = async (textCorectie: string) => {
+    const ownerId = session?.user?.id;
+    const accountGeneration = accountGenerationRef.current;
+    if (!ownerId || !session?.access_token || !isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
     try {
       if (__DEV__) console.log('[Camera] Trimit corecție utilizator către backend.');
       
@@ -499,7 +723,7 @@ export default function CameraScreen() {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         // Backend-ul are nevoie exact de acești parametri
         body: JSON.stringify({ 
@@ -511,6 +735,7 @@ export default function CameraScreen() {
 
       // 1. Citim răspunsul serverului INDIFERENT dacă a crăpat sau nu, ca să vedem mesajul real
       const data = await response.json(); 
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       if (__DEV__) console.log('[Camera] Răspuns corecție backend primit.');
 
       // Răspunsurile backend rămân diagnostic intern. Nu afișăm `eroare` brută:
@@ -524,6 +749,7 @@ export default function CameraScreen() {
         setIngredienteIdentificate(normalizePhotoResultItems(data.ingredients));
       }
     } catch (error) {
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       // Afisam eroarea si pentru utilizator
       console.error('❌ Eroare fallback detaliată:', error);
       Alert.alert(
@@ -548,6 +774,9 @@ export default function CameraScreen() {
 
   const analizeazaFoto = async () => {
     if (!cameraRef.current || seIncarca || !session) return;
+    const ownerId = session.user.id;
+    const accountGeneration = accountGenerationRef.current;
+    if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
     try {
       const foto = await cameraRef.current.takePictureAsync({
         quality: 0.5,
@@ -555,10 +784,12 @@ export default function CameraScreen() {
         shutterSound: false,
         skipProcessing: Platform.OS === 'android'
       });
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       if (foto && foto.uri) {
         analizeazaImaginea(foto.uri);
       }
     } catch (e) {
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       console.error("Eroare captură foto:", e);
       // CAM-005: captura eșuată nu rămâne mută — mesaj vizibil + stare curățată.
       setSeIncarca(false);
@@ -568,9 +799,13 @@ export default function CameraScreen() {
 
   const alegeDinGalerie = async () => {
     if (seIncarca || !session) return;
+    const ownerId = session.user.id;
+    const accountGeneration = accountGenerationRef.current;
+    if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
     try {
       if (Platform.OS === 'ios') {
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
         if (!permissionResult.granted) {
           Alert.alert(t('alerts.titluri.permisiuneNecesara'), t('alerts.mesaje.permisiuneGaleriePoze'));
           return;
@@ -582,11 +817,13 @@ export default function CameraScreen() {
         allowsEditing: true,
         quality: 0.7,
       });
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         analizeazaImaginea(result.assets[0].uri);
       }
     } catch (e) {
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       console.error("Eroare galerie:", e);
       Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.galerieInaccesibila'));
     }
@@ -594,6 +831,9 @@ export default function CameraScreen() {
 
   const adaugaInJurnal = async () => {
     if (!rezultat || rezultat.length === 0 || !session || isSavingDiary) return;
+    const ownerId = session.user.id;
+    const accountGeneration = accountGenerationRef.current;
+    if (!isPhotoOwnerCurrent(ownerId, accountGeneration) || photoStateOwnerId !== ownerId) return;
 
     if (quality.requiresReview) {
       Alert.alert(t('camera.reviewRequiredTitle'), t('camera.reviewRequiredMessage'));
@@ -610,7 +850,6 @@ export default function CameraScreen() {
       return;
     }
 
-    setIsSavingDiary(true);
     const now = new Date();
 
     // FIX 2.5 + BUG-019: per-100g → valori absolute, normalizate și clampate la
@@ -625,73 +864,96 @@ export default function CameraScreen() {
     if (!idOperatieSalvareRef.current) idOperatieSalvareRef.current = idOperatieNoua();
     const payloadInitial = construiestePayloadMasaCamera({
       idOperatie: idOperatieSalvareRef.current,
-      user_id: session.user.id,
+      user_id: ownerId,
       rezultat,
       now,
       tip_masa: tipMasaSelectat,
       poza: { url: imageKitUrlRef.current, fileId: imageKitFileIdRef.current },
     }).payload;
-    const payload = { ...payloadInitial };
+    const payloadCurent: Record<string, unknown> = { ...payloadInitial };
+    const savedPayload = pendingPhotoSavePayloadRef.current;
+    if (savedPayload && !photoMealDraftMatches(payloadCurent, savedPayload)) {
+      Alert.alert(
+        t('alerts.titluri.eroareSalvare'),
+        t('alerts.mesaje.conflictOperatieMasa'),
+      );
+      return;
+    }
+    setIsSavingDiary(true);
+    // Reuse the exact reviewed draft (including local date/time) after restart.
+    const payload: Record<string, unknown> = savedPayload || payloadCurent;
+    const mealName = typeof payload.nume === 'string'
+      ? payload.nume
+      : (rezultat.length === 1 ? rezultat[0].nume : `${rezultat.length} alimente`);
 
     try {
-      const { error } = await insereazaMasaCuPoza(supabase, payload);
-
-      if (error) {
-        if (esteEroareDuplicate(error)) {
-          // P1-01 (Blocant 1): 23505 dovedește doar că EXISTĂ un rând cu acest id,
-          // nu că este aceeași salvare. Citim rândul persistat și îl comparăm
-          // înainte de a confirma ceva utilizatorului.
-          const verificare = await verificaReluareMasa(supabase as never, payload as never);
-          if (verificare.tip === 'conflict_continut') {
-            Alert.alert(
-              t('alerts.titluri.eroareSalvare'),
-              t('alerts.mesaje.conflictOperatieMasa'),
-            );
-            idOperatieSalvareRef.current = null;
-            return;
-          }
-          if (verificare.tip === 'necunoscut') {
-            Alert.alert(
-              t('alerts.titluri.eroareSalvare'),
-              t('alerts.mesaje.problemaNecunoscutaConectare'),
-            );
-            return;
-          }
-          // Reluare confirmată: rândul persistat chiar corespunde acestei salvări.
-          idOperatieSalvareRef.current = null;
-          if (currentPhotoJobIdRef.current) {
-            await clearActivePhotoJob(session.user.id, currentPhotoJobIdRef.current).catch(() => {});
-            currentPhotoJobIdRef.current = null;
-          }
-          marcheazaMeseModificate(session.user.id); // P1-04: date canonice noi
-          anuntaMasaSalvataVerificat(session.user.id, [String(payload.id)], [String(payload.data).slice(0, 10)]);
-          setSaveSuccessData({
-            nume: payload.nume || (rezultat.length === 1 ? rezultat[0].nume : `${rezultat.length} alimente`),
-            calorii: Math.round(totalCalculat.calorii),
-            proteine: Math.round(totalCalculat.proteine * 10) / 10,
-            carbohidrati: Math.round(totalCalculat.carbohidrati * 10) / 10,
-            grasimi: Math.round(totalCalculat.grasimi * 10) / 10,
-            tip_masa: tipMasaSelectat,
-            isOffline: false,
-          });
+      // Persist the retry identity and exact user-reviewed payload before the
+      // write so an app/process restart cannot alter category, portions or date.
+      if (currentPhotoJobIdRef.current) {
+        const saved = await savePhotoJobSaveAttempt(
+          ownerId,
+          currentPhotoJobIdRef.current,
+          idOperatieSalvareRef.current!,
+          payload,
+        );
+        if (!saved) {
+          Alert.alert(
+            t('alerts.titluri.eroareSalvare'),
+            t('alerts.mesaje.problemaNecunoscutaConectare'),
+          );
           return;
         }
-        throw error;
+        pendingPhotoSavePayloadRef.current = payload;
+        setPendingPhotoSaveLocked(true);
+      }
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+
+      const { data, error } = await insereazaMasaCuPoza(supabase, payload);
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+
+      if (error && !esteEroareDuplicate(error)) throw error;
+
+      // A response without the inserted row is not success. This can happen if
+      // a project has INSERT but no visible SELECT policy, or when the transport
+      // response is incomplete. Read back the deterministic row under the same
+      // Supabase Auth/RLS session before clearing the retained photo result.
+      if (error || !raspunsInsertMasaConfirmat(data, payload)) {
+        const verificare = await verificaReluareMasa(supabase as never, payload as never);
+        if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+        if (verificare.tip === 'conflict_continut') {
+          Alert.alert(
+            t('alerts.titluri.eroareSalvare'),
+            t('alerts.mesaje.conflictOperatieMasa'),
+          );
+          return;
+        }
+        if (verificare.tip === 'necunoscut') {
+          Alert.alert(
+            t('alerts.titluri.eroareSalvare'),
+            t('alerts.mesaje.problemaNecunoscutaConectare'),
+          );
+          // Keep the operation ID: a retry must check/reuse the same row rather
+          // than silently creating a second meal after an ambiguous response.
+          return;
+        }
       }
 
       // P1-01: scriere confirmată — acțiunea logică s-a încheiat. O salvare
       // ulterioară pornește o operație nouă, deci poate crea un rând nou.
       idOperatieSalvareRef.current = null;
+      pendingPhotoSavePayloadRef.current = null;
+      setPendingPhotoSaveLocked(false);
       if (currentPhotoJobIdRef.current) {
-        await clearActivePhotoJob(session.user.id, currentPhotoJobIdRef.current).catch(() => {});
+        await clearActivePhotoJob(ownerId, currentPhotoJobIdRef.current).catch(() => {});
+        if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
         currentPhotoJobIdRef.current = null;
       }
       // P1-04: persistare dovedită → invalidare deterministă a datelor canonice.
-      marcheazaMeseModificate(session.user.id);
-      anuntaMasaSalvataVerificat(session.user.id, [String(payload.id)], [String(payload.data).slice(0, 10)]);
+      marcheazaMeseModificate(ownerId);
+      anuntaMasaSalvataVerificat(ownerId, [String(payload.id)], [String(payload.data).slice(0, 10)]);
 
       setSaveSuccessData({
-        nume: payload.nume || (rezultat.length === 1 ? rezultat[0].nume : `${rezultat.length} alimente`),
+        nume: mealName,
         calorii: Math.round(totalCalculat.calorii),
         proteine: Math.round(totalCalculat.proteine * 10) / 10,
         carbohidrati: Math.round(totalCalculat.carbohidrati * 10) / 10,
@@ -700,6 +962,7 @@ export default function CameraScreen() {
         isOffline: false,
       });
     } catch (e: unknown) {
+      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       console.error('[adaugaInJurnal]', e);
       const clasificare = clasificaRezultatInsertMasa(
         e instanceof Error ? e : { error: e },
@@ -710,7 +973,8 @@ export default function CameraScreen() {
       // afișa un succes fals și ar relua la nesfârșit o scriere pe care serverul
       // o va refuza determinist. Doar transportul verificat intră în coadă.
       if (clasificare.tip !== 'offline') {
-        idOperatieSalvareRef.current = null;
+        // Keep the persisted ID on deterministic failure so an app restart
+        // cannot turn an ambiguous write into a second meal.
         const mesaj = clasificare.tip === 'eroare_server'
           ? clasificare.mesaj
           : t('alerts.mesaje.eroareNecunoscutaSalvareMasa');
@@ -724,26 +988,32 @@ export default function CameraScreen() {
       const mesajEroare = clasificare.motiv;
       // U-04: salvare în coada offline FIFO pe eroare de conexiune/rețea
       try {
+        if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
         const payloadOffline: MasaOfflinePayload = {
-          ...payload,
-          created_at: now.toISOString(),
+          ...(payload as unknown as MasaOfflinePayload),
+          created_at: typeof payload.created_at === 'string' ? payload.created_at : now.toISOString(),
         };
         // F-11: nu confirmam „Salvat offline" decat daca masa a ajuns cu adevarat
         // pe disc. Fara verificare, o scriere esuata (storage plin, SQLite ocupat)
         // lasa masa doar in memorie, iar ea dispare la inchiderea aplicatiei —
         // dupa ce utilizatorului i s-a spus ca e in siguranta.
         const { persistat } = await pushOfflineMealVerificat(payloadOffline);
+        if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
         if (!persistat) {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           Alert.alert(t('alerts.titluri.eroareSalvare'), t('offline.masaNesalvataOffline'));
           return;
         }
         if (currentPhotoJobIdRef.current) {
-          await clearActivePhotoJob(session.user.id, currentPhotoJobIdRef.current).catch(() => {});
+          await clearActivePhotoJob(ownerId, currentPhotoJobIdRef.current).catch(() => {});
+          if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
           currentPhotoJobIdRef.current = null;
         }
+        pendingPhotoSavePayloadRef.current = null;
+        setPendingPhotoSaveLocked(false);
+        idOperatieSalvareRef.current = null;
         setSaveSuccessData({
-          nume: payload.nume || (rezultat.length === 1 ? rezultat[0].nume : `${rezultat.length} alimente`),
+          nume: mealName,
           calorii: Math.round(totalCalculat.calorii),
           proteine: Math.round(totalCalculat.proteine * 10) / 10,
           carbohidrati: Math.round(totalCalculat.carbohidrati * 10) / 10,
@@ -755,7 +1025,7 @@ export default function CameraScreen() {
         Alert.alert(t('alerts.titluri.eroareSalvare'), mesajEroare || t('alerts.mesaje.eroareNecunoscutaSalvareMasa'));
       }
     } finally {
-      setIsSavingDiary(false);
+      if (isPhotoOwnerCurrent(ownerId, accountGeneration)) setIsSavingDiary(false);
     }
   };
 
@@ -813,6 +1083,16 @@ export default function CameraScreen() {
             <Text style={[styles.cancelLinkText, { color: colors.textSecondary }]}>{t('camera.back')}</Text>
           </TouchableOpacity>
         </View>
+      </View>
+    );
+  }
+
+  // Hide old-account camera state during the render before the account-change
+  // effect clears it; this closes the one-frame cross-account visibility gap.
+  if (photoStateOwnerId !== sessionUserId) {
+    return (
+      <View testID="camera-account-transition" style={[styles.permissionContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -976,11 +1256,12 @@ export default function CameraScreen() {
                     </View>
                     <Pressable
                       testID="camera-meal-correction-toggle"
+                      disabled={pendingPhotoSaveLocked}
                       onPress={() => setMealCorrectionOpen((open) => !open)}
                       style={[styles.mealSuggestionChip, { borderColor: colors.accent + '55' }]}
                       accessibilityRole="button"
                       accessibilityLabel={t('camera.changeMealCategory')}
-                      accessibilityState={{ expanded: mealCorrectionOpen }}
+                      accessibilityState={{ expanded: mealCorrectionOpen, disabled: pendingPhotoSaveLocked }}
                     >
                       <FlowIcon name={CATEGORIE_ICONA[tipMasaSelectat]} size={14} color={colors.accent} />
                       <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.mealSuggestionText, { color: colors.accent }]}>
@@ -989,6 +1270,16 @@ export default function CameraScreen() {
                       <ChevronDown size={14} color={colors.accent} />
                     </Pressable>
                   </View>
+
+                  {pendingPhotoSaveLocked ? (
+                    <Text
+                      testID="camera-pending-save-lock-notice"
+                      accessibilityRole="alert"
+                      style={[styles.qualityWarningBody, { color: colors.textSecondary, marginTop: 10 }]}
+                    >
+                      {t('camera.pendingPhotoSaveLocked')}
+                    </Text>
+                  ) : null}
 
                   {mealCorrectionOpen ? (
                     <View style={styles.mealTypeRow} accessibilityRole="radiogroup" accessibilityLabel={t('camera.mealCategoryLabel')}>
@@ -1075,15 +1366,22 @@ export default function CameraScreen() {
                             </Text>
                           </View>
                           <View style={[styles.gramContainer, { borderColor: colors.accent + '33' }]}>
-                            <GramInput
-                              value={ingredient.estimare_grame}
-                              onChange={(g) => updateIngredient(index, { estimare_grame: g })}
-                              borderColor="transparent"
-                              color={colors.accent}
-                            />
+                            {pendingPhotoSaveLocked ? (
+                              <Text testID="camera-locked-ingredient-grams" style={{ color: colors.accent }}>
+                                {ingredient.estimare_grame} g
+                              </Text>
+                            ) : (
+                              <GramInput
+                                value={ingredient.estimare_grame}
+                                onChange={(g) => updateIngredient(index, { estimare_grame: g })}
+                                borderColor="transparent"
+                                color={colors.accent}
+                              />
+                            )}
                           </View>
                           <Pressable
                             onPress={() => stergeIngredient(index)}
+                            disabled={pendingPhotoSaveLocked}
                             hitSlop={10}
                             style={styles.deleteIngredientBtn}
                             accessibilityRole="button"
@@ -1096,13 +1394,15 @@ export default function CameraScreen() {
                       );
                     })}
 
-                    <View style={{ marginTop: 12 }}>
-                      <IngredientCorrectionInput
-                        ingredienteCurente={rezultat}
-                        onCorectat={setRezultat}
-                        onSend={sendCorrectionToAI}
-                      />
-                    </View>
+                    {!pendingPhotoSaveLocked ? (
+                      <View style={{ marginTop: 12 }}>
+                        <IngredientCorrectionInput
+                          ingredienteCurente={rezultat}
+                          onCorectat={setRezultat}
+                          onSend={sendCorrectionToAI}
+                        />
+                      </View>
+                    ) : null}
                   </View>
 
                   {/* Butoane acțiune Jurnal */}
@@ -1111,10 +1411,10 @@ export default function CameraScreen() {
                       testID="camera-add-journal-btn"
                       style={[styles.addBtn, { shadowColor: colors.accent, opacity: quality.requiresReview ? 0.45 : 1 }]}
                       onPress={adaugaInJurnal}
-                      disabled={quality.requiresReview || isSavingDiary}
+                      disabled={quality.requiresReview || isSavingDiary || recoveryBlocked}
                       accessibilityRole="button"
                       accessibilityLabel={t('camera.addToJournal')}
-                      accessibilityState={{ disabled: quality.requiresReview || isSavingDiary, busy: isSavingDiary }}
+                      accessibilityState={{ disabled: quality.requiresReview || isSavingDiary || recoveryBlocked, busy: isSavingDiary }}
                     >
                       <LinearGradient colors={colors.accentGradient} style={styles.addBtnGrad}>
                         <Text maxFontSizeMultiplier={1.3} style={[styles.addBtnText, { color: colors.background }]}>{t('camera.addToJournal')}</Text>
@@ -1144,9 +1444,24 @@ export default function CameraScreen() {
       {scanError && (
         <View style={[styles.errorCard, { top: insets.top + 78 }]} accessibilityRole="alert" accessibilityLiveRegion="assertive">
           <Text maxFontSizeMultiplier={1.3} style={styles.errorText}>{scanError}</Text>
-          <Pressable onPress={() => setScanError(null)} accessibilityRole="button" accessibilityLabel={t('camera.closeErrorA11y')}>
-            <Text maxFontSizeMultiplier={1.3} style={styles.retryText}>{t('common.close')}</Text>
-          </Pressable>
+          {recoveryBlocked ? (
+            <Pressable
+              testID="camera-recovery-retry"
+              onPress={() => {
+                setRecoveryBlocked(false);
+                setScanError(null);
+                setRecoveryAttempt((attempt) => attempt + 1);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={t('photoJob.retry')}
+            >
+              <Text maxFontSizeMultiplier={1.3} style={styles.retryText}>{t('photoJob.retry')}</Text>
+            </Pressable>
+          ) : (
+            <Pressable onPress={() => setScanError(null)} accessibilityRole="button" accessibilityLabel={t('camera.closeErrorA11y')}>
+              <Text maxFontSizeMultiplier={1.3} style={styles.retryText}>{t('common.close')}</Text>
+            </Pressable>
+          )}
         </View>
       )}
 

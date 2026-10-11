@@ -23,7 +23,7 @@ import {
 } from '../lib/ads/adGate';
 import { loadAdGateState, saveAdGateState } from '../lib/ads/adGateStore';
 import { getAdsRuntimeConfig } from '../lib/ads/adsConfig';
-import { adsAvailable, initializeAdsSdk, showPreloadedInterstitial } from '../lib/ads/adsService';
+import { adsAvailable, initializeAdsSdk, refreshAdsAfterConsentChange, showPreloadedInterstitial } from '../lib/ads/adsService';
 import {
   resolveAdsConsent,
   getCanRequestAds,
@@ -94,9 +94,7 @@ export function AdsProvider({
   const showPrivacyOptions = useCallback(async () => {
     const success = await showAdsPrivacyOptionsForm();
     setPrivacyOptionsRequired(getPrivacyOptionsRequired());
-    if (getCanRequestAds()) {
-      await initializeAdsSdk();
-    }
+    await refreshAdsAfterConsentChange();
     return success;
   }, []);
 

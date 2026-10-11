@@ -509,6 +509,30 @@ describe('P0-05: AdMob Configuration Hardening & Canonical Mode', () => {
       expect(runtime.interstitialAndroidUnitId).toBe(GOOGLE_TEST_INTERSTITIAL_ANDROID);
     });
 
+    it('TEST runtime never accepts a real GetFlow rewarded unit', () => {
+      const runtime = getAdsRuntimeConfig('android', {
+        adsMode: 'test',
+        androidAppId: GOOGLE_TEST_APP_ID_ANDROID,
+        interstitialAndroidUnitId: GOOGLE_TEST_INTERSTITIAL_ANDROID,
+        rewardedAndroidUnitId: PROD_REWARDED_ID,
+      });
+      expect(runtime.enabled).toBe(true);
+      expect(runtime.rewardedAndroidUnitId).toBeNull();
+    });
+
+    it('REAL runtime ignores malformed or Google test rewarded IDs and uses the verified GetFlow unit', () => {
+      for (const unsafeId of [GOOGLE_TEST_INTERSTITIAL_ANDROID, 'not-an-ad-unit']) {
+        const runtime = getAdsRuntimeConfig('android', {
+          adsMode: 'real',
+          androidAppId: PROD_APP_ID,
+          interstitialAndroidUnitId: PROD_INTERSTITIAL_ID,
+          rewardedAndroidUnitId: unsafeId,
+        });
+        expect(runtime.enabled).toBe(true);
+        expect(runtime.rewardedAndroidUnitId).toBe(PROD_REWARDED_ID);
+      }
+    });
+
     it('FAIL CLOSED: Production never silently falls back to a test ID if an environment value is absent', () => {
       const runtimeWithoutAppId = getAdsRuntimeConfig('android', {
         adsMode: 'real',

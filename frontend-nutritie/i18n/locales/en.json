@@ -312,6 +312,7 @@
     "pendingDraftTitle": "Unanalyzed Image",
     "pendingDraftMessage": "There is an unanalyzed picture from your previous session. Would you like to resume analysis?",
     "resumeAnalysis": "Resume analysis",
+    "pendingPhotoSaveLocked": "Your reviewed meal is kept for a safe save retry. Its category and ingredients stay locked until the save is confirmed.",
     "permissionTitle": "Camera Permission",
     "permissionSubtitle": "GetFlow needs access to your camera to analyze food on your plate.",
     "permissionDeniedPermanent": "Camera permission was denied. Open app settings and grant camera permission.",

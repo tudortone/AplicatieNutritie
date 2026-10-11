@@ -394,7 +394,7 @@ export function getAdsRuntimeConfig(
       interstitialIosUnitId: interstitialIos ?? null,
       rewardedAndroidUnitId: validateAdMobUnitId(rewardedAndroid, false).ok
         ? rewardedAndroid
-        : (STATIC_REWARDED_ANDROID ?? GETFLOW_PRODUCTION_ADMOB.rewardedAndroidUnitId),
+        : GETFLOW_PRODUCTION_ADMOB.rewardedAndroidUnitId,
       rewardedIosUnitId: validateAdMobUnitId(rewardedIos, false).ok ? rewardedIos : null,
       everyNAnalyses,
       everyNChatMessages,
@@ -406,12 +406,12 @@ export function getAdsRuntimeConfig(
   return {
     mode: 'test',
     enabled: true,
-    androidAppId: androidAppId || null,
-    iosAppId: iosAppId || null,
-    interstitialAndroidUnitId: interstitialAndroid || null,
-    interstitialIosUnitId: interstitialIos || null,
-    rewardedAndroidUnitId: rewardedAndroid || null,
-    rewardedIosUnitId: rewardedIos || null,
+    androidAppId: androidAppId && isGoogleTestId(androidAppId) ? androidAppId : null,
+    iosAppId: iosAppId && isGoogleTestId(iosAppId) ? iosAppId : null,
+    interstitialAndroidUnitId: interstitialAndroid && isGoogleTestId(interstitialAndroid) ? interstitialAndroid : null,
+    interstitialIosUnitId: interstitialIos && isGoogleTestId(interstitialIos) ? interstitialIos : null,
+    rewardedAndroidUnitId: rewardedAndroid && isGoogleTestId(rewardedAndroid) ? rewardedAndroid : null,
+    rewardedIosUnitId: rewardedIos && isGoogleTestId(rewardedIos) ? rewardedIos : null,
     everyNAnalyses,
     everyNChatMessages,
     minAdIntervalSeconds,

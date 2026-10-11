@@ -312,6 +312,7 @@
     "pendingDraftTitle": "Nicht analysiertes Bild",
     "pendingDraftMessage": "Es gibt ein nicht analysiertes Bild aus der vorherigen Sitzung. Möchten Sie die Analyse fortsetzen?",
     "resumeAnalysis": "Analyse fortsetzen",
+    "pendingPhotoSaveLocked": "Ihre geprüfte Mahlzeit bleibt für einen sicheren Speicher-Versuch erhalten. Kategorie und Zutaten bleiben gesperrt, bis das Speichern bestätigt wurde.",
     "permissionTitle": "Kameraberechtigung",
     "permissionSubtitle": "GetFlow benötigt Zugriff auf Ihre Kamera, um Speisen auf Ihrem Teller zu analysieren.",
     "permissionDeniedPermanent": "Kamerazugriff wurde verweigert. Öffnen Sie die Einstellungen und aktivieren Sie die Kameraberechtigung.",

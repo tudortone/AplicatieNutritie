@@ -307,6 +307,7 @@
     "pendingDraftTitle": "Imagine neanalizată",
     "pendingDraftMessage": "Există o poză neanalizată din sesiunea anterioară. Dorești să reiei analiza?",
     "resumeAnalysis": "Reia analiza",
+    "pendingPhotoSaveLocked": "Masa verificată este păstrată pentru o salvare sigură. Categoria și ingredientele sunt blocate până când salvarea este confirmată.",
     "permissionTitle": "Permisiune Cameră",
     "permissionSubtitle": "GetFlow are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.",
     "permissionDeniedPermanent": "Ai refuzat accesul la cameră. Deschide setările aplicației și activează permisiunea camerei.",

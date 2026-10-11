@@ -9,13 +9,27 @@ function safeError(res, error, { log = false } = {}) {
   return res.status(status).json({ eroare: 'Creditul recompensat nu a putut fi procesat.', cod: code });
 }
 
-function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, verifier } = {}) {
-  if (!rewardedService || !verifier) throw new TypeError('Rewarded route dependencies are required.');
+function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, verifier, integrityGuard } = {}) {
+  if (!rewardedService || !verifier || typeof requireAuth !== 'function' || typeof generalLimiter !== 'function' || typeof integrityGuard !== 'function') {
+    throw new TypeError('Rewarded route dependencies are required.');
+  }
   const router = express.Router();
-  router.post('/rewarded/intents', requireAuth, generalLimiter, async (req, res) => {
+  const intentIntegrity = integrityGuard({ action: 'rewarded.intent', canonicalPath: '/rewarded/intents' });
+  router.post('/rewarded/intents', requireAuth, generalLimiter, intentIntegrity, async (req, res) => {
     try {
       const intent = await rewardedService.createIntent({ userId: req.user.id });
       return res.status(201).json({ intentId: intent.intentId, expiresAt: intent.expiresAt, ssv: { userId: intent.intentId, customData: intent.customData } });
+    } catch (error) {
+      return safeError(res, error);
+    }
+  });
+  router.get('/rewarded/intents/:intentId', requireAuth, generalLimiter, async (req, res) => {
+    try {
+      const intent = await rewardedService.getIntentStatus({ intentId: req.params.intentId, userId: req.user.id });
+      if (!intent) {
+        return safeError(res, Object.assign(new Error('Reward intent not found.'), { code: 'REWARDED_INTENT_NOT_FOUND', status: 404 }));
+      }
+      return res.status(200).json({ status: intent.status });
     } catch (error) {
       return safeError(res, error);
     }

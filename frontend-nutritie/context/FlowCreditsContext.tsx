@@ -69,9 +69,10 @@ function normalizedBalance(value: unknown): FlowCreditsBalance | null {
   };
 }
 
-async function authenticatedFetch(path: string, init?: RequestInit) {
+async function authenticatedFetch(path: string, init?: RequestInit, expectedUserId?: string) {
   const { data } = await supabase.auth.getSession();
   if (!data.session?.access_token) throw new Error('AUTH_REQUIRED');
+  if (expectedUserId && data.session.user.id !== expectedUserId) throw new Error('AUTH_USER_CHANGED');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
@@ -109,11 +110,13 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   const billing = useBilling();
   const premium = usePremium();
   const [balance, setBalance] = useState<FlowCreditsBalance>(EMPTY);
+  const [balanceOwnerId, setBalanceOwnerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [visible, setVisible] = useState(false);
   const [rewardState, setRewardState] = useState<RewardState>('idle');
   const ownerRef = useRef(appUserId);
   const sequenceRef = useRef(0);
+  const rewardOperationRef = useRef(0);
   ownerRef.current = appUserId;
 
   const refresh = useCallback(async () => {
@@ -121,15 +124,20 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     const sequence = ++sequenceRef.current;
     if (!owner) {
       setBalance(EMPTY);
+      setBalanceOwnerId(null);
       return null;
     }
     setLoading(true);
     try {
-      const response = await authenticatedFetch('/flow-credits');
+      const response = await authenticatedFetch('/flow-credits', undefined, owner);
       if (!response.ok) return null;
       const next = normalizedBalance(await response.json());
-      if (next && ownerRef.current === owner && sequenceRef.current === sequence) setBalance(next);
-      return next;
+      if (next && ownerRef.current === owner && sequenceRef.current === sequence) {
+        setBalance(next);
+        setBalanceOwnerId(owner);
+        return next;
+      }
+      return null;
     } catch {
       return null;
     } finally {
@@ -139,7 +147,9 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
 
   useEffect(() => {
     sequenceRef.current += 1;
+    rewardOperationRef.current += 1;
     setBalance(EMPTY);
+    setBalanceOwnerId(null);
     setRewardState('idle');
     setVisible(false);
     if (appUserId) void refresh();
@@ -157,48 +167,76 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   }, [billing.operation.status, refresh]);
 
   const watchRewarded = useCallback(async () => {
-    if (balance.rewardedGrantsRemaining <= 0) {
-      setRewardState('limit');
+    const owner = ownerRef.current;
+    const operation = ++rewardOperationRef.current;
+    const isCurrentOperation = () => Boolean(owner) && ownerRef.current === owner && rewardOperationRef.current === operation;
+    const updateState = (state: RewardState) => {
+      if (isCurrentOperation()) setRewardState(state);
+    };
+    if (!owner) return 'unavailable' as const;
+    const eligibleBalance = balanceOwnerId === owner ? balance : await refresh();
+    if (!isCurrentOperation()) return 'unavailable' as const;
+    if (!eligibleBalance) {
+      updateState('unavailable');
+      return 'unavailable' as const;
+    }
+    if (eligibleBalance.rewardedGrantsRemaining <= 0) {
+      updateState('limit');
       return 'limit' as const;
     }
-    setRewardState('loading');
+    updateState('loading');
     try {
-      const response = await authenticatedFetch('/rewarded/intents', { method: 'POST', body: '{}' });
+      const response = await authenticatedFetch('/rewarded/intents', { method: 'POST', body: '{}' }, owner);
+      if (!isCurrentOperation()) return 'unavailable' as const;
       if (!response.ok) {
-        setRewardState(response.status === 429 ? 'limit' : 'unavailable');
+        updateState(response.status === 429 ? 'limit' : 'unavailable');
         return response.status === 429 ? 'limit' as const : 'unavailable' as const;
       }
       const intent = await response.json() as { intentId?: string; ssv?: { userId?: string; customData?: string } };
+      if (!isCurrentOperation()) return 'unavailable' as const;
       if (!intent.intentId || intent.ssv?.userId !== intent.intentId || !intent.ssv.customData) throw new Error('INVALID_REWARD_INTENT');
-      const previousTotal = balance.total;
       const outcome = await showRewardedAdWithSsv({ intentId: intent.intentId, customData: intent.ssv.customData });
+      if (!isCurrentOperation()) return 'unavailable' as const;
       if (outcome !== 'earned-awaiting-server') {
-        setRewardState(outcome === 'unavailable' ? 'unavailable' : 'idle');
+        updateState(outcome === 'unavailable' ? 'unavailable' : 'idle');
         return outcome;
       }
-      setRewardState('awaiting-server');
+      updateState('awaiting-server');
       for (let attempt = 0; attempt < 12; attempt += 1) {
         await delay(1_500);
-        const next = await refresh();
-        if (next && next.total > previousTotal) {
-          setRewardState('granted');
+        if (!isCurrentOperation()) return 'unavailable' as const;
+        const statusResponse = await authenticatedFetch(`/rewarded/intents/${encodeURIComponent(intent.intentId)}`, undefined, owner);
+        if (!isCurrentOperation()) return 'unavailable' as const;
+        if (!statusResponse.ok) continue;
+        const { status } = await statusResponse.json() as { status?: string };
+        if (status === 'GRANTED') {
+          await refresh();
+          if (!isCurrentOperation()) return 'unavailable' as const;
+          updateState('granted');
           return 'granted' as const;
         }
+        if (status === 'DENIED_LIMIT') {
+          updateState('limit');
+          return 'limit' as const;
+        }
+        if (status === 'EXPIRED') break;
       }
-      setRewardState('unavailable');
+      updateState('unavailable');
       return 'unavailable' as const;
     } catch {
-      setRewardState('unavailable');
+      updateState('unavailable');
       return 'unavailable' as const;
     }
-  }, [balance.rewardedGrantsRemaining, balance.total, refresh]);
+  }, [balance, balanceOwnerId, refresh]);
 
   const purchase = useCallback(async (product: BillingCreditProduct) => {
     await billing.purchaseCredits(product);
   }, [billing]);
 
   const value = useMemo<FlowCreditsContextValue>(() => ({
-    balance,
+    // Never render the previous account's credits during the render/effect gap
+    // when appUserId changes; the network refresh may still be pending.
+    balance: appUserId && balanceOwnerId === appUserId ? balance : EMPTY,
     loading,
     unlimited: premium.hasFullAccess || premium.isPremium,
     visible,
@@ -209,7 +247,7 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     refresh,
     watchRewarded,
     purchase,
-  }), [balance, loading, premium.hasFullAccess, premium.isPremium, visible, rewardState, billing.creditProducts, refresh, watchRewarded, purchase]);
+  }), [appUserId, balance, balanceOwnerId, loading, premium.hasFullAccess, premium.isPremium, visible, rewardState, billing.creditProducts, refresh, watchRewarded, purchase]);
 
   return <FlowCreditsContext.Provider value={value}>{children}</FlowCreditsContext.Provider>;
 }

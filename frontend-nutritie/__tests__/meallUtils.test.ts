@@ -1,4 +1,4 @@
-import { obtinePozaMasa, recalculeazaTotaluri, parseAlimente, construiesteAlimenteLaSalvare } from '../lib/mealUtils';
+import { insereazaMasaCuPoza, obtinePozaMasa, recalculeazaTotaluri, parseAlimente, construiesteAlimenteLaSalvare } from '../lib/mealUtils';
 import { Masa, AlimentDetaliat } from '../types';
 
 function masa(overrides: Partial<Masa>): Masa {
@@ -43,6 +43,24 @@ describe('lib/mealUtils — poza mesei', () => {
   it('returneaza null cand nu exista nicio poza', () => {
     expect(obtinePozaMasa(masa({}))).toBeNull();
     expect(obtinePozaMasa(masa({ alimente: [] }))).toBeNull();
+  });
+});
+
+describe('lib/mealUtils — inserare photo meal', () => {
+  it('preserves the canonical UUID so retry identity reaches the database', async () => {
+    const payload = {
+      id: '123e4567-e89b-42d3-a456-426614174000',
+      user_id: 'user-1',
+      nume: 'Meal photo',
+      imagine_url: 'https://example.test/meal.jpg',
+    };
+    const select = jest.fn().mockResolvedValue({ data: [payload], error: null });
+    const insert = jest.fn(() => ({ select }));
+    const client = { from: jest.fn(() => ({ insert })) };
+
+    await insereazaMasaCuPoza(client as never, payload);
+
+    expect(insert).toHaveBeenCalledWith(payload);
   });
 });
 

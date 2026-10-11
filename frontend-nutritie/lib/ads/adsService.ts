@@ -83,19 +83,36 @@ function getRewardedUnitId(): string | null {
 
 let sdkInitialized = false;
 let interstitial: InterstitialAdInstance | null = null;
+let interstitialUnsubscribers: Array<() => void> = [];
+let interstitialGeneration = 0;
 
-function attachInterstitialListeners(ad: InterstitialAdInstance): void {
+export function discardPreloadedInterstitial(): void {
+  interstitialGeneration += 1;
+  interstitial = null;
+  for (const unsubscribe of interstitialUnsubscribers.splice(0)) {
+    try { unsubscribe(); } catch {}
+  }
+}
+
+function attachInterstitialListeners(ad: InterstitialAdInstance, generation: number): void {
   if (!AdsModule) return;
   const { AdEventType } = AdsModule;
-  ad.addAdEventListener(AdEventType.ERROR, () => {
-    // Nimic de făcut — reclama pur și simplu nu va fi disponibilă la `show()`.
-  });
-  ad.addAdEventListener(AdEventType.CLOSED, () => {
+  const isCurrentAd = () => interstitial === ad && interstitialGeneration === generation;
+  interstitialUnsubscribers.push(ad.addAdEventListener(AdEventType.ERROR, () => {
+    // Do not automatically retry an unavailable/no-fill ad in a tight loop.
+    if (isCurrentAd()) discardPreloadedInterstitial();
+  }));
+  interstitialUnsubscribers.push(ad.addAdEventListener(AdEventType.LOADED, () => {
+    if (isCurrentAd() && !getCanRequestAds()) discardPreloadedInterstitial();
+  }));
+  interstitialUnsubscribers.push(ad.addAdEventListener(AdEventType.CLOSED, () => {
     // Preîncărcăm imediat următoarea reclamă, ca următoarea oportunitate
     // eligibilă să nu aștepte un load la cerere (care ar întârzia/eșua vizibil
     // exact în momentul tranziției utilizatorului).
-    preloadInterstitial();
-  });
+    if (!isCurrentAd()) return;
+    discardPreloadedInterstitial();
+    if (getCanRequestAds()) preloadInterstitial();
+  }));
 }
 
 /**
@@ -104,17 +121,23 @@ function attachInterstitialListeners(ad: InterstitialAdInstance): void {
  * o cerere e deja în curs / deja încărcată — `MobileAd.load()` e idempotent).
  */
 export function preloadInterstitial(): void {
-  if (!isAdsAvailable() || !AdsModule) return;
+  if (!getCanRequestAds()) {
+    discardPreloadedInterstitial();
+    return;
+  }
+  if (!isAdsAvailable() || !AdsModule || interstitial) return;
   try {
     const unitId = getInterstitialUnitId();
     if (!unitId) return;
     const ad = AdsModule.InterstitialAd.createForAdRequest(unitId, {
       requestNonPersonalizedAdsOnly: !getConsentPersonalizedAllowed(),
     });
-    attachInterstitialListeners(ad);
     interstitial = ad;
+    const generation = interstitialGeneration;
+    attachInterstitialListeners(ad, generation);
     ad.load();
   } catch {
+    discardPreloadedInterstitial();
     // Fail silențios — vezi antetul fișierului.
   }
 }
@@ -148,22 +171,29 @@ export function isInterstitialReady(): boolean {
  * Apelantul NU trebuie să condiționeze nimic funcțional de rezultat.
  */
 export function showPreloadedInterstitial(): boolean {
-  if (!isAdsAvailable() || !getCanRequestAds()) return false;
+  if (!getCanRequestAds()) {
+    discardPreloadedInterstitial();
+    return false;
+  }
+  if (!isAdsAvailable()) return false;
   if (!interstitial || !interstitial.loaded) {
     preloadInterstitial();
     return false;
   }
+  const activeInterstitial = interstitial;
   try {
-    const showResult = interstitial.show();
+    const showResult = activeInterstitial.show();
     // `show()` întoarce o Promise; o eventuală respingere asincronă nu trebuie
     // să devină o excepție necapturată (unhandledRejection) în restul aplicației.
     if (showResult && typeof (showResult as Promise<void>).catch === 'function') {
       (showResult as Promise<void>).catch(() => {
+        if (interstitial === activeInterstitial) discardPreloadedInterstitial();
         preloadInterstitial();
       });
     }
     return true;
   } catch {
+    if (interstitial === activeInterstitial) discardPreloadedInterstitial();
     preloadInterstitial();
     return false;
   }
@@ -224,5 +254,13 @@ export function showRewardedAdWithSsv({
 /** Doar pentru teste: resetează starea internă a modulului (interstițial + flag inițializare). */
 export function __resetAdsServiceForTests(): void {
   sdkInitialized = false;
-  interstitial = null;
+  discardPreloadedInterstitial();
+}
+
+/** Reconcile any already-loaded ad with the user's latest UMP choice. */
+export async function refreshAdsAfterConsentChange(): Promise<void> {
+  discardPreloadedInterstitial();
+  if (!getCanRequestAds()) return;
+  if (sdkInitialized) preloadInterstitial();
+  else await initializeAdsSdk();
 }

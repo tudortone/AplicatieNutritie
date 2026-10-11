@@ -72,7 +72,15 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
 
     const updateCalls = [];
     const deleteCalls = [];
+    const imageKitRequests = [];
     let ltColumn = null;
+    const fetchSalvat = global.fetch;
+    const imageKitKeySalvata = process.env.IMAGEKIT_PRIVATE_KEY;
+    process.env.IMAGEKIT_PRIVATE_KEY = 'synthetic-imagekit-key';
+    global.fetch = jest.fn(async (url, options = {}) => {
+      imageKitRequests.push({ url: String(url), method: options.method });
+      return { ok: true, status: 200 };
+    });
 
     const adminFake = {
       auth: {
@@ -135,7 +143,14 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
       },
     };
 
-    const rez = await reiaStergerileBlocate({ supabaseAdmin: adminFake, config: {} });
+    let rez;
+    try {
+      rez = await reiaStergerileBlocate({ supabaseAdmin: adminFake, config: {} });
+    } finally {
+      global.fetch = fetchSalvat;
+      if (imageKitKeySalvata === undefined) delete process.env.IMAGEKIT_PRIVATE_KEY;
+      else process.env.IMAGEKIT_PRIVATE_KEY = imageKitKeySalvata;
+    }
     expect(rez.reluate).toBe(1);
     // S3-01: worker-ul filtrează pe coloana reală (initiated_at), nu created_at
     expect(ltColumn).toBe('initiated_at');
@@ -156,6 +171,11 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
     const clerkDl = deleteCalls.find((d) => d.tabela === 'clerk_webhook_esuate');
     expect(clerkDl.col).toBe('clerk_user_id');
     expect(clerkDl.val).toBe('clerk-789');
+    expect(imageKitRequests).toHaveLength(2);
+    expect(imageKitRequests.every((request) => request.method === 'DELETE')).toBe(true);
+    expect(imageKitRequests.map((request) => request.url)).toEqual(expect.arrayContaining([
+      expect.stringContaining('/folder/'),
+    ]));
     expect(adminFake.auth.admin.deleteUser).toHaveBeenCalledWith('user-456');
     // N-02: ordinea statusurilor = ordinea rutei (DB → Clerk → ImageKit → auth)
     const statusuri = updateCalls.map((u) => u.status);
@@ -182,8 +202,17 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
     const updateCalls = [];
     const apeluriImageKit = [];
     const fetchSalvat = global.fetch;
-    global.fetch = jest.fn(async (url) => {
-      apeluriImageKit.push(String(url));
+    global.fetch = jest.fn(async (url, options = {}) => {
+      const urlString = String(url);
+      const method = options.method || 'GET';
+      apeluriImageKit.push({ url: urlString, method });
+      if (urlString.endsWith('/details')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ filePath: `/meals/${randClerk.user_id}/${urlString.includes('fk_alpha') ? 'alpha' : 'beta'}.jpg` }),
+        };
+      }
       return { ok: true, status: 200 };
     });
 
@@ -230,8 +259,10 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
       const rez = await reiaStergerileBlocate({ supabaseAdmin: adminFake, config: {} });
       expect(rez.reluate).toBe(1);
       // fileIds din outbox ajung la ImageKit (N-04), NU o listă goală
-      expect(apeluriImageKit.some((u) => u.includes('/files/fk_alpha'))).toBe(true);
-      expect(apeluriImageKit.some((u) => u.includes('/files/fk_beta'))).toBe(true);
+      expect(apeluriImageKit).toEqual(expect.arrayContaining([
+        expect.objectContaining({ url: expect.stringMatching(/\/files\/fk_alpha$/), method: 'DELETE' }),
+        expect.objectContaining({ url: expect.stringMatching(/\/files\/fk_beta$/), method: 'DELETE' }),
+      ]));
       expect(updateCalls.map((u) => u.status)).toEqual(['imagekit_done', 'auth_done', 'completed']);
       expect(adminFake.auth.admin.deleteUser).toHaveBeenCalledWith('user-img');
     } finally {

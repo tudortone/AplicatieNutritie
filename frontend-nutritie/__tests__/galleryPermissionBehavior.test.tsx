@@ -159,6 +159,7 @@ jest.mock('../context/FlowCreditsContext', () => ({
   useFlowCredits: () => mockFlowCreditsReturn,
 }));
 
+const mockMaybeSingleMeal = jest.fn().mockResolvedValue({ data: null, error: null });
 const mockInsertMeal = jest.fn().mockResolvedValue({ data: null, error: null });
 const mockPushOfflineMealVerificat = jest.fn().mockResolvedValue({ persistat: true, lungime: 1 });
 
@@ -168,6 +169,7 @@ jest.mock('../supabase', () => ({
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
       single: jest.fn().mockResolvedValue({ data: null, error: null }),
+      maybeSingle: (...args: unknown[]) => mockMaybeSingleMeal(...args),
       insert: (...args: unknown[]) => ({
         select: () => mockInsertMeal(...args),
       }),
@@ -192,15 +194,20 @@ jest.mock('../lib/imagekit', () => ({
   }),
 }));
 
-jest.mock('../lib/photoJobs', () => ({
+jest.mock('../lib/photoJobs', () => {
+  const mockedRecovery = jest.fn(async () => null);
+  return ({
   PhotoApiError: class PhotoApiError extends Error {
     status: number;
     code: string;
     constructor(status: number, code: string) { super(code); this.status = status; this.code = code; }
   },
   clearActivePhotoJob: jest.fn(async () => {}),
+  hasPendingPhotoSave: jest.fn(async () => false),
+  savePhotoJobSaveAttempt: jest.fn(async () => true),
   cleanupPhotoAsset: jest.fn(async () => {}),
-  recoverPhotoJob: jest.fn(async () => null),
+  recoverPhotoJob: mockedRecovery,
+  recoverPhotoJobForCamera: mockedRecovery,
   submitPhotoJob: jest.fn(async () => ({
     id: 'photo-job-1',
     status: 'succeeded',
@@ -225,7 +232,8 @@ jest.mock('../lib/photoJobs', () => ({
       }],
     },
   })),
-}));
+  });
+});
 
 jest.mock('lucide-react-native', () => {
   const MockIcon = () => null;
@@ -356,8 +364,12 @@ jest.mock('../lib/userDataCleanup', () => ({
 import CameraScreen from '../app/camera';
 import ProfilScreen from '../app/(tabs)/profil';
 import { aboneazaLaModificariMese } from '../lib/freshnessMese';
+import { discardLocalImageDraft, listPendingDrafts } from '../lib/imageOptimizer';
+import { construiestePayloadMasaCamera } from '../lib/payloadMese';
 import {
   clearActivePhotoJob,
+  hasPendingPhotoSave,
+  savePhotoJobSaveAttempt,
   recoverPhotoJob,
   submitPhotoJob,
   waitForPhotoJob,
@@ -371,9 +383,15 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAuthReturn.session = mockSession;
+    mockAuthReturn.user = mockUser;
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     mockRequestPermissions.mockResolvedValue({ granted: true });
     mockInsertMeal.mockResolvedValue({ data: null, error: null });
+    mockMaybeSingleMeal.mockResolvedValue({ data: null, error: null });
+    (savePhotoJobSaveAttempt as jest.Mock).mockResolvedValue(true);
+    (listPendingDrafts as jest.Mock).mockReset().mockResolvedValue([]);
+    (discardLocalImageDraft as jest.Mock).mockReset().mockResolvedValue(true);
     mockPushOfflineMealVerificat.mockResolvedValue({ persistat: true, lungime: 1 });
     Platform.OS = originalPlatform;
   });
@@ -527,6 +545,29 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       expect(view.getByTestId('camera-add-journal-btn').props.accessibilityLabel).toBe('camera.addToJournal');
     });
 
+    it('PHOTO CATEGORY: category selection keeps the result visible and only Add to Journal persists it', async () => {
+      Platform.OS = 'android';
+      mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///meal.jpg' }] });
+      mockInsertMeal.mockImplementationOnce(async (payload: Record<string, unknown>) => ({
+        data: [{ ...payload }], error: null,
+      }));
+
+      const view = await render(<CameraScreen />);
+      await act(async () => fireEvent.press(view.getByTestId('gallery-button')));
+      await waitFor(() => expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy());
+
+      await act(async () => fireEvent.press(view.getByTestId('camera-meal-correction-toggle')));
+      await act(async () => fireEvent.press(view.getByRole('radio', { name: 'chat.mealCategory.gustare' })));
+
+      expect(view.getAllByText('Chicken').length).toBeGreaterThan(0);
+      expect(view.getByText('chat.mealCategory.gustare')).toBeTruthy();
+      expect(mockInsertMeal).not.toHaveBeenCalled();
+
+      await act(async () => fireEvent.press(view.getByTestId('camera-add-journal-btn')));
+      expect(mockInsertMeal).toHaveBeenCalledTimes(1);
+      expect((mockInsertMeal.mock.calls[0][0] as Record<string, unknown>).tip_masa).toBe('gustare');
+    });
+
     it('PHOTO FAILURE: maps backend Photo API failures through the active locale', async () => {
       Platform.OS = 'android';
       (submitPhotoJob as jest.Mock).mockRejectedValueOnce(
@@ -593,6 +634,191 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       const retryInput = (submitPhotoJob as jest.Mock).mock.calls.at(-1)?.[0];
       expect(retryInput.analysisId).toMatch(/^photo-operation-fingerprint:retry:/);
       expect(clearActivePhotoJob).toHaveBeenCalledWith(mockUser.id, 'failed-job-1');
+    });
+
+    it('PHOTO ACCOUNT ISOLATION: clears an already recovered user A result before user B can see it', async () => {
+      Platform.OS = 'android';
+      (recoverPhotoJob as jest.Mock).mockResolvedValueOnce({
+        job: {
+          id: 'user-a-photo-job', status: 'succeeded',
+          result: { success: true, tipMasa: 'cina', items: [{
+            nume: 'User A private meal', estimare_grame: 100, calorii_per_100g: 165,
+            proteine_per_100g: 31, carbohidrati_per_100g: 0, grasimi_per_100g: 3.6,
+          }] },
+        },
+        pointer: {
+          userId: mockUser.id, jobId: 'user-a-photo-job', savedAt: 1,
+          imageUrl: 'https://cdn.example.test/user-a-private.jpg',
+          saveOperationId: 'user-a-save-operation',
+          savePayload: {
+            id: 'user-a-meal-id', user_id: mockUser.id,
+            nume: 'User A private meal', data: '2026-10-11', ora: '20:00:00',
+            created_at: '2026-10-11T17:00:00.000Z', tip_masa: 'cina',
+            calorii: 165, proteine: 31, carbohidrati: 0, grasimi: 3.6, fibre: 0,
+            alimente: [{ nume: 'User A private meal', grame: 100, calorii: 165, proteine: 31, carbohidrati: 0, grasimi: 3.6, fibre: 0 }],
+          },
+        },
+      });
+
+      const view = await render(<CameraScreen />);
+      await waitFor(() => expect(view.getAllByText('User A private meal').length).toBeGreaterThan(0));
+      expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy();
+
+      const userB = { id: 'test-user-b', email: 'b@example.test', user_metadata: {} };
+      mockAuthReturn.user = userB;
+      mockAuthReturn.session = { access_token: 'user-b-token', user: userB } as typeof mockSession;
+      await act(async () => view.rerender(<CameraScreen />));
+
+      await waitFor(() => expect(recoverPhotoJob).toHaveBeenCalledWith(expect.objectContaining({ userId: userB.id })));
+      expect(view.queryByText('User A private meal')).toBeNull();
+      expect(view.queryByTestId('camera-add-journal-btn')).toBeNull();
+      expect(view.queryByText('camera.detectedMeal')).toBeNull();
+    });
+
+    it('PHOTO ACCOUNT ISOLATION: ignores a user A recovery that resolves only after switching to user B', async () => {
+      Platform.OS = 'android';
+      let resolveUserARecovery!: (value: unknown) => void;
+      (recoverPhotoJob as jest.Mock).mockImplementationOnce(() => new Promise((resolve) => {
+        resolveUserARecovery = resolve;
+      }));
+
+      const view = await render(<CameraScreen />);
+      await waitFor(() => expect(recoverPhotoJob).toHaveBeenCalledWith(expect.objectContaining({ userId: mockUser.id })));
+
+      const userB = { id: 'test-user-b', email: 'b@example.test', user_metadata: {} };
+      mockAuthReturn.user = userB;
+      mockAuthReturn.session = { access_token: 'user-b-token', user: userB } as typeof mockSession;
+      await act(async () => view.rerender(<CameraScreen />));
+      await waitFor(() => expect(recoverPhotoJob).toHaveBeenCalledWith(expect.objectContaining({ userId: userB.id })));
+
+      await act(async () => resolveUserARecovery({
+        job: {
+          id: 'late-user-a-job', status: 'succeeded',
+          result: { success: true, items: [{
+            nume: 'Late private user A meal', estimare_grame: 100, calorii_per_100g: 200,
+            proteine_per_100g: 20, carbohidrati_per_100g: 10, grasimi_per_100g: 5,
+          }] },
+        },
+        pointer: { userId: mockUser.id, jobId: 'late-user-a-job', savedAt: 1 },
+      }));
+
+      expect(view.queryByText('Late private user A meal')).toBeNull();
+      expect(view.queryByTestId('camera-add-journal-btn')).toBeNull();
+      expect(clearActivePhotoJob).not.toHaveBeenCalled();
+    });
+
+    it('PHOTO DRAFT ACCOUNT ISOLATION: ignores user A drafts that finish loading after switching to B', async () => {
+      Platform.OS = 'android';
+      let resolveUserADrafts!: (drafts: string[]) => void;
+      (listPendingDrafts as jest.Mock).mockImplementationOnce(() => new Promise((resolve) => {
+        resolveUserADrafts = resolve;
+      }));
+
+      const view = await render(<CameraScreen />);
+      await waitFor(() => expect(listPendingDrafts).toHaveBeenCalledWith(mockUser.id));
+
+      const userB = { id: 'test-user-b', email: 'b@example.test', user_metadata: {} };
+      mockAuthReturn.user = userB;
+      mockAuthReturn.session = { access_token: 'user-b-token', user: userB } as typeof mockSession;
+      view.rerender(<CameraScreen />);
+      await waitFor(() => expect(recoverPhotoJob).toHaveBeenCalledWith(expect.objectContaining({ userId: userB.id })));
+
+      await act(async () => resolveUserADrafts(['file:///user-a-private-draft.jpg']));
+      expect(Alert.alert).not.toHaveBeenCalled();
+    });
+
+    it('PHOTO DRAFT ACCOUNT ISOLATION: stale Resume and Discard callbacks cannot act for user A after switching to B', async () => {
+      Platform.OS = 'android';
+      (listPendingDrafts as jest.Mock).mockResolvedValueOnce(['file:///user-a-private-draft.jpg']);
+
+      const view = await render(<CameraScreen />);
+      await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
+      const buttons = (Alert.alert as jest.Mock).mock.calls[0][2] as Array<{ onPress?: () => void }>;
+      expect(buttons).toHaveLength(2);
+
+      const userB = { id: 'test-user-b', email: 'b@example.test', user_metadata: {} };
+      mockAuthReturn.user = userB;
+      mockAuthReturn.session = { access_token: 'user-b-token', user: userB } as typeof mockSession;
+      view.rerender(<CameraScreen />);
+      await waitFor(() => expect(recoverPhotoJob).toHaveBeenCalledWith(expect.objectContaining({ userId: userB.id })));
+
+      await act(async () => {
+        buttons[0].onPress?.();
+        buttons[1].onPress?.();
+      });
+      expect(discardLocalImageDraft).not.toHaveBeenCalled();
+      expect(submitPhotoJob).not.toHaveBeenCalled();
+    });
+
+    it('PHOTO ACCOUNT ISOLATION: does not submit user A meal after auth switches while save snapshot is being stored', async () => {
+      Platform.OS = 'android';
+      mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///user-a-meal.jpg' }] });
+      let resolveSaveSnapshot!: (saved: boolean) => void;
+      let saveSnapshotPromiseSettled = false;
+      (savePhotoJobSaveAttempt as jest.Mock).mockImplementationOnce(() => new Promise((resolve) => {
+        resolveSaveSnapshot = (saved) => {
+          saveSnapshotPromiseSettled = true;
+          resolve(saved);
+        };
+      }));
+
+      const view = await render(<CameraScreen />);
+      await act(async () => fireEvent.press(view.getByTestId('gallery-button')));
+      await waitFor(() => expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy());
+      try {
+        // The save handler intentionally waits for durable idempotency metadata;
+        // don't make act await that deferred promise before switching accounts.
+        await act(async () => {
+          fireEvent.press(view.getByTestId('camera-add-journal-btn'));
+          await Promise.resolve();
+        });
+        await waitFor(() => expect(savePhotoJobSaveAttempt).toHaveBeenCalled());
+
+        const userB = { id: 'test-user-b', email: 'b@example.test', user_metadata: {} };
+        mockAuthReturn.user = userB;
+        mockAuthReturn.session = { access_token: 'user-b-token', user: userB } as typeof mockSession;
+        view.rerender(<CameraScreen />);
+        await waitFor(() => expect(recoverPhotoJob).toHaveBeenCalledWith(expect.objectContaining({ userId: userB.id })));
+        // The auth-change render must not expose the prior result even before
+        // checking that the new user's recovery has started.
+        expect(view.queryAllByText('Chicken')).toHaveLength(0);
+        expect(view.queryByTestId('camera-add-journal-btn')).toBeNull();
+
+        await act(async () => resolveSaveSnapshot(true));
+        expect(mockInsertMeal).not.toHaveBeenCalled();
+        expect(view.queryByTestId('camera-add-journal-btn')).toBeNull();
+        expect(view.queryAllByText('Chicken')).toHaveLength(0);
+      } finally {
+        if (resolveSaveSnapshot && !saveSnapshotPromiseSettled) {
+          await act(async () => resolveSaveSnapshot(false));
+        }
+      }
+    });
+
+    it('PHOTO CORRUPT SAVE RECOVERY: shows a safe error and leaves corrupt pending state untouched', async () => {
+      Platform.OS = 'android';
+      mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///next-meal.jpg' }] });
+      (recoverPhotoJob as jest.Mock).mockRejectedValueOnce(new PhotoApiError(500, 'INVALID_PENDING_MEAL_SAVE_DRAFT'));
+      (recoverPhotoJob as jest.Mock).mockRejectedValueOnce(new PhotoApiError(500, 'INVALID_PENDING_MEAL_SAVE_DRAFT'));
+      (hasPendingPhotoSave as jest.Mock).mockRejectedValueOnce(new PhotoApiError(500, 'INVALID_PENDING_MEAL_SAVE_DRAFT'));
+
+      const view = await render(<CameraScreen />);
+      await waitFor(() => expect(view.getByText('camera.genericScanError')).toBeTruthy());
+      expect(view.queryByTestId('camera-add-journal-btn')).toBeNull();
+      expect(view.getByTestId('camera-recovery-retry')).toBeTruthy();
+      expect(clearActivePhotoJob).not.toHaveBeenCalled();
+
+      await act(async () => fireEvent.press(view.getByTestId('camera-recovery-retry')));
+      await waitFor(() => expect(view.getByTestId('camera-recovery-retry')).toBeTruthy());
+      expect(clearActivePhotoJob).not.toHaveBeenCalled();
+
+      await act(async () => fireEvent.press(view.getByTestId('gallery-button')));
+      expect(submitPhotoJob).not.toHaveBeenCalled();
+      expect(clearActivePhotoJob).not.toHaveBeenCalled();
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'alerts.titluri.eroareSalvare',
+        'alerts.mesaje.problemaNecunoscutaConectare',
+      );
     });
 
     it('PHOTO BACKGROUND NAVIGATION: returns Home after durable submission and preserves the job', async () => {
@@ -695,6 +921,262 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
         expect(freshnessSignals).toEqual([mockUser.id]);
       } finally {
         unsubscribe();
+      }
+    });
+
+    it('CAMERA DATA LOSS GUARD: does not report success when insert and readback confirm no persisted row', async () => {
+      Platform.OS = 'android';
+      mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///meal.jpg' }] });
+      mockInsertMeal.mockResolvedValueOnce({ data: [], error: null });
+      (global.fetch as jest.Mock) = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ([{
+          nume: 'Chicken',
+          estimare_grame: 100,
+          calorii_per_100g: 165,
+          proteine_per_100g: 31,
+          carbohidrati_per_100g: 0,
+          grasimi_per_100g: 3.6,
+        }]),
+      });
+      const freshnessSignals: string[] = [];
+      const unsubscribe = aboneazaLaModificariMese((userId) => freshnessSignals.push(userId));
+
+      try {
+        const view = await render(<CameraScreen />);
+        await act(async () => fireEvent.press(view.getByTestId('gallery-button')));
+        const saveButton = await waitFor(() => view.getByTestId('camera-add-journal-btn'));
+        await act(async () => fireEvent.press(saveButton));
+
+        await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
+          'alerts.titluri.eroareSalvare',
+          'alerts.mesaje.problemaNecunoscutaConectare',
+        ));
+        expect(view.queryByText('Masă adăugată!')).toBeNull();
+        expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy();
+        expect(freshnessSignals).toEqual([]);
+        expect(clearActivePhotoJob).not.toHaveBeenCalled();
+      } finally {
+        unsubscribe();
+      }
+    });
+
+    it('CAMERA PERSISTENCE READBACK: confirms an ambiguous insert only after the exact row is found', async () => {
+      Platform.OS = 'android';
+      mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///meal.jpg' }] });
+      mockInsertMeal.mockImplementationOnce(async () => {
+        mockMaybeSingleMeal.mockImplementationOnce(async () => ({
+          data: { ...(mockInsertMeal.mock.calls[0][0] as Record<string, unknown>) },
+          error: null,
+        }));
+        return { data: [], error: null };
+      });
+      (global.fetch as jest.Mock) = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ([{
+          nume: 'Chicken', estimare_grame: 100, calorii_per_100g: 165,
+          proteine_per_100g: 31, carbohidrati_per_100g: 0, grasimi_per_100g: 3.6,
+        }]),
+      });
+
+      const view = await render(<CameraScreen />);
+      await act(async () => fireEvent.press(view.getByTestId('gallery-button')));
+      const saveButton = await waitFor(() => view.getByTestId('camera-add-journal-btn'));
+      await act(async () => fireEvent.press(saveButton));
+
+      expect(mockInsertMeal).toHaveBeenCalledTimes(1);
+      expect(mockMaybeSingleMeal).toHaveBeenCalledTimes(1);
+      expect(mockPushOfflineMealVerificat).not.toHaveBeenCalled();
+      expect(savePhotoJobSaveAttempt).toHaveBeenCalledWith(
+        mockUser.id,
+        'photo-job-1',
+        expect.any(String),
+        expect.objectContaining({ user_id: mockUser.id }),
+      );
+      expect(clearActivePhotoJob).toHaveBeenCalledWith(mockUser.id, 'photo-job-1');
+    });
+
+    it('CAMERA PERSISTENCE RETRY: reuses the same operation id after an inconclusive readback', async () => {
+      Platform.OS = 'android';
+      mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///meal.jpg' }] });
+      mockInsertMeal.mockResolvedValueOnce({ data: [], error: null });
+      mockInsertMeal.mockResolvedValueOnce({ data: [], error: null });
+      mockMaybeSingleMeal.mockResolvedValueOnce({ data: null, error: null });
+      mockMaybeSingleMeal.mockImplementationOnce(async () => ({
+        data: { ...(mockInsertMeal.mock.calls[1][0] as Record<string, unknown>) },
+        error: null,
+      }));
+      (global.fetch as jest.Mock) = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ([{
+          nume: 'Chicken', estimare_grame: 100, calorii_per_100g: 165,
+          proteine_per_100g: 31, carbohidrati_per_100g: 0, grasimi_per_100g: 3.6,
+        }]),
+      });
+
+      const view = await render(<CameraScreen />);
+      await act(async () => fireEvent.press(view.getByTestId('gallery-button')));
+      const saveButton = await waitFor(() => view.getByTestId('camera-add-journal-btn'));
+      await act(async () => fireEvent.press(saveButton));
+      await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
+        'alerts.titluri.eroareSalvare',
+        'alerts.mesaje.problemaNecunoscutaConectare',
+      ));
+      await act(async () => fireEvent.press(saveButton));
+
+      expect(mockInsertMeal).toHaveBeenCalledTimes(2);
+      const firstPayload = mockInsertMeal.mock.calls[0][0] as Record<string, unknown>;
+      const retryPayload = mockInsertMeal.mock.calls[1][0] as Record<string, unknown>;
+      expect(retryPayload.id).toBe(firstPayload.id);
+      expect(mockMaybeSingleMeal).toHaveBeenCalledTimes(2);
+      expect(Alert.alert).toHaveBeenCalledTimes(1);
+      expect(clearActivePhotoJob).toHaveBeenCalledWith(mockUser.id, 'photo-job-1');
+    });
+
+    it('CAMERA RESTART RECOVERY: retries the exact reviewed category, portions and local date', async () => {
+      Platform.OS = 'android';
+      const reviewedResult = {
+        nume: 'Chicken', estimare_grame: 150, calorii_per_100g: 165,
+        proteine_per_100g: 31, carbohidrati_per_100g: 0, grasimi_per_100g: 3.6,
+      };
+      const reviewedMeal = construiestePayloadMasaCamera({
+        idOperatie: 'recovered-photo-save',
+        user_id: mockUser.id,
+        rezultat: [reviewedResult],
+        now: new Date('2026-10-10T20:30:00.000Z'),
+        tip_masa: 'gustare',
+      }).payload;
+      (recoverPhotoJob as jest.Mock).mockResolvedValueOnce({
+        job: {
+          id: 'photo-job-1', status: 'succeeded',
+          result: { success: true, tipMasa: 'cina', items: [{ ...reviewedResult, estimare_grame: 100 }] },
+        },
+        pointer: {
+          userId: mockUser.id, jobId: 'photo-job-1', savedAt: 1,
+          saveOperationId: 'recovered-photo-save', savePayload: reviewedMeal,
+        },
+      });
+      mockInsertMeal.mockImplementationOnce(async () => ({ data: [{ ...reviewedMeal }], error: null }));
+
+      const view = await render(<CameraScreen />);
+      await waitFor(() => expect(view.getByText('chat.mealCategory.gustare')).toBeTruthy());
+      const saveButton = await waitFor(() => view.getByTestId('camera-add-journal-btn'));
+      await act(async () => fireEvent.press(saveButton));
+
+      const inserted = mockInsertMeal.mock.calls[0][0] as Record<string, unknown>;
+      expect(inserted).toEqual(reviewedMeal);
+      expect(savePhotoJobSaveAttempt).toHaveBeenCalledWith(
+        mockUser.id, 'photo-job-1', 'recovered-photo-save', reviewedMeal,
+      );
+      expect(clearActivePhotoJob).toHaveBeenCalledWith(mockUser.id, 'photo-job-1');
+    });
+
+    it('CAMERA RESTART RECOVERY: restores the exact edited ingredient list when it differs from AI output', async () => {
+      Platform.OS = 'android';
+      const reviewedItems = [
+        {
+          nume: 'Chicken', estimare_grame: 140, calorii_per_100g: 165,
+          proteine_per_100g: 31, carbohidrati_per_100g: 0, grasimi_per_100g: 3.6,
+        },
+        {
+          nume: 'Avocado', estimare_grame: 80, calorii_per_100g: 160,
+          proteine_per_100g: 2, carbohidrati_per_100g: 9, grasimi_per_100g: 15,
+        },
+      ];
+      const reviewedMeal = construiestePayloadMasaCamera({
+        idOperatie: 'edited-photo-save',
+        user_id: mockUser.id,
+        rezultat: reviewedItems,
+        now: new Date('2026-10-10T20:30:00.000Z'),
+        tip_masa: 'gustare',
+      }).payload;
+      (recoverPhotoJob as jest.Mock).mockResolvedValueOnce({
+        job: {
+          id: 'photo-job-edited', status: 'succeeded',
+          result: { success: true, tipMasa: 'cina', items: [
+            reviewedItems[0],
+            { nume: 'Rice (removed by user)', estimare_grame: 120, calorii_per_100g: 130, proteine_per_100g: 3, carbohidrati_per_100g: 28, grasimi_per_100g: 1 },
+            { nume: 'Broccoli (removed by user)', estimare_grame: 80, calorii_per_100g: 34, proteine_per_100g: 2.8, carbohidrati_per_100g: 7, grasimi_per_100g: 0.4 },
+          ] },
+        },
+        pointer: {
+          userId: mockUser.id, jobId: 'photo-job-edited', savedAt: 1,
+          saveOperationId: 'edited-photo-save', savePayload: reviewedMeal,
+        },
+      });
+      mockInsertMeal.mockImplementationOnce(async () => ({ data: [{ ...reviewedMeal }], error: null }));
+
+      const view = await render(<CameraScreen />);
+      await waitFor(() => expect(view.getByText('chat.mealCategory.gustare')).toBeTruthy());
+      expect(view.getAllByText('Chicken').length).toBeGreaterThan(0);
+      expect(view.getAllByText('Avocado').length).toBeGreaterThan(0);
+      expect(view.queryByText('Rice (removed by user)')).toBeNull();
+      expect(view.queryByText('Broccoli (removed by user)')).toBeNull();
+
+      await act(async () => fireEvent.press(view.getByTestId('camera-add-journal-btn')));
+      expect(mockInsertMeal).toHaveBeenCalledTimes(1);
+      expect(mockInsertMeal.mock.calls[0][0]).toEqual(reviewedMeal);
+    });
+
+    it('CAMERA ORPHANED SAVE: recovers a locked snapshot after job expiry and retries the exact owner UUID', async () => {
+      Platform.OS = 'android';
+      const reviewedItems = [{
+        nume: 'Măr', estimare_grame: 175, calorii_per_100g: 52,
+        proteine_per_100g: 0.3, carbohidrati_per_100g: 14, grasimi_per_100g: 0.2,
+      }];
+      const reviewedMeal = construiestePayloadMasaCamera({
+        idOperatie: 'orphaned-photo-save',
+        user_id: mockUser.id,
+        rezultat: reviewedItems,
+        now: new Date('2026-10-10T20:30:00.000Z'),
+        tip_masa: 'gustare',
+      }).payload;
+      const pointer = {
+        userId: mockUser.id,
+        jobId: 'expired-photo-job',
+        savedAt: 1,
+        saveOperationId: 'orphaned-photo-save',
+        savePayload: reviewedMeal,
+      };
+      (recoverPhotoJob as jest.Mock).mockResolvedValueOnce({ job: null, pointer, missingJob: true });
+      mockMaybeSingleMeal.mockResolvedValueOnce({ data: null, error: null });
+      mockInsertMeal.mockImplementationOnce(async () => ({ data: [{ ...reviewedMeal }], error: null }));
+
+      const view = await render(<CameraScreen />);
+      await waitFor(() => expect(view.getByTestId('camera-pending-save-lock-notice')).toBeTruthy());
+      expect(mockMaybeSingleMeal).toHaveBeenCalledTimes(1);
+      expect(view.getByText('chat.mealCategory.gustare')).toBeTruthy();
+      expect(view.getAllByText('Măr').length).toBeGreaterThan(0);
+
+      const categoryButton = view.getByTestId('camera-meal-correction-toggle');
+      expect(categoryButton.props.accessibilityState.disabled).toBe(true);
+      await act(async () => fireEvent.press(categoryButton));
+      expect(view.queryByRole('radiogroup')).toBeNull();
+      expect(view.getByText('chat.mealCategory.gustare')).toBeTruthy();
+      expect(view.getByTestId('camera-locked-ingredient-grams').props.children).toEqual([175, ' g']);
+
+      await act(async () => fireEvent.press(view.getByTestId('camera-add-journal-btn')));
+      expect(mockInsertMeal).toHaveBeenCalledTimes(1);
+      expect(mockInsertMeal.mock.calls[0][0]).toEqual(reviewedMeal);
+      expect(savePhotoJobSaveAttempt).toHaveBeenCalledWith(
+        mockUser.id, 'expired-photo-job', 'orphaned-photo-save', reviewedMeal,
+      );
+      expect(clearActivePhotoJob).toHaveBeenCalledWith(mockUser.id, 'expired-photo-job');
+    });
+
+    it('PENDING PHOTO SAVE LOCK: has localized recovery guidance in RO, EN, FR and DE', () => {
+      const locales = [
+        require('../i18n/locales/ro.json'),
+        require('../i18n/locales/en.json'),
+        require('../i18n/locales/fr.json'),
+        require('../i18n/locales/de.json'),
+      ];
+      for (const locale of locales) {
+        expect(locale.camera.pendingPhotoSaveLocked).toEqual(expect.any(String));
+        expect(locale.camera.pendingPhotoSaveLocked.trim().length).toBeGreaterThan(20);
       }
     });
   });

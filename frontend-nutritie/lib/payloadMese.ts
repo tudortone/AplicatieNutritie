@@ -371,11 +371,59 @@ export type RezultatReluareMasa =
 
 const CAMPURI_NUMERICE_CANONICE = ['calorii', 'proteine', 'grasimi', 'carbohidrati', 'fibre'] as const;
 
+function randulPersistatCorespundePayloadului(
+  rand: Record<string, unknown>,
+  payload: Record<string, unknown>,
+): boolean {
+  const campuriText = ['id', 'nume', 'tip_masa'] as const;
+  if (campuriText.some((camp) => String(rand[camp] ?? '') !== String(payload[camp] ?? ''))) return false;
+  if (payload.user_id !== undefined && String(rand.user_id ?? '') !== String(payload.user_id)) return false;
+  if (payload.data !== undefined && String(rand.data ?? '') !== String(payload.data)) return false;
+  if (payload.ora !== undefined && String(rand.ora ?? '') !== String(payload.ora)) return false;
+  if (payload.imagine_url !== undefined && String(rand.imagine_url ?? '') !== String(payload.imagine_url ?? '')) return false;
+  if (payload.alimente !== undefined && jsonCanonizat(rand.alimente) !== jsonCanonizat(payload.alimente)) return false;
+  if (payload.created_at !== undefined && instantCanonizat(rand.created_at) !== instantCanonizat(payload.created_at)) return false;
+
+  return CAMPURI_NUMERICE_CANONICE.every(
+    (camp) => normalizeazaNutrient(rand[camp]) === normalizeazaNutrient(payload[camp]),
+  );
+}
+
+/** Compares JSONB independent of object key ordering while preserving array order and values. */
+function jsonCanonizat(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(jsonCanonizat).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).filter((key) => record[key] !== undefined).sort()
+      .map((key) => `${JSON.stringify(key)}:${jsonCanonizat(record[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'undefined';
+}
+
+/** Postgres/PostgREST may format the same timestamptz with `Z` or `+00:00`. */
+function instantCanonizat(value: unknown): string {
+  const raw = String(value ?? '');
+  const millis = Date.parse(raw);
+  return Number.isFinite(millis) ? String(millis) : raw;
+}
+
+/** True only for the single returned row that proves this exact owner/day/category save. */
+export function raspunsInsertMasaConfirmat(
+  data: unknown,
+  payload: Record<string, unknown>,
+): boolean {
+  if (!Array.isArray(data) || data.length !== 1 || !data[0] || typeof data[0] !== 'object') return false;
+  return randulPersistatCorespundePayloadului(data[0] as Record<string, unknown>, payload);
+}
+
 export async function verificaReluareMasa(
   client: {
     from: (tabela: string) => {
       select: (coloane: string) => {
         eq: (coloana: string, valoare: string) => {
+          eq: (coloana: string, valoare: string) => {
+            maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: unknown }>;
+          };
           maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: unknown }>;
         };
       };
@@ -385,11 +433,14 @@ export async function verificaReluareMasa(
 ): Promise<RezultatReluareMasa> {
   let rand: Record<string, unknown> | null = null;
   try {
-    const raspuns = await client
+    const idQuery = client
       .from('mese')
-      .select('id, nume, tip_masa, calorii, proteine, grasimi, carbohidrati, fibre')
-      .eq('id', payload.id)
-      .maybeSingle();
+      .select('id, user_id, data, ora, created_at, nume, tip_masa, calorii, proteine, grasimi, carbohidrati, fibre, alimente, imagine_url')
+      .eq('id', payload.id);
+    const query = payload.user_id !== undefined
+      ? idQuery.eq('user_id', String(payload.user_id))
+      : idQuery;
+    const raspuns = await query.maybeSingle();
     if (raspuns?.error) return { tip: 'necunoscut' };
     rand = raspuns?.data ?? null;
   } catch {
@@ -399,15 +450,7 @@ export async function verificaReluareMasa(
   // Rândul lipsește (șters între timp, ori replică fără el): nu putem dovedi nimic.
   if (!rand) return { tip: 'necunoscut' };
 
-  for (const camp of CAMPURI_NUMERICE_CANONICE) {
-    if (normalizeazaNutrient(rand[camp]) !== normalizeazaNutrient(payload[camp])) {
-      return { tip: 'conflict_continut', rand };
-    }
-  }
-  if (String(rand.nume ?? '') !== String(payload.nume ?? '')) {
-    return { tip: 'conflict_continut', rand };
-  }
-  if (String(rand.tip_masa ?? '') !== String(payload.tip_masa ?? '')) {
+  if (!randulPersistatCorespundePayloadului(rand, payload)) {
     return { tip: 'conflict_continut', rand };
   }
 

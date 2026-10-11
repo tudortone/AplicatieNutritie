@@ -35,9 +35,11 @@ jest.mock('../supabase', () => ({
       }),
       select: () => ({
         eq: () => ({
-          maybeSingle: async () => ({
-            data: mockEcouInsert ? ((mockInserturi[0] as Record<string, unknown>) ?? null) : mockRandPersistat,
-            error: null,
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: mockEcouInsert ? ((mockInserturi[0] as Record<string, unknown>) ?? null) : mockRandPersistat,
+              error: null,
+            }),
           }),
         }),
       }),

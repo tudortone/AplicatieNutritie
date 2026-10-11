@@ -10,6 +10,14 @@ export function preloadInterstitial(): void {
   // no-op on web
 }
 
+export function discardPreloadedInterstitial(): void {
+  // no-op on web
+}
+
+export async function refreshAdsAfterConsentChange(): Promise<void> {
+  // no-op on web
+}
+
 export async function initializeAdsSdk(): Promise<void> {
   // no-op on web
 }

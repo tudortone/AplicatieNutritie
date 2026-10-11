@@ -186,6 +186,7 @@ paths:
   /api/v1/photo-jobs/{jobId}: { $ref: '#/components/pathItems/PhotoJobId' }
   /api/v1/photo-assets/cleanup: { $ref: '#/components/pathItems/PhotoAssetCleanup' }
   /api/v1/rewarded/intents: { $ref: '#/components/pathItems/RewardedIntent' }
+  /api/v1/rewarded/intents/{intentId}: { $ref: '#/components/pathItems/RewardedIntentStatus' }
   /api/v1/webhooks/admob/rewarded: { $ref: '#/components/pathItems/AdmobRewardedWebhook' }
   /api/v1/user/export-data: { $ref: '#/components/pathItems/ExportData' }
   /api/v1/user/delete-account: { $ref: '#/components/pathItems/DeleteAccount' }
@@ -288,6 +289,9 @@ paths:
   /api/photo-jobs/{jobId}: { $ref: '#/components/pathItems/PhotoJobId', x-legacy-alias: { canonical: '/api/v1/photo-jobs/{jobId}', sunset: '2026-09-30T00:00:00Z' } }
   /api/photo-assets/cleanup: { $ref: '#/components/pathItems/PhotoAssetCleanup', x-legacy-alias: { canonical: /api/v1/photo-assets/cleanup, sunset: '2026-09-30T00:00:00Z' } }
   /api/rewarded/intents: { $ref: '#/components/pathItems/RewardedIntent', x-legacy-alias: { canonical: /api/v1/rewarded/intents, sunset: '2026-09-30T00:00:00Z' } }
+  /api/rewarded/intents/{intentId}:
+    $ref: '#/components/pathItems/RewardedIntentStatus'
+    x-legacy-alias: { canonical: '/api/v1/rewarded/intents/{intentId}', sunset: '2026-09-30T00:00:00Z' }
   /api/webhooks/admob/rewarded: { $ref: '#/components/pathItems/AdmobRewardedWebhook', x-legacy-alias: { canonical: /api/v1/webhooks/admob/rewarded, sunset: '2026-09-30T00:00:00Z' } }
 
 components:
@@ -1366,6 +1370,25 @@ components:
         responses:
           <<: *authLimited
           '201': { description: Intent SSV cu expirare }
+    RewardedIntentStatus:
+      get:
+        summary: Citește starea intentului AdMob deținut de utilizatorul autentificat
+        parameters:
+          - { in: path, name: intentId, required: true, schema: { type: string, maxLength: 64 } }
+        responses:
+          <<: *authLimited
+          '200':
+            description: Starea curentă a intentului
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required: [status]
+                  properties:
+                    status: { type: string, enum: [PENDING, GRANTED, DENIED_LIMIT, EXPIRED] }
+                  additionalProperties: false
+          '400': { $ref: '#/components/responses/BadRequest' }
+          '404': { $ref: '#/components/responses/NotFound' }
     AdmobRewardedWebhook:
       get:
         summary: Callback AdMob SSV verificat criptografic și idempotent

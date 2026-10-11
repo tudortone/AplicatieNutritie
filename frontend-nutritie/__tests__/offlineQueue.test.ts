@@ -205,19 +205,12 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
         // persistat si compara continutul. Fake-ul intoarce EXACT masa pusa in coada,
         // deci scenariul ramane „acelasi rand, deja inserat".
         select: () => ({
-          eq: () => ({
-            maybeSingle: async () => ({
-              data: {
-                id: idUuid,
-                nume: masaSample1.nume,
-                tip_masa: masaSample1.tip_masa,
-                calorii: masaSample1.calorii,
-                proteine: masaSample1.proteine,
-                grasimi: masaSample1.grasimi,
-                carbohidrati: masaSample1.carbohidrati,
-                fibre: masaSample1.fibre,
-              },
-              error: null,
+          eq: (_idColumn: string, _idValue: string) => ({
+            eq: (_ownerColumn: string, _ownerValue: string) => ({
+              maybeSingle: async () => ({
+                data: { ...masaSample1, id: idUuid },
+                error: null,
+              }),
             }),
           }),
         }),
