@@ -59,7 +59,11 @@ function raspuns(status) {
 }
 
 /** Client admin Supabase controlabil pentru rute (fără apeluri reale). */
-function creeazaSupabaseAdminFake({ clerkUserId = 'clerk-123', outboxId = 'outbox-abc' } = {}) {
+function creeazaSupabaseAdminFake({
+  clerkUserId = 'clerk-123',
+  outboxId = 'outbox-abc',
+  failStatusUpdate = null,
+} = {}) {
   const apeluri = [];
   const admin = {
     apeluri,
@@ -105,6 +109,9 @@ function creeazaSupabaseAdminFake({ clerkUserId = 'clerk-123', outboxId = 'outbo
         update: (payload) => ({
           eq: async (col, val) => {
             apeluri.push({ tabela, tip: 'update', payload, eq: [col, val] });
+            if (tabela === 'gdpr_deletions' && payload.status === failStatusUpdate) {
+              return { error: new Error('simulated outbox status update failure') };
+            }
             return { error: null };
           },
         }),
@@ -283,6 +290,30 @@ describe('GDPR ImageKit', () => {
       }));
     });
 
+    test('eroarea PostgREST la actualizarea db_done oprește pașii externi și Auth', async () => {
+      const adminCuOutboxIndisponibil = creeazaSupabaseAdminFake({ failStatusUpdate: 'db_done' });
+      const ctx = {
+        db: adminCuOutboxIndisponibil,
+        admin: adminCuOutboxIndisponibil,
+        userId: 'supabase-id',
+        modAdmin: true,
+      };
+      const appFailClosed = express();
+      appFailClosed.use(createGdprRouter({
+        requireAuth: (req, res, next) => next(),
+        generalLimiter: (req, res, next) => next(),
+        supabaseAdmin: adminCuOutboxIndisponibil,
+        contextDate: () => ctx,
+        profilRepo: {},
+      }));
+
+      const res = await request(appFailClosed).delete('/delete-account');
+      expect(res.status).toBe(500);
+      expect(adminCuOutboxIndisponibil.apeluri.some((apel) => apel.tip === 'deleteUser')).toBe(false);
+      expect(stub.clerkApeluri).toHaveLength(0);
+      expect(stub.imaginiApeluri).toHaveLength(0);
+    });
+
     test('N-OUTBOX: rpc outbox întoarce null (fără rând outbox) → 503 fail-closed, nimic nu se șterge', async () => {
       const adminNull = creeazaSupabaseAdminFake({ outboxId: null });
       const ctx = { db: adminNull, admin: adminNull, userId: 'supabase-id', modAdmin: true };
@@ -450,6 +481,13 @@ describe('GDPR ImageKit', () => {
               if (tabela === 'mese' && coloane === 'alimente') {
                 return { eq: async () => ({ data: [], error: null }) };
               }
+              if (tabela === 'google_play_subscriptions') {
+                return {
+                  eq: () => ({
+                    order: () => ({ range: async () => ({ data: [], error: null }) }),
+                  }),
+                };
+              }
               return {
                 eq: (col, val) => ({
                   maybeSingle: async () => {
@@ -464,7 +502,7 @@ describe('GDPR ImageKit', () => {
                 evenimente.push({ tabela, tip: 'update', payload });
                 // M2: persistarea esueaza (e.g. eroare DB) -> ruta trebuie sa
                 // opreasca stergerea, nu sa continue best-effort cu orfani ImageKit.
-                throw new Error('DB_FAIL_UPDATE_FILE_IDS');
+                return { error: new Error('DB_FAIL_UPDATE_FILE_IDS') };
               },
             }),
             delete: () => ({

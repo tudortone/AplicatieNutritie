@@ -27,6 +27,18 @@ const { codEroare } = require('./codEroare');
 // folosească aceeași listă. Orice altă eroare oprește avansarea statusului,
 // altfel am marca `completed` o ștergere care nu s-a întâmplat (P-05b).
 
+async function actualizeazaStatusOutbox(supabaseAdmin, id, payload) {
+  const rezultat = await supabaseAdmin
+    .from('gdpr_deletions')
+    .update(payload)
+    .eq('id', id);
+  if (rezultat?.error) {
+    const error = new Error('GDPR_OUTBOX_STATUS_UPDATE_FAILED');
+    error.code = 'GDPR_OUTBOX_STATUS_UPDATE_FAILED';
+    throw error;
+  }
+}
+
 async function stergeRanduriDbUtilizator(supabaseAdmin, userId, clerkUserId = null) {
   if (!userId || !supabaseAdmin) return;
   // C1-S4: stergere admin (service_role) pe tabele de utilizator, fara context —
@@ -89,14 +101,11 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
         // Sentry indisponibil
       }
 
-      await supabaseAdmin
-        .from('gdpr_deletions')
-        .update({
+      await actualizeazaStatusOutbox(supabaseAdmin, rand.id, {
           status: 'failed',
           last_error: 'Număr maxim de încercări atins (5).',
           retry_count: numariIncercare,
-        })
-        .eq('id', rand.id);
+        });
       continue;
     }
 
@@ -109,10 +118,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
           await stergeRanduriDbUtilizator(supabaseAdmin, rand.user_id, rand.clerk_user_id);
         }
         statusCurent = 'db_done';
-        await supabaseAdmin
-          .from('gdpr_deletions')
-          .update({ status: 'db_done' })
-          .eq('id', rand.id);
+        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'db_done' });
       }
 
       // Pasul 2 (dacă s-a oprit după db_done): Clerk delete — REVERSIBIL
@@ -121,47 +127,32 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
       // se execută ÎNAINTE de auth.deleteUser, ca un eșec să lase contul intact.
       if (statusCurent === 'db_done') {
         if (rand.clerk_user_id) {
-          try {
-            await stergeIdentitateClerk({
-              clerkUserId: rand.clerk_user_id,
-              secretKey: process.env.CLERK_SECRET_KEY?.trim(),
-            });
-          } catch (e) {
-            const msg = String(e.message);
-            if (!msg.includes('404') && !msg.includes('CLERK_NOT_CONFIGURED')) throw e;
-          }
+          await stergeIdentitateClerk({
+            clerkUserId: rand.clerk_user_id,
+            secretKey: process.env.CLERK_SECRET_KEY?.trim(),
+          });
         }
         statusCurent = 'clerk_done';
-        await supabaseAdmin
-          .from('gdpr_deletions')
-          .update({ status: 'clerk_done' })
-          .eq('id', rand.id);
+        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'clerk_done' });
       }
 
       // Pasul 3 (dacă s-a oprit după clerk_done): ImageKit media delete — REVERSIBIL
       if (statusCurent === 'clerk_done') {
         if (rand.user_id) {
-          try {
-            // N-04: la reluare, fileIds-urile vin din outbox (ruta le-a persistat
-            // ÎNAINTE de ștergerea mesei); baza de date e deja ștearsă, deci o
-            // re-extragere ar fi goală. Rânduri vechi fără coloana file_ids →
-            // listă goală (comportamentul inițial).
-            const fileIds = Array.isArray(rand.file_ids) ? new Set(rand.file_ids) : new Set();
-            await stergeActiveImageKit({
-              userId: rand.user_id,
-              fileIds,
-              privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim() || config?.imagekit?.privateKey,
-            });
-          } catch (e) {
-            const msg = String(e.message);
-            if (!msg.includes('404') && !msg.includes('IMAGEKIT_NOT_CONFIGURED')) throw e;
-          }
+          // N-04: la reluare, fileIds-urile vin din outbox (ruta le-a persistat
+          // ÎNAINTE de ștergerea mesei); baza de date e deja ștearsă, deci o
+          // re-extragere ar fi goală. Rânduri vechi fără coloana file_ids →
+          // listă goală. Lipsa credențialelor oprește înainte de deleteUser;
+          // helper-ul ImageKit tratează 404 ca rezultat idempotent.
+          const fileIds = Array.isArray(rand.file_ids) ? new Set(rand.file_ids) : new Set();
+          await stergeActiveImageKit({
+            userId: rand.user_id,
+            fileIds,
+            privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim() || config?.imagekit?.privateKey,
+          });
         }
         statusCurent = 'imagekit_done';
-        await supabaseAdmin
-          .from('gdpr_deletions')
-          .update({ status: 'imagekit_done' })
-          .eq('id', rand.id);
+        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'imagekit_done' });
       }
 
       // Pasul 4 (dacă s-a oprit după imagekit_done): auth.deleteUser — IREVERSIBIL,
@@ -170,7 +161,12 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
       // reluare după un crash în timpul lui deleteUser să reia doar acest pas
       // (404 = deja șters = succes).
       if (statusCurent === 'imagekit_done') {
-        if (rand.user_id && supabaseAdmin.auth?.admin?.deleteUser) {
+        if (rand.user_id && !supabaseAdmin.auth?.admin?.deleteUser) {
+          const error = new Error('ADMIN_DELETE_UNAVAILABLE');
+          error.code = 'ADMIN_DELETE_UNAVAILABLE';
+          throw error;
+        }
+        if (rand.user_id) {
           const { error: errAuth } = await supabaseAdmin.auth.admin.deleteUser(rand.user_id);
           // 404 sau inexistent în auth.users = deja șters = succes
           if (errAuth && !String(errAuth.message).toLowerCase().includes('not found')) {
@@ -178,17 +174,12 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
           }
         }
         statusCurent = 'auth_done';
-        await supabaseAdmin
-          .from('gdpr_deletions')
-          .update({ status: 'auth_done' })
-          .eq('id', rand.id);
+        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'auth_done' });
       }
 
       // Pasul 5 (dacă s-a oprit după auth_done): confirmare finală
       if (statusCurent === 'auth_done') {
-        await supabaseAdmin
-          .from('gdpr_deletions')
-          .update({
+        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, {
             status: 'completed',
             completed_at: new Date().toISOString(),
             // Audit fără PII după ce operația nu mai are nevoie de reluare.
@@ -196,19 +187,15 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
             clerk_user_id: null,
             file_ids: [],
             last_error: null,
-          })
-          .eq('id', rand.id);
+          });
       }
 
       reluate += 1;
     } catch (e) {
-      await supabaseAdmin
-        .from('gdpr_deletions')
-        .update({
+      await actualizeazaStatusOutbox(supabaseAdmin, rand.id, {
           last_error: codEroare(e),
           retry_count: numariIncercare,
-        })
-        .eq('id', rand.id);
+        });
     }
   }
 

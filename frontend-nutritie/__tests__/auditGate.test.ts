@@ -116,6 +116,39 @@ describe('P0-04 — exceptii cu potrivire EXACTA', () => {
     expect(r.blocate.join()).toContain('demo-pkg');
   });
 
+  it('exceptiile tranzitive cer acelasi range vulnerabil raportat de advisory', () => {
+    const transitiv = {
+      severity: 'high',
+      range: '<=9.9.9',
+      via: [{
+        name: 'demo-pkg',
+        range: '<=1.2.3',
+        source: 123,
+        title: 'known advisory',
+        severity: 'high',
+        url: 'https://github.com/advisories/GHSA-1111-2222-3333',
+      }],
+    };
+    const date = raport({ 'transitive-parent': transitiv });
+
+    const staleRange = evalueazaAudit(date, [{ ...exceptie, range: '*' }]);
+    expect(staleRange.blocate.join()).toContain('transitive-parent');
+
+    const exactRange = evalueazaAudit(date, [exceptie]);
+    expect(exactRange.blocate).toEqual([]);
+
+    const missingRange = {
+      ...date,
+      vulnerabilities: {
+        'transitive-parent': {
+          ...transitiv,
+          via: [{ ...transitiv.via[0], range: undefined }],
+        },
+      },
+    };
+    expect(evalueazaAudit(missingRange, [exceptie]).blocate.join()).toContain('transitive-parent');
+  });
+
   it('o exceptie EXPIRATA nu mai acopera nimic', () => {
     const expirata = { ...exceptie, expira: '2000-01-01' };
     const r = evalueazaAudit(

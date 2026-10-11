@@ -126,6 +126,9 @@ function esteTranzitivAcoperit(vuln, toateVuln, listaExceptii, acum, vizitate = 
 			const acoperit = listaExceptii.some((e) =>
 				exceptieValida(e) &&
 				e.pachet === intrare.name &&
+				// Exceptiile tranzitive trebuie sa corespunda exact versiunilor afectate;
+				// lipsa range-ului din raport ramane fail-closed.
+				e.range === String(intrare.range ?? '') &&
 				(e.advisory.toUpperCase() === advGasit || String(intrare.source) === e.advisory) &&
 				new Date(`${e.expira}T23:59:59Z`).getTime() >= acum.getTime(),
 			);
