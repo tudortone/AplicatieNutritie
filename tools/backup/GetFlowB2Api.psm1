@@ -39,8 +39,14 @@ function Get-GetFlowB2ApiFailureDiagnostic {
         $responseStatus = $ErrorRecord.Exception.Response.StatusCode
         if ($null -ne $responseStatus) {
             $parsedStatus = 0
-            if ([int]::TryParse([string]$responseStatus, [ref]$parsedStatus) -and $parsedStatus -ge 100 -and $parsedStatus -le 599) {
+            if ($responseStatus -is [System.Enum] -or $responseStatus -is [int]) {
+                $status = [int]$responseStatus
+            } elseif ([int]::TryParse([string]$responseStatus, [ref]$parsedStatus) -and $parsedStatus -ge 100 -and $parsedStatus -le 599) {
                 $status = $parsedStatus
+            } else {
+                try {
+                    $status = [int][Enum]::Parse([System.Net.HttpStatusCode], [string]$responseStatus)
+                } catch { }
             }
         }
     } catch { }
@@ -49,6 +55,15 @@ function Get-GetFlowB2ApiFailureDiagnostic {
     # only its stable numeric status and identifier code; never log its body.
     $responseText = ''
     if ($null -ne $ErrorRecord.ErrorDetails) { $responseText = [string]$ErrorRecord.ErrorDetails.Message }
+    if ([string]::IsNullOrWhiteSpace($responseText) -and $ErrorRecord.Exception -is [System.Net.WebException] -and $null -ne $ErrorRecord.Exception.Response) {
+        try {
+            $responseStream = $ErrorRecord.Exception.Response.GetResponseStream()
+            if ($null -ne $responseStream) {
+                $streamReader = [System.IO.StreamReader]::new($responseStream)
+                $responseText = $streamReader.ReadToEnd()
+            }
+        } catch { }
+    }
     if (-not [string]::IsNullOrWhiteSpace($responseText)) {
         try {
             $response = $responseText | ConvertFrom-Json -ErrorAction Stop

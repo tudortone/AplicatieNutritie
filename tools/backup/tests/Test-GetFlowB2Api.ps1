@@ -89,6 +89,14 @@ try {
 Assert-Equal $true ($invokeFailureMessage -match 'b2_list_buckets failed \(HTTP 403, code unauthorized\)') 'request wrapper returns safe API diagnostic'
 Assert-Equal $false ($invokeFailureMessage -match 'synthetic-sensitive|synthetic message|synthetic-secret|synthetic-token') 'request wrapper does not leak diagnostic sentinels'
 
+# Enum StatusCode diagnostic test (WebException emulation on Windows PowerShell)
+$mockEnumResponse = [pscustomobject]@{ StatusCode = [System.Net.HttpStatusCode]::Forbidden }
+$enumException = [System.InvalidOperationException]::new('synthetic-enum-status-exception')
+$enumException | Add-Member -MemberType NoteProperty -Name 'Response' -Value $mockEnumResponse
+$enumRecord = [System.Management.Automation.ErrorRecord]::new($enumException, 'SyntheticEnumStatusFailure', [System.Management.Automation.ErrorCategory]::InvalidOperation, $null)
+$enumDiagnostic = Get-GetFlowB2ApiFailureDiagnostic -ErrorRecord $enumRecord -Operation 'b2_list_buckets'
+Assert-Equal $true ($enumDiagnostic -match 'b2_list_buckets failed \(HTTP 403\)') 'diagnostic handles enum StatusCode without FormatException'
+
 $transportException = [System.Net.Http.HttpRequestException]::new('synthetic-network-message')
 $transportRecord = [System.Management.Automation.ErrorRecord]::new($transportException, 'SyntheticTransportFailure', [System.Management.Automation.ErrorCategory]::ResourceUnavailable, $null)
 $safeTransport = Get-GetFlowB2ApiFailureDiagnostic -ErrorRecord $transportRecord -Operation 'b2_authorize_account'
