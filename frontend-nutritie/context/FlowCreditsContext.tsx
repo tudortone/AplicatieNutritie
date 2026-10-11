@@ -115,9 +115,11 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   const [visible, setVisible] = useState(false);
   const [rewardState, setRewardState] = useState<RewardState>('idle');
   const ownerRef = useRef(appUserId);
+  const premiumRef = useRef(premium);
   const sequenceRef = useRef(0);
   const rewardOperationRef = useRef(0);
   ownerRef.current = appUserId;
+  premiumRef.current = premium;
 
   const refresh = useCallback(async () => {
     const owner = ownerRef.current;
@@ -170,12 +172,21 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     const owner = ownerRef.current;
     const operation = ++rewardOperationRef.current;
     const isCurrentOperation = () => Boolean(owner) && ownerRef.current === owner && rewardOperationRef.current === operation;
+    const accessBlocksRewardedAds = () => {
+      const current = premiumRef.current;
+      return current.loading || current.hasFullAccess || current.isPremium;
+    };
     const updateState = (state: RewardState) => {
       if (isCurrentOperation()) setRewardState(state);
     };
-    if (!owner) return 'unavailable' as const;
+    const stopIfBlocked = () => {
+      if (!isCurrentOperation() || !accessBlocksRewardedAds()) return false;
+      updateState('unavailable');
+      return true;
+    };
+    if (!owner || accessBlocksRewardedAds()) return 'unavailable' as const;
     const eligibleBalance = balanceOwnerId === owner ? balance : await refresh();
-    if (!isCurrentOperation()) return 'unavailable' as const;
+    if (!isCurrentOperation() || accessBlocksRewardedAds()) return 'unavailable' as const;
     if (!eligibleBalance) {
       updateState('unavailable');
       return 'unavailable' as const;
@@ -187,16 +198,16 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     updateState('loading');
     try {
       const response = await authenticatedFetch('/rewarded/intents', { method: 'POST', body: '{}' }, owner);
-      if (!isCurrentOperation()) return 'unavailable' as const;
+      if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
       if (!response.ok) {
         updateState(response.status === 429 ? 'limit' : 'unavailable');
         return response.status === 429 ? 'limit' as const : 'unavailable' as const;
       }
       const intent = await response.json() as { intentId?: string; ssv?: { userId?: string; customData?: string } };
-      if (!isCurrentOperation()) return 'unavailable' as const;
+      if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
       if (!intent.intentId || intent.ssv?.userId !== intent.intentId || !intent.ssv.customData) throw new Error('INVALID_REWARD_INTENT');
       const outcome = await showRewardedAdWithSsv({ intentId: intent.intentId, customData: intent.ssv.customData });
-      if (!isCurrentOperation()) return 'unavailable' as const;
+      if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
       if (outcome !== 'earned-awaiting-server') {
         updateState(outcome === 'unavailable' ? 'unavailable' : 'idle');
         return outcome;
@@ -237,7 +248,7 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     // Never render the previous account's credits during the render/effect gap
     // when appUserId changes; the network refresh may still be pending.
     balance: appUserId && balanceOwnerId === appUserId ? balance : EMPTY,
-    loading,
+    loading: loading || premium.loading,
     unlimited: premium.hasFullAccess || premium.isPremium,
     visible,
     rewardState,
@@ -247,7 +258,7 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     refresh,
     watchRewarded,
     purchase,
-  }), [appUserId, balance, balanceOwnerId, loading, premium.hasFullAccess, premium.isPremium, visible, rewardState, billing.creditProducts, refresh, watchRewarded, purchase]);
+  }), [appUserId, balance, balanceOwnerId, loading, premium.loading, premium.hasFullAccess, premium.isPremium, visible, rewardState, billing.creditProducts, refresh, watchRewarded, purchase]);
 
   return <FlowCreditsContext.Provider value={value}>{children}</FlowCreditsContext.Provider>;
 }

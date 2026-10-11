@@ -4,25 +4,42 @@ const express = require('express');
 const request = require('supertest');
 const createRewardedRouter = require('../routes/rewarded');
 
-function build({ verifyError, applyError, verified, intentStatus = { status: 'PENDING', expiresAt: '2030-01-01T00:10:00.000Z' }, integrityError } = {}) {
+function build({ verifyError, applyError, verified, intentStatus = { status: 'PENDING', expiresAt: '2030-01-01T00:10:00.000Z' }, integrityError, user = {}, paidEntitlement = { premium: false }, entitlementError } = {}) {
   const rewardedService = {
     createIntent: jest.fn(async () => ({ intentId: 'intent-1', customData: 'secret-1', expiresAt: '2030-01-01T00:10:00Z' })),
     getIntentStatus: jest.fn(async ({ userId }) => userId.endsWith('1111') ? intentStatus : null),
     applyVerified: jest.fn(async () => { if (applyError) throw applyError; return { applied: true, amount: 1 }; }),
   };
   const verifier = { verify: jest.fn(async () => { if (verifyError) throw verifyError; return verified || { kind: 'reward', intentId: 'intent-1', customData: 'secret-1', transactionId: 'tx-1' }; }) };
-  const requireAuth = (req, res, next) => { if (!req.headers.authorization) return res.status(401).end(); req.user = { id: '11111111-1111-4111-8111-111111111111' }; return next(); };
+  const requireAuth = (req, res, next) => { if (!req.headers.authorization) return res.status(401).end(); req.user = { id: '11111111-1111-4111-8111-111111111111', ...user }; return next(); };
+  const billingService = { getPaidEntitlement: jest.fn(async () => { if (entitlementError) throw entitlementError; return paidEntitlement; }) };
   const integrityCalls = [];
   const integrityGuard = (policy) => {
     integrityCalls.push(policy);
     return (_req, res, next) => integrityError ? res.status(403).json({ cod: 'PLAY_INTEGRITY_FAILED' }) : next();
   };
-  const app = express(); app.use(express.json()); app.use('/api/v1', createRewardedRouter({ requireAuth, generalLimiter: (_q, _s, n) => n(), rewardedService, verifier, integrityGuard }));
-  return { app, rewardedService, integrityCalls };
+  const app = express(); app.use(express.json()); app.use('/api/v1', createRewardedRouter({ requireAuth, generalLimiter: (_q, _s, n) => n(), rewardedService, billingService, verifier, integrityGuard }));
+  return { app, rewardedService, billingService, integrityCalls };
 }
 
 describe('rewarded routes', () => {
   test('requires authentication for one-time intent creation', async () => { const { app } = build(); await request(app).post('/api/v1/rewarded/intents').expect(401); await request(app).post('/api/v1/rewarded/intents').set('Authorization', 'Bearer valid').expect(201); });
+  test.each([
+    { label: 'paid Premium', paidEntitlement: { premium: true } },
+    { label: 'tester', user: { esteTester: true } },
+    { label: 'admin', user: { esteAdmin: true } },
+  ])('rejects rewarded intent creation for full-access $label accounts', async ({ paidEntitlement, user }) => {
+    const { app, rewardedService } = build({ paidEntitlement, user });
+    const response = await request(app).post('/api/v1/rewarded/intents').set('Authorization', 'Bearer valid').expect(403);
+    expect(response.body.cod).toBe('REWARDED_NOT_ELIGIBLE');
+    expect(rewardedService.createIntent).not.toHaveBeenCalled();
+  });
+  test('fails closed when paid entitlement cannot be verified', async () => {
+    const { app, rewardedService } = build({ entitlementError: Object.assign(new Error('billing temporarily unavailable'), { code: 'UPSTREAM_UNAVAILABLE' }) });
+    const response = await request(app).post('/api/v1/rewarded/intents').set('Authorization', 'Bearer valid').expect(503);
+    expect(response.body.cod).toBe('UPSTREAM_UNAVAILABLE');
+    expect(rewardedService.createIntent).not.toHaveBeenCalled();
+  });
   test('returns only the authenticated owner’s reward intent status', async () => {
     const { app, rewardedService } = build({ intentStatus: { status: 'GRANTED', expiresAt: '2030-01-01T00:10:00.000Z' } });
     await request(app).get('/api/v1/rewarded/intents/intent-1').set('Authorization', 'Bearer valid').expect(200, { status: 'GRANTED' });

@@ -38,10 +38,12 @@ jest.mock('expo-router', () => ({
 jest.mock('expo-camera', () => {
   const React = require('react');
   const { View } = require('react-native');
+  const MockCameraView = React.forwardRef(({ children }: any, ref: any) => (
+    <View testID="camera-view">{children}</View>
+  ));
+  MockCameraView.displayName = 'MockCameraView';
   return {
-    CameraView: React.forwardRef(({ children }: any, ref: any) => (
-      <View testID="camera-view">{children}</View>
-    )),
+    CameraView: MockCameraView,
     useCameraPermissions: () => [{ granted: true, canAskAgain: true }, jest.fn()],
   };
 });
@@ -755,6 +757,8 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///user-a-meal.jpg' }] });
       let resolveSaveSnapshot!: (saved: boolean) => void;
       let saveSnapshotPromiseSettled = false;
+      let resolveUserBRecovery!: (value: unknown) => void;
+      let userBRecoverySettled = false;
       (savePhotoJobSaveAttempt as jest.Mock).mockImplementationOnce(() => new Promise((resolve) => {
         resolveSaveSnapshot = (saved) => {
           saveSnapshotPromiseSettled = true;
@@ -775,6 +779,12 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
         await waitFor(() => expect(savePhotoJobSaveAttempt).toHaveBeenCalled());
 
         const userB = { id: 'test-user-b', email: 'b@example.test', user_metadata: {} };
+        (recoverPhotoJob as jest.Mock).mockImplementationOnce(() => new Promise((resolve) => {
+          resolveUserBRecovery = (value) => {
+            userBRecoverySettled = true;
+            resolve(value);
+          };
+        }));
         mockAuthReturn.user = userB;
         mockAuthReturn.session = { access_token: 'user-b-token', user: userB } as typeof mockSession;
         view.rerender(<CameraScreen />);
@@ -784,13 +794,42 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
         expect(view.queryAllByText('Chicken')).toHaveLength(0);
         expect(view.queryByTestId('camera-add-journal-btn')).toBeNull();
 
+        await act(async () => resolveUserBRecovery({
+          job: {
+            id: 'user-b-photo-job', status: 'succeeded',
+            result: { success: true, items: [{
+              nume: 'User B meal', estimare_grame: 100, calorii_per_100g: 120,
+              proteine_per_100g: 20, carbohidrati_per_100g: 3, grasimi_per_100g: 2,
+            }] },
+          },
+          pointer: { userId: userB.id, jobId: 'user-b-photo-job', savedAt: 2 },
+        }));
+        await waitFor(() => expect(view.getAllByText('User B meal').length).toBeGreaterThan(0));
         await act(async () => resolveSaveSnapshot(true));
         expect(mockInsertMeal).not.toHaveBeenCalled();
-        expect(view.queryByTestId('camera-add-journal-btn')).toBeNull();
         expect(view.queryAllByText('Chicken')).toHaveLength(0);
+
+        mockInsertMeal.mockImplementationOnce(async (payload: Record<string, unknown>) => ({
+          data: [{ ...payload }], error: null,
+        }));
+        await act(async () => fireEvent.press(view.getByTestId('camera-add-journal-btn')));
+        await waitFor(() => expect(mockInsertMeal).toHaveBeenCalledTimes(1));
+        expect(mockInsertMeal.mock.calls[0][0]).toEqual(expect.objectContaining({
+          user_id: userB.id,
+          alimente: expect.arrayContaining([expect.objectContaining({ nume: 'User B meal' })]),
+        }));
+        expect(savePhotoJobSaveAttempt).toHaveBeenLastCalledWith(
+          userB.id,
+          'user-b-photo-job',
+          expect.any(String),
+          expect.objectContaining({ user_id: userB.id, alimente: expect.arrayContaining([expect.objectContaining({ nume: 'User B meal' })]) }),
+        );
       } finally {
         if (resolveSaveSnapshot && !saveSnapshotPromiseSettled) {
           await act(async () => resolveSaveSnapshot(false));
+        }
+        if (resolveUserBRecovery && !userBRecoverySettled) {
+          await act(async () => resolveUserBRecovery(null));
         }
       }
     });
@@ -922,6 +961,44 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       } finally {
         unsubscribe();
       }
+    });
+
+    it('CAMERA DOUBLE TAP: ignores a second save callback while the first durable snapshot is pending', async () => {
+      Platform.OS = 'android';
+      mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///meal.jpg' }] });
+      mockInsertMeal.mockImplementationOnce(async (payload: Record<string, unknown>) => ({
+        data: [{ ...payload }],
+        error: null,
+      }));
+      let resolveSaveSnapshot!: (saved: boolean) => void;
+      (savePhotoJobSaveAttempt as jest.Mock).mockImplementationOnce(() => new Promise((resolve) => {
+        resolveSaveSnapshot = resolve;
+      }));
+      (global.fetch as jest.Mock) = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ([{
+          nume: 'Chicken', estimare_grame: 100, calorii_per_100g: 165,
+          proteine_per_100g: 31, carbohidrati_per_100g: 0, grasimi_per_100g: 3.6,
+        }]),
+      });
+
+      const view = await render(<CameraScreen />);
+      await act(async () => fireEvent.press(view.getByTestId('gallery-button')));
+      const saveButton = await waitFor(() => view.getByTestId('camera-add-journal-btn'));
+      await act(async () => {
+        // Invoke the same render's callback twice before React can commit the
+        // disabled/busy button state, as can happen with closely spaced taps.
+        fireEvent.press(saveButton);
+        fireEvent.press(saveButton);
+        await Promise.resolve();
+        expect(savePhotoJobSaveAttempt).toHaveBeenCalledTimes(1);
+        resolveSaveSnapshot(true);
+      });
+      await waitFor(() => expect(mockInsertMeal).toHaveBeenCalledTimes(1));
+
+      expect(mockInsertMeal).toHaveBeenCalledTimes(1);
+      expect(clearActivePhotoJob).toHaveBeenCalledWith(mockUser.id, 'photo-job-1');
     });
 
     it('CAMERA DATA LOSS GUARD: does not report success when insert and readback confirm no persisted row', async () => {

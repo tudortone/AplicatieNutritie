@@ -46,6 +46,23 @@ beforeEach(() => {
 afterEach(async () => { await cleanup(); });
 
 describe('Flow Credits production UI', () => {
+  test('full-access sheet does not offer a rewarded-ad action', async () => {
+    mockFlowState.unlimited = true;
+    const screen = await render(<FlowCreditsModalHost />);
+    expect(await screen.findByText('∞')).toBeTruthy();
+    expect(screen.queryByText('Watch ad · +1')).toBeNull();
+    expect(mockWatchRewarded).not.toHaveBeenCalled();
+  });
+
+  test('rewarded action stays disabled while access entitlement is loading', async () => {
+    mockFlowState.loading = true;
+    const screen = await render(<FlowCreditsModalHost />);
+    const action = screen.getByRole('button', { name: 'Loading...' });
+    expect(action.props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(action);
+    expect(mockWatchRewarded).not.toHaveBeenCalled();
+  });
+
   test('pill displays the authoritative balance and opens the sheet', async () => {
     const screen = await render(<FlowCreditsPill />);
     expect(screen.getByText('10')).toBeTruthy();

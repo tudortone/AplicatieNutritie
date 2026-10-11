@@ -442,6 +442,7 @@ const rewardedR = createRewardedRouter({
   requireAuth,
   generalLimiter,
   rewardedService,
+  billingService: googleBillingService,
   integrityGuard: playIntegrityGuard,
   verifier: createAdmobSsvVerifier({
     expectedAdUnit: config.admob.rewardedAdUnitId,

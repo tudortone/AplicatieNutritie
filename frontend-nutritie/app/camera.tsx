@@ -147,6 +147,10 @@ export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
   // P1-01: identitatea acțiunii de salvare în jurnal (nu a analizei AI).
   const idOperatieSalvareRef = useRef<string | null>(null);
+  // Lock synchronously before the first await; React state alone cannot reject
+  // two callbacks dispatched from the same render on rapid Android taps.
+  const saveAttemptSequenceRef = useRef(0);
+  const activeSaveAttemptRef = useRef<number | null>(null);
   const pendingPhotoSavePayloadRef = useRef<Record<string, unknown> | null>(null);
   const sessionUserIdRef = useRef<string | null>(sessionUserId);
   sessionUserIdRef.current = sessionUserId;
@@ -184,6 +188,7 @@ export default function CameraScreen() {
     uploadGenerationRef.current += 1;
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
+    activeSaveAttemptRef.current = null;
     imageKitUrlRef.current = null;
     imageKitFileIdRef.current = null;
     currentPhotoJobIdRef.current = null;
@@ -830,7 +835,7 @@ export default function CameraScreen() {
   };
 
   const adaugaInJurnal = async () => {
-    if (!rezultat || rezultat.length === 0 || !session || isSavingDiary) return;
+    if (!rezultat || rezultat.length === 0 || !session || isSavingDiary || activeSaveAttemptRef.current !== null) return;
     const ownerId = session.user.id;
     const accountGeneration = accountGenerationRef.current;
     if (!isPhotoOwnerCurrent(ownerId, accountGeneration) || photoStateOwnerId !== ownerId) return;
@@ -879,6 +884,8 @@ export default function CameraScreen() {
       );
       return;
     }
+    const saveAttemptToken = ++saveAttemptSequenceRef.current;
+    activeSaveAttemptRef.current = saveAttemptToken;
     setIsSavingDiary(true);
     // Reuse the exact reviewed draft (including local date/time) after restart.
     const payload: Record<string, unknown> = savedPayload || payloadCurent;
@@ -896,6 +903,7 @@ export default function CameraScreen() {
           idOperatieSalvareRef.current!,
           payload,
         );
+        if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
         if (!saved) {
           Alert.alert(
             t('alerts.titluri.eroareSalvare'),
@@ -906,7 +914,6 @@ export default function CameraScreen() {
         pendingPhotoSavePayloadRef.current = payload;
         setPendingPhotoSaveLocked(true);
       }
-      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
 
       const { data, error } = await insereazaMasaCuPoza(supabase, payload);
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
@@ -1025,7 +1032,10 @@ export default function CameraScreen() {
         Alert.alert(t('alerts.titluri.eroareSalvare'), mesajEroare || t('alerts.mesaje.eroareNecunoscutaSalvareMasa'));
       }
     } finally {
-      if (isPhotoOwnerCurrent(ownerId, accountGeneration)) setIsSavingDiary(false);
+      if (activeSaveAttemptRef.current === saveAttemptToken) {
+        activeSaveAttemptRef.current = null;
+        if (isPhotoOwnerCurrent(ownerId, accountGeneration)) setIsSavingDiary(false);
+      }
     }
   };
 

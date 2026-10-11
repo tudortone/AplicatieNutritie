@@ -43,15 +43,17 @@ export function FlowCreditsModalHost() {
               ) : null}
             </View>
 
-            <TouchableOpacity
-              style={[styles.action, flow.balance.rewardedGrantsRemaining <= 0 && styles.disabled]}
-              onPress={() => void flow.watchRewarded()}
-              disabled={busy || flow.balance.rewardedGrantsRemaining <= 0}
-              accessibilityRole="button"
-            >
-              {busy ? <ActivityIndicator color="#0A0C0A" /> : <Play size={18} color="#0A0C0A" fill="#0A0C0A" />}
-              <Text style={styles.actionText}>{busy ? t('flowCredits.verifyingReward') : t('flowCredits.watchAd')}</Text>
-            </TouchableOpacity>
+            {!flow.unlimited ? (
+              <TouchableOpacity
+                style={[styles.action, (flow.loading || flow.balance.rewardedGrantsRemaining <= 0) && styles.disabled]}
+                onPress={() => void flow.watchRewarded()}
+                disabled={busy || flow.loading || flow.balance.rewardedGrantsRemaining <= 0}
+                accessibilityRole="button"
+              >
+                {busy || flow.loading ? <ActivityIndicator color="#0A0C0A" /> : <Play size={18} color="#0A0C0A" fill="#0A0C0A" />}
+                <Text style={styles.actionText}>{busy ? t('flowCredits.verifyingReward') : flow.loading ? t('common.loading') : t('flowCredits.watchAd')}</Text>
+              </TouchableOpacity>
+            ) : null}
             {flow.rewardState === 'granted' ? <Text style={styles.success}>{t('flowCredits.rewardGranted')}</Text> : null}
             {flow.rewardState === 'limit' ? <Text style={[styles.note, { color: colors.warning }]}>{t('flowCredits.rewardLimit')}</Text> : null}
             {flow.rewardState === 'unavailable' ? <Text style={[styles.note, { color: colors.textSecondary }]}>{t('flowCredits.rewardPending')}</Text> : null}

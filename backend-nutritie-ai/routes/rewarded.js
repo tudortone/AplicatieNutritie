@@ -9,14 +9,24 @@ function safeError(res, error, { log = false } = {}) {
   return res.status(status).json({ eroare: 'Creditul recompensat nu a putut fi procesat.', cod: code });
 }
 
-function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, verifier, integrityGuard } = {}) {
-  if (!rewardedService || !verifier || typeof requireAuth !== 'function' || typeof generalLimiter !== 'function' || typeof integrityGuard !== 'function') {
+function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, billingService, verifier, integrityGuard } = {}) {
+  if (!rewardedService || !billingService || typeof billingService.getPaidEntitlement !== 'function' || !verifier || typeof requireAuth !== 'function' || typeof generalLimiter !== 'function' || typeof integrityGuard !== 'function') {
     throw new TypeError('Rewarded route dependencies are required.');
   }
   const router = express.Router();
   const intentIntegrity = integrityGuard({ action: 'rewarded.intent', canonicalPath: '/rewarded/intents' });
   router.post('/rewarded/intents', requireAuth, generalLimiter, intentIntegrity, async (req, res) => {
     try {
+      if (req.user?.esteAdmin === true || req.user?.esteTester === true) {
+        throw Object.assign(new Error('Rewarded ads are not available for full-access accounts.'), { code: 'REWARDED_NOT_ELIGIBLE', status: 403 });
+      }
+      const paidEntitlement = await billingService.getPaidEntitlement({ userId: req.user.id });
+      if (paidEntitlement?.premium === true) {
+        throw Object.assign(new Error('Rewarded ads are not available for full-access accounts.'), { code: 'REWARDED_NOT_ELIGIBLE', status: 403 });
+      }
+      if (paidEntitlement?.premium !== false) {
+        throw Object.assign(new Error('Paid access could not be verified.'), { code: 'REWARDED_ENTITLEMENT_UNAVAILABLE', status: 503 });
+      }
       const intent = await rewardedService.createIntent({ userId: req.user.id });
       return res.status(201).json({ intentId: intent.intentId, expiresAt: intent.expiresAt, ssv: { userId: intent.intentId, customData: intent.customData } });
     } catch (error) {

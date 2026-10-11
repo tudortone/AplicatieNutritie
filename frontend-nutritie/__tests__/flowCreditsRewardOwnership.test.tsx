@@ -5,13 +5,15 @@ import { act, render, waitFor } from '@testing-library/react-native';
 let mockSessionUserId = 'user-a';
 let holdBalanceForUserB = false;
 let resolveBalanceForUserB: ((value: object) => void) | null = null;
+let holdRewardIntent = false;
+let resolveRewardIntent: (() => void) | null = null;
 const mockShowRewardedAdWithSsv = jest.fn();
 const mockBillingState = {
   operation: { status: 'idle' },
   creditProducts: [],
   purchaseCredits: jest.fn(),
 };
-const mockPremiumState = { hasFullAccess: false, isPremium: false };
+let mockPremiumState = { hasFullAccess: false, isPremium: false, loading: false };
 
 jest.mock('../lib/api', () => ({ buildApiUrl: (path: string) => path }));
 jest.mock('../lib/ads/adsService', () => ({ showRewardedAdWithSsv: (...args: unknown[]) => mockShowRewardedAdWithSsv(...args) }));
@@ -46,6 +48,9 @@ describe('Flow Credits rewarded operation ownership', () => {
     latest = null;
     holdBalanceForUserB = false;
     resolveBalanceForUserB = null;
+    holdRewardIntent = false;
+    resolveRewardIntent = null;
+    mockPremiumState = { hasFullAccess: false, isPremium: false, loading: false };
     global.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
       if (path === '/flow-credits') {
@@ -56,7 +61,14 @@ describe('Flow Credits rewarded operation ownership', () => {
         }
         return response({ total: mockSessionUserId === 'user-a' ? 8 : 2, rewardedGrantsRemaining: 3 });
       }
-      if (path === '/rewarded/intents') return response({ intentId: 'intent-a', ssv: { userId: 'intent-a', customData: 'opaque' } });
+      if (path === '/rewarded/intents') {
+        if (holdRewardIntent) {
+          return new Promise((resolve) => {
+            resolveRewardIntent = () => resolve({ ok: true, status: 200, json: async () => ({ intentId: 'intent-a', ssv: { userId: 'intent-a', customData: 'opaque' } }) });
+          });
+        }
+        return response({ intentId: 'intent-a', ssv: { userId: 'intent-a', customData: 'opaque' } });
+      }
       if (path === '/rewarded/intents/intent-a') return response({ status: 'PENDING' });
       throw new Error(`Unexpected request ${path}`);
     }) as jest.Mock;
@@ -116,5 +128,96 @@ describe('Flow Credits rewarded operation ownership', () => {
       resolveBalanceForUserB?.({ total: 2, rewardedGrantsRemaining: 1 });
     });
     await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|2'));
+  });
+
+  test.each([
+    { tier: 'tester', isPremium: false },
+    { tier: 'Premium', isPremium: true },
+  ])('$tier account with full access cannot create a reward intent or open an ad', async ({ isPremium }) => {
+    mockPremiumState = { hasFullAccess: true, isPremium, loading: false };
+    const fetchMock = global.fetch as jest.Mock;
+    const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|8'));
+
+    await act(async () => {
+      await expect(latest!.watchRewarded()).resolves.toBe('unavailable');
+    });
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/rewarded/intents')).toBe(false);
+    expect(mockShowRewardedAdWithSsv).not.toHaveBeenCalled();
+  });
+
+  test('fails closed while authoritative entitlement is still loading', async () => {
+    mockPremiumState = { hasFullAccess: false, isPremium: false, loading: true };
+    const fetchMock = global.fetch as jest.Mock;
+    const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|8'));
+
+    await act(async () => {
+      await expect(latest!.watchRewarded()).resolves.toBe('unavailable');
+    });
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/rewarded/intents')).toBe(false);
+    expect(mockShowRewardedAdWithSsv).not.toHaveBeenCalled();
+  });
+
+  test('rechecks entitlement after creating the intent and before showing the ad', async () => {
+    holdRewardIntent = true;
+    const fetchMock = global.fetch as jest.Mock;
+    const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|8'));
+
+    let operation!: ReturnType<FlowCreditsValue['watchRewarded']>;
+    await act(async () => {
+      operation = latest!.watchRewarded();
+      await waitFor(() => expect(resolveRewardIntent).toEqual(expect.any(Function)));
+    });
+    // Return a new provider value like PremiumContext does after entitlement
+    // revalidation; mutating one shared object would not exercise the ref.
+    mockPremiumState = { hasFullAccess: true, isPremium: true, loading: false };
+    await act(async () => view.rerender(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>));
+
+    await act(async () => {
+      resolveRewardIntent?.();
+      await expect(operation).resolves.toBe('unavailable');
+    });
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url) === '/rewarded/intents')).toBe(true);
+    expect(mockShowRewardedAdWithSsv).not.toHaveBeenCalled();
+    expect(latest!.rewardState).toBe('unavailable');
+  });
+
+  test('entitlement revalidation during intent request ends the busy state and allows retry after free status returns', async () => {
+    holdRewardIntent = true;
+    const fetchMock = global.fetch as jest.Mock;
+    const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|8'));
+
+    let operation!: ReturnType<FlowCreditsValue['watchRewarded']>;
+    await act(async () => {
+      operation = latest!.watchRewarded();
+      await waitFor(() => expect(resolveRewardIntent).toEqual(expect.any(Function)));
+    });
+
+    mockPremiumState = { hasFullAccess: false, isPremium: false, loading: true };
+    await act(async () => view.rerender(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>));
+    await act(async () => {
+      resolveRewardIntent?.();
+      await expect(operation).resolves.toBe('unavailable');
+    });
+    expect(latest!.rewardState).toBe('unavailable');
+
+    mockPremiumState = { hasFullAccess: false, isPremium: false, loading: false };
+    await act(async () => view.rerender(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>));
+    expect(latest!.loading).toBe(false);
+    expect(latest!.rewardState).toBe('unavailable');
+
+    holdRewardIntent = false;
+    mockShowRewardedAdWithSsv.mockResolvedValueOnce('unavailable');
+    await act(async () => {
+      await expect(latest!.watchRewarded()).resolves.toBe('unavailable');
+    });
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/rewarded/intents')).toHaveLength(2);
+    expect(latest!.rewardState).toBe('unavailable');
   });
 });
