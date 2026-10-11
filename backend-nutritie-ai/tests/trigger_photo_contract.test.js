@@ -80,4 +80,64 @@ describe('Trigger/Gemini Photo production contract', () => {
     expect(triggerModule._test.inferMealType('unknown', 'pranz')).toBe('pranz');
     expect(triggerModule._test.inferMealType(null, 'invalid')).toBe('gustare');
   });
+
+  test('codEroareSigur maps timeout, image size, and generic errors without leaking internals', () => {
+    const fn = triggerModule._test.codEroareSigur;
+    expect(fn({ name: 'TimeoutAiError' })).toBe('TIMEOUT');
+    expect(fn({ name: 'AbortError' })).toBe('TIMEOUT');
+    expect(fn({ message: 'IMAGINE_PREA_MARE' })).toBe('IMAGINE_PREA_MARE');
+    expect(fn({ code: 'RATE_LIMIT' })).toBe('RATE_LIMIT');
+    expect(fn({})).toBe('ANALIZA_ESUATA');
+    expect(fn(null)).toBe('ANALIZA_ESUATA');
+  });
+
+  test('run fails closed safely with needs_config when mandatory env vars are missing without throwing or consuming credits', async () => {
+    const prevEnv = { ...process.env };
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.SUPABASE_URL;
+
+    const res = await triggerModule.analizaMancareTask.run({
+      userId: '11111111-1111-4111-8111-111111111111',
+      jobId: 'job-missing-config',
+      reservationId: 'res-1',
+      imageUrl: 'https://ik.imagekit.io/getflow/mancare/11111111-1111-4111-8111-111111111111/meal.jpg',
+    });
+
+    expect(res).toEqual(expect.objectContaining({
+      success: false,
+      status: 'needs_config',
+      eroare: 'Task-ul de analiza nu este configurat complet.',
+    }));
+    Object.assign(process.env, prevEnv);
+  });
+
+  test('run rejects malformed payloads and invalid user UUIDs without running Gemini', async () => {
+    process.env.GEMINI_API_KEY = 'mock_gemini_key';
+    process.env.IMAGEKIT_URL_ENDPOINT = 'https://ik.imagekit.io/getflow';
+    process.env.SUPABASE_URL = 'https://mock.supabase.co';
+
+    const res = await triggerModule.analizaMancareTask.run({
+      userId: 'invalid-non-uuid-user',
+      jobId: 'job-bad-user',
+      reservationId: 'res-bad',
+      imageUrl: 'https://ik.imagekit.io/getflow/mancare/invalid/meal.jpg',
+    });
+
+    expect(res).toEqual({
+      success: false,
+      eroare: 'Payload invalid pentru analiza imaginii.',
+    });
+  });
+
+  test('onFailure and onCancel hooks handle null/undefined payloads gracefully', async () => {
+    await expect(triggerModule.analizaMancareTask.onFailure({
+      payload: null,
+      error: new Error('Network failure'),
+    })).resolves.not.toThrow();
+
+    await expect(triggerModule.analizaMancareTask.onCancel({
+      payload: null,
+    })).resolves.not.toThrow();
+  });
 });
+
