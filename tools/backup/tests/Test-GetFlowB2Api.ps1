@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
 
 $apiModulePath = Join-Path $PSScriptRoot '..\GetFlowB2Api.psm1'
 $credentialModulePath = Join-Path $PSScriptRoot '..\GetFlowB2Credential.psm1'
