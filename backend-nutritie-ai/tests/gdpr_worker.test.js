@@ -30,6 +30,19 @@ function creeazaApp(supabaseAdmin, profilRepoFake) {
   return app;
 }
 
+function rezultatUpdateOutbox(payload, onWrite, rezultat = { data: { id: 'outbox-test-row' }, error: null }) {
+  return {
+    eq: () => ({
+      select: () => ({
+        maybeSingle: async () => {
+          onWrite?.(payload);
+          return typeof rezultat === 'function' ? rezultat(payload) : rezultat;
+        },
+      }),
+    }),
+  };
+}
+
 describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
   test('outbox RPC initiate_gdpr_deletion indisponibil → 503 fail-closed', async () => {
     const adminFake = {
@@ -106,12 +119,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
                 }),
               }),
             }),
-            update: (payload) => ({
-              eq: async (_col, _val) => {
-                updateCalls.push(payload);
-                return { error: null };
-              },
-            }),
+            update: (payload) => rezultatUpdateOutbox(payload, (value) => updateCalls.push(value)),
           };
         }
         if (tabela === 'google_play_subscriptions') {
@@ -244,12 +252,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
                 }),
               }),
             }),
-            update: (payload) => ({
-              eq: async () => {
-                updateCalls.push(payload);
-                return { error: null };
-              },
-            }),
+            update: (payload) => rezultatUpdateOutbox(payload, (value) => updateCalls.push(value)),
           };
         }
         return {
@@ -303,12 +306,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
                 }),
               }),
             }),
-            update: (payload) => ({
-              eq: async () => {
-                updateCalls.push(payload);
-                return { error: null };
-              },
-            }),
+            update: (payload) => rezultatUpdateOutbox(payload, (value) => updateCalls.push(value)),
           };
         }
         return { delete: () => ({ eq: async () => ({ error: null }) }) };
@@ -344,10 +342,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
                 limit: async () => ({ data: [randClerkDone], error: null }),
               }) }) }),
             }),
-            update: (payload) => ({ eq: async () => {
-              updates.push(payload);
-              return { error: null };
-            } }),
+            update: (payload) => rezultatUpdateOutbox(payload, (value) => updates.push(value)),
           };
         }
         return {};
@@ -393,10 +388,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
                 limit: async () => ({ data: [randDbDone], error: null }),
               }) }) }),
             }),
-            update: (payload) => ({ eq: async () => {
-              updates.push(payload);
-              return { error: null };
-            } }),
+            update: (payload) => rezultatUpdateOutbox(payload, (value) => updates.push(value)),
           };
         }
         return {};
@@ -441,12 +433,13 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
                 limit: async () => ({ data: [randClerkDone], error: null }),
               }) }) }),
             }),
-            update: (payload) => ({ eq: async () => {
-              updates.push(payload);
-              return payload.status === 'imagekit_done'
-                ? { error: new Error('simulated outbox status write failure') }
-                : { error: null };
-            } }),
+            update: (payload) => rezultatUpdateOutbox(
+              payload,
+              (value) => updates.push(value),
+              (value) => value.status === 'imagekit_done'
+                ? { data: null, error: new Error('simulated outbox status write failure') }
+                : { data: { id: 'outbox-status-error' }, error: null },
+            ),
           };
         }
         return {};
@@ -457,6 +450,56 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
       const rezultat = await reiaStergerileBlocate({ supabaseAdmin: adminFake, config: {} });
       expect(rezultat.reluate).toBe(0);
       expect(deleteUser).not.toHaveBeenCalled();
+      expect(updates).toContainEqual(expect.objectContaining({ last_error: 'GDPR_OUTBOX_STATUS_UPDATE_FAILED' }));
+    } finally {
+      global.fetch = fetchSalvat;
+      if (envImageKitSalvata === undefined) delete process.env.IMAGEKIT_PRIVATE_KEY;
+      else process.env.IMAGEKIT_PRIVATE_KEY = envImageKitSalvata;
+    }
+  });
+
+  test('zero rânduri actualizate în outbox după ImageKit blochează ștergerea Auth ireversibilă', async () => {
+    const randClerkDone = {
+      id: 'outbox-status-missing-row',
+      user_id: 'user-protected',
+      status: 'clerk_done',
+      retry_count: 0,
+      initiated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    };
+    const deleteUser = jest.fn(async () => ({ error: null }));
+    const updates = [];
+    const fetchSalvat = global.fetch;
+    const envImageKitSalvata = process.env.IMAGEKIT_PRIVATE_KEY;
+    process.env.IMAGEKIT_PRIVATE_KEY = 'synthetic-imagekit-key';
+    global.fetch = jest.fn(async () => ({ ok: true, status: 200 }));
+    const adminFake = {
+      auth: { admin: { deleteUser } },
+      from: (tabela) => {
+        if (tabela === 'gdpr_deletions') {
+          return {
+            select: () => ({
+              neq: () => ({ neq: () => ({ lt: () => ({
+                limit: async () => ({ data: [randClerkDone], error: null }),
+              }) }) }),
+            }),
+            update: (payload) => rezultatUpdateOutbox(
+              payload,
+              (value) => updates.push(value),
+              (value) => value.status === 'imagekit_done'
+                ? { data: null, error: null }
+                : { data: { id: randClerkDone.id }, error: null },
+            ),
+          };
+        }
+        return {};
+      },
+    };
+
+    try {
+      const rezultat = await reiaStergerileBlocate({ supabaseAdmin: adminFake, config: {} });
+      expect(rezultat.reluate).toBe(0);
+      expect(deleteUser).not.toHaveBeenCalled();
+      expect(updates).toContainEqual(expect.objectContaining({ status: 'imagekit_done' }));
       expect(updates).toContainEqual(expect.objectContaining({ last_error: 'GDPR_OUTBOX_STATUS_UPDATE_FAILED' }));
     } finally {
       global.fetch = fetchSalvat;
@@ -489,12 +532,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
                 }),
               }),
             }),
-            update: (payload) => ({
-              eq: async () => {
-                updatePayload = payload;
-                return { error: null };
-              },
-            }),
+            update: (payload) => rezultatUpdateOutbox(payload, (value) => { updatePayload = value; }),
           };
         }
         return {};

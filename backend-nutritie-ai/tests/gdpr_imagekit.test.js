@@ -63,6 +63,8 @@ function creeazaSupabaseAdminFake({
   clerkUserId = 'clerk-123',
   outboxId = 'outbox-abc',
   failStatusUpdate = null,
+  missingStatusUpdate = null,
+  missingFileIdsUpdate = false,
 } = {}) {
   const apeluri = [];
   const admin = {
@@ -107,12 +109,26 @@ function creeazaSupabaseAdminFake({
           }),
         }),
         update: (payload) => ({
-          eq: async (col, val) => {
+          eq: (col, val) => {
             apeluri.push({ tabela, tip: 'update', payload, eq: [col, val] });
             if (tabela === 'gdpr_deletions' && payload.status === failStatusUpdate) {
-              return { error: new Error('simulated outbox status update failure') };
+              const result = { data: null, error: new Error('simulated outbox status update failure') };
+              return {
+                select: () => ({ maybeSingle: async () => result }),
+                then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
+              };
             }
-            return { error: null };
+            const statusUpdate = tabela === 'gdpr_deletions' && typeof payload.status === 'string';
+            const fileIdsUpdate = tabela === 'gdpr_deletions' && Array.isArray(payload.file_ids);
+            const result = statusUpdate && payload.status === missingStatusUpdate
+                ? { data: null, error: null }
+                : fileIdsUpdate && missingFileIdsUpdate
+                  ? { data: null, error: null }
+                : { data: { id: outboxId }, error: null };
+            return {
+              select: () => ({ maybeSingle: async () => result }),
+              then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
+            };
           },
         }),
         delete: () => ({
@@ -314,6 +330,50 @@ describe('GDPR ImageKit', () => {
       expect(stub.imaginiApeluri).toHaveLength(0);
     });
 
+    test('actualizarea db_done fără rând returnat oprește pașii externi și Auth', async () => {
+      const adminFaraRandActualizat = creeazaSupabaseAdminFake({ missingStatusUpdate: 'db_done' });
+      const ctx = {
+        db: adminFaraRandActualizat,
+        admin: adminFaraRandActualizat,
+        userId: 'supabase-id',
+        modAdmin: true,
+      };
+      const appFailClosed = express();
+      appFailClosed.use(createGdprRouter({
+        requireAuth: (req, res, next) => next(),
+        generalLimiter: (req, res, next) => next(),
+        supabaseAdmin: adminFaraRandActualizat,
+        contextDate: () => ctx,
+        profilRepo: {},
+      }));
+
+      const res = await request(appFailClosed).delete('/delete-account');
+      expect(res.status).toBe(500);
+      expect(adminFaraRandActualizat.apeluri.some((apel) => apel.tip === 'deleteUser')).toBe(false);
+      expect(stub.clerkApeluri).toHaveLength(0);
+      expect(stub.imaginiApeluri).toHaveLength(0);
+    });
+
+    test('persistarea file_ids fără rând returnat oprește ștergerea datelor și a identităților', async () => {
+      const adminFaraRandOutbox = creeazaSupabaseAdminFake({ missingFileIdsUpdate: true });
+      const ctx = { db: adminFaraRandOutbox, admin: adminFaraRandOutbox, userId: 'supabase-id', modAdmin: true };
+      const appFailClosed = express();
+      appFailClosed.use(createGdprRouter({
+        requireAuth: (req, res, next) => next(),
+        generalLimiter: (req, res, next) => next(),
+        supabaseAdmin: adminFaraRandOutbox,
+        contextDate: () => ctx,
+        profilRepo: {},
+      }));
+
+      const res = await request(appFailClosed).delete('/delete-account');
+      expect(res.status).toBe(500);
+      expect(adminFaraRandOutbox.apeluri.filter((apel) => apel.tip === 'delete')).toHaveLength(0);
+      expect(adminFaraRandOutbox.apeluri.some((apel) => apel.tip === 'deleteUser')).toBe(false);
+      expect(stub.clerkApeluri).toHaveLength(0);
+      expect(stub.imaginiApeluri).toHaveLength(0);
+    });
+
     test('N-OUTBOX: rpc outbox întoarce null (fără rând outbox) → 503 fail-closed, nimic nu se șterge', async () => {
       const adminNull = creeazaSupabaseAdminFake({ outboxId: null });
       const ctx = { db: adminNull, admin: adminNull, userId: 'supabase-id', modAdmin: true };
@@ -404,9 +464,16 @@ describe('GDPR ImageKit', () => {
               };
             },
             update: (payload) => ({
-              eq: async () => {
+              eq: () => {
                 evenimente.push({ tabela, tip: 'update', payload });
-                return { error: null };
+                const result = {
+                  data: { id: 'outbox-n4-test' },
+                  error: null,
+                };
+                return {
+                  select: () => ({ maybeSingle: async () => result }),
+                  then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
+                };
               },
             }),
             delete: () => ({
@@ -498,11 +565,15 @@ describe('GDPR ImageKit', () => {
               };
             },
             update: (payload) => ({
-              eq: async () => {
+              eq: () => {
                 evenimente.push({ tabela, tip: 'update', payload });
                 // M2: persistarea esueaza (e.g. eroare DB) -> ruta trebuie sa
                 // opreasca stergerea, nu sa continue best-effort cu orfani ImageKit.
-                return { error: new Error('DB_FAIL_UPDATE_FILE_IDS') };
+                const result = { data: null, error: new Error('DB_FAIL_UPDATE_FILE_IDS') };
+                return {
+                  select: () => ({ maybeSingle: async () => result }),
+                  then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
+                };
               },
             }),
             delete: () => ({

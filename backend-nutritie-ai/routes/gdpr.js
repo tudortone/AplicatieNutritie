@@ -181,7 +181,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       const actualizezaStatus = async (status, lastError = null) => {
         if (!outboxId) return;
         const finalizat = status === 'completed';
-        const { error } = await supabaseAdmin
+        const { data: updatedRow, error } = await supabaseAdmin
           .from('gdpr_deletions')
           .update({
             status,
@@ -195,8 +195,10 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
               file_ids: [],
             } : {}),
           })
-          .eq('id', outboxId);
-        if (error) {
+          .eq('id', outboxId)
+          .select('id')
+          .maybeSingle();
+        if (error || !updatedRow?.id) {
           const statusError = new Error('GDPR_OUTBOX_STATUS_UPDATE_FAILED');
           statusError.code = 'GDPR_OUTBOX_STATUS_UPDATE_FAILED';
           throw statusError;
@@ -225,11 +227,13 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
             fileIds = new Set(fileIdsPersistate);
           }
           if (fileIds.size > 0 || fileIdsPersistate.length === 0) {
-            const { error: eroarePersistareFileIds } = await supabaseAdmin
+            const { data: outboxActualizat, error: eroarePersistareFileIds } = await supabaseAdmin
               .from('gdpr_deletions')
               .update({ file_ids: [...fileIds] })
-              .eq('id', outboxId);
-            if (eroarePersistareFileIds) {
+              .eq('id', outboxId)
+              .select('id')
+              .maybeSingle();
+            if (eroarePersistareFileIds || !outboxActualizat?.id) {
               throw new Error('GDPR_OUTBOX_FILE_IDS_PERSIST_FAILED');
             }
           }

@@ -34,4 +34,6 @@ frontend-nutritie/output/
 frontend-nutritie/graphify-out/
 backend-nutritie-ai/graphify-out/
 supabase/.temp/
+__pycache__/
+*.pyc
 

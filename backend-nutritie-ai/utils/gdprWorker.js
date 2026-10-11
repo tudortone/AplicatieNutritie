@@ -31,8 +31,10 @@ async function actualizeazaStatusOutbox(supabaseAdmin, id, payload) {
   const rezultat = await supabaseAdmin
     .from('gdpr_deletions')
     .update(payload)
-    .eq('id', id);
-  if (rezultat?.error) {
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+  if (rezultat?.error || !rezultat?.data?.id) {
     const error = new Error('GDPR_OUTBOX_STATUS_UPDATE_FAILED');
     error.code = 'GDPR_OUTBOX_STATUS_UPDATE_FAILED';
     throw error;

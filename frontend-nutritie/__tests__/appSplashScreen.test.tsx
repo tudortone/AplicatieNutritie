@@ -65,6 +65,25 @@ describe('AppSplashScreen Minimalist Animation', () => {
     expect(screen.queryByTestId('app-splash-screen')).toBeNull();
   });
 
+  it('uses the latest completion callback after props change during the fallback delay', async () => {
+    const staleCallback = jest.fn();
+    const latestCallback = jest.fn();
+    const screen = await render(
+      <AppSplashScreen isReady={false} onAnimationComplete={staleCallback} />
+    );
+
+    await screen.rerender(
+      <AppSplashScreen isReady={false} onAnimationComplete={latestCallback} />
+    );
+
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+    });
+
+    expect(staleCallback).not.toHaveBeenCalled();
+    expect(latestCallback).toHaveBeenCalled();
+  });
+
   it('respects reduceMotion accessibility setting and exits quickly without jarring animation', async () => {
     const motionHook = require('../hooks/useReducedMotion');
     jest.spyOn(motionHook, 'useReducedMotion').mockReturnValue(true);
