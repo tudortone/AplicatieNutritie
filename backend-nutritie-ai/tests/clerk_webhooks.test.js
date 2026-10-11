@@ -45,7 +45,7 @@ function creeazaSupabaseAdminFake({ userCreat = { id: 'supabase-user-creat' } } 
           }),
         }),
         upsert: async (payload, options) => {
-          apeluri.push({ tabela, tip: 'upsert', payload, onConflict: options?.onConflict });
+          apeluri.push({ tabela, tip: 'upsert', payload, onConflict: options?.onConflict, ignoreDuplicates: options?.ignoreDuplicates });
           return { error: null };
         },
         update: (payload) => ({
@@ -111,7 +111,19 @@ describe('Clerk Webhooks & User Sync Audit', () => {
     expect(res.body.eroare).toMatch(/Semnătură webhook invalidă/i);
   });
 
-  test('user.created cu external_id valid foloseste acel id', async () => {
+  test('eveniment semnat fara identificator Clerk esueaza inchis fara scrieri', async () => {
+    const payload = JSON.stringify({ type: 'user.deleted', data: { external_id: 'victim-id' } });
+    const res = await request(app)
+      .post('/api/v1/webhooks/clerk')
+      .set(semneaza(payload, 'msg_missing_identity'))
+      .set('content-type', 'application/json')
+      .send(payload);
+
+    expect(res.status).toBe(400);
+    expect(admin.apeluri).toEqual([]);
+  });
+
+  test('user.created nu stabileste asocierea nici cand external_id indica un user existent', async () => {
     const payload = JSON.stringify({
       type: 'user.created',
       data: {
@@ -128,18 +140,12 @@ describe('Clerk Webhooks & User Sync Audit', () => {
       .send(payload);
 
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
-
-    const upsertMap = admin.apeluri.find((a) => a.tabela === 'clerk_user_map' && a.tip === 'upsert');
-    expect(upsertMap.payload.supabase_user_id).toBe('auth-user-extern');
-
-    const upsertProfil = admin.apeluri.find((a) => a.tabela === 'profil' && a.tip === 'upsert');
-    expect(upsertProfil.payload.user_id).toBe('auth-user-extern');
-    // Nu se creează un auth user suplimentar
+    expect(res.body.ok).toBe(false);
+    expect(admin.apeluri.some((a) => a.tabela === 'clerk_user_map' || a.tabela === 'profil')).toBe(false);
     expect(admin.apeluri.some((a) => a.tip === 'createUser')).toBe(false);
   });
 
-  test('user.created fara external_id creeaza un auth user real (FK satisfacut)', async () => {
+  test('user.created fara external_id nu revendica emailul si nu creeaza alt cont', async () => {
     const payload = JSON.stringify({
       type: 'user.created',
       data: {
@@ -158,19 +164,14 @@ describe('Clerk Webhooks & User Sync Audit', () => {
       .send(payload);
 
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body.ok).toBe(false);
     expect(res.body.type).toBe('user.created');
-
-    // A creat auth user-ul real, cu email-ul din Clerk și email_confirm
-    const creare = admin.apeluri.find((a) => a.tip === 'createUser');
-    expect(creare.params.email).toBe('test@example.com');
-    expect(creare.params.email_confirm).toBe(true);
-
-    const upsertMap = admin.apeluri.find((a) => a.tabela === 'clerk_user_map' && a.tip === 'upsert');
-    expect(upsertMap.payload.supabase_user_id).toBe('supabase-user-creat');
+    expect(admin.apeluri.some((a) => a.tip === 'createUser' || a.tip === 'rpc')).toBe(false);
+    expect(admin.apeluri.some((a) => a.tabela === 'clerk_user_map' && a.tip === 'upsert')).toBe(false);
+    expect(admin.apeluri.some((a) => a.tabela === 'profil' && a.tip === 'upsert')).toBe(false);
   });
 
-  test('user.created reutilizeaza maparea existenta (idempotent)', async () => {
+  test('user.created nu modifica profilul unui utilizator cu mapare legacy', async () => {
     // Simulăm că maparea există deja în baza de date
     admin.apeluri.push({
       tabela: 'clerk_user_map',
@@ -180,7 +181,7 @@ describe('Clerk Webhooks & User Sync Audit', () => {
 
     const payload = JSON.stringify({
       type: 'user.created',
-      data: { id: 'user_idempotent', email_addresses: [{ email_address: 'idem@example.com' }] },
+      data: { id: 'user_idempotent', external_id: 'supabase-id-mapat', email_addresses: [{ email_address: 'idem@example.com' }] },
     });
 
     const res = await request(app)
@@ -190,14 +191,12 @@ describe('Clerk Webhooks & User Sync Audit', () => {
       .send(payload);
 
     expect(res.status).toBe(200);
-    // Nu creează auth user și nu rescrie maparea
+    expect(res.body.ok).toBe(false);
     expect(admin.apeluri.some((a) => a.tip === 'createUser')).toBe(false);
-
-    const upsertProfil = admin.apeluri.filter((a) => a.tabela === 'profil' && a.tip === 'upsert');
-    expect(upsertProfil[upsertProfil.length - 1].payload.user_id).toBe('supabase-id-mapat');
+    expect(admin.apeluri.some((a) => a.tabela === 'profil')).toBe(false);
   });
 
-  test('user.updated actualizeaza profilul utilizatorului mapat', async () => {
+  test('user.updated nu modifica un profil mapat chiar daca external_id coincide', async () => {
     admin.apeluri.push({
       tabela: 'clerk_user_map',
       tip: 'upsert',
@@ -206,7 +205,7 @@ describe('Clerk Webhooks & User Sync Audit', () => {
 
     const payload = JSON.stringify({
       type: 'user.updated',
-      data: { id: 'user_update', first_name: 'Nou', last_name: 'Nume' },
+      data: { id: 'user_update', external_id: 'supabase-id-update', first_name: 'Nou', last_name: 'Nume' },
     });
 
     const res = await request(app)
@@ -216,19 +215,35 @@ describe('Clerk Webhooks & User Sync Audit', () => {
       .send(payload);
 
     expect(res.status).toBe(200);
-    const update = admin.apeluri.find((a) => a.tabela === 'profil' && a.tip === 'update');
-    expect(update.eq).toEqual(['user_id', 'supabase-id-update']);
-    expect(update.payload.nume).toBe('Nou Nume');
+    expect(res.body.ok).toBe(false);
+    expect(admin.apeluri.some((a) => a.tabela === 'profil')).toBe(false);
   });
 
-  test('user.deleted sterge datele utilizatorului mapat', async () => {
+  test('user.updated replayed nu produc mutatii repetate', async () => {
+    const payload = JSON.stringify({
+      type: 'user.updated',
+      data: { id: 'user_replay', external_id: 'victim-id', first_name: 'Spoofed' },
+    });
+    const send = () => request(app).post('/api/v1/webhooks/clerk')
+      .set(semneaza(payload, 'msg_replay'))
+      .set('content-type', 'application/json').send(payload);
+
+    const first = await send();
+    const replay = await send();
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(admin.apeluri.some((a) => ['clerk_user_map', 'profil'].includes(a.tabela))).toBe(false);
+    expect(admin.apeluri.some((a) => a.tip === 'delete')).toBe(false);
+  });
+
+  test('user.deleted nu poate sterge datele Supabase chiar daca external_id coincide', async () => {
     admin.apeluri.push({
       tabela: 'clerk_user_map',
       tip: 'upsert',
       payload: { clerk_user_id: 'user_del', supabase_user_id: 'supabase-id-del' },
     });
 
-    const payload = JSON.stringify({ type: 'user.deleted', data: { id: 'user_del' } });
+    const payload = JSON.stringify({ type: 'user.deleted', data: { id: 'user_del', external_id: 'supabase-id-del' } });
 
     const res = await request(app)
       .post('/api/v1/webhooks/clerk')
@@ -237,9 +252,30 @@ describe('Clerk Webhooks & User Sync Audit', () => {
       .send(payload);
 
     expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(false);
     const sterse = admin.apeluri.filter((a) => a.tip === 'delete');
-    expect(sterse.some((a) => a.tabela === 'mese' && a.eq[1] === 'supabase-id-del')).toBe(true);
-    expect(sterse.some((a) => a.tabela === 'profil' && a.eq[1] === 'supabase-id-del')).toBe(true);
-    expect(sterse.some((a) => a.tabela === 'clerk_user_map' && a.eq[1] === 'user_del')).toBe(true);
+    expect(sterse).toEqual([]);
+    expect(admin.apeluri.some((a) => a.tabela === 'clerk_webhook_esuate' && a.payload.motiv === 'CLERK_DELETE_NOT_SUPABASE_AUTHORITY')).toBe(true);
   });
+
+  test.each(['user.created', 'user.updated', 'user.deleted'])(
+    '%s nu poate modifica sau sterge contul mapat cand external_id nu corespunde',
+    async (type) => {
+      admin.apeluri.push({
+        tabela: 'clerk_user_map', tip: 'upsert',
+        payload: { clerk_user_id: 'user_mismatch', supabase_user_id: 'victim-id' },
+      });
+      const payload = JSON.stringify({
+        type,
+        data: { id: 'user_mismatch', external_id: 'different-id', first_name: 'Wrong' },
+      });
+      const res = await request(app).post('/api/v1/webhooks/clerk')
+        .set(semneaza(payload, `msg_mismatch_${type}`))
+        .set('content-type', 'application/json').send(payload);
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(false);
+      expect(admin.apeluri.some((a) => a.tabela === 'profil' && ['upsert', 'update', 'delete'].includes(a.tip))).toBe(false);
+      expect(admin.apeluri.some((a) => a.tip === 'delete')).toBe(false);
+    },
+  );
 });
