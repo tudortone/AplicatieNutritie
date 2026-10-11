@@ -1,0 +1,48 @@
+# GETFLOW Autonomous Task Ledger
+
+Updated: 2026-10-11
+Repository: `tudortone/AplicatieNutritie`
+Integration branch: `ci-integration/verified-fixes`
+Reference SHA: `f212e42d5fedcf7dd16c82d58d22c9d4b327f754`
+Plan: [2026-10-11-getflow-autonomous-release-readiness.md](docs/superpowers/plans/2026-10-11-getflow-autonomous-release-readiness.md)
+
+## Global safety
+
+- Production inspection is read-only only. No deploy, production config/data change, billing change, or release publishing performed.
+- Dirty worktree preserved; no reset, clean, stash, rebase, merge, branch switch, or unrelated staging.
+- Claims below distinguish historical reports from fresh local or live evidence.
+
+## Baseline
+
+| Item | Current evidence | Status | Next action |
+|---|---|---|---|
+| Requested report set | All four reports read in full at task start | Complete | Reconcile against fresh state |
+| Current branch / HEAD | `ci-integration/verified-fixes` at `f212e42d5fedcf7dd16c82d58d22c9d4b327f754` | Verified locally | Verify remote/ancestry and CI |
+| Remote | `origin` resolves to the expected GitHub repository | Verified locally | Verify remote refs/read-only provider access |
+| Tracked dirty diff | `GETFLOW_FINAL_RELEASE_STATUS.md`, +49 lines; contains release checkpoint and post-v28 source/test/device caveats | Preserved, not reviewed for correctness yet | Keep untouched; read-only reconcile if relevant |
+| Untracked inventory | 17,388 paths (`??`) from `git status --porcelain=v1 -uall`; largest roots: `.qa-temp-20261009` 6,731, `frontend-nutritie` 3,856, `scratch` 2,757, `artifacts` 2,564, `backend-nutritie-ai` 1,253 | Preserved; bulk contents not individually reviewed | Inspect only relevant, bounded areas; do not clean |
+| Existing ledger | No prior `GETFLOW_AUTONOMOUS_TASK_LEDGER.md` found | Created for this task | Continue updating this file |
+
+## Findings and workstream status
+
+| Task ID | Owner | Files / system | Status | Evidence | Next action / blocker |
+|---|---|---|---|---|---|
+| 1 | Root | Reports, Git baseline | Complete | All four reports read; HEAD `f212e42d5fedcf7dd16c82d58d22c9d4b327f754`; branch `ci-integration/verified-fixes`; remote origin is expected GitHub repo; 17,388 untracked paths and one tracked diff preserved | Reconcile remaining workstreams |
+| 2 | Agent A — Git/release/CI | Git refs, workflow files, GitHub run metadata | Complete | GitHub live integration head matches local; live `main` `bf7ca4c77701e4ee78d9bffd3a329d779e8e7d6f`; `origin/main...HEAD` `0 12`; exact-head CI run `38082432769` failed: frontend audit and OSV jobs, while backend/RLS/secret scan passed; frontend tests skipped | Keep audit fail-closed; no CI run rerun or policy exception authorized |
+| 3 | Agent B — Render/Clerk | Backend auth/webhook source; public health only | Complete | Current source at HEAD verifies Svix, neutralizes Clerk user events to minimal reconciliation, ordinary identity is Supabase Auth only; GET `/health` returned 200 at 2026-10-11 06:41 UTC, but response has no commit SHA | Live Render source version remains unverified; owner-authorized deploy needed to prove hotfix live |
+| 4 | Agent C — Trigger/Supabase | Trigger task/auth code and RLS/migrations | Source review complete; live state blocked | Local `user-sync` task is a no-op for Clerk events; configs target `proj_elmgvpjxptegigrzrhtv`; source analyzer reports 25 tables/31 functions/0 issues. No live dashboard or Production RLS test was performed. A focused local test launch failed before Jest tests due Windows sandbox `EPERM` resolving its temp directory. | Owner-authorized read-only Trigger/Supabase access or an isolated integration environment is required to prove deployed task/migration/RLS state. No Production test. |
+| 5 | Agent D — dependencies | Manifests, lockfiles, audit gates, upstream advisories | Review complete; scanner hardening uncommitted | Exact-head CI `38082432769`: frontend audit and OSV dependency scan failed; backend lint/tests, RLS CI, and secret scan passed. Frontend audit: 47 entries, 3 permitted, 44 blocked; `braces@3.0.3` GHSA-vfj7-8cjw-p6xm remains high. `node-forge@1.4.0` GHSA-86w9-cpqp-85rv remains high with no upstream fix. `compression@1.8.2` and `proxy-addr@2.0.8` have clean backend npm audit. Root cause: `osv-scanner.toml` had 29 name-only global ignores; fresh OSV query found active node-forge advisory suppressed by that config. This task removed the package-wide ignores; `auditGate.js` and its existing exception were not changed; no exception added. OSV CLI is not installed, so the modified scanner config has not been executed locally. | Run the exact pinned OSV scanner in CI or install/use an approved local binary before claiming scanner-config execution. Keep audit gate red until advisories are remediated/owner-approved; no upload exception. |
+| 6 | Agent E — AdMob/domain/monetization | Public site, app-ads, purchase source/config | Complete | Public GET on 2026-10-11: `getflow.app` and both domain app-ads URLs return 200 Squarespace HTML, not the publisher record; Render `/app-ads.txt` returns 200 `text/plain` with `google.com, pub-5202280855139508, DIRECT, f08c47fec0942fa0`. Source copies match. Production app IDs are configured in source; Play products/account settings were not changed or verified. | Owner must configure public domain hosting and then confirm Play developer website / request AdMob recrawl. |
+| 7 | Agent F — Android/QA | Expo/EAS/Android config and test gates | Source review complete; executable gates partially blocked | Source package `com.totsrl.getflo`; SDK 36/36/26; CAMERA and Health Connect READ_STEPS required; forbidden audio/storage/media/overlay permissions are rejected by verifier. EAS production profile uses Node 22.20 and real AdMob IDs; internal profile uses test IDs. Existing v29 AAB hash freshly matches `A3F9…DD12B`, size 86,131,485 bytes; report says no source fingerprint. Play max 27 and EAS remote code/env are only stale/blocked evidence. ADB daemon did not start. Node 22.23.3 exists locally, but full frontend Jest did not finish (7 suites visibly passed, no summary). `permissions:verify` failed in its isolated prebuild `npm ci` with npm `Exit handler never called!`; its script cleaned the temp workspace. | No build or upload authorized here. Current Play/EAS counter and Production env require read-only owner-enabled access; physical-device validation remains pending. |
+| 8 | Root | Evidence-based fixes/review/handoff | Local evidence ledger complete; scanner validation and release blockers remain | Only task-owned source-policy change is removal of broad OSV package ignores plus this plan/ledger. No application source, backend, database, Play, Render, Trigger, or billing changes. Frontend Jest is incomplete; `permissions:verify` failed at npm prebuild, not at manifest assertions. Exact-head CI backend test job passed under the Node 22 workflow. | Preserve the unverified OSV config edit until the exact pinned scanner can run; commit only validated task-owned documentation; do not stage the dirty release status or untracked app trees. |
+
+## Decisions
+
+- No decision has been made to change Production or publish a release. The current request authorizes investigation and safe local engineering only.
+- No application source or deployment settings were modified. The tracked `osv-scanner.toml` was changed to remove global package-name ignore rules; this is a stricter scan policy and does not add an exception. Exact scanner execution remains unverified because the CLI is unavailable.
+- The source-level Clerk fix is not proof that the live Render instance is running it; `/health` does not expose a revision. Do not infer deployment from uptime alone.
+- Exact-head CI is genuinely red on the frontend audit/dependency scan; successful typecheck/lint and Vercel checks do not cancel those failures or the skipped frontend Jest step.
+- The current live Render health probe is HTTP 200 but reveals no commit identifier. The process uptime is consistent with earlier observations, not proof of the deployed hotfix. The old historical backend commit contained email-based association/deletion behavior, so deployment identity must be verified before calling the Production exposure closed.
+- The public GetFlow domain still serves Squarespace parking HTML, including `/app-ads.txt`; Render serves the correct plaintext record, but that does not satisfy the public-domain requirement.
+- Existing v29 artifact hash was rechecked, but its source provenance is not reliable enough to treat it as containing all later working-tree changes. No new build, Play upload, or Production promotion was performed.
+- Root test evidence is mixed: exact-head GitHub CI backend lint/tests passed under its Node 22 workflow; frontend exact-head Jest was skipped after the audit failure. A local Node 22.23.3 full frontend run was attempted; Windows sandbox blocked default temp resolution, and the elevated retry showed seven passing suites but produced no completion summary. It was stopped after the Node process disappeared; the full frontend suite is not PASS.
