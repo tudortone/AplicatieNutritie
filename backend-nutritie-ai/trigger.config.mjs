@@ -1,7 +1,7 @@
-const { defineConfig } = require('@trigger.dev/sdk/v3');
+import { defineConfig } from '@trigger.dev/sdk/v3';
 
-module.exports = defineConfig({
-  project: "proj_nutriai_app",
+export default defineConfig({
+  project: "proj_elmgvpjxptegigrzrhtv",
   runtime: "node",
   logLevel: "log",
   maxDuration: 300,
