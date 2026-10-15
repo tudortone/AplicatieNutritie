@@ -1650,5 +1650,27 @@
       "high_protein": "High-protein preference",
       "dairy_free": "Dairy-free preference"
     }
+  },
+  "flowCompanion": {
+    "pillA11y": "Your Flow Companion and calorie limit status",
+    "stage1Name": "Spark Egg",
+    "stage2Name": "Ember Fox",
+    "stage3Name": "Volt Lynx",
+    "stage4Name": "Cosmic Wolf",
+    "stage5Name": "Flow Titan",
+    "stageLabel": "Stage {{stage}} of 5",
+    "optimal": "On track",
+    "nearLimit": "Near limit",
+    "exceeded": "Limit reached",
+    "optimalDesc": "Calories in the optimal zone. You have energy to spare for today!",
+    "nearLimitDesc": "You reached over 85% of your daily calorie budget. Choose lighter meals!",
+    "exceededDesc": "Daily calorie target exceeded. Focus on hydration and recovery.",
+    "modalTitle": "Your Flow Companion",
+    "evolutionTitle": "Evolution & Streak",
+    "nextEvolutionIn": "{{days}} more streak days to unlock next evolution!",
+    "maxEvolutionReached": "You reached the supreme Legend form!",
+    "beaconTitle": "Nutrition Limit Beacon",
+    "caloriesProgress": "{{consumed}} of {{target}} kcal consumed",
+    "close": "Got it"
   }
 }

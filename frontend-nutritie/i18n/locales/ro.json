@@ -1650,5 +1650,27 @@
       "high_protein": "Prioritate hiperproteică",
       "dairy_free": "Preferință fără lactate"
     }
+  },
+  "flowCompanion": {
+    "pillA11y": "Companionul tău Flow și starea limitei calorice",
+    "stage1Name": "Sparky (Ou)",
+    "stage2Name": "Pui de Foc",
+    "stage3Name": "Râs Electric",
+    "stage4Name": "Lup Cosmic",
+    "stage5Name": "Dragon Flow",
+    "stageLabel": "Etapa {{stage}} din 5",
+    "optimal": "În grafic",
+    "nearLimit": "Aproape de limită",
+    "exceeded": "Limită atinsă",
+    "optimalDesc": "Calorii în zona optimă. Ai energie liberă pentru restul zilei!",
+    "nearLimitDesc": "Ai atins peste 85% din bugetul caloric de azi. Alege mese ușoare!",
+    "exceededDesc": "Ținta calorică a fost depășită. Concentrează-te pe hidratare și odihnă.",
+    "modalTitle": "Companionul Tău Flow",
+    "evolutionTitle": "Evoluție & Streak",
+    "nextEvolutionIn": "Mai ai {{days}} zile de streak până la următoarea formă!",
+    "maxEvolutionReached": "Ai atins forma supremă de Legendă!",
+    "beaconTitle": "Becul de Limită Nutrițională",
+    "caloriesProgress": "{{consumed}} din {{target}} kcal consumate",
+    "close": "Am înțeles"
   }
 }

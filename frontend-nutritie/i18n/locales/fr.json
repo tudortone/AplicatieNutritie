@@ -1650,5 +1650,27 @@
       "high_protein": "Priorité hyperprotéinée",
       "dairy_free": "Sans produits laitiers"
     }
+  },
+  "flowCompanion": {
+    "pillA11y": "Votre Compagnon Flow et statut de limite calorique",
+    "stage1Name": "Œuf Spark",
+    "stage2Name": "Renard de Feu",
+    "stage3Name": "Lynx Volt",
+    "stage4Name": "Loup Cosmique",
+    "stage5Name": "Titan Flow",
+    "stageLabel": "Étape {{stage}} sur 5",
+    "optimal": "En cible",
+    "nearLimit": "Proche limite",
+    "exceeded": "Limite atteinte",
+    "optimalDesc": "Calories dans la zone optimale. Énergie disponible pour la journée !",
+    "nearLimitDesc": "Vous avez atteint plus de 85% de votre budget calorique. Privilégiez des repas légers !",
+    "exceededDesc": "Objectif calorique dépassé. Concentrez-vous sur l'hydratation et le repos.",
+    "modalTitle": "Votre Compagnon Flow",
+    "evolutionTitle": "Évolution & Série",
+    "nextEvolutionIn": "Plus que {{days}} jours de série pour la prochaine évolution !",
+    "maxEvolutionReached": "Vous avez atteint la forme suprême Légende !",
+    "beaconTitle": "Balise de Limite Nutritionnelle",
+    "caloriesProgress": "{{consumed}} sur {{target}} kcal consommées",
+    "close": "Compris"
   }
 }

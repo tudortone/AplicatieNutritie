@@ -1650,5 +1650,27 @@
       "high_protein": "Proteinreich",
       "dairy_free": "Milchfrei"
     }
+  },
+  "flowCompanion": {
+    "pillA11y": "Dein Flow-Begleiter und Kalorienlimit-Status",
+    "stage1Name": "Spark-Ei",
+    "stage2Name": "Feuerfuchs",
+    "stage3Name": "Volt-Luchs",
+    "stage4Name": "Kosmischer Wolf",
+    "stage5Name": "Flow-Titan",
+    "stageLabel": "Stufe {{stage}} von 5",
+    "optimal": "Im Plan",
+    "nearLimit": "Fast am Limit",
+    "exceeded": "Limit erreicht",
+    "optimalDesc": "Kalorien im optimalen Bereich. Du hast noch Energie für den Tag!",
+    "nearLimitDesc": "Du hast über 85% deines Kalorienbudgets erreicht. Wähle leichtere Mahlzeiten!",
+    "exceededDesc": "Tagesziel überschritten. Konzentriere dich auf Hydration und Erholung.",
+    "modalTitle": "Dein Flow-Begleiter",
+    "evolutionTitle": "Evolution & Streak",
+    "nextEvolutionIn": "Noch {{days}} Streak-Tage bis zur nächsten Evolution!",
+    "maxEvolutionReached": "Du hast die höchste Legenden-Stufe erreicht!",
+    "beaconTitle": "Ernährungs-Limit-Leuchte",
+    "caloriesProgress": "{{consumed}} von {{target}} kcal verbraucht",
+    "close": "Verstanden"
   }
 }

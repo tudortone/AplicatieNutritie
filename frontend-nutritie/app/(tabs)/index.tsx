@@ -39,6 +39,8 @@ import { HomePhotoAnalysisIndicator } from '../../components/photo/PhotoJobStatu
 import { calculateDailyWaterTargetMl } from '../../lib/hydration';
 import { aboneazaLaMeseSalvateVerificat } from '../../lib/freshnessMese';
 import { decideCalorieRingUpdate } from '../../lib/mealRingAnimation';
+import { FlowCompanionPill } from '../../components/home/FlowCompanionPill';
+import { FlowCompanionModal } from '../../components/home/FlowCompanionModal';
 
 const AnimatedRingCircle = Animated.createAnimatedComponent(Circle);
 
@@ -138,6 +140,7 @@ export default function HomeScreen() {
   const [stepGoalInput, setStepGoalInput] = useState('');
   const [completedStepsInput, setCompletedStepsInput] = useState('');
   const [verifiedMealSaveRevision, setVerifiedMealSaveRevision] = useState(0);
+  const [companionModalVisible, setCompanionModalVisible] = useState(false);
 
   // HOME-TOUCH-001 / REMED-029: foaia Adaugă masă se montează DOAR la prima deschidere
   // pentru a preveni interceptarea atingerilor pe Home de către containerul/backdrop-ul
@@ -476,7 +479,17 @@ export default function HomeScreen() {
         {/* Header */}
         <Animated.View style={s.header}>
           <View testID="home-header-actions" style={[s.headerActions, isCompact && s.headerActionsCompact]}>
-            <FlowCreditsPill />
+            {/* Left: Flow Companion Mascot & Calorie Limit Beacon */}
+            <FlowCompanionPill
+              streak={streak}
+              caloriiConsumate={caloriiConsumate}
+              caloriiTinta={caloriiTinta}
+              isCompact={isCompact}
+              onPress={() => setCompanionModalVisible(true)}
+            />
+
+            <View style={[s.headerRightGroup, isCompact && s.headerRightGroupCompact]}>
+              <FlowCreditsPill />
             <TouchableOpacity
               onPress={() => router.push('/notificari' as any)}
               accessibilityRole="button"
@@ -519,6 +532,7 @@ export default function HomeScreen() {
                 <Text style={[s.streakText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{t('home.streakDays', { count: streak })}</Text>
               </LinearGradient>
             </TouchableOpacity>
+            </View>
           </View>
         </Animated.View>
 
@@ -961,6 +975,13 @@ export default function HomeScreen() {
         <AddMealBottomSheet ref={addMealSheetRef} openOnMount onSuccess={refresh} onMasaCreata={optimisticAddMeal} />
       ) : null}
       <StreakBottomSheet ref={streakSheetRef} />
+      <FlowCompanionModal
+        visible={companionModalVisible}
+        onClose={() => setCompanionModalVisible(false)}
+        streak={streak}
+        caloriiConsumate={caloriiConsumate}
+        caloriiTinta={caloriiTinta}
+      />
       {/* BUG-004: greutatea se editează direct pe Home, fără navigare la Profil */}
       <AddWeightModal
         visible={weightModalVisible}
@@ -990,9 +1011,13 @@ const s = StyleSheet.create({
   eroareBtnText: { fontSize: 13, fontWeight: '800' },
 
   // Header
-  header: { width: '100%', maxWidth: 680, alignSelf: 'center', alignItems: 'flex-end', marginBottom: 20 },
-  headerActions: { width: '100%', maxWidth: '100%', minWidth: 0, flexShrink: 1, flexDirection: 'row', flexWrap: 'nowrap', justifyContent: 'flex-end', alignItems: 'center', gap: 10 },
+  header: { width: '100%', maxWidth: 680, alignSelf: 'center', marginBottom: 20 },
+  headerActions: { width: '100%', maxWidth: '100%', minWidth: 0, flexShrink: 1, flexDirection: 'row', flexWrap: 'nowrap', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   headerActionsCompact: { gap: 6 },
+  headerRightGroup: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  headerRightGroupCompact: { gap: 6 },
+  notificationBadge: { position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  notificationBadgeText: { fontSize: 9, fontWeight: '800' },
   notificationButton: { width: 44, height: 44, flexShrink: 0, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
   streakBadge: { borderRadius: 20, overflow: 'hidden' },
   streakGrad: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, gap: 6 },
