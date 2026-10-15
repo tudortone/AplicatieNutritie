@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -33,6 +34,8 @@ import {
   type CompanionStageId,
 } from '../../lib/flowCompanion';
 
+const COMPANION_FULL_IMAGE = require('../../assets/images/flow-companion-full.jpg');
+
 export interface FlowCompanionModalProps {
   visible: boolean;
   onClose: () => void;
@@ -61,20 +64,20 @@ export function FlowCompanionModal({
   const beaconLabel = t(beacon.labelKey, beacon.defaultLabel);
   const beaconDesc = t(beacon.descKey, beacon.defaultDesc);
 
-  const renderLargeStageIcon = (id: CompanionStageId) => {
+  const renderStageBadgeIcon = (id: CompanionStageId) => {
     switch (id) {
       case 'egg':
-        return <Egg size={44} color={colors.accent} strokeWidth={2.2} />;
+        return <Egg size={12} color={colors.accent} strokeWidth={2.4} />;
       case 'fox':
-        return <Flame size={44} color={colors.accent} strokeWidth={2.2} fill={colors.accent + '33'} />;
+        return <Flame size={12} color={colors.accent} strokeWidth={2.4} />;
       case 'lynx':
-        return <Zap size={44} color={colors.accent} strokeWidth={2.2} fill={colors.accent + '33'} />;
+        return <Zap size={12} color={colors.accent} strokeWidth={2.4} />;
       case 'wolf':
-        return <Crown size={44} color={colors.accent} strokeWidth={2.2} fill={colors.accent + '33'} />;
+        return <Crown size={12} color={colors.accent} strokeWidth={2.4} />;
       case 'titan':
-        return <Sparkles size={44} color={colors.accent} strokeWidth={2.2} fill={colors.accent + '33'} />;
+        return <Sparkles size={12} color={colors.accent} strokeWidth={2.4} />;
       default:
-        return <Egg size={44} color={colors.accent} strokeWidth={2.2} />;
+        return <Egg size={12} color={colors.accent} strokeWidth={2.4} />;
     }
   };
 
@@ -122,19 +125,24 @@ export function FlowCompanionModal({
               style={[
                 styles.largeAvatarCircle,
                 {
-                  backgroundColor: colors.accent + '15',
-                  borderColor: colors.accent + '44',
+                  borderColor: colors.accent + '55',
+                  shadowColor: colors.accent,
                 },
               ]}
             >
-              {renderLargeStageIcon(stage.id)}
+              <Image
+                source={COMPANION_FULL_IMAGE}
+                style={styles.heroArtwork}
+                resizeMode="cover"
+              />
             </View>
 
             <Text style={[styles.heroName, { color: colors.textPrimary }]}>
               {stageName}
             </Text>
 
-            <View style={[styles.stageBadge, { backgroundColor: colors.accent + '22', borderColor: colors.accent + '44' }]}>
+            <View style={[styles.stageBadge, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '44' }]}>
+              {renderStageBadgeIcon(stage.id)}
               <Text style={[styles.stageBadgeText, { color: colors.accent }]}>
                 {t('flowCompanion.stageLabel', { stage: stage.stage })}
               </Text>
@@ -305,23 +313,36 @@ const styles = StyleSheet.create({
     borderRadius: 70,
   },
   largeAvatarCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 104,
+    height: 104,
+    borderRadius: 28,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
+    overflow: 'hidden',
+    backgroundColor: '#050706',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  heroArtwork: {
+    width: '100%',
+    height: '100%',
   },
   heroName: {
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: -0.3,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   stageBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
   },

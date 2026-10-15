@@ -1,11 +1,13 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Egg, Flame, Zap, Crown, Sparkles, Lightbulb } from 'lucide-react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Lightbulb } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '../../context/ThemeContext';
-import { getCompanionStage, getLimitBeaconStatus, type CompanionStageId } from '../../lib/flowCompanion';
+import { getCompanionStage, getLimitBeaconStatus } from '../../lib/flowCompanion';
+
+const COMPANION_AVATAR = require('../../assets/images/flow-companion-avatar.jpg');
 
 export interface FlowCompanionPillProps {
   streak: number;
@@ -27,23 +29,6 @@ export function FlowCompanionPill({
 
   const stage = getCompanionStage(streak);
   const beacon = getLimitBeaconStatus(caloriiConsumate, caloriiTinta);
-
-  const renderStageIcon = (id: CompanionStageId, size: number = 16) => {
-    switch (id) {
-      case 'egg':
-        return <Egg size={size} color={colors.accent} strokeWidth={2.5} />;
-      case 'fox':
-        return <Flame size={size} color={colors.accent} strokeWidth={2.5} fill={colors.accent + '33'} />;
-      case 'lynx':
-        return <Zap size={size} color={colors.accent} strokeWidth={2.5} fill={colors.accent + '33'} />;
-      case 'wolf':
-        return <Crown size={size} color={colors.accent} strokeWidth={2.5} fill={colors.accent + '33'} />;
-      case 'titan':
-        return <Sparkles size={size} color={colors.accent} strokeWidth={2.5} fill={colors.accent + '33'} />;
-      default:
-        return <Egg size={size} color={colors.accent} strokeWidth={2.5} />;
-    }
-  };
 
   const handlePress = () => {
     try {
@@ -71,17 +56,21 @@ export function FlowCompanionPill({
         },
       ]}
     >
-      {/* Mascot Icon Avatar */}
+      {/* Custom 3D Cyber-Spirit Mascot Avatar */}
       <View
         style={[
           styles.avatarCircle,
           {
-            backgroundColor: colors.accent + '18',
-            borderColor: colors.accent + '33',
+            borderColor: beacon.color + '66',
+            shadowColor: beacon.color,
           },
         ]}
       >
-        {renderStageIcon(stage.id, isCompact ? 14 : 16)}
+        <Image
+          source={COMPANION_AVATAR}
+          style={styles.avatarImage}
+          resizeMode="cover"
+        />
       </View>
 
       {/* Info: Name and Beacon */}
@@ -141,12 +130,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   avatarCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    backgroundColor: '#090C0E',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 5,
+    elevation: 4,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   textContainer: {
     justifyContent: 'center',
