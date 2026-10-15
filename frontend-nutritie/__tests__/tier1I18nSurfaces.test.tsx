@@ -43,6 +43,7 @@ jest.mock('expo-router', () => ({
   router: { back: mockBack, push: jest.fn() },
   useRouter: () => ({ back: mockBack, push: mockPush, replace: jest.fn(), canGoBack: () => false }),
   useNavigation: () => ({ addListener: jest.fn(() => jest.fn()), setOptions: jest.fn() }),
+  useFocusEffect: (callback: any) => require('react').useEffect(callback, [callback]),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({

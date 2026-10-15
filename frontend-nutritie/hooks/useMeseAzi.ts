@@ -179,10 +179,27 @@ export function useMeseAzi(dataSelectata?: Date) {
           const pending = currentUser.id ? await citesteTargeturiPending(currentUser.id) : null;
           const pendingTargets = pending?.userId === currentUser.id ? pending.targets : undefined;
           let greutateLocala: string | null = null;
+          let caloriiLocale: string | null = null;
+          let proteineLocale: string | null = null;
+          let carbiLocali: string | null = null;
+          let grasimiLocale: string | null = null;
           try {
-            greutateLocala = await AsyncStorage.getItem('greutate');
+            const multi = await AsyncStorage.multiGet([
+              'greutate',
+              'caloriiTinta',
+              'proteineTinta',
+              'carbiTinta',
+              'grasimiTinta',
+            ]);
+            for (const [k, v] of multi) {
+              if (k === 'greutate') greutateLocala = v;
+              if (k === 'caloriiTinta') caloriiLocale = v;
+              if (k === 'proteineTinta') proteineLocale = v;
+              if (k === 'carbiTinta') carbiLocali = v;
+              if (k === 'grasimiTinta') grasimiLocale = v;
+            }
           } catch (error) {
-            console.warn('[Profil] Citirea greutății locale restaurate a eșuat:', error);
+            console.warn('[Profil] Citirea valorilor locale restaurate a eșuat:', error);
           }
 
           if (isStale()) return;
@@ -190,18 +207,21 @@ export function useMeseAzi(dataSelectata?: Date) {
           const rezolva = (
             metadataVal: number | undefined,
             localVal: number | undefined,
+            storedStr: string | null,
             fallback: number
           ): number => {
             if (typeof localVal === 'number' && Number.isFinite(localVal)) return localVal;
             if (typeof metadataVal === 'number' && Number.isFinite(metadataVal)) return metadataVal;
+            const parsedStored = storedStr ? Number(storedStr) : NaN;
+            if (Number.isFinite(parsedStored) && parsedStored > 0) return parsedStored;
             return fallback;
           };
 
-          setCaloriiTinta(rezolva(userMetadata.caloriiTinta, pendingTargets?.caloriiTinta, 2000));
-          setProteineTinta(rezolva(userMetadata.proteineTinta, pendingTargets?.proteineTinta, 150));
-          setCarbiTinta(rezolva(userMetadata.carbiTinta, pendingTargets?.carbiTinta, 250));
-          setGrasimiTinta(rezolva(userMetadata.grasimiTinta, pendingTargets?.grasimiTinta, 70));
-          setGreutate(rezolva(userMetadata.greutate, pendingTargets?.greutate, 75));
+          setCaloriiTinta(rezolva(userMetadata.caloriiTinta, pendingTargets?.caloriiTinta, caloriiLocale, 2000));
+          setProteineTinta(rezolva(userMetadata.proteineTinta, pendingTargets?.proteineTinta, proteineLocale, 150));
+          setCarbiTinta(rezolva(userMetadata.carbiTinta, pendingTargets?.carbiTinta, carbiLocali, 250));
+          setGrasimiTinta(rezolva(userMetadata.grasimiTinta, pendingTargets?.grasimiTinta, grasimiLocale, 70));
+          setGreutate(rezolva(userMetadata.greutate, pendingTargets?.greutate, greutateLocala, 75));
           setGreutateIntrodusaKg(
             resolveProfileWeightKg({
               pendingKg: pendingTargets?.greutate,
@@ -316,7 +336,7 @@ export function useMeseAzi(dataSelectata?: Date) {
         if (!isMountedRef.current) return;
         if (!user?.id || userIdSemnal !== user.id) return;
         targetsLoadedRef.current = false;
-        fetchData(true, false);
+        fetchData(true, true);
       }),
     [fetchData, user?.id]
   );

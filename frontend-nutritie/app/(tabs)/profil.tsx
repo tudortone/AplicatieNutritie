@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Save, LogOut, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Camera, CheckCircle2, User, Pencil, Crown, FileText, Watch, Globe, Download, Award } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { themes, themeDisplayNames, ThemeName } from '../../constants/theme';
@@ -48,6 +48,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { finalizeConfirmedAccountDeletion } from '../../lib/accountDeletion';
 import { buildCompleteUserExport, fetchServerGdprExport } from '../../lib/gdprExport';
 import { SupportEmailFooter } from '../../components/ui/SupportEmailFooter';
+import { marcheazaMeseModificate } from '../../lib/freshnessMese';
 
 
 const MEAL_REMINDER_LABEL_KEYS: Record<string, string> = {
@@ -236,6 +237,13 @@ export default function ProfilScreen() {
     initProfile();
   }, [initProfile]);
 
+  const safeFocusEffect = typeof useFocusEffect === 'function' ? useFocusEffect : useEffect;
+  safeFocusEffect(
+    useCallback(() => {
+      initProfile();
+    }, [initProfile])
+  );
+
   const alegePozaProfil = async () => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -308,6 +316,7 @@ export default function ProfilScreen() {
       // REV-003: Serverul a confirmat -> curățăm payload-ul pending pentru acest utilizator
       if (session?.user?.id) {
         await stergeTargeturiPending(session.user.id);
+        marcheazaMeseModificate(session.user.id);
       }
 
       notify.success(t('profile.profileUpdatedTitle'), t('profile.profileUpdatedDesc'));
@@ -333,6 +342,7 @@ export default function ProfilScreen() {
             nume: nume.trim() || undefined,
             avatar_url: avatarUrl || undefined,
           });
+          marcheazaMeseModificate(session.user.id);
         }
       } catch {
         salvatLocal = false;
