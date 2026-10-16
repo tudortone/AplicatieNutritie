@@ -116,25 +116,17 @@ Levels & Evolution:
 
 ---
 
-## 5. RESOLVING THE "BUDGET / MONEY" AMBIGUITY
+## 5. CONFIRMED BUDGET INTERPRETATION & WIDGET SPECIFICATION
 
-The owner's prompt notes:
-> *"The owner also wants useful progress or budget information. IMPORTANT AMBIGUITY: 'Budget / money' might mean: available Flow Credits, money spent or available for the application, progress toward a daily goal, or an in-app progression system. Do not invent a financial budgeting feature. Ask the owner which interpretation is intended before implementation."*
+The owner was consulted regarding the prompt's budget ambiguity and confirmed:
+> **Owner Decision:** **Option 1 — Available Flow Credits (Spendable AI Analysis Credits Balance)**
 
-We propose two distinct, ethical widgets for the owner to choose between:
-
-### Option 1: Flow Credits Budget Widget (Spendable AI Balance)
-- **What it displays:** The user's verified, server-authoritative Flow Credits balance (e.g., `4 Credits`).
-- **Utility:** Shows how many Photo AI analyses, AI Coach suggestions, or barcode lookups the user can perform today.
-- **Integration:** Replaces or enriches the existing `FlowCreditsPill` with a micro-indicator directly beside the companion.
-
-### Option 2: Daily Calorie / Macronutrient Budget Widget
-- **What it displays:** The remaining daily energy budget (e.g., `850 kcal remaining` or `45g protein left`).
-- **Utility:** Nutritionists and fitness coaches commonly refer to daily target allowances as an "energy budget".
-- **Integration:** Pinned as a subtle pill beside the companion, linking to the Calorie Ring below.
-
-### Option 3: Separate Financial Tracking (Requires Product/Privacy Assessment)
-- If the owner specifically desires real financial budgeting (money spent on groceries, food costs, or app subscriptions), this introduces major banking/financial regulatory and privacy implications under GDPR/PSD2. This must be handled in a dedicated financial feature, not combined with the companion.
+### Confirmed Widget Specification:
+- **Data Source:** Verified server-authoritative balance via `context/FlowCreditsContext.tsx` (`flowCredits.credits`).
+- **Visual Presentation:** An ultra-compact dark capsule (`#0B0E0C`) bordered with lime neon (`#CCFF0033`) reading:
+  `FLOW 4 ★` (or current numeric balance).
+- **Placement & Flow:** Sits in the top-right header cluster beside the Notification Bell and Streak Pill, directly reflecting spendable capacity for the Runner Sphere's Photo AI scanner.
+- **Privacy & Financial Safety:** Zero invented currency, zero banking credentials, zero exposed monetary amounts. Strictly reflects authorized AI credits owned by the authenticated user.
 
 ---
 
