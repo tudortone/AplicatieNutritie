@@ -171,6 +171,7 @@ export default function CameraScreen() {
   // U-03: garanteaza ca dialogul de recuperare a draft-ului apare o singura data
   // pe sesiunea ecranului, chiar daca efectul se re-executa la schimbarea tokenului.
   const draftPromptAfisatRef = useRef(false);
+  const isTakingPhotoRef = useRef(false);
 
   const isPhotoOwnerCurrent = useCallback((userId: string, generation: number) => (
     sessionUserIdRef.current === userId
@@ -188,6 +189,7 @@ export default function CameraScreen() {
     uploadGenerationRef.current += 1;
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
+    isTakingPhotoRef.current = false;
     activeSaveAttemptRef.current = null;
     imageKitUrlRef.current = null;
     imageKitFileIdRef.current = null;
@@ -406,12 +408,6 @@ export default function CameraScreen() {
         draftUri: draftPersistentUri,
         savedAt: Date.now(),
       };
-      // Jobul și pointerul local sunt deja confirmate durabil. Lăsăm ecranul
-      // Camerei să se demonteze (anulând polling-ul local); Home recuperează
-      // starea din backend, iar rezultatul poate fi reluat ulterior din status.
-      setPhotoPhase('background');
-      setSeIncarca(false);
-      router.replace('/(tabs)');
       const completed = await waitForPhotoJob({
         token: session.access_token,
         userId: ownerId,
@@ -420,6 +416,7 @@ export default function CameraScreen() {
       });
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       applyPhotoJobResult(completed, activePointer, ownerId, accountGeneration);
+      setSeIncarca(false);
 
       await discardLocalImageDraft(draftPersistentUri, ownerId).catch(() => {});
       if (draftCurrentUriRef.current === draftPersistentUri) draftCurrentUriRef.current = null;
@@ -470,7 +467,7 @@ export default function CameraScreen() {
         if (isMountedRef.current) setSeIncarca(false);
       }
     }
-  }, [applyPhotoJobResult, flowCredits, i18n.language, isPhotoOwnerCurrent, router, session?.access_token, session?.user?.id, t]);
+  }, [applyPhotoJobResult, flowCredits, i18n.language, isPhotoOwnerCurrent, session?.access_token, session?.user?.id, t]);
 
   // Un job Photo AI este recuperabil după închiderea aplicației. Analiza rămâne
   // în Trigger; acest ecran doar reia polling-ul și reconstruiește review-ul.
@@ -778,27 +775,32 @@ export default function CameraScreen() {
   }), [quality.totals]);
 
   const analizeazaFoto = async () => {
-    if (!cameraRef.current || seIncarca || !session) return;
+    if (!cameraRef.current || isTakingPhotoRef.current || seIncarca || !session) return;
     const ownerId = session.user.id;
     const accountGeneration = accountGenerationRef.current;
     if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+    isTakingPhotoRef.current = true;
+    setSeIncarca(true);
     try {
       const foto = await cameraRef.current.takePictureAsync({
-        quality: 0.5,
+        quality: 0.7,
         base64: false,
         shutterSound: false,
-        skipProcessing: Platform.OS === 'android'
       });
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       if (foto && foto.uri) {
-        analizeazaImaginea(foto.uri);
+        await analizeazaImaginea(foto.uri);
+      } else {
+        setSeIncarca(false);
       }
     } catch (e) {
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
-      console.error("Eroare captură foto:", e);
+      console.error(`Eroare captură foto: ${e instanceof Error ? e.message : String(e)}`);
       // CAM-005: captura eșuată nu rămâne mută — mesaj vizibil + stare curățată.
       setSeIncarca(false);
-      setScanError(t('camera.genericScanError'));
+      setScanError(t('camera.captureFailed', 'Nu am putut captura fotografia. Te rugăm să încerci din nou sau să alegi din galerie.'));
+    } finally {
+      isTakingPhotoRef.current = false;
     }
   };
 
@@ -1155,52 +1157,52 @@ export default function CameraScreen() {
         style={StyleSheet.absoluteFillObject}
         facing="back"
         active={rezultat.length === 0}
-      >
-        <LinearGradient
-          colors={['rgba(5,8,13,0.85)', 'rgba(5,8,13,0)', 'rgba(5,8,13,0.95)']}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
+      />
 
-        {/* Box Scanare */}
-        <View style={styles.scanArea}>
-          <View style={[styles.scanBox, { width: scanBoxSize, height: scanBoxSize, borderColor: colors.cardBorder }]}>
-            <View style={[styles.corner, styles.cornerTL, { borderColor: colors.accent }]} />
-            <View style={[styles.corner, styles.cornerTR, { borderColor: colors.accent }]} />
-            <View style={[styles.corner, styles.cornerBL, { borderColor: colors.accent }]} />
-            <View style={[styles.corner, styles.cornerBR, { borderColor: colors.accent }]} />
+      <LinearGradient
+        colors={['rgba(5,8,13,0.85)', 'rgba(5,8,13,0)', 'rgba(5,8,13,0.95)']}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
 
-            {seIncarca && (
-              <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay} accessibilityLiveRegion="polite">
-                <BlurView intensity={60} tint="dark" style={styles.scanningBlur}>
-                  <ActivityIndicator size="large" color={colors.accent} />
-                  <Animated.Text key={`${photoPhase}-${scanStepIndex}`} entering={FadeInUp.duration(250)} style={[styles.scanningText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
-                    {photoPhase === 'retrying'
-                      ? t('photoJob.retrying')
-                      : photoPhase === 'background'
-                        ? t('photoJob.backgroundTitle')
-                        : scanSteps[scanStepIndex]}
-                  </Animated.Text>
-                  <View style={styles.stepProgressDots}>
-                    {scanSteps.map((_: string, idx: number) => (
-                      <View
-                        key={idx}
-                        style={[
-                          styles.stepDot,
-                          { backgroundColor: idx <= scanStepIndex ? colors.accent : 'rgba(255,255,255,0.2)' }
-                        ]}
-                      />
-                    ))}
-                  </View>
+      {/* Box Scanare */}
+      <View style={[styles.scanArea, StyleSheet.absoluteFillObject]} pointerEvents="box-none">
+        <View style={[styles.scanBox, { width: scanBoxSize, height: scanBoxSize, borderColor: colors.cardBorder }]}>
+          <View style={[styles.corner, styles.cornerTL, { borderColor: colors.accent }]} />
+          <View style={[styles.corner, styles.cornerTR, { borderColor: colors.accent }]} />
+          <View style={[styles.corner, styles.cornerBL, { borderColor: colors.accent }]} />
+          <View style={[styles.corner, styles.cornerBR, { borderColor: colors.accent }]} />
 
-                </BlurView>
-              </Animated.View>
-            )}
+          {seIncarca && (
+            <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay} accessibilityLiveRegion="polite">
+              <BlurView intensity={60} tint="dark" style={styles.scanningBlur}>
+                <ActivityIndicator size="large" color={colors.accent} />
+                <Animated.Text key={`${photoPhase}-${scanStepIndex}`} entering={FadeInUp.duration(250)} style={[styles.scanningText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
+                  {photoPhase === 'retrying'
+                    ? t('photoJob.retrying')
+                    : photoPhase === 'background'
+                      ? t('photoJob.backgroundTitle')
+                      : scanSteps[scanStepIndex]}
+                </Animated.Text>
+                <View style={styles.stepProgressDots}>
+                  {scanSteps.map((_: string, idx: number) => (
+                    <View
+                      key={idx}
+                      style={[
+                        styles.stepDot,
+                        { backgroundColor: idx <= scanStepIndex ? colors.accent : 'rgba(255,255,255,0.2)' }
+                      ]}
+                    />
+                  ))}
+                </View>
 
-          </View>
-          <Text style={styles.scanHint}>{t('camera.scanHint')}</Text>
+              </BlurView>
+            </Animated.View>
+          )}
+
         </View>
-      </CameraView>
+        <Text style={styles.scanHint}>{t('camera.scanHint')}</Text>
+      </View>
 
       {failedPhotoJob ? (
         <View testID="camera-failed-job" style={[styles.jobStateCard, { top: insets.top + 92, borderColor: colors.danger + '88' }]} accessibilityRole="alert">

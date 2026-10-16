@@ -34,13 +34,21 @@ jest.mock('expo-router', () => ({
   }),
 }));
 
+const mockTakePictureAsync = jest.fn(async () => ({ uri: 'file:///mock-camera-capture.jpg' }));
+
 // Mock expo-camera
 jest.mock('expo-camera', () => {
   const React = require('react');
   const { View } = require('react-native');
-  const MockCameraView = React.forwardRef(({ children }: any, ref: any) => (
-    <View testID="camera-view">{children}</View>
-  ));
+  const MockCameraView = React.forwardRef(({ children, onCameraReady }: any, ref: any) => {
+    React.useImperativeHandle(ref, () => ({
+      takePictureAsync: mockTakePictureAsync,
+    }));
+    React.useEffect(() => {
+      onCameraReady?.();
+    }, [onCameraReady]);
+    return <View testID="camera-view">{children}</View>;
+  });
   MockCameraView.displayName = 'MockCameraView';
   return {
     CameraView: MockCameraView,
@@ -538,7 +546,6 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
 
       await waitFor(() => expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy());
       expect(waitForPhotoJob).toHaveBeenCalled();
-      expect(mockRouter.replace).toHaveBeenCalledWith('/(tabs)');
       expect(view.getByText('camera.detectedMeal')).toBeTruthy();
       expect(view.getAllByText('Chicken').length).toBeGreaterThanOrEqual(1);
       expect(view.getByText('chat.mealCategory.cina')).toBeTruthy();
@@ -585,6 +592,64 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
 
       await waitFor(() => expect(view.getByText('camera.genericScanError')).toBeTruthy());
       expect(view.queryByText('PHOTO_SERVICE_UNAVAILABLE')).toBeNull();
+    });
+
+    it('CAMERA CAPTURE: pressing shutter captures image and triggers Photo AI analysis', async () => {
+      Platform.OS = 'android';
+      mockTakePictureAsync.mockResolvedValueOnce({ uri: 'file:///snapped-food.jpg' });
+
+      const view = await render(<CameraScreen />);
+      const shutterBtn = view.getByTestId('shutter-button');
+
+      await act(async () => {
+        fireEvent.press(shutterBtn);
+      });
+
+      expect(mockTakePictureAsync).toHaveBeenCalledWith({
+        quality: 0.7,
+        base64: false,
+        shutterSound: false,
+      });
+      await waitFor(() => expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy());
+      expect(view.getAllByText('Chicken').length).toBeGreaterThan(0);
+    });
+
+    it('CAMERA CAPTURE: capture exception displays captureFailed error and resets loading state', async () => {
+      Platform.OS = 'android';
+      mockTakePictureAsync.mockRejectedValueOnce(new Error('Failed to capture image'));
+
+      const view = await render(<CameraScreen />);
+      const shutterBtn = view.getByTestId('shutter-button');
+
+      await act(async () => {
+        fireEvent.press(shutterBtn);
+      });
+
+      await waitFor(() => expect(view.getByText('camera.captureFailed')).toBeTruthy());
+      expect(shutterBtn.props.accessibilityState.disabled).toBe(false);
+    });
+
+    it('CAMERA CAPTURE: rapid duplicate taps do not trigger concurrent takePictureAsync calls', async () => {
+      Platform.OS = 'android';
+      let resolveCapture: (val: any) => void = () => {};
+      const capturePromise = new Promise((res) => { resolveCapture = res; });
+      mockTakePictureAsync.mockReturnValueOnce(capturePromise);
+
+      const view = await render(<CameraScreen />);
+      const shutterBtn = view.getByTestId('shutter-button');
+
+      await act(async () => {
+        fireEvent.press(shutterBtn);
+        fireEvent.press(shutterBtn);
+      });
+
+      expect(mockTakePictureAsync).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        resolveCapture({ uri: 'file:///first-capture.jpg' });
+      });
+
+      await waitFor(() => expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy());
     });
 
     it('PHOTO RESULT: blocks journal save and exposes review guidance for implausible 3180g output', async () => {
@@ -865,10 +930,12 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///meal.jpg' }] });
       (waitForPhotoJob as jest.Mock).mockImplementationOnce(() => new Promise(() => {}));
 
+      mockRouter.canGoBack.mockReturnValueOnce(false);
       const view = await render(<CameraScreen />);
       await act(async () => fireEvent.press(view.getByTestId('gallery-button')));
       await waitFor(() => expect(submitPhotoJob).toHaveBeenCalled());
 
+      await act(async () => fireEvent.press(view.getByLabelText('common.close')));
       expect(mockRouter.replace).toHaveBeenCalledWith('/(tabs)');
       expect(clearActivePhotoJob).not.toHaveBeenCalled();
     });
