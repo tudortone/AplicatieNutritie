@@ -16,7 +16,7 @@ RENDER_SHA: fbf4e0741f102f37f6bcfc009383a4a9c0a2793b (Service: nutritie-backend-
 TRIGGER_DEPLOYMENT: p1srfix5 (Version: 20261012.2, Node 22.16.0, Project: proj_elmgvpjxptegigrzrhtv)
 FIRST_FAILING_BOUNDARY: Boundary 1 — Mobile Client Camera Shutter Capture (cameraRef.current.takePictureAsync)
 ROOT_CAUSE: In camera.tsx (versionCode 33 on device), CameraX threw an unhandled capture error within 14ms of shutter press due to: 1) skipProcessing: Platform.OS === 'android' bypassing orientation/processing pipeline in Expo Camera CameraX; 2) lack of reentrancy guard allowing rapid successive shutter taps to trigger ImageCaptureFailed while sensor was busy; 3) CameraView wrapping child view overlays which violates Expo Camera Android surface hierarchy and corrupts SurfaceFlinger rendering; 4) misleading error handling that mapped shutter failures to genericScanError ("A apărut o eroare la analiza imaginii"), falsely indicting the backend and Trigger.dev.
-FIX_COMMIT: PENDING_MAIN_COMMIT
+FIX_COMMIT: 15ea1ae44fe38d6df7c05fa0e6761db3a9ba00d4 (fix(camera): resolve Samsung Android 16 shutter capture crash and add Photo AI root cause report)
 TRIGGER_DEPLOYED: YES (p1srfix5 / 20261012.2 active, verified live with run_06gkdu3k2hhe7ajn811dh05g01)
 RENDER_DEPLOYED: YES (dep-db93i167bikc73bqvdkg running SHA fbf4e0741f102f37f6bcfc009383a4a9c0a2793b, HTTP 200)
 ANDROID_HOTFIX_INSTALLED: NO (Samsung device runs versionCode 33 installed 2026-10-16 22:59:49; versionCode 34 hotfix code is verified locally and passing unit/typecheck tests)
