@@ -285,9 +285,6 @@ export async function processOfflineQueue(
 
     try {
       const { error } = await supabaseClient.from('mese').insert({
-        // BUG-054: trimitem id-ul deterministic al meselor offline. Daca un sync
-        // partial a inserat deja randul, PK-ul UUID (23505) il detecteaza si
-        // tratam eroarea ca succes — fara masa duplicata la reluare.
         ...(esteUuidValid(masa.id)
           ? { id: masa.id }
           : !isNaN(Number(masa.id)) && typeof masa.id !== 'boolean'
@@ -295,18 +292,15 @@ export async function processOfflineQueue(
           : {}),
         user_id: masa.user_id,
         nume: masa.nume,
-        calorii: masa.calorii,
-        proteine: masa.proteine,
-        grasimi: masa.grasimi,
-        carbohidrati: masa.carbohidrati,
-        fibre: masa.fibre,
+        calorii: Math.round(Number(masa.calorii) || 0),
+        proteine: Math.round(Number(masa.proteine) || 0),
+        grasimi: Math.round(Number(masa.grasimi) || 0),
+        carbohidrati: Math.round(Number(masa.carbohidrati) || 0),
+        fibre: Math.round((Number(masa.fibre) || 0) * 10) / 10,
         tip_masa: masa.tip_masa,
         alimente: masa.alimente,
         data: masa.data,
         ora: masa.ora ?? null,
-        // BUG-018: fara created_at, DB pune server-now si masa offline ajunge in
-        // ziua sincronizarii, nu in ziua consumului (useMeseAzi filtreaza dupa
-        // created_at). Tinem timestamp-ul din momentul salvarii.
         created_at: masa.created_at,
         imagine_url: masa.imagine_url ?? null,
       });

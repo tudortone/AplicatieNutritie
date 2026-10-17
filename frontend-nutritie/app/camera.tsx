@@ -16,7 +16,7 @@ import { supabase } from '../supabase';
 import { API_URL } from '@/constants/config';
 import { API_PREFIX } from '@/lib/api';
 import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
-import { Scan, Zap, Trash2, Image as ImageIcon, ChevronDown, AlertTriangle } from 'lucide-react-native';
+import { Scan, Zap, Trash2, Image as ImageIcon, ChevronDown, AlertTriangle, Home } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -172,6 +172,7 @@ export default function CameraScreen() {
   // pe sesiunea ecranului, chiar daca efectul se re-executa la schimbarea tokenului.
   const draftPromptAfisatRef = useRef(false);
   const isTakingPhotoRef = useRef(false);
+  const shouldGoHomeOnSubmitRef = useRef(false);
 
   const isPhotoOwnerCurrent = useCallback((userId: string, generation: number) => (
     sessionUserIdRef.current === userId
@@ -217,9 +218,12 @@ export default function CameraScreen() {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      // CAM-007: la unmount anulăm analiza în zbor — fără fetch orfan după
-      // părăsirea ecranului (fără setState-after-unmount, fără rețea risipită).
-      abortControllerRef.current?.abort();
+      // Doar dacă NU avem un job activ pe backend sau o trecere cerută la Acasă,
+      // anulăm cererea locală. Dacă jobul e deja pornit pe server, el continuă
+      // în fundal și va fi semnalizat pe Acasă prin Sfera Runner.
+      if (!currentPhotoJobIdRef.current && !shouldGoHomeOnSubmitRef.current) {
+        abortControllerRef.current?.abort();
+      }
       abortControllerRef.current = null;
     };
   }, []);
@@ -408,6 +412,12 @@ export default function CameraScreen() {
         draftUri: draftPersistentUri,
         savedAt: Date.now(),
       };
+      if (shouldGoHomeOnSubmitRef.current) {
+        if (__DEV__) console.log('[Camera] Job pornit pe backend, utilizatorul a mers la Acasă:', submitted.id);
+        setPhotoPhase('background');
+        setSeIncarca(false);
+        return;
+      }
       const completed = await waitForPhotoJob({
         token: session.access_token,
         userId: ownerId,
@@ -676,6 +686,18 @@ export default function CameraScreen() {
     return true;
   }, []);
 
+  const mergiLaAcasa = useCallback(() => {
+    permitereNavigareRef.current = true;
+    if (currentPhotoJobIdRef.current) {
+      lasaAnalizaInFundal();
+    } else {
+      shouldGoHomeOnSubmitRef.current = true;
+      setPhotoPhase('background');
+      setSeIncarca(false);
+    }
+    router.replace('/(tabs)');
+  }, [lasaAnalizaInFundal, router]);
+
   // BUG-065: pe Android, butonul/gestul „Înapoi" peste modalul fullScreen ejecta
   // ecranul direct, aruncând un scan în review fără confirmare și fără să
   // șteargă draftul persistent local. Gardul beforeRemove confirmă renunțarea;
@@ -831,7 +853,7 @@ export default function CameraScreen() {
       }
     } catch (e) {
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
-      console.error("Eroare galerie:", e);
+      console.error(`Eroare galerie: ${e instanceof Error ? e.message : String(e)}`);
       Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.galerieInaccesibila'));
     }
   };
@@ -1196,6 +1218,19 @@ export default function CameraScreen() {
                   ))}
                 </View>
 
+                {/* Butonul aprobat de trecere în fundal: Mergi la Acasă / Go to Home */}
+                <Pressable
+                  testID="camera-go-home-btn"
+                  onPress={mergiLaAcasa}
+                  style={styles.goHomeBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={i18n.language === 'ro' ? 'Mergi la Acasă' : 'Go to Home'}
+                >
+                  <Home size={16} color={colors.accent} style={{ marginRight: 6 }} />
+                  <Text style={[styles.goHomeBtnText, { color: colors.accent }]}>
+                    {i18n.language === 'ro' ? 'Mergi la Acasă' : 'Go to Home'}
+                  </Text>
+                </Pressable>
               </BlurView>
             </Animated.View>
           )}
@@ -1685,4 +1720,22 @@ const styles = StyleSheet.create({
   aiDropdownTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '700', marginBottom: 2 },
   aiDropdownDesc: { color: 'rgba(255,255,255,0.55)', fontSize: 12 },
   statusIndicator: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.25)' },
+  goHomeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 22,
+    backgroundColor: 'rgba(204, 255, 0, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.35)',
+    minHeight: 44,
+  },
+  goHomeBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
 });

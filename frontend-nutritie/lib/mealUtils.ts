@@ -186,12 +186,33 @@ export async function insereazaMasaCuPoza(
   client: any,
   payload: Record<string, unknown>,
 ): Promise<{ data: any; error: any }> {
-  const payloadCurat = { ...payload };
-  // Schema canonică `mese.id` este UUID. Păstrăm ID-ul determinist trimis de
-  // aplicație pentru ca retry-ul aceleiași acțiuni să nu creeze un al doilea rând.
-  // `.select()` cere rândul creat; apelantul trebuie să verifice reprezentarea
-  // înainte de a afișa succesul.
+  const payloadCurat: Record<string, unknown> = { ...payload };
+
+  // Coloanele `calorii`, `proteine`, `carbohidrati`, `grasimi` sunt de tip INTEGER în PostgreSQL.
+  // Trimiterea de zecimale (ex. 20.7, 0.4) declanșează 22P02 ("invalid input syntax for type integer: '20.7'").
+  if (payloadCurat.calorii !== undefined) payloadCurat.calorii = clampValoare(Math.round(Number(payloadCurat.calorii) || 0), LIMITE_DB_MESE.calorii, 0);
+  if (payloadCurat.proteine !== undefined) payloadCurat.proteine = clampValoare(Math.round(Number(payloadCurat.proteine) || 0), LIMITE_DB_MESE.proteine, 0);
+  if (payloadCurat.carbohidrati !== undefined) payloadCurat.carbohidrati = clampValoare(Math.round(Number(payloadCurat.carbohidrati) || 0), LIMITE_DB_MESE.carbohidrati, 0);
+  if (payloadCurat.grasimi !== undefined) payloadCurat.grasimi = clampValoare(Math.round(Number(payloadCurat.grasimi) || 0), LIMITE_DB_MESE.grasimi, 0);
+  if (payloadCurat.fibre !== undefined) payloadCurat.fibre = clampValoare(Math.round((Number(payloadCurat.fibre) || 0) * 10) / 10, LIMITE_DB_MESE.fibre, 0);
+
   const prima = await client.from('mese').insert(payloadCurat).select();
+
+  // În PostgreSQL/Supabase, tabela `mese` are cheia primară `id` de tip BIGINT (identity/autoincrement).
+  // Dacă insertul eșuează cu 22P02 din cauza unui string UUID în `id`, reîncercăm fără `id`
+  // pentru ca Postgres să atribuie automat următorul id din secvență.
+  if (prima.error && (prima.error.code === '22P02' || /invalid input syntax for type bigint/i.test(String(prima.error.message)))) {
+    const faraId = { ...payloadCurat };
+    delete faraId.id;
+    const aDoua = await client.from('mese').insert(faraId).select();
+    if (!aDoua.error || !SEMNALE_COLOANA_LIPSA.test(String(aDoua.error.message))) {
+      return aDoua;
+    }
+    const faraPozaSiId = { ...faraId };
+    delete faraPozaSiId.imagine_url;
+    return client.from('mese').insert(faraPozaSiId).select();
+  }
+
   if (prima.error && SEMNALE_COLOANA_LIPSA.test(String(prima.error.message))) {
     const faraPoza = { ...payloadCurat };
     delete faraPoza.imagine_url;
@@ -262,7 +283,7 @@ export interface TotaluriMasa {
 function rotunjeste(valoare: number, zecimale: number): number {
   if (!Number.isFinite(valoare) || valoare < 0) return 0;
   const factor = Math.pow(10, zecimale);
-  return Math.round(valoare * factor) / factor;
+  return Math.round((valoare + Number.EPSILON) * factor) / factor;
 }
 
 /** Recalculeaza totalurile mesei din ingredient (suma, clamp>=0). */
@@ -361,13 +382,19 @@ export function construiesteAlimenteLaSalvare({
 /** La fel ca `insereazaMasaCuPoza`, pentru editarea unei mese existente. Cu .select() pentru verificare persistență reală. */
 export async function actualizeazaMasaCuPoza(
   client: any,
-  id: string,
+  id: string | number,
   valori: Record<string, unknown>,
 ): Promise<{ error: any; data?: any }> {
-  const valoriCurate = { ...valori };
-  if (valoriCurate.id !== undefined && (typeof valoriCurate.id === 'string' && isNaN(Number(valoriCurate.id)))) {
+  const valoriCurate: Record<string, unknown> = { ...valori };
+  if (valoriCurate.id !== undefined && (typeof valoriCurate.id !== 'number' || isNaN(valoriCurate.id) || !Number.isInteger(valoriCurate.id))) {
     delete valoriCurate.id;
   }
+  if (valoriCurate.calorii !== undefined) valoriCurate.calorii = clampValoare(Math.round(Number(valoriCurate.calorii) || 0), LIMITE_DB_MESE.calorii, 0);
+  if (valoriCurate.proteine !== undefined) valoriCurate.proteine = clampValoare(Math.round(Number(valoriCurate.proteine) || 0), LIMITE_DB_MESE.proteine, 0);
+  if (valoriCurate.carbohidrati !== undefined) valoriCurate.carbohidrati = clampValoare(Math.round(Number(valoriCurate.carbohidrati) || 0), LIMITE_DB_MESE.carbohidrati, 0);
+  if (valoriCurate.grasimi !== undefined) valoriCurate.grasimi = clampValoare(Math.round(Number(valoriCurate.grasimi) || 0), LIMITE_DB_MESE.grasimi, 0);
+  if (valoriCurate.fibre !== undefined) valoriCurate.fibre = clampValoare(Math.round((Number(valoriCurate.fibre) || 0) * 10) / 10, LIMITE_DB_MESE.fibre, 0);
+
   const prima = await client.from('mese').update(valoriCurate).eq('id', id).select();
   if (prima.error && SEMNALE_COLOANA_LIPSA.test(String(prima.error.message))) {
     const faraPoza = { ...valoriCurate };

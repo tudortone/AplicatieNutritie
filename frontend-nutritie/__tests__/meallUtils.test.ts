@@ -47,12 +47,71 @@ describe('lib/mealUtils — poza mesei', () => {
 });
 
 describe('lib/mealUtils — inserare photo meal', () => {
-  it('preserves the canonical UUID so retry identity reaches the database', async () => {
+  it('preserves id on initial insert and rounds macros to integer', async () => {
     const payload = {
       id: '123e4567-e89b-42d3-a456-426614174000',
       user_id: 'user-1',
       nume: 'Meal photo',
       imagine_url: 'https://example.test/meal.jpg',
+      calorii: 150.4,
+      proteine: 20.7,
+      carbohidrati: 10.2,
+      grasimi: 5.6,
+      fibre: 2.34,
+    };
+    const select = jest.fn().mockResolvedValue({ data: [{ ...payload, id: 123 }], error: null });
+    const insert = jest.fn(() => ({ select }));
+    const client = { from: jest.fn(() => ({ insert })) };
+
+    await insereazaMasaCuPoza(client as never, payload);
+
+    expect(insert).toHaveBeenCalledWith({
+      id: '123e4567-e89b-42d3-a456-426614174000',
+      user_id: 'user-1',
+      nume: 'Meal photo',
+      imagine_url: 'https://example.test/meal.jpg',
+      calorii: 150,
+      proteine: 21,
+      carbohidrati: 10,
+      grasimi: 6,
+      fibre: 2.3,
+    });
+  });
+
+  it('retries without id when PostgreSQL returns 22P02 bigint syntax error', async () => {
+    const payload = {
+      id: '123e4567-e89b-42d3-a456-426614174000',
+      user_id: 'user-1',
+      nume: 'Meal photo',
+      calorii: 100,
+    };
+    const selectFail = jest.fn().mockResolvedValue({
+      data: null,
+      error: { code: '22P02', message: 'invalid input syntax for type bigint: "123e4567-e89b-42d3-a456-426614174000"' },
+    });
+    const selectSuccess = jest.fn().mockResolvedValue({
+      data: [{ user_id: 'user-1', nume: 'Meal photo', calorii: 100, id: 89 }],
+      error: null,
+    });
+    const insert = jest.fn()
+      .mockReturnValueOnce({ select: selectFail })
+      .mockReturnValueOnce({ select: selectSuccess });
+    const client = { from: jest.fn(() => ({ insert })) };
+
+    const res = await insereazaMasaCuPoza(client as never, payload);
+
+    expect(insert).toHaveBeenCalledTimes(2);
+    expect(insert.mock.calls[0][0].id).toBe('123e4567-e89b-42d3-a456-426614174000');
+    expect(insert.mock.calls[1][0].id).toBeUndefined();
+    expect(res.data).toHaveLength(1);
+    expect(res.data[0].id).toBe(89);
+  });
+
+  it('preserves integer id when provided', async () => {
+    const payload = {
+      id: 42,
+      user_id: 'user-1',
+      nume: 'Meal photo',
     };
     const select = jest.fn().mockResolvedValue({ data: [payload], error: null });
     const insert = jest.fn(() => ({ select }));

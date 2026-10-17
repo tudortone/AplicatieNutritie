@@ -334,11 +334,11 @@ export function construiestePayloadMasaManuala(params: {
     id: idMasaDinOperatie(user_id, idOperatie),
     user_id,
     nume,
-    calorii: clampValoare(params.calorii, LIMITE_DB_MESE.calorii),
-    proteine: clampValoare(params.proteine, LIMITE_DB_MESE.proteine),
-    grasimi: clampValoare(params.grasimi, LIMITE_DB_MESE.grasimi),
-    carbohidrati: clampValoare(params.carbohidrati, LIMITE_DB_MESE.carbohidrati),
-    fibre: clampValoare(params.fibre, LIMITE_DB_MESE.fibre),
+    calorii: clampValoare(Math.round(Number(params.calorii) || 0), LIMITE_DB_MESE.calorii),
+    proteine: clampValoare(Math.round(Number(params.proteine) || 0), LIMITE_DB_MESE.proteine),
+    grasimi: clampValoare(Math.round(Number(params.grasimi) || 0), LIMITE_DB_MESE.grasimi),
+    carbohidrati: clampValoare(Math.round(Number(params.carbohidrati) || 0), LIMITE_DB_MESE.carbohidrati),
+    fibre: clampValoare(Math.round((Number(params.fibre) || 0) * 10) / 10, LIMITE_DB_MESE.fibre),
     tip_masa: normalizeTipMasa(tip_masa),
     alimente: params.alimente ?? [],
     imagine_url: params.imagine_url ?? null,
@@ -375,7 +375,14 @@ function randulPersistatCorespundePayloadului(
   rand: Record<string, unknown>,
   payload: Record<string, unknown>,
 ): boolean {
-  const campuriText = ['id', 'nume', 'tip_masa'] as const;
+  // Dacă payload.id este un număr sau un id egal cu rand.id, verificăm egalitatea.
+  // Dacă payload.id este un UUID client dar rand.id este bigint-ul generat de DB, nu colapsăm la false.
+  if (payload.id !== undefined && (typeof payload.id === 'number' || (typeof payload.id === 'string' && !isNaN(Number(payload.id)) && typeof rand.id === 'number'))) {
+    if (String(rand.id) !== String(payload.id)) return false;
+  } else if (payload.id !== undefined && typeof payload.id === 'string' && typeof rand.id === 'string') {
+    if (rand.id !== payload.id) return false;
+  }
+  const campuriText = ['nume', 'tip_masa'] as const;
   if (campuriText.some((camp) => String(rand[camp] ?? '') !== String(payload[camp] ?? ''))) return false;
   if (payload.user_id !== undefined && String(rand.user_id ?? '') !== String(payload.user_id)) return false;
   if (payload.data !== undefined && String(rand.data ?? '') !== String(payload.data)) return false;
@@ -420,7 +427,7 @@ export async function verificaReluareMasa(
   client: {
     from: (tabela: string) => {
       select: (coloane: string) => {
-        eq: (coloana: string, valoare: string) => {
+        eq: (coloana: string, valoare: string | number) => {
           eq: (coloana: string, valoare: string) => {
             maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: unknown }>;
           };
@@ -429,14 +436,15 @@ export async function verificaReluareMasa(
       };
     };
   },
-  payload: { id: string; nume?: string; tip_masa?: string } & Record<string, unknown>,
+  payload: { id: string | number; nume?: string; tip_masa?: string } & Record<string, unknown>,
 ): Promise<RezultatReluareMasa> {
   let rand: Record<string, unknown> | null = null;
   try {
+    const idVal = payload.id !== undefined && !isNaN(Number(payload.id)) ? Number(payload.id) : payload.id;
     const idQuery = client
       .from('mese')
       .select('id, user_id, data, ora, created_at, nume, tip_masa, calorii, proteine, grasimi, carbohidrati, fibre, alimente, imagine_url')
-      .eq('id', payload.id);
+      .eq('id', idVal);
     const query = payload.user_id !== undefined
       ? idQuery.eq('user_id', String(payload.user_id))
       : idQuery;
