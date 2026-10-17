@@ -78,7 +78,9 @@ export async function resolveAdsConsent(): Promise<AdsConsentResolution> {
     try {
       let info: any;
       try {
-        info = await AdsModule.AdsConsent.gatherConsent();
+        info = await AdsModule.AdsConsent.gatherConsent({
+          testDeviceIdentifiers: ['182025E7F769CEBC220B2CA72371661A'],
+        });
       } catch {
         // A3: dacă gatherConsent a eșuat (ex. eroare de rețea), consultăm decizia
         // deja persistată în SDK din sesiunile anterioare

@@ -151,6 +151,13 @@ export async function initializeAdsSdk(): Promise<void> {
   if (!isAdsAvailable() || !AdsModule || sdkInitialized) return;
   if (!getCanRequestAds()) return;
   try {
+    try {
+      if (typeof AdsModule.default === 'function' && typeof AdsModule.default().setRequestConfiguration === 'function') {
+        await AdsModule.default().setRequestConfiguration({
+          testDeviceIdentifiers: ['182025E7F769CEBC220B2CA72371661A'],
+        });
+      }
+    } catch {}
     await AdsModule.default().initialize();
     sdkInitialized = true;
     preloadInterstitial();

@@ -5,7 +5,7 @@
     "owner": "totsrl",
     "version": "1.0.0",
     "orientation": "default",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/playstore-icon-512.png",
     "scheme": "nutriai",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
@@ -21,8 +21,8 @@
     },
     "android": {
       "package": "com.totsrl.getflo",
-      "versionCode": 29,
-      "icon": "./assets/images/icon.png",
+      "versionCode": 34,
+      "icon": "./assets/images/playstore-icon-512.png",
       "allowBackup": false,
       "permissions": [
         "android.permission.ACTIVITY_RECOGNITION",
@@ -39,8 +39,7 @@
       ],
       "adaptiveIcon": {
         "backgroundColor": "#090C0E",
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
@@ -87,6 +86,12 @@
       ],
       "expo-secure-store",
       "react-native-health-connect",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-5202280855139508~6141533757"
+        }
+      ],
       "./plugins/withAndroidR8OptimizedProguard",
       [
         "expo-build-properties",
@@ -97,7 +102,7 @@
             "minSdkVersion": 26,
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
-            "extraProguardRules": "# General Optimization and Deobfuscation Attributes\n-keepattributes SourceFile,LineNumberTable\n-keepattributes *Annotation*\n-keepattributes Signature\n-keepattributes InnerClasses,EnclosingMethod\n\n# Suppress harmless build-time warnings for optional dependencies\n-dontwarn javax.annotation.**\n-dontwarn org.checkerframework.**\n-dontwarn okhttp3.**\n-dontwarn okio.**\n\n# React Native & Hermes\n-keep class com.facebook.hermes.unicode.** { *; }\n-keep class com.facebook.jni.** { *; }\n-keep class com.facebook.react.turbomodule.** { *; }\n-keep class com.facebook.react.bridge.** { *; }\n\n# Sentry\n-dontwarn io.sentry.**\n-keep class io.sentry.** { *; }\n\n# Google Play Billing (expo-iap)\n-keep class com.android.billingclient.api.** { *; }\n-keep class expo.modules.iap.** { *; }\n\n# Google Mobile Ads / AdMob & UMP\n-keep class com.google.android.gms.ads.** { *; }\n-keep class com.google.android.ump.** { *; }\n-keep class io.invertase.googlemobileads.** { *; }\n-dontwarn io.invertase.googlemobileads.**\n\n# Health Connect\n-keep class androidx.health.connect.client.** { *; }\n-keep class dev.matinzd.healthconnect.** { *; }\n\n# Google Play Integrity (expo-app-integrity)\n-keep class com.google.android.play.core.integrity.** { *; }\n-keep class expo.modules.integrity.** { *; }\n\n# Camera & Image Picker\n-keep class androidx.camera.** { *; }\n-keep class expo.modules.camera.** { *; }\n-keep class expo.modules.imagepicker.** { *; }\n\n# Web Browser / Custom Tabs (Google OAuth)\n-keep class androidx.browser.customtabs.** { *; }\n-keep class expo.modules.webbrowser.** { *; }\n\n# Nitro Modules & MMKV\n-keep class com.margelo.nitro.** { *; }\n-keep class com.tencent.mmkv.** { *; }\n\n# Reanimated & Worklets & Screens\n-keep class com.swmansion.reanimated.** { *; }\n-keep class com.swmansion.worklets.** { *; }\n-keep class com.swmansion.rnscreens.** { *; }\n-keep class com.swmansion.gesturehandler.** { *; }"
+            "extraProguardRules": "# General Optimization and Deobfuscation Attributes\n-keepattributes SourceFile,LineNumberTable\n-keepattributes *Annotation*\n-keepattributes Signature\n-keepattributes InnerClasses,EnclosingMethod\n\n# Suppress harmless build-time warnings for optional dependencies\n-dontwarn javax.annotation.**\n-dontwarn org.checkerframework.**\n-dontwarn okhttp3.**\n-dontwarn okio.**\n\n# React Native & Hermes\n-keep class com.facebook.hermes.unicode.** { *; }\n-keep class com.facebook.jni.** { *; }\n-keep class com.facebook.react.turbomodule.** { *; }\n-keep class com.facebook.react.bridge.** { *; }\n\n# Sentry\n-dontwarn io.sentry.**\n-keep class io.sentry.** { *; }\n\n# Google Play Billing (expo-iap)\n-keep class com.android.billingclient.api.** { *; }\n-keep class expo.modules.iap.** { *; }\n\n# Google Mobile Ads / AdMob & UMP\n-keep class com.google.android.gms.ads.** { *; }\n-keep class com.google.android.ump.** { *; }\n-keep class io.invertase.googlemobileads.** { *; }\n-dontwarn io.invertase.googlemobileads.**\n\n# Health Connect\n-keep class androidx.health.connect.client.** { *; }\n-keep class dev.matinzd.healthconnect.** { *; }\n\n# Google Play Integrity (expo-app-integrity)\n-keep class com.google.android.play.core.integrity.** { *; }\n-keep class expo.modules.integrity.** { *; }\n\n# Kotlin Reflection & Metadata (CRITICAL for Expo Modules Record reflection)\n-keep class kotlin.Metadata { *; }\n-keepclassmembers class kotlin.Metadata { *; }\n-keep class kotlin.reflect.** { *; }\n-keepclassmembers class kotlin.reflect.** { *; }\n-dontwarn kotlin.reflect.**\n\n# Expo Modules Core & Record Reflection\n-keep class expo.modules.** { *; }\n-keepclassmembers class expo.modules.** { *; }\n-keep class * implements expo.modules.kotlin.records.Record { *; }\n-keepclassmembers class * implements expo.modules.kotlin.records.Record { *; }\n-keep @interface expo.modules.kotlin.records.Field\n-keepclassmembers class * {\n    @expo.modules.kotlin.records.Field *;\n}\n-keep class * implements expo.modules.kotlin.types.Enumerable { *; }\n-keepclassmembers enum * implements expo.modules.kotlin.types.Enumerable { *; }\n-dontwarn sun.misc.Unsafe\n-keep class expo.modules.kotlin.allocators.** { *; }\n\n# Camera & Image Picker\n-keep class androidx.camera.** { *; }\n-keep class expo.modules.camera.** { *; }\n-keepclassmembers class expo.modules.camera.** { *; }\n-keep class expo.modules.imagepicker.** { *; }\n-keepclassmembers class expo.modules.imagepicker.** { *; }\n\n# Web Browser / Custom Tabs (Google OAuth)\n-keep class androidx.browser.customtabs.** { *; }\n-keep class expo.modules.webbrowser.** { *; }\n\n# Nitro Modules & MMKV\n-keep class com.margelo.nitro.** { *; }\n-keep class com.tencent.mmkv.** { *; }\n\n# Reanimated & Worklets & Screens\n-keep class com.swmansion.reanimated.** { *; }\n-keep class com.swmansion.worklets.** { *; }\n-keep class com.swmansion.rnscreens.** { *; }\n-keep class com.swmansion.gesturehandler.** { *; }"
           }
         }
       ],
