@@ -1,0 +1,113 @@
+import React from 'react';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { RunnerSphere } from '../components/home/RunnerSphere';
+import { PixelCompanion } from '../components/home/PixelCompanion';
+import { RunnerSphereCompanionCluster } from '../components/home/RunnerSphereCompanionCluster';
+
+// Mock expo-router
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+  useFocusEffect: (cb: any) => {
+    cb();
+  },
+}));
+
+// Mock expo-haptics
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn(),
+  notificationAsync: jest.fn(),
+  ImpactFeedbackStyle: { Light: 'light' },
+  NotificationFeedbackType: { Success: 'success', Error: 'error' },
+}));
+
+// Mock useReducedMotion
+jest.mock('../hooks/useReducedMotion', () => ({
+  useReducedMotion: () => false,
+}));
+
+// Mock AuthContext
+jest.mock('../context/AuthContext', () => ({
+  useAuth: () => ({
+    session: {
+      access_token: 'test_token',
+      user: { id: 'test_user_id' },
+    },
+  }),
+}));
+
+// Mock photoJobs
+jest.mock('../lib/photoJobs', () => ({
+  recoverPhotoJob: jest.fn().mockResolvedValue({
+    job: { id: 'job_123', status: 'idle' },
+    pointer: { userId: 'test_user_id', jobId: 'job_123', savedAt: Date.now() },
+  }),
+}));
+
+describe('RunnerSphere Component', () => {
+  it('renders idle state with accessible label', async () => {
+    const onPress = jest.fn();
+    const view = await render(
+      <RunnerSphere state="idle" onPress={onPress} size={44} />
+    );
+
+    const widget = view.getByTestId('runner-sphere-widget');
+    expect(widget).toBeTruthy();
+    expect(view.getByLabelText('Sferă Runner GetFlow. Atingeți pentru camera foto.')).toBeTruthy();
+
+    fireEvent.press(widget);
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders processing state while analysis is running', async () => {
+    const onPress = jest.fn();
+    const view = await render(
+      <RunnerSphere state="processing" onPress={onPress} size={44} />
+    );
+
+    const widget = view.getByTestId('runner-sphere-widget');
+    expect(widget).toBeTruthy();
+    expect(view.getByLabelText('Analiză foto în desfășurare. Atingeți pentru stare.')).toBeTruthy();
+  });
+
+  it('renders completed state with checkmark badge', async () => {
+    const onPress = jest.fn();
+    const view = await render(
+      <RunnerSphere state="completed" onPress={onPress} size={44} />
+    );
+
+    const widget = view.getByTestId('runner-sphere-widget');
+    expect(widget).toBeTruthy();
+    expect(view.getByLabelText('Analiză foto finalizată. Atingeți pentru a deschide rezultatul.')).toBeTruthy();
+  });
+});
+
+describe('PixelCompanion Component', () => {
+  it('renders pixel creature with calculated level from streak', async () => {
+    const onPress = jest.fn();
+    const view = await render(
+      <PixelCompanion streak={6} onPress={onPress} size={32} />
+    );
+
+    expect(view.getByTestId('pixel-companion-widget')).toBeTruthy();
+    expect(view.getByText('Lv 3')).toBeTruthy();
+
+    fireEvent.press(view.getByTestId('pixel-companion-widget'));
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('RunnerSphereCompanionCluster Component', () => {
+  it('renders both sphere and companion side by side in cluster', async () => {
+    const onCompanionPress = jest.fn();
+    const view = await render(
+      <RunnerSphereCompanionCluster streak={3} onCompanionPress={onCompanionPress} />
+    );
+
+    await waitFor(() => {
+      expect(view.getByTestId('runner-sphere-companion-cluster')).toBeTruthy();
+      expect(view.getByTestId('runner-sphere-widget')).toBeTruthy();
+      expect(view.getByTestId('pixel-companion-widget')).toBeTruthy();
+    });
+  });
+});
