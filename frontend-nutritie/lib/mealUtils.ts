@@ -196,7 +196,8 @@ export async function insereazaMasaCuPoza(
   if (payloadCurat.grasimi !== undefined) payloadCurat.grasimi = clampValoare(Math.round(Number(payloadCurat.grasimi) || 0), LIMITE_DB_MESE.grasimi, 0);
   if (payloadCurat.fibre !== undefined) payloadCurat.fibre = clampValoare(Math.round((Number(payloadCurat.fibre) || 0) * 10) / 10, LIMITE_DB_MESE.fibre, 0);
 
-  const prima = await client.from('mese').insert(payloadCurat).select();
+  const query1 = client.from('mese').insert(payloadCurat);
+  const prima = typeof query1?.select === 'function' ? await query1.select() : await query1;
 
   // În PostgreSQL/Supabase, tabela `mese` are cheia primară `id` de tip BIGINT (identity/autoincrement).
   // Dacă insertul eșuează cu 22P02 din cauza unui string UUID în `id`, reîncercăm fără `id`
@@ -204,19 +205,22 @@ export async function insereazaMasaCuPoza(
   if (prima.error && (prima.error.code === '22P02' || /invalid input syntax for type bigint/i.test(String(prima.error.message)))) {
     const faraId = { ...payloadCurat };
     delete faraId.id;
-    const aDoua = await client.from('mese').insert(faraId).select();
+    const query2 = client.from('mese').insert(faraId);
+    const aDoua = typeof query2?.select === 'function' ? await query2.select() : await query2;
     if (!aDoua.error || !SEMNALE_COLOANA_LIPSA.test(String(aDoua.error.message))) {
       return aDoua;
     }
     const faraPozaSiId = { ...faraId };
     delete faraPozaSiId.imagine_url;
-    return client.from('mese').insert(faraPozaSiId).select();
+    const query3 = client.from('mese').insert(faraPozaSiId);
+    return typeof query3?.select === 'function' ? query3.select() : query3;
   }
 
   if (prima.error && SEMNALE_COLOANA_LIPSA.test(String(prima.error.message))) {
     const faraPoza = { ...payloadCurat };
     delete faraPoza.imagine_url;
-    return client.from('mese').insert(faraPoza).select();
+    const query4 = client.from('mese').insert(faraPoza);
+    return typeof query4?.select === 'function' ? query4.select() : query4;
   }
   return prima;
 }

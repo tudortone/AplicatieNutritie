@@ -44,8 +44,7 @@ import { coachMealTotals, extractCoachMealDrafts, isBareJournalCommand, validate
 import { CoachMealSuggestionCard } from '../../components/coach/CoachMealSuggestionCard';
 import { CoachMealConfirmModal } from '../../components/coach/CoachMealConfirmModal';
 import { MealSaveSuccessModal, type MealSuccessData } from '../../components/ui/MealSaveSuccessModal';
-// REMED-006: categoriile de masă aparțin lib/mealUtils (read-only) — aici doar le citim;
-// eticheta tradusă o derivăm noi din id (clés chat.mealCategory.*), nu din label-ul RO fix.
+import { getTipMasaDupaOra, insereazaMasaCuPoza } from '../../lib/mealUtils';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import type { TipMasa } from '../../types';
 import type { ThemeColors } from '../../constants/theme';
@@ -340,7 +339,12 @@ export default function ChatScreen() {
     const match = mesajeRef.current.flatMap((message) => message.suggestions || []).find((suggestion) => suggestion.id === id);
     if (!match || match.status !== 'ready') return;
     setActiveSuggestionId(id);
-    setEditingDraft({ ...match.draft, items: match.draft.items.map((item) => ({ ...item })), date: localDayKey(new Date()) });
+    setEditingDraft({
+      ...match.draft,
+      category: match.draft.category || getTipMasaDupaOra(new Date()),
+      items: match.draft.items.map((item) => ({ ...item })),
+      date: localDayKey(new Date()),
+    });
   }, []);
   
   const { 
@@ -710,24 +714,29 @@ export default function ChatScreen() {
     const [year, month, day] = draft.date.split('-').map(Number);
     mealTime.setFullYear(year, month - 1, day);
     if (!operationIdsRef.current[suggestionId]) operationIdsRef.current[suggestionId] = idOperatieNoua();
+    const calVal = Math.round(Number(totals.calories) || 0);
+    const protVal = Math.round(Number(totals.protein) || 0);
+    const carbVal = Math.round(Number(totals.carbs) || 0);
+    const fatVal = Math.round(Number(totals.fat) || 0);
+    const fibVal = Math.round((Number(totals.fiber) || 0) * 10) / 10;
     const payload = construiestePayloadMasaManuala({
       user_id: userId,
       idOperatie: operationIdsRef.current[suggestionId],
       nume: draft.name.trim(),
-      calorii: Number(totals.calories),
-      proteine: Number(totals.protein),
-      carbohidrati: Number(totals.carbs),
-      grasimi: Number(totals.fat),
-      fibre: Number(totals.fiber),
-      tip_masa: draft.category as TipMasa,
+      calorii: calVal,
+      proteine: protVal,
+      carbohidrati: carbVal,
+      grasimi: fatVal,
+      fibre: fibVal,
+      tip_masa: (draft.category || getTipMasaDupaOra(mealTime)) as TipMasa,
       alimente: draft.items.map((item) => ({
         nume: item.name.trim(),
-        grame: Number(item.quantity),
-        calorii: Number(item.calories),
-        proteine: Number(item.protein),
-        carbohidrati: Number(item.carbs),
-        grasimi: Number(item.fat),
-        fibre: Number(item.fiber),
+        grame: Number(item.quantity) || 100,
+        calorii: Math.round(Number(item.calories) || 0),
+        proteine: Math.round(Number(item.protein) || 0),
+        carbohidrati: Math.round(Number(item.carbs) || 0),
+        grasimi: Math.round(Number(item.fat) || 0),
+        fibre: Math.round((Number(item.fiber) || 0) * 10) / 10,
       })),
       imagine_url: draft.imageUrl || null,
       now: mealTime,
@@ -735,8 +744,10 @@ export default function ChatScreen() {
 
     try {
       let result: DecizieInsertMasa;
+      let persistedRow: any = null;
       try {
-        const { error } = await supabase.from('mese').insert(payload);
+        const { data, error } = await insereazaMasaCuPoza(supabase, payload);
+        persistedRow = data && data[0] ? data[0] : null;
         result = await decideRezultatInsertMasa(supabase as never, payload as never, { error });
       } catch (error) {
         result = await decideRezultatInsertMasa(supabase as never, payload as never, error instanceof Error ? error : new Error('transport'));
@@ -775,10 +786,10 @@ export default function ChatScreen() {
       refresh();
       setSuccessModalData({
         nume: draft.name,
-        calorii: Number(totals.calories),
-        proteine: Number(totals.protein),
-        carbohidrati: Number(totals.carbs),
-        grasimi: Number(totals.fat),
+        calorii: calVal,
+        proteine: protVal,
+        carbohidrati: carbVal,
+        grasimi: fatVal,
         tip_masa: draft.category || undefined,
         isOffline: result.tip === 'offline',
       });
