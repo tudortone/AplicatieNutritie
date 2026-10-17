@@ -140,13 +140,10 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
    *   5. auth.deleteUser Supabase (IREVERSIBIL — ULTIMUL pas, după ce
    *      curățarea Clerk/ImageKit a reușit)
    *
-   * Statusurile outbox: `db_done` (după rândurile DB), `auth_done` (după
-   * deleteUser), `completed`. Ruta scrie direct `db_done`/`auth_done`/`completed`;
-   * workerul (gdprWorker.js, N-02) folosește `clerk_done` și `imagekit_done`
-   * pentru reluarea granulară, urmând aceeași ordine a rutei:
-   * `db_done` → Clerk → `clerk_done` → ImageKit → `imagekit_done` →
-   * auth.deleteUser → `auth_done` → `completed`. Dacă ruta e întreruptă după
-   * `db_done`, workerul reia exact de la statusul persistat (M-06).
+   * Statusurile outbox urmează secvența strictă granulară (atât în rută cât și în worker):
+   * `pending` → `db_done` → `clerk_done` → `imagekit_done` → `auth_done` → `completed`.
+   * Fiecare pas este persistat durabil; un eșec la scrierea outbox blochează avansarea
+   * spre operația distructivă următoare (fail-closed).
    */
   router.delete('/delete-account', requireAuth, generalLimiter, async (req, res) => {
     let outboxId = null;

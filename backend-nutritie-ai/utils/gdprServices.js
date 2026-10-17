@@ -7,6 +7,9 @@
  * o singură dată aici, în utils, ca ruta și workerul să nu mai depindă unul de
  * celălalt (workerul nu mai importă din routes/gdpr). Orice altă eroare oprește
  * ștergerea — altfel am marca `completed` o ștergere care nu s-a întâmplat (P-05b).
+ *
+ * NOTĂ: PGRST106 indică schemă PostgREST neexpusă/misconfigurată și NU o tabelă lipsă;
+ * a fost exclus explicit pentru a forța fail-loud la export și ștergere.
  */
 const CODURI_TABELA_INEXISTENTA = new Set(['42P01', 'PGRST205']);
 
