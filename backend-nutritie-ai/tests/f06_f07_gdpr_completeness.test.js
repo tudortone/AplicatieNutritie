@@ -236,6 +236,7 @@ describe('F-06 — exportul GDPR nu mai este truncat', () => {
       'credite_tranzactii',
       'flow_credit_reservations',
       'flow_reward_intents',
+      'workout_templates',
       'abonamente_google_play',
     ]);
     expect(raspuns.body.abonamente_google_play[0]).not.toHaveProperty('purchase_token');

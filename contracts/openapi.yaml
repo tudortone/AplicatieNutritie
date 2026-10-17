@@ -192,9 +192,13 @@ paths:
   /api/v1/user/delete-account: { $ref: '#/components/pathItems/DeleteAccount' }
   /api/v1/webhooks/clerk: { $ref: '#/components/pathItems/ClerkWebhook' }
   /api/v1/webhooks/google-play: { $ref: '#/components/pathItems/GooglePlayWebhook' }
+  /api/v1/version-check: { $ref: '#/components/pathItems/VersionCheck' }
 
   # Aliasuri legacy. x-legacy-alias este excepția verificabilă folosită de testul
   # anti-drift; serverul emite și Sunset/Deprecation/Link pentru aceste căi.
+  /api/version-check:
+    $ref: '#/components/pathItems/VersionCheck'
+    x-legacy-alias: { canonical: /api/v1/version-check, sunset: '2026-09-30T00:00:00Z' }
   /api/ai-status:
     $ref: '#/components/pathItems/AiStatus'
     x-legacy-alias: { canonical: /api/v1/ai-status, sunset: '2026-09-30T00:00:00Z' }
@@ -749,6 +753,7 @@ components:
         - ai_jobs
         - credite_ai
         - credite_tranzactii
+        - workout_templates
         - abonamente_google_play
       properties:
         exportDate: { type: string, format: date-time }
@@ -766,6 +771,7 @@ components:
         ai_jobs: { type: array, items: { type: object } }
         credite_ai: { type: array, items: { type: object } }
         credite_tranzactii: { type: array, items: { type: object } }
+        workout_templates: { type: array, items: { type: object } }
         abonamente_google_play:
           type: array
           description: Metadate de abonament; tokenurile brute și legăturile dintre tokenuri nu sunt exportate.
@@ -852,6 +858,17 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
 
   pathItems:
+    VersionCheck:
+      get:
+        summary: Verificare versiune client GetFlow
+        security: []
+        responses:
+          '200':
+            description: Informatii actualizare aplicatie
+            content:
+              application/json:
+                schema:
+                  type: object
     AiStatus:
       get:
         summary: Stare publicabilă a furnizorilor AI

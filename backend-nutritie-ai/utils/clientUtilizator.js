@@ -71,6 +71,9 @@ const TABELE_CU_RLS_UTILIZATOR = Object.freeze([
 	'credite_tranzactii',
 	'flow_credit_reservations',
 	'flow_reward_intents',
+	// Training 2.0 (20260926090000_workout_v2_templates.sql): tabel utilizator cu RLS
+	// strict pe auth.uid() = user_id; exportabil și șters la GDPR.
+	'workout_templates',
 ]);
 
 /**

@@ -190,7 +190,10 @@ async function citesteTotPaginat({
       .eq('user_id', userId)
       .order(coloanaOrdine, { ascending: true })
       .range(de_la, pana_la);
-    if (error) throw error;
+    if (error) {
+      if (CODURI_TABELA_INEXISTENTA.has(error.code)) return [];
+      throw error;
+    }
     const lot = data ?? [];
     toate.push(...lot);
     // Ultima pagina: mai putine randuri decat am cerut.

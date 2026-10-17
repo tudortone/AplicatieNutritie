@@ -81,6 +81,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         tranzactiiCredite,
         rezervariFlowCredits,
         intentiiRecompensa,
+        workoutTemplates,
         abonamenteGooglePlay,
       ] = await Promise.all([
         citeste('mese'),
@@ -97,6 +98,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         citeste('credite_tranzactii'),
         citeste('flow_credit_reservations'),
         citeste('flow_reward_intents'),
+        citeste('workout_templates'),
         exportaAbonamenteGooglePlay({ supabaseAdmin, userId }),
       ]);
 
@@ -118,6 +120,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         credite_tranzactii: tranzactiiCredite,
         flow_credit_reservations: rezervariFlowCredits,
         flow_reward_intents: intentiiRecompensa,
+        workout_templates: workoutTemplates,
         abonamente_google_play: abonamenteGooglePlay,
       });
     } catch (err) {
@@ -180,24 +183,29 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
 
       const actualizezaStatus = async (status, lastError = null) => {
         if (!outboxId) return;
-        try {
-          const finalizat = status === 'completed';
-          await supabaseAdmin
-            .from('gdpr_deletions')
-            .update({
-              status,
-              last_error: finalizat ? null : lastError,
-              ...(finalizat ? {
-                completed_at: new Date().toISOString(),
-                // Rândul rămâne ca audit operațional, dar nu mai păstrează PII
-                // sau fileId-uri după ce reluarea nu mai este necesară.
-                user_id: outboxId,
-                clerk_user_id: null,
-                file_ids: [],
-              } : {}),
-            })
-            .eq('id', outboxId);
-        } catch { /* best-effort */ }
+        const finalizat = status === 'completed';
+        const { data: updatedRow, error } = await supabaseAdmin
+          .from('gdpr_deletions')
+          .update({
+            status,
+            last_error: finalizat ? null : lastError,
+            ...(finalizat ? {
+              completed_at: new Date().toISOString(),
+              // Rândul rămâne ca audit operațional, dar nu mai păstrează PII
+              // sau fileId-uri după ce reluarea nu mai este necesară.
+              user_id: outboxId,
+              clerk_user_id: null,
+              file_ids: [],
+            } : {}),
+          })
+          .eq('id', outboxId)
+          .select('id')
+          .maybeSingle();
+        if (error || !updatedRow?.id) {
+          const statusError = new Error('GDPR_OUTBOX_STATUS_UPDATE_FAILED');
+          statusError.code = 'GDPR_OUTBOX_STATUS_UPDATE_FAILED';
+          throw statusError;
+        }
       };
 
       // P-06: extrage fileId-urile ÎNAINTE de a șterge rândurile din DB
@@ -209,20 +217,28 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       // persistată; nu suprascriem o listă non-goală cu una goală.
       if (outboxId) {
         try {
-          const { data: randOutbox } = await supabaseAdmin
+          const { data: randOutbox, error: eroareCitireOutbox } = await supabaseAdmin
             .from('gdpr_deletions')
             .select('file_ids')
             .eq('id', outboxId)
             .maybeSingle();
+          if (eroareCitireOutbox || !randOutbox) {
+            throw new Error('GDPR_OUTBOX_FILE_IDS_READ_FAILED');
+          }
           const fileIdsPersistate = Array.isArray(randOutbox?.file_ids) ? randOutbox.file_ids : [];
           if (fileIds.size === 0 && fileIdsPersistate.length > 0) {
             fileIds = new Set(fileIdsPersistate);
           }
           if (fileIds.size > 0 || fileIdsPersistate.length === 0) {
-            await supabaseAdmin
+            const { data: outboxActualizat, error: eroarePersistareFileIds } = await supabaseAdmin
               .from('gdpr_deletions')
               .update({ file_ids: [...fileIds] })
-              .eq('id', outboxId);
+              .eq('id', outboxId)
+              .select('id')
+              .maybeSingle();
+            if (eroarePersistareFileIds || !outboxActualizat?.id) {
+              throw new Error('GDPR_OUTBOX_FILE_IDS_PERSIST_FAILED');
+            }
           }
         } catch (err) {
           // M2: persistarea fileIds NU mai e best-effort. Dacă rândurile `mese` se
