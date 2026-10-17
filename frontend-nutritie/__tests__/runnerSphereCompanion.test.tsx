@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { RunnerSphere } from '../components/home/RunnerSphere';
+import { RunnerSphere, RUN_FRAMES, IDLE_FRAME } from '../components/home/RunnerSphere';
 import { PixelCompanion } from '../components/home/PixelCompanion';
 import { RunnerSphereCompanionCluster } from '../components/home/RunnerSphereCompanionCluster';
 
@@ -79,6 +79,24 @@ describe('RunnerSphere Component', () => {
     const widget = view.getByTestId('runner-sphere-widget');
     expect(widget).toBeTruthy();
     expect(view.getByLabelText('Analiză foto finalizată. Atingeți pentru a deschide rezultatul.')).toBeTruthy();
+  });
+
+  it('features an authentic 6-phase running gait cycle with alternating limbs and depth shading', () => {
+    expect(RUN_FRAMES).toHaveLength(6);
+    // Frame 0 has near leg extended forward and far leg back
+    expect(RUN_FRAMES[0].nearLeg).toContain('18 20.8');
+    expect(RUN_FRAMES[0].farLeg).toContain('5 18.5');
+
+    // Frame 3 alternates: near leg kicked back and far leg extended forward
+    expect(RUN_FRAMES[3].nearLeg).toContain('5 18.5');
+    expect(RUN_FRAMES[3].farLeg).toContain('18 20.8');
+
+    // Verify arms also alternate
+    expect(RUN_FRAMES[0].nearArm).toContain('7.8 11.8');
+    expect(RUN_FRAMES[3].nearArm).toContain('17.5 7.8');
+
+    // Verify idle frame is a balanced resting stance
+    expect(IDLE_FRAME.torso).toBe('M 12 6.3 L 12 13.5');
   });
 });
 

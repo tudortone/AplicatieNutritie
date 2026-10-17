@@ -80,4 +80,16 @@ describe('Trigger/Gemini Photo production contract', () => {
     expect(triggerModule._test.inferMealType('unknown', 'pranz')).toBe('pranz');
     expect(triggerModule._test.inferMealType(null, 'invalid')).toBe('gustare');
   });
+
+  test('codEroareSigur cleanly categorizes high demand, rate limit, and never returns generic Error', () => {
+    const cod = triggerModule._test.codEroareSigur;
+    expect(cod(new Error('503 Service Unavailable'))).toBe('AI_HIGH_DEMAND');
+    expect(cod(new Error('The model is temporarily overloaded with high demand'))).toBe('AI_HIGH_DEMAND');
+    expect(cod(new Error('429 Quota exceeded'))).toBe('AI_RATE_LIMITED');
+    expect(cod(new Error('PHOTO_RESULT_INVALID'))).toBe('PHOTO_RESULT_INVALID');
+    expect(cod(new Error('Something unexpected'))).toBe('ANALIZA_ESUATA');
+    const customErr = new Error('Custom failure');
+    customErr.code = 'NOT_FOOD';
+    expect(cod(customErr)).toBe('NOT_FOOD');
+  });
 });

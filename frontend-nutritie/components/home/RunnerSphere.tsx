@@ -38,34 +38,81 @@ const AnimatedSvg: any =
     ? Animated.createAnimatedComponent(SafeSvg)
     : SafeSvg;
 
-// Authentic 4-phase human running gait cycle on 24x24 viewBox:
-// Frame 0: Right foot strike contact, left leg back kick, left arm forward, right arm back
-// Frame 1: Mid-stance transition, left knee driving forward through swing phase
-// Frame 2: Left foot strike contact, right leg back kick, right arm forward, left arm back
-// Frame 3: Mid-stance transition, right knee driving forward through swing phase
-const RUN_FRAMES = [
+export interface RunnerFrame {
+  head: { cx: number; cy: number; r: number };
+  torso: string;
+  nearLeg: string;
+  nearArm: string;
+  farLeg: string;
+  farArm: string;
+}
+
+// Authentic 6-phase human running gait cycle on 24x24 viewBox:
+// Phase 0: Near leg heel strike forward, far leg kicked back, near arm back, far arm forward
+// Phase 1: Near leg mid-stance vertical support, far leg 90° knee drive forward past hips
+// Phase 2: Near leg toe-off push backward, far leg reaches forward into flight apex
+// Phase 3: Far leg heel strike forward, near leg kicked back, far arm back, near arm forward
+// Phase 4: Far leg mid-stance vertical support, near leg 90° knee drive forward past hips
+// Phase 5: Far leg toe-off push backward, near leg reaches forward into flight apex
+export const RUN_FRAMES: RunnerFrame[] = [
   {
-    head: { cx: 14, cy: 4.5, r: 1.8 },
-    body: 'M 13.2 6.3 L 11.5 12.5 M 13 7.5 L 9.5 9.5 L 8 12 M 13 7.5 L 15.8 9.2 L 17.5 7.8 M 11.5 12.5 L 8 16 L 5 18.5 M 11.5 12.5 L 14.5 16 L 17.8 20.5',
+    head: { cx: 13.8, cy: 4.8, r: 1.8 },
+    torso: 'M 13.2 6.6 L 11.5 12.8',
+    nearLeg: 'M 11.5 12.8 L 14.5 16.5 L 18 20.8',
+    nearArm: 'M 12.8 7.8 L 9.5 9.5 L 7.8 11.8',
+    farLeg: 'M 11.5 12.8 L 8 16 L 5 18.5',
+    farArm: 'M 12.8 7.8 L 15.5 9.2 L 17.5 7.8',
   },
   {
-    head: { cx: 13.8, cy: 4, r: 1.8 },
-    body: 'M 13 5.8 L 11.8 12 M 12.8 7 L 11.2 9.8 L 12.5 12 M 12.8 7 L 15 9 L 14.8 11.5 M 11.8 12 L 12.2 16.5 L 11.5 21.5 M 11.8 12 L 14.5 14 L 13.5 18.5',
+    head: { cx: 13.6, cy: 4.2, r: 1.8 },
+    torso: 'M 13.0 6.0 L 11.8 12.2',
+    nearLeg: 'M 11.8 12.2 L 12.5 16.5 L 12 21.5',
+    nearArm: 'M 12.6 7.2 L 11 9.5 L 11.5 12',
+    farLeg: 'M 11.8 12.2 L 14.8 13.8 L 13 17.5',
+    farArm: 'M 12.6 7.2 L 14.2 9.8 L 14.5 12',
   },
   {
-    head: { cx: 14, cy: 4.5, r: 1.8 },
-    body: 'M 13.2 6.3 L 11.5 12.5 M 13 7.5 L 15.8 9.2 L 17.5 7.8 M 13 7.5 L 9.5 9.5 L 8 12 M 11.5 12.5 L 14.5 16 L 17.8 20.5 M 11.5 12.5 L 8 16 L 5 18.5',
+    head: { cx: 14.2, cy: 3.6, r: 1.8 },
+    torso: 'M 13.4 5.4 L 12.0 11.6',
+    nearLeg: 'M 12.0 11.6 L 8.5 15.5 L 6 19.5',
+    nearArm: 'M 13.0 6.6 L 9 8.5 L 7 10.5',
+    farLeg: 'M 12.0 11.6 L 16.2 14.5 L 16 18.5',
+    farArm: 'M 13.0 6.6 L 15.8 8.5 L 18 7',
   },
   {
-    head: { cx: 13.8, cy: 4, r: 1.8 },
-    body: 'M 13 5.8 L 11.8 12 M 12.8 7 L 15 9 L 14.8 11.5 M 12.8 7 L 11.2 9.8 L 12.5 12 M 11.8 12 L 14.5 14 L 13.5 18.5 M 11.8 12 L 12.2 16.5 L 11.5 21.5',
+    head: { cx: 13.8, cy: 4.8, r: 1.8 },
+    torso: 'M 13.2 6.6 L 11.5 12.8',
+    nearLeg: 'M 11.5 12.8 L 8 16 L 5 18.5',
+    nearArm: 'M 12.8 7.8 L 15.5 9.2 L 17.5 7.8',
+    farLeg: 'M 11.5 12.8 L 14.5 16.5 L 18 20.8',
+    farArm: 'M 12.8 7.8 L 9.5 9.5 L 7.8 11.8',
+  },
+  {
+    head: { cx: 13.6, cy: 4.2, r: 1.8 },
+    torso: 'M 13.0 6.0 L 11.8 12.2',
+    nearLeg: 'M 11.8 12.2 L 14.8 13.8 L 13 17.5',
+    nearArm: 'M 12.6 7.2 L 14.2 9.8 L 14.5 12',
+    farLeg: 'M 11.8 12.2 L 12.5 16.5 L 12 21.5',
+    farArm: 'M 12.6 7.2 L 11 9.5 L 11.5 12',
+  },
+  {
+    head: { cx: 14.2, cy: 3.6, r: 1.8 },
+    torso: 'M 13.4 5.4 L 12.0 11.6',
+    nearLeg: 'M 12.0 11.6 L 16.2 14.5 L 16 18.5',
+    nearArm: 'M 13.0 6.6 L 15.8 8.5 L 18 7',
+    farLeg: 'M 12.0 11.6 L 8.5 15.5 L 6 19.5',
+    farArm: 'M 13.0 6.6 L 9 8.5 L 7 10.5',
   },
 ];
 
-// Athletic standing stance at rest (balanced posture, hands relaxed)
-const IDLE_FRAME = {
+// Athletic standing stance at rest (balanced posture, relaxed arms)
+export const IDLE_FRAME: RunnerFrame = {
   head: { cx: 12, cy: 4.5, r: 1.8 },
-  body: 'M 12 6.3 L 12 13.5 M 12 7.5 L 9.8 11 L 9.5 14 M 12 7.5 L 14.2 11 L 14.5 14 M 12 13.5 L 10.5 17.5 L 10 21.5 M 12 13.5 L 13.5 17.5 L 14 21.5',
+  torso: 'M 12 6.3 L 12 13.5',
+  nearLeg: 'M 12 13.5 L 13.5 17.5 L 14 21.5',
+  nearArm: 'M 12 7.5 L 14.2 11 L 14.5 14',
+  farLeg: 'M 12 13.5 L 10.5 17.5 L 10 21.5',
+  farArm: 'M 12 7.5 L 9.8 11 L 9.5 14',
 };
 
 export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSphereProps) {
@@ -79,7 +126,7 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
   const isProcessing = state === 'processing';
   const isCompleted = state === 'completed';
 
-  // 1. Authentic Stride Cycle (130ms per frame = ~520ms full stride cycle)
+  // 1. Authentic Stride Cycle (100ms per frame = 600ms full human running gait cycle)
   useEffect(() => {
     if (!isProcessing || reduceMotion) {
       setRunFrameIndex(0);
@@ -87,7 +134,7 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
     }
     const timer = setInterval(() => {
       setRunFrameIndex((prev) => (prev + 1) % RUN_FRAMES.length);
-    }, 130);
+    }, 100);
     return () => clearInterval(timer);
   }, [isProcessing, reduceMotion]);
 
@@ -143,6 +190,12 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
     : state === 'failed'
       ? '#EF4444'
       : '#CCFF00';
+
+  const farLimbColor = isCompleted
+    ? 'rgba(16, 185, 129, 0.52)'
+    : state === 'failed'
+      ? 'rgba(239, 68, 68, 0.52)'
+      : 'rgba(204, 255, 0, 0.48)';
 
   const handlePress = () => {
     try {
@@ -245,7 +298,30 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
 
         {/* Layer 3: Core Athlete Figure displaying Real Running Stride Cycle */}
         <View style={[StyleSheet.absoluteFill, styles.centerAlign]}>
-          <SafeSvg width={22} height={22} viewBox="0 0 24 24">
+          <SafeSvg width={24} height={24} viewBox="0 0 24 24">
+            {/* 1. Far arm & far leg (rendered with depth shading) */}
+            {currentFrame.farArm ? (
+              <SafePath
+                d={currentFrame.farArm}
+                stroke={farLimbColor}
+                strokeWidth={1.9}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            ) : null}
+            {currentFrame.farLeg ? (
+              <SafePath
+                d={currentFrame.farLeg}
+                stroke={farLimbColor}
+                strokeWidth={2.0}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            ) : null}
+
+            {/* 2. Head & Torso */}
             <SafeCircle
               cx={currentFrame.head.cx}
               cy={currentFrame.head.cy}
@@ -253,13 +329,35 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
               fill={runnerColor}
             />
             <SafePath
-              d={currentFrame.body}
+              d={currentFrame.torso}
               stroke={runnerColor}
-              strokeWidth={2.2}
+              strokeWidth={2.3}
               strokeLinecap="round"
               strokeLinejoin="round"
               fill="none"
             />
+
+            {/* 3. Near leg & near arm (rendered with full foreground illumination) */}
+            {currentFrame.nearLeg ? (
+              <SafePath
+                d={currentFrame.nearLeg}
+                stroke={runnerColor}
+                strokeWidth={2.3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            ) : null}
+            {currentFrame.nearArm ? (
+              <SafePath
+                d={currentFrame.nearArm}
+                stroke={runnerColor}
+                strokeWidth={2.1}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            ) : null}
           </SafeSvg>
         </View>
 

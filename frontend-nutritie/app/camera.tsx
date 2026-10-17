@@ -33,7 +33,7 @@ import { FlowIcon } from '../components/ui/FlowIcon';
 import { uploadImageToImageKit } from '@/lib/imagekit';
 import { useFlowCredits } from '../context/FlowCreditsContext';
 import { FlowCreditsPill } from '@/components/FlowCreditsPill';
-import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts, amprentaOperatieFoto } from '@/lib/imageOptimizer';
+import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts, amprentaOperatieFoto, purgeLocalImageDrafts } from '@/lib/imageOptimizer';
 import { pushOfflineMealVerificat, processOfflineQueue, MasaOfflinePayload } from '@/lib/offlineQueue';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { MealSaveSuccessModal, type MealSuccessData } from '../components/ui/MealSaveSuccessModal';
@@ -463,7 +463,14 @@ export default function CameraScreen() {
         setScanError(null);
         return;
       }
-      if (error instanceof PhotoApiError && (error.code === 'NOT_FOOD' || error.code === 'PHOTO_RESULT_EMPTY')) {
+      const isNonFoodErrorCode = error instanceof PhotoApiError && (
+        error.code === 'NOT_FOOD'
+        || error.code === 'NO_FOOD'
+        || error.code === 'PHOTO_RESULT_EMPTY'
+        || error.code === 'EMPTY_RESULT'
+        || error.code === 'PHOTO_RESULT_INVALID'
+      );
+      if (isNonFoodErrorCode) {
         setPhotoPhase('failed');
         setFailedPhotoJob({
           job: { id: activePointer?.jobId || currentPhotoJobIdRef.current || 'unknown', status: 'failed', errorCode: 'NOT_FOOD' },
@@ -661,7 +668,7 @@ export default function CameraScreen() {
               style: 'destructive',
               onPress: () => {
                 if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
-                discardLocalImageDraft(ultimulDraft, ownerId).catch(() => {});
+                purgeLocalImageDrafts(ownerId).catch(() => {});
               },
             },
             {
@@ -715,44 +722,16 @@ export default function CameraScreen() {
 
   const mergiLaAcasa = useCallback(() => {
     permitereNavigareRef.current = true;
-    if (currentPhotoJobIdRef.current) {
-      lasaAnalizaInFundal();
-    } else {
+    if (!currentPhotoJobIdRef.current) {
       shouldGoHomeOnSubmitRef.current = true;
-      setPhotoPhase('background');
-      setSeIncarca(false);
     }
     if (router.canGoBack()) {
       router.back();
     } else {
       router.replace('/(tabs)');
     }
-  }, [lasaAnalizaInFundal, router]);
+  }, [router]);
 
-  const handleRetakePhoto = useCallback(() => {
-    setFailedPhotoJob(null);
-    setScanError(null);
-    anuleazaScanarea();
-  }, [anuleazaScanarea]);
-
-  const handleGalleryFromNotFood = useCallback(() => {
-    setFailedPhotoJob(null);
-    setScanError(null);
-    anuleazaScanarea();
-    void alegeDinGalerie();
-  }, [alegeDinGalerie, anuleazaScanarea]);
-
-  const handleHomeFromNotFood = useCallback(() => {
-    setFailedPhotoJob(null);
-    setScanError(null);
-    anuleazaScanarea();
-    permitereNavigareRef.current = true;
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)');
-    }
-  }, [anuleazaScanarea, router]);
 
   // BUG-065: pe Android, butonul/gestul „Înapoi" peste modalul fullScreen ejecta
   // ecranul direct, aruncând un scan în review fără confirmare și fără să
@@ -852,6 +831,17 @@ export default function CameraScreen() {
     fibre: quality.totals.fiber,
   }), [quality.totals]);
 
+  const isNonFood = Boolean(
+    failedPhotoJob && (
+      failedPhotoJob.job.errorCode === 'NOT_FOOD'
+      || failedPhotoJob.job.errorCode === 'NO_FOOD'
+      || failedPhotoJob.job.errorCode === 'PHOTO_RESULT_EMPTY'
+      || failedPhotoJob.job.errorCode === 'EMPTY_RESULT'
+      || failedPhotoJob.job.errorCode === 'PHOTO_RESULT_INVALID'
+      || (failedPhotoJob.job.result as Record<string, unknown> | undefined)?.isNotFood === true
+    )
+  );
+
   const analizeazaFoto = async () => {
     if (!cameraRef.current || isTakingPhotoRef.current || seIncarca || !session) return;
     const ownerId = session.user.id;
@@ -913,6 +903,31 @@ export default function CameraScreen() {
       Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.galerieInaccesibila'));
     }
   };
+
+  const handleRetakePhoto = useCallback(() => {
+    setFailedPhotoJob(null);
+    setScanError(null);
+    anuleazaScanarea();
+  }, [anuleazaScanarea]);
+
+  const handleGalleryFromNotFood = useCallback(() => {
+    setFailedPhotoJob(null);
+    setScanError(null);
+    anuleazaScanarea();
+    void alegeDinGalerie();
+  }, [alegeDinGalerie, anuleazaScanarea]);
+
+  const handleHomeFromNotFood = useCallback(() => {
+    setFailedPhotoJob(null);
+    setScanError(null);
+    anuleazaScanarea();
+    permitereNavigareRef.current = true;
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
+  }, [anuleazaScanarea, router]);
 
   const adaugaInJurnal = async () => {
     if (!rezultat || rezultat.length === 0 || !session || isSavingDiary || activeSaveAttemptRef.current !== null) return;
@@ -1234,7 +1249,7 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={StyleSheet.absoluteFillObject}
         facing="back"
-        active={rezultat.length === 0 && (!failedPhotoJob || failedPhotoJob.job.errorCode !== 'NOT_FOOD')}
+        active={rezultat.length === 0 && !isNonFood}
       />
 
       <LinearGradient
@@ -1329,8 +1344,7 @@ export default function CameraScreen() {
         <Text style={styles.scanHint}>{t('camera.scanHint')}</Text>
       </View>
 
-      {/* Non-Food Recovery Screen */}
-      {failedPhotoJob && failedPhotoJob.job.errorCode === 'NOT_FOOD' ? (
+      {isNonFood ? (
         <Animated.View
           testID="camera-not-food-card"
           entering={FadeInUp.duration(400)}
@@ -1683,7 +1697,7 @@ export default function CameraScreen() {
       )}
 
       {/* Shutter & Gallery button */}
-      {rezultat.length === 0 && (
+      {rezultat.length === 0 && !isNonFood && !failedPhotoJob && (
         <Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(600).delay(200)} style={[styles.shutterArea, { bottom: Math.max(insets.bottom, 16) + 20 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 28 }}>
             <TouchableOpacity

@@ -157,7 +157,18 @@ function codEroareSigur(err) {
     return 'TIMEOUT';
   }
   if (err?.message === 'IMAGINE_PREA_MARE') return 'IMAGINE_PREA_MARE';
-  return err?.code || err?.name || 'ANALIZA_ESUATA';
+  const msg = String(err?.message || '');
+  if (msg.includes('503') || /high demand|temporarily unavailable|service unavailable/i.test(msg)) {
+    return 'AI_HIGH_DEMAND';
+  }
+  if (msg.includes('429') || /resource exhausted|quota/i.test(msg)) {
+    return 'AI_RATE_LIMITED';
+  }
+  if (err?.message === 'PHOTO_RESULT_INVALID' || err?.message === 'JSON_AI_INVALID') {
+    return err.message;
+  }
+  const cleanName = err?.name && err?.name !== 'Error' ? err.name : null;
+  return err?.code || cleanName || 'ANALIZA_ESUATA';
 }
 
 exports.analizaMancareTask = task({
@@ -280,7 +291,8 @@ exports.analizaMancareTask = task({
         keys: chei,
         maxAttempts: Number(process.env.GEMINI_PHOTO_ATTEMPTS_PER_RUN || 2),
       });
-      for (const { key, model: modelName } of incercariGemini) {
+      for (let i = 0; i < incercariGemini.length; i++) {
+        const { key, model: modelName } = incercariGemini[i];
         const client = new GoogleGenerativeAI(key);
         try {
           const model = client.getGenerativeModel({ model: modelName });
@@ -293,8 +305,11 @@ exports.analizaMancareTask = task({
           ultimaEroare = err;
           const code = codEroareSigur(err);
           if (code === 'TIMEOUT') inregistreazaOperational('gemini.timeout');
-          if (String(err?.status || err?.code || err?.message || '').includes('429')) {
+          if (code === 'AI_RATE_LIMITED' || String(err?.status || err?.code || err?.message || '').includes('429')) {
             inregistreazaOperational('gemini.429');
+          }
+          if (code === 'AI_HIGH_DEMAND' && i < incercariGemini.length - 1) {
+            await new Promise((r) => setTimeout(r, 1500));
           }
         }
         if (text) break;
@@ -304,19 +319,20 @@ exports.analizaMancareTask = task({
       const items = parseJsonFromLlm(text, { asteapta: 'array' });
       if (!Array.isArray(items)) throw new Error('JSON_AI_INVALID');
 
-      const normalizate = normalizePhotoItems(items.slice(0, MAX_ALIMENTE));
-
       // Ramura isNotFood: imaginea nu contine alimente (modelul a raspuns cu
-      // alimente filtrate sau nume care semnaleaza non-food). Raspuns explicit
-      // pentru frontend, distinct de o eroare tehnica.
-      if (normalizate.some((item) => /nu.*mancare|non-food|nu s-a detectat|nu contine/i.test(item.nume))) {
+      // array gol [] sau cu alimente/mesaje care semnaleaza non-food).
+      const isNotFood = items.length === 0 || items.some((item) =>
+        !item || typeof item !== 'object' || /nu.*(mancare|aliment)|non-food|nu s-a detectat|nu contine|not.*food|no.*food/i.test(String(item.nume || ''))
+      );
+
+      if (isNotFood) {
         const rezultatNotFood = {
           success: false,
           isNotFood: true,
           eroare: 'Imaginea încărcată nu pare să conțină alimente. Te rugăm să încerci cu o poză clară a unei mese.',
           processedAt: new Date().toISOString(),
         };
-        // Rezultat procesat valid: jobul se considera completed, nu o eroare tehnica.
+        // Rezultat procesat valid: creditul se restituie, iar jobul este marcat NOT_FOOD
         await settlePhotoCredit({ userId, reservationId, action: 'release', reason: 'NOT_FOOD' });
         if (jobId) await updateAiJob(jobId, {
           status: 'failed', result: rezultatNotFood, error_code: 'NOT_FOOD',
@@ -324,6 +340,8 @@ exports.analizaMancareTask = task({
         }, userId);
         return rezultatNotFood;
       }
+
+      const normalizate = normalizePhotoItems(items.slice(0, MAX_ALIMENTE));
 
       const quality = evaluatePhotoQuality(normalizate);
       const suggestedMeal = normalizate.find((item) => item.tip_masa_sugerat)?.tip_masa_sugerat;

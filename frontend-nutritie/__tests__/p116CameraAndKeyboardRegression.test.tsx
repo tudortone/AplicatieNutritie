@@ -72,6 +72,19 @@ describe('P1-16: Camera UX & Keyboard Regression Suite (Defects C, D, E, F)', ()
       expect(expectedCameraTestIds).toContain('camera-add-journal-btn');
       expect(expectedCameraTestIds).toContain('camera-retry-btn');
     });
+
+    it('verifies non-food recovery card contracts and error code handling in camera source', () => {
+      const cameraSource = fs.readFileSync(path.join(__dirname, '..', 'app', 'camera.tsx'), 'utf8');
+      expect(cameraSource).toContain('testID="camera-not-food-card"');
+      expect(cameraSource).toContain('NOT_FOOD');
+      expect(cameraSource).toContain('PHOTO_RESULT_INVALID');
+      expect(cameraSource).toContain('PHOTO_RESULT_EMPTY');
+      expect(cameraSource).toContain('isNonFood');
+      expect(cameraSource).toContain('handleRetakePhoto');
+      expect(cameraSource).toContain('handleGalleryFromNotFood');
+      expect(cameraSource).toContain('handleHomeFromNotFood');
+      expect(cameraSource).toContain('purgeLocalImageDrafts');
+    });
   });
 
   describe('Defect E & F: Multilingual Meal Intent & Keyboard Offset Contract', () => {
