@@ -65,6 +65,13 @@ const EXCEPTII_AUDIT = [
 		motiv: 'Transitiv prin @expo/code-signing-certificates. Advisory 2026-10-01 GHSA-86w9-cpqp-85rv fara versiune remediata pe npm (afecteaza <=1.4.0). Utilizat exclusiv la build-time in Expo CLI; absent din runtime bundle aplicatie.',
 		expira: '2026-12-31',
 	},
+	{
+		pachet: 'braces',
+		range: '*',
+		advisory: 'GHSA-VFJ7-8CJW-P6XM',
+		motiv: 'Transitiv prin micromatch / metro-file-map / jest. Advisory GHSA-vfj7-8cjw-p6xm fara versiune superioara pe npm (afecteaza <=3.0.3). Utilizat exclusiv la build-time si testare; absent din runtime bundle aplicatie.',
+		expira: '2026-12-31',
+	},
 ];
 
 const SEVERITATI_IGNORATE = new Set(['low', 'info']);

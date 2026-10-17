@@ -57,6 +57,7 @@ const createBillingGoogleRouter = require('./routes/billingGoogle');
 const createPhotoFlowRouter = require('./routes/photoFlow');
 const createRewardedRouter = require('./routes/rewarded');
 const createFeedbackRouter = require('./routes/feedback');
+const createVersionCheckRouter = require('./routes/versionCheck');
 const createGooglePlayWebhookRouter = require('./routes/webhooksGooglePlay');
 const createWebhooksRouter = require('./routes/webhooks');
 const createMeseRepo = require('./repositories/meseRepo');
@@ -469,7 +470,12 @@ const feedbackR = createFeedbackRouter({
   feedbackLimiter,
   contextDate,
 });
+const versionCheckR = createVersionCheckRouter({
+  config,
+  versionLimiter: generalLimiter,
+});
 // /api/v1 = prefix canonic
+app.use('/api/v1', versionCheckR);
 app.use('/api/v1', statusR);
 app.use('/api/v1', aiR);
 app.use('/api/v1', photoFlowR);
@@ -494,6 +500,7 @@ app.use('/api', (req, res, next) => {
   res.setHeader('Link', '</api/v1>; rel="successor-version"');
   next();
 });
+app.use('/api', versionCheckR);
 app.use('/api', statusR);
 app.use('/api', aiR);
 app.use('/api', photoFlowR);

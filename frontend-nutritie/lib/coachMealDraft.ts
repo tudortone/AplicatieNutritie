@@ -62,9 +62,7 @@ function makeDraft(raw: unknown, explanation: string, userText: string): CoachMe
     };
   }).filter((value): value is CoachMealIngredient => value !== null);
   if (ingredients.length === 0) return null;
-  // The user's explicit wording is stronger than the model's inferred label.
-  // Structured output is retained only when the user's text has no single
-  // unambiguous category; no time-based preference is fabricated for Coach.
+  // Explicit category from user wording > explicit category from model
   const category = parseExplicitTipMasa(userText) ?? parseExplicitTipMasa(item.meal_type);
   const steps = item.preparare ?? item.mod_de_preparare ?? item.steps;
   return {

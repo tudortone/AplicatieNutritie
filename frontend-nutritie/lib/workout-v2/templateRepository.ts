@@ -119,8 +119,15 @@ export function createSupabaseTemplateRepository(client: SupabaseClient): Workou
       return fromRow(data as WorkoutTemplateRow);
     },
     async duplicate(ownerId, sourceId, newId, newName, now) {
-      const source = (await this.list(ownerId)).find((template) => template.id === sourceId);
-      if (!source) throw new Error('TEMPLATE_NOT_FOUND');
+      const { data, error } = await client
+        .from('workout_templates')
+        .select('*')
+        .eq('id', sourceId)
+        .eq('user_id', ownerId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('TEMPLATE_NOT_FOUND');
+      const source = fromRow(data as WorkoutTemplateRow);
       const duplicate: WorkoutTemplate = {
         ...source, id: newId, name: newName.trim(), createdAt: now, updatedAt: now,
         blocks: source.blocks.map((block) => ({ ...block, id: `${newId}:${block.id}` })),

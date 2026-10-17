@@ -133,8 +133,10 @@ export const PLAFON_MACRO = 5000;
 export function totaluriPentruAfisare(totaluri: TotaluriZi): TotaluriZi {
   const intreg = (v: number, plafon: number) =>
     Math.min(plafon, Math.max(0, Math.round(Number.isFinite(v) ? v : 0)));
-  const zecimala = (v: number, plafon: number) =>
-    Math.min(plafon, Math.max(0, Math.round((Number.isFinite(v) ? v : 0) * 10) / 10));
+  const zecimala = (v: number, plafon: number) => {
+    const val = Number.isFinite(v) ? v : 0;
+    return Math.min(plafon, Math.max(0, Math.round((val + Number.EPSILON) * 10) / 10));
+  };
 
   return {
     calorii: intreg(totaluri.calorii, PLAFON_CALORII),

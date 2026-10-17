@@ -5,10 +5,12 @@ import {
 	ScrollView,
 	StyleSheet,
 	Text,
+	TouchableOpacity,
 	View,
 	useWindowDimensions,
 } from 'react-native'
 import * as Haptics from 'expo-haptics'
+import { Minus, Plus } from 'lucide-react-native'
 
 import { useTheme } from '../../context/ThemeContext'
 
@@ -49,6 +51,8 @@ export default function SelectorValoare({
 	const { width } = useWindowDimensions()
 	const refScroll = useRef<ScrollView>(null)
 	const ultimaValoare = useRef(valoare)
+	const initializat = useRef(false)
+	const ultimulTimpHaptic = useRef(0)
 	// Cat timp utilizatorul trage, efectul de sincronizare nu trebuie sa sara inapoi.
 	const manevreaza = useRef(false)
 
@@ -63,14 +67,43 @@ export default function SelectorValoare({
 
 	const indiceDinValoare = useCallback((v: number) => Math.round((v - min) / pas), [min, pas])
 
+	const sincronizeazaPozitie = useCallback(
+		(v: number, animated = false) => {
+			const x = Math.max(0, indiceDinValoare(v) * LATIME_PAS)
+			refScroll.current?.scrollTo({ x, animated })
+		},
+		[indiceDinValoare]
+	)
+
+	// Offset inițial pentru ca ScrollView-ul să se monteze direct la valoarea selectată,
+	// nu la x=0 (care ar corespunde minimului).
+	const initialOffset = useMemo(
+		() => ({ x: Math.max(0, indiceDinValoare(valoare) * LATIME_PAS), y: 0 }),
+		// Offset calculat intenționat exclusiv la prima montare a componentei
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[]
+	)
+
+	// Sincronizare la rezolvarea dimensiunilor native de layout (Android 16 fix).
+	const laLayout = useCallback(() => {
+		if (!initializat.current) {
+			initializat.current = true
+			sincronizeazaPozitie(valoare, false)
+		}
+	}, [sincronizeazaPozitie, valoare])
+
 	// Pozitionam rigla pe valoarea curenta cand aceasta se schimba din exterior.
 	useEffect(() => {
 		if (manevreaza.current) return
+		if (!initializat.current) {
+			initializat.current = true
+			sincronizeazaPozitie(valoare, false)
+			return
+		}
 		if (valoare === ultimaValoare.current) return
 		ultimaValoare.current = valoare
-		const x = indiceDinValoare(valoare) * LATIME_PAS
-		refScroll.current?.scrollTo({ x, animated: false })
-	}, [valoare, indiceDinValoare])
+		sincronizeazaPozitie(valoare, false)
+	}, [valoare, sincronizeazaPozitie])
 
 	const laDerulare = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
 		const indice = Math.round(e.nativeEvent.contentOffset.x / LATIME_PAS)
@@ -78,6 +111,23 @@ export default function SelectorValoare({
 		const noua = gradatii[limitat]
 		if (noua !== ultimaValoare.current) {
 			ultimaValoare.current = noua
+			const acum = Date.now()
+			if (acum - ultimulTimpHaptic.current > 35) {
+				ultimulTimpHaptic.current = acum
+				try {
+					Haptics.selectionAsync()
+				} catch {}
+			}
+			laSchimbare(noua)
+		}
+	}
+
+	const ajusteazaPas = (directie: number) => {
+		const pasCuSemn = directie * pas
+		const noua = Math.min(max, Math.max(min, Number((valoare + pasCuSemn).toFixed(zecimale))))
+		if (noua !== valoare) {
+			ultimaValoare.current = noua
+			sincronizeazaPozitie(noua, true)
 			try {
 				Haptics.selectionAsync()
 			} catch {}
@@ -85,24 +135,58 @@ export default function SelectorValoare({
 		}
 	}
 
-	// Pentru TalkBack/VoiceOver rigla expune controale increment/decrement, ca
-	// valoarea sa poata fi ajustata si fara gesturi de tragere.
+	// Pentru TalkBack/VoiceOver rigla expune controale increment/decrement.
 	const laActiuneAccesibilitate = (e: { nativeEvent: { actionName: string } }) => {
-		const pasCuSemn = e.nativeEvent.actionName === 'increment' ? pas : -pas
-		const noua = Math.min(max, Math.max(min, Number((valoare + pasCuSemn).toFixed(zecimale))))
-		ultimaValoare.current = noua
-		laSchimbare(noua)
+		ajusteazaPas(e.nativeEvent.actionName === 'increment' ? 1 : -1)
 	}
 
 	const valoareAfisata = Number.isFinite(valoare) ? valoare.toFixed(zecimale) : Number(min.toFixed(zecimale))
 
 	return (
-		<View>
+		<View onLayout={laLayout}>
 			<View style={styles.valoareWrap}>
-				<Text style={[styles.valoare, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
-					{valoareAfisata}
-				</Text>
-				<Text style={[styles.unitate, { color: colors.textSecondary }]}>{unitate}</Text>
+				<TouchableOpacity
+					accessibilityRole="button"
+					accessibilityLabel={`Scade ${unitate}`}
+					hitSlop={12}
+					onPress={() => ajusteazaPas(-1)}
+					disabled={valoare <= min}
+					style={[
+						styles.stepperBtn,
+						{
+							borderColor: colors.cardBorder,
+							backgroundColor: colors.surfaceElevated,
+							opacity: valoare <= min ? 0.3 : 1,
+						},
+					]}
+				>
+					<Minus size={18} color={colors.textPrimary} />
+				</TouchableOpacity>
+
+				<View style={styles.valoareCenter}>
+					<Text style={[styles.valoare, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+						{valoareAfisata}
+					</Text>
+					<Text style={[styles.unitate, { color: colors.accent }]}>{unitate}</Text>
+				</View>
+
+				<TouchableOpacity
+					accessibilityRole="button"
+					accessibilityLabel={`Crește ${unitate}`}
+					hitSlop={12}
+					onPress={() => ajusteazaPas(1)}
+					disabled={valoare >= max}
+					style={[
+						styles.stepperBtn,
+						{
+							borderColor: colors.cardBorder,
+							backgroundColor: colors.surfaceElevated,
+							opacity: valoare >= max ? 0.3 : 1,
+						},
+					]}
+				>
+					<Plus size={18} color={colors.textPrimary} />
+				</TouchableOpacity>
 			</View>
 
 			<View style={styles.riglaWrap}>
@@ -114,6 +198,7 @@ export default function SelectorValoare({
 					decelerationRate="fast"
 					bounces={false}
 					overScrollMode="never"
+					contentOffset={initialOffset}
 					contentContainerStyle={{ paddingHorizontal: padding }}
 					onScroll={laDerulare}
 					scrollEventThrottle={16}
@@ -132,7 +217,6 @@ export default function SelectorValoare({
 						manevreaza.current = false
 					}}
 					onScrollEndDrag={() => {
-						// Nu dezactivam manevreaza daca exista in continuare inertie de derulare.
 						setTimeout(() => {
 							manevreaza.current = false
 						}, 150)
@@ -168,7 +252,16 @@ export default function SelectorValoare({
 }
 
 const styles = StyleSheet.create({
-	valoareWrap: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 8 },
+	valoareWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
+	valoareCenter: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 8, minWidth: 140 },
+	stepperBtn: {
+		width: 44,
+		height: 44,
+		borderRadius: 22,
+		borderWidth: 1,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
 	valoare: { fontSize: 60, fontWeight: '900', letterSpacing: -2 },
 	unitate: { fontSize: 20, fontWeight: '700', marginBottom: 12 },
 	riglaWrap: { height: 60, marginTop: 24, justifyContent: 'center' },

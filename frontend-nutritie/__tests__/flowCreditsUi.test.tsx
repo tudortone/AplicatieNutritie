@@ -59,14 +59,14 @@ describe('Flow Credits production UI', () => {
     const screen = await render(<FlowCreditsModalHost />);
     const action = screen.getByRole('button', { name: 'Loading...' });
     expect(action.props.accessibilityState.disabled).toBe(true);
-    fireEvent.press(action);
+    await fireEvent.press(action);
     expect(mockWatchRewarded).not.toHaveBeenCalled();
   });
 
   test('pill displays the authoritative balance and opens the sheet', async () => {
     const screen = await render(<FlowCreditsPill />);
     expect(screen.getByText('10')).toBeTruthy();
-    fireEvent.press(screen.getByRole('button'));
+    await fireEvent.press(screen.getByRole('button'));
     expect(mockOpen).toHaveBeenCalledTimes(1);
   });
 
@@ -74,9 +74,19 @@ describe('Flow Credits production UI', () => {
     const screen = await render(<FlowCreditsModalHost />);
     expect(screen.getByText('6,99 RON')).toBeTruthy();
     expect(screen.getByText('14,99 RON')).toBeTruthy();
-    fireEvent.press(screen.getByText('Watch ad · +1'));
+    await fireEvent.press(screen.getByText('Watch ad · +1'));
     expect(mockWatchRewarded).toHaveBeenCalledTimes(1);
-    fireEvent.press(screen.getByText('30 Flow Credits'));
+    await fireEvent.press(screen.getByText('30 Flow Credits'));
     expect(mockPurchase).toHaveBeenCalledWith(expect.objectContaining({ id: 'getflow_credits_30' }));
   });
+
+  test('unavailable ad state displays localized explanation and active retry action', async () => {
+    mockFlowState.rewardState = 'unavailable';
+    const screen = await render(<FlowCreditsModalHost />);
+    expect(await screen.findByText('Retry ad · +1')).toBeTruthy();
+    expect(screen.getByText('The advertisement is currently unavailable. Please try again later.')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Retry ad · +1'));
+    expect(mockWatchRewarded).toHaveBeenCalledTimes(1);
+  });
 });
+

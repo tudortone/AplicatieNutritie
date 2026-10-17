@@ -632,7 +632,7 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
     it('CAMERA CAPTURE: rapid duplicate taps do not trigger concurrent takePictureAsync calls', async () => {
       Platform.OS = 'android';
       let resolveCapture: (val: any) => void = () => {};
-      const capturePromise = new Promise((res) => { resolveCapture = res; });
+      const capturePromise = new Promise<{ uri: string }>((res) => { resolveCapture = res; });
       mockTakePictureAsync.mockReturnValueOnce(capturePromise);
 
       const view = await render(<CameraScreen />);

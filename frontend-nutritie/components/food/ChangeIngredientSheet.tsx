@@ -11,11 +11,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Search, X, Check, Flame } from 'lucide-react-native';
-import { BlurView } from 'expo-blur';
+import { Search, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
-import type { AlimentScanat } from './FoodScanSuccessModal';
 
 export interface FoodCandidate {
   nume: string;

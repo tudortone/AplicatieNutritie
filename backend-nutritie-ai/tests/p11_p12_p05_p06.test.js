@@ -110,23 +110,25 @@ describe('P-05/P-06 — GDPR outbox + extragere fileIds', () => {
     expect(rezultat instanceof Set).toBe(true);
   });
 
-  test('extrageFileIdsUtilizator returnează Set gol dacă supabase eșuează', async () => {
+  test('extrageFileIdsUtilizator aruncă eroare dacă supabase eșuează (GDPR-04 fail-closed)', async () => {
     const { extrageFileIdsUtilizator } = createGdprRouter;
 
     const supabaseAdminFake = {
       from: () => ({
         select: () => ({
-          eq: () => Promise.resolve({ data: null, error: new Error('DB down') }),
+          eq: () => ({
+            range: () => Promise.resolve({ data: null, error: new Error('DB down') }),
+          }),
         }),
       }),
     };
 
-    const rezultat = await extrageFileIdsUtilizator({
-      supabaseAdmin: supabaseAdminFake,
-      userId: 'test-user-id',
-    });
-    expect(rezultat instanceof Set).toBe(true);
-    expect(rezultat.size).toBe(0);
+    await expect(
+      extrageFileIdsUtilizator({
+        supabaseAdmin: supabaseAdminFake,
+        userId: 'test-user-id',
+      }),
+    ).rejects.toThrow('DB down');
   });
 
   test('stergeActiveImageKit șterge atât folderele cât și fileIds individuale (P-06)', async () => {
@@ -135,7 +137,11 @@ describe('P-05/P-06 — GDPR outbox + extragere fileIds', () => {
     const apeluriImageKit = [];
     global.fetch = jest.fn(async (url) => {
       apeluriImageKit.push(url);
-      return { ok: true, status: 200 };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ filePath: `/mancare/user-test-123/${String(url).split('/').pop()}` }),
+      };
     });
 
     await stergeActiveImageKit({

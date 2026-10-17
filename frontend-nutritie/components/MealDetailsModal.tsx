@@ -566,6 +566,8 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
                     bottomSheetRef.current?.dismiss();
                     onEdit(masaLocal);
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('jurnal.edit')}
                 >
                   <Pencil size={16} color={colors.textPrimary} />
                   <Text style={[styles.actionBtnText, { color: colors.textPrimary }]}>{t('jurnal.edit')}</Text>
@@ -580,6 +582,8 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
                     bottomSheetRef.current?.dismiss();
                     onDelete(masaLocal);
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('jurnal.delete')}
                 >
                   <Trash2 size={16} color={colors.danger} />
                   <Text style={[styles.actionBtnText, { color: colors.danger }]}>{t('jurnal.delete')}</Text>
@@ -589,6 +593,8 @@ export const MealDetailsSheet = forwardRef<MealDetailsSheetRef, Props>(
               <TouchableOpacity
                 style={[styles.confirmBtn, { backgroundColor: colors.accent }]}
                 onPress={() => bottomSheetRef.current?.dismiss()}
+                accessibilityRole="button"
+                accessibilityLabel={t('jurnal.close')}
               >
                 <Text style={[styles.confirmBtnText, { color: colors.textOnAccent }]}>{t('jurnal.close')}</Text>
               </TouchableOpacity>

@@ -87,7 +87,7 @@ function createBarcodeRouter({
   }),
 }) {
   const router = express.Router();
-  const groqTextModels = config?.ai?.groqTextModels || ['openai/gpt-oss-120b', 'qwen/qwen3.6-27b'];
+  const groqTextModels = config?.ai?.groqTextModels || ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'];
   // P1-12: scrierea răspunsului se sare dacă socket-ul clientului a dispărut, dar
   // NIMIC din corectitudinea server-side (persistare, finalizare, eliberare zălog)
   // nu depinde de asta — acelea rulează oricum, înainte.

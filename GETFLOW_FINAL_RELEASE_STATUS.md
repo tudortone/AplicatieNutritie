@@ -440,3 +440,52 @@
 - TypeScript Typecheck: `tsc --noEmit` exited 0 (0 errors).
 - ESLint (Frontend & Backend): 0 errors across all production files.
 - Launch-critical P0 / P1 Regressions: **NONE**.
+## FINAL_PRODUCTION_RELEASE_CHECKPOINT — 2026-10-08
+
+LEGAL_RELEASE_GATE: PASS (release/policy checklist; no P0/P1 blockers recorded)
+FINAL_BUILD_REUSED: YES
+FINAL_BUILD_ID: 66d1850c-104b-4ba3-96a6-032dcfd53de5
+FINAL_GIT_COMMIT: 2d32af081734186e0f743c32cc0771265f1e675f
+FINAL_VERSION_CODE: 27
+FINAL_VERSION_NAME: 1.0.0
+FINAL_AAB_PATH: C:\Users\tudor\OneDrive\Desktop\AplicatieNutritie\release-artifacts\getflow-v27-production.aab
+FINAL_AAB_SIZE: 85112978 bytes
+FINAL_AAB_SHA256: A4600058026F383A7048384C2A89BFC001A5D6EB2F2594A87A04255476D894D6
+MAPPING_PATH: C:\Users\tudor\OneDrive\Desktop\AplicatieNutritie\release-artifacts\mapping-v27.txt
+PLAY_PRODUCTION_UPLOAD: PASS
+PLAY_RELEASE_CREATED: PASS
+PLAY_REVIEW_SUBMITTED: PASS
+PLAY_REVIEW_STATUS: IN REVIEW — 2 changes submitted to Google Play
+PUBLICATION_STATUS: NOT PUBLIC — Managed Publishing enabled
+
+## POST_V28_UX_REFINEMENT — 2026-10-09
+
+STATUS: PARTIAL — no AAB built; source-level changes require a future build.
+
+- **Journal presentation:** `MasaCard` now uses the localized canonical meal category as the visible heading; the stored generated title and ingredient records remain unchanged and are not rendered as the main card title. Ingredient rows and the existing meal photo are revealed only from an accessible expand/collapse control. Existing edit/delete actions and save data flow were left intact. Added RO/EN/FR/DE disclosure labels.
+- **Journal quantity discrepancy:** the reported generated title (cabanos 120 g) and detail row (80 g) are distinct persisted/display fields in the current model. No real user row was accessed or rewritten, so the specific production discrepancy remains unverified and unresolved; source text will not be retained in the visible heading as a workaround.
+- **Photo AI:** after the backend confirms durable job creation and the local recovery pointer is saved, Camera replaces itself with Home. The existing Home `PhotoJobStatusCard` recovers/polls the durable job and exposes its real status; no fabricated percentage or implicit Journal save was added. Compact status presentation respects reduced motion. Runtime background/resume and one-time calorie-ring update were not physically verified.
+- **Achievements:** Profile now shows a compact summary instead of the expanded list; the modal still renders existing achievements, sorted by localized name with `Intl.Collator`, and respects reduced motion/safe-area padding. Unlock logic and IDs are unchanged.
+- **Stats:** calorie intake was already the default selector. Weight projection remains a blocker: current code can use a 75 kg fallback as if measured and averages across unlogged days; it does not safely distinguish incomplete intake from zero. No prediction/data behavior was changed.
+- **App resume:** no deterministic Home-on-resume behavior was implemented. The existing notification-response listener is user-action based; the reported unintended redirect was not reproduced, and changing global navigation without evidence risks OAuth, permissions, forms, and notification deep links.
+- **Localization blockers:** no complete localized canonical exercise-name catalog or safe dynamic ingredient translation mechanism was found in the inspected data flow. Persisted/user-entered/AI text remains unchanged rather than being mistranslated. Exercise and dynamic ingredient localization remain open.
+- **Verification:** `npm run typecheck` passed on the available Node 24 runtime; the frontend package requires Node 22 (`>=22 <23`), and Node 22 was unavailable, so this is not Node 22 release evidence. `npm run lint` had 0 errors and 23 warnings (20 auto-fixable); remaining warnings are in unrelated `_layout.tsx` and splash files. The Camera hook dependency warning was addressed by including `router`. Focused Jest was blocked before test execution by sandbox `EPERM`; elevated execution was rejected, and no alternate/indirect test run was attempted. Android device check unavailable (`adb` not installed).
+- **Release:** candidate v28 remains untouched; no v29/version-code change, build, or Play action was performed. `NEW AAB REQUIRED: YES` if these source changes are kept for a later release.
+
+REMAINING P1: reproduce/fix app resume behavior; complete canonical exercise and safe ingredient localization; correct weight projection to distinguish measured weight and incomplete/no-log days; resolve the reported persisted quantity mismatch with the actual row; run focused Jest and required Node 22 checks; physical Android smoke test.
+
+## POST_V28_UX_CONTINUATION — 2026-10-09
+
+This continuation supersedes the earlier POST_V28 notes above for Photo AI Home status, calorie-ring behavior, app-resume handling, and Stats weight projection. It does not change v28 artifacts or Play state.
+
+- **Home resume / Notifications:** added a guarded AppState recovery for a normal background-to-active return specifically when the restored route is `/notificari`; it replaces to the tab Home only when auth/onboarding/storage are ready and the app is unlocked. The Home screen itself scrolls to the top when focused/resumed. Explicit notification responses use a validated in-app route from notification data (or the existing Notifications fallback); OAuth, onboarding, locked state, and other routes are not redirected. Source-level safeguard is implemented; physical lifecycle reproduction remains unavailable.
+- **Photo AI Home indicator:** `HomePhotoAnalysisIndicator` is now a dedicated compact, upper-left component with a scanning ring while a recovered server job is queued/running, reduced-motion static fallback, and discreet completed/failed states. It reads the existing durable job/recovery pointer and polls real status; no progress percentage, new job, or implicit Journal save is added. Camera still returns Home only after durable job creation and recovery-pointer persistence. Runtime/restart behavior was not physically tested.
+- **Calorie ring:** initial hydration and ordinary refreshes set the ring directly. A verified-save event (emitted after confirmed persistence, including offline queue replay) authorizes one timing animation to the next server-derived total; the event carries IDs/dates, not calorie values, and duplicate IDs are deduplicated in-process. Reduced motion disables the animation. Focused tests were added but could not be executed in this environment, so behavior is source/typechecked, not test-verified.
+- **Journal:** category-only localized heading and expandable ingredients/photo remain intact. The historic title/ingredient quantity mismatch was not resolved against the actual user row; no live user data was queried or changed. The old generated title is not rendered in the card, so it no longer misrepresents the visible heading. Quantity discrepancy status remains `EXACT BLOCKER: the actual persisted meal row is unavailable for authorized inspection`.
+- **Ingredient/exercise localization:** remains blocked. Saved ingredient records do not retain reliable canonical catalog IDs/provenance or separate localized display text for AI/manual entries; no safe, complete translation path can be added without schema/data-contract work and could mislabel user-authored food. The legacy exercise catalog has no complete locale-key mapping for its full catalog. No IDs, names, or persisted values were fabricated or overwritten. RO/EN/FR/DE parity passed only for the new `statistici.weightProjection` strings, not for these catalogs.
+- **Stats / weight:** removed the Stats screen's synthetic 75 kg/current and 70 kg/goal defaults and synthetic current-day history write. Projections now require at least 3 actual measurements spanning at least 14 days in the recent window, use a capped measured trend, never infer expenditure from calorie goals/logged intake, avoid projected-date drift, and return localized unavailable states when evidence is insufficient or trend opposes the goal. Actual measurements/current profile weight and the estimated target date are labeled separately. No-log days do not enter the weight model. The chart was not physically reviewed.
+- **Achievements/default calorie tab:** earlier compact/full achievement UX and default calorie selector were preserved; no unlock logic or default selection was changed in this continuation.
+- **Verification:** `npm run typecheck` PASS on Node v24.18.0 (and the alternate Codex Node reports v24.19.0); focused ESLint on all changed implementation/test files PASS, 0 errors/0 warnings after import cleanup; weight-projection translation-key parity PASS for RO/EN/FR/DE; `git diff --check` PASS (only Git LF/CRLF notices). Four new focused Jest suites (19 test cases) are present but NOT RUN: the earlier Windows run failed before test startup with EPERM and the elevated retry was rejected; no bypass was attempted. Node 22 is not installed/available. Android runtime not verified: `ANDROID_HOME` is unset and the checked SDK adb/emulator executables are absent. No Play/device evidence is claimed.
+- **Release:** `POST_V28_UX_GATE=BLOCKED`; no AAB build, version bump, upload, or Play action was performed. Existing release artifacts remain untouched.
+
+REMAINING P1: add durable ingredient provenance/canonical localization and complete localized exercise catalog; inspect the actual persisted Journal row if the owner supplies an authorized safe record; execute focused Jest under the supported Node 22 runtime; perform Android resume/Photo AI/ring/Stats smoke checks on a device; complete safe-route resume validation. Reassess the gate only after those are resolved.

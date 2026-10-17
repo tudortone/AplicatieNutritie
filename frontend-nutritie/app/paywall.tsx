@@ -562,7 +562,7 @@ export default function PaywallScreen() {
           </View>
         ) : (
           <>
-            <View style={styles.plansContainer}>
+            <View style={styles.plansContainer} accessibilityRole="radiogroup">
               {/* Monthly Plan Card */}
               {monthlyOffer ? (
                 <Pressable
@@ -584,6 +584,7 @@ export default function PaywallScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{
                     selected: selectedPlanId === PREMIUM_PACKAGE_IDS[0],
+                    checked: selectedPlanId === PREMIUM_PACKAGE_IDS[0],
                     disabled: isActionDisabled,
                   }}
                   accessibilityLabel={`${t('paywall.plans.monthly')} ${formatPrice(monthlyOffer)} ${t(`paywall.plans.${getPeriodKeyFromOffer(monthlyOffer)}`)}`}
@@ -638,6 +639,7 @@ export default function PaywallScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{
                     selected: selectedPlanId === PREMIUM_PACKAGE_IDS[1],
+                    checked: selectedPlanId === PREMIUM_PACKAGE_IDS[1],
                     disabled: isActionDisabled,
                   }}
                   accessibilityLabel={`${t('paywall.plans.annual')} ${formatPrice(annualOffer)} ${t(`paywall.plans.${getPeriodKeyFromOffer(annualOffer)}`)}`}
@@ -696,7 +698,14 @@ export default function PaywallScreen() {
                 },
               ]}
               accessibilityRole="button"
-              accessibilityState={{ disabled: isActionDisabled }}
+              accessibilityState={{
+                disabled: isActionDisabled,
+                busy: Boolean(
+                  buying != null ||
+                  operation.status === 'purchasing' ||
+                  operation.status === 'verifying'
+                ),
+              }}
             >
               {buying != null ||
               operation.status === 'purchasing' ||
@@ -771,6 +780,7 @@ export default function PaywallScreen() {
           {'\n'}
           <Text
             style={{ textDecorationLine: 'underline' }}
+            accessibilityRole="link"
             onPress={() => openLegal('termsUrl')}
           >
             {t('paywall.legal.terms')}
@@ -778,6 +788,7 @@ export default function PaywallScreen() {
           {' · '}
           <Text
             style={{ textDecorationLine: 'underline' }}
+            accessibilityRole="link"
             onPress={() => openLegal('privacyUrl')}
           >
             {t('paywall.legal.privacy')}

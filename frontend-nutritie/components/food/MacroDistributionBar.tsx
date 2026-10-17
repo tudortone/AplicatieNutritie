@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface MacroDistributionBarProps {
   protein: number;
@@ -17,7 +16,6 @@ export function MacroDistributionBar({
   fiber,
 }: MacroDistributionBarProps) {
   const { t } = useTranslation();
-  const reduceMotion = useReducedMotion();
 
   const safeProtein = Math.max(0, protein);
   const safeCarbs = Math.max(0, carbs);

@@ -100,6 +100,8 @@ export function DeleteAccountModal({
               },
             ]}
             onPress={(e) => e.stopPropagation()}
+            accessibilityViewIsModal={true}
+            aria-modal={true}
           >
             <View style={styles.header}>
               <View style={styles.headerTitleRow}>

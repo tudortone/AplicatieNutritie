@@ -25,7 +25,9 @@ module.exports = ({ config }) => {
     );
   }
 
-  const plugins = [...(config.plugins || [])];
+  const plugins = (config.plugins || []).filter(
+    (p) => !(Array.isArray(p) && p[0] === 'react-native-google-mobile-ads'),
+  );
 
   // In modul 'disabled', plugin-ul react-native-google-mobile-ads NU este adăugat.
   // Astfel, build-urile fără reclame nu cer și nu injectează com.google.android.gms.ads.APPLICATION_ID în AndroidManifest.

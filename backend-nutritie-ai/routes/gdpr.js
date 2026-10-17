@@ -180,10 +180,11 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         });
       }
 
+      let statusAsteptat = 'pending';
       const actualizezaStatus = async (status, lastError = null) => {
         if (!outboxId) return;
         const finalizat = status === 'completed';
-        const { data: updatedRow, error } = await supabaseAdmin
+        let query = supabaseAdmin
           .from('gdpr_deletions')
           .update({
             status,
@@ -197,7 +198,14 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
               file_ids: [],
             } : {}),
           })
-          .eq('id', outboxId)
+          .eq('id', outboxId);
+
+        // GDPR-01: CAS atomic pe status curent pentru a preveni cursele cu workerii de reluare
+        if (statusAsteptat && typeof query.eq === 'function') {
+          query = query.eq('status', statusAsteptat);
+        }
+
+        const { data: updatedRow, error } = await query
           .select('id')
           .maybeSingle();
         if (error || !updatedRow?.id) {
@@ -205,6 +213,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
           statusError.code = 'GDPR_OUTBOX_STATUS_UPDATE_FAILED';
           throw statusError;
         }
+        statusAsteptat = status;
       };
 
       // P-06: extrage fileId-urile ÎNAINTE de a șterge rândurile din DB

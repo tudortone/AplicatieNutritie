@@ -27,17 +27,41 @@ const { codEroare } = require('./codEroare');
 // folosească aceeași listă. Orice altă eroare oprește avansarea statusului,
 // altfel am marca `completed` o ștergere care nu s-a întâmplat (P-05b).
 
-async function actualizeazaStatusOutbox(supabaseAdmin, id, payload) {
-  const rezultat = await supabaseAdmin
+async function actualizeazaStatusOutbox(supabaseAdmin, id, payload, { expectedStatus } = {}) {
+  let query = supabaseAdmin
     .from('gdpr_deletions')
     .update(payload)
-    .eq('id', id)
+    .eq('id', id);
+
+  if (expectedStatus && typeof query?.eq === 'function') {
+    query = query.eq('status', expectedStatus);
+  }
+
+  const rezultat = await query
     .select('id')
     .maybeSingle();
   if (rezultat?.error || !rezultat?.data?.id) {
     const error = new Error('GDPR_OUTBOX_STATUS_UPDATE_FAILED');
     error.code = 'GDPR_OUTBOX_STATUS_UPDATE_FAILED';
     throw error;
+  }
+}
+
+async function revendicaRandOutbox(supabaseAdmin, id, { workerId, expectedStatus } = {}) {
+  try {
+    if (typeof supabaseAdmin?.rpc === 'function') {
+      const res = await supabaseAdmin.rpc('claim_gdpr_deletion', {
+        p_id: id,
+        p_worker_id: workerId || 'worker_default',
+        p_expected_status: expectedStatus,
+      });
+      if (res && typeof res.data === 'boolean') {
+        return res.data;
+      }
+    }
+    return true;
+  } catch {
+    return true; // compatibilitate fail-open dacă tabela nu are încă coloana sau RPC
   }
 }
 
@@ -115,6 +139,17 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
       continue;
     }
 
+    // GDPR-01: Revendică atomic rândul înainte de a executa vreo operație
+    const workerId = `worker_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const revendicat = await revendicaRandOutbox(supabaseAdmin, rand.id, {
+      workerId,
+      expectedStatus: rand.status,
+    });
+    if (!revendicat) {
+      // Un alt worker sau ruta deține deja claim-ul activ pe acest rând
+      continue;
+    }
+
     try {
       let statusCurent = rand.status;
 
@@ -123,7 +158,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
         if (rand.user_id) {
           await stergeRanduriDbUtilizator(supabaseAdmin, rand.user_id, rand.clerk_user_id);
         }
-        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'db_done' });
+        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'db_done' }, { expectedStatus: 'pending' });
         statusCurent = 'db_done';
       }
 
@@ -138,7 +173,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
             secretKey: process.env.CLERK_SECRET_KEY?.trim(),
           });
         }
-        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'clerk_done' });
+        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'clerk_done' }, { expectedStatus: 'db_done' });
         statusCurent = 'clerk_done';
       }
 
@@ -157,7 +192,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
             privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim() || config?.imagekit?.privateKey,
           });
         }
-        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'imagekit_done' });
+        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'imagekit_done' }, { expectedStatus: 'clerk_done' });
         statusCurent = 'imagekit_done';
       }
 
@@ -179,7 +214,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
             throw errAuth;
           }
         }
-        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'auth_done' });
+        await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'auth_done' }, { expectedStatus: 'imagekit_done' });
         statusCurent = 'auth_done';
       }
 
@@ -193,7 +228,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
             clerk_user_id: null,
             file_ids: [],
             last_error: null,
-          });
+          }, { expectedStatus: 'auth_done' });
       }
 
       reluate += 1;

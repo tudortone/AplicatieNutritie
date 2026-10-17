@@ -44,7 +44,8 @@ import { TemplateBuilder } from './TemplateBuilder';
 
 type ExperienceView = 'browse' | 'build' | 'active' | 'summary' | 'strength';
 
-export function WorkoutV2Experience({ nowIso = '2026-09-26T12:00:00.000Z' }: { nowIso?: string }) {
+export function WorkoutV2Experience({ nowIso }: { nowIso?: string }) {
+  const effectiveNowIso = nowIso ?? new Date().toISOString();
   const { t } = useTranslation();
   const { colors } = useTheme();
   const sequence = useRef(0);
@@ -58,14 +59,14 @@ export function WorkoutV2Experience({ nowIso = '2026-09-26T12:00:00.000Z' }: { n
   const [selectedMuscle, setSelectedMuscle] = useState<V2MuscleId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const profile = getWorkoutV2PreviewProfile(profileId);
-  const strength = useStrengthMap([...profile.performances, ...history], profile.bodyweightKg, nowIso);
+  const strength = useStrengthMap([...profile.performances, ...history], profile.bodyweightKg, effectiveNowIso);
   const anatomyScores = useMemo(() => Object.fromEntries(
     Object.entries(strength.muscles).map(([muscleId, result]) => [muscleId, result.score ?? undefined]),
   ), [strength.muscles]);
 
   const openPreset = (presetIndex: number) => {
     const preset = WORKOUT_V2_PRESETS[presetIndex];
-    const next = instantiatePreset(preset, 'preview-user', id('template'), nowIso);
+    const next = instantiatePreset(preset, 'preview-user', id('template'), effectiveNowIso);
     setDraft({ ...next, name: t(preset.nameKey) });
     setError(null);
     setView('build');
@@ -89,7 +90,7 @@ export function WorkoutV2Experience({ nowIso = '2026-09-26T12:00:00.000Z' }: { n
       setError(t('workoutV2.experience.invalidTemplate'));
       return;
     }
-    setActive(startWorkoutFromTemplate(draft, id('session'), nowIso));
+    setActive(startWorkoutFromTemplate(draft, id('session'), effectiveNowIso));
     setError(null);
     setView('active');
   };
@@ -103,13 +104,13 @@ export function WorkoutV2Experience({ nowIso = '2026-09-26T12:00:00.000Z' }: { n
     }
     // The adapter validation is the preview persistence boundary. If it throws,
     // no success state is shown and the active session remains intact.
-    toWorkoutHistoryPayload(active, nowIso);
+    toWorkoutHistoryPayload(active, effectiveNowIso);
     const completed: WorkoutV2Performance[] = active.blocks.flatMap((block) => block.kind === 'strength'
       ? block.sets.filter((set) => set.completed).map((set) => ({
           id: `${active.id}:${set.id}`,
           sessionId: active.id,
           exerciseId: block.exerciseId,
-          performedAt: nowIso,
+          performedAt: effectiveNowIso,
           reps: set.actualReps ?? 0,
           weightKg: set.actualWeightKg,
           assistanceWeightKg: set.assistanceWeightKg,
@@ -125,7 +126,7 @@ export function WorkoutV2Experience({ nowIso = '2026-09-26T12:00:00.000Z' }: { n
   if (view === 'active' && active) {
     return (
       <View style={styles.section}>
-        <BackButton onPress={() => setView('build')} />
+        <BackButton onPress={() => setView('build')} label={t('common.back')} borderColor={colors.border} textColor={colors.textPrimary} />
         {error ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
         <ActiveWorkout
           session={active}
@@ -141,17 +142,17 @@ export function WorkoutV2Experience({ nowIso = '2026-09-26T12:00:00.000Z' }: { n
   if (view === 'build' && draft) {
     return (
       <View style={styles.section}>
-        <BackButton onPress={() => setView('browse')} />
+        <BackButton onPress={() => setView('browse')} label={t('common.back')} borderColor={colors.border} textColor={colors.textPrimary} />
         <TemplateBuilder
           template={draft}
           error={error}
           onNameChange={(name) => requireDraft((template) => ({ ...template, name }))}
-          onAddExercise={(exerciseId: WorkoutV2ExerciseId) => requireDraft((template) => addTemplateExercise(template, exerciseId, id('block'), nowIso))}
-          onRemoveBlock={(blockId) => requireDraft((template) => removeTemplateBlock(template, blockId, nowIso))}
-          onDuplicateBlock={(blockId) => requireDraft((template) => duplicateTemplateBlock(template, blockId, id('block'), nowIso))}
-          onMoveBlock={(from, to) => requireDraft((template) => moveTemplateBlock(template, from, to, nowIso))}
-          onChangeStrengthBlock={(blockId, update: Partial<StrengthTemplateBlock>) => requireDraft((template) => updateTemplateBlock(template, blockId, update, nowIso))}
-          onChangeCardioBlock={(blockId, update: Partial<CardioTemplateBlock>) => requireDraft((template) => updateCardioTemplateBlock(template, blockId, update, nowIso))}
+          onAddExercise={(exerciseId: WorkoutV2ExerciseId) => requireDraft((template) => addTemplateExercise(template, exerciseId, id('block'), effectiveNowIso))}
+          onRemoveBlock={(blockId) => requireDraft((template) => removeTemplateBlock(template, blockId, effectiveNowIso))}
+          onDuplicateBlock={(blockId) => requireDraft((template) => duplicateTemplateBlock(template, blockId, id('block'), effectiveNowIso))}
+          onMoveBlock={(from, to) => requireDraft((template) => moveTemplateBlock(template, from, to, effectiveNowIso))}
+          onChangeStrengthBlock={(blockId, update: Partial<StrengthTemplateBlock>) => requireDraft((template) => updateTemplateBlock(template, blockId, update, effectiveNowIso))}
+          onChangeCardioBlock={(blockId, update: Partial<CardioTemplateBlock>) => requireDraft((template) => updateCardioTemplateBlock(template, blockId, update, effectiveNowIso))}
           onSave={saveDraft}
         />
         <Pressable testID="workout-v2-start" accessibilityRole="button" accessibilityLabel={t('workoutV2.experience.start')} onPress={startDraft} style={[styles.primary, { backgroundColor: colors.accent }]}>
@@ -166,7 +167,7 @@ export function WorkoutV2Experience({ nowIso = '2026-09-26T12:00:00.000Z' }: { n
     const muscle = selectedMuscle ? strength.muscles[selectedMuscle] : null;
     return (
       <View style={styles.section}>
-        <BackButton onPress={() => setView('browse')} />
+        <BackButton onPress={() => setView('browse')} label={t('common.back')} borderColor={colors.border} textColor={colors.textPrimary} />
         <View style={styles.profileRow}>
           {WORKOUT_V2_PREVIEW_PROFILES.map((item) => (
             <Pressable key={item.id} accessibilityRole="button" accessibilityState={{ selected: profileId === item.id }} onPress={() => setProfileId(item.id)} style={[styles.profileChip, { borderColor: profileId === item.id ? colors.accent : colors.border, backgroundColor: colors.surfaceBg }]}>
@@ -218,15 +219,25 @@ export function WorkoutV2Experience({ nowIso = '2026-09-26T12:00:00.000Z' }: { n
       ) : null}
     </View>
   );
+}
 
-  function BackButton({ onPress }: { onPress: () => void }) {
-    return (
-      <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={onPress} style={[styles.back, { borderColor: colors.border }]}>
-        <ArrowLeft size={18} color={colors.textPrimary} />
-        <Text style={[styles.backText, { color: colors.textPrimary }]}>{t('common.back')}</Text>
-      </Pressable>
-    );
-  }
+function BackButton({
+  onPress,
+  label,
+  borderColor,
+  textColor,
+}: {
+  onPress: () => void;
+  label: string;
+  borderColor: string;
+  textColor: string;
+}) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={[styles.back, { borderColor }]}>
+      <ArrowLeft size={18} color={textColor} />
+      <Text style={[styles.backText, { color: textColor }]}>{label}</Text>
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({

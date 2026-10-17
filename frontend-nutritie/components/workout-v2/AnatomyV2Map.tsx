@@ -31,14 +31,30 @@ export interface AnatomyV2MapProps {
   testID?: string;
 }
 
+interface SlugVisualMetadata {
+  mod: number;
+  hash: number;
+}
+
+const SLUG_META_CACHE = new Map<string, SlugVisualMetadata>();
+
+function getSlugMeta(slug: string): SlugVisualMetadata {
+  const cached = SLUG_META_CACHE.get(slug);
+  if (cached !== undefined) return cached;
+  let hash = 0;
+  for (let i = 0; i < slug.length; i++) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
+  const mod = (hash % 5 - 2) * 0.015;
+  const meta: SlugVisualMetadata = { mod, hash };
+  SLUG_META_CACHE.set(slug, meta);
+  return meta;
+}
+
 function visualFor(
   state: AnatomyV2DisplayState,
   slug: string,
   colors: ReturnType<typeof useTheme>['colors'],
 ): { fill: string; opacity: number } {
-  let hash = 0;
-  for (let i = 0; i < slug.length; i++) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
-  const mod = (hash % 5 - 2) * 0.015;
+  const { mod, hash } = getSlugMeta(slug);
 
   switch (state) {
     case 'PRIMARY':

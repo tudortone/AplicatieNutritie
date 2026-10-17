@@ -78,12 +78,8 @@ async function imageKitGetJson(cale, { privateKey }) {
 
 async function fileIdApartineUtilizatorului({ fileId, userId, privateKey }) {
   if (!userId) return false;
-  let detalii;
-  try {
-    detalii = await imageKitGetJson(`/files/${encodeURIComponent(fileId)}/details`, { privateKey });
-  } catch {
-    return false; // fail-closed
-  }
+  // F-03 / GDPR-03: nu suprimăm erorile 500/timeout/rețea tratându-le drept unowned
+  const detalii = await imageKitGetJson(`/files/${encodeURIComponent(fileId)}/details`, { privateKey });
   // 404 => fisierul nu mai exista; nu e nimic de sters si nici de raportat.
   if (!detalii) return false;
   const caleBruta = typeof detalii.filePath === 'string' ? detalii.filePath : '';
@@ -194,7 +190,7 @@ async function citesteTotPaginat({
       .order(coloanaOrdine, { ascending: true })
       .range(de_la, pana_la);
     if (error) {
-      if (CODURI_TABELA_INEXISTENTA.has(error.code)) return [];
+      if (pagina === 0 && CODURI_TABELA_INEXISTENTA.has(error.code)) return [];
       throw error;
     }
     const lot = data ?? [];
@@ -357,21 +353,37 @@ async function stergeIdentitateClerk({ clerkUserId, secretKey }) {
  * Citim direct din supabaseAdmin (tabel cu RLS — service_role ocolește, OK
  * pentru GDPR care deja s-a autentificat și verificat userId).
  */
-async function extrageFileIdsUtilizator({ supabaseAdmin, userId }) {
-  try {
-    const { data, error } = await supabaseAdmin
+async function extrageFileIdsUtilizator({ supabaseAdmin, userId, dimensiunePagina = 1000 }) {
+  const rezultat = new Set();
+  for (let pagina = 0; ; pagina += 1) {
+    const de_la = pagina * dimensiunePagina;
+    const pana_la = de_la + dimensiunePagina - 1;
+    let query = supabaseAdmin
       .from('mese')
       .select('alimente')
       .eq('user_id', userId);
-    if (error || !data) return new Set();
-    const rezultat = new Set();
-    for (const masa of data) {
+
+    if (typeof query?.order === 'function') {
+      query = query.order('id', { ascending: true });
+    }
+    const hasRange = typeof query?.range === 'function';
+    if (hasRange) {
+      query = query.range(de_la, pana_la);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      if (pagina === 0 && CODURI_TABELA_INEXISTENTA.has(error.code)) return new Set();
+      throw error;
+    }
+    const lot = data ?? [];
+    for (const masa of lot) {
       if (masa.alimente) extrageFileIds(masa.alimente, rezultat);
     }
-    return rezultat;
-  } catch {
-    return new Set();
+    if (!hasRange || lot.length < dimensiunePagina) break;
+    if (pagina > 10000) break;
   }
+  return rezultat;
 }
 
 module.exports = {

@@ -183,10 +183,27 @@ function createGoogleBillingService({
       }
       const unique = [...new Set(purchaseTokens)];
       const results = [];
+      const errors = [];
       for (const purchaseToken of unique) {
-        results.push(await this.verifyAndPersist({ userId, purchaseToken }));
+        try {
+          results.push(await this.verifyAndPersist({ userId, purchaseToken }));
+        } catch (error) {
+          errors.push({
+            purchaseToken,
+            code: error.code || 'UNKNOWN_ERROR',
+            status: error.status || 500,
+            message: error.message,
+          });
+        }
       }
-      return Object.freeze({ results: Object.freeze(results) });
+      if (results.length === 0 && errors.length > 0) {
+        const first = errors[0];
+        throw new GoogleBillingError(first.code, first.status, first.message);
+      }
+      return Object.freeze({
+        results: Object.freeze(results),
+        errors: Object.freeze(errors),
+      });
     },
 
     async getPaidEntitlement({ userId } = {}) {

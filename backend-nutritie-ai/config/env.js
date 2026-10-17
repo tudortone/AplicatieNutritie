@@ -31,7 +31,7 @@ const IMPLICITE_TEST = {
 	SUPABASE_SERVICE_ROLE_KEY: 'service-role-de-test',
 	GEMINI_API_KEY: 'gemini-key-de-test',
 	GROQ_API_KEY: 'groq-key-de-test',
-	GROQ_TEXT_MODELS: 'openai/gpt-oss-120b,qwen/qwen3.6-27b',
+	GROQ_TEXT_MODELS: 'openai/gpt-oss-120b,qwen/qwen3.8-27b',
 	GOOGLE_PLAY_PACKAGE_NAME: 'com.totsrl.getflo',
 	GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_IDS: 'premium_monthly,premium_annual',
 	GOOGLE_PLAY_CREDIT_PRODUCT_IDS: 'getflow_credits_10,getflow_credits_30',
@@ -300,7 +300,7 @@ function incarcaConfig() {
 			geminiApiKey: process.env.GEMINI_API_KEY || null,
 			groqTextModels: (() => {
 				const dinEnv = listaDinEnv(process.env.GROQ_TEXT_MODELS);
-				return dinEnv.length > 0 ? dinEnv : ['openai/gpt-oss-120b', 'qwen/qwen3.6-27b'];
+				return dinEnv.length > 0 ? dinEnv : ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'];
 			})(),
 			groqVisionModels: listaDinEnv(process.env.GROQ_VISION_MODELS),
 			// Plafon de cereri AI simultane pe instanta. Fara el, 20 de utilizatori

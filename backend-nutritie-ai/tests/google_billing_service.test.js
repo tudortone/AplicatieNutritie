@@ -211,6 +211,25 @@ describe('Google Play billing service — autoritate backend', () => {
     })).rejects.toMatchObject({ code: 'TOO_MANY_PURCHASE_TOKENS', status: 400 });
   });
 
+  test('resync este rezilient: restaureaza abonamentul valid chiar daca un alt token esueaza', async () => {
+    const BAD_TOKEN = 'google-play-token-bad-0000000000000000';
+    const { service, publisher } = harness();
+    publisher.getSubscription.mockImplementation(async (token) => {
+      if (token === BAD_TOKEN) {
+        const err = new Error('Subscription not found');
+        err.code = 404;
+        throw err;
+      }
+      return googleSubscription();
+    });
+
+    const out = await service.resync({ userId: USER_ID, purchaseTokens: [BAD_TOKEN, TOKEN] });
+    expect(out.results.length).toBe(1);
+    expect(out.results[0].premium).toBe(true);
+    expect(out.errors.length).toBe(1);
+    expect(out.errors[0].purchaseToken).toBe(BAD_TOKEN);
+  });
+
   test('RTDN refoloseste proprietarul persistent si ignora sigur tokenul necunoscut', async () => {
     const necunoscut = harness({ owner: null });
     await expect(necunoscut.service.processRtdnToken({ purchaseToken: TOKEN, messageId: 'm-1' }))

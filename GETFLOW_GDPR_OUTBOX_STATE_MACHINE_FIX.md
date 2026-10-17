@@ -99,8 +99,9 @@
 - **Cerințe Compatibilitate:**
   - Migrarea Supabase `20260926090000_workout_v2_templates.sql` trebuie să fie aplicată.
   - Variabilele de mediu `IMAGEKIT_PRIVATE_KEY` și `CLERK_SECRET_KEY` sunt deja configurate pe Render.
-- **Plan de Rollback:**
-  - Dacă apar regresii pe Render, se poate efectua manual Rollback din dashboard-ul Render la deployment-ul stabil precedent asociat commit-ului `f0d066c`.
+- **Plan de Rollback & Siguranță:**
+  - **STRICT INTERZIS:** Nu se efectuează NICIODATĂ rollback la commit-ul istoric vulnerabil `f0d066c` (care conține handlerul Clerk neconținut și mascarea de schemă PGRST106).
+  - În caz de degradare a serviciului Render, se aplică un forward-fix pe `main` sau se revine exclusiv la o revizie verificată cu conținere completă a securității (ex. `95d1f45`).
 - **Politica de Deploy:** Conform regulilor stricte ale proiectului, niciun deploy nu a fost inițiat automat.
 
 ---

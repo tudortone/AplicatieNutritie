@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../context/AuthContext';
+import { generareUuid } from '../lib/idUtils';
 
 export interface AlimentFavorit {
   id: string;
@@ -10,16 +12,41 @@ export interface AlimentFavorit {
   grasimi: number;
 }
 
-const STORAGE_KEY = 'favorite_foods';
+export const STORAGE_KEY_BASE = 'favorite_foods';
+
+export function getFavoritesStorageKey(userId?: string | null): string {
+  if (userId && typeof userId === 'string' && userId.trim().length > 0) {
+    return `${STORAGE_KEY_BASE}_${userId.trim()}`;
+  }
+  return STORAGE_KEY_BASE;
+}
 
 export function useFavorite() {
   const [favorite, setFavorite] = useState<AlimentFavorit[]>([]);
   const [loading, setLoading] = useState(true);
 
+  let userId: string | null = null;
+  try {
+    const auth = useAuth();
+    userId = auth?.user?.id ?? null;
+  } catch {
+    userId = null;
+  }
+
+  const storageKey = getFavoritesStorageKey(userId);
+
   const loadFavorites = useCallback(async () => {
     setLoading(true);
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      let stored = await AsyncStorage.getItem(storageKey);
+      if (!stored && userId) {
+        // Transparent backward compatibility: check legacy unpartitioned key
+        const legacy = await AsyncStorage.getItem(STORAGE_KEY_BASE);
+        if (legacy) {
+          stored = legacy;
+          await AsyncStorage.setItem(storageKey, legacy);
+        }
+      }
       if (stored) {
         setFavorite(JSON.parse(stored));
       } else {
@@ -27,10 +54,11 @@ export function useFavorite() {
       }
     } catch (e) {
       console.error('Eroare la citirea alimentelor favorite:', e);
+      setFavorite([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [storageKey, userId]);
 
   useEffect(() => {
     loadFavorites();
@@ -43,12 +71,19 @@ export function useFavorite() {
       const newFav: AlimentFavorit = {
         ...aliment,
         nume: aliment.nume.trim(),
-        id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
+        id: generareUuid(),
       };
 
-      const updated = [newFav, ...favorite];
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      setFavorite(updated);
+      let updated: AlimentFavorit[] = [];
+      setFavorite((current) => {
+        const withoutDup = current.filter(
+          (f) => f.nume.toLowerCase().trim() !== newFav.nume.toLowerCase()
+        );
+        updated = [newFav, ...withoutDup];
+        return updated;
+      });
+
+      await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
       return true;
     } catch (e) {
       console.error('Eroare la adăugare favorit:', e);
@@ -58,9 +93,13 @@ export function useFavorite() {
 
   const removeFavorite = async (id: string) => {
     try {
-      const updated = favorite.filter((f) => f.id !== id);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      setFavorite(updated);
+      let updated: AlimentFavorit[] = [];
+      setFavorite((current) => {
+        updated = current.filter((f) => f.id !== id);
+        return updated;
+      });
+
+      await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
       return true;
     } catch (e) {
       console.error('Eroare la ștergere favorit:', e);

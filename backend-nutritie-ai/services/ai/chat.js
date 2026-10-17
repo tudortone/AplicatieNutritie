@@ -275,7 +275,7 @@ Sarcina ta: Răspunde prietenos, ținând cont de istoricul discuției și de ca
 function creeazaServiciuChat({ config, genAI }) {
   const serviciuVision = creeazaServiciuVision({ config });
   const groqApiKey = process.env.GROQ_API_KEY || null;
-  const groqTextModels = config?.ai?.groqTextModels || ['openai/gpt-oss-120b', 'qwen/qwen3.6-27b'];
+  const groqTextModels = config?.ai?.groqTextModels || ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'];
 
   const getGeminiModelsList = () => serviciuVision.getGeminiModelsList();
 
@@ -362,7 +362,7 @@ function creeazaServiciuChat({ config, genAI }) {
             model: modelName,
             messages,
             temperature: isMealLog ? 0.2 : 0.7,
-            max_tokens: 800,
+            max_tokens: 1500,
           };
           if (isMealLog) {
             groqBody.response_format = { type: 'json_object' };
@@ -461,9 +461,7 @@ function creeazaServiciuChat({ config, genAI }) {
       throw new EroareAiClient(400, 'Mesajul contine instructiuni interzise.');
     }
 
-    if (!groqApiKey) {
-      // /log-food-from-chat depinde exclusiv de Groq (fara fallback). Fara cheie,
-      // requestul nu poate fi servit: 503 onest, nu 'Bearer undefined' catre Groq.
+    if (!groqApiKey && !genAI) {
       throw new EroareAiClient(503, 'Serviciul de planificare a mesei nu este disponibil momentan.');
     }
 
@@ -510,54 +508,88 @@ RETURNEAZA STRICT UN OBIECT JSON valid in acest format:
     let parsed = null;
     let ultimulEsec = null;
 
-    for (const modelName of groqTextModels) {
-      try {
-        const response = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${groqApiKey}`,
-          },
-          body: JSON.stringify({
+    if (groqApiKey) {
+      for (const modelName of groqTextModels) {
+        try {
+          const response = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${groqApiKey}`,
+            },
+            body: JSON.stringify({
+              model: modelName,
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.1,
+              max_tokens: 1500,
+              response_format: { type: 'json_object' },
+              reasoning_effort: 'low',
+            }),
+            signal,
+          }), 25000, semnalAnulare);
+
+          if (!response.ok) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
+            ultimulEsec = new Error(`Eroare Groq /api/log-food-from-chat (${response.status}) pe modelul ${modelName}`);
+            continue;
+          }
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (!content) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
+            ultimulEsec = new Error('Raspuns gol primit de la AI.');
+            continue;
+          }
+
+          const candidate = parseJsonFromLlm(content, { asteapta: 'obiect' });
+          if (!candidate || (candidate.type !== 'MEAL_PROPOSAL' && !Array.isArray(candidate.items))) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
+            ultimulEsec = new Error('JSON invalid pentru MEAL_PROPOSAL.');
+            continue;
+          }
+
+          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', usage: data.usage, ok: true });
+          parsed = candidate;
+          break;
+        } catch (err) {
+          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
+          ultimulEsec = err;
+        }
+      }
+    }
+
+    if (!parsed && genAI) {
+      for (const modelName of getGeminiModelsList().filter(Boolean)) {
+        try {
+          const model = genAI.getGenerativeModel({
             model: modelName,
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.1,
-            max_tokens: 600,
-            response_format: { type: 'json_object' },
-          }),
-          signal,
-        }), 25000, semnalAnulare);
-
-        if (!response.ok) {
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
-          ultimulEsec = new Error(`Eroare Groq /api/log-food-from-chat (${response.status}) pe modelul ${modelName}`);
-          continue;
+            generationConfig: { responseMimeType: 'application/json' },
+          });
+          const result = await callWithSoftTimeout(model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          }), 25000);
+          const rawText = result?.response?.text();
+          if (rawText) {
+            const candidate = parseJsonFromLlm(rawText, { asteapta: 'obiect' });
+            if (candidate && (candidate.type === 'MEAL_PROPOSAL' || Array.isArray(candidate.items))) {
+              inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'log-food-from-chat', usage: result.response?.usageMetadata, ok: true });
+              parsed = candidate;
+              break;
+            }
+          }
+        } catch (gemErr) {
+          console.warn('[AI logFoodDinChat fallback]', rezumatEroareSigur(gemErr, {
+            operation: 'meal_proposal',
+            provider: 'gemini',
+          }));
         }
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
-        if (!content) {
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
-          ultimulEsec = new Error('Raspuns gol primit de la AI.');
-          continue;
-        }
-
-        const candidate = parseJsonFromLlm(content, { asteapta: 'obiect' });
-        if (!candidate || (candidate.type !== 'MEAL_PROPOSAL' && !Array.isArray(candidate.items))) {
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
-          ultimulEsec = new Error('JSON invalid pentru MEAL_PROPOSAL.');
-          continue;
-        }
-
-        inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', usage: data.usage, ok: true });
-        parsed = candidate;
-        break;
-      } catch (err) {
-        inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
-        ultimulEsec = err;
       }
     }
 
     if (!parsed) {
+      if (!groqApiKey) {
+        throw new EroareAiClient(503, 'Serviciul de planificare a mesei nu este disponibil momentan.');
+      }
       throw (ultimulEsec || new Error('Nu s-a putut genera MEAL_PROPOSAL prin modelele disponibile.'));
     }
 

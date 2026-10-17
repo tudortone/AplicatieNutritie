@@ -113,7 +113,19 @@ jest.mock('../components/AddWeightModal', () => ({
   },
 }));
 jest.mock('../components/fitness/BodyMap', () => ({ BodyMap: () => null }));
-jest.mock('react-native-svg', () => ({ __esModule: true, default: ({ children }: any) => children, Circle: () => null }));
+jest.mock('react-native-svg', () => ({
+  __esModule: true,
+  default: ({ children }: any) => children,
+  Svg: ({ children }: any) => children,
+  Circle: () => null,
+  Path: () => null,
+  Rect: () => null,
+  G: ({ children }: any) => children,
+  Defs: ({ children }: any) => children,
+  LinearGradient: ({ children }: any) => children,
+  RadialGradient: ({ children }: any) => children,
+  Stop: () => null,
+}));
 jest.mock('../lib/calorieState', () => ({
   getCalorieState: () => ({ ringColor: '#0f0', iconName: 'check', mesaj: '' }),
 }));

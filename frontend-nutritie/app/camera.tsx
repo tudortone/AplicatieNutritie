@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator, Pressable, Text, View, StyleSheet, TouchableOpacity,
-  ScrollView, Alert, KeyboardAvoidingView, Platform, Linking,
+  Alert, KeyboardAvoidingView, Platform, Linking,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,22 +16,19 @@ import { supabase } from '../supabase';
 import { API_URL } from '@/constants/config';
 import { API_PREFIX } from '@/lib/api';
 import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
-import { Scan, Zap, Trash2, Image as ImageIcon, ChevronDown, AlertTriangle, Home, Check } from 'lucide-react-native';
+import { Scan, Zap, Image as ImageIcon, AlertTriangle, Home, Check } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { MEAL_CATEGORIES, CATEGORIE_ICONA, getTipMasaDupaOra, insereazaMasaCuPoza, normalizeTipMasa } from '../lib/mealUtils';
+import { getTipMasaDupaOra, insereazaMasaCuPoza, normalizeTipMasa } from '../lib/mealUtils';
 import { clasificaRezultatInsertMasa, construiestePayloadMasaCamera, esteEroareDuplicate, eliminaAlimentScanat, raspunsInsertMasaConfirmat, verificaReluareMasa } from '../lib/payloadMese';
 import { idOperatieNoua } from '@/lib/idUtils';
 import { anuntaMasaSalvataVerificat, marcheazaMeseModificate } from '@/lib/freshnessMese';
-import { GramInput } from '../components/ui/GramInput';
 import { type AlimentScanat } from '@/components/food/FoodScanSuccessModal';
 import type { TipMasa } from '../types';
 import { FontSize } from '../constants/theme';
-import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInput';
 import { PhotoMealResultView } from '@/components/food/PhotoMealResultView';
 import { PhotoMealErrorView } from '@/components/food/PhotoMealErrorView';
-import { FlowIcon } from '../components/ui/FlowIcon';
 import { uploadImageToImageKit } from '@/lib/imagekit';
 import { useFlowCredits } from '../context/FlowCreditsContext';
 import { FlowCreditsPill } from '@/components/FlowCreditsPill';

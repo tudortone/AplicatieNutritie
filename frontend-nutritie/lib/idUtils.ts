@@ -5,7 +5,13 @@ import * as Crypto from 'expo-crypto';
 // separată de mai jos.
 
 export function generareUuid(): string {
-  return Crypto.randomUUID();
+  try {
+    if (typeof Crypto.randomUUID === 'function') {
+      const id = Crypto.randomUUID();
+      if (typeof id === 'string' && id.trim() !== '') return id;
+    }
+  } catch {}
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 // Hash FNV-1a 32-bit -> hex stabil (aceeași intrare -> același hash).

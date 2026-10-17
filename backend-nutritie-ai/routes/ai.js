@@ -537,7 +537,7 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
       let content = null;
       let lastErr = null;
 
-      const groqTextModels = config?.ai?.groqTextModels || ['openai/gpt-oss-120b', 'qwen/qwen3.6-27b'];
+      const groqTextModels = config?.ai?.groqTextModels || ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'];
       for (const key of serviciuVision.getApiKeysList('GROQ_API_KEY')) {
         for (const modelName of groqTextModels) {
           try {

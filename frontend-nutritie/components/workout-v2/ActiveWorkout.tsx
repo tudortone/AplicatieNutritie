@@ -61,6 +61,7 @@ function CardioEntry({ completed, onComplete }: {
   const [distance, setDistance] = useState('');
   const durationSeconds = Math.max(0, Number(minutes.replace(',', '.')) || 0) * 60;
   const distanceKm = Math.max(0, Number(distance.replace(',', '.')) || 0);
+  const isDisabled = completed || (durationSeconds <= 0 && distanceKm <= 0);
   return (
     <View style={styles.cardioFields}>
       <TextInput accessibilityLabel={t('workoutV2.active.cardioMinutes')} keyboardType="decimal-pad" value={minutes} onChangeText={setMinutes} style={[styles.cardioInput, { color: colors.textPrimary, borderColor: colors.border }]} />
@@ -68,12 +69,22 @@ function CardioEntry({ completed, onComplete }: {
       <Pressable
         accessibilityRole="checkbox"
         accessibilityLabel={t('workoutV2.active.completeCardio')}
-        accessibilityState={{ checked: completed }}
-        disabled={completed || (durationSeconds <= 0 && distanceKm <= 0)}
+        accessibilityState={{ checked: completed, disabled: isDisabled }}
+        disabled={isDisabled}
         onPress={() => onComplete({ durationSeconds: durationSeconds || undefined, distanceKm: distanceKm || undefined })}
-        style={[styles.cardioComplete, { backgroundColor: completed ? colors.success : colors.accent }]}
+        style={[
+          styles.cardioComplete,
+          {
+            backgroundColor: completed
+              ? colors.success
+              : isDisabled
+              ? (colors.disabledBg || '#1e242b')
+              : colors.accent,
+            opacity: isDisabled && !completed ? 0.4 : 1,
+          },
+        ]}
       >
-        <Check size={18} color={colors.textOnAccent} />
+        <Check size={18} color={isDisabled && !completed ? (colors.disabledText || '#64748B') : colors.textOnAccent} />
       </Pressable>
     </View>
   );

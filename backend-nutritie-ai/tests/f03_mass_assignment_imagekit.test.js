@@ -170,12 +170,13 @@ describe('F-03 strat 2 — verificarea proprietatii inainte de stergere', () => 
 
   it('verificarea de proprietate este fail-closed la eroare de retea', async () => {
     instaleazaFetchFals({ esueaza: true });
-    const apartine = await gdpr.fileIdApartineUtilizatorului({
-      fileId: FILE_A,
-      userId: USER_A,
-      privateKey: CHEIE,
-    });
-    expect(apartine).toBe(false);
+    await expect(
+      gdpr.fileIdApartineUtilizatorului({
+        fileId: FILE_A,
+        userId: USER_A,
+        privateKey: CHEIE,
+      }),
+    ).rejects.toThrow('network down');
   });
 
   it('un fileId inexistent (404) nu este considerat al utilizatorului', async () => {
