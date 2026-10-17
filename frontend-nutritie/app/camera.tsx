@@ -29,6 +29,8 @@ import { type AlimentScanat } from '@/components/food/FoodScanSuccessModal';
 import type { TipMasa } from '../types';
 import { FontSize } from '../constants/theme';
 import IngredientCorrectionInput from '@/components/food/IngredientCorrectionInput';
+import { PhotoMealResultView } from '@/components/food/PhotoMealResultView';
+import { PhotoMealErrorView } from '@/components/food/PhotoMealErrorView';
 import { FlowIcon } from '../components/ui/FlowIcon';
 import { uploadImageToImageKit } from '@/lib/imagekit';
 import { useFlowCredits } from '../context/FlowCreditsContext';
@@ -929,6 +931,40 @@ export default function CameraScreen() {
     }
   }, [anuleazaScanarea, router]);
 
+  const [saveFailureError, setSaveFailureError] = useState<string | null>(null);
+
+  const salveazaOfflineDirect = useCallback(async () => {
+    if (!rezultat || rezultat.length === 0 || !session || isSavingDiary) return;
+    const ownerId = session.user.id;
+    const now = new Date();
+    if (!idOperatieSalvareRef.current) idOperatieSalvareRef.current = idOperatieNoua();
+    const payload = construiestePayloadMasaCamera({
+      idOperatie: idOperatieSalvareRef.current,
+      user_id: ownerId,
+      rezultat,
+      now,
+      tip_masa: tipMasaSelectat,
+      poza: { url: imageKitUrlRef.current, fileId: imageKitFileIdRef.current },
+    }).payload;
+    const payloadOffline: MasaOfflinePayload = {
+      ...(payload as unknown as MasaOfflinePayload),
+      created_at: typeof payload.created_at === 'string' ? payload.created_at : now.toISOString(),
+    };
+    const { persistat } = await pushOfflineMealVerificat(payloadOffline);
+    if (persistat) {
+      setSaveFailureError(null);
+      setSaveSuccessData({
+        nume: typeof payload.nume === 'string' ? payload.nume : (rezultat.length === 1 ? rezultat[0].nume : `${rezultat.length} alimente`),
+        calorii: Math.round(totalCalculat.calorii),
+        proteine: Math.round(totalCalculat.proteine * 10) / 10,
+        carbohidrati: Math.round(totalCalculat.carbohidrati * 10) / 10,
+        grasimi: Math.round(totalCalculat.grasimi * 10) / 10,
+        tip_masa: tipMasaSelectat,
+        isOffline: true,
+      });
+    }
+  }, [rezultat, session, isSavingDiary, tipMasaSelectat, totalCalculat]);
+
   const adaugaInJurnal = async () => {
     if (!rezultat || rezultat.length === 0 || !session || isSavingDiary || activeSaveAttemptRef.current !== null) return;
     const ownerId = session.user.id;
@@ -1053,6 +1089,7 @@ export default function CameraScreen() {
       // P1-04: persistare dovedită → invalidare deterministă a datelor canonice.
       marcheazaMeseModificate(ownerId);
       anuntaMasaSalvataVerificat(ownerId, [String(payload.id)], [String(payload.data).slice(0, 10)]);
+      setSaveFailureError(null);
 
       setSaveSuccessData({
         nume: mealName,
@@ -1080,6 +1117,7 @@ export default function CameraScreen() {
         const mesaj = clasificare.tip === 'eroare_server'
           ? clasificare.mesaj
           : t('alerts.mesaje.eroareNecunoscutaSalvareMasa');
+        setSaveFailureError(mesaj);
         Alert.alert(
           t('alerts.titluri.eroareSalvare'),
           t('alerts.mesaje.bazaDateRefuza', { eroare: mesaj }),
@@ -1345,77 +1383,13 @@ export default function CameraScreen() {
       </View>
 
       {isNonFood ? (
-        <Animated.View
+        <PhotoMealErrorView
           testID="camera-not-food-card"
-          entering={FadeInUp.duration(400)}
-          style={[
-            styles.notFoodContainer,
-            { top: insets.top + 70, bottom: Math.max(insets.bottom, 20) + 20 }
-          ]}
-          accessibilityRole="alert"
-        >
-          <BlurView intensity={80} tint="dark" style={styles.notFoodBlur}>
-            <View style={styles.notFoodContent}>
-              <View style={[styles.notFoodIconWrap, { backgroundColor: 'rgba(204, 255, 0, 0.12)' }]}>
-                <AlertTriangle size={36} color={colors.accent} />
-              </View>
-
-              <Text style={[styles.notFoodTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
-                {t('camera.notFoodTitle')}
-              </Text>
-
-              <Text style={[styles.notFoodMessage, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
-                {t('camera.notFoodMessage')}
-              </Text>
-
-              <View style={styles.notFoodActions}>
-                {/* 1. Refă fotografia */}
-                <TouchableOpacity
-                  testID="not-food-retake-btn"
-                  onPress={handleRetakePhoto}
-                  style={[styles.notFoodPrimaryBtn, { shadowColor: colors.accent }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('camera.retakePhoto')}
-                >
-                  <LinearGradient colors={colors.accentGradient} style={styles.notFoodBtnGrad}>
-                    <FlowIcon name="refresh" size={18} color={colors.background} />
-                    <Text style={[styles.notFoodBtnTextPrimary, { color: colors.background }]} maxFontSizeMultiplier={1.3}>
-                      {t('camera.retakePhoto')}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-
-                {/* 2. Alege din galerie */}
-                <TouchableOpacity
-                  testID="not-food-gallery-btn"
-                  onPress={handleGalleryFromNotFood}
-                  style={[styles.notFoodSecondaryBtn, { borderColor: 'rgba(255,255,255,0.2)' }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('camera.chooseFromGallery')}
-                >
-                  <ImageIcon size={18} color="#FFFFFF" />
-                  <Text style={styles.notFoodBtnTextSecondary} maxFontSizeMultiplier={1.3}>
-                    {t('camera.chooseFromGallery')}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* 3. Mergi la Acasă */}
-                <TouchableOpacity
-                  testID="not-food-home-btn"
-                  onPress={handleHomeFromNotFood}
-                  style={styles.notFoodGhostBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('camera.goToHome')}
-                >
-                  <Home size={16} color={colors.accent} />
-                  <Text style={[styles.notFoodBtnTextGhost, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
-                    {t('camera.goToHome')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </BlurView>
-        </Animated.View>
+          errorType="not_food"
+          onRetake={handleRetakePhoto}
+          onGallery={handleGalleryFromNotFood}
+          onHome={handleHomeFromNotFood}
+        />
       ) : failedPhotoJob ? (
         <View testID="camera-failed-job" style={[styles.jobStateCard, { top: insets.top + 92, borderColor: colors.danger + '88' }]} accessibilityRole="alert">
           <AlertTriangle size={22} color={colors.danger} />
@@ -1451,216 +1425,27 @@ export default function CameraScreen() {
         </Pressable>
       ) : null}
 
-      {/* Result section & sheet */}
+      {/* Photo AI 2.0: Option A Athletic Pro HUD Result View */}
       {rezultat.length > 0 && (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <Animated.View entering={FadeInUp.duration(500).springify()} style={[styles.resultSheet, { borderColor: colors.accent + '26' }]}>
-            <BlurView intensity={65} tint="dark" style={[styles.resultBlur, { maxHeight: Math.round(height * 0.88) }]}>
-              <LinearGradient colors={[colors.accent + '14', 'rgba(10,14,20,0.98)']} style={styles.resultGrad}>
-                <View style={styles.resultHandle} />
-                
-                <ScrollView
-                  testID="camera-result-scroll"
-                  style={styles.resultScrollView}
-                  contentContainerStyle={[
-                    styles.resultScrollContent,
-                    { paddingBottom: Math.max(insets.bottom, 16) + 36 }
-                  ]}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  <View style={styles.resultHeading}>
-                    <View style={styles.resultHeadingText}>
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.resultEyebrow, { color: colors.accent }]}>
-                        {t('camera.detectedMeal')}
-                      </Text>
-                      <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={[styles.resultTitle, { color: colors.textPrimary }]}>
-                        {rezultat.map((item) => item.nume).join(', ')}
-                      </Text>
-                    </View>
-                    <Pressable
-                      testID="camera-meal-correction-toggle"
-                      disabled={pendingPhotoSaveLocked}
-                      onPress={() => setMealCorrectionOpen((open) => !open)}
-                      style={[styles.mealSuggestionChip, { borderColor: colors.accent + '55' }]}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('camera.changeMealCategory')}
-                      accessibilityState={{ expanded: mealCorrectionOpen, disabled: pendingPhotoSaveLocked }}
-                    >
-                      <FlowIcon name={CATEGORIE_ICONA[tipMasaSelectat]} size={14} color={colors.accent} />
-                      <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={[styles.mealSuggestionText, { color: colors.accent }]}>
-                        {t(`chat.mealCategory.${tipMasaSelectat}`)}
-                      </Text>
-                      <ChevronDown size={14} color={colors.accent} />
-                    </Pressable>
-                  </View>
-
-                  {pendingPhotoSaveLocked ? (
-                    <Text
-                      testID="camera-pending-save-lock-notice"
-                      accessibilityRole="alert"
-                      style={[styles.qualityWarningBody, { color: colors.textSecondary, marginTop: 10 }]}
-                    >
-                      {t('camera.pendingPhotoSaveLocked')}
-                    </Text>
-                  ) : null}
-
-                  {mealCorrectionOpen ? (
-                    <View style={styles.mealTypeRow} accessibilityRole="radiogroup" accessibilityLabel={t('camera.mealCategoryLabel')}>
-                      {MEAL_CATEGORIES.map((cat) => {
-                        const selected = tipMasaSelectat === cat.id;
-                        return (
-                          <Pressable
-                            key={cat.id}
-                            onPress={() => {
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              setTipMasaSelectat(cat.id);
-                              setMealCorrectionOpen(false);
-                            }}
-                            style={[styles.mealTypeChip, selected && { borderColor: colors.accent, backgroundColor: colors.accent + '22' }]}
-                            accessibilityRole="radio"
-                            accessibilityState={{ checked: selected }}
-                            accessibilityLabel={t(`chat.mealCategory.${cat.id}`)}
-                          >
-                            <FlowIcon name={CATEGORIE_ICONA[cat.id]} size={14} color={selected ? colors.accent : colors.textSecondary} />
-                            <Text maxFontSizeMultiplier={1.3} style={[styles.mealTypeChipText, { color: selected ? colors.accent : colors.textSecondary }]}>
-                              {t(`chat.mealCategory.${cat.id}`)}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  ) : null}
-
-                  {/* Rezumat macro & calorii */}
-                  <View style={styles.macroRow} testID="camera-macro-summary">
-                    <View style={styles.macroItem}>
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.accent }]}>{Math.round(totalCalculat.calorii)}</Text>
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>kcal</Text>
-                    </View>
-                    <View style={styles.macroDivider} />
-                    <View style={styles.macroItem}>
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.accentSecondary }]}>{Math.round(totalCalculat.proteine)}g</Text>
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>{t('jurnal.macroProtein')}</Text>
-                    </View>
-                    <View style={styles.macroDivider} />
-                    <View style={styles.macroItem}>
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.accentTertiary }]}>{Math.round(totalCalculat.carbohidrati)}g</Text>
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>{t('jurnal.macroCarbs')}</Text>
-                    </View>
-                    <View style={styles.macroDivider} />
-                    <View style={styles.macroItem}>
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.warning }]}>{Math.round(totalCalculat.grasimi)}g</Text>
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>{t('jurnal.macroFats')}</Text>
-                    </View>
-                    <View style={styles.macroDivider} />
-                    <View style={styles.macroItem}>
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroValue, { color: colors.textPrimary }]}>
-                        {totalCalculat.fibre === null ? '—' : `${Math.round(totalCalculat.fibre)}g`}
-                      </Text>
-                      <Text maxFontSizeMultiplier={1.3} style={[styles.macroLabel, { color: colors.textSecondary }]}>{t('camera.fiber')}</Text>
-                    </View>
-                  </View>
-
-                  {quality.requiresReview ? (
-                    <View testID="camera-quality-warning" style={[styles.qualityWarning, { borderColor: colors.warning + '66' }]} accessibilityRole="alert">
-                      <AlertTriangle size={18} color={colors.warning} />
-                      <View style={styles.qualityWarningTextWrap}>
-                        <Text maxFontSizeMultiplier={1.3} style={[styles.qualityWarningTitle, { color: colors.warning }]}>{t('camera.reviewRequiredTitle')}</Text>
-                        <Text maxFontSizeMultiplier={1.3} style={[styles.qualityWarningBody, { color: colors.textSecondary }]}>{t('camera.reviewRequiredMessage')}</Text>
-                      </View>
-                    </View>
-                  ) : null}
-
-                  {/* Rânduri ingrediente identificate */}
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.ingredientsTitle, { color: colors.textPrimary }]}>{t('camera.detectedIngredients')}</Text>
-                  <View style={styles.ingredientsList}>
-                    {rezultat.map((ingredient, index) => {
-                      const kcalRand = Math.round(
-                        ((ingredient.calorii_per_100g || 0) * (ingredient.estimare_grame || 0)) / 100,
-                      );
-                      return (
-                        <View key={`${ingredient.nume}-${index}`} style={styles.ingredientRow}>
-                          <View style={styles.ingredientMain}>
-                            <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={[styles.ingredientName, { color: colors.textPrimary }]}>
-                              {ingredient.nume || t('camera.unidentifiedFoodDefault')}
-                            </Text>
-                            <Text maxFontSizeMultiplier={1.3} style={[styles.ingredientNutrition, { color: colors.textSecondary }]}>
-                              {kcalRand} kcal · {Math.round(ingredient.proteine_per_100g * ingredient.estimare_grame / 10) / 10}g {t('camera.proteinShort')} · {Math.round(ingredient.carbohidrati_per_100g * ingredient.estimare_grame / 10) / 10}g {t('camera.carbsShort')}
-                            </Text>
-                          </View>
-                          <View style={[styles.gramContainer, { borderColor: colors.accent + '33' }]}>
-                            {pendingPhotoSaveLocked ? (
-                              <Text testID="camera-locked-ingredient-grams" style={{ color: colors.accent }}>
-                                {ingredient.estimare_grame} g
-                              </Text>
-                            ) : (
-                              <GramInput
-                                value={ingredient.estimare_grame}
-                                onChange={(g) => updateIngredient(index, { estimare_grame: g })}
-                                borderColor="transparent"
-                                color={colors.accent}
-                              />
-                            )}
-                          </View>
-                          <Pressable
-                            onPress={() => stergeIngredient(index)}
-                            disabled={pendingPhotoSaveLocked}
-                            hitSlop={10}
-                            style={styles.deleteIngredientBtn}
-                            accessibilityRole="button"
-                            accessibilityLabel={t('jurnal.deleteIngredient', { nume: ingredient.nume })}
-                            accessibilityHint={t('camera.deleteIngredientHint')}
-                          >
-                            <Trash2 size={16} color={colors.danger} />
-                          </Pressable>
-                        </View>
-                      );
-                    })}
-
-                    {!pendingPhotoSaveLocked ? (
-                      <View style={{ marginTop: 12 }}>
-                        <IngredientCorrectionInput
-                          ingredienteCurente={rezultat}
-                          onCorectat={setRezultat}
-                          onSend={sendCorrectionToAI}
-                        />
-                      </View>
-                    ) : null}
-                  </View>
-
-                  {/* Butoane acțiune Jurnal */}
-                  <View style={styles.actionButtonsArea}>
-                    <TouchableOpacity
-                      testID="camera-add-journal-btn"
-                      style={[styles.addBtn, { shadowColor: colors.accent, opacity: quality.requiresReview ? 0.45 : 1 }]}
-                      onPress={adaugaInJurnal}
-                      disabled={quality.requiresReview || isSavingDiary || recoveryBlocked}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('camera.addToJournal')}
-                      accessibilityState={{ disabled: quality.requiresReview || isSavingDiary || recoveryBlocked, busy: isSavingDiary }}
-                    >
-                      <LinearGradient colors={colors.accentGradient} style={styles.addBtnGrad}>
-                        <Text maxFontSizeMultiplier={1.3} style={[styles.addBtnText, { color: colors.background }]}>{t('camera.addToJournal')}</Text>
-                      </LinearGradient>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      testID="camera-retry-btn"
-                      style={styles.retryBtn}
-                      onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); anuleazaScanarea(); }}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('camera.cancelAndRescan')}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                        <FlowIcon name="refresh" size={16} color={colors.accent} />
-                        <Text maxFontSizeMultiplier={1.3} style={styles.retryBtnText}>{t('camera.cancelAndRescan')}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                </ScrollView>
-              </LinearGradient>
-            </BlurView>
+            <PhotoMealResultView
+              rezultat={rezultat}
+              photoUri={imageKitUrlRef.current}
+              tipMasa={tipMasaSelectat}
+              onChangeTipMasa={setTipMasaSelectat}
+              onUpdateRezultat={setRezultat}
+              onSaveToJournal={adaugaInJurnal}
+              onCancelAndRescan={anuleazaScanarea}
+              isSaving={isSavingDiary}
+              saveFailureMessage={saveFailureError}
+              onRetrySave={adaugaInJurnal}
+              onSaveOffline={salveazaOfflineDirect}
+              requiresReview={quality.requiresReview}
+              disabled={recoveryBlocked}
+              pendingPhotoSaveLocked={pendingPhotoSaveLocked}
+              bottomInset={insets.bottom}
+            />
           </Animated.View>
         </KeyboardAvoidingView>
       )}
@@ -1989,105 +1774,5 @@ const styles = StyleSheet.create({
   stageTextPending: {
     color: 'rgba(255, 255, 255, 0.4)',
     fontWeight: '500',
-  },
-
-  notFoodContainer: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    zIndex: 1300,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notFoodBlur: {
-    width: '100%',
-    borderRadius: 28,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.25)',
-  },
-  notFoodContent: {
-    padding: 24,
-    alignItems: 'center',
-    backgroundColor: 'rgba(8, 12, 18, 0.92)',
-  },
-  notFoodIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  notFoodTitle: {
-    fontSize: 19,
-    fontWeight: '800',
-    textAlign: 'center',
-    letterSpacing: -0.3,
-    marginBottom: 8,
-  },
-  notFoodMessage: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 8,
-  },
-  notFoodActions: {
-    width: '100%',
-    gap: 10,
-  },
-  notFoodPrimaryBtn: {
-    width: '100%',
-    borderRadius: 18,
-    overflow: 'hidden',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  notFoodBtnGrad: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  notFoodBtnTextPrimary: {
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-  notFoodSecondaryBtn: {
-    width: '100%',
-    minHeight: 48,
-    borderRadius: 18,
-    borderWidth: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-  },
-  notFoodBtnTextSecondary: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  notFoodGhostBtn: {
-    width: '100%',
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    marginTop: 4,
-  },
-  notFoodBtnTextGhost: {
-    fontSize: 14,
-    fontWeight: '700',
   },
 });
