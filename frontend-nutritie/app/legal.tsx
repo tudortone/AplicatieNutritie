@@ -2,15 +2,15 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, FileText, Landmark, Mail, Building2, Scale, Calendar, ChevronRight } from 'lucide-react-native';
+import { ArrowLeft, FileText, Landmark, Mail, Building2, Scale, Calendar, ChevronRight, ShieldCheck } from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { getLegalUrls } from '../lib/legalUrls';
 import { SUPPORT_EMAIL } from '../constants/support';
 
-// ATENȚIE: conținutul juridic este informativ și principalul document obligatoriu
-// (Termenii și Politica de Confidențialitate) se deschide extern din documentele
+// ATENȚIE: conținutul juridic este informativ și documentele obligatorii
+// (Termenii, Politica de Confidențialitate și Declarația de Accesibilitate) se deschid extern din documentele
 // legale oficiale configurate prin EXPO_PUBLIC_TERMS_OF_SERVICE_URL /
 // EXPO_PUBLIC_PRIVACY_POLICY_URL.
 
@@ -33,10 +33,13 @@ export default function LegalScreen() {
     </Animated.View>
   );
 
-  const deschideDocument = async (tip: 'terms' | 'privacy', nume: string) => {
+  const deschideDocument = async (tip: 'terms' | 'privacy' | 'accessibility', nume: string) => {
     try {
       const { termsUrl, privacyUrl } = getLegalUrls();
-      const url = tip === 'terms' ? termsUrl : privacyUrl;
+      let url = tip === 'terms' ? termsUrl : privacyUrl;
+      if (tip === 'accessibility') {
+        url = privacyUrl.replace(/\/politica-de-confidentialitate(?:\.html)?|\/privacy(?:\.html)?/, '/declaratie-accesibilitate.html');
+      }
       await Linking.openURL(url);
     } catch {
       Alert.alert(
@@ -46,7 +49,7 @@ export default function LegalScreen() {
     }
   };
 
-  const actiuneDocument = (icon: React.ReactNode, titlu: string, subtitlu: string, urlKey: 'terms' | 'privacy') => (
+  const actiuneDocument = (icon: React.ReactNode, titlu: string, subtitlu: string, urlKey: 'terms' | 'privacy' | 'accessibility') => (
     <Pressable
       style={({ pressed }) => [styles.actionRow, { borderColor: colors.border, opacity: pressed ? 0.6 : 1 }]}
       onPress={() => deschideDocument(urlKey, titlu)}
@@ -110,6 +113,13 @@ export default function LegalScreen() {
           t('legalScreen.privacyTitle'),
           t('legalScreen.privacySubtitle'),
           'privacy'
+        )}
+
+        {actiuneDocument(
+          <ShieldCheck size={18} color={colors.accent} />,
+          t('legalScreen.accessibilityTitle'),
+          t('legalScreen.accessibilitySubtitle'),
+          'accessibility'
         )}
 
         {section(

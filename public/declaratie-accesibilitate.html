@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Declarație de Accesibilitate — GetFlow</title>
+  <style>
+    :root {
+      --bg: #090C0E;
+      --card-bg: rgba(22, 28, 36, 0.7);
+      --accent: #10B981;
+      --accent-dim: rgba(16, 185, 129, 0.12);
+      --text: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --border: rgba(255, 255, 255, 0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1.5rem;
+      padding: 3rem 2.5rem;
+      backdrop-filter: blur(12px);
+    }
+    .nav-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+      margin-bottom: 2rem;
+    }
+    h1 {
+      font-size: 2.2rem;
+      margin-bottom: 0.5rem;
+      color: #FFF;
+    }
+    .date { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
+    h2 {
+      font-size: 1.35rem;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+      color: var(--accent);
+    }
+    p, ul, ol { color: #D1D5DB; margin-bottom: 1rem; font-size: 1rem; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    strong { color: #FFF; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .badge {
+      display: inline-block;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      margin-bottom: 1.5rem;
+    }
+    .card-info {
+      background: rgba(16, 185, 129, 0.06);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="nav-back">← Înapoi la pagina principală</a>
+    <div class="badge">Conformitate EAA &amp; Standardul EN 301 549</div>
+    <h1>Declarație de Accesibilitate</h1>
+    <p class="date">Ultima actualizare: 17 octombrie 2026</p>
+
+    <div class="card-info">
+      <p><strong>Operator și Statut Legal:</strong> Aplicația mobilă <strong>GetFlow</strong> este dezvoltată și operată de către un <strong>Dezvoltator Individual (persoană fizică)</strong>, fără entitate juridică separată (fără SRL) și fără personal angajat. În conformitate cu Recomandarea Comisiei Europene 2003/361/CE (Anexa, Art. 1), dezvoltatorul se încadrează în categoria microîntreprinderilor.</p>
+    </div>
+
+    <h2>1. Cadrul Legal European (Directiva UE 2019/882 — EAA)</h2>
+    <p>Conform <strong>Articolului 4 alineatul (5) din Directiva (UE) 2019/882</strong> a Parlamentului European și a Consiliului (Actul European privind Accesibilitatea - EAA), transpusă în legislația națională a României prin <strong>Legea nr. 232/2022 (Art. 4 alin. 6)</strong>, <em>microîntreprinderile care furnizează servicii sunt exceptate de la respectarea cerințelor obligatorii de accesibilitate și de la obligațiile administrative aferente</em>.</p>
+    <p>Cu toate acestea, dezvoltatorul GetFlow recunoaște importanța fundamentală a accesibilității digitale și a implementat voluntar bune practici inspirate din standardul european <strong>EN 301 549</strong> și ghidul <strong>WCAG 2.1 (Nivel AA)</strong>.</p>
+
+    <h2>2. Măsuri Tehnice Implementate Voluntar</h2>
+    <p>Aplicația mobilă integrează funcționalități proiectate pentru a facilita accesul tuturor utilizatorilor:</p>
+    <ul>
+      <li><strong>Screen Readers (Cititoare de ecran):</strong> Elementele interactive, butoanele și etichetele sunt echipate cu atribute native de accesibilitate (<code>accessibilityRole</code>, <code>accessibilityLabel</code>, <code>accessibilityHint</code>) compatibile cu <strong>Google TalkBack</strong> pe Android și <strong>Apple VoiceOver</strong> pe iOS.</li>
+      <li><strong>Zone de atingere tactile (Touch Targets):</strong> Toate butoanele și acțiunile respectă dimensiunile optime de atingere de minimum 44x44 dp / 48x48 dp pentru a preveni atingerile accidentale.</li>
+      <li><strong>Reducerea mișcării (Reduced Motion):</strong> Aplicația detectează preferința de sistem a utilizatorului privind reducerea animațiilor (<code>Reduce Motion</code>) și dezactivează automat tranzițiile rapide sau efectele de pulsație vizuală.</li>
+      <li><strong>Contrast Cromatic:</strong> Paleta vizuală întunecată (Dark Mode) și accentele grafice sunt calibrate pentru a respecta un raport de contrast de minimum 4.5:1 pentru textul principal.</li>
+      <li><strong>Scalare Text Dinamic:</strong> Interfața este optimizată pentru a acomoda preferințele de mărime a fontului configurate la nivel de sistem de operare.</li>
+    </ul>
+
+    <h2>3. Limitări Cunoscute</h2>
+    <p>Deși depunem eforturi continue pentru îmbunătățire, pot exista anumite secțiuni unde accesibilitatea completă este în curs de perfecționare:</p>
+    <ul>
+      <li>Graficele complexe de distribuție a macronutrienților pot oferi descrieri textuale simplificate prin screen reader.</li>
+      <li>Funcționalitatea de scanare foto a alimentelor necesită ghidare vizuală pe ecran pentru încadrarea farfuriei, însă valorile identificate sunt citite complet vocal ulterior.</li>
+    </ul>
+
+    <h2>4. Feedback și Date de Contact</h2>
+    <p>Dacă întâmpinați bariere de accesibilitate în utilizarea aplicației GetFlow sau dacă aveți sugestii de îmbunătățire, vă încurajăm să ne contactați direct:</p>
+    <ul>
+      <li><strong>E-mail asistență accesibilitate:</strong> <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a></li>
+      <li><strong>Termen de răspuns:</strong> Depunem eforturi pentru a răspunde solicitărilor legate de accesibilitate în termen de maximum 15 zile lucrătoare.</li>
+    </ul>
+
+    <footer>
+      <p>&copy; 2026 Dezvoltator Individual (GetFlow). Toate drepturile rezervate.</p>
+    </footer>
+  </div>
+</body>
+</html>

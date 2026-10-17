@@ -1121,6 +1121,8 @@
     "termsSubtitle": "Deschide documentul complet în browser",
     "privacyTitle": "Politica de Confidențialitate",
     "privacySubtitle": "Deschide documentul complet în browser",
+    "accessibilityTitle": "Declarație de Accesibilitate",
+    "accessibilitySubtitle": "Deschide declarația de accesibilitate în browser",
     "operatorTitle": "Operator",
     "operatorText": "Operatorul aplicației este responsabil de prelucrarea datelor personale.",
     "operatorTextWithOperator": "{{operator}}, operatorul aplicației, este responsabil de prelucrarea datelor personale.",

@@ -1121,6 +1121,8 @@
     "termsSubtitle": "Vollständiges Dokument im Browser öffnen",
     "privacyTitle": "Datenschutzerklärung",
     "privacySubtitle": "Vollständiges Dokument im Browser öffnen",
+    "accessibilityTitle": "Erklärung zur Barrierefreiheit",
+    "accessibilitySubtitle": "Erklärung zur Barrierefreiheit im Browser öffnen",
     "operatorTitle": "Betreiber",
     "operatorText": "Der App-Betreiber ist verantwortlich für die Verarbeitung personenbezogener Daten.",
     "operatorTextWithOperator": "{{operator}}, App-Betreiber, ist verantwortlich für die Verarbeitung personenbezogener Daten.",

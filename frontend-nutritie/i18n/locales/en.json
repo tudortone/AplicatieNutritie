@@ -1121,6 +1121,8 @@
     "termsSubtitle": "Open complete document in browser",
     "privacyTitle": "Privacy Policy",
     "privacySubtitle": "Open complete document in browser",
+    "accessibilityTitle": "Accessibility Statement",
+    "accessibilitySubtitle": "Open accessibility statement in browser",
     "operatorTitle": "Operator",
     "operatorText": "The app operator is responsible for processing personal data.",
     "operatorTextWithOperator": "{{operator}}, the app operator, is responsible for processing personal data.",

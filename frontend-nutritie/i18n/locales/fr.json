@@ -1121,6 +1121,8 @@
     "termsSubtitle": "Ouvrir le document complet dans le navigateur",
     "privacyTitle": "Politique de Confidentialité",
     "privacySubtitle": "Ouvrir le document complet dans le navigateur",
+    "accessibilityTitle": "Déclaration d'Accessibilité",
+    "accessibilitySubtitle": "Ouvrir la déclaration d'accessibilité dans le navigateur",
     "operatorTitle": "Opérateur",
     "operatorText": "L’éditeur de l’application est responsable du traitement des données personnelles.",
     "operatorTextWithOperator": "{{operator}}, éditeur de l’application, est responsable du traitement des données personnelles.",
