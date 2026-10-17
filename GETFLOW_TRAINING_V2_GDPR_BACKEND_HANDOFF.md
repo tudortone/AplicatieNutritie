@@ -59,67 +59,56 @@ Gemini has completed the backend remediation, test-driven validation, and contra
 - Deoarece `TABELE_STERGERE_GDPR_UTILIZATOR` este derivat automat prin `Object.freeze([...TABELE_CU_RLS_UTILIZATOR, 'google_play_subscriptions'])`, adăugarea include automat tabela în toate ciclurile de ștergere GDPR (atât pe calea sincronă din rută, cât și pe calea asincronă din worker-ul outbox).
 
 ### 2. `backend-nutritie-ai/utils/gdprServices.js`
-- În funcția de citire paginată `citesteTotPaginat`, s-a adăugat toleranță explicită la migrări etapizate (`CODURI_TABELA_INEXISTENTA` = `42P01`, `PGRST205`, `PGRST106`). Dacă un mediu de test sau un branch nu are încă migrarea aplicată, citirea returnează `[]` în loc să arunce excepție fatală. Erorile reale de conexiune sau autorizare continuă să eșueze controlat (fail-loud).
+- **PGRST106 Fail-Loud:** `PGRST106` a fost eliminat din `CODURI_TABELA_INEXISTENTA`. PostgREST `PGRST106` reprezintă o schemă neexpusă sau o eroare de configurare a serverului, nu o tabelă lipsă; mascarea lui risca generarea de exporturi trunchiate prezentate eronat ca HTTP 200. Toleranța la migrări etapizate a fost restrânsă strict la tabele inexistente autentice (`42P01` și `PGRST205`). Orice eroare de schemă PostgREST eșuează acum garantat zgomotos (fail-loud 500).
 
 ### 3. `backend-nutritie-ai/routes/gdpr.js`
 - În handler-ul rutei `GET /api/v1/user/export-data`:
   - Adăugat `citeste('workout_templates')` în `Promise.all`.
   - Adăugat `workoutTemplates` în destructuring.
   - Returnat `workout_templates: workoutTemplates` în JSON-ul final de export.
+- În handler-ul rutei `DELETE /api/v1/user/delete-account`:
+  - Aliniată mașina de stări outbox la granularitatea strictă: `pending` → `db_done` → `clerk_done` → `imagekit_done` → `auth_done` → `completed`.
+  - Fiecare tranziție de stare verifică atomic `{ data: updatedRow, error }` via `.select('id').maybeSingle()`; eșecul persistării în outbox aruncă `GDPR_OUTBOX_STATUS_UPDATE_FAILED` și blochează trecerea la pasul următor.
+  - În `catch (err)`, eroarea primară persistă `last_error` pe rândul din outbox fără a masca codul de eroare HTTP (503/500).
 
-### 4. `contracts/openapi.yaml`
+### 4. `backend-nutritie-ai/utils/gdprWorker.js`
+- **Fail-Closed pe Credențiale Lipsă:** Worker-ul asincron `reiaStergerileBlocate` nu mai ignoră `CLERK_NOT_CONFIGURED` sau `IMAGEKIT_NOT_CONFIGURED`. Dacă un utilizator are identitate Clerk sau fișiere ImageKit iar cheile lipsesc din mediu, worker-ul oprește execuția înainte de ștergerea ireversibilă din `auth.users`, înregistrează `last_error` și incrementează `retry_count`.
+- **Protecție Actualizare Outbox:** `actualizeazaStatusOutbox` validează existența rândului actualizat; starea din memorie este avansată strict DUPĂ confirmarea persistării durabile. Eșecurile secundare din blocul `catch` sunt capturate în Sentry fără a prăbuși bucla worker-ului.
+
+### 5. `contracts/openapi.yaml`
 - Actualizat `components.schemas.GdprExportResponse`:
   - Adăugat `workout_templates` în lista `required`.
   - Definit `workout_templates: { type: array, items: { type: object } }` în `properties`.
 
-### 5. `backend-nutritie-ai/tests/f06_f07_gdpr_completeness.test.js`
-- Actualizat testul canonic de completitudine a exportului pentru a aserta prezența cheii `workout_templates`.
+### 6. `backend-nutritie-ai/tests/f06_f07_gdpr_completeness.test.js`
+- Adăugate teste axate pe comportamentul fail-loud pentru `PGRST106` și toleranța strictă pentru `42P01` și `PGRST205` pe `citesteTotPaginat`, `stergeDeadLetterUtilizator` și endpoint-ul de export.
 
-### 6. `backend-nutritie-ai/tests/training_v2_gdpr.test.js`
-- Adăugat o suită completă de 12 teste de regresie și securitate:
-  1. User A export returnează template-urile lui User A.
-  2. User A export nu include NICIODATĂ template-urile lui User B.
-  3. User B export nu include NICIODATĂ înregistrările lui User A.
-  4. Paginare completă pentru volume mari (>1000 template-uri) fără trunchiere la limita PostgREST.
-  5. Seturile goale exportă corect `workout_templates: []`.
-  6. Cererile malformate fără context/identitate eșuează protejat (500).
-  7. Ștergerea contului elimină explicit template-urile utilizatorului corect.
-  8. Ștergerea contului nu atinge template-urile altui utilizator.
-  9. Exportul existent (V1 antrenamente, mese, profil) rămâne intact.
-  10. Toleranță la migrări în etape (tabel inexistent pe schema veche returnează `[]`).
-  11. Erorile reale de bază de date pe export sunt raportate (500) fără ignorare silențioasă.
-  12. Ștergerea repetată/idempotentă rămâne sigură.
+### 7. `backend-nutritie-ai/tests/gdpr_imagekit.test.js`
+- Adăugate teste pentru eșecul actualizării outbox pe `clerk_done` și `imagekit_done` în ruta sincronă.
+- Parametrizat testul M2 de persistare `file_ids` pentru ambele moduri de eșec (excepție aruncată și obiect de eroare returnat de clientul DB).
+
+### 8. `backend-nutritie-ai/tests/gdpr_worker.test.js`
+- Adăugat test ce verifică faptul că identitatea Supabase Auth NU este ștearsă dacă lipsesc credențialele Clerk sau ImageKit.
+
+### 9. `backend-nutritie-ai/tests/training_v2_gdpr.test.js`
+- Suită completă de 12 teste de regresie și securitate (izolare A/B, export paginat >1000 template-uri, ștergere atomică, idempotență).
 
 ---
 
 ## 4. Test Verification Results
 
-### Teste dedicate Training V2 GDPR:
+### Teste dedicate GDPR & Outbox State Machine:
 ```bash
-npx jest tests/training_v2_gdpr.test.js
+npx jest tests/training_v2_gdpr.test.js tests/f06_f07_gdpr_completeness.test.js tests/gdpr_worker.test.js tests/gdpr_imagekit.test.js
 ```
 **Rezultat:**
 ```
-PASS tests/training_v2_gdpr.test.js
-  Training 2.0 GDPR Backend Support — workout_templates
-    Registru tabele utilizator
-      √ workout_templates este înregistrat în TABELE_CU_RLS_UTILIZATOR
-      √ workout_templates este inclus în TABELE_STERGERE_GDPR_UTILIZATOR
-    Izolare A/B și integritate export
-      √ 1. User A export returnează template-urile lui User A
-      √ 2 & 3. User A export nu include niciodată datele lui B, iar User B nu include datele lui A
-      √ 4. Paginarea completă exportă peste 1000 template-uri fără trunchiere
-      √ 5. Seturile goale exportă corect workout_templates: []
-      √ 6. Cererile malformate fără contextDate/userId eșuează protejat
-      √ 9. Exportul existent (antrenamente V1, mese, profil) rămâne intact
-      √ 10. Toleranță la migrare în etape (tabel inexistent nu blochează exportul)
-      √ 11. Erorile reale de bază de date pe export sunt raportate (500)
-    Ștergere cont și izolare A/B
-      √ 7 & 8. Ștergerea contului elimină template-urile lui A și nu atinge pe cele ale lui B
-      √ 12. Ștergerea repetată/idempotentă rămâne sigură
-
-Test Suites: 1 passed, 1 total
-Tests:       12 passed, 12 total
+PASS tests/training_v2_gdpr.test.js (12 passed)
+PASS tests/f06_f07_gdpr_completeness.test.js (17 passed)
+PASS tests/gdpr_worker.test.js (10 passed)
+PASS tests/gdpr_imagekit.test.js (23 passed)
+Test Suites: 4 passed, 4 total
+Tests:       62 passed, 62 total
 ```
 
 ### Suita completă Backend:
@@ -129,9 +118,9 @@ npm test
 **Rezultat:**
 ```
 Test Suites: 77 passed, 77 total
-Tests:       761 passed, 761 total
+Tests:       769 passed, 769 total
 Snapshots:   0 total
-Time:        7.616 s
+Time:        7.239 s
 ```
 
 ---
@@ -156,8 +145,9 @@ Time:        7.616 s
    - Preia modificările din `backend-nutritie-ai/` și `contracts/openapi.yaml`.
 2. **Verifică testele din frontend:**
    - Rulează testele `frontend-nutritie/__tests__/` relevante pentru template-uri și experiența de antrenament.
-3. **Finalizează Task 7:**
-   - Marchează Task 7 ca complet în ledger-ul de sarcini.
-   - Procedează la integrarea componentelor UI (`WorkoutV2Experience`, `ActiveWorkout`, `AnatomyV2Map`, `templateRepository`).
+3. **Acceptanță Task 7:**
+   - Toate cele 3 constatări formulate de GPT Codex au fost investigate, corectate fail-closed și acoperite prin teste automate în commits `d634392` și `9b02a91`.
+   - GPT Codex poate proceda la acceptanța tehnică a componentei de backend GDPR pentru deblocarea sigură a Task-ului 7.
 4. **Nu modifica logica comună de securitate backend:**
    - Orice ajustare la logica de autentificare, GDPR sau tabele RLS trebuie coordonată cu Gemini.
+
