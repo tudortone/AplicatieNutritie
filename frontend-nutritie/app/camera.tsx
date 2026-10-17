@@ -16,7 +16,7 @@ import { supabase } from '../supabase';
 import { API_URL } from '@/constants/config';
 import { API_PREFIX } from '@/lib/api';
 import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
-import { Scan, Zap, Trash2, Image as ImageIcon, ChevronDown, AlertTriangle, Home } from 'lucide-react-native';
+import { Scan, Zap, Trash2, Image as ImageIcon, ChevronDown, AlertTriangle, Home, Check } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -134,6 +134,7 @@ export default function CameraScreen() {
   const [photoStateOwnerId, setPhotoStateOwnerId] = useState<string | null>(sessionUserId);
   const [photoPhase, setPhotoPhase] = useState<'idle' | 'uploading' | 'processing' | 'background' | 'retrying' | 'completed' | 'failed'>('idle');
   const [failedPhotoJob, setFailedPhotoJob] = useState<{ job: PhotoJob; pointer: ActivePhotoJobPointer } | null>(null);
+  const [analysisStage, setAnalysisStage] = useState<1 | 2 | 3 | 4>(1);
   // REMED-009: categoria mesei scanate — implicit = sugestia după oră, dar
   // utilizatorul o poate suprascrie din chip-urile din foaia de review.
   const [tipMasaSelectat, setTipMasaSelectat] = useState<TipMasa>(() => getTipMasaDupaOra(new Date()));
@@ -207,6 +208,7 @@ export default function CameraScreen() {
     setScanError(null);
     setPhotoPhase('idle');
     setFailedPhotoJob(null);
+    setAnalysisStage(1);
     setSaveSuccessData(null);
     setRecoveryBlocked(false);
     setPendingPhotoSaveLocked(false);
@@ -344,6 +346,7 @@ export default function CameraScreen() {
     abortControllerRef.current = controller;
     setScanError(null);
     setRezultat([]);
+    setAnalysisStage(1);
     setSeIncarca(true);
     setPhotoPhase(isRetry ? 'retrying' : 'uploading');
     let timeoutDepasit = false;
@@ -385,6 +388,7 @@ export default function CameraScreen() {
         || !isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       imageKitUrlRef.current = uploaded.url;
       imageKitFileIdRef.current = uploaded.fileId;
+      setAnalysisStage(2);
       setPhotoPhase(isRetry ? 'retrying' : 'processing');
 
       const submitted = await submitPhotoJob({
@@ -423,6 +427,12 @@ export default function CameraScreen() {
         userId: ownerId,
         jobId: submitted.id,
         signal: controller.signal,
+        onStatus: (job: PhotoJob) => {
+          if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+          if (job.status === 'queued') setAnalysisStage(2);
+          else if (job.status === 'running' || job.status === 'processing') setAnalysisStage(3);
+          else if (job.status === 'succeeded' || job.status === 'completed') setAnalysisStage(4);
+        },
       });
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       applyPhotoJobResult(completed, activePointer, ownerId, accountGeneration);
@@ -451,6 +461,14 @@ export default function CameraScreen() {
       if (timeoutDepasit) {
         setPhotoPhase('background');
         setScanError(null);
+        return;
+      }
+      if (error instanceof PhotoApiError && (error.code === 'NOT_FOOD' || error.code === 'PHOTO_RESULT_EMPTY')) {
+        setPhotoPhase('failed');
+        setFailedPhotoJob({
+          job: { id: activePointer?.jobId || currentPhotoJobIdRef.current || 'unknown', status: 'failed', errorCode: 'NOT_FOOD' },
+          pointer: activePointer || { userId: ownerId, jobId: 'unknown', savedAt: Date.now() },
+        });
         return;
       }
       if (error instanceof PhotoApiError && error.status === 422 && activePointer) {
@@ -555,12 +573,21 @@ export default function CameraScreen() {
           setFailedPhotoJob(active);
           return;
         }
+        if (active.job.status === 'queued') setAnalysisStage(2);
+        else if (active.job.status === 'running' || active.job.status === 'processing') setAnalysisStage(3);
+        else if (active.job.status === 'succeeded' || active.job.status === 'completed') setAnalysisStage(4);
         setSeIncarca(true);
         setPhotoPhase(active.job.status === 'succeeded' || active.job.status === 'completed' ? 'completed' : 'background');
         const completed = active.job.status === 'succeeded' || active.job.status === 'completed'
           ? active.job
           : await waitForPhotoJob({
             token, userId, jobId: active.job.id, signal: controller.signal,
+            onStatus: (job: PhotoJob) => {
+              if (!isPhotoOwnerCurrent(userId, accountGeneration)) return;
+              if (job.status === 'queued') setAnalysisStage(2);
+              else if (job.status === 'running' || job.status === 'processing') setAnalysisStage(3);
+              else if (job.status === 'succeeded' || job.status === 'completed') setAnalysisStage(4);
+            },
           });
         if (!controller.signal.aborted && isPhotoOwnerCurrent(userId, accountGeneration)) {
           applyPhotoJobResult(completed, active.pointer, userId, accountGeneration);
@@ -695,8 +722,37 @@ export default function CameraScreen() {
       setPhotoPhase('background');
       setSeIncarca(false);
     }
-    router.replace('/(tabs)');
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
   }, [lasaAnalizaInFundal, router]);
+
+  const handleRetakePhoto = useCallback(() => {
+    setFailedPhotoJob(null);
+    setScanError(null);
+    anuleazaScanarea();
+  }, [anuleazaScanarea]);
+
+  const handleGalleryFromNotFood = useCallback(() => {
+    setFailedPhotoJob(null);
+    setScanError(null);
+    anuleazaScanarea();
+    void alegeDinGalerie();
+  }, [alegeDinGalerie, anuleazaScanarea]);
+
+  const handleHomeFromNotFood = useCallback(() => {
+    setFailedPhotoJob(null);
+    setScanError(null);
+    anuleazaScanarea();
+    permitereNavigareRef.current = true;
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
+  }, [anuleazaScanarea, router]);
 
   // BUG-065: pe Android, butonul/gestul „Înapoi" peste modalul fullScreen ejecta
   // ecranul direct, aruncând un scan în review fără confirmare și fără să
@@ -1178,7 +1234,7 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={StyleSheet.absoluteFillObject}
         facing="back"
-        active={rezultat.length === 0}
+        active={rezultat.length === 0 && (!failedPhotoJob || failedPhotoJob.job.errorCode !== 'NOT_FOOD')}
       />
 
       <LinearGradient
@@ -1197,25 +1253,59 @@ export default function CameraScreen() {
 
           {seIncarca && (
             <Animated.View entering={FadeIn.duration(300)} style={styles.scanningOverlay} accessibilityLiveRegion="polite">
-              <BlurView intensity={60} tint="dark" style={styles.scanningBlur}>
-                <ActivityIndicator size="large" color={colors.accent} />
-                <Animated.Text key={`${photoPhase}-${scanStepIndex}`} entering={FadeInUp.duration(250)} style={[styles.scanningText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
-                  {photoPhase === 'retrying'
-                    ? t('photoJob.retrying')
-                    : photoPhase === 'background'
-                      ? t('photoJob.backgroundTitle')
-                      : scanSteps[scanStepIndex]}
-                </Animated.Text>
-                <View style={styles.stepProgressDots}>
-                  {scanSteps.map((_: string, idx: number) => (
-                    <View
-                      key={idx}
-                      style={[
-                        styles.stepDot,
-                        { backgroundColor: idx <= scanStepIndex ? colors.accent : 'rgba(255,255,255,0.2)' }
-                      ]}
-                    />
-                  ))}
+              <BlurView intensity={70} tint="dark" style={styles.scanningBlur}>
+                <Text style={[styles.stagesCardTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+                  {t('camera.activeAnalysisTitle')}
+                </Text>
+
+                <View style={styles.stagesContainer}>
+                  {[
+                    { stage: 1, key: 'stagePreparing' },
+                    { stage: 2, key: 'stageQueued' },
+                    { stage: 3, key: 'stageAnalyzing' },
+                    { stage: 4, key: 'stageFinalizing' },
+                  ].map((s) => {
+                    const isDone = s.stage < analysisStage;
+                    const isActive = s.stage === analysisStage;
+                    const isPending = s.stage > analysisStage;
+                    return (
+                      <View key={s.stage} style={styles.stageRow}>
+                        <View style={styles.stageIndicatorCol}>
+                          <View style={[
+                            styles.stageDot,
+                            isDone && styles.stageDotCompleted,
+                            isActive && [styles.stageDotActive, { borderColor: colors.accent }],
+                            isPending && styles.stageDotPending,
+                          ]}>
+                            {isDone ? (
+                              <Check size={11} color="#10B981" strokeWidth={3} />
+                            ) : isActive ? (
+                              <ActivityIndicator size="small" color={colors.accent} style={{ transform: [{ scale: 0.7 }] }} />
+                            ) : (
+                              <View style={styles.stagePendingInnerDot} />
+                            )}
+                          </View>
+                          {s.stage < 4 && (
+                            <View style={[
+                              styles.stageConnector,
+                              isDone ? styles.stageConnectorCompleted : styles.stageConnectorPending,
+                            ]} />
+                          )}
+                        </View>
+                        <Text
+                          maxFontSizeMultiplier={1.3}
+                          style={[
+                            styles.stageText,
+                            isDone && styles.stageTextCompleted,
+                            isActive && [styles.stageTextActive, { color: colors.accent }],
+                            isPending && styles.stageTextPending,
+                          ]}
+                        >
+                          {t(`camera.${s.key}`)}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
 
                 {/* Butonul aprobat de trecere în fundal: Mergi la Acasă / Go to Home */}
@@ -1224,11 +1314,11 @@ export default function CameraScreen() {
                   onPress={mergiLaAcasa}
                   style={styles.goHomeBtn}
                   accessibilityRole="button"
-                  accessibilityLabel={i18n.language === 'ro' ? 'Mergi la Acasă' : 'Go to Home'}
+                  accessibilityLabel={t('camera.goToHome')}
                 >
                   <Home size={16} color={colors.accent} style={{ marginRight: 6 }} />
                   <Text style={[styles.goHomeBtnText, { color: colors.accent }]}>
-                    {i18n.language === 'ro' ? 'Mergi la Acasă' : 'Go to Home'}
+                    {t('camera.goToHome')}
                   </Text>
                 </Pressable>
               </BlurView>
@@ -1239,7 +1329,80 @@ export default function CameraScreen() {
         <Text style={styles.scanHint}>{t('camera.scanHint')}</Text>
       </View>
 
-      {failedPhotoJob ? (
+      {/* Non-Food Recovery Screen */}
+      {failedPhotoJob && failedPhotoJob.job.errorCode === 'NOT_FOOD' ? (
+        <Animated.View
+          testID="camera-not-food-card"
+          entering={FadeInUp.duration(400)}
+          style={[
+            styles.notFoodContainer,
+            { top: insets.top + 70, bottom: Math.max(insets.bottom, 20) + 20 }
+          ]}
+          accessibilityRole="alert"
+        >
+          <BlurView intensity={80} tint="dark" style={styles.notFoodBlur}>
+            <View style={styles.notFoodContent}>
+              <View style={[styles.notFoodIconWrap, { backgroundColor: 'rgba(204, 255, 0, 0.12)' }]}>
+                <AlertTriangle size={36} color={colors.accent} />
+              </View>
+
+              <Text style={[styles.notFoodTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+                {t('camera.notFoodTitle')}
+              </Text>
+
+              <Text style={[styles.notFoodMessage, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
+                {t('camera.notFoodMessage')}
+              </Text>
+
+              <View style={styles.notFoodActions}>
+                {/* 1. Refă fotografia */}
+                <TouchableOpacity
+                  testID="not-food-retake-btn"
+                  onPress={handleRetakePhoto}
+                  style={[styles.notFoodPrimaryBtn, { shadowColor: colors.accent }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('camera.retakePhoto')}
+                >
+                  <LinearGradient colors={colors.accentGradient} style={styles.notFoodBtnGrad}>
+                    <FlowIcon name="refresh" size={18} color={colors.background} />
+                    <Text style={[styles.notFoodBtnTextPrimary, { color: colors.background }]} maxFontSizeMultiplier={1.3}>
+                      {t('camera.retakePhoto')}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {/* 2. Alege din galerie */}
+                <TouchableOpacity
+                  testID="not-food-gallery-btn"
+                  onPress={handleGalleryFromNotFood}
+                  style={[styles.notFoodSecondaryBtn, { borderColor: 'rgba(255,255,255,0.2)' }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('camera.chooseFromGallery')}
+                >
+                  <ImageIcon size={18} color="#FFFFFF" />
+                  <Text style={styles.notFoodBtnTextSecondary} maxFontSizeMultiplier={1.3}>
+                    {t('camera.chooseFromGallery')}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* 3. Mergi la Acasă */}
+                <TouchableOpacity
+                  testID="not-food-home-btn"
+                  onPress={handleHomeFromNotFood}
+                  style={styles.notFoodGhostBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('camera.goToHome')}
+                >
+                  <Home size={16} color={colors.accent} />
+                  <Text style={[styles.notFoodBtnTextGhost, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
+                    {t('camera.goToHome')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </BlurView>
+        </Animated.View>
+      ) : failedPhotoJob ? (
         <View testID="camera-failed-job" style={[styles.jobStateCard, { top: insets.top + 92, borderColor: colors.danger + '88' }]} accessibilityRole="alert">
           <AlertTriangle size={22} color={colors.danger} />
           <View style={styles.jobStateCopy}>
@@ -1737,5 +1900,180 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.2,
+  },
+  stagesCardTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  stagesContainer: {
+    width: '100%',
+    paddingHorizontal: 6,
+    marginBottom: 2,
+  },
+  stageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    minHeight: 26,
+  },
+  stageIndicatorCol: {
+    alignItems: 'center',
+    width: 20,
+    marginRight: 8,
+  },
+  stageDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  stageDotCompleted: {
+    borderColor: '#10B981',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  stageDotActive: {
+    backgroundColor: 'rgba(204, 255, 0, 0.12)',
+  },
+  stageDotPending: {
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'transparent',
+  },
+  stagePendingInnerDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  stageConnector: {
+    width: 2,
+    height: 10,
+    marginVertical: 1,
+  },
+  stageConnectorCompleted: {
+    backgroundColor: '#10B981',
+  },
+  stageConnectorPending: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  stageText: {
+    fontSize: 12,
+    lineHeight: 18,
+    flex: 1,
+  },
+  stageTextCompleted: {
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  stageTextActive: {
+    fontWeight: '800',
+  },
+  stageTextPending: {
+    color: 'rgba(255, 255, 255, 0.4)',
+    fontWeight: '500',
+  },
+
+  notFoodContainer: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    zIndex: 1300,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notFoodBlur: {
+    width: '100%',
+    borderRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.25)',
+  },
+  notFoodContent: {
+    padding: 24,
+    alignItems: 'center',
+    backgroundColor: 'rgba(8, 12, 18, 0.92)',
+  },
+  notFoodIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  notFoodTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: -0.3,
+    marginBottom: 8,
+  },
+  notFoodMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
+  notFoodActions: {
+    width: '100%',
+    gap: 10,
+  },
+  notFoodPrimaryBtn: {
+    width: '100%',
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  notFoodBtnGrad: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  notFoodBtnTextPrimary: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  notFoodSecondaryBtn: {
+    width: '100%',
+    minHeight: 48,
+    borderRadius: 18,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  notFoodBtnTextSecondary: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  notFoodGhostBtn: {
+    width: '100%',
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    marginTop: 4,
+  },
+  notFoodBtnTextGhost: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
