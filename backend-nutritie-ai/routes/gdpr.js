@@ -149,6 +149,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
    * `db_done`, workerul reia exact de la statusul persistat (M-06).
    */
   router.delete('/delete-account', requireAuth, generalLimiter, async (req, res) => {
+    let outboxId = null;
     try {
       const ctx = contextDate(req, res);
       const userId = ctx.userId;
@@ -167,11 +168,12 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       const clerkUserId = mapare?.clerk_user_id || null;
 
       // P-05: înregistrare atomică în outbox (idempotent)
-      const { data: outboxId, error: outboxErr } = await supabaseAdmin
+      const { data: outboxNou, error: outboxErr } = await supabaseAdmin
         .rpc('initiate_gdpr_deletion', {
           p_user_id: userId,
           p_clerk_user_id: clerkUserId,
         });
+      outboxId = outboxNou;
       // N-OUTBOX: fail-closed dacă lipsește fie eroarea, fie rândul outbox (data
       // null) — nu continuăm ștergerea ireversibilă fără rând de audit/resumare.
       if (outboxErr || !outboxId) {
@@ -301,6 +303,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         clerkUserId,
         secretKey: process.env.CLERK_SECRET_KEY?.trim(),
       });
+      await actualizezaStatus('clerk_done');
 
       // PASUL 3 (reversibil — reluabil): Ștergere media ImageKit
       // P-06: stergeActiveImageKit + foldere + fileIds individuale
@@ -309,6 +312,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         fileIds,
         privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim(),
       });
+      await actualizezaStatus('imagekit_done');
 
       // PASUL 4 (IREVERSIBIL — ULTIMUL pas): Ștergere identitate Supabase
       // M-06: auth.deleteUser rulează doar după ce curățarea Clerk/ImageKit a
@@ -330,6 +334,16 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
     } catch (err) {
       const cod = codEroare(err);
       console.error('[GDPR] Stergere cont esuata:', cod);
+      if (outboxId) {
+        try {
+          await supabaseAdmin
+            .from('gdpr_deletions')
+            .update({ last_error: cod })
+            .eq('id', outboxId);
+        } catch {
+          // eroare persistare last_error ignorata ca sa nu mascam eroarea primara
+        }
+      }
       const status = cod === 'IMAGEKIT_NOT_CONFIGURED' || cod === 'CLERK_NOT_CONFIGURED' ? 503 : 500;
       return res.status(status).json({
         eroare: 'Ștergerea contului a eșuat. Este posibil ca unele date să fi fost deja șterse, iar o nouă încercare poate să nu restabilească resursele externe (ImageKit/Clerk). Poți încerca din nou în siguranță — operația poate fi reluată, dar succesul ei nu e garantat complet.',

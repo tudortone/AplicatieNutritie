@@ -8,7 +8,7 @@
  * celălalt (workerul nu mai importă din routes/gdpr). Orice altă eroare oprește
  * ștergerea — altfel am marca `completed` o ștergere care nu s-a întâmplat (P-05b).
  */
-const CODURI_TABELA_INEXISTENTA = new Set(['42P01', 'PGRST205', 'PGRST106']);
+const CODURI_TABELA_INEXISTENTA = new Set(['42P01', 'PGRST205']);
 
 const IMAGEKIT_API = ['https:', '', 'api.imagekit.io', 'v1'].join('/');
 const CLERK_USERS_API = ['https:', '', 'api.clerk.com', 'v1', 'users'].join('/');

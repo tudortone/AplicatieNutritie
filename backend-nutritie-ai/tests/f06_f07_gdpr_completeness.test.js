@@ -366,4 +366,117 @@ describe('F-07 — stergerea GDPR curata si tabelele dead-letter', () => {
       stergeDeadLetterUtilizator({ supabaseAdmin: adminEroareReala, userId: USER, clerkUserId: CLERK }),
     ).rejects.toBeDefined();
   });
+
+  describe('PGRST106 — fail-loud pentru erori de schemă PostgREST', () => {
+    it('citesteTotPaginat aruncă pe PGRST106 și NU returnează array gol', async () => {
+      const clientPGRST106 = {
+        from: () => {
+          const q = {
+            select: () => q,
+            eq: () => q,
+            order: () => q,
+            range: async () => ({
+              data: null,
+              error: { code: 'PGRST106', message: 'The schema must be one of the following...' },
+            }),
+          };
+          return q;
+        },
+      };
+
+      await expect(
+        citesteTotPaginat({ client: clientPGRST106, tabela: 'mese', userId: USER }),
+      ).rejects.toMatchObject({ code: 'PGRST106' });
+    });
+
+    it('citesteTotPaginat tolerează strict 42P01 și PGRST205 (tabelă inexistentă pe schemă)', async () => {
+      const client42P01 = {
+        from: () => {
+          const q = {
+            select: () => q,
+            eq: () => q,
+            order: () => q,
+            range: async () => ({
+              data: null,
+              error: { code: '42P01', message: 'relation does not exist' },
+            }),
+          };
+          return q;
+        },
+      };
+      const rez42P01 = await citesteTotPaginat({ client: client42P01, tabela: 'mese', userId: USER });
+      expect(rez42P01).toEqual([]);
+
+      const clientPGRST205 = {
+        from: () => {
+          const q = {
+            select: () => q,
+            eq: () => q,
+            order: () => q,
+            range: async () => ({
+              data: null,
+              error: { code: 'PGRST205', message: 'table not found in cache' },
+            }),
+          };
+          return q;
+        },
+      };
+      const rezPGRST205 = await citesteTotPaginat({ client: clientPGRST205, tabela: 'mese', userId: USER });
+      expect(rezPGRST205).toEqual([]);
+    });
+
+    it('stergeDeadLetterUtilizator aruncă pe PGRST106', async () => {
+      const adminPGRST106 = {
+        from: () => ({
+          delete: () => ({
+            in: async () => ({ error: { code: 'PGRST106', message: 'schema missing' } }),
+            eq: async () => ({ error: { code: 'PGRST106', message: 'schema missing' } }),
+          }),
+        }),
+      };
+      await expect(
+        stergeDeadLetterUtilizator({ supabaseAdmin: adminPGRST106, userId: USER, clerkUserId: CLERK }),
+      ).rejects.toMatchObject({ code: 'PGRST106' });
+    });
+
+    it('export-data eșuează cu 500 când o tabelă primește PGRST106', async () => {
+      const db = {
+        from: (tabela) => {
+          const q = {
+            select: () => q,
+            eq: () => q,
+            order: () => q,
+            range: async () => {
+              if (tabela === 'mese') {
+                return { data: null, error: { code: 'PGRST106', message: 'schema unexposed' } };
+              }
+              return { data: [], error: null };
+            },
+          };
+          return q;
+        },
+      };
+
+      const app = express();
+      app.use('/api/user', createGdprRouter({
+        requireAuth: (req, _res, next) => {
+          req.user = { id: USER };
+          next();
+        },
+        generalLimiter: (_req, _res, next) => next(),
+        supabaseAdmin: {
+          from: () => ({
+            select: () => ({ eq: () => ({ order: () => ({ range: async () => ({ data: [], error: null }) }) }) }),
+          }),
+        },
+        contextDate: () => ({ db, userId: USER }),
+        profilRepo: { getProfil: async () => ({ user_id: USER }) },
+      }));
+
+      const res = await request(app).get('/api/user/export-data');
+      expect(res.status).toBe(500);
+      expect(res.body.eroare).toBe('Nu s-au putut pregăti datele pentru export.');
+    });
+  });
 });
+
