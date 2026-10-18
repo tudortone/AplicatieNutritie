@@ -181,6 +181,7 @@ paths:
   /api/v1/billing/google/resync: { $ref: '#/components/pathItems/GoogleBillingResync' }
   /api/v1/billing/google/verify-consumable: { $ref: '#/components/pathItems/GoogleBillingVerifyConsumable' }
   /api/v1/flow-credits: { $ref: '#/components/pathItems/FlowCredits' }
+  /api/v1/chat/quota: { $ref: '#/components/pathItems/ChatQuota' }
   /api/v1/photo-jobs: { $ref: '#/components/pathItems/PhotoJobs' }
   /api/v1/photo-jobs/active: { $ref: '#/components/pathItems/PhotoJobsActive' }
   /api/v1/photo-jobs/{jobId}: { $ref: '#/components/pathItems/PhotoJobId' }
@@ -288,6 +289,7 @@ paths:
     x-legacy-alias: { canonical: /api/v1/webhooks/google-play, sunset: '2026-09-30T00:00:00Z' }
   /api/billing/google/verify-consumable: { $ref: '#/components/pathItems/GoogleBillingVerifyConsumable', x-legacy-alias: { canonical: /api/v1/billing/google/verify-consumable, sunset: '2026-09-30T00:00:00Z' } }
   /api/flow-credits: { $ref: '#/components/pathItems/FlowCredits', x-legacy-alias: { canonical: /api/v1/flow-credits, sunset: '2026-09-30T00:00:00Z' } }
+  /api/chat/quota: { $ref: '#/components/pathItems/ChatQuota', x-legacy-alias: { canonical: /api/v1/chat/quota, sunset: '2026-09-30T00:00:00Z' } }
   /api/photo-jobs: { $ref: '#/components/pathItems/PhotoJobs', x-legacy-alias: { canonical: /api/v1/photo-jobs, sunset: '2026-09-30T00:00:00Z' } }
   /api/photo-jobs/active: { $ref: '#/components/pathItems/PhotoJobsActive', x-legacy-alias: { canonical: /api/v1/photo-jobs/active, sunset: '2026-09-30T00:00:00Z' } }
   /api/photo-jobs/{jobId}: { $ref: '#/components/pathItems/PhotoJobId', x-legacy-alias: { canonical: '/api/v1/photo-jobs/{jobId}', sunset: '2026-09-30T00:00:00Z' } }
@@ -1352,6 +1354,12 @@ components:
         responses:
           <<: *authLimited
           '200': { description: Daily, rewarded, purchased și total }
+    ChatQuota:
+      get:
+        summary: Stare autoritativă server pentru cota zilnică de mesaje chat
+        responses:
+          <<: *authLimited
+          '200': { description: Total, consumate, rămase și moment de reset }
     PhotoJobs:
       post:
         summary: Rezervă creditul și trimite o analiză Photo AI durabilă

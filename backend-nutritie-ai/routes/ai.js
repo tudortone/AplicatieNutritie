@@ -16,6 +16,7 @@ const { numarModel, NUME_FURNIZORI_AI } = require('../services/ai/vision');
 const { EroareAiClient } = require('../services/ai/chat');
 const { inregistreazaUtilizareAdmin } = require('../utils/clientUtilizator');
 const { rezumatEroareSigur } = require('../utils/sentrySanitize');
+const { creeazaServiciuChatQuota } = require('../utils/chatQuota');
 
 /**
  * Rute AI (analiza foto, chat, estimare text, corectie vizual+text) + orfanele
@@ -45,9 +46,34 @@ function createAiRouter({
   // fetch + timeout de 10s. Inainte se construia aici un client duplicat fara
   // timeout. Absent => null: ruta merge, dar nu creeaza job.
   supabaseAdmin = null,
+  billingService = null,
+  chatQuota = null,
 }) {
   // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
   const router = express.Router();
+
+  const serviciuChatQuota = chatQuota || creeazaServiciuChatQuota({
+    billingService,
+    limitaFree: config?.ai?.chatLimitaFree,
+    limitaPremium: config?.ai?.chatLimitaPremium,
+    limitaTester: config?.ai?.chatLimitaTester,
+  });
+
+  const middlewareChatQuota = chatQuota?.middlewareCotaChat
+    || (checkAiUsageQuota && !chatQuota ? checkAiUsageQuota : serviciuChatQuota.middlewareCotaChat);
+
+  // ==========================================
+  // CHAT QUOTA STATUS (STATE AUTORITATIVĂ SERVER)
+  // ==========================================
+  router.get('/chat/quota', requireAuth, generalLimiter, async (req, res) => {
+    try {
+      const cota = await serviciuChatQuota.obtineCota(req.user);
+      return res.json(cota);
+    } catch (err) {
+      console.error('[AI route]', rezumatEroareSigur(err, { operation: 'get_chat_quota' }));
+      return res.status(500).json({ eroare: 'Nu s-a putut citi cota de mesaje chat.' });
+    }
+  });
 
   // ==========================================
   // IMAGEKIT AUTHENTICATION ENDPOINT
@@ -327,7 +353,7 @@ function createAiRouter({
   // ==========================================
   // RUTA 2: CHAT CONVERSATIONAL (GROQ / LLAMA 3.3)
   // ==========================================
-  router.post('/chat', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, async (req, res) => {
+  router.post('/chat', requireAuth, aiLimiter, idempotencyCritic, middlewareChatQuota, async (req, res) => {
     const admission = chatAdmission
       ? await chatAdmission.acquire(req.user?.id)
       : { ok: true, release: async () => true };
@@ -407,9 +433,9 @@ function createAiRouter({
     }
   };
 
-  router.post('/log-food-from-chat', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, handleLogFoodChat);
-  router.post('/log-food', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, handleLogFoodChat);
-  router.post('/log-food-chat', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, handleLogFoodChat);
+  router.post('/log-food-from-chat', requireAuth, aiLimiter, idempotencyCritic, middlewareChatQuota, handleLogFoodChat);
+  router.post('/log-food', requireAuth, aiLimiter, idempotencyCritic, middlewareChatQuota, handleLogFoodChat);
+  router.post('/log-food-chat', requireAuth, aiLimiter, idempotencyCritic, middlewareChatQuota, handleLogFoodChat);
 
   // ==========================================
   // RUTA: ESTIMARE RAPIDA TEXT ALIMENT (GROQ/LLM)

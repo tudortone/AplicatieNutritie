@@ -110,7 +110,7 @@ export function PhotoMealErrorView({
           <View style={styles.actionsArea}>
             {/* 1. Primary Action */}
             <TouchableOpacity
-              testID={errorType === 'not_food' ? 'not-food-retake-btn' : 'error-primary-btn'}
+              testID={testID === 'camera-failed-job' ? 'camera-failed-retry' : (errorType === 'not_food' ? 'not-food-retake-btn' : 'error-primary-btn')}
               onPress={content.primaryAction}
               style={styles.primaryBtn}
               accessibilityRole="button"

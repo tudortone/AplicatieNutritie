@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, Image } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -88,7 +88,7 @@ export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
   }, [reduceMotion, containerOpacity, logoScale, glowScale, glowOpacity, textOpacity, textTranslateY]);
 
   // Declansare exit animation
-  const startExit = () => {
+  const startExit = useCallback(() => {
     if (exitStartedRef.current) return;
     exitStartedRef.current = true;
     setIsExiting(true);
@@ -127,7 +127,7 @@ export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
     setTimeout(() => {
       onExitDone();
     }, 330);
-  };
+  }, [containerOpacity, logoScale, onAnimationComplete, reduceMotion]);
 
   // Verificare conditie de dismiss (isReady + minDisplayTime sau fallback timeout)
   useEffect(() => {
@@ -148,7 +148,7 @@ export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
     }, MAX_FALLBACK_MS);
 
     return () => clearTimeout(fallbackTimer);
-  }, [isReady, mounted]);
+  }, [isReady, mounted, startExit]);
 
   const animatedContainerStyle = useAnimatedStyle(() => ({
     opacity: containerOpacity.value,

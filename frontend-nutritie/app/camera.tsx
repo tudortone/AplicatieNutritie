@@ -13,15 +13,13 @@ import { useRouter, useNavigation } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../supabase';
-import { API_URL } from '@/constants/config';
-import { API_PREFIX } from '@/lib/api';
 import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { Scan, Zap, Image as ImageIcon, AlertTriangle, Home, Check } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { getTipMasaDupaOra, insereazaMasaCuPoza, normalizeTipMasa } from '../lib/mealUtils';
-import { clasificaRezultatInsertMasa, construiestePayloadMasaCamera, esteEroareDuplicate, eliminaAlimentScanat, raspunsInsertMasaConfirmat, verificaReluareMasa } from '../lib/payloadMese';
+import { clasificaRezultatInsertMasa, construiestePayloadMasaCamera, esteEroareDuplicate, raspunsInsertMasaConfirmat, verificaReluareMasa } from '../lib/payloadMese';
 import { idOperatieNoua } from '@/lib/idUtils';
 import { anuntaMasaSalvataVerificat, marcheazaMeseModificate } from '@/lib/freshnessMese';
 import { type AlimentScanat } from '@/components/food/FoodScanSuccessModal';
@@ -29,7 +27,7 @@ import type { TipMasa } from '../types';
 import { FontSize } from '../constants/theme';
 import { PhotoMealResultView } from '@/components/food/PhotoMealResultView';
 import { PhotoMealErrorView } from '@/components/food/PhotoMealErrorView';
-import { uploadImageToImageKit } from '@/lib/imagekit';
+import { uploadImageToImageKit, getImageKitAuthParams } from '@/lib/imagekit';
 import { useFlowCredits } from '../context/FlowCreditsContext';
 import { FlowCreditsPill } from '@/components/FlowCreditsPill';
 import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts, amprentaOperatieFoto, purgeLocalImageDrafts } from '@/lib/imageOptimizer';
@@ -105,27 +103,16 @@ export default function CameraScreen() {
   const reduceMotion = useReducedMotion();
   const flowCredits = useFlowCredits();
 
-  const scanSteps = useMemo(() => [
-    t('camera.steps.optimizing'),
-    t('camera.steps.sending'),
-    t('camera.steps.identifying'),
-    t('camera.steps.calculating'),
-  ], [t]);
-
   const { session } = useAuth();
   const sessionUserId = session?.user?.id ?? null;
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   
   const [rezultat, setRezultat] = useState<AlimentScanat[]>([]);
-  const ingredienteIdentificate = rezultat;
-  const setIngredienteIdentificate = setRezultat;
   const [isSavingDiary, setIsSavingDiary] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
 
   const [seIncarca, setSeIncarca] = useState(false);
-  const [scanStepIndex, setScanStepIndex] = useState(0);
-  const [mealCorrectionOpen, setMealCorrectionOpen] = useState(false);
   const [recoveryChecked, setRecoveryChecked] = useState(false);
   const [recoveryBlocked, setRecoveryBlocked] = useState(false);
   const [pendingPhotoSaveLocked, setPendingPhotoSaveLocked] = useState(false);
@@ -202,7 +189,6 @@ export default function CameraScreen() {
     setPhotoStateOwnerId(sessionUserId);
     setRezultat([]);
     setTipMasaSelectat(getTipMasaDupaOra(new Date()));
-    setMealCorrectionOpen(false);
     setIsSavingDiary(false);
     setScanError(null);
     setPhotoPhase('idle');
@@ -229,17 +215,6 @@ export default function CameraScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!seIncarca) {
-      setScanStepIndex(0);
-      return;
-    }
-    const interval = setInterval(() => {
-      setScanStepIndex((prev) => (prev < scanSteps.length - 1 ? prev + 1 : prev));
-    }, 1800);
-
-    return () => clearInterval(interval);
-  }, [seIncarca, scanSteps.length]);
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -248,24 +223,6 @@ export default function CameraScreen() {
   }, [session?.user?.id]);
 
 
-  const updateIngredient = useCallback(
-    (index: number, patch: Partial<AlimentScanat>) => {
-      if (pendingPhotoSavePayloadRef.current) return;
-      setRezultat((current) =>
-        current.map((ingredient, itemIndex) =>
-          itemIndex === index ? { ...ingredient, ...patch } : ingredient,
-        ),
-      );
-    },
-    [],
-  );
-
-  // BUG-015: eliminarea unui singur aliment detectat greșit, fără să dispară restul.
-  const stergeIngredient = useCallback((index: number) => {
-    if (pendingPhotoSavePayloadRef.current) return;
-    setRezultat((current) => eliminaAlimentScanat(current, index));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
 
   const applyPhotoJobResult = useCallback((
     job: PhotoJob,
@@ -290,7 +247,6 @@ export default function CameraScreen() {
     setTipMasaSelectat(pointer?.savePayload?.tip_masa
       ? normalizeTipMasa(String(pointer.savePayload.tip_masa))
       : inferCanonicalMealType({ aiMealType: job.result.tipMasa, capturedAt }));
-    setMealCorrectionOpen(false);
     setRezultat(restorePhotoMealItems(normalized, pointer?.savePayload));
     setPhotoPhase('completed');
     setFailedPhotoJob(null);
@@ -486,13 +442,12 @@ export default function CameraScreen() {
         return;
       }
       setPhotoPhase('failed');
-      setScanError(
-        error instanceof PhotoApiError
-          ? t('camera.genericScanError')
-          : error instanceof Error
-            ? error.message
-            : t('camera.genericScanError'),
-      );
+      const friendlyMsg = error instanceof PhotoApiError && (error.code === 'TIMEOUT' || error.status === 504)
+        ? t('camera.aiProviderErrorMessage', 'Analiza nu a putut fi finalizată.')
+        : error instanceof TypeError && error.message.toLowerCase().includes('network')
+          ? t('camera.networkErrorMessage', 'Conexiunea a fost întreruptă.')
+          : t('camera.genericScanError', 'Analiza nu a putut fi finalizată.');
+      setScanError(friendlyMsg);
     } finally {
       clearTimeout(backgroundId);
       clearTimeout(timeoutId);
@@ -511,6 +466,11 @@ export default function CameraScreen() {
     const token = session.access_token;
     const userId = session.user.id;
     const accountGeneration = accountGenerationRef.current;
+
+    // Pre-warm ImageKit credentials on camera open to eliminate upload cold start
+    if (typeof getImageKitAuthParams === 'function') {
+      void getImageKitAuthParams(controller.signal).catch(() => {});
+    }
 
     const recover = async () => {
       try {
@@ -536,7 +496,6 @@ export default function CameraScreen() {
           pendingPhotoSavePayloadRef.current = payload;
           setPendingPhotoSaveLocked(true);
           setTipMasaSelectat(normalizeTipMasa(String(payload.tip_masa || '')));
-          setMealCorrectionOpen(false);
           setRezultat(snapshotItems);
           setPhotoPhase('completed');
           setFailedPhotoJob(null);
@@ -700,7 +659,6 @@ export default function CameraScreen() {
     }
     currentPhotoJobIdRef.current = null;
     setRezultat([]);
-    setMealCorrectionOpen(false);
     setScanError(null);
     setSeIncarca(false);
     setPhotoPhase('idle');
@@ -770,53 +728,6 @@ export default function CameraScreen() {
     return unsubscribe;
   }, [navigation, rezultat.length, seIncarca, anuleazaScanarea, lasaAnalizaInFundal, t]);
 
-  const trimiteCorectieText = async (textCorectie: string) => {
-    const ownerId = session?.user?.id;
-    const accountGeneration = accountGenerationRef.current;
-    if (!ownerId || !session?.access_token || !isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
-    try {
-      if (__DEV__) console.log('[Camera] Trimit corecție utilizator către backend.');
-      
-      const response = await fetch(`${API_URL}${API_PREFIX}/corecteaza-mancare-vizual-text`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        // Backend-ul are nevoie exact de acești parametri
-        body: JSON.stringify({ 
-          current_ingredients: ingredienteIdentificate, 
-          user_prompt: textCorectie,
-          limba: i18n.language || 'ro'
-        })
-      });
-
-      // 1. Citim răspunsul serverului INDIFERENT dacă a crăpat sau nu, ca să vedem mesajul real
-      const data = await response.json(); 
-      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
-      if (__DEV__) console.log('[Camera] Răspuns corecție backend primit.');
-
-      // Răspunsurile backend rămân diagnostic intern. Nu afișăm `eroare` brută:
-      // poate fi în altă limbă sau poate conține detalii operaționale.
-      if (!response.ok) {
-         throw new Error('CAMERA_CORRECTION_FAILED');
-      }
-
-      // 3. Dacă e totul în regulă, actualizăm datele pe ecran
-      if (data.ingredients) {
-        setIngredienteIdentificate(normalizePhotoResultItems(data.ingredients));
-      }
-    } catch (error) {
-      if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
-      // Afisam eroarea si pentru utilizator
-      console.error('❌ Eroare fallback detaliată:', error);
-      Alert.alert(
-        t('alerts.titluri.eroareConexiune'),
-        t('alerts.mesaje.serverCorectieInaccesibil'),
-      );
-    }
-  };
-  const sendCorrectionToAI = trimiteCorectieText;
 
   const quality = useMemo(
     () => evaluatePhotoMealQuality(normalizePhotoResultItems(rezultat)),
@@ -871,7 +782,7 @@ export default function CameraScreen() {
     }
   };
 
-  const alegeDinGalerie = async () => {
+  const alegeDinGalerie = useCallback(async () => {
     if (seIncarca || !session) return;
     const ownerId = session.user.id;
     const accountGeneration = accountGenerationRef.current;
@@ -901,7 +812,7 @@ export default function CameraScreen() {
       console.error(`Eroare galerie: ${e instanceof Error ? e.message : String(e)}`);
       Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.galerieInaccesibila'));
     }
-  };
+  }, [analizeazaImaginea, isPhotoOwnerCurrent, seIncarca, session, t]);
 
   const handleRetakePhoto = useCallback(() => {
     setFailedPhotoJob(null);
@@ -1114,7 +1025,7 @@ export default function CameraScreen() {
         const mesaj = clasificare.tip === 'eroare_server'
           ? clasificare.mesaj
           : t('alerts.mesaje.eroareNecunoscutaSalvareMasa');
-        setSaveFailureError(mesaj);
+        setSaveFailureError(t('camera.saveFailedMessage', 'Nu am putut salva masa. Modificările au fost păstrate.'));
         Alert.alert(
           t('alerts.titluri.eroareSalvare'),
           t('alerts.mesaje.bazaDateRefuza', { eroare: mesaj }),

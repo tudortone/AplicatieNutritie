@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
+  Alert,
   Image,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Egg,
@@ -19,10 +21,13 @@ import {
   Lightbulb,
   X,
   TrendingUp,
-  ShieldCheck,
+  Edit3,
+  Check,
+  Lock,
 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useTheme } from '../../context/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -54,6 +59,43 @@ export function FlowCompanionModal({
   const { t } = useTranslation();
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
+
+  const [companionName, setCompanionName] = useState<string | null>(null);
+  const [isNamingActive, setIsNamingActive] = useState(false);
+  const [draftName, setDraftName] = useState('');
+
+  useEffect(() => {
+    if (!visible) return;
+    AsyncStorage.getItem('@getflow:companion_name')
+      .then((saved) => {
+        if (saved) setCompanionName(saved);
+      })
+      .catch(() => {});
+  }, [visible]);
+
+  const handleConfirmName = () => {
+    const trimmed = draftName.trim();
+    if (!trimmed) {
+      setIsNamingActive(false);
+      return;
+    }
+    Alert.alert(
+      'Confirmare Nume Companion',
+      `Ești sigur că vrei să alegi numele «${trimmed}»? Numele va fi asociat companionului tău.`,
+      [
+        { text: 'Anulează', style: 'cancel' },
+        {
+          text: 'Confirmă',
+          onPress: async () => {
+            setCompanionName(trimmed);
+            setIsNamingActive(false);
+            await AsyncStorage.setItem('@getflow:companion_name', trimmed).catch(() => {});
+            try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+          },
+        },
+      ]
+    );
+  };
 
   const stage = getCompanionStage(streak);
   const beacon = getLimitBeaconStatus(caloriiConsumate, caloriiTinta);
@@ -115,145 +157,235 @@ export function FlowCompanionModal({
             <X size={16} color={colors.textSecondary} />
           </TouchableOpacity>
 
-          {/* Hero Avatar Card */}
-          <View style={styles.heroSection}>
-            <LinearGradient
-              colors={[colors.accent + '25', 'transparent']}
-              style={styles.heroGlow}
-            />
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            {/* Hero Avatar Card */}
+            <View style={styles.heroSection}>
+              <LinearGradient
+                colors={[colors.accent + '25', 'transparent']}
+                style={styles.heroGlow}
+              />
+              <View
+                style={[
+                  styles.largeAvatarCircle,
+                  {
+                    borderColor: colors.accent + '55',
+                    shadowColor: colors.accent,
+                  },
+                ]}
+              >
+                <Image
+                  source={COMPANION_FULL_IMAGE}
+                  style={styles.heroArtwork}
+                  resizeMode="cover"
+                />
+              </View>
+
+              <View style={styles.heroNameRow}>
+                <Text style={[styles.heroName, { color: colors.textPrimary }]}>
+                  {companionName ? `${companionName} (${stageName})` : stageName}
+                </Text>
+                {!companionName && !isNamingActive ? (
+                  <TouchableOpacity
+                    testID="flow-companion-name-btn"
+                    style={[styles.nameEditBtn, { borderColor: colors.accent + '44', backgroundColor: colors.accent + '15' }]}
+                    onPress={() => setIsNamingActive(true)}
+                  >
+                    <Edit3 size={12} color={colors.accent} />
+                    <Text style={[styles.nameEditBtnText, { color: colors.accent }]}>Dă-i un nume</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {isNamingActive ? (
+                <View style={[styles.namingBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent + '55' }]}>
+                  <TextInput
+                    testID="flow-companion-name-input"
+                    value={draftName}
+                    onChangeText={setDraftName}
+                    placeholder="Ex: Sprout, Kiko, Rex"
+                    placeholderTextColor={colors.textSecondary}
+                    style={[styles.namingInput, { color: colors.textPrimary }]}
+                    maxLength={20}
+                    autoFocus
+                  />
+                  <TouchableOpacity
+                    testID="flow-companion-name-confirm"
+                    style={[styles.namingConfirmBtn, { backgroundColor: colors.accent }]}
+                    onPress={handleConfirmName}
+                  >
+                    <Check size={14} color={colors.background} strokeWidth={3} />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              <View style={[styles.stageBadge, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '44' }]}>
+                {renderStageBadgeIcon(stage.id)}
+                <Text style={[styles.stageBadgeText, { color: colors.accent }]}>
+                  {t('flowCompanion.stageLabel', { stage: stage.stage })}
+                </Text>
+              </View>
+            </View>
+
+            {/* Sprout Introduction & Lore Card */}
             <View
               style={[
-                styles.largeAvatarCircle,
+                styles.sectionCard,
+                { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.cardBorder },
+              ]}
+            >
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.sectionTitleRow}>
+                  <Sparkles size={16} color={colors.accent} />
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                    Despre Sprout
+                  </Text>
+                </View>
+              </View>
+              <Text style={[styles.loreText, { color: colors.textSecondary }]}>
+                Sprout este companionul tău inteligent de nutriție. Crește și evoluează alături de tine cu fiecare zi de streak înregistrată în jurnal.
+              </Text>
+            </View>
+
+            {/* Evolution Progression Bar */}
+            <View
+              style={[
+                styles.sectionCard,
+                { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.cardBorder },
+              ]}
+            >
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.sectionTitleRow}>
+                  <TrendingUp size={16} color={colors.accent} />
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                    {t('flowCompanion.evolutionTitle', 'Evoluție & Streak')}
+                  </Text>
+                </View>
+                <Text style={[styles.streakCount, { color: colors.accent }]}>
+                  {streak} {streak === 1 ? 'zi' : 'zile'}
+                </Text>
+              </View>
+
+              {/* Progress Track */}
+              <View style={[styles.progressTrack, { backgroundColor: colors.cardBorder }]}>
+                <View
+                  style={[
+                    styles.progressBar,
+                    {
+                      width: `${evolutionPercent}%`,
+                      backgroundColor: colors.accent,
+                    },
+                  ]}
+                />
+              </View>
+
+              <Text style={[styles.evolutionSubtitle, { color: colors.textSecondary }]}>
+                {daysUntilNext !== null
+                  ? t('flowCompanion.nextEvolutionIn', { days: daysUntilNext })
+                  : t('flowCompanion.maxEvolutionReached', 'Ai atins forma supremă de Legendă!')}
+              </Text>
+            </View>
+
+            {/* Limit Beacon ("Becul de Limită") Card */}
+            <View
+              style={[
+                styles.sectionCard,
                 {
-                  borderColor: colors.accent + '55',
-                  shadowColor: colors.accent,
+                  backgroundColor: beacon.color + '10',
+                  borderColor: beacon.color + '44',
                 },
               ]}
             >
-              <Image
-                source={COMPANION_FULL_IMAGE}
-                style={styles.heroArtwork}
-                resizeMode="cover"
-              />
-            </View>
-
-            <Text style={[styles.heroName, { color: colors.textPrimary }]}>
-              {stageName}
-            </Text>
-
-            <View style={[styles.stageBadge, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '44' }]}>
-              {renderStageBadgeIcon(stage.id)}
-              <Text style={[styles.stageBadgeText, { color: colors.accent }]}>
-                {t('flowCompanion.stageLabel', { stage: stage.stage })}
-              </Text>
-            </View>
-          </View>
-
-          {/* Evolution Progression Bar */}
-          <View
-            style={[
-              styles.sectionCard,
-              { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.cardBorder },
-            ]}
-          >
-            <View style={styles.sectionHeaderRow}>
-              <View style={styles.sectionTitleRow}>
-                <TrendingUp size={16} color={colors.accent} />
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                  {t('flowCompanion.evolutionTitle', 'Evoluție & Streak')}
-                </Text>
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.sectionTitleRow}>
+                  <Lightbulb size={18} color={beacon.color} strokeWidth={2.5} />
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                    {t('flowCompanion.beaconTitle', 'Becul de Limită Nutrițională')}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.beaconStatusPill,
+                    { backgroundColor: beacon.color + '25', borderColor: beacon.color + '55' },
+                  ]}
+                >
+                  <View style={[styles.liveDot, { backgroundColor: beacon.color }]} />
+                  <Text style={[styles.beaconStatusText, { color: beacon.color }]}>
+                    {beaconLabel}
+                  </Text>
+                </View>
               </View>
-              <Text style={[styles.streakCount, { color: colors.accent }]}>
-                {streak} {streak === 1 ? 'zi' : 'zile'}
+
+              <Text style={[styles.beaconDescText, { color: colors.textPrimary }]}>
+                {beaconDesc}
               </Text>
-            </View>
 
-            {/* Progress Track */}
-            <View style={[styles.progressTrack, { backgroundColor: colors.cardBorder }]}>
-              <View
-                style={[
-                  styles.progressBar,
-                  {
-                    width: `${evolutionPercent}%`,
-                    backgroundColor: colors.accent,
-                  },
-                ]}
-              />
-            </View>
-
-            <Text style={[styles.evolutionSubtitle, { color: colors.textSecondary }]}>
-              {daysUntilNext !== null
-                ? t('flowCompanion.nextEvolutionIn', { days: daysUntilNext })
-                : t('flowCompanion.maxEvolutionReached', 'Ai atins forma supremă de Legendă!')}
-            </Text>
-          </View>
-
-          {/* Limit Beacon ("Becul de Limită") Card */}
-          <View
-            style={[
-              styles.sectionCard,
-              {
-                backgroundColor: beacon.color + '10',
-                borderColor: beacon.color + '44',
-              },
-            ]}
-          >
-            <View style={styles.sectionHeaderRow}>
-              <View style={styles.sectionTitleRow}>
-                <Lightbulb size={18} color={beacon.color} strokeWidth={2.5} />
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                  {t('flowCompanion.beaconTitle', 'Becul de Limită Nutrițională')}
+              <View style={styles.calorieStatsRow}>
+                <Text style={[styles.calorieStatsText, { color: colors.textSecondary }]}>
+                  {t('flowCompanion.caloriesProgress', {
+                    consumed: caloriiConsumate.toLocaleString(),
+                    target: caloriiTinta.toLocaleString(),
+                  })}
                 </Text>
-              </View>
-              <View
-                style={[
-                  styles.beaconStatusPill,
-                  { backgroundColor: beacon.color + '25', borderColor: beacon.color + '55' },
-                ]}
-              >
-                <View style={[styles.liveDot, { backgroundColor: beacon.color }]} />
-                <Text style={[styles.beaconStatusText, { color: beacon.color }]}>
-                  {beaconLabel}
+                <Text style={[styles.caloriePercentText, { color: beacon.color }]}>
+                  {beacon.percent}%
                 </Text>
               </View>
             </View>
 
-            <Text style={[styles.beaconDescText, { color: colors.textPrimary }]}>
-              {beaconDesc}
-            </Text>
-
-            <View style={styles.calorieStatsRow}>
-              <Text style={[styles.calorieStatsText, { color: colors.textSecondary }]}>
-                {t('flowCompanion.caloriesProgress', {
-                  consumed: caloriiConsumate.toLocaleString(),
-                  target: caloriiTinta.toLocaleString(),
-                })}
-              </Text>
-              <Text style={[styles.caloriePercentText, { color: beacon.color }]}>
-                {beacon.percent}%
-              </Text>
+            {/* Modular Cosmetics Preview Card (Future Economy) */}
+            <View
+              style={[
+                styles.sectionCard,
+                { backgroundColor: 'rgba(255,255,255,0.02)', borderColor: colors.cardBorder },
+              ]}
+            >
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.sectionTitleRow}>
+                  <Crown size={15} color={colors.accentSecondary} />
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                    Personalizare & Accesorii
+                  </Text>
+                </View>
+                <View style={[styles.comingSoonBadge, { backgroundColor: colors.accentSecondary + '18', borderColor: colors.accentSecondary + '44' }]}>
+                  <Text style={[styles.comingSoonText, { color: colors.accentSecondary }]}>În curând</Text>
+                </View>
+              </View>
+              <View style={styles.cosmeticSlotsRow}>
+                <View style={[styles.cosmeticSlot, { borderColor: colors.cardBorder }]}>
+                  <Lock size={13} color={colors.textSecondary} />
+                  <Text style={[styles.cosmeticSlotName, { color: colors.textSecondary }]}>Aură Neon</Text>
+                </View>
+                <View style={[styles.cosmeticSlot, { borderColor: colors.cardBorder }]}>
+                  <Lock size={13} color={colors.textSecondary} />
+                  <Text style={[styles.cosmeticSlotName, { color: colors.textSecondary }]}>Coroniță</Text>
+                </View>
+                <View style={[styles.cosmeticSlot, { borderColor: colors.cardBorder }]}>
+                  <Lock size={13} color={colors.textSecondary} />
+                  <Text style={[styles.cosmeticSlotName, { color: colors.textSecondary }]}>Căști Sport</Text>
+                </View>
+              </View>
             </View>
-          </View>
 
-          {/* Action Button */}
-          <TouchableOpacity
-            testID="flow-companion-modal-action"
-            style={[styles.actionBtn, { shadowColor: colors.accent }]}
-            onPress={() => {
-              try {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              } catch {}
-              onClose();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={t('flowCompanion.close', 'Am înțeles')}
-          >
-            <LinearGradient colors={colors.accentGradient} style={styles.actionBtnGrad}>
-              <Text style={[styles.actionBtnText, { color: colors.background }]}>
-                {t('flowCompanion.close', 'Am înțeles')}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
+            {/* Action Button */}
+            <TouchableOpacity
+              testID="flow-companion-modal-action"
+              style={[styles.actionBtn, { shadowColor: colors.accent }]}
+              onPress={() => {
+                try {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                } catch {}
+                onClose();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={t('flowCompanion.close', 'Am înțeles')}
+            >
+              <LinearGradient colors={colors.accentGradient} style={styles.actionBtnGrad}>
+                <Text style={[styles.actionBtnText, { color: colors.background }]}>
+                  {t('flowCompanion.close', 'Am înțeles')}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -276,7 +408,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     paddingHorizontal: 22,
     paddingTop: 12,
-    paddingBottom: 34,
+    paddingBottom: 24,
+    maxHeight: '90%',
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   indicatorWrap: {
     alignItems: 'center',
@@ -331,11 +467,53 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  heroNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
   heroName: {
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: -0.3,
-    marginBottom: 6,
+  },
+  nameEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  nameEditBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  namingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 10,
+    width: 220,
+  },
+  namingInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    paddingVertical: 4,
+  },
+  namingConfirmBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stageBadge: {
     flexDirection: 'row',
@@ -349,6 +527,11 @@ const styles = StyleSheet.create({
   stageBadgeText: {
     fontSize: 11,
     fontWeight: '800',
+  },
+  loreText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
   },
   sectionCard: {
     borderRadius: 18,
@@ -379,21 +562,20 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     overflow: 'hidden',
-    marginVertical: 6,
+    marginBottom: 8,
   },
   progressBar: {
     height: '100%',
     borderRadius: 3,
   },
   evolutionSubtitle: {
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 4,
+    fontSize: 12,
+    fontWeight: '600',
   },
   beaconStatusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -409,31 +591,62 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   beaconDescText: {
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '600',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
     marginBottom: 10,
   },
   calorieStatsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
+    justifyContent: 'space-between',
   },
   calorieStatsText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
   },
   caloriePercentText: {
     fontSize: 13,
     fontWeight: '900',
   },
+  comingSoonBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  comingSoonText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  cosmeticSlotsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  cosmeticSlot: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+  },
+  cosmeticSlotName: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
   actionBtn: {
+    marginTop: 4,
     borderRadius: 16,
     overflow: 'hidden',
-    marginTop: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   actionBtnGrad: {
     paddingVertical: 14,
@@ -443,5 +656,6 @@ const styles = StyleSheet.create({
   actionBtnText: {
     fontSize: 15,
     fontWeight: '900',
+    letterSpacing: 0.2,
   },
 });

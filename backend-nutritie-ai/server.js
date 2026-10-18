@@ -46,6 +46,7 @@ const { Semafor } = require('./utils/semafor');
 const { creeazaContextDate, EroareContextDate, getStatisticiClientDate } = require('./utils/clientUtilizator');
 const { idempotencyMiddleware, idempotencyMiddlewareCritic } = require('./utils/idempotency');
 const { creeazaCheckAiUsageQuota } = require('./utils/aiUsageQuota');
+const { creeazaServiciuChatQuota } = require('./utils/chatQuota');
 const createGdprRouter = require('./routes/gdpr');
 const createStatusRouter = require('./routes/status');
 const createAiRouter = require('./routes/ai');
@@ -192,6 +193,7 @@ const playIntegrityGuard = config.playIntegrity.mode === 'off'
     }),
   });
 const checkAiUsageQuota = creeazaCheckAiUsageQuota({ supabaseAdmin, billingService: googleBillingService });
+const chatQuota = creeazaServiciuChatQuota({ billingService: googleBillingService });
 // P-012: limitator dedicat webhook-urilor (Clerk/Svix). Se monteaza pe calea
 // webhook-urilor INAINTE de router (si INAINTE de preAuthLimiter, care altfel nu
 // se aplica), ca burst-urile legitime Clerk sa treaca dar traficul evadat sa fie
@@ -393,6 +395,8 @@ const aiR = createAiRouter({
   chatAdmission,
   idempotencyCritic: idempotencyMiddlewareCritic,
   supabaseAdmin,
+  billingService: googleBillingService,
+  chatQuota,
 });
 const barcodeR = createBarcodeRouter({
   requireAuth,

@@ -202,6 +202,12 @@ jest.mock('../lib/imagekit', () => ({
     url: 'https://cdn.example.test/meal.jpg',
     fileId: 'meal-file-id',
   }),
+  getImageKitAuthParams: jest.fn().mockResolvedValue({
+    token: 'mock-token',
+    expire: 1234567890,
+    signature: 'mock-signature',
+  }),
+  clearImageKitAuthCache: jest.fn(),
 }));
 
 jest.mock('../lib/photoJobs', () => {

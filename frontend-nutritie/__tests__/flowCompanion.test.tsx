@@ -11,6 +11,10 @@ import {
 import { FlowCompanionPill } from '../components/home/FlowCompanionPill';
 import { FlowCompanionModal } from '../components/home/FlowCompanionModal';
 
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
 jest.mock('../context/ThemeContext', () => ({
   useTheme: () => ({
     colors: {

@@ -279,6 +279,36 @@ export default function ChatScreen() {
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<CoachMealDraft | null>(null);
   const [savingProposal, setSavingProposal] = useState(false);
+  const [chatQuota, setChatQuota] = useState<{
+    total: number;
+    consumate: number;
+    ramase: number;
+    tier: string;
+    reseteazaLa?: string;
+    oreRamase?: number;
+  } | null>(null);
+
+  const fetchChatQuota = useCallback(async () => {
+    if (!session?.access_token) return;
+    try {
+      const resp = await fetch(buildApiUrl('/chat/quota'), {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (typeof data?.total === 'number' && typeof data?.ramase === 'number') {
+          setChatQuota(data);
+        }
+      }
+    } catch {
+      // fail safe
+    }
+  }, [session?.access_token]);
+
+  useEffect(() => {
+    fetchChatQuota();
+  }, [fetchChatQuota]);
+
   const [mesaje, setMesaje] = useState<ChatMessage[]>([
     buleMesaj('ai', t('chat.welcome'))
   ]);
@@ -358,9 +388,10 @@ export default function ChatScreen() {
   useFocusRefresh(
     useCallback(() => {
       refresh();
-    }, [refresh]),
+      fetchChatQuota();
+    }, [refresh, fetchChatQuota]),
     5000,
-    [refresh]
+    [refresh, fetchChatQuota]
   );
 
   const params = useLocalSearchParams<{ prompt?: string }>();
@@ -627,6 +658,9 @@ export default function ChatScreen() {
       }
 
       if (!raspuns.ok) {
+        if (date?.cod === 'CHAT_QUOTA_EXCEEDED') {
+          setChatQuota((prev) => prev ? { ...prev, ramase: 0 } : null);
+        }
         // Statusurile non-2xx se mapau pe mesaje clare; altfel un 401/429/500
         // apărea ca un răspuns AI normal ("Eroare la procesarea răspunsului.").
         const mesajServer = date?.raspuns || date?.eroare || date?.message;
@@ -640,6 +674,19 @@ export default function ChatScreen() {
         }
         adaugaMesaj(buleMesaj('ai', textEroare, true));
         return;
+      }
+
+      // Sincronizăm cota rămasă din antetele autoritative de răspuns
+      const remainingHeader = raspuns.headers?.get?.('x-ai-chat-quota-remaining') || raspuns.headers?.get?.('X-AI-Chat-Quota-Remaining') || null;
+      const totalHeader = raspuns.headers?.get?.('x-ai-chat-quota-total') || raspuns.headers?.get?.('X-AI-Chat-Quota-Total') || null;
+      const tierHeader = raspuns.headers?.get?.('x-ai-chat-quota-tier') || raspuns.headers?.get?.('X-AI-Chat-Quota-Tier') || null;
+      if (remainingHeader !== null && totalHeader !== null) {
+        setChatQuota((prev) => ({
+          total: Number(totalHeader) || (prev?.total ?? 10),
+          consumate: Math.max(0, (Number(totalHeader) || 10) - Number(remainingHeader)),
+          ramase: Number(remainingHeader),
+          tier: tierHeader || (prev?.tier ?? 'free'),
+        }));
       }
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -744,10 +791,8 @@ export default function ChatScreen() {
 
     try {
       let result: DecizieInsertMasa;
-      let persistedRow: any = null;
       try {
-        const { data, error } = await insereazaMasaCuPoza(supabase, payload);
-        persistedRow = data && data[0] ? data[0] : null;
+        const { error } = await insereazaMasaCuPoza(supabase, payload);
         result = await decideRezultatInsertMasa(supabase as never, payload as never, { error });
       } catch (error) {
         result = await decideRezultatInsertMasa(supabase as never, payload as never, error instanceof Error ? error : new Error('transport'));
@@ -935,6 +980,16 @@ export default function ChatScreen() {
               <View style={[styles.miniIndicator, { backgroundColor: colors.accentSecondary }]} />
               <Text style={[styles.contextChipText, { color: colors.textPrimary }]}>{totalProteine} / {proteineTinta} g proteine</Text>
             </View>
+            {chatQuota && typeof chatQuota.total === 'number' && typeof chatQuota.ramase === 'number' ? (
+              <View testID="chat-quota-chip" style={[styles.contextChip, { backgroundColor: colors.surfaceElevated, borderColor: chatQuota.ramase === 0 ? '#EF4444' : colors.cardBorder }]}>
+                <View style={[styles.miniIndicator, { backgroundColor: chatQuota.ramase === 0 ? '#EF4444' : colors.accent }]} />
+                <Text style={[styles.contextChipText, { color: chatQuota.ramase === 0 ? '#EF4444' : colors.textPrimary }]}>
+                  {chatQuota.tier === 'admin'
+                    ? 'Nelimitat'
+                    : `${chatQuota.ramase}/${chatQuota.total} mesaje`}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </Animated.View>
 
@@ -1054,6 +1109,14 @@ export default function ChatScreen() {
           </Animated.View>
         ) : null}
 
+        {chatQuota && chatQuota.ramase === 0 ? (
+          <View testID="chat-quota-exhausted-banner" style={[styles.quotaExhaustedBanner, { backgroundColor: '#EF444415', borderColor: '#EF444455' }]}>
+            <Text style={[styles.quotaExhaustedText, { color: colors.textPrimary }]}>
+              {t('chat.quotaExhausted', 'Ai atins limita gratuită de mesaje pentru astăzi. Limita se resetează la miezul nopții.')}
+            </Text>
+          </View>
+        ) : null}
+
         {/* Input */}
         <Animated.View
           testID="coach-composer"
@@ -1066,14 +1129,15 @@ export default function ChatScreen() {
                 testID="chat-input"
                 accessibilityLabel={t('chat.inputA11y')}
                 style={[styles.input, { color: colors.textPrimary }]}
-                placeholder={t('chat.inputPlaceholder')}
+                placeholder={chatQuota && chatQuota.ramase === 0 ? 'Limita zilnică de mesaje a fost atinsă' : t('chat.inputPlaceholder')}
                 placeholderTextColor={colors.textSecondary}
                 value={chatInput}
                 onChangeText={setChatInput}
+                editable={!chatQuota || typeof chatQuota.ramase !== 'number' || chatQuota.ramase > 0}
                 multiline
                 maxLength={1000}
                 returnKeyType="send"
-                onSubmitEditing={() => { if (!loadingChat && chatInput.trim()) trimiteMesaj(); }}
+                onSubmitEditing={() => { if (!loadingChat && chatInput.trim() && (!chatQuota || typeof chatQuota.ramase !== 'number' || chatQuota.ramase > 0)) trimiteMesaj(); }}
                 blurOnSubmit={false}
               />
               <TouchableOpacity
@@ -1081,9 +1145,9 @@ export default function ChatScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={t('chat.sendA11y')}
                 hitSlop={4}
-                style={[styles.sendBtn, !chatInput.trim() && { opacity: 0.4 }]}
+                style={[styles.sendBtn, (!chatInput.trim() || (chatQuota && chatQuota.ramase === 0)) && { opacity: 0.4 }]}
                 onPress={trimiteMesaj}
-                disabled={loadingChat || !chatInput.trim()}
+                disabled={loadingChat || !chatInput.trim() || (chatQuota ? chatQuota.ramase === 0 : false)}
               >
                 <LinearGradient colors={colors.accentGradient} style={styles.sendGrad}>
                   <Send size={18} color={colors.background} strokeWidth={2.5} />
@@ -1207,6 +1271,21 @@ const styles = StyleSheet.create({
   },
   proposalBannerClose: {
     padding: 4,
+  },
+  quotaExhaustedBanner: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quotaExhaustedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   outerContainer: { flex: 1 },
   container: { flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center' },

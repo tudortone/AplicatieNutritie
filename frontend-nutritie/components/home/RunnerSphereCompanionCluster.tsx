@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
-import { recoverPhotoJob, type PhotoJob, type ActivePhotoJobPointer } from '../../lib/photoJobs';
+import { recoverPhotoJob, clearActivePhotoJob, type PhotoJob, type ActivePhotoJobPointer } from '../../lib/photoJobs';
 import { RunnerSphere, type RunnerSphereState } from './RunnerSphere';
 import { PixelCompanion } from './PixelCompanion';
 
@@ -56,6 +56,15 @@ export function RunnerSphereCompanionCluster({
             userId: session.user.id,
           });
           if (!active) return;
+          // Expire stale terminal jobs (>10 min) so Home sphere doesn't show old red error or green checkmark
+          if (recovered && (COMPLETED.has(recovered.job.status) || recovered.job.status === 'failed')) {
+            const isStale = Date.now() - (recovered.pointer.savedAt || 0) > 10 * 60 * 1000;
+            if (isStale) {
+              void clearActivePhotoJob(session.user.id, recovered.pointer.jobId);
+              setActiveJob(null);
+              return;
+            }
+          }
           setActiveJob(recovered);
           if (recovered && RUNNING.has(recovered.job.status)) {
             timer = setTimeout(poll, 4000);
@@ -86,20 +95,28 @@ export function RunnerSphereCompanionCluster({
     }, [session?.access_token, session?.user.id])
   );
 
-  // Derive sphere state from real backend job
+  // Derive sphere state from real backend job (safely guarded against stale status)
   let sphereState: RunnerSphereState = 'idle';
   if (activeJob) {
-    if (RUNNING.has(activeJob.job.status)) {
-      sphereState = 'processing';
-    } else if (COMPLETED.has(activeJob.job.status)) {
-      sphereState = 'completed';
-    } else if (activeJob.job.status === 'failed') {
-      sphereState = 'failed';
+    const isStale = Date.now() - (activeJob.pointer.savedAt || 0) > 10 * 60 * 1000;
+    if (!isStale) {
+      if (RUNNING.has(activeJob.job.status)) {
+        sphereState = 'processing';
+      } else if (COMPLETED.has(activeJob.job.status)) {
+        sphereState = 'completed';
+      } else if (activeJob.job.status === 'failed') {
+        sphereState = 'failed';
+      }
     }
   }
 
   const handleSpherePress = () => {
-    // Both completed and active analysis open /camera where the result or camera is shown
+    // If tapping failed sphere, reset failed pointer and clear from storage
+    if (sphereState === 'failed' && activeJob && session?.user?.id) {
+      void clearActivePhotoJob(session.user.id, activeJob.pointer.jobId);
+      setActiveJob(null);
+    }
+    // Navigate to camera where active result, progress stages, or camera capture is rendered
     router.push('/camera');
   };
 

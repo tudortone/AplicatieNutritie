@@ -28,11 +28,30 @@ function textNenul(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-/** Preia parametrii temporari de upload și îi validează înainte de utilizare. */
-export async function getImageKitAuthParams(signal?: AbortSignal): Promise<ImageKitAuthParams> {
+let cachedAuthParams: { params: ImageKitAuthParams; userId: string } | null = null;
+
+export function clearImageKitAuthCache(): void {
+  cachedAuthParams = null;
+}
+
+/** Preia parametrii temporari de upload și îi validează înainte de utilizare (cu TTL caching în memorie). */
+export async function getImageKitAuthParams(signal?: AbortSignal, forceRefresh = false): Promise<ImageKitAuthParams> {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token || !data.session.user?.id) {
     throw new Error('Sesiunea a expirat. Autentifică-te din nou.');
+  }
+
+  const currentUserId = data.session.user.id;
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  // Folosește parametrii din memorie dacă sunt pentru același utilizator și mai au cel puțin 60 secunde de valabilitate
+  if (
+    !forceRefresh &&
+    cachedAuthParams &&
+    cachedAuthParams.userId === currentUserId &&
+    cachedAuthParams.params.expire > nowSec + 60
+  ) {
+    return cachedAuthParams.params;
   }
 
   const res = await fetch(`${API_URL}${API_PREFIX}/imagekit-auth`, {
@@ -55,17 +74,20 @@ export async function getImageKitAuthParams(signal?: AbortSignal): Promise<Image
   }
 
   const expire = Number(payload.expire);
-  if (expire <= Math.floor(Date.now() / 1000) + 15) {
+  if (expire <= nowSec + 15) {
     throw new Error('Parametrii ImageKit au expirat.');
   }
 
-  return {
+  const validated: ImageKitAuthParams = {
     token: payload.token,
     signature: payload.signature,
     urlEndpoint: payload.urlEndpoint,
     expire,
-    userId: data.session.user.id,
+    userId: currentUserId,
   };
+
+  cachedAuthParams = { params: validated, userId: currentUserId };
+  return validated;
 }
 
 export interface UploadImageKitOptions {
