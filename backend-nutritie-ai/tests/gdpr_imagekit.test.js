@@ -83,6 +83,7 @@ function creeazaSupabaseAdminFake({
     rpc: async (functie, params) => {
       apeluri.push({ tip: 'rpc', functie, params });
       if (functie === 'initiate_gdpr_deletion') return { data: outboxId, error: null };
+      if (functie === 'claim_gdpr_deletion') return { data: { success: true, fencing_token: 1 }, error: null };
       return { data: null, error: null };
     },
     from(tabela) {
@@ -108,25 +109,31 @@ function creeazaSupabaseAdminFake({
             },
           }),
         }),
-        update: (payload) => ({
-          eq: (col, val) => {
-            apeluri.push({ tabela, tip: 'update', payload, eq: [col, val] });
-            const statusUpdate = tabela === 'gdpr_deletions' && typeof payload.status === 'string';
-            const fileIdsUpdate = tabela === 'gdpr_deletions' && Array.isArray(payload.file_ids);
-            const result = statusUpdate && payload.status === failStatusUpdate
-              ? { data: null, error: new Error('simulated outbox status update failure') }
-              : statusUpdate && payload.status === missingStatusUpdate
+        update: (payload) => {
+          const statusUpdate = tabela === 'gdpr_deletions' && typeof payload.status === 'string';
+          const fileIdsUpdate = tabela === 'gdpr_deletions' && Array.isArray(payload.file_ids);
+          const result = statusUpdate && payload.status === failStatusUpdate
+            ? { data: null, error: new Error('simulated outbox status update failure') }
+            : statusUpdate && payload.status === missingStatusUpdate
+              ? { data: null, error: null }
+              : fileIdsUpdate && missingFileIdsUpdate
                 ? { data: null, error: null }
-                : fileIdsUpdate && missingFileIdsUpdate
-                  ? { data: null, error: null }
-                  : { data: { id: outboxId }, error: null };
-            const query = {
-              select: () => ({ maybeSingle: async () => result }),
-              then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
-            };
-            return query;
-          },
-        }),
+                : { data: { id: outboxId }, error: null };
+          let pushed = false;
+          const chain = {
+            eq: (col, val) => {
+              if (!pushed) {
+                apeluri.push({ tabela, tip: 'update', payload, eq: [col, val] });
+                pushed = true;
+              }
+              return chain;
+            },
+            gte: () => chain,
+            select: () => ({ maybeSingle: async () => result }),
+            then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
+          };
+          return chain;
+        },
         delete: () => ({
           // F-07: curatarea tabelelor dead-letter sterge dupa mai multe
           // identitati simultan (`app_user_id in (supabaseId, clerkId)`).
@@ -466,6 +473,9 @@ describe('GDPR ImageKit', () => {
         },
         rpc: async (functie) => {
           evenimente.push({ tip: 'rpc', functie });
+          if (functie === 'claim_gdpr_deletion') {
+            return { data: { success: true, fencing_token: 1 }, error: null };
+          }
           return { data: 'outbox-n4-test', error: null };
         },
         from(tabela) {
@@ -507,19 +517,20 @@ describe('GDPR ImageKit', () => {
                 }),
               };
             },
-            update: (payload) => ({
-              eq: () => {
-                evenimente.push({ tabela, tip: 'update', payload });
-                const result = {
-                  data: { id: 'outbox-n4-test' },
-                  error: null,
-                };
-                return {
-                  select: () => ({ maybeSingle: async () => result }),
-                  then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
-                };
-              },
-            }),
+            update: (payload) => {
+              evenimente.push({ tabela, tip: 'update', payload });
+              const result = {
+                data: { id: 'outbox-n4-test' },
+                error: null,
+              };
+              const chain = {
+                eq: () => chain,
+                gte: () => chain,
+                select: () => ({ maybeSingle: async () => result }),
+                then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
+              };
+              return chain;
+            },
             delete: () => ({
               eq: async () => {
                 evenimente.push({ tabela, tip: 'delete' });
@@ -584,6 +595,9 @@ describe('GDPR ImageKit', () => {
         },
         rpc: async (functie) => {
           evenimente.push({ tip: 'rpc', functie });
+          if (functie === 'claim_gdpr_deletion') {
+            return { data: { success: true, fencing_token: 1 }, error: null };
+          }
           return { data: 'outbox-m2', error: null };
         },
         from(tabela) {
@@ -608,19 +622,20 @@ describe('GDPR ImageKit', () => {
                 }),
               };
             },
-            update: (payload) => ({
-              eq: () => {
-                evenimente.push({ tabela, tip: 'update', payload });
-                // M2: persistarea esueaza (e.g. eroare DB) -> ruta trebuie sa
-                // opreasca stergerea, nu sa continue best-effort cu orfani ImageKit.
-                if (failureMode === 'exception') throw new Error('DB_FAIL_UPDATE_FILE_IDS');
-                const result = { data: null, error: { code: '42501', message: 'write denied' } };
-                return {
-                  select: () => ({ maybeSingle: async () => result }),
-                  then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
-                };
-              },
-            }),
+            update: (payload) => {
+              evenimente.push({ tabela, tip: 'update', payload });
+              // M2: persistarea esueaza (e.g. eroare DB) -> ruta trebuie sa
+              // opreasca stergerea, nu sa continue best-effort cu orfani ImageKit.
+              if (failureMode === 'exception') throw new Error('DB_FAIL_UPDATE_FILE_IDS');
+              const result = { data: null, error: { code: '42501', message: 'write denied' } };
+              const chain = {
+                eq: () => chain,
+                gte: () => chain,
+                select: () => ({ maybeSingle: async () => result }),
+                then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
+              };
+              return chain;
+            },
             delete: () => ({
               eq: async () => {
                 evenimente.push({ tabela, tip: 'delete' });

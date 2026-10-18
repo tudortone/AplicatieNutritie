@@ -82,8 +82,12 @@ async function fileIdApartineUtilizatorului({ fileId, userId, privateKey }) {
   const detalii = await imageKitGetJson(`/files/${encodeURIComponent(fileId)}/details`, { privateKey });
   // 404 => fisierul nu mai exista; nu e nimic de sters si nici de raportat.
   if (!detalii) return false;
-  const caleBruta = typeof detalii.filePath === 'string' ? detalii.filePath : '';
-  if (!caleBruta) return false;
+  if (typeof detalii !== 'object' || typeof detalii.filePath !== 'string' || !detalii.filePath.trim()) {
+    const error = new Error('IMAGEKIT_MALFORMED_FILE_PATH');
+    error.code = 'IMAGEKIT_MALFORMED_FILE_PATH';
+    throw error;
+  }
+  const caleBruta = detalii.filePath.trim();
   const cale = caleBruta.startsWith('/') ? caleBruta : `/${caleBruta}`;
 
   // Aparare in adancime: ImageKit intoarce cai canonice, dar nu ne bazam pe asta.

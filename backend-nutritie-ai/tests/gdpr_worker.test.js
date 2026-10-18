@@ -30,17 +30,28 @@ function creeazaApp(supabaseAdmin, profilRepoFake) {
   return app;
 }
 
+const defaultRpcMock = async (fn) => {
+  if (fn === 'claim_gdpr_deletion') return { data: { success: true, fencing_token: 1 }, error: null };
+  return { data: null, error: null };
+};
+
 function rezultatUpdateOutbox(payload, onWrite, rezultat = { data: { id: 'outbox-test-row' }, error: null }) {
-  return {
-    eq: () => ({
-      select: () => ({
-        maybeSingle: async () => {
-          onWrite?.(payload);
-          return typeof rezultat === 'function' ? rezultat(payload) : rezultat;
-        },
-      }),
+  const chain = {
+    eq: () => chain,
+    gte: () => chain,
+    select: () => ({
+      maybeSingle: async () => {
+        onWrite?.(payload);
+        return typeof rezultat === 'function' ? rezultat(payload) : rezultat;
+      },
     }),
+    then: (resolve, reject) => {
+      onWrite?.(payload);
+      const res = typeof rezultat === 'function' ? rezultat(payload) : rezultat;
+      return Promise.resolve(res).then(resolve, reject);
+    },
   };
+  return chain;
 }
 
 describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
@@ -61,6 +72,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
     };
     const admin = {
       auth: { admin: { deleteUser } },
+      rpc: defaultRpcMock,
       from: () => ({
         select: () => ({
           neq: () => ({
@@ -71,16 +83,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
             }),
           }),
         }),
-        update: (payload) => ({
-          eq: () => ({
-            select: () => ({
-              maybeSingle: async () => {
-                statusuri.push(payload.status);
-                return { data: { id: row.id }, error: null };
-              },
-            }),
-          }),
-        }),
+        update: (payload) => rezultatUpdateOutbox(payload, (p) => statusuri.push(p.status), { data: { id: row.id }, error: null }),
       }),
     };
     try {
@@ -156,6 +159,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
           deleteUser: jest.fn(async () => ({ error: null })),
         },
       },
+      rpc: defaultRpcMock,
       from: (tabela) => {
         if (tabela === 'gdpr_deletions') {
           return {
@@ -292,6 +296,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
       auth: {
         admin: { deleteUser: jest.fn(async () => ({ error: null })) },
       },
+      rpc: defaultRpcMock,
       from: (tabela) => {
         if (tabela === 'gdpr_deletions') {
           return {
@@ -346,6 +351,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
       auth: {
         admin: { deleteUser: jest.fn(async () => ({ error: null })) },
       },
+      rpc: defaultRpcMock,
       from: (tabela) => {
         if (tabela === 'gdpr_deletions') {
           return {
@@ -386,6 +392,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
     delete process.env.CLERK_SECRET_KEY;
     const adminFake = {
       auth: { admin: { deleteUser } },
+      rpc: defaultRpcMock,
       from: (tabela) => {
         if (tabela === 'gdpr_deletions') {
           return {
@@ -432,6 +439,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
     global.fetch = jest.fn();
     const adminFake = {
       auth: { admin: { deleteUser } },
+      rpc: defaultRpcMock,
       from: (tabela) => {
         if (tabela === 'gdpr_deletions') {
           return {
@@ -477,6 +485,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
     global.fetch = jest.fn(async () => ({ ok: true, status: 200 }));
     const adminFake = {
       auth: { admin: { deleteUser } },
+      rpc: defaultRpcMock,
       from: (tabela) => {
         if (tabela === 'gdpr_deletions') {
           return {
@@ -526,6 +535,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
     global.fetch = jest.fn(async () => ({ ok: true, status: 200 }));
     const adminFake = {
       auth: { admin: { deleteUser } },
+      rpc: defaultRpcMock,
       from: (tabela) => {
         if (tabela === 'gdpr_deletions') {
           return {
@@ -572,6 +582,7 @@ describe('P-05 — GDPR Worker și Outbox Fail-Closed', () => {
     let updatePayload = null;
 
     const adminFake = {
+      rpc: defaultRpcMock,
       from: (tabela) => {
         if (tabela === 'gdpr_deletions') {
           return {

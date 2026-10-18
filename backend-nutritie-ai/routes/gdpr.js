@@ -46,6 +46,10 @@ const {
   exportaAbonamenteGooglePlay,
   stergeEvenimenteRtdnUtilizator,
 } = require('../utils/gdprServices');
+const {
+  revendicaRandOutbox,
+  actualizeazaStatusOutbox,
+} = require('../utils/gdprWorker');
 const { codEroare } = require('../utils/codEroare');
 
 function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate, profilRepo }) {
@@ -106,6 +110,10 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         exportDate: new Date().toISOString(),
         user_id: userId,
         user: req.user,
+        media_export_scope: {
+          type: 'metadata_and_urls',
+          description: 'Acest export conține metadatele și URL-urile securizate ale fișierelor media asociate contului. Fișierele binare brute nu sunt înglobate direct în formatul JSON, dar pot fi descărcate individual utilizând URL-urile furnizate înainte de ștergerea contului.',
+        },
         profil: profil || null,
         mese,
         antrenamente,
@@ -180,39 +188,44 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         });
       }
 
+      // P1 FINDING 2: Ruta și workerul împart același protocol de claim și lease
+      const ownerId = `route_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const claim = await revendicaRandOutbox(supabaseAdmin, outboxId, {
+        workerId: ownerId,
+        expectedStatus: 'pending',
+        leaseSeconds: 300,
+      });
+
+      if (!claim.success) {
+        console.warn('[GDPR] Outbox claim eșuat pentru rută:', claim.error);
+        return res.status(409).json({
+          eroare: 'O cerere de ștergere este deja în curs de procesare pentru acest cont.',
+        });
+      }
+
+      const fencingToken = claim.fencingToken;
       let statusAsteptat = 'pending';
       const actualizezaStatus = async (status, lastError = null) => {
         if (!outboxId) return;
         const finalizat = status === 'completed';
-        let query = supabaseAdmin
-          .from('gdpr_deletions')
-          .update({
-            status,
-            last_error: finalizat ? null : lastError,
-            ...(finalizat ? {
-              completed_at: new Date().toISOString(),
-              // Rândul rămâne ca audit operațional, dar nu mai păstrează PII
-              // sau fileId-uri după ce reluarea nu mai este necesară.
-              user_id: outboxId,
-              clerk_user_id: null,
-              file_ids: [],
-            } : {}),
-          })
-          .eq('id', outboxId);
+        const payload = {
+          status,
+          last_error: finalizat ? null : lastError,
+          ...(finalizat ? {
+            completed_at: new Date().toISOString(),
+            // Rândul rămâne ca audit operațional, dar nu mai păstrează PII
+            // sau fileId-uri după ce reluarea nu mai este necesară.
+            user_id: outboxId,
+            clerk_user_id: null,
+            file_ids: [],
+          } : {}),
+        };
 
-        // GDPR-01: CAS atomic pe status curent pentru a preveni cursele cu workerii de reluare
-        if (statusAsteptat && typeof query.eq === 'function') {
-          query = query.eq('status', statusAsteptat);
-        }
-
-        const { data: updatedRow, error } = await query
-          .select('id')
-          .maybeSingle();
-        if (error || !updatedRow?.id) {
-          const statusError = new Error('GDPR_OUTBOX_STATUS_UPDATE_FAILED');
-          statusError.code = 'GDPR_OUTBOX_STATUS_UPDATE_FAILED';
-          throw statusError;
-        }
+        await actualizeazaStatusOutbox(supabaseAdmin, outboxId, payload, {
+          workerId: ownerId,
+          fencingToken,
+          expectedStatus: statusAsteptat,
+        });
         statusAsteptat = status;
       };
 
@@ -238,10 +251,17 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
             fileIds = new Set(fileIdsPersistate);
           }
           if (fileIds.size > 0 || fileIdsPersistate.length === 0) {
-            const { data: outboxActualizat, error: eroarePersistareFileIds } = await supabaseAdmin
+            let updateQuery = supabaseAdmin
               .from('gdpr_deletions')
               .update({ file_ids: [...fileIds] })
-              .eq('id', outboxId)
+              .eq('id', outboxId);
+            if (ownerId && typeof updateQuery?.eq === 'function') {
+              updateQuery = updateQuery.eq('claimed_by', ownerId);
+            }
+            if (fencingToken !== undefined && fencingToken !== null && typeof updateQuery?.eq === 'function') {
+              updateQuery = updateQuery.eq('fencing_token', fencingToken);
+            }
+            const { data: outboxActualizat, error: eroarePersistareFileIds } = await updateQuery
               .select('id')
               .maybeSingle();
             if (eroarePersistareFileIds || !outboxActualizat?.id) {

@@ -269,19 +269,15 @@ describe('Training 2.0 GDPR Backend Support — workout_templates', () => {
             };
           }
           if (tabela === 'gdpr_deletions') {
+            const chain = {
+              eq: () => chain,
+              gte: () => chain,
+              select: () => chain,
+              maybeSingle: async () => ({ data: { id: 'outbox-1', file_ids: [] }, error: null }),
+            };
             return {
-              select: () => ({
-                eq: () => ({
-                  maybeSingle: async () => ({ data: { file_ids: [] }, error: null }),
-                }),
-              }),
-              update: () => ({
-                eq: () => ({
-                  select: () => ({
-                    maybeSingle: async () => ({ data: { id: 'outbox-1' }, error: null }),
-                  }),
-                }),
-              }),
+              select: () => chain,
+              update: () => chain,
             };
           }
           if (tabela === 'google_play_subscriptions') {
@@ -313,7 +309,12 @@ describe('Training 2.0 GDPR Backend Support — workout_templates', () => {
             }),
           };
         },
-        rpc: jest.fn().mockResolvedValue({ data: 'outbox-1', error: null }),
+        rpc: jest.fn().mockImplementation((fn) => {
+          if (fn === 'claim_gdpr_deletion') {
+            return Promise.resolve({ data: { success: true, fencing_token: 1 }, error: null });
+          }
+          return Promise.resolve({ data: 'outbox-1', error: null });
+        }),
       };
 
       const app = express();
@@ -357,19 +358,15 @@ describe('Training 2.0 GDPR Backend Support — workout_templates', () => {
             };
           }
           if (tabela === 'gdpr_deletions') {
+            const chain = {
+              eq: () => chain,
+              gte: () => chain,
+              select: () => chain,
+              maybeSingle: async () => ({ data: { id: 'outbox-2', file_ids: [] }, error: null }),
+            };
             return {
-              select: () => ({
-                eq: () => ({
-                  maybeSingle: async () => ({ data: { file_ids: [] }, error: null }),
-                }),
-              }),
-              update: () => ({
-                eq: () => ({
-                  select: () => ({
-                    maybeSingle: async () => ({ data: { id: 'outbox-2' }, error: null }),
-                  }),
-                }),
-              }),
+              select: () => chain,
+              update: () => chain,
             };
           }
           if (tabela === 'google_play_subscriptions') {
@@ -395,7 +392,12 @@ describe('Training 2.0 GDPR Backend Support — workout_templates', () => {
             }),
           };
         },
-        rpc: jest.fn().mockResolvedValue({ data: 'outbox-2', error: null }),
+        rpc: jest.fn().mockImplementation((fn) => {
+          if (fn === 'claim_gdpr_deletion') {
+            return Promise.resolve({ data: { success: true, fencing_token: 1 }, error: null });
+          }
+          return Promise.resolve({ data: 'outbox-2', error: null });
+        }),
       };
 
       const app = express();

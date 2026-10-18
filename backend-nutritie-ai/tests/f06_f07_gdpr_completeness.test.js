@@ -221,7 +221,8 @@ describe('F-06 — exportul GDPR nu mai este truncat', () => {
     const raspuns = await request(app).get('/api/user/export-data');
 
     expect(raspuns.status).toBe(200);
-    expect(Object.keys(raspuns.body).slice(3)).toEqual([
+    expect(raspuns.body.media_export_scope).toBeDefined();
+    expect(Object.keys(raspuns.body).slice(4)).toEqual([
       'profil',
       'mese',
       'antrenamente',
