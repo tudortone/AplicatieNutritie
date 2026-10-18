@@ -19,8 +19,6 @@ const sampleMealDinner1: Masa = {
   grasimi: 10,
   tip_masa: 'cina',
   created_at: '2026-10-18T19:00:00.000Z',
-  ora: '19:00',
-  data: '2026-10-18',
 };
 
 const sampleMealDinner2: Masa = {
@@ -33,8 +31,6 @@ const sampleMealDinner2: Masa = {
   grasimi: 18,
   tip_masa: 'cina',
   created_at: '2026-10-18T19:30:00.000Z',
-  ora: '19:30',
-  data: '2026-10-18',
 };
 
 const sampleMealBreakfast: Masa = {
@@ -47,8 +43,6 @@ const sampleMealBreakfast: Masa = {
   grasimi: 22,
   tip_masa: 'mic_dejun',
   created_at: '2026-10-18T08:30:00.000Z',
-  ora: '08:30',
-  data: '2026-10-18',
 };
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({

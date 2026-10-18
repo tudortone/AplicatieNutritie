@@ -219,6 +219,8 @@ export default function CameraScreen() {
   useEffect(() => {
     if (session?.user?.id) {
       processOfflineQueue(supabase).catch(() => {});
+      // Prewarm ImageKit auth cache in background so photo capture doesn't wait on auth roundtrip
+      getImageKitAuthParams().catch(() => {});
     }
   }, [session?.user?.id]);
 
