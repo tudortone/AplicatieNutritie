@@ -6,13 +6,14 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Flame, Activity, PlusCircle, ChevronRight, Eye, EyeOff, Utensils, Calendar, AlertCircle, Trash2 } from 'lucide-react-native';
+import { Flame, Activity, PlusCircle, ChevronDown, ChevronUp, Eye, EyeOff, Utensils, Calendar, AlertCircle, Trash2 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi, type CategorieMasaGrupata } from '../../hooks/useMeseAzi';
@@ -33,7 +34,6 @@ import { MonthCalendar } from '../../components/MonthCalendar';
 import { MealDetailsSheet, MealDetailsSheetRef } from '../../components/MealDetailsModal';
 import { CategorieDetailSheet, CategorieDetailSheetRef } from '../../components/jurnal/CategorieDetailSheet';
 import { MasaCard } from '../../components/MasaCard';
-import { EmptyState } from '../../components/ui/EmptyState';
 import { actualizeazaMasaCuPoza, CATEGORIE_ICONA, getMealCategoryLabel } from '../../lib/mealUtils';
 import { marcheazaMeseModificate } from '../../lib/freshnessMese';
 import KeyboardAwareScreen from '@/components/ui/KeyboardAwareScreen';
@@ -49,9 +49,9 @@ import { NutrientFocusCard } from '../../components/jurnal/NutrientFocusCard';
 // antet de categorie, o masă sau butonul „+ adaugă încă o masă”. FlashList
 // virtualizează itemele, deci nu mai montează toate mesele zilei odată.
 type ItemJurnal =
-  | { tip: 'header'; cheie: string; cat: CategorieMasaGrupata; primul: boolean }
+  | { tip: 'header'; cheie: string; cat: CategorieMasaGrupata; primul: boolean; isExpanded: boolean }
   | { tip: 'masa'; cheie: string; masa: Masa }
-  | { tip: 'empty'; cheie: string; cat: CategorieMasaGrupata; primul: boolean }
+  | { tip: 'emptyExpanded'; cheie: string; cat: CategorieMasaGrupata }
   | { tip: 'addMore'; cheie: string; cat: CategorieMasaGrupata };
 
 // REMED-025: accent semantic per categorie — mic dejun → accent, prânz →
@@ -85,6 +85,26 @@ export default function HistoryScreen() {
   const mealDetailSheetRef = useRef<MealDetailsSheetRef>(null);
   const { insets, topInset, horizontalPadding, scrollPaddingTop, scrollPaddingBottom, isVeryCompact } = useResponsiveLayout();
   const reduceMotion = useReducedMotion();
+
+  // ACCORDION STATE: All categories start in a compact collapsed state so the user doesn't
+  // have to scroll through every meal entry. Tapping a header expands its food items;
+  // tapping it again collapses them. State is preserved across re-renders and sheet dismissals.
+  const [categoriiExtinse, setCategoriiExtinse] = useState<Record<string, boolean>>({
+    mic_dejun: false,
+    pranz: false,
+    cina: false,
+    gustare: false,
+  });
+
+  const toggleCategorie = useCallback((catId: string) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {}
+    setCategoriiExtinse((prev) => ({
+      ...prev,
+      [catId]: !prev[catId],
+    }));
+  }, []);
 
   // REMED-029: foaia „adăugare/editare masă" se montează DOAR la prima deschidere
   // (argumentele așteaptă în ref). Reduce costul de montare al jurnalului; după
@@ -299,34 +319,34 @@ export default function HistoryScreen() {
   // BUG-029: listă aplatizată pentru FlashList — doar categoriile cu mese, în
   // ordinea afișării (antet, mese, „+ adaugă încă o masă”). Antetul și cardul
   // de rezumat păstrează animația de intrare (montează o singură dată).
+  // ACCORDION LIST: Flattened list structure for FlashList representing the 4 meal groups.
+  // Each category is rendered as a compact header (name, icon, count, summed calories, chevron).
+  // When a category is expanded, its meals (and an addMore or emptyExpanded item) are inserted.
   const listaJurnal = useMemo<ItemJurnal[]>(() => {
     if (!categoriiMeseList) return [];
-    // REMED-025: EmptyState (ListEmptyComponent) apare DOAR când TOATE cele 4
-    // categorii sunt goale. Cu mese într-o singură categorie, lista e construită
-    // iar categoriile goale își păstrează antetul + butonul „Adaugă".
-    const areMese = categoriiMeseList.some((cat) => cat.mese && cat.mese.length > 0);
-    if (!areMese) return [];
     const items: ItemJurnal[] = [];
     let primul = true;
     for (const cat of categoriiMeseList) {
-      if (cat.mese && cat.mese.length > 0) {
-        items.push({ tip: 'header', cheie: `h-${cat.id}`, cat, primul });
-        for (const m of cat.mese) items.push({ tip: 'masa', cheie: `m-${m.id}`, masa: m });
-        items.push({ tip: 'addMore', cheie: `a-${cat.id}`, cat });
-      } else {
-        // BUG-029: categoria goală rămâne vizibilă cu butonul ei „Adaugă" — fără
-        // regresie de UX pe o zi fără mese; doar aria de mese e virtualizată.
-        items.push({ tip: 'empty', cheie: `e-${cat.id}`, cat, primul });
+      const isExpanded = Boolean(categoriiExtinse[cat.id]);
+      items.push({ tip: 'header', cheie: `h-${cat.id}`, cat, primul, isExpanded });
+      if (isExpanded) {
+        if (cat.mese && cat.mese.length > 0) {
+          for (const m of cat.mese) {
+            items.push({ tip: 'masa', cheie: `m-${m.id}`, masa: m });
+          }
+          items.push({ tip: 'addMore', cheie: `a-${cat.id}`, cat });
+        } else {
+          items.push({ tip: 'emptyExpanded', cheie: `ee-${cat.id}`, cat });
+        }
       }
       primul = false;
     }
     return items;
-  }, [categoriiMeseList]);
+  }, [categoriiMeseList, categoriiExtinse]);
 
-  // PERF-005: fără entering per categorie — animațiile în cascadă re-porneau la
-  // fiecare re-render al listei; FlashList nu animă itemele, doar antetul.
-  // Atingerea antetului deschide CategorieDetailSheet (drill-down cu poze/detaliu).
-  const renderSectionHeader = useCallback((cat: CategorieMasaGrupata, primul: boolean) => {
+  // Section Header: Compact accordion toggle. Tapping expands or collapses its entries.
+  // Uses dedicated Pressable with hitSlop and clear accessibility state for Android TalkBack.
+  const renderSectionHeader = useCallback((cat: CategorieMasaGrupata, primul: boolean, isExpanded: boolean) => {
     const accent = accentCategorie(colors, cat);
     const afisatCategorie = totaluriPentruAfisare({
       calorii: cat.totalCalorii,
@@ -336,70 +356,91 @@ export default function HistoryScreen() {
       fibre: cat.totalFibre,
     });
     const label = getMealCategoryLabel(cat.id, t);
+    const count = cat.mese ? cat.mese.length : 0;
+    const countText = count === 1 ? t('jurnal.mealLogged') : t('jurnal.mealsLogged', { count });
+    const subtitle = `${countText} · ${afisatCategorie.calorii} kcal`;
+
     return (
-      <View style={[styles.sectionContainer, { marginTop: primul ? Spacing.sm : Spacing.xl, marginBottom: Spacing.md }]}>
-        <TouchableOpacity
-          style={[styles.sectionHeader, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}
-          onPress={() => {
-            try {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            } catch {}
-            categorieSheetRef.current?.open(cat);
-          }}
-          activeOpacity={0.8}
+      <View style={[styles.sectionContainer, { marginTop: primul ? Spacing.sm : Spacing.md, marginBottom: isExpanded ? Spacing.sm : Spacing.xs }]}>
+        <Pressable
+          testID={`category-header-${cat.id}`}
+          style={({ pressed }) => [
+            styles.sectionHeader,
+            {
+              borderColor: isExpanded ? accent + '70' : colors.cardBorder,
+              backgroundColor: pressed ? colors.surfaceElevated : colors.surfaceBg,
+            },
+          ]}
+          onPress={() => toggleCategorie(cat.id)}
           accessibilityRole="button"
-          accessibilityLabel={t('jurnal.viewCategoryDetails', { label })}
+          accessibilityState={{ expanded: isExpanded }}
+          accessibilityLabel={`${label}, ${subtitle}. ${isExpanded ? t('common.expanded', { defaultValue: 'Extins' }) : t('common.collapsed', { defaultValue: 'Restrâns' })}`}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, flex: 1 }}>
-            <CategorieIcona cat={cat} color={accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.sectionTitleText, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{label}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, flex: 1, minWidth: 0 }}>
+            <CategorieIcona cat={cat} color={accent} size={22} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.sectionTitleText, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">
+                {label}
+              </Text>
               <Text style={[styles.sectionSubtitleText, { color: colors.textSecondary }]}>
-                {cat.mese.length === 1 ? t('jurnal.mealLogged') : t('jurnal.mealsLogged', { count: cat.mese.length })}
+                {subtitle}
               </Text>
             </View>
           </View>
+
           <View style={styles.sectionMacrosSummary}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
-              <Text style={[styles.sectionTotalCal, { color: accent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{afisatCategorie.calorii} kcal</Text>
-              <ChevronRight size={16} color={colors.textTertiary} />
+              <Text style={[styles.sectionTotalCal, { color: accent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                {afisatCategorie.calorii} kcal
+              </Text>
+              {isExpanded ? (
+                <ChevronUp size={18} color={accent} />
+              ) : (
+                <ChevronDown size={18} color={colors.textTertiary} />
+              )}
             </View>
-            <Text style={[styles.sectionTotalMacros, { color: colors.textTertiary }]}>
-              P:{afisatCategorie.proteine}g • C:{afisatCategorie.carbohidrati}g • G:{afisatCategorie.grasimi}g • F:{afisatCategorie.fibre}g
-            </Text>
+            {count > 0 && (
+              <Text style={[styles.sectionTotalMacros, { color: colors.textTertiary }]} numberOfLines={1}>
+                P:{afisatCategorie.proteine}g • C:{afisatCategorie.carbohidrati}g • G:{afisatCategorie.grasimi}g
+              </Text>
+            )}
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     );
-  }, [colors, t]);
+  }, [colors, t, toggleCategorie]);
 
-  const renderCategorieGoala = useCallback((cat: CategorieMasaGrupata, primul: boolean) => {
+  const renderEmptyExpanded = useCallback((cat: CategorieMasaGrupata) => {
     const accent = accentCategorie(colors, cat);
     const label = getMealCategoryLabel(cat.id, t);
     return (
-      <View style={[styles.sectionContainer, { marginTop: primul ? Spacing.sm : Spacing.xl, marginBottom: Spacing.md }]}>
-        <View style={[styles.sectionHeader, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.md, flex: 1 }}>
-            <CategorieIcona cat={cat} color={accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.sectionTitleText, { color: colors.textPrimary }]} numberOfLines={1} ellipsizeMode="tail">{label}</Text>
-              <Text style={[styles.sectionSubtitleText, { color: colors.textSecondary }]}>{t('jurnal.noMealsAdded')}</Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={[styles.discreteAddBtn, { borderColor: accent + '40', backgroundColor: accent + '15' }]}
-            onPress={() => {
-              try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
-              deschideAddMeal(null, cat.id);
-            }}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel={t('jurnal.addCategory', { categorie: label, label })}
-          >
-            <PlusCircle size={15} color={accent} />
-            <Text style={[styles.discreteAddBtnText, { color: accent }]}>{t('jurnal.addCategory', { categorie: label, label })}</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={[styles.emptyExpandedContainer, { borderColor: colors.cardBorder, backgroundColor: colors.surfaceBg }]}>
+        <Text style={[styles.emptyExpandedText, { color: colors.textSecondary }]}>
+          {t('jurnal.noMealsAdded')}
+        </Text>
+        <Pressable
+          testID={`add-to-empty-${cat.id}`}
+          style={({ pressed }) => [
+            styles.discreteAddBtn,
+            {
+              borderColor: accent + '60',
+              backgroundColor: accent + (pressed ? '30' : '15'),
+            },
+          ]}
+          onPress={() => {
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+            deschideAddMeal(null, cat.id);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={t('jurnal.addCategory', { categorie: label, label })}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <PlusCircle size={15} color={accent} />
+          <Text style={[styles.discreteAddBtnText, { color: accent }]}>
+            {t('jurnal.addCategory', { categorie: label, label })}
+          </Text>
+        </Pressable>
       </View>
     );
   }, [colors, deschideAddMeal, t]);
@@ -407,27 +448,34 @@ export default function HistoryScreen() {
   const renderAddMore = useCallback((cat: CategorieMasaGrupata) => {
     const label = getMealCategoryLabel(cat.id, t);
     return (
-      <View style={{ marginBottom: Spacing.sm }}>
-        <TouchableOpacity
-          style={[styles.addMoreCategoryBtn, { borderColor: colors.cardBorder }]}
+      <View style={{ marginBottom: Spacing.md, marginTop: Spacing.xs }}>
+        <Pressable
+          testID={`add-more-${cat.id}`}
+          style={({ pressed }) => [
+            styles.addMoreCategoryBtn,
+            {
+              borderColor: colors.cardBorder,
+              backgroundColor: pressed ? colors.surfaceElevated : 'transparent',
+            },
+          ]}
           onPress={() => {
             try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
             deschideAddMeal(null, cat.id);
           }}
-          activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel={t('jurnal.addAnotherTo', { categorie: label, label })}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>
             + {t('jurnal.addAnotherTo', { categorie: label, label })}
           </Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     );
   }, [colors, deschideAddMeal, t]);
 
   const redareItem = useCallback((item: ItemJurnal) => {
-    if (item.tip === 'header') return renderSectionHeader(item.cat, item.primul);
+    if (item.tip === 'header') return renderSectionHeader(item.cat, item.primul, item.isExpanded);
     if (item.tip === 'masa') {
       return (
         <MasaCard
@@ -439,9 +487,9 @@ export default function HistoryScreen() {
         />
       );
     }
-    if (item.tip === 'empty') return renderCategorieGoala(item.cat, item.primul);
+    if (item.tip === 'emptyExpanded') return renderEmptyExpanded(item.cat);
     return renderAddMore(item.cat);
-  }, [afisarePoze, openMasaDetail, openEditModal, handleDelete, renderSectionHeader, renderCategorieGoala, renderAddMore]);
+  }, [afisarePoze, openMasaDetail, openEditModal, handleDelete, renderSectionHeader, renderEmptyExpanded, renderAddMore]);
 
   const keyExtractor = useCallback((item: ItemJurnal) => item.cheie, []);
 
@@ -619,6 +667,7 @@ export default function HistoryScreen() {
         <FlashList
           data={listaJurnal}
           keyExtractor={keyExtractor}
+          getItemType={(item) => item.tip}
           renderItem={({ item }) => redareItem(item)}
           onRefresh={onRefresh}
           refreshing={false}
@@ -634,13 +683,7 @@ export default function HistoryScreen() {
                   <SkeletonLoader key={i} width="100%" height={96} borderRadius={20} style={{ marginBottom: 12 }} />
                 ))}
               </View>
-            ) : (
-              <EmptyState
-                icon="utensils"
-                title={t('jurnal.empty.title')}
-                subtitle={t('jurnal.empty.subtitle')}
-              />
-            )
+            ) : null
           }
         />
       </View>
@@ -743,7 +786,9 @@ const styles = StyleSheet.create({
   sectionTotalMacros: { fontSize: 11, fontWeight: '600', marginTop: 2 },
   discreteAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1 },
   discreteAddBtnText: { fontSize: 12, fontWeight: '800' },
-  addMoreCategoryBtn: { paddingVertical: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', marginTop: 4 },
+  addMoreCategoryBtn: { paddingVertical: 12, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', marginTop: 4 },
+  emptyExpandedContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, borderWidth: 1, marginBottom: 8, marginTop: 2 },
+  emptyExpandedText: { fontSize: 13, fontWeight: '600', flex: 1, marginRight: 8 },
 
   // Meal card & sub-items
   card: { borderRadius: 24, overflow: 'hidden', marginBottom: 16, borderWidth: 1 },
