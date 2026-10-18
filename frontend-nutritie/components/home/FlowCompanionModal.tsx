@@ -47,6 +47,7 @@ export interface FlowCompanionModalProps {
   streak: number;
   caloriiConsumate: number;
   caloriiTinta: number;
+  userId?: string | null;
 }
 
 export function FlowCompanionModal({
@@ -55,6 +56,7 @@ export function FlowCompanionModal({
   streak,
   caloriiConsumate,
   caloriiTinta,
+  userId,
 }: FlowCompanionModalProps) {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -64,14 +66,22 @@ export function FlowCompanionModal({
   const [isNamingActive, setIsNamingActive] = useState(false);
   const [draftName, setDraftName] = useState('');
 
+  const companionKey = userId ? `@getflow:companion_name_${userId}` : '@getflow:companion_name';
+
   useEffect(() => {
     if (!visible) return;
-    AsyncStorage.getItem('@getflow:companion_name')
+    AsyncStorage.getItem(companionKey)
       .then((saved) => {
-        if (saved) setCompanionName(saved);
+        if (saved) {
+          setCompanionName(saved);
+        } else if (userId) {
+          AsyncStorage.getItem('@getflow:companion_name').then((legacy) => {
+            if (legacy) setCompanionName(legacy);
+          }).catch(() => {});
+        }
       })
       .catch(() => {});
-  }, [visible]);
+  }, [visible, companionKey, userId]);
 
   const handleConfirmName = () => {
     const trimmed = draftName.trim();
@@ -80,16 +90,16 @@ export function FlowCompanionModal({
       return;
     }
     Alert.alert(
-      'Confirmare Nume Companion',
-      `Ești sigur că vrei să alegi numele «${trimmed}»? Numele va fi asociat companionului tău.`,
+      t('flowCompanion.confirmNameTitle', 'Confirmare Nume Companion'),
+      t('flowCompanion.confirmNamePrompt', `Ești sigur că vrei să alegi numele «${trimmed}»? Numele va fi asociat companionului tău.`, { name: trimmed }),
       [
-        { text: 'Anulează', style: 'cancel' },
+        { text: t('common.cancel', 'Anulează'), style: 'cancel' },
         {
-          text: 'Confirmă',
+          text: t('common.confirm', 'Confirmă'),
           onPress: async () => {
             setCompanionName(trimmed);
             setIsNamingActive(false);
-            await AsyncStorage.setItem('@getflow:companion_name', trimmed).catch(() => {});
+            await AsyncStorage.setItem(companionKey, trimmed).catch(() => {});
             try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
           },
         },
@@ -184,14 +194,36 @@ export function FlowCompanionModal({
                 <Text style={[styles.heroName, { color: colors.textPrimary }]}>
                   {companionName ? `${companionName} (${stageName})` : stageName}
                 </Text>
-                {!companionName && !isNamingActive ? (
+                {companionName && !isNamingActive ? (
+                  <TouchableOpacity
+                    testID="flow-companion-edit-name-btn"
+                    style={[styles.nameEditBtn, { borderColor: colors.accent + '44', backgroundColor: colors.accent + '15' }]}
+                    onPress={() => {
+                      setDraftName(companionName);
+                      setIsNamingActive(true);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('flowCompanion.editName', 'Modifică numele')}
+                  >
+                    <Edit3 size={12} color={colors.accent} />
+                  </TouchableOpacity>
+                ) : !companionName && !isNamingActive ? (
                   <TouchableOpacity
                     testID="flow-companion-name-btn"
                     style={[styles.nameEditBtn, { borderColor: colors.accent + '44', backgroundColor: colors.accent + '15' }]}
-                    onPress={() => setIsNamingActive(true)}
+                    onPress={() => {
+                      setDraftName('');
+                      setIsNamingActive(true);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('flowCompanion.giveName', 'Dă-i un nume')}
                   >
                     <Edit3 size={12} color={colors.accent} />
-                    <Text style={[styles.nameEditBtnText, { color: colors.accent }]}>Dă-i un nume</Text>
+                    <Text style={[styles.nameEditBtnText, { color: colors.accent }]}>
+                      {t('flowCompanion.giveName', 'Dă-i un nume')}
+                    </Text>
                   </TouchableOpacity>
                 ) : null}
               </View>
@@ -209,9 +241,22 @@ export function FlowCompanionModal({
                     autoFocus
                   />
                   <TouchableOpacity
+                    testID="flow-companion-name-cancel"
+                    style={[styles.namingCancelBtn, { borderColor: colors.cardBorder }]}
+                    onPress={() => setIsNamingActive(false)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.cancel', 'Anulează')}
+                  >
+                    <X size={14} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
                     testID="flow-companion-name-confirm"
                     style={[styles.namingConfirmBtn, { backgroundColor: colors.accent }]}
                     onPress={handleConfirmName}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.confirm', 'Confirmă')}
                   >
                     <Check size={14} color={colors.background} strokeWidth={3} />
                   </TouchableOpacity>
@@ -237,12 +282,12 @@ export function FlowCompanionModal({
                 <View style={styles.sectionTitleRow}>
                   <Sparkles size={16} color={colors.accent} />
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                    Despre Sprout
+                    {t('flowCompanion.aboutTitle', 'Despre Sprout')}
                   </Text>
                 </View>
               </View>
               <Text style={[styles.loreText, { color: colors.textSecondary }]}>
-                Sprout este companionul tău inteligent de nutriție. Crește și evoluează alături de tine cu fiecare zi de streak înregistrată în jurnal.
+                {t('flowCompanion.aboutDesc', 'Sprout este companionul tău inteligent de nutriție. Crește și evoluează alături de tine cu fiecare zi de streak înregistrată în jurnal.')}
               </Text>
             </View>
 
@@ -343,11 +388,13 @@ export function FlowCompanionModal({
                 <View style={styles.sectionTitleRow}>
                   <Crown size={15} color={colors.accentSecondary} />
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                    Personalizare & Accesorii
+                    {t('flowCompanion.accessoriesTitle', 'Personalizare & Accesorii')}
                   </Text>
                 </View>
                 <View style={[styles.comingSoonBadge, { backgroundColor: colors.accentSecondary + '18', borderColor: colors.accentSecondary + '44' }]}>
-                  <Text style={[styles.comingSoonText, { color: colors.accentSecondary }]}>În curând</Text>
+                  <Text style={[styles.comingSoonText, { color: colors.accentSecondary }]}>
+                    {t('flowCompanion.comingSoon', 'În curând')}
+                  </Text>
                 </View>
               </View>
               <View style={styles.cosmeticSlotsRow}>
@@ -508,10 +555,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     paddingVertical: 4,
   },
+  namingCancelBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
   namingConfirmBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
   },

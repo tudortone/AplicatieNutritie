@@ -362,7 +362,10 @@
     "stagePreparing": "Pregătire & încărcare imagine",
     "stageQueued": "În așteptare procesare",
     "stageAnalyzing": "Analiză AI alimente & macro",
-    "stageFinalizing": "Pregătire rezultat nutrițional"
+    "stageFinalizing": "Pregătire rezultat nutrițional",
+    "creditConsumedCount": "1 Flow Credit folosit • {{count}} rămase",
+    "creditsUnlimited": "Acces Premium Nelimitat",
+    "creditProtectedNotice": "Niciun Flow Credit nu a fost consumat"
   },
   "photoJob": {
     "backgroundTitle": "Analiza continuă în fundal",
@@ -1700,6 +1703,14 @@
     "maxEvolutionReached": "Ai atins forma supremă de Legendă!",
     "beaconTitle": "Becul de Limită Nutrițională",
     "caloriesProgress": "{{consumed}} din {{target}} kcal consumate",
-    "close": "Am înțeles"
+    "close": "Am înțeles",
+    "aboutTitle": "Despre Sprout",
+    "aboutDesc": "Sprout este companionul tău inteligent de nutriție. Crește și evoluează alături de tine cu fiecare zi de streak înregistrată în jurnal.",
+    "accessoriesTitle": "Personalizare & Accesorii",
+    "comingSoon": "În curând",
+    "giveName": "Dă-i un nume",
+    "editName": "Modifică numele",
+    "confirmNameTitle": "Confirmare Nume Companion",
+    "confirmNamePrompt": "Ești sigur că vrei să alegi numele «{{name}}»? Numele va fi asociat companionului tău."
   }
 }

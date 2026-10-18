@@ -367,7 +367,10 @@
     "stagePreparing": "Préparation et téléversement",
     "stageQueued": "En attente de traitement",
     "stageAnalyzing": "Analyse IA des aliments et macros",
-    "stageFinalizing": "Finalisation du résultat"
+    "stageFinalizing": "Finalisation du résultat",
+    "creditConsumedCount": "1 crédit Flow utilisé • {{count}} restant(s)",
+    "creditsUnlimited": "Accès Premium Illimité",
+    "creditProtectedNotice": "Aucun crédit Flow n'a été consommé"
   },
   "photoJob": {
     "backgroundTitle": "L’analyse continue en arrière-plan",
@@ -1700,6 +1703,14 @@
     "maxEvolutionReached": "Vous avez atteint la forme suprême Légende !",
     "beaconTitle": "Balise de Limite Nutritionnelle",
     "caloriesProgress": "{{consumed}} sur {{target}} kcal consommées",
-    "close": "Compris"
+    "close": "Compris",
+    "aboutTitle": "À propos de Sprout",
+    "aboutDesc": "Sprout est votre compagnon nutritionnel intelligent. Il grandit et évolue avec vous à chaque jour de série enregistré dans votre journal.",
+    "accessoriesTitle": "Personnalisation & Accessoires",
+    "comingSoon": "Bientôt",
+    "giveName": "Donner un nom",
+    "editName": "Modifier le nom",
+    "confirmNameTitle": "Confirmer le nom du compagnon",
+    "confirmNamePrompt": "Voulez-vous vraiment choisir le nom «{{name}}» ? Ce nom sera associé à votre compagnon."
   }
 }

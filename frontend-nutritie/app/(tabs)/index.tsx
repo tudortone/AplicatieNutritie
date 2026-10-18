@@ -36,6 +36,9 @@ import { anatomyMapSize, singleAnatomyMapWidth } from '../../lib/anatomyLayout';
 import { FlowCreditsPill } from '../../components/FlowCreditsPill';
 import { WaterIntakeCard } from '../../components/home/WaterIntakeCard';
 import { RunnerSphereCompanionCluster } from '../../components/home/RunnerSphereCompanionCluster';
+import { FlowCompanionModal } from '../../components/home/FlowCompanionModal';
+import { useAuth } from '../../context/AuthContext';
+import { useFlowCredits } from '../../context/FlowCreditsContext';
 import { calculateDailyWaterTargetMl } from '../../lib/hydration';
 import { aboneazaLaMeseSalvateVerificat } from '../../lib/freshnessMese';
 import { decideCalorieRingUpdate } from '../../lib/mealRingAnimation';
@@ -129,16 +132,26 @@ export default function HomeScreen() {
   const reduceMotion = useReducedMotion();
   const { unreadCount } = useNotificationBannerData();
   const { streak } = useGamificareData();
+  const auth = useAuth();
+  const flowCredits = useFlowCredits();
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
   const homeScrollRef = useRef<ScrollView>(null);
   const streakSheetRef = useRef<StreakBottomSheetRef>(null);
   const [dataSelectata, setDataSelectata] = useState<Date>(() => new Date());
+  const [companionModalVisible, setCompanionModalVisible] = useState(false);
   const [weightModalVisible, setWeightModalVisible] = useState(false);
   const [greutateTinta, setGreutateTinta] = useState(70);
   const [stepGoalEdit, setStepGoalEdit] = useState(false);
   const [stepGoalInput, setStepGoalInput] = useState('');
   const [completedStepsInput, setCompletedStepsInput] = useState('');
   const [verifiedMealSaveRevision, setVerifiedMealSaveRevision] = useState(0);
+
+  // Refresh flow credits whenever Home receives focus
+  useFocusEffect(
+    useCallback(() => {
+      void flowCredits.refresh();
+    }, [flowCredits.refresh])
+  );
 
   // HOME-TOUCH-001 / REMED-029: foaia Adaugă masă se montează DOAR la prima deschidere
   // pentru a preveni interceptarea atingerilor pe Home de către containerul/backdrop-ul
@@ -478,7 +491,7 @@ export default function HomeScreen() {
         <Animated.View style={s.header}>
           <RunnerSphereCompanionCluster
             streak={streak}
-            onCompanionPress={() => streakSheetRef.current?.open()}
+            onCompanionPress={() => setCompanionModalVisible(true)}
           />
           <View testID="home-header-actions" style={[s.headerActions, isCompact && s.headerActionsCompact]}>
             <FlowCreditsPill />
@@ -982,6 +995,14 @@ export default function HomeScreen() {
         greutateCurenta={greutateIntrodusaKg}
         greutateTinta={greutateTinta}
         onSaveTinta={salveazaGreutateTinta}
+      />
+      <FlowCompanionModal
+        visible={companionModalVisible}
+        onClose={() => setCompanionModalVisible(false)}
+        streak={streak}
+        caloriiConsumate={totalCalorii}
+        caloriiTinta={caloriiTinta}
+        userId={auth?.user?.id}
       />
     </Animated.View>
   );

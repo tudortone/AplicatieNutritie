@@ -202,7 +202,7 @@ export function PixelCompanion({
       onPress={handlePress}
       accessibilityRole="button"
       accessibilityLabel={`Companion GetFlow nivelul ${calculatedLevel}.`}
-      hitSlop={6}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       style={styles.container}
     >
       <Animated.View style={[styles.companionWrapper, animatedStyle]}>
@@ -223,6 +223,9 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    minWidth: 48,
     gap: 4,
   },
   companionWrapper: {

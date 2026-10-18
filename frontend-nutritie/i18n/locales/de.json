@@ -367,7 +367,10 @@
     "stagePreparing": "Bildvorbereitung & Upload",
     "stageQueued": "In der Warteschlange",
     "stageAnalyzing": "KI-Analyse von Speisen & Makros",
-    "stageFinalizing": "Nährwertergebnis wird finalisiert"
+    "stageFinalizing": "Nährwertergebnis wird finalisiert",
+    "creditConsumedCount": "1 Flow-Guthaben verbraucht • {{count}} übrig",
+    "creditsUnlimited": "Unbegrenzter Premium-Zugriff",
+    "creditProtectedNotice": "Kein Flow-Guthaben verbraucht"
   },
   "photoJob": {
     "backgroundTitle": "Die Analyse läuft im Hintergrund weiter",
@@ -1700,6 +1703,14 @@
     "maxEvolutionReached": "Du hast die höchste Legenden-Stufe erreicht!",
     "beaconTitle": "Ernährungs-Limit-Leuchte",
     "caloriesProgress": "{{consumed}} von {{target}} kcal verbraucht",
-    "close": "Verstanden"
+    "close": "Verstanden",
+    "aboutTitle": "Über Sprout",
+    "aboutDesc": "Sprout ist dein intelligenter Ernährungsbegleiter. Er wächst und entwickelt sich mit jedem im Tagebuch erfassten Streak-Tag.",
+    "accessoriesTitle": "Anpassung & Zubehör",
+    "comingSoon": "Demnächst",
+    "giveName": "Einen Namen geben",
+    "editName": "Namen bearbeiten",
+    "confirmNameTitle": "Begleiternamen bestätigen",
+    "confirmNamePrompt": "Möchtest du wirklich den Namen «{{name}}» wählen? Der Name wird für deinen Begleiter gespeichert."
   }
 }

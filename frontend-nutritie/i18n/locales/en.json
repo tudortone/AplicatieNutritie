@@ -367,7 +367,10 @@
     "stagePreparing": "Preparing & uploading image",
     "stageQueued": "Queued for processing",
     "stageAnalyzing": "AI analyzing dish & macros",
-    "stageFinalizing": "Finalizing nutritional result"
+    "stageFinalizing": "Finalizing nutritional result",
+    "creditConsumedCount": "1 Flow Credit used • {{count}} left",
+    "creditsUnlimited": "Unlimited Premium Access",
+    "creditProtectedNotice": "No Flow Credits were consumed"
   },
   "photoJob": {
     "backgroundTitle": "Analysis continues in the background",
@@ -1700,6 +1703,14 @@
     "maxEvolutionReached": "You reached the supreme Legend form!",
     "beaconTitle": "Nutrition Limit Beacon",
     "caloriesProgress": "{{consumed}} of {{target}} kcal consumed",
-    "close": "Got it"
+    "close": "Got it",
+    "aboutTitle": "About Sprout",
+    "aboutDesc": "Sprout is your intelligent nutrition companion. It grows and evolves with you with every streak day logged in your journal.",
+    "accessoriesTitle": "Customization & Accessories",
+    "comingSoon": "Coming Soon",
+    "giveName": "Name your companion",
+    "editName": "Edit name",
+    "confirmNameTitle": "Confirm Companion Name",
+    "confirmNamePrompt": "Are you sure you want to name your companion \"{{name}}\"? The name will be saved for your companion."
   }
 }
