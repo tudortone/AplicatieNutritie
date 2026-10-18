@@ -26,6 +26,27 @@ jest.mock('expo-blur', () => {
   };
 });
 
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
+jest.mock('../context/FlowCreditsContext', () => ({
+  useFlowCredits: () => ({
+    balance: { total: 3, dailyRemaining: 3, rewarded: 0, purchased: 0, rewardedGrantsRemaining: 5, serverDay: null },
+    loading: false,
+    unlimited: false,
+    visible: false,
+    rewardState: 'idle',
+    creditProducts: [],
+    open: jest.fn(),
+    close: jest.fn(),
+    refresh: jest.fn().mockResolvedValue(null),
+    consumeOptimisticCredit: jest.fn(),
+    watchRewarded: jest.fn().mockResolvedValue('unavailable'),
+    purchase: jest.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 // Mock expo-linear-gradient
 jest.mock('expo-linear-gradient', () => {
   const { View } = require('react-native');

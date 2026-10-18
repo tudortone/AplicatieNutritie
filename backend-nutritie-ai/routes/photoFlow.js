@@ -57,6 +57,9 @@ function createPhotoFlowRouter({
 
   router.get('/flow-credits', requireAuth, generalLimiter, async (req, res) => {
     try {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       return res.json(await flowCredits.getBalance({ userId: req.user.id }));
     } catch (error) {
       return sendError(res, error);

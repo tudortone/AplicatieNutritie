@@ -373,6 +373,7 @@ export default function CameraScreen() {
         draftUri: draftPersistentUri,
         savedAt: Date.now(),
       };
+      flowCredits.consumeOptimisticCredit();
       if (shouldGoHomeOnSubmitRef.current) {
         if (__DEV__) console.log('[Camera] Job pornit pe backend, utilizatorul a mers la Acasă:', submitted.id);
         setPhotoPhase('background');
@@ -401,6 +402,7 @@ export default function CameraScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void flowCredits.refresh();
     } catch (error) {
+      if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void flowCredits.refresh();
       if (abortControllerRef.current !== controller || !isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       if (error instanceof PhotoApiError && (
         error.code === 'FLOW_CREDITS_EXHAUSTED'
@@ -559,6 +561,7 @@ export default function CameraScreen() {
           });
         if (!controller.signal.aborted && isPhotoOwnerCurrent(userId, accountGeneration)) {
           applyPhotoJobResult(completed, active.pointer, userId, accountGeneration);
+          void flowCredits.refresh();
         }
         if (controller.signal.aborted || !isPhotoOwnerCurrent(userId, accountGeneration)) return;
         if (active.pointer.draftUri) {

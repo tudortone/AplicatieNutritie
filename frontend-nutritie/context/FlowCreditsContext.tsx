@@ -28,6 +28,7 @@ type FlowCreditsContextValue = {
   open: () => void;
   close: () => void;
   refresh: () => Promise<FlowCreditsBalance | null>;
+  consumeOptimisticCredit: () => void;
   watchRewarded: () => Promise<RewardedAdOutcome | 'limit' | 'granted'>;
   purchase: (product: BillingCreditProduct) => Promise<void>;
 };
@@ -51,6 +52,7 @@ const FlowCreditsContext = createContext<FlowCreditsContextValue>({
   open: () => {},
   close: () => {},
   refresh: async () => null,
+  consumeOptimisticCredit: () => {},
   watchRewarded: async () => 'unavailable',
   purchase: async () => {},
 });
@@ -93,6 +95,8 @@ async function authenticatedFetch(path: string, init?: RequestInit, expectedUser
       ...init,
       headers: {
         Authorization: `Bearer ${data.session.access_token}`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
         ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
         ...init?.headers,
         ...integrityHeaders,
@@ -240,6 +244,34 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     }
   }, [balance, balanceOwnerId, refresh]);
 
+  const consumeOptimisticCredit = useCallback(() => {
+    setBalance((prev) => {
+      if (prev.total <= 0) return prev;
+      if (prev.dailyRemaining > 0) {
+        return {
+          ...prev,
+          dailyRemaining: prev.dailyRemaining - 1,
+          total: Math.max(0, prev.total - 1),
+        };
+      }
+      if (prev.rewarded > 0) {
+        return {
+          ...prev,
+          rewarded: prev.rewarded - 1,
+          total: Math.max(0, prev.total - 1),
+        };
+      }
+      if (prev.purchased > 0) {
+        return {
+          ...prev,
+          purchased: prev.purchased - 1,
+          total: Math.max(0, prev.total - 1),
+        };
+      }
+      return prev;
+    });
+  }, []);
+
   const purchase = useCallback(async (product: BillingCreditProduct) => {
     await billing.purchaseCredits(product);
   }, [billing]);
@@ -256,9 +288,10 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     open: () => setVisible(true),
     close: () => setVisible(false),
     refresh,
+    consumeOptimisticCredit,
     watchRewarded,
     purchase,
-  }), [appUserId, balance, balanceOwnerId, loading, premium.loading, premium.hasFullAccess, premium.isPremium, visible, rewardState, billing.creditProducts, refresh, watchRewarded, purchase]);
+  }), [appUserId, balance, balanceOwnerId, loading, premium.loading, premium.hasFullAccess, premium.isPremium, visible, rewardState, billing.creditProducts, refresh, consumeOptimisticCredit, watchRewarded, purchase]);
 
   return <FlowCreditsContext.Provider value={value}>{children}</FlowCreditsContext.Provider>;
 }

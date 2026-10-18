@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { AlertTriangle, RefreshCw, Image as ImageIcon, Home, WifiOff, Lock, Camera } from 'lucide-react-native';
+import { AlertTriangle, RefreshCw, Image as ImageIcon, Home, WifiOff, Lock, Camera, ShieldCheck } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useTranslation } from 'react-i18next';
@@ -106,6 +106,15 @@ export function PhotoMealErrorView({
           <Text maxFontSizeMultiplier={1.3} style={styles.bodyText}>
             {content.body}
           </Text>
+
+          {errorType !== 'permission_denied' && (
+            <View style={styles.refundBadge} testID="credit-refund-reassurance-badge">
+              <ShieldCheck size={14} color="#CCFF00" />
+              <Text style={styles.refundBadgeText}>
+                {t('camera.creditProtectedNotice', 'Niciun Flow Credit nu a fost consumat')}
+              </Text>
+            </View>
+          )}
 
           <View style={styles.actionsArea}>
             {/* 1. Primary Action */}
@@ -259,5 +268,24 @@ const styles = StyleSheet.create({
     color: '#CCFF00',
     fontSize: 14,
     fontWeight: '700',
+  },
+  refundBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(204, 255, 0, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.25)',
+    marginTop: 10,
+    marginBottom: 4,
+    alignSelf: 'center',
+  },
+  refundBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#CCFF00',
   },
 });

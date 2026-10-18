@@ -16,6 +16,7 @@ import { FlowIcon } from '../ui/FlowIcon';
 import { MacroDistributionBar } from './MacroDistributionBar';
 import { IngredientCardRow } from './IngredientCardRow';
 import { ChangeIngredientSheet, FoodCandidate } from './ChangeIngredientSheet';
+import { useFlowCredits } from '../../context/FlowCreditsContext';
 import type { AlimentScanat } from './FoodScanSuccessModal';
 import type { TipMasa } from '../../types';
 
@@ -69,6 +70,7 @@ export function PhotoMealResultView({
   bottomInset = 16,
 }: PhotoMealResultViewProps) {
   const { t } = useTranslation();
+  const flowCredits = useFlowCredits();
   const [mealCategoryOpen, setMealCategoryOpen] = useState(false);
   const [changeSheetTargetIndex, setChangeSheetTargetIndex] = useState<number | null>(null);
   const [isAddingNewIngredient, setIsAddingNewIngredient] = useState(false);
@@ -232,6 +234,16 @@ export function PhotoMealResultView({
                 </Text>
                 <ChevronDown size={12} color="#CCFF00" />
               </TouchableOpacity>
+            </View>
+
+            {/* Credit Consumption Status Badge */}
+            <View style={styles.creditStatusRow} testID="photo-credit-status-badge">
+              <FlowIcon name="zap" size={11} color="#CCFF00" />
+              <Text style={styles.creditStatusText}>
+                {flowCredits.unlimited
+                  ? t('camera.creditsUnlimited', 'Acces Premium Nelimitat')
+                  : t('camera.creditConsumedCount', '1 Flow Credit folosit • {{count}} rămase', { count: flowCredits.balance.total })}
+              </Text>
             </View>
 
             {/* Pending Photo Save Lock Notice */}
@@ -743,5 +755,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: '#8B93A0',
+  },
+  creditStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(204, 255, 0, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.2)',
+    alignSelf: 'flex-start',
+  },
+  creditStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#CCFF00',
   },
 });
