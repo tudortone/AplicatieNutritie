@@ -197,7 +197,7 @@ export default function HomeScreen() {
   }), [dataSelectata, user?.id]);
   const { t, i18n } = useTranslation();
   const { consumedMl, loading: waterLoading, adaugaPahar, scadePahar, setConsumedMl } = useApa();
-  const { steps, activeCalories, stepGoal, isEnabled, isAvailable, platformName, setNewStepGoal, toggleSync, refreshSteps, addManualSteps, setCompletedSteps } = useHealthSync();
+  const { steps, activeCalories, stepGoal, isEnabled, isAvailable, platformName, setNewStepGoal, toggleSync, refreshSteps, addManualSteps, setCompletedSteps, openStepsSettings } = useHealthSync();
   const { totalCaloriiArse, antrenamente, refresh: refreshAntrenamente } = useAntrenamente();
   const { exercitii } = useExercitii();
   const [viewSideHome, setViewSideHome] = useState<'front' | 'back'>('front');
@@ -855,7 +855,12 @@ export default function HomeScreen() {
                       : t('home.stepsInactiveHelp')}
                   </Text>
                   <TouchableOpacity
-                    onPress={() => toggleSync(true)}
+                    onPress={async () => {
+                      await toggleSync(true);
+                      if (!isAvailable) {
+                        await openStepsSettings();
+                      }
+                    }}
                     style={[s.connectBtn, { backgroundColor: colors.accent }]}
                     accessibilityRole="button"
                     accessibilityLabel={t('home.stepsActivateA11y')}

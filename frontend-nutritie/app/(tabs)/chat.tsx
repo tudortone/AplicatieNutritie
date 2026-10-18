@@ -279,6 +279,10 @@ export default function ChatScreen() {
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<CoachMealDraft | null>(null);
   const [savingProposal, setSavingProposal] = useState(false);
+  const DEFAULT_CHAT_QUOTA_TOTAL = 10;
+  const getDailyChatUsageKey = (userId?: string) =>
+    `@getflow/chat_daily_${userId || 'anon'}_${localDayKey(new Date())}`;
+
   const [chatQuota, setChatQuota] = useState<{
     total: number;
     consumate: number;
@@ -286,7 +290,31 @@ export default function ChatScreen() {
     tier: string;
     reseteazaLa?: string;
     oreRamase?: number;
-  } | null>(null);
+  }>({
+    total: DEFAULT_CHAT_QUOTA_TOTAL,
+    consumate: 0,
+    ramase: DEFAULT_CHAT_QUOTA_TOTAL,
+    tier: 'free',
+  });
+
+  useEffect(() => {
+    let activ = true;
+    const loadLocalQuota = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(getDailyChatUsageKey(session?.user?.id));
+        if (stored && activ) {
+          const used = Math.max(0, parseInt(stored, 10) || 0);
+          setChatQuota((prev) => ({
+            ...prev,
+            consumate: used,
+            ramase: Math.max(0, prev.total - used),
+          }));
+        }
+      } catch {}
+    };
+    void loadLocalQuota();
+    return () => { activ = false; };
+  }, [session?.user?.id]);
 
   const fetchChatQuota = useCallback(async () => {
     if (!session?.access_token) return;
@@ -298,12 +326,14 @@ export default function ChatScreen() {
         const data = await resp.json();
         if (typeof data?.total === 'number' && typeof data?.ramase === 'number') {
           setChatQuota(data);
+          const used = data.consumate ?? Math.max(0, data.total - data.ramase);
+          void AsyncStorage.setItem(getDailyChatUsageKey(session?.user?.id), String(used)).catch(() => {});
         }
       }
     } catch {
-      // fail safe
+      // fail safe: păstrăm cota locală zilnică
     }
-  }, [session?.access_token]);
+  }, [session?.access_token, session?.user?.id]);
 
   useEffect(() => {
     fetchChatQuota();
@@ -659,7 +689,12 @@ export default function ChatScreen() {
 
       if (!raspuns.ok) {
         if (date?.cod === 'CHAT_QUOTA_EXCEEDED') {
-          setChatQuota((prev) => prev ? { ...prev, ramase: 0 } : null);
+          setChatQuota((prev) => ({
+            ...prev,
+            ramase: 0,
+            consumate: prev.total,
+          }));
+          void AsyncStorage.setItem(getDailyChatUsageKey(session?.user?.id), '10').catch(() => {});
         }
         // Statusurile non-2xx se mapau pe mesaje clare; altfel un 401/429/500
         // apărea ca un răspuns AI normal ("Eroare la procesarea răspunsului.").
@@ -681,12 +716,27 @@ export default function ChatScreen() {
       const totalHeader = raspuns.headers?.get?.('x-ai-chat-quota-total') || raspuns.headers?.get?.('X-AI-Chat-Quota-Total') || null;
       const tierHeader = raspuns.headers?.get?.('x-ai-chat-quota-tier') || raspuns.headers?.get?.('X-AI-Chat-Quota-Tier') || null;
       if (remainingHeader !== null && totalHeader !== null) {
-        setChatQuota((prev) => ({
-          total: Number(totalHeader) || (prev?.total ?? 10),
-          consumate: Math.max(0, (Number(totalHeader) || 10) - Number(remainingHeader)),
-          ramase: Number(remainingHeader),
-          tier: tierHeader || (prev?.tier ?? 'free'),
-        }));
+        const total = Number(totalHeader) || 10;
+        const ramase = Number(remainingHeader);
+        const consumate = Math.max(0, total - ramase);
+        setChatQuota({
+          total,
+          consumate,
+          ramase,
+          tier: tierHeader || 'free',
+        });
+        void AsyncStorage.setItem(getDailyChatUsageKey(session.user?.id), String(consumate)).catch(() => {});
+      } else {
+        setChatQuota((prev) => {
+          const newConsumate = prev.consumate + 1;
+          const newRamase = Math.max(0, prev.total - newConsumate);
+          void AsyncStorage.setItem(getDailyChatUsageKey(session.user?.id), String(newConsumate)).catch(() => {});
+          return {
+            ...prev,
+            consumate: newConsumate,
+            ramase: newRamase,
+          };
+        });
       }
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

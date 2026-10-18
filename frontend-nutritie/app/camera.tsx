@@ -426,6 +426,7 @@ export default function CameraScreen() {
         || error.code === 'PHOTO_RESULT_EMPTY'
         || error.code === 'EMPTY_RESULT'
         || error.code === 'PHOTO_RESULT_INVALID'
+        || error.code === 'PHOTO_ANALYSIS_FAILED'
       );
       if (isNonFoodErrorCode) {
         setPhotoPhase('failed');
@@ -819,12 +820,14 @@ export default function CameraScreen() {
   const handleRetakePhoto = useCallback(() => {
     setFailedPhotoJob(null);
     setScanError(null);
+    setPhotoPhase('idle');
     anuleazaScanarea();
   }, [anuleazaScanarea]);
 
   const handleGalleryFromNotFood = useCallback(() => {
     setFailedPhotoJob(null);
     setScanError(null);
+    setPhotoPhase('idle');
     anuleazaScanarea();
     void alegeDinGalerie();
   }, [alegeDinGalerie, anuleazaScanarea]);
@@ -832,6 +835,7 @@ export default function CameraScreen() {
   const handleHomeFromNotFood = useCallback(() => {
     setFailedPhotoJob(null);
     setScanError(null);
+    setPhotoPhase('idle');
     anuleazaScanarea();
     permitereNavigareRef.current = true;
     if (router.canGoBack()) {
@@ -1296,6 +1300,7 @@ export default function CameraScreen() {
         <PhotoMealErrorView
           testID="camera-not-food-card"
           errorType="not_food"
+          customMessage={scanError}
           onRetake={handleRetakePhoto}
           onGallery={handleGalleryFromNotFood}
           onHome={handleHomeFromNotFood}
@@ -1360,7 +1365,7 @@ export default function CameraScreen() {
         </KeyboardAvoidingView>
       )}
 
-      {scanError && (
+      {scanError && !isNonFood && (
         <View style={[styles.errorCard, { top: insets.top + 78 }]} accessibilityRole="alert" accessibilityLiveRegion="assertive">
           <Text maxFontSizeMultiplier={1.3} style={styles.errorText}>{scanError}</Text>
           {recoveryBlocked ? (

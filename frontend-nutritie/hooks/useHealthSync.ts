@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Platform, AppState, AppStateStatus } from 'react-native';
+import { Platform, AppState, AppStateStatus, Linking } from 'react-native';
 import { Pedometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -71,7 +71,26 @@ export interface HealthSyncState {
   addManualSteps: (amount: number) => Promise<void>;
   setCompletedSteps: (total: number) => Promise<void>;
   refreshSteps: () => Promise<void>;
+  openStepsSettings: () => Promise<void>;
 }
+
+export const openStepsSettings = async () => {
+  if (Platform.OS === 'android') {
+    try {
+      if (typeof (HealthConnect as unknown as { openHealthConnectSettings?: () => void }).openHealthConnectSettings === 'function') {
+        (HealthConnect as unknown as { openHealthConnectSettings: () => void }).openHealthConnectSettings();
+        return;
+      }
+    } catch (e) {
+      console.warn('Eroare openHealthConnectSettings:', e);
+    }
+  }
+  try {
+    await Linking.openSettings();
+  } catch (e) {
+    console.warn('Eroare Linking.openSettings:', e);
+  }
+};
 
 export function useHealthSync(): HealthSyncState {
   const healthConnectProvider = useMemoHealthConnectProvider();
@@ -348,6 +367,9 @@ export function useHealthSync(): HealthSyncState {
           } catch {
             avail = false;
           }
+          if (!avail) {
+            await openStepsSettings();
+          }
         } else {
           try {
             const permResult = await Pedometer.requestPermissionsAsync();
@@ -469,6 +491,7 @@ export function useHealthSync(): HealthSyncState {
     addManualSteps,
     setCompletedSteps,
     refreshSteps,
+    openStepsSettings,
   };
 }
 
