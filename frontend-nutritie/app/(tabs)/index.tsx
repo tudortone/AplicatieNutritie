@@ -147,10 +147,11 @@ export default function HomeScreen() {
   const [verifiedMealSaveRevision, setVerifiedMealSaveRevision] = useState(0);
 
   // Refresh flow credits whenever Home receives focus
+  const refreshCredits = flowCredits.refresh;
   useFocusEffect(
     useCallback(() => {
-      void flowCredits.refresh();
-    }, [flowCredits.refresh])
+      void refreshCredits();
+    }, [refreshCredits])
   );
 
   // HOME-TOUCH-001 / REMED-029: foaia Adaugă masă se montează DOAR la prima deschidere

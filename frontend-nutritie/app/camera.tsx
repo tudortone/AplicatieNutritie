@@ -586,7 +586,7 @@ export default function CameraScreen() {
     };
     void recover();
     return () => controller.abort();
-  }, [applyPhotoJobResult, isPhotoOwnerCurrent, recoveryAttempt, session?.access_token, session?.user.id, t]);
+  }, [applyPhotoJobResult, flowCredits, isPhotoOwnerCurrent, recoveryAttempt, session?.access_token, session?.user.id, t]);
 
   const retryFailedPhotoJob = useCallback(async () => {
     if (!failedPhotoJob || !session?.user.id) return;
