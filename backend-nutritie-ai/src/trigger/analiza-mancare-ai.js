@@ -100,7 +100,7 @@ async function settlePhotoCredit({ userId, reservationId, action, reason = null 
 }
 
 async function requireOwnedJob({ jobId, userId, imageUrl, reservationId }) {
-  if (!jobId) return;
+  if (!jobId || !reservationId) throw new Error('JOB_OWNERSHIP_MISMATCH');
   const client = supabaseAiJobs();
   if (!client) throw new Error('SUPABASE_CONFIG_MISSING');
   const { data, error } = await client.from('ai_jobs')

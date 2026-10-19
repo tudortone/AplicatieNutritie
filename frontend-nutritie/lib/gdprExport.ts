@@ -44,12 +44,15 @@ export async function buildCompleteUserExport({
   const activeOwner = await AsyncStorage.getItem(ACTIVE_LOCAL_USER_KEY);
   const encodedOwnerPrefix = `${USER_STORAGE_PREFIX}${encodeURIComponent(owner)}:`;
   const chatPrefix = `chat_history_${owner}_`;
+  const chatDailyPrefix = `@getflow/chat_daily_${owner}_`;
   const accountKeys = allKeys.filter((key) =>
     key.startsWith(encodedOwnerPrefix) ||
     key === `chat_history_${owner}` ||
     key.startsWith(chatPrefix) ||
     key === `@nutri_offline_meals_queue_${owner}` ||
-    key === `@nutri_pending_macro_targets_${owner}`,
+    key === `@nutri_pending_macro_targets_${owner}` ||
+    key === `@getflow/photo-job/v1/${owner}` ||
+    key.startsWith(chatDailyPrefix),
   );
   const workspaceKeys = activeOwner === owner
     ? allKeys.filter(isUserBoundWorkspaceKey)

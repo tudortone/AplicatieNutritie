@@ -82,12 +82,13 @@ function creeazaServiciuChatQuota({
     const msTtl = fereastraMs || calculeazaMsPanaLaMiezulNoptiiUtc();
     const reseteazaLa = new Date(Date.now() + (secundeRamase > 0 ? secundeRamase * 1000 : msTtl)).toISOString();
 
-    // Deducem valoarea curentă atomic prin increment + decrement imediat
-    const countTest = await sursa.increment(cheie, msTtl);
-    if (typeof sursa.decrement === 'function') {
-      await Promise.resolve(sursa.decrement(cheie)).catch(() => {});
-    }
-    const consumatReal = Math.max(0, countTest - 1);
+    // Citire strict read-only a valorii curente (fără mutare INCR/DECR sau intrări fantomă)
+    const valoareCitita = typeof sursa.get === 'function'
+      ? await sursa.get(cheie)
+      : 0;
+    const consumatReal = Number.isFinite(Number(valoareCitita))
+      ? Math.max(0, Number(valoareCitita))
+      : 0;
     const ramase = Math.max(0, limita - consumatReal);
 
     return {

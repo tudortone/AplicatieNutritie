@@ -76,6 +76,8 @@ export const ALREADY_USER_SCOPED_PREFIXES = [
   'chat_history_',
   '@nutri_offline_meals_queue_',
   '@nutri_pending_macro_targets_',
+  '@getflow/photo-job/v1/',
+  '@getflow/chat_daily_',
 ] as const;
 
 // Pre-auth onboarding may set this before the first login, so it is not part of
@@ -248,11 +250,14 @@ async function purgeDeletedUserData(owner: string): Promise<void> {
   const registry = await readRegistry(owner);
   const allKeys = await AsyncStorage.getAllKeys();
   const chatPrefix = `chat_history_${owner}_`;
+  const chatDailyPrefix = `@getflow/chat_daily_${owner}_`;
   const independentlyScoped = allKeys.filter((key) =>
     key === `chat_history_${owner}` ||
     key.startsWith(chatPrefix) ||
     key === `@nutri_offline_meals_queue_${owner}` ||
-    key === `@nutri_pending_macro_targets_${owner}`,
+    key === `@nutri_pending_macro_targets_${owner}` ||
+    key === `@getflow/photo-job/v1/${owner}` ||
+    key.startsWith(chatDailyPrefix),
   );
   const scoped = [
     ...registry.map((key) => userStorageKey(owner, key)),

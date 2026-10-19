@@ -124,6 +124,14 @@ function construiesteApp({ userId = USER_A, tasks = null, registru: registruInje
     semaforAi: { ruleaza: async (fn) => fn() },
     idempotencyCritic: middlewareCritic,
     supabaseAdmin: null,
+    flowCredits: {
+      reservePhoto: async ({ logicalAnalysisId }) => {
+        mutatiiCota.consum += 1;
+        return { ok: true, reservationId: `res-${logicalAnalysisId}`, source: 'DAILY' };
+      },
+      commitPhoto: async () => ({ ok: true, status: 'COMMITTED' }),
+      releasePhoto: async () => ({ ok: true, status: 'RELEASED' }),
+    },
   });
 
   app.use('/api/v1', aiRouter);

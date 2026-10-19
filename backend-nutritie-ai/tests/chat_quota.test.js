@@ -187,5 +187,68 @@ describe('AI Chat Quota & Cost Protection (Phase 6)', () => {
       expect(typeof res.body.ramase).toBe('number');
       expect(res.body.reseteazaLa).toBeDefined();
     });
+
+    it('este strict read-only: nu apelează increment/decrement și nu creează intrări fantomă în contor', async () => {
+      const incrSpy = jest.spyOn(contor, 'increment');
+      const decrSpy = jest.spyOn(contor, 'decrement');
+
+      const res = await request(app)
+        .get('/api/chat/quota')
+        .set('Authorization', 'Bearer free_token');
+
+      expect(res.status).toBe(200);
+      expect(res.body.consumate).toBe(0);
+      expect(res.body.ramase).toBe(3);
+      expect(incrSpy).not.toHaveBeenCalled();
+      expect(decrSpy).not.toHaveBeenCalled();
+      expect(contor.intrari.size).toBe(0);
+    });
+
+    it('nu provoacă un fals 429 la limita - 1 când GET /chat/quota rulează concurent cu POST /chat', async () => {
+      let valoare = 2; // 2 din 3 consumate (1 mesaj rămas)
+      const contorAsincron = {
+        get: jest.fn(async () => valoare),
+        ttl: jest.fn(async () => 3600),
+        increment: jest.fn(async () => {
+          valoare += 1;
+          const curent = valoare;
+          // Fereastra de rețea Redis între INCR și eventualul DECR
+          await new Promise((r) => setTimeout(r, 25));
+          return curent;
+        }),
+        decrement: jest.fn(async () => {
+          valoare = Math.max(0, valoare - 1);
+          return valoare;
+        }),
+      };
+
+      const serviciuConcurent = creeazaServiciuChatQuota({
+        contor: contorAsincron,
+        billingService: mockBillingService,
+        limitaFree: 3,
+      });
+
+      const appConcurent = express();
+      appConcurent.use(express.json());
+      appConcurent.use((req, _res, next) => {
+        req.user = { id: 'free-race-user' };
+        next();
+      });
+      appConcurent.get('/api/chat/quota', async (req, res) => {
+        res.json(await serviciuConcurent.obtineCota(req.user));
+      });
+      appConcurent.post('/api/chat', serviciuConcurent.middlewareCotaChat, (_req, res) => {
+        res.json({ raspuns: 'Ultimul mesaj permis!' });
+      });
+
+      const [quotaRes, chatRes] = await Promise.all([
+        request(appConcurent).get('/api/chat/quota'),
+        request(appConcurent).post('/api/chat').send({ mesaj: 'Al 3-lea mesaj' }),
+      ]);
+
+      expect(quotaRes.status).toBe(200);
+      expect(chatRes.status).toBe(200);
+      expect(valoare).toBe(3);
+    });
   });
 });

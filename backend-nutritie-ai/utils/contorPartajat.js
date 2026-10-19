@@ -89,6 +89,16 @@ class ContorLocalCuTtl {
     return intrare.valoare;
   }
 
+  get(cheie) {
+    const acum = Date.now();
+    const intrare = this.intrari.get(cheie);
+    if (!intrare || (intrare.expiraLa && intrare.expiraLa <= acum)) {
+      if (intrare) this.intrari.delete(cheie);
+      return 0;
+    }
+    return Math.max(0, Number(intrare.valoare) || 0);
+  }
+
   ttl(cheie) {
     const intrare = this.intrari.get(cheie);
     if (!intrare) return -2;
@@ -113,6 +123,21 @@ function creeazaContorPartajat({ url, prefix = 'nutri:contor', plafon } = {}) {
   const cheieFinala = (cheie) => `${prefix}:${String(cheie)}`;
 
   return {
+    async get(cheie) {
+      const finala = cheieFinala(cheie);
+      if (client?.isReady) {
+        try {
+          const raw = await client.get(finala);
+          if (raw === null || raw === undefined) return 0;
+          const parsed = Number(raw);
+          return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+        } catch (err) {
+          avertizeaza(`[Contor] GET Redis indisponibil (${codEroare(err)}); folosesc rezerva locala.`);
+        }
+      }
+      return local.get(finala);
+    },
+
     async increment(cheie, ttlMs) {
       const finala = cheieFinala(cheie);
       const localCount = local.increment(finala, ttlMs);

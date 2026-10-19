@@ -397,6 +397,10 @@ const aiR = createAiRouter({
   supabaseAdmin,
   billingService: googleBillingService,
   chatQuota,
+  photoJobs: photoJobService,
+  flowCredits: flowCreditsService,
+  contextDate,
+  integrityGuard: playIntegrityGuard,
 });
 const barcodeR = createBarcodeRouter({
   requireAuth,

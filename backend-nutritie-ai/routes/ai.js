@@ -17,6 +17,26 @@ const { EroareAiClient } = require('../services/ai/chat');
 const { inregistreazaUtilizareAdmin } = require('../utils/clientUtilizator');
 const { rezumatEroareSigur } = require('../utils/sentrySanitize');
 const { creeazaServiciuChatQuota } = require('../utils/chatQuota');
+const { PhotoJobError } = require('../services/ai/photoJobService');
+const { FlowCreditsError } = require('../services/monetization/flowCreditsService');
+
+function mapPhotoAdmissionStatus(code) {
+  if (code === 'PHOTO_IN_PROGRESS') return 409;
+  if (code === 'FLOW_CREDITS_EXHAUSTED') return 402;
+  if (code === 'PREMIUM_FAIR_USE_REACHED') return 429;
+  return 503;
+}
+
+function sendPhotoAdmissionError(res, code) {
+  const normalizedCode = code || 'FLOW_CREDITS_UNAVAILABLE';
+  const status = mapPhotoAdmissionStatus(normalizedCode);
+  if (normalizedCode === 'PHOTO_IN_PROGRESS') res.setHeader('Retry-After', '5');
+  return res.status(status).json({
+    eroare: 'Operația foto nu a putut fi pornită.',
+    cod: normalizedCode,
+    code: normalizedCode,
+  });
+}
 
 /**
  * Rute AI (analiza foto, chat, estimare text, corectie vizual+text) + orfanele
@@ -48,9 +68,36 @@ function createAiRouter({
   supabaseAdmin = null,
   billingService = null,
   chatQuota = null,
+  photoJobs = null,
+  flowCredits = null,
+  contextDate = null,
+  integrityGuard = null,
 }) {
   // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
   const router = express.Router();
+
+  const buildPhotoIntegrityMiddleware = (canonicalPath) => {
+    if (typeof integrityGuard === 'function') {
+      return integrityGuard({ action: 'photo.submit', canonicalPath });
+    }
+    if (config?.playIntegrity?.mode && config.playIntegrity.mode !== 'off') {
+      return (_req, res) => res.status(403).json({
+        eroare: 'Verificarea integrității aplicației nu a reușit.',
+        cod: 'PLAY_INTEGRITY_REQUIRED',
+        code: 'PLAY_INTEGRITY_REQUIRED',
+      });
+    }
+    return (_req, _res, next) => next();
+  };
+
+  const resolvePhotoEntitlement = async (user) => {
+    if (user?.esteTester === true) return 'full_access';
+    if (billingService && typeof billingService.getPaidEntitlement === 'function') {
+      const paid = await billingService.getPaidEntitlement({ userId: user.id });
+      if (paid?.premium === true) return 'premium';
+    }
+    return 'free';
+  };
 
   const serviciuChatQuota = chatQuota || creeazaServiciuChatQuota({
     billingService,
@@ -113,7 +160,9 @@ function createAiRouter({
     supabaseUrl: config.supabase.url,
   });
 
-  router.post('/trigger-analiza-mancare', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, async (req, res) => {
+  const submitTriggerIntegrity = buildPhotoIntegrityMiddleware('/trigger-analiza-mancare');
+
+  router.post('/trigger-analiza-mancare', requireAuth, aiLimiter, submitTriggerIntegrity, idempotencyCritic, async (req, res) => {
     if (!config.triggerSecretKey) {
       return res.status(503).json({
         eroare: 'Trigger.dev nu este activat (lipseste TRIGGER_SECRET_KEY in variabilele de mediu backend).',
@@ -121,7 +170,7 @@ function createAiRouter({
       });
     }
     try {
-      const { imageUrl, tipMasa } = req.body;
+      const { imageUrl, tipMasa } = req.body || {};
       // folderPrefix per-utilizator: analiza trebuie sa accepte doar imagini din
       // folderul propriu `/mancare/<userId>/` — altfel oricine ar putea trimite
       // URL-ul imaginii altui utilizator (IDOR).
@@ -134,70 +183,115 @@ function createAiRouter({
         return res.status(400).json({ eroare: verificare.eroare });
       }
 
-      // JOB-UL se creeaza in `ai_jobs` (status `queued`) iar task-ul Trigger primeste
-      // `jobId` in payload ca sa isi actualizeze propria stare (processing/completed/failed).
-      // Client admin (service_role) exclusiv pentru tabelele backend-only: `ai_jobs`
-      // nu are politici de insert/update (revoke pe anon/authenticated), deci singura
-      // cale corecta prin care backendul scrie job-uri e clientul privilegiat.
-      // M-05: clientul se injecteaza din server.js (cu timeout 10s) — nu se mai
-      // construieste aici un client duplicat fara timeout.
-      let jobId = null;
-      if (supabaseAdmin) {
-        const { data: rand, error: insertErr } = await supabaseAdmin
-          .from('ai_jobs')
-          .insert({ user_id: req.user.id, status: 'queued' })
-          .select('id')
-          .single();
-        if (!insertErr) {
-          jobId = rand?.id || null;
-          // C1-S4: scriere admin (service_role) pe `ai_jobs` — crearea job-ului,
-          // prin clientul admin, fara context (calea Trigger.dev).
-          inregistreazaUtilizareAdmin();
-        }
-      }
-
       // P1-12: cheia de idempotenta a RUNULUI Trigger.dev se deriva din OPERATIA
       // LOGICA (utilizator + imagine + tip masa), nu din identitatea cererii HTTP.
-      // Doua cereri HTTP distincte (retry dupa timeout, reconectare, dublu tap) au
-      // request-id-uri diferite, dar aceeasi operatie logica — fara asta, fiecare
-      // ar porni un run separat si ar factura inca o analiza vision.
-      // Includerea userId-ului pastreaza izolarea: aceeasi imagine la doi utilizatori
-      // ramane doua operatii distincte.
       const cheieIdempotentaRun = crypto
         .createHash('sha256')
         .update(`analiza-mancare-ai:${req.user.id}:${verificare.url}:${tipMasa || 'Pranz'}`)
         .digest('hex');
 
-      const handle = await tasks.trigger('analiza-mancare-ai', {
-        imageUrl: verificare.url,
-        tipMasa: tipMasa || 'Pranz',
-        userId: req.user.id,
-        jobId,
-      }, {
-        idempotencyKey: cheieIdempotentaRun,
-        // Marginit: dupa fereastra, aceeasi poza poate fi re-analizata deliberat.
-        idempotencyKeyTTL: '15m',
-      });
+      const suppliedAnalysisId = typeof req.body?.analysisId === 'string'
+        && req.body.analysisId.trim().length > 0
+        && req.body.analysisId.trim().length <= 256
+        ? req.body.analysisId.trim()
+        : null;
+      const logicalAnalysisId = suppliedAnalysisId || cheieIdempotentaRun;
 
-      // Asocim trigger_run_id-ul cu job-ul creat.
-      if (jobId && supabaseAdmin) {
-        await supabaseAdmin
-          .from('ai_jobs')
-          .update({ trigger_run_id: handle.id })
-          .eq('id', jobId);
-        // C1-S4: actualizare admin pe `ai_jobs` — confirmarea trigger_run_id,
-        // prin clientul admin, fara context (calea Trigger.dev).
-        inregistreazaUtilizareAdmin();
+      if (photoJobs && typeof photoJobs.submit === 'function') {
+        const job = await photoJobs.submit({
+          userId: req.user.id,
+          logicalAnalysisId,
+          imageUrl: verificare.url,
+          imageFileId: typeof req.body?.imageFileId === 'string' ? req.body.imageFileId : null,
+          mealType: tipMasa || 'Pranz',
+          language: req.body?.limba || req.body?.language || 'ro',
+          fullAccess: req.user.esteTester === true,
+          dataContext: typeof contextDate === 'function' ? contextDate(req, res) : {},
+        });
+
+        return res.status(202).json({
+          jobId: job.id || null,
+          succes: true,
+          taskId: job.triggerRunId,
+          status: 'pending',
+          mesaj: 'Analiza AI a fost trimisa in fundal prin Trigger.dev.',
+          ...(job.replay === true ? { replay: true } : {}),
+        });
       }
 
-      return res.status(202).json({
-        jobId,
-        succes: true,
-        taskId: handle.id,
-        status: 'pending',
-        mesaj: 'Analiza AI a fost trimisa in fundal prin Trigger.dev.',
+      if (!flowCredits || typeof flowCredits.reservePhoto !== 'function') {
+        return sendPhotoAdmissionError(res, 'FLOW_CREDITS_UNAVAILABLE');
+      }
+
+      const entitlement = await resolvePhotoEntitlement(req.user);
+      const reservation = await flowCredits.reservePhoto({
+        userId: req.user.id,
+        logicalAnalysisId,
+        entitlement,
       });
+      if (!reservation?.ok) {
+        return sendPhotoAdmissionError(res, reservation?.code || reservation?.reason);
+      }
+
+      let jobId = null;
+      try {
+        if (supabaseAdmin) {
+          const { data: rand, error: insertErr } = await supabaseAdmin
+            .from('ai_jobs')
+            .insert({
+              user_id: req.user.id,
+              status: 'queued',
+              logical_analysis_id: logicalAnalysisId,
+              image_url: verificare.url,
+              credit_reservation_id: reservation.reservationId,
+            })
+            .select('id')
+            .single();
+          if (!insertErr) {
+            jobId = rand?.id || null;
+            inregistreazaUtilizareAdmin();
+          }
+        }
+
+        const handle = await tasks.trigger('analiza-mancare-ai', {
+          imageUrl: verificare.url,
+          tipMasa: tipMasa || 'Pranz',
+          userId: req.user.id,
+          jobId,
+          reservationId: reservation.reservationId,
+        }, {
+          idempotencyKey: cheieIdempotentaRun,
+          idempotencyKeyTTL: '15m',
+        });
+
+        if (jobId && supabaseAdmin) {
+          await supabaseAdmin
+            .from('ai_jobs')
+            .update({ trigger_run_id: handle.id })
+            .eq('id', jobId);
+          inregistreazaUtilizareAdmin();
+        }
+
+        return res.status(202).json({
+          jobId,
+          succes: true,
+          taskId: handle.id,
+          status: 'pending',
+          mesaj: 'Analiza AI a fost trimisa in fundal prin Trigger.dev.',
+          ...(reservation.replay === true ? { replay: true } : {}),
+        });
+      } catch {
+        await flowCredits.releasePhoto({
+          userId: req.user.id,
+          reservationId: reservation.reservationId,
+          reason: 'TRIGGER_DISPATCH_FAILED',
+        }).catch(() => {});
+        throw new PhotoJobError('TRIGGER_DISPATCH_FAILED', 503);
+      }
     } catch (err) {
+      if (err instanceof PhotoJobError || err instanceof FlowCreditsError) {
+        return sendPhotoAdmissionError(res, err.code);
+      }
       if (config.sentryDsn) Sentry.captureException(err);
       console.error('[Trigger.dev]', rezumatEroareSigur(err, { operation: 'enqueue_ai_job', provider: 'trigger_dev' }));
       return res.status(500).json({ eroare: 'Nu s-a putut trimite task-ul in fundal.' });
@@ -208,6 +302,21 @@ function createAiRouter({
   // RUTA 1: ANALIZA FOTO STRUCTURATA
   // ==========================================
   const handleAnalizaFoto = async (req, res) => {
+    let reservation = null;
+    let settled = false;
+    const releaseReserved = async (reason) => {
+      if (settled || !reservation?.reservationId || !flowCredits || typeof flowCredits.releasePhoto !== 'function') {
+        return;
+      }
+      settled = true;
+      await flowCredits.releasePhoto({
+        userId: req.user?.id,
+        reservationId: reservation.reservationId,
+        reason,
+      }).catch(() => {});
+      inregistreazaOperational('credit.release');
+    };
+
     try {
       if (!req.file) {
         return res.status(400).json({ eroare: 'Te rog incarca o imagine.' });
@@ -236,13 +345,38 @@ function createAiRouter({
         }
       }
 
+      if (!flowCredits || typeof flowCredits.reservePhoto !== 'function') {
+        return sendPhotoAdmissionError(res, 'FLOW_CREDITS_UNAVAILABLE');
+      }
+
+      let fileBuffer = await fs.promises.readFile(req.file.path);
+      const imageMime = serviciuVision.detectImageMime(fileBuffer);
+      if (!imageMime) {
+        return res.status(400).json({ eroare: 'Tip fișier nepermis. Doar imagini JPEG/PNG/WEBP sunt acceptate.' });
+      }
+
+      const headerKey = (typeof req.get === 'function' && (req.get('Idempotency-Key') || req.get('X-Payload-Fingerprint'))) || '';
+      const imageDigest = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+      const logicalAnalysisId = crypto
+        .createHash('sha256')
+        .update(`sync-photo:${req.user.id}:${headerKey}:${imageDigest}`)
+        .digest('hex');
+
+      const entitlement = await resolvePhotoEntitlement(req.user);
+      reservation = await flowCredits.reservePhoto({
+        userId: req.user.id,
+        logicalAnalysisId,
+        entitlement,
+      });
+      if (!reservation?.ok) {
+        return sendPhotoAdmissionError(res, reservation?.code || reservation?.reason);
+      }
+      inregistreazaOperational('credit.reserve');
+
       // Semnal comun de anulare: daca clientul se deconecteaza inca din coada,
       // intrarea se scoate din semafor si slotul ramane liber pentru ceilalti.
       const controllerAbord = new AbortController();
       const peDeconectare = () => {
-        // 'close' se declanseaza si la finalizarea normala; anulam doar cand
-        // raspunsul nu a fost inca terminat (deconectare reala a clientului).
-        // Node emite 'close' fara argument, deci garda verifica chiar res.writableEnded.
         if (res.writableEnded) return;
         controllerAbord.abort();
       };
@@ -250,41 +384,23 @@ function createAiRouter({
 
       let rezultatCascada;
       try {
-        // Citirea fișierului și encodarea Base64 au loc ÎN INTERIORUL semaforului.
-        // Înainte rulau înainte de plafonare: o cereri concurente își duplicau
-        // imaginea în heap, iar semaforul nu proteja vârful de memorie.
         rezultatCascada = await semaforAi.ruleaza(async () => {
-          let fileBuffer = await fs.promises.readFile(req.file.path);
-          const imageMime = serviciuVision.detectImageMime(fileBuffer);
-          if (!imageMime) {
-            const eroare400 = new Error('Tip fișier nepermis. Doar imagini JPEG/PNG/WEBP sunt acceptate.');
-            eroare400.status = 400;
-            throw eroare400;
-          }
           const imageBase64 = fileBuffer.toString('base64');
-          // B-20: eliberam Buffer-ul brut dupa encodare. Base64-ul ramane necesar
-          // pe toata cascada, dar tinand ambele copii in heap dublam varful de
-          // memorie fara castig. Reducerea reala de payload vine din redimensionarea
-          // pe client (camera.tsx), inainte de upload.
           fileBuffer = null;
           return serviciuCascada.ruleazaCascadaVision({
             imageBase64,
             imageMime,
             requestedProvider,
             limba,
-            // S4-04: semnalul de anulare ajunge si la fetch-urile din cascada, nu
-            // doar la coada semaforului. Un client deconectat intelege imediat
-            // providerii, fara sa se mai factureze generarea pana la deadline.
             semnalAnulare: controllerAbord.signal,
           });
         }, controllerAbord.signal);
       } catch (errSemafor) {
+        await releaseReserved(errSemafor?.cod || 'VISION_EXECUTION_FAILED');
         if (errSemafor?.cod === 'AI_SUPRAINCARCAT') {
           return res.status(503).json({ eroare: errSemafor.message });
         }
         if (errSemafor?.cod === 'REQUEST_ABORTED') {
-          // Clientul s-a deconectat; nu mai are cine citi raspunsul. Nu trasam
-          // eroarea ca 500 — asteptarea in coada a fost renuntata, atat.
           return res.status(499).end();
         }
         if (errSemafor?.status === 400) {
@@ -297,6 +413,7 @@ function createAiRouter({
 
       const text = rezultatCascada.text;
       if (!text) {
+        await releaseReserved('AI_PROVIDERS_UNAVAILABLE');
         console.error('AI vision fail.');
         return res.status(503).json({
           eroare: 'Toate sistemele AI au esuat sau sunt temporar in limita de cereri (cooldown). Incearca din nou peste un minut sau schimba modelul AI.',
@@ -310,6 +427,7 @@ function createAiRouter({
 
       let parsed = parseJsonFromLlm(text, { asteapta: 'array' });
       if (!parsed) {
+        await releaseReserved('JSON_AI_INVALID');
         return res.status(500).json({ eroare: 'AI nu a returnat un format JSON valid.' });
       }
 
@@ -336,8 +454,26 @@ function createAiRouter({
         incredere: String(item?.incredere || 'ridicat').substring(0, 20),
       }));
 
+      const isNotFood = validated.length === 0 || validated.some((item) =>
+        !item || typeof item !== 'object' || /nu.*(mancare|aliment)|non-food|nu s-a detectat|nu contine|not.*food|no.*food/i.test(String(item.nume || ''))
+      );
+      if (isNotFood) {
+        await releaseReserved('NOT_FOOD');
+        return res.json(validated);
+      }
+
+      settled = true;
+      if (typeof flowCredits.commitPhoto === 'function') {
+        await flowCredits.commitPhoto({
+          userId: req.user.id,
+          reservationId: reservation.reservationId,
+        });
+        inregistreazaOperational('credit.commit');
+      }
+
       res.json(validated);
     } catch (error) {
+      await releaseReserved('ANALIZA_ESUATA');
       console.error('[AI route]', rezumatEroareSigur(error, { operation: 'photo_analysis' }));
       res.status(500).json({ eroare: 'Eroare la analiza imaginii cu AI.' });
     } finally {
@@ -347,8 +483,11 @@ function createAiRouter({
     }
   };
 
-  router.post('/analiza-foto', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, upload.single('imagine'), handleAnalizaFoto);
-  router.post('/analizeaza-mancare-structurat', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, upload.single('imagine'), handleAnalizaFoto);
+  const submitAnalizaFotoIntegrity = buildPhotoIntegrityMiddleware('/analiza-foto');
+  const submitStructuratIntegrity = buildPhotoIntegrityMiddleware('/analizeaza-mancare-structurat');
+
+  router.post('/analiza-foto', requireAuth, aiLimiter, submitAnalizaFotoIntegrity, idempotencyCritic, upload.single('imagine'), handleAnalizaFoto);
+  router.post('/analizeaza-mancare-structurat', requireAuth, aiLimiter, submitStructuratIntegrity, idempotencyCritic, upload.single('imagine'), handleAnalizaFoto);
 
   // ==========================================
   // RUTA 2: CHAT CONVERSATIONAL (GROQ / LLAMA 3.3)

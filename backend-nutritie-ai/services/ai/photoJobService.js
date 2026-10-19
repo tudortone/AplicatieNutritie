@@ -59,12 +59,13 @@ function createPhotoJobService({ repo, flowCredits, tasks, billing } = {}) {
         entitlement,
       });
       if (!reservation?.ok) {
-        inregistreazaOperational(reservation?.code === 'PREMIUM_FAIR_USE_REACHED'
+        const rejectionCode = reservation?.code || reservation?.reason || 'FLOW_CREDITS_UNAVAILABLE';
+        inregistreazaOperational(rejectionCode === 'PREMIUM_FAIR_USE_REACHED'
           ? 'photo.fair_use_rejected'
           : 'photo.admission_rejected');
         throw new PhotoJobError(
-          reservation?.code || 'FLOW_CREDITS_UNAVAILABLE',
-          admissionStatus(reservation?.code),
+          rejectionCode,
+          admissionStatus(rejectionCode),
         );
       }
       inregistreazaOperational('credit.reserve');

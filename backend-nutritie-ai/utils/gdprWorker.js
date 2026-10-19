@@ -128,6 +128,25 @@ async function reinoiesteLeaseOutbox(supabaseAdmin, id, {
   return res.data;
 }
 
+async function asiguraLeaseActiv(supabaseAdmin, id, {
+  workerId,
+  fencingToken,
+  leaseExpiresAt = null,
+  leaseSeconds = 300,
+} = {}) {
+  if (!leaseExpiresAt) return null;
+  const remainingMs = new Date(leaseExpiresAt).getTime() - Date.now();
+  if (!Number.isFinite(remainingMs) || remainingMs > 120 * 1000) {
+    return leaseExpiresAt;
+  }
+  const renewed = await reinoiesteLeaseOutbox(supabaseAdmin, id, {
+    workerId,
+    fencingToken,
+    leaseSeconds,
+  });
+  return renewed?.lease_expires_at || leaseExpiresAt;
+}
+
 async function stergeRanduriDbUtilizator(supabaseAdmin, userId, clerkUserId = null) {
   if (!userId || !supabaseAdmin) return;
   inregistreazaUtilizareAdmin();
@@ -177,6 +196,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
     }
 
     const fencingToken = claim.fencingToken;
+    let leaseExpiresAt = claim.leaseExpiresAt || null;
     const numariIncercare = (rand.retry_count ?? 0) + 1;
 
     if (numariIncercare >= 5) {
@@ -205,9 +225,8 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
       continue;
     }
 
+    let statusCurent = rand.status;
     try {
-      let statusCurent = rand.status;
-
       // Pasul 1 (dacă s-a oprit la pending): DB rows delete
       if (statusCurent === 'pending') {
         if (rand.user_id) {
@@ -223,6 +242,11 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
 
       // Pasul 2 (dacă s-a oprit după db_done): Clerk delete
       if (statusCurent === 'db_done') {
+        leaseExpiresAt = await asiguraLeaseActiv(supabaseAdmin, rand.id, {
+          workerId,
+          fencingToken,
+          leaseExpiresAt,
+        });
         if (rand.clerk_user_id) {
           await stergeIdentitateClerk({
             clerkUserId: rand.clerk_user_id,
@@ -239,6 +263,11 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
 
       // Pasul 3 (dacă s-a oprit după clerk_done): ImageKit media delete
       if (statusCurent === 'clerk_done') {
+        leaseExpiresAt = await asiguraLeaseActiv(supabaseAdmin, rand.id, {
+          workerId,
+          fencingToken,
+          leaseExpiresAt,
+        });
         if (rand.user_id) {
           const fileIds = Array.isArray(rand.file_ids) ? new Set(rand.file_ids) : new Set();
           await stergeActiveImageKit({
@@ -257,6 +286,11 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
 
       // Pasul 4 (dacă s-a oprit după imagekit_done): auth.deleteUser
       if (statusCurent === 'imagekit_done') {
+        leaseExpiresAt = await asiguraLeaseActiv(supabaseAdmin, rand.id, {
+          workerId,
+          fencingToken,
+          leaseExpiresAt,
+        });
         if (rand.user_id && !supabaseAdmin.auth?.admin?.deleteUser) {
           const error = new Error('ADMIN_DELETE_UNAVAILABLE');
           error.code = 'ADMIN_DELETE_UNAVAILABLE';
@@ -296,12 +330,13 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
     } catch (e) {
       try {
         await actualizeazaStatusOutbox(supabaseAdmin, rand.id, {
+          ...(numariIncercare >= 5 ? { status: 'failed' } : {}),
           last_error: codEroare(e),
           retry_count: numariIncercare,
         }, {
           workerId,
           fencingToken,
-          expectedStatus: rand.status,
+          expectedStatus: statusCurent,
         });
       } catch (errActualizare) {
         try {
@@ -323,5 +358,6 @@ module.exports = {
   actualizeazaStatusOutbox,
   revendicaRandOutbox,
   reinoiesteLeaseOutbox,
+  asiguraLeaseActiv,
   reiaStergerileBlocate,
 };

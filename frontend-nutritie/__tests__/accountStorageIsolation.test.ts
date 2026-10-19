@@ -265,4 +265,46 @@ describe('P0-02 — cross-account local persistence boundary', () => {
     await prepareLocalDataForUser('user-A');
     expect(await AsyncStorage.getItem(key)).toBe(JSON.stringify({ activePreset: 'sports' }));
   });
+
+  test('15. active photo job pointer (@getflow/photo-job/v1/<userId>) and chat daily cache are purged on account deletion and crash recovery, while preserving other accounts', async () => {
+    const draftA = await seedAState();
+    const pointerA = JSON.stringify({
+      userId: 'user-A',
+      jobId: 'job-photo-A',
+      saveOperationId: 'op-save-A',
+      savePayload: { user_id: 'user-A', nume: 'Salata A', calorii: 350 },
+      imageUrl: 'https://ik.imagekit.io/getflow/mancare/user-A/meal.jpg',
+      draftUri: draftA,
+      savedAt: Date.now(),
+    });
+    const pointerB = JSON.stringify({
+      userId: 'user-B',
+      jobId: 'job-photo-B',
+      savedAt: Date.now(),
+    });
+
+    await AsyncStorage.setItem('@getflow/photo-job/v1/user-A', pointerA);
+    await AsyncStorage.setItem('@getflow/photo-job/v1/user-B', pointerB);
+    await AsyncStorage.setItem(`@getflow/chat_daily_user-A_${DAY}`, JSON.stringify({ remaining: 4 }));
+    await AsyncStorage.setItem(`@getflow/chat_daily_user-B_${DAY}`, JSON.stringify({ remaining: 9 }));
+
+    // Normal logout preserves user-scoped photo job pointer for crash/re-login recovery
+    await clearLocalUserData();
+    expect(await AsyncStorage.getItem('@getflow/photo-job/v1/user-A')).toBe(pointerA);
+
+    // Interrupted account deletion journals pending deletion and completes on cold-start recovery
+    await prepareLocalDataForUser('user-A');
+    storage.__failNextMultiRemove();
+    await expect(purgeLocalDataForUser('user-A')).rejects.toThrow('simulated process interruption');
+    expect(await AsyncStorage.getItem(PENDING_DELETED_USER_KEY)).toBe('user-A');
+
+    await prepareLocalDataForNoSession();
+
+    expect(await AsyncStorage.getItem(PENDING_DELETED_USER_KEY)).toBeNull();
+    expect(await AsyncStorage.getItem('@getflow/photo-job/v1/user-A')).toBeNull();
+    expect(await AsyncStorage.getItem(`@getflow/chat_daily_user-A_${DAY}`)).toBeNull();
+    // Account B remains completely untouched
+    expect(await AsyncStorage.getItem('@getflow/photo-job/v1/user-B')).toBe(pointerB);
+    expect(await AsyncStorage.getItem(`@getflow/chat_daily_user-B_${DAY}`)).toBe(JSON.stringify({ remaining: 9 }));
+  });
 });
