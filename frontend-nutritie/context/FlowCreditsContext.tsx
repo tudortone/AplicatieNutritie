@@ -17,6 +17,8 @@ export type FlowCreditsBalance = {
   serverDay: string | null;
 };
 
+export type FlowCreditCategory = 'daily' | 'rewarded' | 'purchased';
+
 type RewardState = 'idle' | 'loading' | 'awaiting-server' | 'granted' | 'unavailable' | 'limit';
 type FlowCreditsContextValue = {
   balance: FlowCreditsBalance;
@@ -25,10 +27,12 @@ type FlowCreditsContextValue = {
   visible: boolean;
   rewardState: RewardState;
   creditProducts: BillingCreditProduct[];
+  lastConsumedCategory: FlowCreditCategory | null;
   open: () => void;
   close: () => void;
   refresh: () => Promise<FlowCreditsBalance | null>;
-  consumeOptimisticCredit: () => void;
+  consumeOptimisticCredit: () => FlowCreditCategory | null;
+  rollbackOptimisticCredit: () => void;
   watchRewarded: () => Promise<RewardedAdOutcome | 'limit' | 'granted'>;
   purchase: (product: BillingCreditProduct) => Promise<void>;
 };
@@ -49,10 +53,12 @@ const FlowCreditsContext = createContext<FlowCreditsContextValue>({
   visible: false,
   rewardState: 'idle',
   creditProducts: [],
+  lastConsumedCategory: null,
   open: () => {},
   close: () => {},
   refresh: async () => null,
-  consumeOptimisticCredit: () => {},
+  consumeOptimisticCredit: () => null,
+  rollbackOptimisticCredit: () => {},
   watchRewarded: async () => 'unavailable',
   purchase: async () => {},
 });
@@ -118,12 +124,17 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   const [loading, setLoading] = useState(false);
   const [visible, setVisible] = useState(false);
   const [rewardState, setRewardState] = useState<RewardState>('idle');
+  const [lastConsumedCategory, setLastConsumedCategory] = useState<FlowCreditCategory | null>(null);
   const ownerRef = useRef(appUserId);
   const premiumRef = useRef(premium);
+  const balanceRef = useRef(balance);
+  const lastConsumedCategoryRef = useRef<FlowCreditCategory | null>(null);
   const sequenceRef = useRef(0);
   const rewardOperationRef = useRef(0);
   ownerRef.current = appUserId;
   premiumRef.current = premium;
+  balanceRef.current = balance;
+  lastConsumedCategoryRef.current = lastConsumedCategory;
 
   const refresh = useCallback(async () => {
     const owner = ownerRef.current;
@@ -131,6 +142,8 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     if (!owner) {
       setBalance(EMPTY);
       setBalanceOwnerId(null);
+      lastConsumedCategoryRef.current = null;
+      setLastConsumedCategory(null);
       return null;
     }
     setLoading(true);
@@ -139,6 +152,11 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
       if (!response.ok) return null;
       const next = normalizedBalance(await response.json());
       if (next && ownerRef.current === owner && sequenceRef.current === sequence) {
+        if (lastConsumedCategoryRef.current && next.total > balanceRef.current.total) {
+          lastConsumedCategoryRef.current = null;
+          setLastConsumedCategory(null);
+        }
+        balanceRef.current = next;
         setBalance(next);
         setBalanceOwnerId(owner);
         return next;
@@ -154,8 +172,11 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   useEffect(() => {
     sequenceRef.current += 1;
     rewardOperationRef.current += 1;
+    balanceRef.current = EMPTY;
     setBalance(EMPTY);
     setBalanceOwnerId(null);
+    lastConsumedCategoryRef.current = null;
+    setLastConsumedCategory(null);
     setRewardState('idle');
     setVisible(false);
     if (appUserId) void refresh();
@@ -244,29 +265,77 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     }
   }, [balance, balanceOwnerId, refresh]);
 
-  const consumeOptimisticCredit = useCallback(() => {
+  const consumeOptimisticCredit = useCallback((): FlowCreditCategory | null => {
+    if (premiumRef.current.hasFullAccess || premiumRef.current.isPremium) {
+      return null;
+    }
+    const current = balanceRef.current;
+    if (current.total <= 0) return null;
+    let category: FlowCreditCategory | null = null;
+    if (current.dailyRemaining > 0) {
+      category = 'daily';
+    } else if (current.rewarded > 0) {
+      category = 'rewarded';
+    } else if (current.purchased > 0) {
+      category = 'purchased';
+    } else {
+      return null;
+    }
     setBalance((prev) => {
-      if (prev.total <= 0) return prev;
-      if (prev.dailyRemaining > 0) {
-        return {
+      if (category === 'daily' && prev.dailyRemaining > 0) {
+        const next = {
           ...prev,
           dailyRemaining: prev.dailyRemaining - 1,
           total: Math.max(0, prev.total - 1),
         };
+        balanceRef.current = next;
+        return next;
       }
-      if (prev.rewarded > 0) {
-        return {
+      if (category === 'rewarded' && prev.rewarded > 0) {
+        const next = {
           ...prev,
           rewarded: prev.rewarded - 1,
           total: Math.max(0, prev.total - 1),
         };
+        balanceRef.current = next;
+        return next;
       }
-      if (prev.purchased > 0) {
-        return {
+      if (category === 'purchased' && prev.purchased > 0) {
+        const next = {
           ...prev,
           purchased: prev.purchased - 1,
           total: Math.max(0, prev.total - 1),
         };
+        balanceRef.current = next;
+        return next;
+      }
+      return prev;
+    });
+    lastConsumedCategoryRef.current = category;
+    setLastConsumedCategory(category);
+    return category;
+  }, []);
+
+  const rollbackOptimisticCredit = useCallback(() => {
+    const category = lastConsumedCategoryRef.current;
+    lastConsumedCategoryRef.current = null;
+    setLastConsumedCategory(null);
+    if (!category) return;
+    setBalance((prev) => {
+      if (category === 'daily') {
+        const next = { ...prev, dailyRemaining: prev.dailyRemaining + 1, total: prev.total + 1 };
+        balanceRef.current = next;
+        return next;
+      }
+      if (category === 'rewarded') {
+        const next = { ...prev, rewarded: prev.rewarded + 1, total: prev.total + 1 };
+        balanceRef.current = next;
+        return next;
+      }
+      if (category === 'purchased') {
+        const next = { ...prev, purchased: prev.purchased + 1, total: prev.total + 1 };
+        balanceRef.current = next;
+        return next;
       }
       return prev;
     });
@@ -285,13 +354,15 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     visible,
     rewardState,
     creditProducts: billing.creditProducts,
+    lastConsumedCategory,
     open: () => setVisible(true),
     close: () => setVisible(false),
     refresh,
     consumeOptimisticCredit,
+    rollbackOptimisticCredit,
     watchRewarded,
     purchase,
-  }), [appUserId, balance, balanceOwnerId, loading, premium.loading, premium.hasFullAccess, premium.isPremium, visible, rewardState, billing.creditProducts, refresh, consumeOptimisticCredit, watchRewarded, purchase]);
+  }), [appUserId, balance, balanceOwnerId, loading, premium.loading, premium.hasFullAccess, premium.isPremium, visible, rewardState, billing.creditProducts, lastConsumedCategory, refresh, consumeOptimisticCredit, rollbackOptimisticCredit, watchRewarded, purchase]);
 
   return <FlowCreditsContext.Provider value={value}>{children}</FlowCreditsContext.Provider>;
 }

@@ -42,12 +42,31 @@ describe('FlowIcon registry', () => {
       ...Object.values(CATEGORIE_ICONA),
       ...HEALTH_PROVIDERS.map((provider) => provider.icon),
       ...QUEST_POOL.map((quest) => quest.icon),
-      'circle', 'scale', 'check', 'sun', 'refresh', 'copy', 'star',
+      'circle', 'scale', 'check', 'sun', 'refresh', 'copy', 'star', 'camera', 'file-text',
     ];
 
     for (const glyph of new Set(glyphs)) {
       if (!resolveFlowIconName(glyph)) throw new Error(`Unmapped icon metadata: ${glyph}`);
     }
+  });
+
+  test('renders camera and file-text vector icons without falling back to utensils', async () => {
+    const camView = await render(<FlowIcon name="camera" testID="cam-icon" />);
+    expect(camView.getByTestId('icon-Camera')).toBeTruthy();
+
+    const docView = await render(<FlowIcon name="file-text" testID="doc-icon" />);
+    expect(docView.getByTestId('icon-FileText')).toBeTruthy();
+  });
+
+  test('PhotoMealResultView uses canonical CATEGORIE_ICONA from mealUtils instead of a duplicate map', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', 'components', 'food', 'PhotoMealResultView.tsx'),
+      'utf8',
+    );
+    expect(source).toMatch(/import\s+\{[^}]*\bCATEGORIE_ICONA\b[^}]*\}\s+from\s+['"]\.\.\/\.\.\/lib\/mealUtils['"]/);
+    expect(source).not.toMatch(/const\s+CATEGORIE_ICONA\b/);
   });
 
   test('renders the resolved vector icon accessibly instead of the source glyph', async () => {

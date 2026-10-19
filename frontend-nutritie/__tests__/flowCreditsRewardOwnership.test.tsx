@@ -220,4 +220,43 @@ describe('Flow Credits rewarded operation ownership', () => {
     expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/rewarded/intents')).toHaveLength(2);
     expect(latest!.rewardState).toBe('unavailable');
   });
+
+  test('consumeOptimisticCredit records lastConsumedCategory and rollback resets it to null', async () => {
+    global.fetch = jest.fn(async () =>
+      response({ total: 3, dailyRemaining: 2, rewarded: 1, purchased: 0, rewardedGrantsRemaining: 3 }),
+    ) as jest.Mock;
+
+    const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|3'));
+    expect(latest!.lastConsumedCategory).toBeNull();
+
+    await act(async () => {
+      const cat = latest!.consumeOptimisticCredit();
+      expect(cat).toBe('daily');
+    });
+    expect(latest!.lastConsumedCategory).toBe('daily');
+    expect(latest!.balance.total).toBe(2);
+    expect(latest!.balance.dailyRemaining).toBe(1);
+
+    // Explicit rollback restores balance and clears lastConsumedCategory
+    await act(async () => {
+      latest!.rollbackOptimisticCredit();
+    });
+    expect(latest!.lastConsumedCategory).toBeNull();
+    expect(latest!.balance.total).toBe(3);
+    expect(latest!.balance.dailyRemaining).toBe(2);
+
+    // Server refresh after a released/failed reservation (total restored from 2 -> 3) also clears lastConsumedCategory
+    await act(async () => {
+      latest!.consumeOptimisticCredit();
+    });
+    expect(latest!.lastConsumedCategory).toBe('daily');
+    expect(latest!.balance.total).toBe(2);
+
+    await act(async () => {
+      await latest!.refresh();
+    });
+    expect(latest!.balance.total).toBe(3);
+    expect(latest!.lastConsumedCategory).toBeNull();
+  });
 });

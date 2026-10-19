@@ -17,15 +17,9 @@ import { MacroDistributionBar } from './MacroDistributionBar';
 import { IngredientCardRow } from './IngredientCardRow';
 import { ChangeIngredientSheet, FoodCandidate } from './ChangeIngredientSheet';
 import { useFlowCredits } from '../../context/FlowCreditsContext';
+import { CATEGORIE_ICONA } from '../../lib/mealUtils';
 import type { AlimentScanat } from './FoodScanSuccessModal';
 import type { TipMasa } from '../../types';
-
-const CATEGORIE_ICONA: Record<TipMasa, string> = {
-  mic_dejun: 'coffee',
-  pranz: 'utensils',
-  cina: 'moon',
-  gustare: 'apple',
-};
 
 const MEAL_CATEGORIES: { id: TipMasa }[] = [
   { id: 'mic_dejun' },
