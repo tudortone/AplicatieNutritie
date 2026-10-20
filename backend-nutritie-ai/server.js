@@ -538,7 +538,7 @@ const trimiteDocumentLegal = (numeFisier, tipContinut = 'text/html; charset=utf-
   if (tipContinut.startsWith('text/html')) {
     res.setHeader('Content-Security-Policy', "default-src 'self'; font-src 'self' https: data:; style-src 'self' https: 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:;");
   }
-  return res.sendFile(caleFisier);
+  return res.sendFile(numeFisier, { root: calePublic });
 };
 
 app.get('/privacy', trimiteDocumentLegal('politica-de-confidentialitate.html'));

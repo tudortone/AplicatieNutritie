@@ -43,7 +43,7 @@ function capacityHarness() {
     reservePhoto: jest.fn(async ({ userId, logicalAnalysisId }) => {
       const reservationId = `reservation-${nextReservation++}`;
       reservations.set(`${userId}:${logicalAnalysisId}`, reservationId);
-      return { ok: true, reservationId, source: 'DAILY' };
+      return { ok: true, reservationId, source: 'DAILY', status: 'RESERVED', replay: false };
     }),
     releasePhoto: jest.fn(),
   };

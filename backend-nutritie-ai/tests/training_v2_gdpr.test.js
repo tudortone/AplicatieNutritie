@@ -311,7 +311,7 @@ describe('Training 2.0 GDPR Backend Support — workout_templates', () => {
         },
         rpc: jest.fn().mockImplementation((fn) => {
           if (fn === 'claim_gdpr_deletion') {
-            return Promise.resolve({ data: { success: true, fencing_token: 1 }, error: null });
+            return Promise.resolve({ data: { success: true, fencing_token: 1, lease_expires_at: new Date(Date.now() + 300000).toISOString() }, error: null });
           }
           return Promise.resolve({ data: 'outbox-1', error: null });
         }),
@@ -394,7 +394,7 @@ describe('Training 2.0 GDPR Backend Support — workout_templates', () => {
         },
         rpc: jest.fn().mockImplementation((fn) => {
           if (fn === 'claim_gdpr_deletion') {
-            return Promise.resolve({ data: { success: true, fencing_token: 1 }, error: null });
+            return Promise.resolve({ data: { success: true, fencing_token: 1, lease_expires_at: new Date(Date.now() + 300000).toISOString() }, error: null });
           }
           return Promise.resolve({ data: 'outbox-2', error: null });
         }),

@@ -21,9 +21,18 @@ const { PhotoJobError } = require('../services/ai/photoJobService');
 const { FlowCreditsError } = require('../services/monetization/flowCreditsService');
 
 function mapPhotoAdmissionStatus(code) {
-  if (code === 'PHOTO_IN_PROGRESS') return 409;
+  if (
+    code === 'PHOTO_IN_PROGRESS'
+    || code === 'PHOTO_RESERVATION_ALREADY_COMMITTED'
+    || code === 'PHOTO_RESERVATION_RELEASED'
+    || code === 'CREDIT_RESERVATION_EXPIRED'
+    || code === 'LOGICAL_ID_IMAGE_MISMATCH'
+  ) {
+    return 409;
+  }
   if (code === 'FLOW_CREDITS_EXHAUSTED') return 402;
   if (code === 'PREMIUM_FAIR_USE_REACHED') return 429;
+  if (code === 'RESERVATION_OWNERSHIP_MISMATCH' || code === 'JOB_OWNERSHIP_MISMATCH') return 403;
   return 503;
 }
 
@@ -36,6 +45,41 @@ function sendPhotoAdmissionError(res, code) {
     cod: normalizedCode,
     code: normalizedCode,
   });
+}
+
+function valideazaRezervareProaspataFoto(reservation, userId) {
+  if (!reservation || typeof reservation !== 'object') {
+    return { ok: false, code: 'FLOW_CREDITS_UNAVAILABLE' };
+  }
+  if (!reservation.ok) {
+    return { ok: false, code: reservation.code || reservation.reason || 'FLOW_CREDITS_UNAVAILABLE' };
+  }
+  if (reservation.userId && reservation.userId !== userId) {
+    return { ok: false, code: 'RESERVATION_OWNERSHIP_MISMATCH' };
+  }
+  if (reservation.status === 'COMMITTED') {
+    return { ok: false, code: 'PHOTO_RESERVATION_ALREADY_COMMITTED' };
+  }
+  if (reservation.status === 'RELEASED') {
+    return { ok: false, code: 'PHOTO_RESERVATION_RELEASED' };
+  }
+  if (reservation.replay === true) {
+    return { ok: false, code: 'PHOTO_IN_PROGRESS' };
+  }
+  if (
+    reservation.status !== 'RESERVED'
+    || typeof reservation.reservationId !== 'string'
+    || reservation.reservationId.trim().length === 0
+  ) {
+    return { ok: false, code: 'INVALID_CREDIT_RESERVATION' };
+  }
+  if (reservation.expiresAt !== undefined && reservation.expiresAt !== null) {
+    const expMs = Date.parse(String(reservation.expiresAt));
+    if (!Number.isFinite(expMs) || expMs <= Date.now()) {
+      return { ok: false, code: 'CREDIT_RESERVATION_EXPIRED' };
+    }
+  }
+  return { ok: true, reservationId: reservation.reservationId.trim() };
 }
 
 /**
@@ -75,10 +119,12 @@ function createAiRouter({
 }) {
   // C-1: router-ul se creeaza per-instanta de fabrica, nu la nivel de modul.
   const router = express.Router();
+  const operatiiFotoInCurs = new Set();
+  const utilizatoriFotoSincronInCurs = new Set();
 
-  const buildPhotoIntegrityMiddleware = (canonicalPath) => {
+  const buildPhotoIntegrityMiddleware = (canonicalPath, extraOptions = {}) => {
     if (typeof integrityGuard === 'function') {
-      return integrityGuard({ action: 'photo.submit', canonicalPath });
+      return integrityGuard({ action: 'photo.submit', canonicalPath, ...extraOptions });
     }
     if (config?.playIntegrity?.mode && config.playIntegrity.mode !== 'off') {
       return (_req, res) => res.status(403).json({
@@ -88,6 +134,46 @@ function createAiRouter({
       });
     }
     return (_req, _res, next) => next();
+  };
+
+  const atasareAmprentaImagineMultipart = async (req, res, next) => {
+    let curatat = false;
+    const curataFisier = () => {
+      if (curatat) return;
+      curatat = true;
+      if (req.file && req.file.path) {
+        fs.promises.unlink(req.file.path).catch(() => {});
+      }
+    };
+    res.once?.('finish', curataFisier);
+    res.once?.('close', curataFisier);
+    req._curataFisierMultipart = curataFisier;
+
+    try {
+      if (req.file) {
+        const buffer = Buffer.isBuffer(req.file.buffer)
+          ? req.file.buffer
+          : (req.file.path ? await fs.promises.readFile(req.file.path) : null);
+        if (Buffer.isBuffer(buffer)) {
+          req.fileBuffer = buffer;
+          req.imageContentSha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+          const md5 = crypto.createHash('md5').update(buffer).digest('hex');
+          const requestedProvider = String(
+            req.body?.provider || citesteQuery(req, 'provider') || 'auto',
+          ).toLowerCase();
+          const limba = String(
+            req.body?.limba || citesteQuery(req, 'limba') || 'ro',
+          ).toLowerCase();
+          req.imageLegacyFingerprint = crypto
+            .createHash('sha256')
+            .update(`analiza-foto|md5:${md5}:${buffer.length}|${requestedProvider}|${limba}`)
+            .digest('hex');
+        }
+      }
+      return next();
+    } catch {
+      return next();
+    }
   };
 
   const resolvePhotoEntitlement = async (user) => {
@@ -229,8 +315,9 @@ function createAiRouter({
         logicalAnalysisId,
         entitlement,
       });
-      if (!reservation?.ok) {
-        return sendPhotoAdmissionError(res, reservation?.code || reservation?.reason);
+      const verificareRezervare = valideazaRezervareProaspataFoto(reservation, req.user.id);
+      if (!verificareRezervare.ok) {
+        return sendPhotoAdmissionError(res, verificareRezervare.code);
       }
 
       let jobId = null;
@@ -243,7 +330,7 @@ function createAiRouter({
               status: 'queued',
               logical_analysis_id: logicalAnalysisId,
               image_url: verificare.url,
-              credit_reservation_id: reservation.reservationId,
+              credit_reservation_id: verificareRezervare.reservationId,
             })
             .select('id')
             .single();
@@ -258,7 +345,7 @@ function createAiRouter({
           tipMasa: tipMasa || 'Pranz',
           userId: req.user.id,
           jobId,
-          reservationId: reservation.reservationId,
+          reservationId: verificareRezervare.reservationId,
         }, {
           idempotencyKey: cheieIdempotentaRun,
           idempotencyKeyTTL: '15m',
@@ -278,12 +365,11 @@ function createAiRouter({
           taskId: handle.id,
           status: 'pending',
           mesaj: 'Analiza AI a fost trimisa in fundal prin Trigger.dev.',
-          ...(reservation.replay === true ? { replay: true } : {}),
         });
       } catch {
         await flowCredits.releasePhoto({
           userId: req.user.id,
-          reservationId: reservation.reservationId,
+          reservationId: verificareRezervare.reservationId,
           reason: 'TRIGGER_DISPATCH_FAILED',
         }).catch(() => {});
         throw new PhotoJobError('TRIGGER_DISPATCH_FAILED', 503);
@@ -302,19 +388,37 @@ function createAiRouter({
   // RUTA 1: ANALIZA FOTO STRUCTURATA
   // ==========================================
   const handleAnalizaFoto = async (req, res) => {
-    let reservation = null;
+    let reservationId = null;
+    let ownsFreshReservation = false;
     let settled = false;
+    let logicalInFlightKey = null;
+    let userInFlightLocked = false;
+
     const releaseReserved = async (reason) => {
-      if (settled || !reservation?.reservationId || !flowCredits || typeof flowCredits.releasePhoto !== 'function') {
-        return;
+      if (
+        settled
+        || !ownsFreshReservation
+        || !reservationId
+        || !flowCredits
+        || typeof flowCredits.releasePhoto !== 'function'
+      ) {
+        return false;
       }
-      settled = true;
-      await flowCredits.releasePhoto({
-        userId: req.user?.id,
-        reservationId: reservation.reservationId,
-        reason,
-      }).catch(() => {});
-      inregistreazaOperational('credit.release');
+      try {
+        const releaseResult = await flowCredits.releasePhoto({
+          userId: req.user?.id,
+          reservationId,
+          reason,
+        });
+        if (releaseResult && releaseResult.ok === false) {
+          return false;
+        }
+        settled = true;
+        inregistreazaOperational('credit.release');
+        return true;
+      } catch {
+        return false;
+      }
     };
 
     try {
@@ -349,28 +453,42 @@ function createAiRouter({
         return sendPhotoAdmissionError(res, 'FLOW_CREDITS_UNAVAILABLE');
       }
 
-      let fileBuffer = await fs.promises.readFile(req.file.path);
+      let fileBuffer = Buffer.isBuffer(req.fileBuffer)
+        ? req.fileBuffer
+        : await fs.promises.readFile(req.file.path);
       const imageMime = serviciuVision.detectImageMime(fileBuffer);
       if (!imageMime) {
         return res.status(400).json({ eroare: 'Tip fișier nepermis. Doar imagini JPEG/PNG/WEBP sunt acceptate.' });
       }
 
       const headerKey = (typeof req.get === 'function' && (req.get('Idempotency-Key') || req.get('X-Payload-Fingerprint'))) || '';
-      const imageDigest = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+      const imageDigest = req.imageContentSha256 || crypto.createHash('sha256').update(fileBuffer).digest('hex');
       const logicalAnalysisId = crypto
         .createHash('sha256')
         .update(`sync-photo:${req.user.id}:${headerKey}:${imageDigest}`)
         .digest('hex');
 
+      logicalInFlightKey = `${req.user.id}:${logicalAnalysisId}`;
+      if (operatiiFotoInCurs.has(logicalInFlightKey) || utilizatoriFotoSincronInCurs.has(req.user.id)) {
+        logicalInFlightKey = null;
+        return sendPhotoAdmissionError(res, 'PHOTO_IN_PROGRESS');
+      }
+      operatiiFotoInCurs.add(logicalInFlightKey);
+      utilizatoriFotoSincronInCurs.add(req.user.id);
+      userInFlightLocked = true;
+
       const entitlement = await resolvePhotoEntitlement(req.user);
-      reservation = await flowCredits.reservePhoto({
+      const reservation = await flowCredits.reservePhoto({
         userId: req.user.id,
         logicalAnalysisId,
         entitlement,
       });
-      if (!reservation?.ok) {
-        return sendPhotoAdmissionError(res, reservation?.code || reservation?.reason);
+      const verificareRezervare = valideazaRezervareProaspataFoto(reservation, req.user.id);
+      if (!verificareRezervare.ok) {
+        return sendPhotoAdmissionError(res, verificareRezervare.code);
       }
+      reservationId = verificareRezervare.reservationId;
+      ownsFreshReservation = true;
       inregistreazaOperational('credit.reserve');
 
       // Semnal comun de anulare: daca clientul se deconecteaza inca din coada,
@@ -458,36 +576,80 @@ function createAiRouter({
         !item || typeof item !== 'object' || /nu.*(mancare|aliment)|non-food|nu s-a detectat|nu contine|not.*food|no.*food/i.test(String(item.nume || ''))
       );
       if (isNotFood) {
-        await releaseReserved('NOT_FOOD');
+        const released = await releaseReserved('NOT_FOOD');
+        if (!released) {
+          return sendPhotoAdmissionError(res, 'CREDIT_SETTLEMENT_FAILED');
+        }
         return res.json(validated);
       }
 
-      settled = true;
-      if (typeof flowCredits.commitPhoto === 'function') {
-        await flowCredits.commitPhoto({
-          userId: req.user.id,
-          reservationId: reservation.reservationId,
-        });
-        inregistreazaOperational('credit.commit');
+      if (typeof flowCredits.commitPhoto !== 'function') {
+        await releaseReserved('COMMIT_UNSUPPORTED');
+        return sendPhotoAdmissionError(res, 'CREDIT_SETTLEMENT_FAILED');
       }
 
-      res.json(validated);
+      let commitResult = null;
+      try {
+        commitResult = await flowCredits.commitPhoto({
+          userId: req.user.id,
+          reservationId,
+        });
+      } catch {
+        await releaseReserved('COMMIT_FAILED');
+        return sendPhotoAdmissionError(res, 'CREDIT_SETTLEMENT_FAILED');
+      }
+
+      if (commitResult?.ok === true && commitResult.status === 'COMMITTED' && commitResult.replay === true) {
+        settled = true;
+        return sendPhotoAdmissionError(res, 'PHOTO_RESERVATION_ALREADY_COMMITTED');
+      }
+      if (!commitResult || commitResult.ok !== true || commitResult.status !== 'COMMITTED') {
+        await releaseReserved('COMMIT_FAILED');
+        return sendPhotoAdmissionError(res, 'CREDIT_SETTLEMENT_FAILED');
+      }
+
+      settled = true;
+      inregistreazaOperational('credit.commit');
+
+      return res.json(validated);
     } catch (error) {
       await releaseReserved('ANALIZA_ESUATA');
       console.error('[AI route]', rezumatEroareSigur(error, { operation: 'photo_analysis' }));
-      res.status(500).json({ eroare: 'Eroare la analiza imaginii cu AI.' });
+      return res.status(500).json({ eroare: 'Eroare la analiza imaginii cu AI.' });
     } finally {
-      if (req.file && req.file.path) {
+      if (logicalInFlightKey) operatiiFotoInCurs.delete(logicalInFlightKey);
+      if (userInFlightLocked && req.user?.id) utilizatoriFotoSincronInCurs.delete(req.user.id);
+      if (typeof req._curataFisierMultipart === 'function') {
+        req._curataFisierMultipart();
+      } else if (req.file && req.file.path) {
         fs.promises.unlink(req.file.path).catch(() => {});
       }
     }
   };
 
-  const submitAnalizaFotoIntegrity = buildPhotoIntegrityMiddleware('/analiza-foto');
-  const submitStructuratIntegrity = buildPhotoIntegrityMiddleware('/analizeaza-mancare-structurat');
+  const submitAnalizaFotoIntegrity = buildPhotoIntegrityMiddleware('/analiza-foto', { requireImageDigest: true });
+  const submitStructuratIntegrity = buildPhotoIntegrityMiddleware('/analizeaza-mancare-structurat', { requireImageDigest: true });
 
-  router.post('/analiza-foto', requireAuth, aiLimiter, submitAnalizaFotoIntegrity, idempotencyCritic, upload.single('imagine'), handleAnalizaFoto);
-  router.post('/analizeaza-mancare-structurat', requireAuth, aiLimiter, submitStructuratIntegrity, idempotencyCritic, upload.single('imagine'), handleAnalizaFoto);
+  router.post(
+    '/analiza-foto',
+    requireAuth,
+    aiLimiter,
+    upload.single('imagine'),
+    atasareAmprentaImagineMultipart,
+    submitAnalizaFotoIntegrity,
+    idempotencyCritic,
+    handleAnalizaFoto,
+  );
+  router.post(
+    '/analizeaza-mancare-structurat',
+    requireAuth,
+    aiLimiter,
+    upload.single('imagine'),
+    atasareAmprentaImagineMultipart,
+    submitStructuratIntegrity,
+    idempotencyCritic,
+    handleAnalizaFoto,
+  );
 
   // ==========================================
   // RUTA 2: CHAT CONVERSATIONAL (GROQ / LLAMA 3.3)

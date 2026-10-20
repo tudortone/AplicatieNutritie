@@ -42,12 +42,13 @@ function createFlowCreditsService({ repo, now = () => new Date() } = {}) {
         action: 'commit',
       });
     },
-    releasePhoto({ userId, reservationId } = {}) {
+    releasePhoto({ userId, reservationId, reason } = {}) {
       if (typeof repo.settlePhoto !== 'function') throw new TypeError('settlePhoto is not supported by repo');
       return repo.settlePhoto({
         userId: requiredString(userId, 'INVALID_USER'),
         reservationId: requiredString(reservationId, 'INVALID_RESERVATION_ID'),
         action: 'release',
+        ...(typeof reason === 'string' && reason.trim() ? { reason: reason.trim() } : {}),
       });
     },
     grantRewardVerified({ userId, rewardEventId } = {}) {

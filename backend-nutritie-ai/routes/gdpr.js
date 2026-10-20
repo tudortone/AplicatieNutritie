@@ -50,6 +50,8 @@ const {
   revendicaRandOutbox,
   actualizeazaStatusOutbox,
   asiguraLeaseActiv,
+  cuReinnoireLeaseContinua,
+  pregatesteSiPersistaFileIdsOutbox,
 } = require('../utils/gdprWorker');
 const { codEroare } = require('../utils/codEroare');
 
@@ -257,7 +259,15 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
 
       hasActiveClaim = true;
       fencingToken = claim.fencingToken;
-      leaseExpiresAt = claim.leaseExpiresAt || null;
+      leaseExpiresAt = claim.leaseExpiresAt;
+
+      const verificaSiReinnoiesteLease = async () => {
+        leaseExpiresAt = await asiguraLeaseActiv(supabaseAdmin, outboxId, {
+          workerId: ownerId,
+          fencingToken,
+          leaseExpiresAt,
+        });
+      };
 
       const actualizezaStatus = async (status, lastError = null) => {
         if (!outboxId) return;
@@ -286,69 +296,35 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       let fileIds = new Set(Array.isArray(fileIdsDinOutbox) ? fileIdsDinOutbox : []);
 
       if (statusAsteptat === 'pending') {
-        // P-06: extrage fileId-urile ÎNAINTE de a șterge rândurile din DB
-        fileIds = await extrageFileIdsUtilizator({ supabaseAdmin, userId });
-
-        // N-04: persistenăm fileIds-urile în outbox ÎNAINTE de ștergerea rândurilor
-        // `mese` (sursa lor e JSONB-ul `alimente`, pe cale să dispară). Un retry după
-        // un eșec (rândurile deja șterse, extragere goală) reutilizează lista
-        // persistată; nu suprascriem o listă non-goală cu una goală.
-        if (outboxId) {
-          try {
-            const { data: randOutbox, error: eroareCitireOutbox } = await supabaseAdmin
-              .from('gdpr_deletions')
-              .select('file_ids')
-              .eq('id', outboxId)
-              .maybeSingle();
-            if (eroareCitireOutbox || !randOutbox) {
-              throw new Error('GDPR_OUTBOX_FILE_IDS_READ_FAILED');
-            }
-            if (typeof randOutbox?.retry_count === 'number') {
-              numariIncercare = randOutbox.retry_count + 1;
-            }
-            const fileIdsPersistate = Array.isArray(randOutbox?.file_ids) ? randOutbox.file_ids : [];
-            if (fileIds.size === 0 && fileIdsPersistate.length > 0) {
-              fileIds = new Set(fileIdsPersistate);
-            }
-            if (fileIds.size > 0 || fileIdsPersistate.length === 0) {
-              let updateQuery = supabaseAdmin
-                .from('gdpr_deletions')
-                .update({ file_ids: [...fileIds] })
-                .eq('id', outboxId);
-              if (ownerId && typeof updateQuery?.eq === 'function') {
-                updateQuery = updateQuery.eq('claimed_by', ownerId);
-              }
-              if (fencingToken !== undefined && fencingToken !== null && typeof updateQuery?.eq === 'function') {
-                updateQuery = updateQuery.eq('fencing_token', fencingToken);
-              }
-              const { data: outboxActualizat, error: eroarePersistareFileIds } = await updateQuery
-                .select('id')
-                .maybeSingle();
-              if (eroarePersistareFileIds || !outboxActualizat?.id) {
-                throw new Error('GDPR_OUTBOX_FILE_IDS_PERSIST_FAILED');
-              }
-            }
-          } catch (err) {
-            // M2: persistarea fileIds NU mai e best-effort. Dacă rândurile `mese` se
-            // șterg fără ca lista să fie persistată, activele ImageKit rămân orfane
-            // fără nicio alertă (workerul se reia cu o listă goală). Fail-loud:
-            // capturăm în Sentry și oprim ștergerea (500) ÎNAINTE de DELETE-ul `mese`.
-            try {
-              Sentry.withScope((scope) => {
-                scope.setLevel('error');
-                scope.setTag('gdpr.file_ids_persist_failed', 'true');
-                scope.setTag('gdpr.outbox_id', String(outboxId));
-                Sentry.captureException(err);
-              });
-            } catch {
-              // Sentry indisponibil — eroarea continuă spre fail-loud 500
-            }
-            throw err;
+        try {
+          const pregatire = await pregatesteSiPersistaFileIdsOutbox(supabaseAdmin, {
+            outboxId,
+            userId,
+            workerId: ownerId,
+            fencingToken,
+            leaseExpiresAt,
+            existingFileIds: fileIdsDinOutbox,
+          });
+          fileIds = pregatire.fileIds;
+          leaseExpiresAt = pregatire.leaseExpiresAt;
+          if (typeof pregatire.retryCount === 'number') {
+            numariIncercare = pregatire.retryCount + 1;
           }
+        } catch (err) {
+          try {
+            Sentry.withScope((scope) => {
+              scope.setLevel('error');
+              scope.setTag('gdpr.file_ids_persist_failed', 'true');
+              scope.setTag('gdpr.outbox_id', String(outboxId));
+              Sentry.captureException(err);
+            });
+          } catch {}
+          throw err;
         }
 
         // PASUL 1 (reversibil): Ștergere rânduri DB din TOATE tabelele user-scoped.
         inregistreazaUtilizareAdmin();
+        await verificaSiReinnoiesteLease();
 
         await stergeEvenimenteRtdnUtilizator({ supabaseAdmin, userId });
 
@@ -359,46 +335,42 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         };
         await Promise.all(TABELE_STERGERE_GDPR_UTILIZATOR.map((tabela) => sterge(tabela)));
 
+        await verificaSiReinnoiesteLease();
         await stergeDeadLetterUtilizator({ supabaseAdmin, userId, clerkUserId });
 
         await actualizezaStatus('db_done');
       }
 
       if (statusAsteptat === 'db_done') {
-        leaseExpiresAt = await asiguraLeaseActiv(supabaseAdmin, outboxId, {
-          workerId: ownerId,
-          fencingToken,
-          leaseExpiresAt,
-        });
+        await verificaSiReinnoiesteLease();
         // PASUL 2 (reversibil — reluabil): Ștergere identitate Clerk
-        await stergeIdentitateClerk({
-          clerkUserId,
-          secretKey: process.env.CLERK_SECRET_KEY?.trim(),
-        });
+        await cuReinnoireLeaseContinua(
+          () => stergeIdentitateClerk({
+            clerkUserId,
+            secretKey: process.env.CLERK_SECRET_KEY?.trim(),
+          }),
+          verificaSiReinnoiesteLease,
+        );
         await actualizezaStatus('clerk_done');
       }
 
       if (statusAsteptat === 'clerk_done') {
-        leaseExpiresAt = await asiguraLeaseActiv(supabaseAdmin, outboxId, {
-          workerId: ownerId,
-          fencingToken,
-          leaseExpiresAt,
-        });
+        await verificaSiReinnoiesteLease();
         // PASUL 3 (reversibil — reluabil): Ștergere media ImageKit
-        await stergeActiveImageKit({
-          userId,
-          fileIds,
-          privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim(),
-        });
+        await cuReinnoireLeaseContinua(
+          () => stergeActiveImageKit({
+            userId,
+            fileIds,
+            privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim(),
+            onBeforeStep: verificaSiReinnoiesteLease,
+          }),
+          verificaSiReinnoiesteLease,
+        );
         await actualizezaStatus('imagekit_done');
       }
 
       if (statusAsteptat === 'imagekit_done') {
-        await asiguraLeaseActiv(supabaseAdmin, outboxId, {
-          workerId: ownerId,
-          fencingToken,
-          leaseExpiresAt,
-        });
+        await verificaSiReinnoiesteLease();
         // PASUL 4 (IREVERSIBIL — ULTIMUL pas): Ștergere identitate Supabase
         const { error: eroareAuth } = await supabaseAdmin.auth.admin.deleteUser(userId);
         if (eroareAuth && !String(eroareAuth.message).toLowerCase().includes('not found')) {
@@ -408,6 +380,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
       }
 
       if (statusAsteptat === 'auth_done') {
+        await verificaSiReinnoiesteLease();
         await actualizezaStatus('completed');
       }
 

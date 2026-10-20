@@ -94,7 +94,13 @@ async function settlePhotoCredit({ userId, reservationId, action, reason = null 
     p_reason: reason,
     p_now: new Date().toISOString(),
   });
-  if (error) throw Object.assign(new Error('FLOW_CREDIT_SETTLEMENT_FAILED'), { cause: error });
+  if (error || !data || data.ok !== true) {
+    throw Object.assign(new Error('FLOW_CREDIT_SETTLEMENT_FAILED'), { cause: error || data });
+  }
+  const expectedStatus = action === 'commit' ? 'COMMITTED' : 'RELEASED';
+  if (data.status && data.status !== expectedStatus) {
+    throw Object.assign(new Error('FLOW_CREDIT_SETTLEMENT_STATE_MISMATCH'), { cause: data });
+  }
   inregistreazaOperational(action === 'commit' ? 'credit.commit' : 'credit.release');
   return data;
 }

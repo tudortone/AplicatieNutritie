@@ -106,11 +106,14 @@ async function fileIdApartineUtilizatorului({ fileId, userId, privateKey }) {
  * Pastreaza doar fileId-urile pe care ImageKit le confirma ca apartinand
  * utilizatorului care isi sterge contul.
  */
-async function filtreazaFileIdsProprii({ userId, fileIds, privateKey }) {
+async function filtreazaFileIdsProprii({ userId, fileIds, privateKey, onBeforeStep = null }) {
   const ids = [...fileIds];
   const proprii = [];
   const respinse = [];
   for (let index = 0; index < ids.length; index += 5) {
+    if (typeof onBeforeStep === 'function') {
+      await onBeforeStep();
+    }
     const lot = ids.slice(index, index + 5);
     const verdicte = await Promise.all(
       lot.map((fileId) => fileIdApartineUtilizatorului({ fileId, userId, privateKey })),
@@ -201,8 +204,12 @@ async function citesteTotPaginat({
     toate.push(...lot);
     // Ultima pagina: mai putine randuri decat am cerut.
     if (lot.length < dimensiunePagina) break;
-    // Plasa de siguranta impotriva unei bucle infinite daca `range` e ignorat.
-    if (pagina > 10000) break;
+    // Plasa de siguranta impotriva unei bucle infinite daca `range` e ignorat: fail-closed, nu trunchiere tacuta.
+    if (pagina > 10000) {
+      const err = new Error('GDPR_PAGINATION_INCOMPLETE');
+      err.code = 'GDPR_PAGINATION_INCOMPLETE';
+      throw err;
+    }
   }
   return toate;
 }
@@ -284,11 +291,15 @@ async function imageKitRequest(cale, { privateKey, method = 'DELETE', body } = {
  * P-06: Șterge fișierele individuale pe fileId + folderele userId.
  * Cele două strategii sunt complementare, nu alternative.
  */
-async function stergeActiveImageKit({ userId, fileIds, privateKey }) {
+async function stergeActiveImageKit({ userId, fileIds, privateKey, onBeforeStep = null }) {
   if (!privateKey) {
     const error = new Error('IMAGEKIT_NOT_CONFIGURED');
     error.code = 'IMAGEKIT_NOT_CONFIGURED';
     throw error;
+  }
+
+  if (typeof onBeforeStep === 'function') {
+    await onBeforeStep();
   }
 
   // Ștergere foldere (idempotent: 404 = deja șters)
@@ -300,8 +311,11 @@ async function stergeActiveImageKit({ userId, fileIds, privateKey }) {
   // P-06: ștergere fișiere individuale pe fileId (căi non-standard).
   // F-03: DOAR după ce ImageKit confirmă că fiecare fișier chiar aparține
   // acestui utilizator — id-urile vin din JSONB scris de client.
-  const ids = await filtreazaFileIdsProprii({ userId, fileIds, privateKey });
+  const ids = await filtreazaFileIdsProprii({ userId, fileIds, privateKey, onBeforeStep });
   for (let index = 0; index < ids.length; index += 5) {
+    if (typeof onBeforeStep === 'function') {
+      await onBeforeStep();
+    }
     const lot = ids.slice(index, index + 5);
     await Promise.all(lot.map((fileId) => imageKitRequest(
       `/files/${encodeURIComponent(fileId)}`,
@@ -385,7 +399,11 @@ async function extrageFileIdsUtilizator({ supabaseAdmin, userId, dimensiunePagin
       if (masa.alimente) extrageFileIds(masa.alimente, rezultat);
     }
     if (!hasRange || lot.length < dimensiunePagina) break;
-    if (pagina > 10000) break;
+    if (pagina > 10000) {
+      const err = new Error('GDPR_MEDIA_ENUMERATION_INCOMPLETE');
+      err.code = 'GDPR_MEDIA_ENUMERATION_INCOMPLETE';
+      throw err;
+    }
   }
   return rezultat;
 }

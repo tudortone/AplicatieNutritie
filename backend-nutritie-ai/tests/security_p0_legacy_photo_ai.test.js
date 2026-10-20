@@ -90,6 +90,7 @@ function createHarness({
         ok: true,
         reservationId: `res-${logicalAnalysisId}`,
         source: 'DAILY',
+        status: 'RESERVED',
         replay: false,
       };
     }),
@@ -416,5 +417,416 @@ describe('P0 Security Remediation — Legacy Photo AI Endpoints & Job Ownership'
         reservationId: null,
       }),
     ).rejects.toThrow('JOB_OWNERSHIP_MISMATCH');
+  });
+
+  test('8. GPT P0 reproduction: replaying a COMMITTED reservation never authorizes a second AI inference', async () => {
+    const reservations = new Map();
+    const h = createHarness({
+      reserveResult: ({ logicalAnalysisId }) => {
+        const key = `${USER_ID}:${logicalAnalysisId}`;
+        if (reservations.has(key)) {
+          const existing = reservations.get(key);
+          return { ...existing, replay: true };
+        }
+        const created = {
+          ok: true,
+          reservationId: `res-${logicalAnalysisId}`,
+          source: 'DAILY',
+          status: 'RESERVED',
+          replay: false,
+        };
+        reservations.set(key, created);
+        return created;
+      },
+    });
+    h.flowCredits.commitPhoto.mockImplementation(async ({ reservationId }) => {
+      for (const value of reservations.values()) {
+        if (value.reservationId === reservationId) {
+          value.status = 'COMMITTED';
+          return { ok: true, status: 'COMMITTED', replay: false };
+        }
+      }
+      return { ok: false, code: 'RESERVATION_NOT_FOUND' };
+    });
+
+    const first = await request(h.app)
+      .post('/api/v1/analiza-foto')
+      .set('Idempotency-Key', 'gpt-replay-committed-1')
+      .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
+
+    const replay = await request(h.app)
+      .post('/api/v1/analiza-foto')
+      .set('Idempotency-Key', 'gpt-replay-committed-1')
+      .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
+
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(409);
+    expect(replay.body.code || replay.body.cod).toBe('PHOTO_RESERVATION_ALREADY_COMMITTED');
+    expect(h.serviciuCascada.ruleazaCascadaVision).toHaveBeenCalledTimes(1);
+    expect(h.flowCredits.commitPhoto).toHaveBeenCalledTimes(1);
+    expect(h.flowCredits.releasePhoto).not.toHaveBeenCalled();
+
+    const replayStructurat = await request(h.app)
+      .post('/api/v1/analizeaza-mancare-structurat')
+      .set('Idempotency-Key', 'gpt-replay-committed-1')
+      .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
+
+    expect(replayStructurat.status).toBe(409);
+    expect(replayStructurat.body.code || replayStructurat.body.cod).toBe('PHOTO_RESERVATION_ALREADY_COMMITTED');
+    expect(h.serviciuCascada.ruleazaCascadaVision).toHaveBeenCalledTimes(1);
+  });
+
+  test('9. reservation states (RELEASED, RESERVED replay, missing, malformed, expired, cross-account) fail closed without inference', async () => {
+    const hReleased = createHarness({
+      reserveResult: {
+        ok: true,
+        reservationId: 'res-released-1',
+        source: 'DAILY',
+        status: 'RELEASED',
+        replay: true,
+      },
+    });
+    const rReleased = await request(hReleased.app)
+      .post('/api/v1/analiza-foto')
+      .set('Idempotency-Key', 'rel-1')
+      .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
+    expect(rReleased.status).toBe(409);
+    expect(rReleased.body.code || rReleased.body.cod).toBe('PHOTO_RESERVATION_RELEASED');
+    expect(hReleased.serviciuCascada.ruleazaCascadaVision).not.toHaveBeenCalled();
+    expect(hReleased.flowCredits.releasePhoto).not.toHaveBeenCalled();
+
+    const hReservedReplay = createHarness({
+      reserveResult: {
+        ok: true,
+        reservationId: 'res-in-flight-1',
+        source: 'DAILY',
+        status: 'RESERVED',
+        replay: true,
+      },
+    });
+    const rReservedReplay = await request(hReservedReplay.app)
+      .post('/api/v1/analiza-foto')
+      .set('Idempotency-Key', 'inflight-1')
+      .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
+    expect(rReservedReplay.status).toBe(409);
+    expect(rReservedReplay.body.code || rReservedReplay.body.cod).toBe('PHOTO_IN_PROGRESS');
+    expect(hReservedReplay.serviciuCascada.ruleazaCascadaVision).not.toHaveBeenCalled();
+    expect(hReservedReplay.flowCredits.releasePhoto).not.toHaveBeenCalled();
+
+    const hMalformed = createHarness({
+      reserveResult: {
+        ok: true,
+        reservationId: '',
+        source: 'DAILY',
+        status: 'RESERVED',
+        replay: false,
+      },
+    });
+    const rMalformed = await request(hMalformed.app)
+      .post('/api/v1/analiza-foto')
+      .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
+    expect(rMalformed.status).toBe(503);
+    expect(rMalformed.body.code || rMalformed.body.cod).toBe('INVALID_CREDIT_RESERVATION');
+    expect(hMalformed.serviciuCascada.ruleazaCascadaVision).not.toHaveBeenCalled();
+
+    const hExpired = createHarness({
+      reserveResult: {
+        ok: true,
+        reservationId: 'res-expired-1',
+        source: 'DAILY',
+        status: 'RESERVED',
+        replay: false,
+        expiresAt: '2020-01-01T00:00:00.000Z',
+      },
+    });
+    const rExpired = await request(hExpired.app)
+      .post('/api/v1/analiza-foto')
+      .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
+    expect(rExpired.status).toBe(409);
+    expect(rExpired.body.code || rExpired.body.cod).toBe('CREDIT_RESERVATION_EXPIRED');
+    expect(hExpired.serviciuCascada.ruleazaCascadaVision).not.toHaveBeenCalled();
+
+    const hCrossAccount = createHarness({
+      reserveResult: {
+        ok: true,
+        reservationId: 'res-foreign-1',
+        source: 'DAILY',
+        status: 'RESERVED',
+        replay: false,
+        userId: '22222222-2222-4222-8222-222222222222',
+      },
+    });
+    const rCrossAccount = await request(hCrossAccount.app)
+      .post('/api/v1/analiza-foto')
+      .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
+    expect(rCrossAccount.status).toBe(403);
+    expect(rCrossAccount.body.code || rCrossAccount.body.cod).toBe('RESERVATION_OWNERSHIP_MISMATCH');
+    expect(hCrossAccount.serviciuCascada.ruleazaCascadaVision).not.toHaveBeenCalled();
+    expect(hCrossAccount.flowCredits.releasePhoto).not.toHaveBeenCalled();
+  });
+
+  test('10. settlement failure or ambiguous commitPhoto response never returns free 200 analysis or orphans reservation', async () => {
+    const hCommitThrows = createHarness();
+    hCommitThrows.flowCredits.commitPhoto.mockRejectedValueOnce(new Error('DB_COMMIT_TIMEOUT'));
+
+    const rThrows = await request(hCommitThrows.app)
+      .post('/api/v1/analiza-foto')
+      .set('Idempotency-Key', 'commit-throws-1')
+      .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
+
+    expect(rThrows.status).toBe(503);
+    expect(rThrows.body.code || rThrows.body.cod).toBe('CREDIT_SETTLEMENT_FAILED');
+    expect(hCommitThrows.flowCredits.releasePhoto).toHaveBeenCalledWith(expect.objectContaining({
+      userId: USER_ID,
+      reason: 'COMMIT_FAILED',
+    }));
+
+    const hCommitRejected = createHarness();
+    hCommitRejected.flowCredits.commitPhoto.mockResolvedValueOnce({
+      ok: false,
+      code: 'RESERVATION_NOT_FOUND',
+    });
+
+    const rRejected = await request(hCommitRejected.app)
+      .post('/api/v1/analiza-foto')
+      .set('Idempotency-Key', 'commit-rejected-1')
+      .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
+
+    expect(rRejected.status).toBe(503);
+    expect(rRejected.body.code || rRejected.body.cod).toBe('CREDIT_SETTLEMENT_FAILED');
+
+    const hCommitReplayed = createHarness();
+    hCommitReplayed.flowCredits.commitPhoto.mockResolvedValueOnce({
+      ok: true,
+      status: 'COMMITTED',
+      replay: true,
+    });
+
+    const rReplayedCommit = await request(hCommitReplayed.app)
+      .post('/api/v1/analiza-foto')
+      .set('Idempotency-Key', 'commit-replayed-1')
+      .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
+
+    expect(rReplayedCommit.status).toBe(409);
+    expect(rReplayedCommit.body.code || rReplayedCommit.body.cod).toBe('PHOTO_RESERVATION_ALREADY_COMMITTED');
+  });
+
+  test('11. concurrent requests enforce single authoritative processing ownership per logical operation and per user', async () => {
+    const reservations = new Map();
+    const h = createHarness({
+      reserveResult: async ({ logicalAnalysisId }) => {
+        await new Promise((r) => setTimeout(r, 15));
+        const key = `${USER_ID}:${logicalAnalysisId}`;
+        if (reservations.has(key)) {
+          return { ...reservations.get(key), replay: true };
+        }
+        const activeForUser = [...reservations.values()].find((r) => r.status === 'RESERVED');
+        if (activeForUser) {
+          return {
+            ok: false,
+            code: 'PHOTO_IN_PROGRESS',
+            reason: 'PHOTO_IN_PROGRESS',
+            activeReservationId: activeForUser.reservationId,
+          };
+        }
+        const created = {
+          ok: true,
+          reservationId: `res-${logicalAnalysisId}`,
+          source: 'DAILY',
+          status: 'RESERVED',
+          replay: false,
+        };
+        reservations.set(key, created);
+        return created;
+      },
+    });
+    h.serviciuCascada.ruleazaCascadaVision.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 40));
+      return {
+        text: JSON.stringify([{ nume: 'Salata', estimare_grame: 200, calorii_per_100g: 120 }]),
+      };
+    });
+    h.flowCredits.commitPhoto.mockImplementation(async ({ reservationId }) => {
+      await new Promise((r) => setTimeout(r, 15));
+      for (const val of reservations.values()) {
+        if (val.reservationId === reservationId) {
+          val.status = 'COMMITTED';
+          return { ok: true, status: 'COMMITTED', replay: false };
+        }
+      }
+      return { ok: false, code: 'RESERVATION_NOT_FOUND' };
+    });
+
+    const [sameId1, sameId2] = await Promise.all([
+      request(h.app)
+        .post('/api/v1/analiza-foto')
+        .set('Idempotency-Key', 'concurrent-same-logical-id')
+        .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' }),
+      request(h.app)
+        .post('/api/v1/analiza-foto')
+        .set('Idempotency-Key', 'concurrent-same-logical-id')
+        .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' }),
+    ]);
+
+    expect([sameId1.status, sameId2.status].sort()).toEqual([200, 409]);
+    expect(h.serviciuCascada.ruleazaCascadaVision).toHaveBeenCalledTimes(1);
+    expect(h.flowCredits.commitPhoto).toHaveBeenCalledTimes(1);
+    expect(h.flowCredits.releasePhoto).not.toHaveBeenCalled();
+
+    const [diffJob1, diffJob2] = await Promise.all([
+      request(h.app)
+        .post('/api/v1/analiza-foto')
+        .set('Idempotency-Key', 'concurrent-diff-job-1')
+        .attach('imagine', VALID_PNG, { filename: 'meal1.png', contentType: 'image/png' }),
+      request(h.app)
+        .post('/api/v1/analiza-foto')
+        .set('Idempotency-Key', 'concurrent-diff-job-2')
+        .attach('imagine', VALID_PNG, { filename: 'meal2.png', contentType: 'image/png' }),
+    ]);
+
+    expect([diffJob1.status, diffJob2.status].sort()).toEqual([200, 409]);
+    expect(h.serviciuCascada.ruleazaCascadaVision).toHaveBeenCalledTimes(2);
+    expect(h.flowCredits.commitPhoto).toHaveBeenCalledTimes(2);
+  });
+
+  test('12. Play Integrity request binding: token attested for Photo A cannot authorize Photo B on multipart routes', async () => {
+    const crypto = require('crypto');
+    const {
+      buildPlayIntegrityRequestHash,
+      createPlayIntegrityVerifier,
+    } = require('../utils/playIntegrity');
+
+    const PHOTO_A = Buffer.concat([VALID_PNG, Buffer.from('photo-content-A')]);
+    const PHOTO_B = Buffer.concat([VALID_PNG, Buffer.from('photo-content-B')]);
+    const digestA = crypto.createHash('sha256').update(PHOTO_A).digest('hex');
+
+    const NOW = 1_800_000_000_000;
+    const hashForPhotoA = buildPlayIntegrityRequestHash({
+      method: 'POST',
+      path: '/analiza-foto',
+      idempotencyKey: 'integrity-photo-binding-1',
+      payloadFingerprint: digestA,
+      body: {},
+    });
+
+    const realVerifier = createPlayIntegrityVerifier({
+      packageName: 'com.totsrl.getflo',
+      now: () => NOW,
+      decodeToken: async (token) => {
+        if (token !== 'token-for-photo-A') throw new Error('unknown token');
+        return {
+          tokenPayloadExternal: {
+            requestDetails: {
+              requestPackageName: 'com.totsrl.getflo',
+              requestHash: hashForPhotoA,
+              timestampMillis: String(NOW - 500),
+            },
+            appIntegrity: {
+              appRecognitionVerdict: 'PLAY_RECOGNIZED',
+              packageName: 'com.totsrl.getflo',
+            },
+            deviceIntegrity: {
+              deviceRecognitionVerdict: ['MEETS_DEVICE_INTEGRITY'],
+            },
+            accountDetails: {
+              appLicensingVerdict: 'LICENSED',
+            },
+          },
+        };
+      },
+    });
+
+    let currentUploadedBytes = PHOTO_B;
+    fs.promises.readFile.mockImplementation(async () => currentUploadedBytes);
+
+    const h = createHarness({ integrityMode: 'enforce' });
+    const appWithRealIntegrity = express();
+    appWithRealIntegrity.use(express.json());
+    const router = createAiRouter({
+      requireAuth: (req, _res, next) => {
+        req.user = { id: USER_ID, esteTester: false };
+        next();
+      },
+      aiLimiter: (_req, _res, next) => next(),
+      generalLimiter: (_req, _res, next) => next(),
+      upload: {
+        single: () => (req, _res, next) => {
+          req.file = { path: 'uploaded-photo.png', mimetype: 'image/png' };
+          req.body = req.body || {};
+          next();
+        },
+      },
+      checkAiUsageQuota: (_req, _res, next) => next(),
+      imagekit: null,
+      tasks: h.tasks,
+      config: {
+        imagekit: { urlEndpoint: 'https://ik.imagekit.io/getflow' },
+        supabase: { url: 'https://proj.supabase.co' },
+        triggerSecretKey: 'tr_test_secret',
+        playIntegrity: { mode: 'enforce' },
+      },
+      serviciuVision: { detectImageMime: () => 'image/png' },
+      serviciuCascada: h.serviciuCascada,
+      serviciuChat: {
+        ruleazaChat: jest.fn(),
+        estimeazaMancareText: jest.fn(),
+        profilNutritiv: jest.fn(),
+        logFoodDinChat: jest.fn(),
+      },
+      semaforAi: { ruleaza: async (fn) => fn() },
+      idempotencyCritic: (_req, _res, next) => next(),
+      supabaseAdmin: null,
+      billingService: { getPaidEntitlement: jest.fn(async () => ({ premium: false })) },
+      photoJobs: h.photoJobs,
+      flowCredits: h.flowCredits,
+      contextDate: (req) => ({ db: {}, userId: req.user?.id }),
+      integrityGuard: createPlayIntegrityGuard({
+        mode: 'enforce',
+        verifier: realVerifier,
+      }),
+    });
+    appWithRealIntegrity.use('/api/v1', router);
+
+    try {
+      // 1. Attempt to upload Photo B using token attested for Photo A (without fingerprint header)
+      currentUploadedBytes = PHOTO_B;
+      const resPhotoBNoHeader = await request(appWithRealIntegrity)
+        .post('/api/v1/analiza-foto')
+        .set('Idempotency-Key', 'integrity-photo-binding-1')
+        .set('X-Play-Integrity', 'token-for-photo-A')
+        .attach('imagine', PHOTO_B, { filename: 'photoB.png', contentType: 'image/png' });
+
+      expect(resPhotoBNoHeader.status).toBe(403);
+      expect(resPhotoBNoHeader.body.cod || resPhotoBNoHeader.body.code).toBe('PLAY_INTEGRITY_REJECTED');
+      expect(h.flowCredits.reservePhoto).not.toHaveBeenCalled();
+      expect(h.serviciuCascada.ruleazaCascadaVision).not.toHaveBeenCalled();
+
+      // 2. Attempt to upload Photo B while spoofing X-Payload-Fingerprint = digestA
+      currentUploadedBytes = PHOTO_B;
+      const resPhotoBSpoofedHeader = await request(appWithRealIntegrity)
+        .post('/api/v1/analiza-foto')
+        .set('Idempotency-Key', 'integrity-photo-binding-1')
+        .set('X-Play-Integrity', 'token-for-photo-A')
+        .set('X-Payload-Fingerprint', digestA)
+        .attach('imagine', PHOTO_B, { filename: 'photoB.png', contentType: 'image/png' });
+
+      expect(resPhotoBSpoofedHeader.status).toBe(403);
+      expect(resPhotoBSpoofedHeader.body.cod || resPhotoBSpoofedHeader.body.code).toBe('PLAY_INTEGRITY_REJECTED');
+      expect(h.flowCredits.reservePhoto).not.toHaveBeenCalled();
+      expect(h.serviciuCascada.ruleazaCascadaVision).not.toHaveBeenCalled();
+
+      // 3. Uploading the genuine Photo A with token-for-photo-A succeeds
+      currentUploadedBytes = PHOTO_A;
+      const resPhotoAGenuine = await request(appWithRealIntegrity)
+        .post('/api/v1/analiza-foto')
+        .set('Idempotency-Key', 'integrity-photo-binding-1')
+        .set('X-Play-Integrity', 'token-for-photo-A')
+        .attach('imagine', PHOTO_A, { filename: 'photoA.png', contentType: 'image/png' });
+
+      expect(resPhotoAGenuine.status).toBe(200);
+      expect(h.serviciuCascada.ruleazaCascadaVision).toHaveBeenCalledTimes(1);
+    } finally {
+      fs.promises.readFile.mockResolvedValue(VALID_PNG);
+    }
   });
 });

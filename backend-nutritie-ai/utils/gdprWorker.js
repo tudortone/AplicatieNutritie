@@ -11,6 +11,7 @@ const {
   stergeActiveImageKit,
   stergeDeadLetterUtilizator,
   stergeEvenimenteRtdnUtilizator,
+  extrageFileIdsUtilizator,
   CODURI_TABELA_INEXISTENTA,
 } = require('./gdprServices');
 const {
@@ -19,6 +20,21 @@ const {
 } = require('./clientUtilizator');
 const { pseudonimizeaza } = require('./sentrySanitize');
 const { codEroare } = require('./codEroare');
+
+function esteTokenFencingValid(token) {
+  return Number.isInteger(token) && token > 0;
+}
+
+function parseazaExpirareLeaseValida(leaseExpiresAt, nowMs = Date.now()) {
+  if (typeof leaseExpiresAt !== 'string' || leaseExpiresAt.trim().length === 0) {
+    return null;
+  }
+  const timestamp = Date.parse(leaseExpiresAt);
+  if (!Number.isFinite(timestamp) || timestamp <= nowMs) {
+    return null;
+  }
+  return timestamp;
+}
 
 /**
  * Actualizează statusul unui rând din outbox cu verificare de proprietate (workerId, fencingToken, expectedStatus).
@@ -29,6 +45,18 @@ async function actualizeazaStatusOutbox(supabaseAdmin, id, payload, {
   fencingToken,
   expectedStatus,
 } = {}) {
+  if (
+    typeof id !== 'string'
+    || id.trim().length === 0
+    || typeof workerId !== 'string'
+    || workerId.trim().length === 0
+    || !esteTokenFencingValid(fencingToken)
+  ) {
+    const error = new Error('GDPR_OUTBOX_STATUS_UPDATE_FAILED');
+    error.code = 'GDPR_OUTBOX_STATUS_UPDATE_FAILED';
+    throw error;
+  }
+
   let query = supabaseAdmin
     .from('gdpr_deletions')
     .update(payload)
@@ -37,10 +65,10 @@ async function actualizeazaStatusOutbox(supabaseAdmin, id, payload, {
   if (expectedStatus && typeof query?.eq === 'function') {
     query = query.eq('status', expectedStatus);
   }
-  if (workerId && typeof query?.eq === 'function') {
+  if (typeof query?.eq === 'function') {
     query = query.eq('claimed_by', workerId);
   }
-  if (fencingToken !== undefined && fencingToken !== null && typeof query?.eq === 'function') {
+  if (typeof query?.eq === 'function') {
     query = query.eq('fencing_token', fencingToken);
   }
   if (typeof query?.gte === 'function') {
@@ -61,22 +89,28 @@ async function actualizeazaStatusOutbox(supabaseAdmin, id, payload, {
 
 /**
  * Revendică atomic un rând din outbox (fail-closed).
- * Dacă RPC-ul lipsește, aruncă eroare, sau întoarce altceva decât succes, returnează success: false.
- * Zero operații distructive sunt permise dacă claim-ul nu a reușit.
+ * Un raspuns boolean legacy, malformat, fara fencing_token pozitiv sau fara lease_expires_at valid in viitor
+ * este respins fail-closed. Zero operații distructive sunt permise fără claim valid.
  */
 async function revendicaRandOutbox(supabaseAdmin, id, {
   workerId,
   expectedStatus,
   leaseSeconds = 300,
 } = {}) {
+  const normalizedId = typeof id === 'string' ? id.trim() : '';
+  const normalizedWorkerId = typeof workerId === 'string' ? workerId.trim() : '';
+  const normalizedStatus = typeof expectedStatus === 'string' ? expectedStatus.trim() : '';
+  if (!normalizedId || !normalizedWorkerId || !normalizedStatus) {
+    return { success: false, error: 'INVALID_CLAIM_PARAMETERS' };
+  }
   if (!supabaseAdmin || typeof supabaseAdmin.rpc !== 'function') {
     return { success: false, error: 'RPC_UNAVAILABLE' };
   }
   try {
     const res = await supabaseAdmin.rpc('claim_gdpr_deletion', {
-      p_id: id,
-      p_worker_id: workerId || 'worker_default',
-      p_expected_status: expectedStatus,
+      p_id: normalizedId,
+      p_worker_id: normalizedWorkerId,
+      p_expected_status: normalizedStatus,
       p_lease_seconds: leaseSeconds,
     });
     if (res?.error) {
@@ -84,16 +118,36 @@ async function revendicaRandOutbox(supabaseAdmin, id, {
     }
     const data = res?.data;
     if (typeof data === 'boolean') {
-      return { success: data, fencingToken: null };
+      return { success: false, error: 'LEGACY_BOOLEAN_CLAIM_REJECTED' };
     }
-    if (data && typeof data === 'object' && data.success === true) {
-      return {
-        success: true,
-        fencingToken: data.fencing_token,
-        leaseExpiresAt: data.lease_expires_at,
-      };
+    if (!data || typeof data !== 'object' || Array.isArray(data) || data.success !== true) {
+      return { success: false, error: data?.error || 'CLAIM_REJECTED' };
     }
-    return { success: false, error: data?.error || 'CLAIM_REJECTED' };
+    if (!esteTokenFencingValid(data.fencing_token)) {
+      return { success: false, error: 'INVALID_FENCING_TOKEN' };
+    }
+    const leaseTimestamp = parseazaExpirareLeaseValida(data.lease_expires_at);
+    if (leaseTimestamp === null) {
+      return { success: false, error: 'INVALID_OR_EXPIRED_LEASE' };
+    }
+    if (data.id !== undefined && data.id !== normalizedId) {
+      return { success: false, error: 'CLAIM_JOB_ID_MISMATCH' };
+    }
+    if (data.claimed_by !== undefined && data.claimed_by !== normalizedWorkerId) {
+      return { success: false, error: 'CLAIM_OWNER_MISMATCH' };
+    }
+    if (data.worker_id !== undefined && data.worker_id !== normalizedWorkerId) {
+      return { success: false, error: 'CLAIM_OWNER_MISMATCH' };
+    }
+    if (data.status !== undefined && data.status !== normalizedStatus) {
+      return { success: false, error: 'CLAIM_STATUS_MISMATCH' };
+    }
+    return {
+      success: true,
+      workerId: normalizedWorkerId,
+      fencingToken: data.fencing_token,
+      leaseExpiresAt: data.lease_expires_at,
+    };
   } catch (err) {
     return { success: false, error: err };
   }
@@ -108,7 +162,15 @@ async function reinoiesteLeaseOutbox(supabaseAdmin, id, {
   fencingToken,
   leaseSeconds = 300,
 } = {}) {
-  if (!supabaseAdmin || typeof supabaseAdmin.rpc !== 'function') {
+  if (
+    !supabaseAdmin
+    || typeof supabaseAdmin.rpc !== 'function'
+    || typeof id !== 'string'
+    || !id.trim()
+    || typeof workerId !== 'string'
+    || !workerId.trim()
+    || !esteTokenFencingValid(fencingToken)
+  ) {
     const err = new Error('GDPR_LEASE_RENEWAL_FAILED');
     err.code = 'GDPR_LEASE_RENEWAL_FAILED';
     throw err;
@@ -119,13 +181,21 @@ async function reinoiesteLeaseOutbox(supabaseAdmin, id, {
     p_fencing_token: fencingToken,
     p_lease_seconds: leaseSeconds,
   });
-  if (res?.error || res?.data?.success !== true) {
+  const data = res?.data;
+  if (
+    res?.error
+    || !data
+    || typeof data !== 'object'
+    || data.success !== true
+    || (data.fencing_token !== undefined && data.fencing_token !== fencingToken)
+    || parseazaExpirareLeaseValida(data.lease_expires_at) === null
+  ) {
     const err = new Error('GDPR_LEASE_RENEWAL_FAILED');
     err.code = 'GDPR_LEASE_RENEWAL_FAILED';
     if (res?.error) err.cause = res.error;
     throw err;
   }
-  return res.data;
+  return data;
 }
 
 async function asiguraLeaseActiv(supabaseAdmin, id, {
@@ -134,9 +204,26 @@ async function asiguraLeaseActiv(supabaseAdmin, id, {
   leaseExpiresAt = null,
   leaseSeconds = 300,
 } = {}) {
-  if (!leaseExpiresAt) return null;
-  const remainingMs = new Date(leaseExpiresAt).getTime() - Date.now();
-  if (!Number.isFinite(remainingMs) || remainingMs > 120 * 1000) {
+  if (
+    typeof id !== 'string'
+    || !id.trim()
+    || typeof workerId !== 'string'
+    || !workerId.trim()
+    || !esteTokenFencingValid(fencingToken)
+  ) {
+    const err = new Error('GDPR_LEASE_INVALID');
+    err.code = 'GDPR_LEASE_INVALID';
+    throw err;
+  }
+  const nowMs = Date.now();
+  const expMs = parseazaExpirareLeaseValida(leaseExpiresAt, nowMs);
+  if (expMs === null) {
+    const err = new Error('GDPR_LEASE_EXPIRED');
+    err.code = 'GDPR_LEASE_EXPIRED';
+    throw err;
+  }
+  const remainingMs = expMs - nowMs;
+  if (remainingMs > 120 * 1000) {
     return leaseExpiresAt;
   }
   const renewed = await reinoiesteLeaseOutbox(supabaseAdmin, id, {
@@ -144,15 +231,140 @@ async function asiguraLeaseActiv(supabaseAdmin, id, {
     fencingToken,
     leaseSeconds,
   });
-  return renewed?.lease_expires_at || leaseExpiresAt;
+  return renewed.lease_expires_at;
 }
 
-async function stergeRanduriDbUtilizator(supabaseAdmin, userId, clerkUserId = null) {
+async function cuReinnoireLeaseContinua(operatie, reinnoieste, intervalMs = 45_000) {
+  let eroareLease = null;
+  let oprit = false;
+  const timer = setInterval(async () => {
+    if (oprit || eroareLease) return;
+    try {
+      await reinnoieste();
+    } catch (err) {
+      eroareLease = err;
+    }
+  }, intervalMs);
+  if (typeof timer?.unref === 'function') timer.unref();
+
+  try {
+    const rezultat = await operatie();
+    if (eroareLease) throw eroareLease;
+    return rezultat;
+  } finally {
+    oprit = true;
+    clearInterval(timer);
+  }
+}
+
+/**
+ * Pregătire canonică pre-delete (rută + worker):
+ * 1. Verifică lease-ul activ.
+ * 2. Enumeră paginat toate fileId-urile ImageKit din `mese` (fail-closed la eroare sau trunchiere).
+ * 3. Citește și combină cu `file_ids` deja persistate în `gdpr_deletions` (nu suprascrie niciodată o listă
+ *    existentă cu una goală dacă `mese` a fost deja parțial sau integral ștearsă la o încercare anterioară).
+ * 4. Persistează durabil `file_ids` în `gdpr_deletions` sub protecție de fencing ÎNAINTE de ștergerea DB.
+ */
+async function pregatesteSiPersistaFileIdsOutbox(supabaseAdmin, {
+  outboxId,
+  userId,
+  workerId,
+  fencingToken,
+  leaseExpiresAt,
+  existingFileIds = null,
+} = {}) {
+  const updatedLeaseExpiresAt = await asiguraLeaseActiv(supabaseAdmin, outboxId, {
+    workerId,
+    fencingToken,
+    leaseExpiresAt,
+  });
+
+  const merged = new Set(
+    Array.isArray(existingFileIds)
+      ? existingFileIds.filter((fid) => typeof fid === 'string' && fid.trim().length > 0)
+      : [],
+  );
+
+  let extrase = new Set();
+  if (userId) {
+    const tabelMese = supabaseAdmin.from('mese');
+    if (typeof tabelMese?.select === 'function') {
+      extrase = await extrageFileIdsUtilizator({ supabaseAdmin, userId });
+    }
+  }
+
+  let retryCountDinOutbox = null;
+  let cititDinDb = false;
+  const tabelOutbox = supabaseAdmin.from('gdpr_deletions');
+  const selectQuery = typeof tabelOutbox?.select === 'function'
+    ? tabelOutbox.select('file_ids')
+    : null;
+  if (selectQuery && typeof selectQuery.eq === 'function') {
+    const { data: randOutbox, error: eroareCitireOutbox } = await selectQuery
+      .eq('id', outboxId)
+      .maybeSingle();
+    if (eroareCitireOutbox || !randOutbox) {
+      const err = new Error('GDPR_OUTBOX_FILE_IDS_READ_FAILED');
+      err.code = 'GDPR_OUTBOX_FILE_IDS_READ_FAILED';
+      if (eroareCitireOutbox) err.cause = eroareCitireOutbox;
+      throw err;
+    }
+    cititDinDb = true;
+    if (typeof randOutbox.retry_count === 'number') {
+      retryCountDinOutbox = randOutbox.retry_count;
+    }
+    if (Array.isArray(randOutbox.file_ids)) {
+      for (const fid of randOutbox.file_ids) {
+        if (typeof fid === 'string' && fid.trim().length > 0) {
+          merged.add(fid);
+        }
+      }
+    }
+  }
+
+  for (const fid of extrase) {
+    if (typeof fid === 'string' && fid.trim().length > 0) {
+      merged.add(fid);
+    }
+  }
+
+  if (cititDinDb || merged.size > 0) {
+    try {
+      await actualizeazaStatusOutbox(supabaseAdmin, outboxId, {
+        file_ids: [...merged],
+      }, {
+        workerId,
+        fencingToken,
+        expectedStatus: 'pending',
+      });
+    } catch (err) {
+      const persistError = new Error('GDPR_OUTBOX_FILE_IDS_PERSIST_FAILED');
+      persistError.code = 'GDPR_OUTBOX_FILE_IDS_PERSIST_FAILED';
+      persistError.cause = err;
+      throw persistError;
+    }
+  }
+
+  return {
+    fileIds: merged,
+    retryCount: retryCountDinOutbox,
+    leaseExpiresAt: updatedLeaseExpiresAt,
+  };
+}
+
+async function stergeRanduriDbUtilizator(
+  supabaseAdmin,
+  userId,
+  clerkUserId = null,
+  { onBeforeStep = null } = {},
+) {
   if (!userId || !supabaseAdmin) return;
   inregistreazaUtilizareAdmin();
+  if (typeof onBeforeStep === 'function') await onBeforeStep();
   const tabele = TABELE_STERGERE_GDPR_UTILIZATOR;
   await stergeEvenimenteRtdnUtilizator({ supabaseAdmin, userId });
   for (const tabela of tabele) {
+    if (typeof onBeforeStep === 'function') await onBeforeStep();
     const rezultat = await supabaseAdmin.from(tabela).delete().eq('user_id', userId);
     const eroare = rezultat?.error;
     if (eroare && !CODURI_TABELA_INEXISTENTA.has(eroare.code)) {
@@ -161,6 +373,7 @@ async function stergeRanduriDbUtilizator(supabaseAdmin, userId, clerkUserId = nu
       );
     }
   }
+  if (typeof onBeforeStep === 'function') await onBeforeStep();
   await stergeDeadLetterUtilizator({ supabaseAdmin, userId, clerkUserId });
 }
 
@@ -196,7 +409,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
     }
 
     const fencingToken = claim.fencingToken;
-    let leaseExpiresAt = claim.leaseExpiresAt || null;
+    let leaseExpiresAt = claim.leaseExpiresAt;
     const numariIncercare = (rand.retry_count ?? 0) + 1;
 
     if (numariIncercare >= 5) {
@@ -226,11 +439,33 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
     }
 
     let statusCurent = rand.status;
+    let fileIds = new Set(Array.isArray(rand.file_ids) ? rand.file_ids : []);
+    const verificaSiReinnoiesteLease = async () => {
+      leaseExpiresAt = await asiguraLeaseActiv(supabaseAdmin, rand.id, {
+        workerId,
+        fencingToken,
+        leaseExpiresAt,
+      });
+    };
+
     try {
-      // Pasul 1 (dacă s-a oprit la pending): DB rows delete
+      // Pasul 1 (dacă s-a oprit la pending): enumerare + persistare durabilă file_ids ÎNAINTE de DB delete
       if (statusCurent === 'pending') {
+        const pregatire = await pregatesteSiPersistaFileIdsOutbox(supabaseAdmin, {
+          outboxId: rand.id,
+          userId: rand.user_id,
+          workerId,
+          fencingToken,
+          leaseExpiresAt,
+          existingFileIds: Array.isArray(rand.file_ids) ? rand.file_ids : [],
+        });
+        fileIds = pregatire.fileIds;
+        leaseExpiresAt = pregatire.leaseExpiresAt;
+
         if (rand.user_id) {
-          await stergeRanduriDbUtilizator(supabaseAdmin, rand.user_id, rand.clerk_user_id);
+          await stergeRanduriDbUtilizator(supabaseAdmin, rand.user_id, rand.clerk_user_id, {
+            onBeforeStep: verificaSiReinnoiesteLease,
+          });
         }
         await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'db_done' }, {
           workerId,
@@ -242,16 +477,15 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
 
       // Pasul 2 (dacă s-a oprit după db_done): Clerk delete
       if (statusCurent === 'db_done') {
-        leaseExpiresAt = await asiguraLeaseActiv(supabaseAdmin, rand.id, {
-          workerId,
-          fencingToken,
-          leaseExpiresAt,
-        });
+        await verificaSiReinnoiesteLease();
         if (rand.clerk_user_id) {
-          await stergeIdentitateClerk({
-            clerkUserId: rand.clerk_user_id,
-            secretKey: process.env.CLERK_SECRET_KEY?.trim(),
-          });
+          await cuReinnoireLeaseContinua(
+            () => stergeIdentitateClerk({
+              clerkUserId: rand.clerk_user_id,
+              secretKey: process.env.CLERK_SECRET_KEY?.trim(),
+            }),
+            verificaSiReinnoiesteLease,
+          );
         }
         await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'clerk_done' }, {
           workerId,
@@ -263,18 +497,17 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
 
       // Pasul 3 (dacă s-a oprit după clerk_done): ImageKit media delete
       if (statusCurent === 'clerk_done') {
-        leaseExpiresAt = await asiguraLeaseActiv(supabaseAdmin, rand.id, {
-          workerId,
-          fencingToken,
-          leaseExpiresAt,
-        });
+        await verificaSiReinnoiesteLease();
         if (rand.user_id) {
-          const fileIds = Array.isArray(rand.file_ids) ? new Set(rand.file_ids) : new Set();
-          await stergeActiveImageKit({
-            userId: rand.user_id,
-            fileIds,
-            privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim() || config?.imagekit?.privateKey,
-          });
+          await cuReinnoireLeaseContinua(
+            () => stergeActiveImageKit({
+              userId: rand.user_id,
+              fileIds,
+              privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim() || config?.imagekit?.privateKey,
+              onBeforeStep: verificaSiReinnoiesteLease,
+            }),
+            verificaSiReinnoiesteLease,
+          );
         }
         await actualizeazaStatusOutbox(supabaseAdmin, rand.id, { status: 'imagekit_done' }, {
           workerId,
@@ -286,11 +519,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
 
       // Pasul 4 (dacă s-a oprit după imagekit_done): auth.deleteUser
       if (statusCurent === 'imagekit_done') {
-        leaseExpiresAt = await asiguraLeaseActiv(supabaseAdmin, rand.id, {
-          workerId,
-          fencingToken,
-          leaseExpiresAt,
-        });
+        await verificaSiReinnoiesteLease();
         if (rand.user_id && !supabaseAdmin.auth?.admin?.deleteUser) {
           const error = new Error('ADMIN_DELETE_UNAVAILABLE');
           error.code = 'ADMIN_DELETE_UNAVAILABLE';
@@ -312,6 +541,7 @@ async function reiaStergerileBlocate({ supabaseAdmin, config }) {
 
       // Pasul 5 (dacă s-a oprit după auth_done): confirmare finală
       if (statusCurent === 'auth_done') {
+        await verificaSiReinnoiesteLease();
         await actualizeazaStatusOutbox(supabaseAdmin, rand.id, {
           status: 'completed',
           completed_at: new Date().toISOString(),
@@ -359,5 +589,8 @@ module.exports = {
   revendicaRandOutbox,
   reinoiesteLeaseOutbox,
   asiguraLeaseActiv,
+  cuReinnoireLeaseContinua,
+  pregatesteSiPersistaFileIdsOutbox,
+  stergeRanduriDbUtilizator,
   reiaStergerileBlocate,
 };

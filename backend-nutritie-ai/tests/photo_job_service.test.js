@@ -135,4 +135,83 @@ describe('durable Photo AI job admission', () => {
     await expect(h.service.getActive({ userId: USER_B })).resolves.toBeNull();
     expect(h.repo.getOwned).toHaveBeenCalledWith({ userId: USER_A, jobId: job.id });
   });
+
+  test('rejects reusing logicalAnalysisId with a different imageUrl or imageFileId (409 LOGICAL_ID_IMAGE_MISMATCH)', async () => {
+    const h = harness();
+    await h.service.submit(input);
+    await expect(
+      h.service.submit({
+        ...input,
+        imageUrl: 'https://ik.imagekit.io/getflow/mancare/11111111-1111-4111-8111-111111111111/different.jpg',
+      }),
+    ).rejects.toMatchObject({ code: 'LOGICAL_ID_IMAGE_MISMATCH', status: 409 });
+
+    await expect(
+      h.service.submit({
+        ...input,
+        imageFileId: 'mancare/user/different',
+      }),
+    ).rejects.toMatchObject({ code: 'LOGICAL_ID_IMAGE_MISMATCH', status: 409 });
+
+    expect(h.flowCredits.reservePhoto).toHaveBeenCalledTimes(1);
+    expect(h.tasks.trigger).toHaveBeenCalledTimes(1);
+  });
+
+  test('rejects replaying a failed or cancelled job whose reservation was released (409 PHOTO_RESERVATION_RELEASED)', async () => {
+    const h = harness();
+    const first = await h.service.submit(input);
+    h.records.get(first.id).status = 'failed';
+
+    await expect(h.service.submit(input))
+      .rejects.toMatchObject({ code: 'PHOTO_RESERVATION_RELEASED', status: 409 });
+    expect(h.flowCredits.reservePhoto).toHaveBeenCalledTimes(1);
+    expect(h.tasks.trigger).toHaveBeenCalledTimes(1);
+  });
+
+  test('rejects COMMITTED, RELEASED, or replayed RESERVED reservations when no durable job exists without releasing active reservation', async () => {
+    const hCommitted = harness({
+      reserveResult: {
+        ok: true,
+        reservationId: 'res-committed',
+        source: 'DAILY',
+        status: 'COMMITTED',
+        replay: true,
+      },
+    });
+    await expect(hCommitted.service.submit(input))
+      .rejects.toMatchObject({ code: 'PHOTO_RESERVATION_ALREADY_COMMITTED', status: 409 });
+    expect(hCommitted.repo.create).not.toHaveBeenCalled();
+    expect(hCommitted.tasks.trigger).not.toHaveBeenCalled();
+    expect(hCommitted.flowCredits.releasePhoto).not.toHaveBeenCalled();
+
+    const hReleased = harness({
+      reserveResult: {
+        ok: true,
+        reservationId: 'res-released',
+        source: 'DAILY',
+        status: 'RELEASED',
+        replay: true,
+      },
+    });
+    await expect(hReleased.service.submit(input))
+      .rejects.toMatchObject({ code: 'PHOTO_RESERVATION_RELEASED', status: 409 });
+    expect(hReleased.repo.create).not.toHaveBeenCalled();
+    expect(hReleased.tasks.trigger).not.toHaveBeenCalled();
+    expect(hReleased.flowCredits.releasePhoto).not.toHaveBeenCalled();
+
+    const hReplayReserved = harness({
+      reserveResult: {
+        ok: true,
+        reservationId: 'res-replay-active',
+        source: 'DAILY',
+        status: 'RESERVED',
+        replay: true,
+      },
+    });
+    await expect(hReplayReserved.service.submit(input))
+      .rejects.toMatchObject({ code: 'PHOTO_IN_PROGRESS', status: 409 });
+    expect(hReplayReserved.repo.create).not.toHaveBeenCalled();
+    expect(hReplayReserved.tasks.trigger).not.toHaveBeenCalled();
+    expect(hReplayReserved.flowCredits.releasePhoto).not.toHaveBeenCalled();
+  });
 });

@@ -31,7 +31,7 @@ function creeazaApp(supabaseAdmin, profilRepoFake) {
 }
 
 const defaultRpcMock = async (fn) => {
-  if (fn === 'claim_gdpr_deletion') return { data: { success: true, fencing_token: 1 }, error: null };
+  if (fn === 'claim_gdpr_deletion') return { data: { success: true, fencing_token: 1, lease_expires_at: new Date(Date.now() + 300000).toISOString() }, error: null };
   return { data: null, error: null };
 };
 

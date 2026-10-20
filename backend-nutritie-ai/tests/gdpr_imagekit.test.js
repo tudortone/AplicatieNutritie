@@ -83,7 +83,7 @@ function creeazaSupabaseAdminFake({
     rpc: async (functie, params) => {
       apeluri.push({ tip: 'rpc', functie, params });
       if (functie === 'initiate_gdpr_deletion') return { data: outboxId, error: null };
-      if (functie === 'claim_gdpr_deletion') return { data: { success: true, fencing_token: 1 }, error: null };
+      if (functie === 'claim_gdpr_deletion') return { data: { success: true, fencing_token: 1, lease_expires_at: new Date(Date.now() + 300000).toISOString() }, error: null };
       return { data: null, error: null };
     },
     from(tabela) {
@@ -474,7 +474,7 @@ describe('GDPR ImageKit', () => {
         rpc: async (functie) => {
           evenimente.push({ tip: 'rpc', functie });
           if (functie === 'claim_gdpr_deletion') {
-            return { data: { success: true, fencing_token: 1 }, error: null };
+            return { data: { success: true, fencing_token: 1, lease_expires_at: new Date(Date.now() + 300000).toISOString() }, error: null };
           }
           return { data: 'outbox-n4-test', error: null };
         },
@@ -596,7 +596,7 @@ describe('GDPR ImageKit', () => {
         rpc: async (functie) => {
           evenimente.push({ tip: 'rpc', functie });
           if (functie === 'claim_gdpr_deletion') {
-            return { data: { success: true, fencing_token: 1 }, error: null };
+            return { data: { success: true, fencing_token: 1, lease_expires_at: new Date(Date.now() + 300000).toISOString() }, error: null };
           }
           return { data: 'outbox-m2', error: null };
         },

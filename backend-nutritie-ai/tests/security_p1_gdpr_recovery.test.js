@@ -291,10 +291,12 @@ describe('P1 Security Remediation — GDPR Partial-Failure Recovery & Route Retr
 
     // Expire lease so next worker cycle can claim it, and Clerk now succeeds
     afterFirst.lease_expires_at = new Date(Date.now() - 1000).toISOString();
-    global.fetch = jest.fn(async () => ({
+    global.fetch = jest.fn(async (url) => ({
       ok: true,
       status: 200,
-      json: async () => [],
+      json: async () => (String(url).includes('/details')
+        ? { filePath: '/meals/user-worker-1/file_persisted_1.jpg' }
+        : []),
     }));
 
     const secondRun = await reiaStergerileBlocate({
@@ -464,5 +466,311 @@ describe('P1 Security Remediation — GDPR Partial-Failure Recovery & Route Retr
     expect(resCompleted.body.succes).toBe(true);
     expect(dbCompleted.getTableDeleteCalls()).toBe(0);
     expect(dbCompleted.getAuthDeleteCalls()).toBe(0);
+  });
+
+  test('5. Priority 2: Boolean true/false, malformed, missing/non-positive fencing_token, missing/expired lease, RPC error/unavailable, stale owner or reclaim fail closed with ZERO destructive side effects', async () => {
+    const { revendicaRandOutbox, asiguraLeaseActiv } = require('../utils/gdprWorker');
+    const futureIso = new Date(Date.now() + 300_000).toISOString();
+    const pastIso = new Date(Date.now() - 10_000).toISOString();
+
+    const invalidClaimCases = [
+      { name: 'boolean true', rpcImpl: async () => ({ data: true, error: null }) },
+      { name: 'boolean false', rpcImpl: async () => ({ data: false, error: null }) },
+      { name: 'null data', rpcImpl: async () => ({ data: null, error: null }) },
+      { name: 'empty object', rpcImpl: async () => ({ data: {}, error: null }) },
+      { name: 'array data', rpcImpl: async () => ({ data: [{ success: true }], error: null }) },
+      { name: 'missing fencing_token', rpcImpl: async () => ({ data: { success: true, lease_expires_at: futureIso }, error: null }) },
+      { name: 'zero fencing_token', rpcImpl: async () => ({ data: { success: true, fencing_token: 0, lease_expires_at: futureIso }, error: null }) },
+      { name: 'negative fencing_token', rpcImpl: async () => ({ data: { success: true, fencing_token: -5, lease_expires_at: futureIso }, error: null }) },
+      { name: 'missing lease_expires_at', rpcImpl: async () => ({ data: { success: true, fencing_token: 1 }, error: null }) },
+      { name: 'expired lease_expires_at', rpcImpl: async () => ({ data: { success: true, fencing_token: 1, lease_expires_at: pastIso }, error: null }) },
+      { name: 'RPC error object', rpcImpl: async () => ({ data: null, error: { code: '57P01', message: 'db error' } }) },
+      { name: 'RPC exception', rpcImpl: async () => { throw new Error('RPC_CRASH'); } },
+      { name: 'RPC unavailable', rpcUnavailable: true },
+      { name: 'stale owner in response', rpcImpl: async () => ({ data: { success: true, fencing_token: 1, lease_expires_at: futureIso, claimed_by: 'other_worker' }, error: null }) },
+      { name: 'mismatched job id in response', rpcImpl: async () => ({ data: { success: true, fencing_token: 1, lease_expires_at: futureIso, id: 'wrong_job_id' }, error: null }) },
+      { name: 'reclaimed by another worker', rpcImpl: async () => ({ data: { success: false, error: 'ALREADY_CLAIMED' }, error: null }) },
+    ];
+
+    global.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+
+    for (const testCase of invalidClaimCases) {
+      const db = createStatefulGdprDb({
+        id: 'outbox-claim-guard-1',
+        user_id: 'user-claim-guard-1',
+        clerk_user_id: 'clerk-claim-guard-1',
+        status: 'pending',
+        retry_count: 0,
+        file_ids: ['file_should_not_touch'],
+        last_error: null,
+        claimed_by: null,
+        fencing_token: 0,
+        lease_expires_at: null,
+        initiated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      });
+
+      if (testCase.rpcUnavailable) {
+        delete db.rpc;
+      } else {
+        db.rpc = jest.fn(async (fnName, args) => {
+          if (fnName === 'initiate_gdpr_deletion') return { data: 'outbox-claim-guard-1', error: null };
+          if (fnName === 'claim_gdpr_deletion') return testCase.rpcImpl(args);
+          return { data: null, error: null };
+        });
+      }
+
+      const directClaim = await revendicaRandOutbox(db, 'outbox-claim-guard-1', {
+        workerId: 'worker_expected',
+        expectedStatus: 'pending',
+      });
+      expect(directClaim.success).toBe(false);
+
+      const workerResult = await reiaStergerileBlocate({
+        supabaseAdmin: db,
+        config: { imagekit: { privateKey: 'private_test_ik' } },
+      });
+      expect(workerResult.reluate).toBe(0);
+      expect(db.getTableDeleteCalls()).toBe(0);
+      expect(db.getAuthDeleteCalls()).toBe(0);
+      expect(global.fetch).not.toHaveBeenCalled();
+    }
+
+    const dbForLease = createStatefulGdprDb();
+    await expect(
+      asiguraLeaseActiv(dbForLease, 'outbox-1', {
+        workerId: 'w1',
+        fencingToken: 1,
+        leaseExpiresAt: null,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      asiguraLeaseActiv(dbForLease, 'outbox-1', {
+        workerId: 'w1',
+        fencingToken: null,
+        leaseExpiresAt: futureIso,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      asiguraLeaseActiv(dbForLease, 'outbox-1', {
+        workerId: 'w1',
+        fencingToken: 1,
+        leaseExpiresAt: pastIso,
+      }),
+    ).rejects.toThrow();
+  });
+
+  test('6. Priority 3: Worker durably persists paginated ImageKit file_ids before deleting mese and recovers them after mid-DB-delete crash', async () => {
+    let meseDeleted = false;
+    let crashOnProfilDelete = true;
+    let failFileIdsPersistOnce = false;
+    const deletedImageKitFiles = [];
+
+    const db = createStatefulGdprDb({
+      id: 'outbox-p3-crash-1',
+      user_id: 'user-p3-1',
+      clerk_user_id: 'clerk_user-p3-1',
+      status: 'pending',
+      retry_count: 0,
+      file_ids: [],
+      last_error: null,
+      claimed_by: null,
+      fencing_token: 0,
+      lease_expires_at: null,
+      initiated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    });
+
+    const baseFrom = db.from.bind(db);
+    db.from = (table) => {
+      if (table === 'mese') {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                range: async (from) => {
+                  if (meseDeleted) return { data: [], error: null };
+                  if (from === 0) {
+                    return {
+                      data: Array.from({ length: 1000 }, (_, i) => ({
+                        id: `m_${i}`,
+                        alimente: i === 0 ? [{ imagekit_file_id: 'ik_nonstd_page1' }] : [],
+                      })),
+                      error: null,
+                    };
+                  }
+                  return {
+                    data: [{ id: 'm_1001', alimente: [{ fileId: 'ik_nonstd_page2' }] }],
+                    error: null,
+                  };
+                },
+              }),
+            }),
+          }),
+          delete: () => ({
+            eq: async () => {
+              meseDeleted = true;
+              return { error: null };
+            },
+          }),
+        };
+      }
+      if (table === 'profil') {
+        return {
+          delete: () => ({
+            eq: async () => {
+              if (crashOnProfilDelete) {
+                throw new Error('WORKER_CRASH_AFTER_MESE_DELETED');
+              }
+              return { error: null };
+            },
+          }),
+        };
+      }
+      if (table === 'gdpr_deletions') {
+        const gdprTable = baseFrom('gdpr_deletions');
+        const origUpdate = gdprTable.update.bind(gdprTable);
+        return {
+          ...gdprTable,
+          update: (patch) => {
+            if (failFileIdsPersistOnce && Array.isArray(patch.file_ids) && !patch.status) {
+              failFileIdsPersistOnce = false;
+              throw new Error('CRASH_BETWEEN_ENUMERATION_AND_PERSISTENCE');
+            }
+            return origUpdate(patch);
+          },
+        };
+      }
+      return baseFrom(table);
+    };
+
+    global.fetch = jest.fn(async (url, options = {}) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/details')) {
+        const match = urlStr.match(/\/files\/([^/]+)\/details$/);
+        const fid = match ? decodeURIComponent(match[1]) : 'unknown';
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            fileId: fid,
+            filePath: `/custom-legacy/${fid}/user-p3-1/photo.jpg`,
+            customMetadata: { userId: 'user-p3-1' },
+          }),
+        };
+      }
+      if (urlStr.includes('api.imagekit.io/v1/files/') && (options.method || 'DELETE') === 'DELETE') {
+        deletedImageKitFiles.push(urlStr.split('/files/')[1]);
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+
+    // Run 0: Crash between enumeration and persistence -> mese must NOT be deleted!
+    failFileIdsPersistOnce = true;
+    const run0 = await reiaStergerileBlocate({
+      supabaseAdmin: db,
+      config: { imagekit: { privateKey: 'private_test_ik' } },
+    });
+    expect(run0.reluate).toBe(0);
+    expect(meseDeleted).toBe(false);
+    expect(db.rows.get('outbox-p3-crash-1').status).toBe('pending');
+
+    // Expire lease for Run 1: Enumeration + persistence succeed, mese is deleted, then worker crashes mid-DB delete
+    db.rows.get('outbox-p3-crash-1').lease_expires_at = new Date(Date.now() - 1000).toISOString();
+    const run1 = await reiaStergerileBlocate({
+      supabaseAdmin: db,
+      config: { imagekit: { privateKey: 'private_test_ik' } },
+    });
+    expect(run1.reluate).toBe(0);
+    expect(meseDeleted).toBe(true);
+    // Even though worker crashed before db_done, file_ids WERE durably persisted before mese was deleted!
+    expect(db.rows.get('outbox-p3-crash-1').file_ids.slice().sort()).toEqual([
+      'ik_nonstd_page1',
+      'ik_nonstd_page2',
+    ]);
+    expect(db.rows.get('outbox-p3-crash-1').status).toBe('pending');
+
+    // Run 2: New worker resumes after lease expiry. mese is now empty, but persisted file_ids survive and are deleted!
+    crashOnProfilDelete = false;
+    db.rows.get('outbox-p3-crash-1').lease_expires_at = new Date(Date.now() - 1000).toISOString();
+    const run2 = await reiaStergerileBlocate({
+      supabaseAdmin: db,
+      config: { imagekit: { privateKey: 'private_test_ik' } },
+    });
+    expect(run2.reluate).toBe(1);
+    expect(db.rows.get('outbox-p3-crash-1').status).toBe('completed');
+    expect(deletedImageKitFiles.sort()).toEqual(['ik_nonstd_page1', 'ik_nonstd_page2']);
+  });
+
+  test('7. Priority 4: Stale worker losing lease mid-execution aborts before irreversible stages and cannot overwrite reclaiming worker', async () => {
+    const db = createStatefulGdprDb({
+      id: 'outbox-p4-lease-1',
+      user_id: 'user-p4-1',
+      clerk_user_id: 'clerk_user-p4-1',
+      status: 'db_done',
+      retry_count: 0,
+      file_ids: ['file_p4_1'],
+      last_error: null,
+      claimed_by: null,
+      fencing_token: 0,
+      lease_expires_at: null,
+      initiated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    });
+
+    // Simulate slow Clerk call during which Worker 1's lease expires and Worker 2 reclaims the job
+    global.fetch = jest.fn(async (url) => {
+      if (String(url).includes('api.clerk.com')) {
+        const row = db.rows.get('outbox-p4-lease-1');
+        row.claimed_by = 'worker_reclaimer_2';
+        row.fencing_token += 1;
+        row.lease_expires_at = new Date(Date.now() + 300_000).toISOString();
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+
+    const staleRun = await reiaStergerileBlocate({
+      supabaseAdmin: db,
+      config: { imagekit: { privateKey: 'private_test_ik' } },
+    });
+
+    expect(staleRun.reluate).toBe(0);
+    // Stale worker MUST NOT reach auth.admin.deleteUser after losing fencing ownership!
+    expect(db.getAuthDeleteCalls()).toBe(0);
+    expect(db.rows.get('outbox-p4-lease-1').claimed_by).toBe('worker_reclaimer_2');
+
+    // Also test: if lease expires DURING Stage 1 (pending) before DB deletion finishes,
+    // worker aborts remaining table deletions and never reaches Clerk/ImageKit/Auth
+    const dbStage1LeaseLost = createStatefulGdprDb({
+      id: 'outbox-p4-lease-stage1',
+      user_id: 'user-p4-stage1',
+      clerk_user_id: 'clerk_user-p4-stage1',
+      status: 'pending',
+      retry_count: 0,
+      file_ids: ['file_stage1'],
+      last_error: null,
+      claimed_by: null,
+      fencing_token: 0,
+      lease_expires_at: null,
+      initiated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    });
+    // Claim returns a short lease (60s) which triggers renewal check via asiguraLeaseActiv,
+    // and renew_gdpr_lease rejects because another worker reclaimed it!
+    const origRpc = dbStage1LeaseLost.rpc;
+    dbStage1LeaseLost.rpc = jest.fn(async (fnName, args) => {
+      if (fnName === 'claim_gdpr_deletion') {
+        const res = await origRpc(fnName, { ...args, p_lease_seconds: 60 });
+        return res;
+      }
+      if (fnName === 'renew_gdpr_lease') {
+        return { data: { success: false, error: 'LEASE_EXPIRED_OR_STALE' }, error: null };
+      }
+      return origRpc(fnName, args);
+    });
+
+    const stage1LostRun = await reiaStergerileBlocate({
+      supabaseAdmin: dbStage1LeaseLost,
+      config: { imagekit: { privateKey: 'private_test_ik' } },
+    });
+    expect(stage1LostRun.reluate).toBe(0);
+    expect(dbStage1LeaseLost.getTableDeleteCalls()).toBe(0);
+    expect(dbStage1LeaseLost.getAuthDeleteCalls()).toBe(0);
   });
 });

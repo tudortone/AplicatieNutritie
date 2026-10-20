@@ -139,8 +139,10 @@ function createPlayIntegrityVerifier({
     throw new TypeError('Play Integrity verifier configuration is required.');
   }
 
+  const seenTokenBindings = new Map();
+
   return Object.freeze({
-    async verify({ token, expectedRequestHash }) {
+    async verify({ token, expectedRequestHash, userId = null, contentDigest = null }) {
       if (typeof token !== 'string' || token.length === 0) {
         return { trusted: false, reason: 'TOKEN_MISSING' };
       }
@@ -157,7 +159,8 @@ function createPlayIntegrityVerifier({
       if (details.requestHash !== expectedRequestHash) return { trusted: false, reason: 'REQUEST_HASH_MISMATCH' };
 
       const timestamp = Number(details.timestampMillis);
-      const age = now() - timestamp;
+      const currentNow = now();
+      const age = currentNow - timestamp;
       if (!Number.isFinite(timestamp) || age < -30_000 || age > maxAgeMs) {
         return { trusted: false, reason: 'TOKEN_STALE' };
       }
@@ -173,6 +176,25 @@ function createPlayIntegrityVerifier({
       }
       if (payload.accountDetails?.appLicensingVerdict !== 'LICENSED') {
         return { trusted: false, reason: 'ACCOUNT_NOT_LICENSED' };
+      }
+
+      const tokenKey = crypto.createHash('sha256').update(token).digest('hex');
+      const existingBinding = seenTokenBindings.get(tokenKey);
+      if (existingBinding && currentNow <= existingBinding.expiresAt) {
+        if (
+          existingBinding.expectedRequestHash !== expectedRequestHash
+          || (existingBinding.userId && userId && existingBinding.userId !== userId)
+          || (existingBinding.contentDigest && contentDigest && existingBinding.contentDigest !== contentDigest)
+        ) {
+          return { trusted: false, reason: 'TOKEN_REPLAYED' };
+        }
+      } else {
+        seenTokenBindings.set(tokenKey, {
+          expectedRequestHash,
+          userId: userId || null,
+          contentDigest: contentDigest || null,
+          expiresAt: timestamp + maxAgeMs,
+        });
       }
 
       const optionalVerdicts = parseOptionalVerdicts(payload);
@@ -219,6 +241,7 @@ function createPlayIntegrityGuard({ mode = 'off', verifier } = {}) {
     canonicalPath,
     preserveEntitlement = false,
     requireCleanAccessRisk = false,
+    requireImageDigest = false,
   } = {}) {
     if (!action || !canonicalPath) throw new TypeError('Play Integrity action and path are required.');
     return async function playIntegrityGuard(req, res, next) {
@@ -226,16 +249,73 @@ function createPlayIntegrityGuard({ mode = 'off', verifier } = {}) {
         req.playIntegrity = { trusted: false, reason: 'DISABLED', action };
         return next();
       }
+
+      const rawToken = req.get(HEADER_TOKEN) || '';
+      const rawClientFingerprint = (req.get('X-Payload-Fingerprint') || '').trim();
+      const rawBodyDigest = typeof req.body?.imageSha256 === 'string'
+        ? req.body.imageSha256.trim()
+        : (typeof req.body?.imageDigest === 'string' ? req.body.imageDigest.trim() : '');
+      const serverImageDigest = typeof req.imageContentSha256 === 'string' && /^[a-f0-9]{64}$/i.test(req.imageContentSha256)
+        ? req.imageContentSha256.toLowerCase()
+        : null;
+      const serverLegacyFingerprint = typeof req.imageLegacyFingerprint === 'string' && /^[a-f0-9]{64}$/i.test(req.imageLegacyFingerprint)
+        ? req.imageLegacyFingerprint.toLowerCase()
+        : null;
+
+      if (requireImageDigest && !serverImageDigest && rawToken) {
+        req.playIntegrity = { trusted: false, reason: 'CONTENT_DIGEST_MISSING', action };
+        if (mode === 'observe' || preserveEntitlement) return next();
+        return res.status(403).json({
+          eroare: 'Verificarea integrității aplicației nu a reușit.',
+          cod: 'PLAY_INTEGRITY_REJECTED',
+        });
+      }
+
+      let verifiedPayloadFingerprint = rawClientFingerprint;
+      if (serverImageDigest) {
+        if (rawClientFingerprint) {
+          const normalizedHeader = rawClientFingerprint.toLowerCase();
+          const matchesRawSha256 = normalizedHeader === serverImageDigest;
+          const matchesLegacyOpFingerprint = Boolean(
+            serverLegacyFingerprint && normalizedHeader === serverLegacyFingerprint,
+          );
+          if (!matchesRawSha256 && !matchesLegacyOpFingerprint) {
+            req.playIntegrity = { trusted: false, reason: 'CONTENT_DIGEST_MISMATCH', action };
+            if (mode === 'observe' || preserveEntitlement) return next();
+            return res.status(403).json({
+              eroare: 'Verificarea integrității aplicației nu a reușit.',
+              cod: 'PLAY_INTEGRITY_REJECTED',
+            });
+          }
+          verifiedPayloadFingerprint = matchesLegacyOpFingerprint
+            ? serverLegacyFingerprint
+            : serverImageDigest;
+        } else {
+          verifiedPayloadFingerprint = serverImageDigest;
+        }
+
+        if (rawBodyDigest && rawBodyDigest.toLowerCase() !== serverImageDigest) {
+          req.playIntegrity = { trusted: false, reason: 'CONTENT_DIGEST_MISMATCH', action };
+          if (mode === 'observe' || preserveEntitlement) return next();
+          return res.status(403).json({
+            eroare: 'Verificarea integrității aplicației nu a reușit.',
+            cod: 'PLAY_INTEGRITY_REJECTED',
+          });
+        }
+      }
+
       const expectedRequestHash = buildPlayIntegrityRequestHash({
         method: req.method,
         path: canonicalPath,
         body: req.body || {},
         idempotencyKey: req.get('Idempotency-Key') || '',
-        payloadFingerprint: req.get('X-Payload-Fingerprint') || '',
+        payloadFingerprint: verifiedPayloadFingerprint,
       });
       const result = await verifier.verify({
-        token: req.get(HEADER_TOKEN) || '',
+        token: rawToken,
         expectedRequestHash,
+        userId: req.user?.id || null,
+        contentDigest: serverImageDigest,
       });
       req.playIntegrity = {
         trusted: result.trusted,
@@ -280,4 +360,3 @@ module.exports = {
   createPlayIntegrityVerifier,
   parseOptionalVerdicts,
 };
-

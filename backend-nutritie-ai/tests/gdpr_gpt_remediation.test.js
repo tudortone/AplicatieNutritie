@@ -236,6 +236,13 @@ describe('GDPR-01: Atomic claim & CAS status transitions', () => {
     const admin = {
       from: (tabela) => {
         if (tabela === 'gdpr_deletions') {
+          const updateChain = {
+            eq: () => updateChain,
+            gte: () => updateChain,
+            select: () => ({
+              maybeSingle: async () => ({ data: { id: row.id }, error: null }),
+            }),
+          };
           return {
             select: () => ({
               neq: () => ({
@@ -246,18 +253,7 @@ describe('GDPR-01: Atomic claim & CAS status transitions', () => {
                 }),
               }),
             }),
-            update: (_payload) => ({
-              eq: () => ({
-                eq: () => ({
-                  select: () => ({
-                    maybeSingle: async () => ({ data: { id: row.id }, error: null }),
-                  }),
-                }),
-                select: () => ({
-                  maybeSingle: async () => ({ data: { id: row.id }, error: null }),
-                }),
-              }),
-            }),
+            update: (_payload) => updateChain,
           };
         }
         return {
@@ -276,9 +272,16 @@ describe('GDPR-01: Atomic claim & CAS status transitions', () => {
       },
       rpc: jest.fn(async (nume, args) => {
         if (nume === 'claim_gdpr_deletion') {
-          if (activeClaim !== null) return { data: false, error: null };
+          if (activeClaim !== null) return { data: { success: false, error: 'ALREADY_CLAIMED' }, error: null };
           activeClaim = args?.p_worker_id || 'worker-claimed';
-          return { data: true, error: null };
+          return {
+            data: {
+              success: true,
+              fencing_token: 1,
+              lease_expires_at: new Date(Date.now() + 300000).toISOString(),
+            },
+            error: null,
+          };
         }
         return { data: null, error: null };
       }),
