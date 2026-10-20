@@ -2,7 +2,9 @@ import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   cancelAnimation,
+  useAnimatedProps,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withRepeat,
   withSequence,
@@ -30,13 +32,12 @@ interface RunnerSphereProps {
 }
 
 const SafeSvg: any = Svg || (({ children }: any) => children || null);
-const SafeCircle: any = Circle || (() => null);
-const SafePath: any = Path || (() => null);
-
 const AnimatedSvg: any =
   typeof Animated?.createAnimatedComponent === 'function' && SafeSvg
     ? Animated.createAnimatedComponent(SafeSvg)
     : SafeSvg;
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export interface RunnerFrame {
   head: { cx: number; cy: number; r: number };
@@ -115,6 +116,47 @@ export const IDLE_FRAME: RunnerFrame = {
   farArm: 'M 12 7.5 L 9.8 11 L 9.5 14',
 };
 
+const pathNumbers = (path: string): number[] =>
+  (path.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+const FRAME_POINTS = RUN_FRAMES.map((frame) => ({
+  head: frame.head,
+  torso: pathNumbers(frame.torso),
+  nearLeg: pathNumbers(frame.nearLeg),
+  nearArm: pathNumbers(frame.nearArm),
+  farLeg: pathNumbers(frame.farLeg),
+  farArm: pathNumbers(frame.farArm),
+}));
+
+function pathBetween(a: number[], b: number[], fraction: number): string {
+  'worklet';
+  let path = '';
+  for (let i = 0; i < a.length; i += 2) {
+    path += `${i === 0 ? 'M' : ' L'} ${a[i] + (b[i] - a[i]) * fraction} ${a[i + 1] + (b[i + 1] - a[i + 1]) * fraction}`;
+  }
+  return path;
+}
+
+export function interpolateRunnerFrame(phase: number): RunnerFrame {
+  'worklet';
+  const position = ((phase % RUN_FRAMES.length) + RUN_FRAMES.length) % RUN_FRAMES.length;
+  const index = Math.floor(position);
+  const fraction = position - index;
+  const a = FRAME_POINTS[index];
+  const b = FRAME_POINTS[(index + 1) % FRAME_POINTS.length];
+  return {
+    head: {
+      cx: a.head.cx + (b.head.cx - a.head.cx) * fraction,
+      cy: a.head.cy + (b.head.cy - a.head.cy) * fraction,
+      r: a.head.r,
+    },
+    torso: pathBetween(a.torso, b.torso, fraction),
+    nearLeg: pathBetween(a.nearLeg, b.nearLeg, fraction),
+    nearArm: pathBetween(a.nearArm, b.nearArm, fraction),
+    farLeg: pathBetween(a.farLeg, b.farLeg, fraction),
+    farArm: pathBetween(a.farArm, b.farArm, fraction),
+  };
+}
+
 export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSphereProps) {
   const reduceMotion = useReducedMotion();
 
@@ -129,8 +171,8 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
   // 1. Authentic Stride Cycle driven 100% on Reanimated UI thread (0 to 6 over 600ms gait cycle)
   useEffect(() => {
     if (!isProcessing || reduceMotion) {
-      stridePhase.value = 0;
       cancelAnimation(stridePhase);
+      stridePhase.value = 0;
       return;
     }
     stridePhase.value = withRepeat(
@@ -187,28 +229,14 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
     transform: [{ scale: pulseScale.value }],
   }));
 
-  // UI-thread opacity styles for smooth native stride transitions without JS re-renders
-  const idleFrameStyle = useAnimatedStyle(() => ({
-    opacity: isProcessing ? 0 : 1,
-  }));
-  const frameStyle0 = useAnimatedStyle(() => ({
-    opacity: isProcessing ? (Math.floor(stridePhase.value) % 6 === 0 ? 1 : 0) : 0,
-  }));
-  const frameStyle1 = useAnimatedStyle(() => ({
-    opacity: isProcessing ? (Math.floor(stridePhase.value) % 6 === 1 ? 1 : 0) : 0,
-  }));
-  const frameStyle2 = useAnimatedStyle(() => ({
-    opacity: isProcessing ? (Math.floor(stridePhase.value) % 6 === 2 ? 1 : 0) : 0,
-  }));
-  const frameStyle3 = useAnimatedStyle(() => ({
-    opacity: isProcessing ? (Math.floor(stridePhase.value) % 6 === 3 ? 1 : 0) : 0,
-  }));
-  const frameStyle4 = useAnimatedStyle(() => ({
-    opacity: isProcessing ? (Math.floor(stridePhase.value) % 6 === 4 ? 1 : 0) : 0,
-  }));
-  const frameStyle5 = useAnimatedStyle(() => ({
-    opacity: isProcessing ? (Math.floor(stridePhase.value) % 6 === 5 ? 1 : 0) : 0,
-  }));
+  const pose = useDerivedValue(() => isProcessing && !reduceMotion
+    ? interpolateRunnerFrame(stridePhase.value) : IDLE_FRAME);
+  const headProps = useAnimatedProps(() => ({ cx: pose.value.head.cx, cy: pose.value.head.cy }));
+  const torsoProps = useAnimatedProps(() => ({ d: pose.value.torso }));
+  const nearLegProps = useAnimatedProps(() => ({ d: pose.value.nearLeg }));
+  const nearArmProps = useAnimatedProps(() => ({ d: pose.value.nearArm }));
+  const farLegProps = useAnimatedProps(() => ({ d: pose.value.farLeg }));
+  const farArmProps = useAnimatedProps(() => ({ d: pose.value.farArm }));
 
   // Restrained, approved GetFlow athletic palette: Neon Lime (#CCFF00) and Emerald (#10B981)
   const runnerColor = isCompleted
@@ -245,70 +273,6 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
         return 'Sferă Runner GetFlow. Atingeți pentru camera foto.';
     }
   };
-
-  const renderFigure = (frame: RunnerFrame) => (
-    <SafeSvg width={24} height={24} viewBox="0 0 24 24">
-      {/* 1. Far arm & far leg (rendered with depth shading) */}
-      {frame.farArm ? (
-        <SafePath
-          d={frame.farArm}
-          stroke={farLimbColor}
-          strokeWidth={1.9}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        />
-      ) : null}
-      {frame.farLeg ? (
-        <SafePath
-          d={frame.farLeg}
-          stroke={farLimbColor}
-          strokeWidth={2.0}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        />
-      ) : null}
-
-      {/* 2. Head & Torso */}
-      <SafeCircle
-        cx={frame.head.cx}
-        cy={frame.head.cy}
-        r={frame.head.r}
-        fill={runnerColor}
-      />
-      <SafePath
-        d={frame.torso}
-        stroke={runnerColor}
-        strokeWidth={2.3}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-
-      {/* 3. Near leg & near arm (rendered with full foreground illumination) */}
-      {frame.nearLeg ? (
-        <SafePath
-          d={frame.nearLeg}
-          stroke={runnerColor}
-          strokeWidth={2.3}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        />
-      ) : null}
-      {frame.nearArm ? (
-        <SafePath
-          d={frame.nearArm}
-          stroke={runnerColor}
-          strokeWidth={2.1}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        />
-      ) : null}
-    </SafeSvg>
-  );
 
   return (
     <Pressable
@@ -384,32 +348,16 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
           />
         </AnimatedSvg>
 
-        {/* Layer 3: Core Athlete Figure displaying Real Running Stride Cycle on Reanimated UI thread */}
+        {/* Layer 3: One continuous athlete pose, animated on the UI thread */}
         <View style={[StyleSheet.absoluteFill, styles.centerAlign]} pointerEvents="none">
-          {/* Idle balanced stance */}
-          <Animated.View style={[StyleSheet.absoluteFill, styles.centerAlign, idleFrameStyle]}>
-            {renderFigure(IDLE_FRAME)}
-          </Animated.View>
-
-          {/* 6 authentic running gait phases */}
-          <Animated.View style={[StyleSheet.absoluteFill, styles.centerAlign, frameStyle0]}>
-            {renderFigure(RUN_FRAMES[0])}
-          </Animated.View>
-          <Animated.View style={[StyleSheet.absoluteFill, styles.centerAlign, frameStyle1]}>
-            {renderFigure(RUN_FRAMES[1])}
-          </Animated.View>
-          <Animated.View style={[StyleSheet.absoluteFill, styles.centerAlign, frameStyle2]}>
-            {renderFigure(RUN_FRAMES[2])}
-          </Animated.View>
-          <Animated.View style={[StyleSheet.absoluteFill, styles.centerAlign, frameStyle3]}>
-            {renderFigure(RUN_FRAMES[3])}
-          </Animated.View>
-          <Animated.View style={[StyleSheet.absoluteFill, styles.centerAlign, frameStyle4]}>
-            {renderFigure(RUN_FRAMES[4])}
-          </Animated.View>
-          <Animated.View style={[StyleSheet.absoluteFill, styles.centerAlign, frameStyle5]}>
-            {renderFigure(RUN_FRAMES[5])}
-          </Animated.View>
+          <Svg width={24} height={24} viewBox="0 0 24 24" testID="runner-figure">
+            <AnimatedPath d={IDLE_FRAME.farArm} animatedProps={farArmProps} stroke={farLimbColor} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <AnimatedPath d={IDLE_FRAME.farLeg} animatedProps={farLegProps} stroke={farLimbColor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <AnimatedCircle cx={IDLE_FRAME.head.cx} cy={IDLE_FRAME.head.cy} animatedProps={headProps} r={IDLE_FRAME.head.r} fill={runnerColor} />
+            <AnimatedPath d={IDLE_FRAME.torso} animatedProps={torsoProps} stroke={runnerColor} strokeWidth={2.3} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <AnimatedPath d={IDLE_FRAME.nearLeg} animatedProps={nearLegProps} stroke={runnerColor} strokeWidth={2.3} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            <AnimatedPath d={IDLE_FRAME.nearArm} animatedProps={nearArmProps} stroke={runnerColor} strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          </Svg>
         </View>
 
         {/* Layer 4: Specular Glass Reflection Cap */}

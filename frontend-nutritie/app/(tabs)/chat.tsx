@@ -841,9 +841,16 @@ export default function ChatScreen() {
 
     try {
       let result: DecizieInsertMasa;
+      let persistedMealId = payload.id;
       try {
-        const { error } = await insereazaMasaCuPoza(supabase, payload);
-        result = await decideRezultatInsertMasa(supabase as never, payload as never, { error });
+        const { data, error } = await insereazaMasaCuPoza(supabase, payload);
+        if (!error && (!Array.isArray(data) || data.length !== 1
+          || data[0]?.id == null || data[0]?.user_id !== userId)) {
+          result = { tip: 'verificare_esuata' };
+        } else {
+          if (!error) persistedMealId = String(data[0].id);
+          result = await decideRezultatInsertMasa(supabase as never, payload as never, { error });
+        }
       } catch (error) {
         result = await decideRezultatInsertMasa(supabase as never, payload as never, error instanceof Error ? error : new Error('transport'));
       }
@@ -867,7 +874,7 @@ export default function ChatScreen() {
         }
       } else {
         marcheazaMeseModificate(userId);
-        anuntaMasaSalvataVerificat(userId, [payload.id], [payload.data]);
+        anuntaMasaSalvataVerificat(userId, [persistedMealId], [payload.data]);
       }
       delete operationIdsRef.current[suggestionId];
       setMesaje((previous) => previous.map((message) => ({

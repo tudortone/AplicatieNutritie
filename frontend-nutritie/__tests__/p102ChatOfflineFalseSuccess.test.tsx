@@ -26,8 +26,8 @@ import ChatScreen from '../app/(tabs)/chat';
 
 const UTILIZATOR = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
 let mockActiveUserId = UTILIZATOR.id;
-let mockInsertMode: 'offline' | 'success' | 'server' | 'pending' = 'offline';
-let mockPendingInsertResolve: ((result: { error: null }) => void) | null = null;
+let mockInsertMode: 'offline' | 'success' | 'server' | 'pending' | 'empty' | 'legacy' = 'offline';
+let mockPendingInsertResolve: ((result: { data: unknown[]; error: null }) => void) | null = null;
 const mockInserted: unknown[] = [];
 const mockRefresh = jest.fn();
 const mockFreshness = { mark: jest.fn(), announce: jest.fn() };
@@ -56,8 +56,10 @@ jest.mock('../supabase', () => ({
         mockInserted.push(payload);
         if (mockInsertMode === 'offline') throw new Error('Network request failed');
         if (mockInsertMode === 'server') return { error: { code: '42501', message: 'private backend detail' } };
-        if (mockInsertMode === 'pending') return new Promise<{ error: null }>((resolve) => { mockPendingInsertResolve = resolve; });
-        return { error: null };
+        if (mockInsertMode === 'pending') return new Promise<{ data: unknown[]; error: null }>((resolve) => { mockPendingInsertResolve = resolve; });
+        if (mockInsertMode === 'empty') return { data: [], error: null };
+        if (mockInsertMode === 'legacy') return { data: [{ ...(payload as Record<string, unknown>), id: 42 }], error: null };
+        return { data: [payload], error: null };
       },
       select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
     }),
@@ -249,6 +251,21 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('P1-02 — chat: confirmarea offline trebuie să fie adevărată', () => {
+  test('an empty insert representation cannot confirm Journal persistence', async () => {
+    mockInsertMode = 'empty';
+    const view = await trimiteMesajSiSalveaza();
+
+    expect(mockInserted).toHaveLength(1);
+    expect(view.queryByText('CONFIRMARE_SUCCES')).toBeNull();
+    expect(view.getByLabelText('chat.addToJournal')).toBeTruthy();
+  });
+  test('a confirmed legacy BIGINT row uses its returned id', async () => {
+    mockInsertMode = 'legacy';
+    const view = await trimiteMesajSiSalveaza();
+
+    expect(view.getByText('CONFIRMARE_SUCCES')).toBeTruthy();
+    expect(mockFreshness.announce).toHaveBeenCalledWith(UTILIZATOR.id, ['42'], expect.any(Array));
+  });
   test('1. persistarea pe disc EȘUEAZĂ → NICIO confirmare de salvare', async () => {
     mockPersistatOffline = false;
 
@@ -529,7 +546,7 @@ describe('Coach suggestion → explicit Journal confirmation', () => {
     expect(mockInserted).toHaveLength(1);
     mockActiveUserId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
     view.rerender(<ChatScreen />);
-    await act(async () => { mockPendingInsertResolve?.({ error: null }); });
+    await act(async () => { mockPendingInsertResolve?.({ data: [mockInserted[0]], error: null }); });
     expect(view.queryByText('CONFIRMARE_SUCCES')).toBeNull();
     expect(mockFreshness.mark).not.toHaveBeenCalled();
   });

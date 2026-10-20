@@ -54,6 +54,30 @@ describe('AI Text Models & Contracts (RC-001, RC-003, RC-004, CORR-003)', () => 
   }
 
   describe('RC-001: ruleazaChat Meal Proposal Contract & Validation', () => {
+    it('retries a partial apple proposal before returning an editable complete meal', async () => {
+      const partial = { type: 'MEAL_PROPOSAL', meal_type: 'gustare', items: [{ name: 'Măr', qty: 150, unit: 'g', kcal: 78 }] };
+      const complete = { type: 'MEAL_PROPOSAL', meal_type: 'gustare', items: [{ name: 'Măr', qty: 150, unit: 'g', kcal: 78, protein_g: 0.4, carbs_g: 20.7, fat_g: 0.3, fiber_g: 3.6 }] };
+      const models = [];
+      global.fetch = jest.fn(async (_url, options) => {
+        const { model } = JSON.parse(options.body);
+        models.push(model);
+        return { ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(models.length === 1 ? partial : complete) } }] }) };
+      });
+
+      const result = await creeazaServiciuCuConfig().logFoodDinChat({ mesaj: 'Am mâncat un măr de 150 g.' });
+
+      expect(models).toEqual(['openai/gpt-oss-120b', 'qwen/qwen3.6-27b']);
+      expect(result.items[0]).toEqual(complete.items[0]);
+    });
+    it('does not return an unsavable meal when every model omits required macros', async () => {
+      const partial = { type: 'MEAL_PROPOSAL', meal_type: 'gustare', items: [{ name: 'Măr', qty: 150, unit: 'g', kcal: 78 }] };
+      global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(partial) } }] }) }));
+
+      const service = creeazaServiciuChat({ config: { ai: { groqTextModels: ['openai/gpt-oss-120b', 'qwen/qwen3.6-27b'] } } });
+      await expect(service.logFoodDinChat({ mesaj: 'Am mâncat un măr de 150 g.' }))
+        .rejects.toThrow('Nu s-a putut genera MEAL_PROPOSAL');
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
     it('1. System prompt conține contractul exact MEAL_PROPOSAL și regulile de jurnal', async () => {
       let promptCapturat = '';
       global.fetch = jest.fn(async (url, optiuni) => {

@@ -120,6 +120,16 @@ function estePropunereMasaValida(parsed) {
   return true;
 }
 
+function areValoriMasaEditabile(propunere) {
+  return Array.isArray(propunere?.items) && propunere.items.length > 0
+    && propunere.items.every((item) => item && typeof item.name === 'string' && item.name.trim()
+      && String(item.unit || 'g').toLowerCase() === 'g'
+      && Number.isFinite(Number(item.qty)) && Number(item.qty) > 0
+      && ['kcal', 'protein_g', 'carbs_g', 'fat_g', 'fiber_g'].every((key) =>
+        item[key] !== null && item[key] !== undefined && item[key] !== ''
+        && Number.isFinite(Number(item[key])) && Number(item[key]) >= 0));
+}
+
 const REGEX_MEAL_LOG_MULTILINGUAL = /(?:am m[aâ]ncat|am consumat|am servit|am b[aă]ut|logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa|i ate|i had|i drank|log meal|add to diary|log food|record meal|add meal|j'ai mang[eé]|j'ai bu|enregistre|ajouter au journal|ich habe gegessen|ich habe getrunken|mahlzeit loggen|zum tagebuch hinzuf[uü]gen)(?=[\s.,!?;:'"()[\]{}]|$)/iu;
 
 function construiesteSystemPromptChat({ limba = 'en', calCons = 0, calTinta = 2000, protCons = 0, protTinta = 150 }) {
@@ -548,6 +558,11 @@ RETURNEAZA STRICT UN OBIECT JSON valid in acest format:
             continue;
           }
 
+          if (!areValoriMasaEditabile(candidate)) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
+            continue;
+          }
+
           inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', usage: data.usage, ok: true });
           parsed = candidate;
           break;
@@ -571,7 +586,7 @@ RETURNEAZA STRICT UN OBIECT JSON valid in acest format:
           const rawText = result?.response?.text();
           if (rawText) {
             const candidate = parseJsonFromLlm(rawText, { asteapta: 'obiect' });
-            if (candidate && (candidate.type === 'MEAL_PROPOSAL' || Array.isArray(candidate.items))) {
+            if (candidate && areValoriMasaEditabile(candidate)) {
               inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'log-food-from-chat', usage: result.response?.usageMetadata, ok: true });
               parsed = candidate;
               break;

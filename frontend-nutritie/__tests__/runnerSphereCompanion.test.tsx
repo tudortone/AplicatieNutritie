@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { RunnerSphere, RUN_FRAMES, IDLE_FRAME } from '../components/home/RunnerSphere';
+import { RunnerSphere, RUN_FRAMES, IDLE_FRAME, interpolateRunnerFrame } from '../components/home/RunnerSphere';
 import { PixelCompanion } from '../components/home/PixelCompanion';
 import { RunnerSphereCompanionCluster } from '../components/home/RunnerSphereCompanionCluster';
 
@@ -9,7 +9,7 @@ const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
   useFocusEffect: (cb: any) => {
-    cb();
+    require('react').useEffect(cb, [cb]);
   },
 }));
 
@@ -42,7 +42,18 @@ jest.mock('../lib/photoJobs', () => ({
     job: { id: 'job_123', status: 'idle' },
     pointer: { userId: 'test_user_id', jobId: 'job_123', savedAt: Date.now() },
   }),
+  clearActivePhotoJob: jest.fn(),
 }));
+
+const photoJobs = jest.requireMock('../lib/photoJobs') as {
+  recoverPhotoJob: jest.Mock;
+  clearActivePhotoJob: jest.Mock;
+};
+
+beforeEach(() => {
+  mockPush.mockClear();
+  photoJobs.clearActivePhotoJob.mockClear();
+});
 
 describe('RunnerSphere Component', () => {
   it('renders idle state with accessible label', async () => {
@@ -98,6 +109,16 @@ describe('RunnerSphere Component', () => {
     // Verify idle frame is a balanced resting stance
     expect(IDLE_FRAME.torso).toBe('M 12 6.3 L 12 13.5');
   });
+
+  it('interpolates between poses rather than snapping six full silhouettes', async () => {
+    const middle = interpolateRunnerFrame(0.5);
+    expect(middle.head.cy).toBeCloseTo(4.5);
+    expect(middle.nearLeg).toContain('13.5 16.5');
+    expect(interpolateRunnerFrame(6)).toEqual(interpolateRunnerFrame(0));
+    expect(interpolateRunnerFrame(5.999).head.cx).toBeCloseTo(RUN_FRAMES[0].head.cx, 2);
+    const view = await render(<RunnerSphere state="processing" onPress={() => {}} />);
+    expect(view.getAllByTestId('runner-figure')).toHaveLength(1);
+  });
 });
 
 describe('PixelCompanion Component', () => {
@@ -116,6 +137,19 @@ describe('PixelCompanion Component', () => {
 });
 
 describe('RunnerSphereCompanionCluster Component', () => {
+  it('opens the failed job in Camera without discarding its recovery pointer', async () => {
+    photoJobs.recoverPhotoJob.mockResolvedValueOnce({
+      job: { id: 'job_failed', status: 'failed', errorCode: 'ANALYSIS_FAILED' },
+      pointer: { userId: 'test_user_id', jobId: 'job_failed', savedAt: Date.now() },
+    });
+    const view = await render(<RunnerSphereCompanionCluster />);
+    await waitFor(() => expect(view.getByLabelText('Analiză foto eșuată. Atingeți pentru reîncercare.')).toBeTruthy());
+
+    fireEvent.press(view.getByTestId('runner-sphere-widget'));
+
+    expect(mockPush).toHaveBeenCalledWith('/camera');
+    expect(photoJobs.clearActivePhotoJob).not.toHaveBeenCalled();
+  });
   it('renders both sphere and companion side by side in cluster', async () => {
     const onCompanionPress = jest.fn();
     const view = await render(

@@ -111,12 +111,7 @@ export function RunnerSphereCompanionCluster({
   }
 
   const handleSpherePress = () => {
-    // If tapping failed sphere, reset failed pointer and clear from storage
-    if (sphereState === 'failed' && activeJob && session?.user?.id) {
-      void clearActivePhotoJob(session.user.id, activeJob.pointer.jobId);
-      setActiveJob(null);
-    }
-    // Navigate to camera where active result, progress stages, or camera capture is rendered
+    // Camera owns the failed-job recovery action; preserve its pointer until it opens.
     router.push('/camera');
   };
 
