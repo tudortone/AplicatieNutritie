@@ -12,7 +12,7 @@
 
 - Worktree is intact and correctly registered. The sandbox cannot traverse the valid `.git` pointer to common metadata; Git status/diff work via the elevated shell. No Git metadata was changed.
 - All 67 changed candidate files are preserved with matching SHA-256 hashes in `C:\Users\tudor\AppData\Local\Temp\getflow-luna-max-final-20261021-005500\SHA256-MANIFEST.json`.
-- Main, Training V2, and Argon worktrees remain untouched. Local checkpoint commit is pending; no files are pushed.
+- Main, Training V2, and Argon worktrees remain untouched. Local non-release implementation checkpoint: `84fb1e80e9d51266bdf3bb929584e950081c1a89`; no files are pushed. The documentation follow-up commit SHA is given in the completion message.
 
 ## Photo AI and Rewarded
 
@@ -25,6 +25,7 @@
 
 - Node `v22.23.3`; focused resolver 15/15; backend 87 suites / 856 tests; frontend 164 suites / 1,422 tests.
 - TypeScript, frontend lint, and Expo public-config/plugin resolution passed. Backend lint: zero errors, four existing warnings.
+- `apple-design` and `swiftui-design-skill` were consulted for accessibility, responsive hierarchy, motion, and visual consistency. No SwiftUI code or unapproved redesign was added; Android visual/device review remains pending.
 - PostgreSQL migration/RLS/concurrency tests, clean-checkout boot, native Android QA, cloud compatibility, and full independent candidate acceptance remain pending.
 - Post-fix read-only independent review found no P0/P1 in the Photo resolver route; this is not overall release acceptance.
 

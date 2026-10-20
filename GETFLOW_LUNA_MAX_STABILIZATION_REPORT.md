@@ -12,6 +12,7 @@
 |---|---|
 | Candidate | `C:\Users\tudor\.codex\worktrees\getflow-release-stabilization\AplicatieNutritie` |
 | Branch / base | `codex/getflow-release-stabilization-20261020` / `0e600b79ed200000b7df308473dc4c2c626b8295` |
+| Local checkpoint | `84fb1e80e9d51266bdf3bb929584e950081c1a89` — explicitly non-release; source, migrations, tests and handoff committed locally; not pushed. |
 | Git issue | Candidate `.git` is a valid 92-byte worktree pointer to the main checkout's `.git/worktrees/AplicatieNutritie9`. `GIT_DIR`, `GIT_WORK_TREE`, and `GIT_COMMON_DIR` are unset; `core.bare=false`; worktree registration and root resolve correctly. No metadata repair was needed. Sandboxed Git commands cannot traverse the pointer/common metadata; read-only status, diff and worktree commands work with the authorized elevated shell. |
 | Preservation | Final SHA-256-verified snapshot of all 67 changed candidate files: `C:\Users\tudor\AppData\Local\Temp\getflow-luna-max-final-20261021-005500\SHA256-MANIFEST.json`. |
 | Protected trees | Main checkout, Training V2, and Argon historical worktrees were not modified. |
@@ -48,6 +49,7 @@
 | Clean-checkout app boot / Gradle | Not performed. Version-check tests passed, but no fresh clean checkout/device build was booted. |
 | PostgreSQL integration | Pending: no `psql`, server/container CLI, or disposable database URL is available. |
 | Independent review | Post-fix read-only reviewer found no P0/P1 in the Photo resolver path. Full independent security acceptance of the candidate remains pending. |
+| UI design / native appearance | `apple-design` and `swiftui-design-skill` consulted. No visual redesign was made in this continuation; established React Native identity and Android conventions are retained. CI and Expo config are not device appearance acceptance; native layout/back-flow review remains pending. |
 
 ## Release blockers and next steps
 
@@ -55,8 +57,8 @@
 2. Define an operator review SLA for unknown Photo outcomes; retain held credits unless a valid result is recovered or provider failure is evidenced.
 3. Verify Android v37/v38 compatibility and that Production `PLAY_INTEGRITY_MODE=enforce` is active before rollout; do not change the live setting automatically.
 4. Revalidate current Render, Trigger.dev, Supabase and SSV contracts; then perform native Android QA and obtain a separate full independent acceptance.
-5. Create only a local non-release checkpoint commit; do not push, deploy, publish, or change Play tracks.
+5. Keep checkpoint `84fb1e80e9d51266bdf3bb929584e950081c1a89` non-release; do not push, deploy, publish, or change Play tracks.
 
 **Owner approvals still required:** Production migration/deployment/configuration, credentials, billing or account mutations, Android installation where signing/data safety is uncertain, and Play distribution.
 
-**Skills consulted:** `systematic-debugging`, `test-driven-development`, `verification-before-completion`, `differential-review`, `code-review`, `security-review`, `postgres-patterns`, `database-migrations`, `api-design`, `cost-aware-llm-pipeline`, `deployment-patterns`, `react-native-patterns`, and `react-testing`.
+**Skills consulted:** `systematic-debugging`, `test-driven-development`, `verification-before-completion`, `differential-review`, `code-review`, `security-review`, `postgres-patterns`, `database-migrations`, `api-design`, `cost-aware-llm-pipeline`, `deployment-patterns`, `react-native-patterns`, `react-testing`, `apple-design` (accessibility, layout, typography, color, sheets, motion, generative AI, and React Native translation), and `swiftui-design-skill` (design review and typography/color principles; no SwiftUI code introduced).
