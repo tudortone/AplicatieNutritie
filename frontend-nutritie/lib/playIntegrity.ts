@@ -3,6 +3,7 @@ import * as Crypto from 'expo-crypto';
 export type PlayIntegrityRequest = {
   method: string;
   path: string;
+  userId: string;
   body?: Record<string, unknown>;
   idempotencyKey?: string;
   payloadFingerprint?: string;
@@ -30,6 +31,7 @@ export async function buildPlayIntegrityRequestHash(input: PlayIntegrityRequest)
   const canonical = [
     String(input.method || '').toUpperCase(),
     String(input.path || ''),
+    String(input.userId || ''),
     String(input.idempotencyKey || ''),
     String(input.payloadFingerprint || ''),
     JSON.stringify(stableValue(input.body ?? {})),

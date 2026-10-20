@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, fireEvent, act, cleanup } from '@testing-library/react-native';
+import i18n from '../i18n';
 import { MacroDistributionBar } from '../components/food/MacroDistributionBar';
 import { StepperQuantityControl } from '../components/ui/StepperQuantityControl';
 import { ChangeIngredientSheet } from '../components/food/ChangeIngredientSheet';
@@ -30,21 +31,24 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
+const mockFlowCreditsReturn = {
+  balance: { total: 3, dailyRemaining: 3, rewarded: 0, purchased: 0, rewardedGrantsRemaining: 5, serverDay: null },
+  loading: false,
+  unlimited: false,
+  visible: false,
+  rewardState: 'idle',
+  creditProducts: [],
+  lastConsumedCategory: null as 'daily' | 'rewarded' | 'purchased' | null,
+  open: jest.fn(),
+  close: jest.fn(),
+  refresh: jest.fn().mockResolvedValue(null),
+  consumeOptimisticCredit: jest.fn(),
+  watchRewarded: jest.fn().mockResolvedValue('unavailable'),
+  purchase: jest.fn().mockResolvedValue(undefined),
+};
+
 jest.mock('../context/FlowCreditsContext', () => ({
-  useFlowCredits: () => ({
-    balance: { total: 3, dailyRemaining: 3, rewarded: 0, purchased: 0, rewardedGrantsRemaining: 5, serverDay: null },
-    loading: false,
-    unlimited: false,
-    visible: false,
-    rewardState: 'idle',
-    creditProducts: [],
-    open: jest.fn(),
-    close: jest.fn(),
-    refresh: jest.fn().mockResolvedValue(null),
-    consumeOptimisticCredit: jest.fn(),
-    watchRewarded: jest.fn().mockResolvedValue('unavailable'),
-    purchase: jest.fn().mockResolvedValue(undefined),
-  }),
+  useFlowCredits: () => mockFlowCreditsReturn,
 }));
 
 // Mock expo-linear-gradient
@@ -56,6 +60,13 @@ jest.mock('expo-linear-gradient', () => {
 });
 
 describe('Photo AI 2.0: Component Suite & User Experience Contracts', () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('ro');
+    mockFlowCreditsReturn.balance.total = 3;
+    mockFlowCreditsReturn.unlimited = false;
+    mockFlowCreditsReturn.lastConsumedCategory = null;
+  });
+
   afterEach(() => {
     cleanup();
     jest.clearAllMocks();
@@ -450,6 +461,59 @@ describe('Photo AI 2.0: Component Suite & User Experience Contracts', () => {
         fireEvent.press(offlineBtn);
       });
       expect(onSaveOffline).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the consumed credit category and remaining balance', async () => {
+      const viewElement = () => (
+        <PhotoMealResultView
+          rezultat={mockItems}
+          tipMasa="pranz"
+          onChangeTipMasa={jest.fn()}
+          onUpdateRezultat={jest.fn()}
+          onSaveToJournal={jest.fn()}
+          onCancelAndRescan={jest.fn()}
+          isSaving={false}
+        />
+      );
+      const view = await render(viewElement());
+
+      expect(view.getByText(/1 Flow Credit folosit • 3 rămase/)).toBeTruthy();
+      mockFlowCreditsReturn.lastConsumedCategory = 'daily';
+      mockFlowCreditsReturn.balance.total = 4;
+      await act(async () => view.rerender(viewElement()));
+      expect(view.getByText(/1 Credit Gratuit folosit • 4 rămase/)).toBeTruthy();
+
+      mockFlowCreditsReturn.lastConsumedCategory = 'rewarded';
+      await act(async () => view.rerender(viewElement()));
+      expect(view.getByText(/1 Credit Reclamă folosit • 4 rămase/)).toBeTruthy();
+
+      mockFlowCreditsReturn.lastConsumedCategory = 'purchased';
+      await act(async () => view.rerender(viewElement()));
+      expect(view.getByText(/1 Credit Cumpărat folosit • 4 rămase/)).toBeTruthy();
+
+      mockFlowCreditsReturn.unlimited = true;
+      await act(async () => view.rerender(viewElement()));
+      expect(view.getByText('Acces Premium Nelimitat')).toBeTruthy();
+    });
+
+    it('marks a restored locked draft as already credited without claiming another charge', async () => {
+      mockFlowCreditsReturn.lastConsumedCategory = 'daily';
+      const view = await render(
+        <PhotoMealResultView
+          rezultat={mockItems}
+          tipMasa="pranz"
+          pendingPhotoSaveLocked={true}
+          onChangeTipMasa={jest.fn()}
+          onUpdateRezultat={jest.fn()}
+          onSaveToJournal={jest.fn()}
+          onCancelAndRescan={jest.fn()}
+          isSaving={false}
+        />
+      );
+
+      expect(view.getByTestId('photo-credit-status-badge')).toBeTruthy();
+      expect(view.getByText('Ciornă restaurată • Fără cost suplimentar')).toBeTruthy();
+      expect(view.queryByText(/1 Credit Gratuit folosit/)).toBeNull();
     });
   });
 });

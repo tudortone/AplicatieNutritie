@@ -297,7 +297,7 @@ async function pregatesteSiPersistaFileIdsOutbox(supabaseAdmin, {
   let cititDinDb = false;
   const tabelOutbox = supabaseAdmin.from('gdpr_deletions');
   const selectQuery = typeof tabelOutbox?.select === 'function'
-    ? tabelOutbox.select('file_ids')
+    ? tabelOutbox.select('file_ids,retry_count')
     : null;
   if (selectQuery && typeof selectQuery.eq === 'function') {
     const { data: randOutbox, error: eroareCitireOutbox } = await selectQuery
@@ -362,7 +362,7 @@ async function stergeRanduriDbUtilizator(
   inregistreazaUtilizareAdmin();
   if (typeof onBeforeStep === 'function') await onBeforeStep();
   const tabele = TABELE_STERGERE_GDPR_UTILIZATOR;
-  await stergeEvenimenteRtdnUtilizator({ supabaseAdmin, userId });
+  await stergeEvenimenteRtdnUtilizator({ supabaseAdmin, userId, onBeforeDelete: onBeforeStep });
   for (const tabela of tabele) {
     if (typeof onBeforeStep === 'function') await onBeforeStep();
     const rezultat = await supabaseAdmin.from(tabela).delete().eq('user_id', userId);
@@ -373,8 +373,9 @@ async function stergeRanduriDbUtilizator(
       );
     }
   }
-  if (typeof onBeforeStep === 'function') await onBeforeStep();
-  await stergeDeadLetterUtilizator({ supabaseAdmin, userId, clerkUserId });
+  await stergeDeadLetterUtilizator({
+    supabaseAdmin, userId, clerkUserId, onBeforeDelete: onBeforeStep,
+  });
 }
 
 async function reiaStergerileBlocate({ supabaseAdmin, config }) {

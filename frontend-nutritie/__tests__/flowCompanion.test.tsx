@@ -1,5 +1,7 @@
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   getCompanionStage,
@@ -194,6 +196,66 @@ describe('Flow Companion & Nutritional Limit Beacon Suite', () => {
         await fireEvent.press(view.getByTestId('flow-companion-modal-action'));
       });
       expect(mockClose).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps companion names per user and never adopts an ambiguous legacy global name', async () => {
+      await AsyncStorage.setItem('@getflow:companion_name_user-A', 'Sprout-A');
+      await AsyncStorage.setItem('@getflow:companion_name', 'Legacy-Unknown-Owner');
+      const props = {
+        visible: true,
+        onClose: jest.fn(),
+        streak: 7,
+        caloriiConsumate: 1500,
+        caloriiTinta: 2000,
+      };
+      const view = await render(<FlowCompanionModal {...props} userId="user-A" />);
+
+      await waitFor(() => {
+        expect(view.getByText('Sprout-A (Râs Electric)')).toBeTruthy();
+      });
+
+      await act(async () => {
+        await view.rerender(<FlowCompanionModal {...props} userId="user-B" />);
+      });
+      expect(view.queryByText(/Sprout-A|Legacy-Unknown-Owner/)).toBeNull();
+      await waitFor(() => expect(view.getByText('Râs Electric')).toBeTruthy());
+
+      await act(async () => {
+        await view.rerender(<FlowCompanionModal {...props} userId={null} />);
+      });
+      expect(view.queryByText(/Sprout-A|Legacy-Unknown-Owner/)).toBeNull();
+      await waitFor(() => expect(view.getByText('Râs Electric')).toBeTruthy());
+    });
+
+    it('trims and clamps a saved companion name to 20 characters', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert');
+      const view = await render(
+        <FlowCompanionModal
+          visible={true}
+          onClose={jest.fn()}
+          streak={0}
+          caloriiConsumate={0}
+          caloriiTinta={2000}
+          userId="user-Y"
+        />
+      );
+
+      await act(async () => {
+        fireEvent.press(view.getByTestId('flow-companion-name-btn'));
+      });
+      await act(async () => {
+        fireEvent.changeText(view.getByTestId('flow-companion-name-input'), '  NumeFoarteLungCareDepasesteLimita  ');
+      });
+      await act(async () => {
+        fireEvent.press(view.getByTestId('flow-companion-name-confirm'));
+      });
+
+      const alertCall = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
+      expect(alertCall?.[1]).toContain('NumeFoarteLungCareDe');
+      const confirmButton = alertCall?.[2]?.find((button) => button.text === 'Confirmă');
+      await act(async () => confirmButton?.onPress?.());
+      expect(await AsyncStorage.getItem('@getflow:companion_name_user-Y')).toBe('NumeFoarteLungCareDe');
+      alertSpy.mockRestore();
     });
   });
 });

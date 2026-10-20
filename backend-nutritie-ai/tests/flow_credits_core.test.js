@@ -5,6 +5,11 @@ const { createFlowCreditsService } = require('../services/monetization/flowCredi
 const USER = '11111111-1111-4111-8111-111111111111';
 const DAY_1 = '2026-09-20T10:00:00.000Z';
 const DAY_2 = '2026-09-21T00:00:01.000Z';
+const FINGERPRINT = 'a'.repeat(64);
+
+function photoInput(logicalAnalysisId, extra = {}) {
+  return { userId: USER, logicalAnalysisId, requestFingerprint: FINGERPRINT, ...extra };
+}
 
 function createTransactionalRepo() {
   const accounts = new Map();
@@ -49,9 +54,15 @@ function createTransactionalRepo() {
         serverDay: row.serverDay,
       };
     },
-    async reservePhoto({ userId, logicalAnalysisId, now, entitlement }) {
+    async reservePhoto({ userId, logicalAnalysisId, requestFingerprint, now, entitlement }) {
       const key = `${userId}:${logicalAnalysisId}`;
-      if (reservations.has(key)) return { ...reservations.get(key), replay: true };
+      if (reservations.has(key)) {
+        const existing = reservations.get(key);
+        if (existing.requestFingerprint !== requestFingerprint) {
+          return { ok: false, code: 'LOGICAL_ID_IMAGE_MISMATCH' };
+        }
+        return { ...existing, replay: true };
+      }
       const row = account(userId);
       const day = rollDay(row, now);
       let source;
@@ -73,6 +84,7 @@ function createTransactionalRepo() {
       const value = {
         ok: true,
         reservationId: `reservation-${reservations.size + 1}`,
+        requestFingerprint,
         source,
         status: 'RESERVED',
         serverDay: day,
@@ -122,13 +134,22 @@ function createTransactionalRepo() {
 }
 
 describe('Flow Credits core server contract', () => {
+  test('photo reservation requires a SHA-256 request fingerprint', async () => {
+    const service = createFlowCreditsService({ repo: createTransactionalRepo(), now: () => DAY_1 });
+    expect(() => service.reservePhoto({ userId: USER, logicalAnalysisId: 'missing-fingerprint' }))
+      .toThrow(expect.objectContaining({ code: 'INVALID_REQUEST_FINGERPRINT' }));
+    expect(() => service.reservePhoto(photoInput('malformed-fingerprint', {
+      requestFingerprint: 'not-a-sha256',
+    }))).toThrow(expect.objectContaining({ code: 'INVALID_REQUEST_FINGERPRINT' }));
+  });
+
   test('free account gets 3 server-day reservations and the fourth is blocked', async () => {
     const service = createFlowCreditsService({ repo: createTransactionalRepo(), now: () => DAY_1 });
     for (let i = 1; i <= 3; i += 1) {
-      await expect(service.reservePhoto({ userId: USER, logicalAnalysisId: `photo-${i}` }))
+      await expect(service.reservePhoto(photoInput(`photo-${i}`)))
         .resolves.toMatchObject({ ok: true, source: 'DAILY' });
     }
-    await expect(service.reservePhoto({ userId: USER, logicalAnalysisId: 'photo-4' }))
+    await expect(service.reservePhoto(photoInput('photo-4')))
       .resolves.toEqual(expect.objectContaining({ ok: false, code: 'FLOW_CREDITS_EXHAUSTED' }));
   });
 
@@ -139,12 +160,12 @@ describe('Flow Credits core server contract', () => {
       now: () => serverNow,
     });
     for (let i = 0; i < 3; i += 1) {
-      await service.reservePhoto({ userId: USER, logicalAnalysisId: `d1-${i}`, clientNow: DAY_2 });
+      await service.reservePhoto(photoInput(`d1-${i}`, { clientNow: DAY_2 }));
     }
-    await expect(service.reservePhoto({ userId: USER, logicalAnalysisId: 'd1-blocked', clientNow: DAY_2 }))
+    await expect(service.reservePhoto(photoInput('d1-blocked', { clientNow: DAY_2 })))
       .resolves.toMatchObject({ ok: false });
     serverNow = DAY_2;
-    await expect(service.reservePhoto({ userId: USER, logicalAnalysisId: 'd2-1', clientNow: DAY_1 }))
+    await expect(service.reservePhoto(photoInput('d2-1', { clientNow: DAY_1 })))
       .resolves.toMatchObject({ ok: true, source: 'DAILY' });
   });
 
@@ -155,7 +176,7 @@ describe('Flow Credits core server contract', () => {
     await service.grantPackVerified({ userId: USER, purchaseEventId: 'pack-1', productId: 'getflow_credits_10' });
     const sources = [];
     for (let i = 0; i < 5; i += 1) {
-      const result = await service.reservePhoto({ userId: USER, logicalAnalysisId: `order-${i}` });
+      const result = await service.reservePhoto(photoInput(`order-${i}`));
       sources.push(result.source);
     }
     expect(sources).toEqual(['DAILY', 'DAILY', 'DAILY', 'REWARDED', 'PURCHASED']);
@@ -177,8 +198,8 @@ describe('Flow Credits core server contract', () => {
 
   test('reservation commit/release are idempotent and logical replay never spends twice', async () => {
     const service = createFlowCreditsService({ repo: createTransactionalRepo(), now: () => DAY_1 });
-    const first = await service.reservePhoto({ userId: USER, logicalAnalysisId: 'same-photo' });
-    const replay = await service.reservePhoto({ userId: USER, logicalAnalysisId: 'same-photo' });
+    const first = await service.reservePhoto(photoInput('same-photo'));
+    const replay = await service.reservePhoto(photoInput('same-photo'));
     expect(replay).toMatchObject({ reservationId: first.reservationId, replay: true });
     await expect(service.commitPhoto({ userId: USER, reservationId: first.reservationId }))
       .resolves.toMatchObject({ status: 'COMMITTED' });
@@ -186,10 +207,29 @@ describe('Flow Credits core server contract', () => {
       .resolves.toMatchObject({ status: 'COMMITTED', replay: true });
   });
 
+  test('durable resolver SQL rejection is surfaced as a conflict, not a success payload', async () => {
+    const service = createFlowCreditsService({
+      repo: {
+        getBalance: jest.fn(),
+        resolvePhotoOutcomeUnknown: jest.fn(async () => ({
+          ok: false,
+          code: 'PHOTO_OUTCOME_NOT_RESOLVABLE',
+        })),
+      },
+      now: () => DAY_1,
+    });
+    await expect(service.resolvePhotoOutcomeUnknown({
+      userId: USER,
+      reservationId: '22222222-2222-4222-8222-222222222222',
+      evidenceReference: 'trigger-run-1',
+      operatorId: USER,
+    })).rejects.toMatchObject({ code: 'PHOTO_OUTCOME_NOT_RESOLVABLE', status: 409 });
+  });
+
   test('concurrent duplicate reservation returns one reservation and one debit', async () => {
     const service = createFlowCreditsService({ repo: createTransactionalRepo(), now: () => DAY_1 });
     const results = await Promise.all(Array.from({ length: 12 }, () =>
-      service.reservePhoto({ userId: USER, logicalAnalysisId: 'parallel-photo' })));
+      service.reservePhoto(photoInput('parallel-photo'))));
     expect(new Set(results.map((result) => result.reservationId)).size).toBe(1);
     await expect(service.getBalance({ userId: USER })).resolves.toMatchObject({ dailyRemaining: 2 });
   });
@@ -197,28 +237,22 @@ describe('Flow Credits core server contract', () => {
   test('premium bypasses ordinary buckets but fair-use remains server enforced', async () => {
     const service = createFlowCreditsService({ repo: createTransactionalRepo(), now: () => DAY_1 });
     for (let i = 0; i < 50; i += 1) {
-      await expect(service.reservePhoto({
-        userId: USER,
-        logicalAnalysisId: `premium-${i}`,
+      await expect(service.reservePhoto(photoInput(`premium-${i}`, {
         entitlement: 'premium',
-      })).resolves.toMatchObject({ ok: true, source: 'PREMIUM' });
+      }))).resolves.toMatchObject({ ok: true, source: 'PREMIUM' });
     }
-    await expect(service.reservePhoto({
-      userId: USER,
-      logicalAnalysisId: 'premium-51',
+    await expect(service.reservePhoto(photoInput('premium-51', {
       entitlement: 'premium',
-    })).resolves.toMatchObject({ ok: false, code: 'PREMIUM_FAIR_USE_REACHED' });
+    }))).resolves.toMatchObject({ ok: false, code: 'PREMIUM_FAIR_USE_REACHED' });
     await expect(service.getBalance({ userId: USER })).resolves.toMatchObject({ dailyRemaining: 3 });
   });
 
   test('full access is accepted only from the server entitlement argument and does not spend', async () => {
     const service = createFlowCreditsService({ repo: createTransactionalRepo(), now: () => DAY_1 });
-    await expect(service.reservePhoto({
-      userId: USER,
-      logicalAnalysisId: 'full-1',
+    await expect(service.reservePhoto(photoInput('full-1', {
       entitlement: 'full_access',
       clientFullAccess: false,
-    })).resolves.toMatchObject({ ok: true, source: 'FULL_ACCESS' });
+    }))).resolves.toMatchObject({ ok: true, source: 'FULL_ACCESS' });
     await expect(service.getBalance({ userId: USER })).resolves.toMatchObject({ dailyRemaining: 3 });
   });
 });

@@ -14,6 +14,43 @@ const {
   filtreazaFileIdsProprii,
   extrageFileIdsUtilizator,
 } = require('../utils/gdprServices');
+const { pregatesteSiPersistaFileIdsOutbox } = require('../utils/gdprWorker');
+
+describe('GDPR retry metadata and fenced file-id recovery', () => {
+  it('selects and returns the persisted retry_count instead of resetting route retries to one', async () => {
+    const selectedColumns = [];
+    const admin = {
+      from: () => ({
+        select: (columns) => {
+          selectedColumns.push(columns);
+          return { eq: () => ({ maybeSingle: async () => ({
+            data: { file_ids: ['file-kept-001'], retry_count: 4 }, error: null,
+          }) }) };
+        },
+        update: () => {
+          const query = {
+            eq: () => query,
+            gte: () => query,
+            select: () => ({ maybeSingle: async () => ({ data: { id: 'outbox-1' }, error: null }) }),
+          };
+          return query;
+        },
+      }),
+    };
+
+    const prepared = await pregatesteSiPersistaFileIdsOutbox(admin, {
+      outboxId: 'outbox-1',
+      userId: null,
+      workerId: 'route-test',
+      fencingToken: 1,
+      leaseExpiresAt: new Date(Date.now() + 300_000).toISOString(),
+    });
+
+    expect(selectedColumns).toContain('file_ids,retry_count');
+    expect(prepared.retryCount).toBe(4);
+    expect(prepared.fileIds.has('file-kept-001')).toBe(true);
+  });
+});
 
 describe('GDPR-02: citesteTotPaginat fail-closed on later-page errors', () => {
   const USER_ID = 'test-user-uuid-123';

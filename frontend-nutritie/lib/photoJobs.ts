@@ -265,7 +265,7 @@ export async function submitPhotoJob(input: SubmitPhotoJobInput): Promise<PhotoJ
     mealType: input.mealType,
     language: input.language,
   };
-  const integrityHeaders = await getPlayIntegrityHeaders({ method: 'POST', path: '/photo-jobs', body });
+  const integrityHeaders = await getPlayIntegrityHeaders({ method: 'POST', path: '/photo-jobs', userId: input.userId, body });
   const response = await fetch(buildApiUrl('/photo-jobs'), {
     method: 'POST',
     headers: {

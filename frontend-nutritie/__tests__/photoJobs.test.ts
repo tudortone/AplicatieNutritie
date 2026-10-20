@@ -87,6 +87,7 @@ describe('async Photo job client', () => {
     expect(getPlayIntegrityHeaders).toHaveBeenCalledWith({
       method: 'POST',
       path: '/photo-jobs',
+      userId: USER_A,
       body: submittedBody,
     });
     expect(JSON.parse((await AsyncStorage.getItem(activePhotoJobKey(USER_A)))!)).toEqual(expect.objectContaining({

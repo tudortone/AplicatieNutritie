@@ -117,7 +117,7 @@ class ContorLocalCuTtl {
  * local este actualizat in paralel si preia traficul daca Redis cade. Nicio
  * eroare Redis nu expune URL-ul sau parola in loguri.
  */
-function creeazaContorPartajat({ url, prefix = 'nutri:contor', plafon } = {}) {
+function creeazaContorPartajat({ url, prefix = 'nutri:contor', plafon, fallbackLocal = true } = {}) {
   const local = new ContorLocalCuTtl({ plafon });
   const client = url ? creeazaClientRedis({ url }) : null;
   const cheieFinala = (cheie) => `${prefix}:${String(cheie)}`;
@@ -125,23 +125,21 @@ function creeazaContorPartajat({ url, prefix = 'nutri:contor', plafon } = {}) {
   return {
     async get(cheie) {
       const finala = cheieFinala(cheie);
-      if (client?.isReady) {
-        try {
-          const raw = await client.get(finala);
-          if (raw === null || raw === undefined) return 0;
-          const parsed = Number(raw);
-          return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-        } catch (err) {
-          avertizeaza(`[Contor] GET Redis indisponibil (${codEroare(err)}); folosesc rezerva locala.`);
-        }
+      if (!client?.isReady) return fallbackLocal ? local.get(finala) : Number.NaN;
+      try {
+        const raw = await client.get(finala);
+        if (raw === null || raw === undefined) return 0;
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+      } catch (err) {
+        avertizeaza(`[Contor] GET Redis indisponibil (${codEroare(err)}); ${fallbackLocal ? 'folosesc rezerva locala.' : 'cererea necesita contorul partajat.'}`);
+        return fallbackLocal ? local.get(finala) : Number.NaN;
       }
-      return local.get(finala);
     },
 
     async increment(cheie, ttlMs) {
       const finala = cheieFinala(cheie);
-      const localCount = local.increment(finala, ttlMs);
-      if (!client?.isReady) return localCount;
+      if (!client?.isReady) return fallbackLocal ? local.increment(finala, ttlMs) : Number.NaN;
 
       try {
         return await client.eval(INCR_CU_TTL_LUA, {
@@ -149,29 +147,27 @@ function creeazaContorPartajat({ url, prefix = 'nutri:contor', plafon } = {}) {
           arguments: [String(ttlMs || 0)],
         });
       } catch (err) {
-        avertizeaza(`[Contor] Redis indisponibil (${codEroare(err)}); folosesc rezerva locala.`);
-        return localCount;
+        avertizeaza(`[Contor] Redis indisponibil (${codEroare(err)}); ${fallbackLocal ? 'folosesc rezerva locala.' : 'cererea necesita contorul partajat.'}`);
+        return fallbackLocal ? local.increment(finala, ttlMs) : Number.NaN;
       }
     },
 
     async ttl(cheie) {
       const finala = cheieFinala(cheie);
-      if (client?.isReady) {
-        try {
-          return await client.ttl(finala);
-        } catch (err) {
-          avertizeaza(`[Contor] TTL Redis indisponibil (${codEroare(err)}); folosesc rezerva locala.`);
-        }
+      if (!client?.isReady) return fallbackLocal ? local.ttl(finala) : Number.NaN;
+      try {
+        return await client.ttl(finala);
+      } catch (err) {
+        avertizeaza(`[Contor] TTL Redis indisponibil (${codEroare(err)}); ${fallbackLocal ? 'folosesc rezerva locala.' : 'cererea necesita contorul partajat.'}`);
+        return fallbackLocal ? local.ttl(finala) : Number.NaN;
       }
-      return local.ttl(finala);
     },
 
     // S4-03: restituire de 1 unitate (refund pe cota gratuita AI la esec 5xx/429).
     // Local este actualizat in paralel, ca la increment; Redis primeste DECR atomic.
     async decrement(cheie) {
       const finala = cheieFinala(cheie);
-      const localCount = local.decrement(finala);
-      if (!client?.isReady) return localCount;
+      if (!client?.isReady) return fallbackLocal ? local.decrement(finala) : Number.NaN;
 
       try {
         return await client.eval(DECR_CU_FLOOR_LUA, {
@@ -179,8 +175,8 @@ function creeazaContorPartajat({ url, prefix = 'nutri:contor', plafon } = {}) {
           arguments: [],
         });
       } catch (err) {
-        avertizeaza(`[Contor] Redis indisponibil (${codEroare(err)}); folosesc rezerva locala.`);
-        return localCount;
+        avertizeaza(`[Contor] Redis indisponibil (${codEroare(err)}); ${fallbackLocal ? 'folosesc rezerva locala.' : 'cererea necesita contorul partajat.'}`);
+        return fallbackLocal ? local.decrement(finala) : Number.NaN;
       }
     },
   };

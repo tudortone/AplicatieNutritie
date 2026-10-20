@@ -256,30 +256,36 @@ describe('GetFlow Journal Compact 7-Day Calendar UX', () => {
 
   // Test 8: Selecting date in full calendar updates selection & synchronizes compact view
   it('synchronizes selection between full calendar and compact view', async () => {
-    const Harness = () => {
-      const [currentDate, setCurrentDate] = useState(new Date(2026, 8, 15)); // Sep 15, 2026
-      return (
-        <MonthCalendar
-          selectedDate={currentDate}
-          onSelectDate={setCurrentDate}
-          initialExpanded={true}
-        />
-      );
-    };
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 9, 19, 12));
+    try {
+      const Harness = () => {
+        const [currentDate, setCurrentDate] = useState(new Date(2026, 8, 15)); // Sep 15, 2026
+        return (
+          <MonthCalendar
+            selectedDate={currentDate}
+            onSelectDate={setCurrentDate}
+            initialExpanded={true}
+          />
+        );
+      };
 
-    const view = await render(<Harness />);
+      const view = await render(<Harness />);
 
-    // In expanded view, navigate to October; future selection must remain blocked.
-    await fireEvent.press(view.getByTestId('next-month-btn'));
-    const oct20Cell = await view.findByTestId('month-day-2026-10-20');
-    await fireEvent.press(oct20Cell);
+      // In expanded view, navigate to October; future selection must remain blocked.
+      await fireEvent.press(view.getByTestId('next-month-btn'));
+      const oct20Cell = await view.findByTestId('month-day-2026-10-20');
+      await fireEvent.press(oct20Cell);
 
-    // Collapse back to compact view
-    await fireEvent.press(view.getByTestId('calendar-collapse-handle'));
+      // Collapse back to compact view
+      await fireEvent.press(view.getByTestId('calendar-collapse-handle'));
 
-    // The selected date remains September 15 because October 20 is in the future.
-    expect(await view.findByTestId('compact-calendar-strip')).toBeTruthy();
-    expect(await view.findByTestId('compact-day-2026-09-15')).toBeTruthy();
+      // The selected date remains September 15 because October 20 is in the future.
+      expect(await view.findByTestId('compact-calendar-strip')).toBeTruthy();
+      expect(await view.findByTestId('compact-day-2026-09-15')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   // Test 9: Swipe gesture navigation on compact strip

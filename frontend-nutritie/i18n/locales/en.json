@@ -370,7 +370,12 @@
     "stageFinalizing": "Finalizing nutritional result",
     "creditConsumedCount": "1 Flow Credit used • {{count}} left",
     "creditsUnlimited": "Unlimited Premium Access",
-    "creditProtectedNotice": "No Flow Credits were consumed"
+    "creditProtectedNotice": "No Flow Credits were consumed",
+    "dailyCreditConsumedCount": "1 Free Credit used • {{count}} left",
+    "rewardedCreditConsumedCount": "1 Ad Credit used • {{count}} left",
+    "purchasedCreditConsumedCount": "1 Purchased Credit used • {{count}} left",
+    "draftRestoredNoCredit": "Restored draft • No extra credit used",
+    "searchFoodPlaceholder": "Search food or ingredient..."
   },
   "photoJob": {
     "backgroundTitle": "Analysis continues in the background",

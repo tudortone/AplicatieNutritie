@@ -59,6 +59,9 @@ jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), ImpactFeedbackStyle: 
 jest.mock('lucide-react-native', () => new Proxy({}, { get: () => () => null }));
 jest.mock('../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
 jest.mock('../context/ThemeContext', () => ({ useTheme: () => ({ colors: new Proxy({}, { get: () => '#111' }) }) }));
+jest.mock('../context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'responsive-test-user', user_metadata: {} }, session: null, loadingAuth: false }),
+}));
 jest.mock('../hooks/useFocusRefresh', () => ({ useFocusRefresh: jest.fn() }));
 jest.mock('../hooks/useCurrentDayKey', () => ({ useCurrentDayKey: () => '2026-09-21' }));
 jest.mock('../hooks/useZileCuMese', () => ({ useZileCuMese: () => ({ zileCuMese: [], refreshZileCuMese: jest.fn() }) }));

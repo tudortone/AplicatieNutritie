@@ -365,7 +365,12 @@
     "stageFinalizing": "Pregătire rezultat nutrițional",
     "creditConsumedCount": "1 Flow Credit folosit • {{count}} rămase",
     "creditsUnlimited": "Acces Premium Nelimitat",
-    "creditProtectedNotice": "Niciun Flow Credit nu a fost consumat"
+    "creditProtectedNotice": "Niciun Flow Credit nu a fost consumat",
+    "dailyCreditConsumedCount": "1 Credit Gratuit folosit • {{count}} rămase",
+    "rewardedCreditConsumedCount": "1 Credit Reclamă folosit • {{count}} rămase",
+    "purchasedCreditConsumedCount": "1 Credit Cumpărat folosit • {{count}} rămase",
+    "draftRestoredNoCredit": "Ciornă restaurată • Fără cost suplimentar",
+    "searchFoodPlaceholder": "Caută aliment sau ingredient..."
   },
   "photoJob": {
     "backgroundTitle": "Analiza continuă în fundal",

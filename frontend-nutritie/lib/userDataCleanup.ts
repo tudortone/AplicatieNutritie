@@ -76,6 +76,7 @@ export const ALREADY_USER_SCOPED_PREFIXES = [
   'chat_history_',
   '@nutri_offline_meals_queue_',
   '@nutri_pending_macro_targets_',
+  '@getflow:companion_name_',
   '@getflow/photo-job/v1/',
   '@getflow/chat_daily_',
 ] as const;
@@ -256,6 +257,7 @@ async function purgeDeletedUserData(owner: string): Promise<void> {
     key.startsWith(chatPrefix) ||
     key === `@nutri_offline_meals_queue_${owner}` ||
     key === `@nutri_pending_macro_targets_${owner}` ||
+    key === `@getflow:companion_name_${owner}` ||
     key === `@getflow/photo-job/v1/${owner}` ||
     key.startsWith(chatDailyPrefix),
   );

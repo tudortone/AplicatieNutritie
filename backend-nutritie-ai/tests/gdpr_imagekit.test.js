@@ -509,8 +509,8 @@ describe('GDPR ImageKit', () => {
                 eq: (col, val) => ({
                   maybeSingle: async () => {
                     evenimente.push({ tip: 'select', tabela, coloane, col, val });
-                    if (tabela === 'gdpr_deletions' && coloane === 'file_ids') {
-                      return { data: {}, error: null };
+                    if (tabela === 'gdpr_deletions' && coloane === 'file_ids,retry_count') {
+                      return { data: { file_ids: [], retry_count: 0 }, error: null };
                     }
                     return { data: null, error: null };
                   },

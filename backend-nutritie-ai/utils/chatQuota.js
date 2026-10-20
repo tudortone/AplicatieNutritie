@@ -41,6 +41,7 @@ function creeazaServiciuChatQuota({
   const sursa = contor || creeazaContorPartajat({
     url: process.env.REDIS_URL,
     prefix: 'nutri:quota-chat',
+    fallbackLocal: false,
   });
 
   async function verificaEstePremium(userId) {
@@ -77,6 +78,11 @@ function creeazaServiciuChatQuota({
 
     const cheie = cheieUtilizator(userId);
     const secundeRamase = await sursa.ttl(cheie);
+    if (!Number.isFinite(secundeRamase)) {
+      throw Object.assign(new Error('Contorul partajat chat este indisponibil.'), {
+        code: 'CHAT_QUOTA_STORE_UNAVAILABLE',
+      });
+    }
     const oreRamase = secundeRamase > 0 ? Math.ceil(secundeRamase / 3600) : 24;
 
     const msTtl = fereastraMs || calculeazaMsPanaLaMiezulNoptiiUtc();
@@ -86,6 +92,11 @@ function creeazaServiciuChatQuota({
     const valoareCitita = typeof sursa.get === 'function'
       ? await sursa.get(cheie)
       : 0;
+    if (!Number.isFinite(Number(valoareCitita))) {
+      throw Object.assign(new Error('Contorul partajat chat este indisponibil.'), {
+        code: 'CHAT_QUOTA_STORE_UNAVAILABLE',
+      });
+    }
     const consumatReal = Number.isFinite(Number(valoareCitita))
       ? Math.max(0, Number(valoareCitita))
       : 0;

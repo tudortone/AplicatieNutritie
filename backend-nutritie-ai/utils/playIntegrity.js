@@ -21,6 +21,7 @@ function stableValue(value) {
 function buildPlayIntegrityRequestHash({
   method,
   path,
+  userId = '',
   body = {},
   idempotencyKey = '',
   payloadFingerprint = '',
@@ -28,6 +29,7 @@ function buildPlayIntegrityRequestHash({
   const canonical = [
     String(method || '').toUpperCase(),
     String(path || ''),
+    String(userId || ''),
     String(idempotencyKey || ''),
     String(payloadFingerprint || ''),
     JSON.stringify(stableValue(body ?? {})),
@@ -134,17 +136,19 @@ function createPlayIntegrityVerifier({
   now = Date.now,
   maxAgeMs = DEFAULT_MAX_AGE_MS,
   rejectHighRiskMalware = false,
+  bindToken,
 } = {}) {
-  if (!packageName || typeof decodeToken !== 'function') {
+  if (!packageName || typeof decodeToken !== 'function' || typeof bindToken !== 'function') {
     throw new TypeError('Play Integrity verifier configuration is required.');
   }
-
-  const seenTokenBindings = new Map();
 
   return Object.freeze({
     async verify({ token, expectedRequestHash, userId = null, contentDigest = null }) {
       if (typeof token !== 'string' || token.length === 0) {
         return { trusted: false, reason: 'TOKEN_MISSING' };
+      }
+      if (typeof userId !== 'string' || userId.length === 0) {
+        return { trusted: false, reason: 'USER_ID_MISSING' };
       }
       let decoded;
       try {
@@ -179,23 +183,19 @@ function createPlayIntegrityVerifier({
       }
 
       const tokenKey = crypto.createHash('sha256').update(token).digest('hex');
-      const existingBinding = seenTokenBindings.get(tokenKey);
-      if (existingBinding && currentNow <= existingBinding.expiresAt) {
-        if (
-          existingBinding.expectedRequestHash !== expectedRequestHash
-          || (existingBinding.userId && userId && existingBinding.userId !== userId)
-          || (existingBinding.contentDigest && contentDigest && existingBinding.contentDigest !== contentDigest)
-        ) {
-          return { trusted: false, reason: 'TOKEN_REPLAYED' };
-        }
-      } else {
-        seenTokenBindings.set(tokenKey, {
+      let bindingAccepted;
+      try {
+        bindingAccepted = await bindToken({
+          tokenHash: tokenKey,
           expectedRequestHash,
-          userId: userId || null,
-          contentDigest: contentDigest || null,
-          expiresAt: timestamp + maxAgeMs,
+          userId,
+          contentDigest,
+          expiresAt: new Date(timestamp + maxAgeMs).toISOString(),
         });
+      } catch {
+        return { trusted: false, reason: 'TOKEN_BINDING_UNAVAILABLE' };
       }
+      if (bindingAccepted !== true) return { trusted: false, reason: 'TOKEN_REPLAYED' };
 
       const optionalVerdicts = parseOptionalVerdicts(payload);
 
@@ -219,6 +219,8 @@ function createPlayIntegrityVerifier({
       return {
         trusted: true,
         reason: 'VERIFIED',
+        tokenHash: tokenKey,
+        requestHash: expectedRequestHash,
         verdicts: {
           appLicensing: payload.accountDetails?.appLicensingVerdict,
           appRecognition: payload.appIntegrity?.appRecognitionVerdict,
@@ -307,6 +309,7 @@ function createPlayIntegrityGuard({ mode = 'off', verifier } = {}) {
       const expectedRequestHash = buildPlayIntegrityRequestHash({
         method: req.method,
         path: canonicalPath,
+        userId: req.user?.id || '',
         body: req.body || {},
         idempotencyKey: req.get('Idempotency-Key') || '',
         payloadFingerprint: verifiedPayloadFingerprint,
@@ -321,6 +324,10 @@ function createPlayIntegrityGuard({ mode = 'off', verifier } = {}) {
         trusted: result.trusted,
         reason: result.reason,
         action,
+        ...(result.trusted === true ? {
+          tokenHash: result.tokenHash,
+          requestHash: result.requestHash,
+        } : {}),
         ...(result.verdicts ? { verdicts: result.verdicts } : {}),
       };
       if (result.trusted) {

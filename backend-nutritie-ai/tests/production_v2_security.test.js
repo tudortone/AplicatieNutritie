@@ -199,7 +199,8 @@ describe('Fail-Closed Environment Checks', () => {
       );
       // The task must abort early if GEMINI_API_KEY is missing
       expect(taskSource).toContain('process.env.GEMINI_API_KEY');
-      expect(taskSource).toMatch(/!process\.env\.GEMINI_API_KEY/);
+      expect(taskSource).toContain('VARIABILE_OBLIGATORII.some');
+      expect(taskSource).toContain("{ code: 'NEEDS_CONFIG' }");
       expect(taskSource).toContain("success: false");
     });
 

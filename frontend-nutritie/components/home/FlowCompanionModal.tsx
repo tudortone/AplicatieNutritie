@@ -62,44 +62,56 @@ export function FlowCompanionModal({
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
 
-  const [companionName, setCompanionName] = useState<string | null>(null);
-  const [isNamingActive, setIsNamingActive] = useState(false);
+  const [storedCompanionName, setStoredCompanionName] = useState<string | null>(null);
+  const [storedCompanionNameKey, setStoredCompanionNameKey] = useState<string | null>(null);
+  const [namingKey, setNamingKey] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
 
-  const companionKey = userId ? `@getflow:companion_name_${userId}` : '@getflow:companion_name';
+  const companionKey = userId ? `@getflow:companion_name_${userId}` : '@getflow:companion_name_guest';
+  const companionName = storedCompanionNameKey === companionKey ? storedCompanionName : null;
+  const isNamingActive = namingKey === companionKey;
 
   useEffect(() => {
-    if (!visible) return;
-    AsyncStorage.getItem(companionKey)
-      .then((saved) => {
-        if (saved) {
-          setCompanionName(saved);
-        } else if (userId) {
-          AsyncStorage.getItem('@getflow:companion_name').then((legacy) => {
-            if (legacy) setCompanionName(legacy);
-          }).catch(() => {});
-        }
-      })
-      .catch(() => {});
-  }, [visible, companionKey, userId]);
+    if (!visible) {
+      setNamingKey(null);
+      setDraftName('');
+      return undefined;
+    }
+    let isCurrent = true;
+    AsyncStorage.getItem(companionKey).then((saved) => {
+      if (!isCurrent) return;
+      setStoredCompanionName(saved?.trim() || null);
+      setStoredCompanionNameKey(companionKey);
+    }).catch(() => {
+      if (!isCurrent) return;
+      setStoredCompanionName(null);
+      setStoredCompanionNameKey(companionKey);
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, [visible, companionKey]);
 
   const handleConfirmName = () => {
-    const trimmed = draftName.trim();
-    if (!trimmed) {
-      setIsNamingActive(false);
+    const sanitized = draftName.trim().slice(0, 20);
+    if (!sanitized) {
+      setNamingKey(null);
+      setDraftName('');
       return;
     }
     Alert.alert(
       t('flowCompanion.confirmNameTitle', 'Confirmare Nume Companion'),
-      t('flowCompanion.confirmNamePrompt', `Ești sigur că vrei să alegi numele «${trimmed}»? Numele va fi asociat companionului tău.`, { name: trimmed }),
+      t('flowCompanion.confirmNamePrompt', `Ești sigur că vrei să alegi numele «${sanitized}»? Numele va fi asociat companionului tău.`, { name: sanitized }),
       [
         { text: t('common.cancel', 'Anulează'), style: 'cancel' },
         {
           text: t('common.confirm', 'Confirmă'),
           onPress: async () => {
-            setCompanionName(trimmed);
-            setIsNamingActive(false);
-            await AsyncStorage.setItem(companionKey, trimmed).catch(() => {});
+            setStoredCompanionName(sanitized);
+            setStoredCompanionNameKey(companionKey);
+            setNamingKey(null);
+            setDraftName('');
+            await AsyncStorage.setItem(companionKey, sanitized).catch(() => {});
             try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
           },
         },
@@ -200,7 +212,7 @@ export function FlowCompanionModal({
                     style={[styles.nameEditBtn, { borderColor: colors.accent + '44', backgroundColor: colors.accent + '15' }]}
                     onPress={() => {
                       setDraftName(companionName);
-                      setIsNamingActive(true);
+                      setNamingKey(companionKey);
                     }}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     accessibilityRole="button"
@@ -214,7 +226,7 @@ export function FlowCompanionModal({
                     style={[styles.nameEditBtn, { borderColor: colors.accent + '44', backgroundColor: colors.accent + '15' }]}
                     onPress={() => {
                       setDraftName('');
-                      setIsNamingActive(true);
+                      setNamingKey(companionKey);
                     }}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     accessibilityRole="button"
@@ -243,7 +255,10 @@ export function FlowCompanionModal({
                   <TouchableOpacity
                     testID="flow-companion-name-cancel"
                     style={[styles.namingCancelBtn, { borderColor: colors.cardBorder }]}
-                    onPress={() => setIsNamingActive(false)}
+                    onPress={() => {
+                      setNamingKey(null);
+                      setDraftName('');
+                    }}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     accessibilityRole="button"
                     accessibilityLabel={t('common.cancel', 'Anulează')}

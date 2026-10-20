@@ -64,10 +64,10 @@ describe('Flow Credits rewarded operation ownership', () => {
       if (path === '/rewarded/intents') {
         if (holdRewardIntent) {
           return new Promise((resolve) => {
-            resolveRewardIntent = () => resolve({ ok: true, status: 200, json: async () => ({ intentId: 'intent-a', ssv: { userId: 'intent-a', customData: 'opaque' } }) });
+            resolveRewardIntent = () => resolve({ ok: true, status: 200, json: async () => ({ intentId: 'intent-a', status: 'PENDING', ssv: { userId: 'intent-a', customData: 'opaque' } }) });
           });
         }
-        return response({ intentId: 'intent-a', ssv: { userId: 'intent-a', customData: 'opaque' } });
+        return response({ intentId: 'intent-a', status: 'PENDING', ssv: { userId: 'intent-a', customData: 'opaque' } });
       }
       if (path === '/rewarded/intents/intent-a') return response({ status: 'PENDING' });
       throw new Error(`Unexpected request ${path}`);
@@ -146,6 +146,27 @@ describe('Flow Credits rewarded operation ownership', () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url) === '/rewarded/intents')).toBe(false);
     expect(mockShowRewardedAdWithSsv).not.toHaveBeenCalled();
   });
+
+  test.each(['EXPIRED', 'GRANTED', 'DENIED_LIMIT', undefined])(
+    'does not open an ad for a reward intent that is not pending (%s)', async (status) => {
+      const fetchMock = global.fetch as jest.Mock;
+      fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+        if (String(input) === '/flow-credits') return response({ total: 8, rewardedGrantsRemaining: 3 });
+        if (String(input) === '/rewarded/intents') return response({
+          intentId: 'intent-a', status, ssv: { userId: 'intent-a', customData: 'opaque' },
+        });
+        throw new Error(`Unexpected request ${String(input)}`);
+      });
+      const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+      await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|8'));
+
+      await act(async () => {
+        await expect(latest!.watchRewarded()).resolves.toBe('unavailable');
+      });
+
+      expect(mockShowRewardedAdWithSsv).not.toHaveBeenCalled();
+    },
+  );
 
   test('fails closed while authoritative entitlement is still loading', async () => {
     mockPremiumState = { hasFullAccess: false, isPremium: false, loading: true };

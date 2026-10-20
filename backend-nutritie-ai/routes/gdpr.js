@@ -326,17 +326,21 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         inregistreazaUtilizareAdmin();
         await verificaSiReinnoiesteLease();
 
-        await stergeEvenimenteRtdnUtilizator({ supabaseAdmin, userId });
+        await stergeEvenimenteRtdnUtilizator({
+          supabaseAdmin, userId, onBeforeDelete: verificaSiReinnoiesteLease,
+        });
 
         const sterge = async (tabela) => {
+          await verificaSiReinnoiesteLease();
           const rezultat = await supabaseAdmin.from(tabela).delete().eq('user_id', userId);
           const eroare = rezultat?.error;
           if (eroare && !CODURI_TABELA_INEXISTENTA.has(eroare.code)) throw eroare;
         };
-        await Promise.all(TABELE_STERGERE_GDPR_UTILIZATOR.map((tabela) => sterge(tabela)));
+        for (const tabela of TABELE_STERGERE_GDPR_UTILIZATOR) await sterge(tabela);
 
-        await verificaSiReinnoiesteLease();
-        await stergeDeadLetterUtilizator({ supabaseAdmin, userId, clerkUserId });
+        await stergeDeadLetterUtilizator({
+          supabaseAdmin, userId, clerkUserId, onBeforeDelete: verificaSiReinnoiesteLease,
+        });
 
         await actualizezaStatus('db_done');
       }

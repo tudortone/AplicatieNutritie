@@ -370,7 +370,12 @@
     "stageFinalizing": "Finalisation du résultat",
     "creditConsumedCount": "1 crédit Flow utilisé • {{count}} restant(s)",
     "creditsUnlimited": "Accès Premium Illimité",
-    "creditProtectedNotice": "Aucun crédit Flow n'a été consommé"
+    "creditProtectedNotice": "Aucun crédit Flow n'a été consommé",
+    "dailyCreditConsumedCount": "1 Crédit Gratuit utilisé • {{count}} restant(s)",
+    "rewardedCreditConsumedCount": "1 Crédit Publicité utilisé • {{count}} restant(s)",
+    "purchasedCreditConsumedCount": "1 Crédit Acheté utilisé • {{count}} restant(s)",
+    "draftRestoredNoCredit": "Brouillon restauré • Aucun crédit supplémentaire utilisé",
+    "searchFoodPlaceholder": "Rechercher un aliment ou un ingrédient..."
   },
   "photoJob": {
     "backgroundTitle": "L’analyse continue en arrière-plan",

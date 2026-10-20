@@ -39,6 +39,7 @@ const TABELE_BACKEND_ONLY = new Set([
   'clerk_user_map',
   'clerk_webhook_esuate',
   'credite_esuate',
+  'flow_reward_intent_secrets',
   'gdpr_deletions',
 ]);
 

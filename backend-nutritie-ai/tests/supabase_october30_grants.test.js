@@ -48,6 +48,9 @@ const TABELE_SERVER_ONLY = Object.freeze([
   'clerk_webhook_esuate',
   'google_play_subscriptions',
   'google_play_rtdn_events',
+  'flow_reward_intent_secrets',
+  'photo_outcome_resolutions',
+  'play_integrity_token_bindings',
   'user_feedback',
 ]);
 
@@ -59,7 +62,7 @@ describe('Supabase 30 Octombrie Data API Grants Hardening — Schema Assurance',
   });
 
   describe('1. Inventar si intentie explicita pe toate tabelele', () => {
-    it('toate cele 24 de tabele din migratii sunt detectate', () => {
+    it('toate tabelele din migratii sunt detectate', () => {
       const numeTabele = schema.tabele.map((t) => t.nume).sort();
       const toateAsteptate = [...TABELE_CLIENT_DATA_API, ...TABELE_SERVER_ONLY].sort();
       expect(numeTabele).toEqual(toateAsteptate);

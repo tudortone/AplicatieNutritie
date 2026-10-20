@@ -370,7 +370,12 @@
     "stageFinalizing": "Nährwertergebnis wird finalisiert",
     "creditConsumedCount": "1 Flow-Guthaben verbraucht • {{count}} übrig",
     "creditsUnlimited": "Unbegrenzter Premium-Zugriff",
-    "creditProtectedNotice": "Kein Flow-Guthaben verbraucht"
+    "creditProtectedNotice": "Kein Flow-Guthaben verbraucht",
+    "dailyCreditConsumedCount": "1 Gratis-Credit verbraucht • {{count}} übrig",
+    "rewardedCreditConsumedCount": "1 Werbe-Credit verbraucht • {{count}} übrig",
+    "purchasedCreditConsumedCount": "1 Gekaufter Credit verbraucht • {{count}} übrig",
+    "draftRestoredNoCredit": "Wiederhergestellter Entwurf • Kein zusätzlicher Credit verbraucht",
+    "searchFoodPlaceholder": "Lebensmittel oder Zutat suchen..."
   },
   "photoJob": {
     "backgroundTitle": "Die Analyse läuft im Hintergrund weiter",

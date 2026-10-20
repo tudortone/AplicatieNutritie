@@ -87,7 +87,7 @@ async function settlePhotoCredit({ userId, reservationId, action, reason = null 
   if (!userId || !reservationId) return null;
   const client = supabaseAiJobs();
   if (!client) throw new Error('SUPABASE_CONFIG_MISSING');
-  const { data, error } = await client.rpc('settle_flow_photo_credit', {
+  const { data, error } = await client.rpc('settle_flow_photo_credit_v2', {
     p_user_id: userId,
     p_reservation_id: reservationId,
     p_action: action,
@@ -105,18 +105,83 @@ async function settlePhotoCredit({ userId, reservationId, action, reason = null 
   return data;
 }
 
-async function requireOwnedJob({ jobId, userId, imageUrl, reservationId }) {
+async function readPhotoReservation({ userId, reservationId }) {
+  if (!userId || !reservationId) throw new Error('RESERVATION_OWNERSHIP_MISMATCH');
+  const client = supabaseAiJobs();
+  if (!client) throw new Error('SUPABASE_CONFIG_MISSING');
+  const { data, error } = await client.from('flow_credit_reservations')
+    .select('id,user_id,logical_analysis_id,status,request_fingerprint,inference_claimed_at,outcome_unknown_at,result')
+    .eq('id', reservationId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error || !data) throw new Error('RESERVATION_OWNERSHIP_MISMATCH');
+  return data;
+}
+
+async function claimPhotoInference(input) {
+  const client = supabaseAiJobs();
+  if (!client) throw new Error('SUPABASE_CONFIG_MISSING');
+  const { data, error } = await client.rpc('claim_flow_photo_inference', {
+    p_user_id: input.userId,
+    p_reservation_id: input.reservationId,
+    p_request_fingerprint: input.requestFingerprint,
+    p_job_id: input.jobId,
+    p_logical_analysis_id: input.logicalAnalysisId,
+    p_image_url: input.imageUrl,
+    p_image_file_id: input.imageFileId || null,
+    p_now: new Date().toISOString(),
+  });
+  if (error || data?.ok !== true) {
+    throw Object.assign(new Error(data?.code || 'PHOTO_INFERENCE_CLAIM_FAILED'), { cause: error || data });
+  }
+  return data;
+}
+
+async function recordPhotoResult({ userId, reservationId, requestFingerprint, result }) {
+  const client = supabaseAiJobs();
+  if (!client) throw new Error('SUPABASE_CONFIG_MISSING');
+  const { data, error } = await client.rpc('record_flow_photo_result', {
+    p_user_id: userId,
+    p_reservation_id: reservationId,
+    p_request_fingerprint: requestFingerprint,
+    p_result: result,
+  });
+  if (error || data?.ok !== true || !data.result) {
+    throw Object.assign(new Error(data?.code || 'PHOTO_RESULT_PERSISTENCE_FAILED'), { cause: error || data });
+  }
+  return data.result;
+}
+
+async function markPhotoOutcomeUnknown({ userId, jobId, reservationId }) {
+  const client = supabaseAiJobs();
+  if (!client) throw new Error('SUPABASE_CONFIG_MISSING');
+  const { data, error } = await client.rpc('mark_flow_photo_outcome_unknown', {
+    p_user_id: userId,
+    p_reservation_id: reservationId,
+    p_job_id: jobId,
+    p_now: new Date().toISOString(),
+  });
+  if (error || data?.ok !== true) {
+    throw Object.assign(new Error(data?.code || 'PHOTO_OUTCOME_UNKNOWN_PERSIST_FAILED'), { cause: error || data });
+  }
+  return data;
+}
+
+async function requireOwnedJob({ jobId, userId, imageUrl, imageFileId, logicalAnalysisId, reservationId }) {
   if (!jobId || !reservationId) throw new Error('JOB_OWNERSHIP_MISMATCH');
   const client = supabaseAiJobs();
   if (!client) throw new Error('SUPABASE_CONFIG_MISSING');
-  const { data, error } = await client.from('ai_jobs')
-    .select('id')
+  let query = client.from('ai_jobs')
+    .select('id,user_id,logical_analysis_id,image_url,image_file_id,credit_reservation_id,status,result,error_code')
     .eq('id', jobId)
     .eq('user_id', userId)
     .eq('image_url', imageUrl)
-    .eq('credit_reservation_id', reservationId)
-    .maybeSingle();
+    .eq('credit_reservation_id', reservationId);
+  if (logicalAnalysisId) query = query.eq('logical_analysis_id', logicalAnalysisId);
+  if (imageFileId) query = query.eq('image_file_id', imageFileId);
+  const { data, error } = await query.maybeSingle();
   if (error || !data) throw new Error('JOB_OWNERSHIP_MISMATCH');
+  return data;
 }
 
 function construiesteIncercariGemini({ preferredModel, keys, maxAttempts } = {}) {
@@ -177,6 +242,49 @@ function codEroareSigur(err) {
   return err?.code || cleanName || 'ANALIZA_ESUATA';
 }
 
+async function finalizeStoredPhotoResult(payload, result) {
+  const { userId, jobId, reservationId } = payload;
+  const action = result.success === true ? 'commit' : 'release';
+  await settlePhotoCredit({
+    userId, reservationId, action,
+    reason: result.success === true ? 'VALID_PHOTO_RESULT' : 'CONFIRMED_PHOTO_FAILURE',
+  });
+  await updateAiJob(jobId, {
+    status: result.success === true ? 'succeeded' : 'failed',
+    result,
+    error_code: result.success === true ? null : (result.errorCode || 'NOT_FOOD'),
+    completed_at: new Date().toISOString(),
+  }, userId);
+  return result;
+}
+
+async function reconcileTerminalPhotoFailure(payload, error) {
+  const { userId, jobId, reservationId } = payload || {};
+  if (!userId || !reservationId) return;
+  const reservation = await readPhotoReservation({ userId, reservationId });
+  if (reservation.result) {
+    await finalizeStoredPhotoResult(payload, reservation.result);
+    return;
+  }
+  if (reservation.status !== 'RESERVED') {
+    await updateAiJob(jobId, {
+      status: reservation.status === 'COMMITTED' ? 'failed' : 'failed',
+      error_code: reservation.status === 'COMMITTED' ? 'PHOTO_OUTCOME_UNKNOWN' : codEroareSigur(error),
+      completed_at: new Date().toISOString(),
+    }, userId);
+    return;
+  }
+  if (reservation.inference_claimed_at) {
+    const reconciliation = await markPhotoOutcomeUnknown({ userId, jobId, reservationId });
+    if (reconciliation.result) await finalizeStoredPhotoResult(payload, reconciliation.result);
+    return;
+  }
+  await settlePhotoCredit({ userId, reservationId, action: 'release', reason: codEroareSigur(error) });
+  await updateAiJob(jobId, {
+    status: 'failed', error_code: codEroareSigur(error), completed_at: new Date().toISOString(),
+  }, userId);
+}
+
 exports.analizaMancareTask = task({
   id: 'analiza-mancare-ai',
   queue: {
@@ -190,76 +298,66 @@ exports.analizaMancareTask = task({
     factor: 2,
   },
   onFailure: async ({ payload, error }) => {
-    const { userId, jobId, reservationId } = payload || {};
-    const code = codEroareSigur(error);
-    await settlePhotoCredit({ userId, reservationId, action: 'release', reason: code }).catch(() => {});
-    await updateAiJob(jobId, {
-      status: 'failed', error_code: code, completed_at: new Date().toISOString(),
-    }, userId);
+    await reconcileTerminalPhotoFailure(payload, error).catch(async () => {
+      await updateAiJob(payload?.jobId, {
+        status: 'failed', error_code: 'PHOTO_OUTCOME_UNKNOWN', completed_at: new Date().toISOString(),
+      }, payload?.userId);
+    });
     inregistreazaOperational('photo.failed');
   },
   onCancel: async ({ payload }) => {
-    const { userId, jobId, reservationId } = payload || {};
-    await settlePhotoCredit({
-      userId, reservationId, action: 'release', reason: 'TRIGGER_CANCELLED',
-    }).catch(() => {});
-    await updateAiJob(jobId, {
-      status: 'cancelled', error_code: 'TRIGGER_CANCELLED', completed_at: new Date().toISOString(),
-    }, userId);
+    await reconcileTerminalPhotoFailure(payload, new Error('TRIGGER_CANCELLED')).catch(async () => {
+      await updateAiJob(payload?.jobId, {
+        status: 'failed', error_code: 'PHOTO_OUTCOME_UNKNOWN', completed_at: new Date().toISOString(),
+      }, payload?.userId);
+    });
     inregistreazaOperational('photo.failed');
   },
   run: async (payload) => {
     const executionStartedAt = Date.now();
-    const { imageUrl, tipMasa, limba, userId, jobId, reservationId } = payload || {};
-    // Marcheaza job-ul ca fiind in curs, din oficiu (persistarea ramane la confirmarea
-    // explicita a utilizatorului in frontend; aici urmarim doar stadiul analizei).
-    if (jobId) await updateAiJob(jobId, {
-      status: 'running', started_at: new Date().toISOString(), error_code: null,
-    }, userId);
+    const {
+      imageUrl, imageFileId, logicalAnalysisId, requestFingerprint,
+      tipMasa, limba, userId, jobId, reservationId,
+    } = payload || {};
     inregistreazaOperational('photo.started');
 
-    const lipsesteCheiaPrincipalaGemini = !process.env.GEMINI_API_KEY;
-    const lipsa = VARIABILE_OBLIGATORII.filter((cheie) => !process.env[cheie]?.trim());
-    if (lipsesteCheiaPrincipalaGemini || lipsa.length > 0) {
-      // Eroare de configurare: nu se retry (ar esua identic), dar se raporteaza.
-      await settlePhotoCredit({ userId, reservationId, action: 'release', reason: 'NEEDS_CONFIG' }).catch(() => {});
-      if (jobId) await updateAiJob(jobId, {
-        status: 'failed', error_code: 'NEEDS_CONFIG', completed_at: new Date().toISOString(),
-      }, userId);
-      return {
-        success: false,
-        status: 'needs_config',
-        eroare: 'Task-ul de analiza nu este configurat complet.',
-        variabileLipsa: lipsa,
-      };
-    }
-
-    if (typeof imageUrl !== 'string' || !imageUrl.trim() || !esteUuid(userId)) {
-      await settlePhotoCredit({ userId, reservationId, action: 'release', reason: 'PAYLOAD_INVALID' }).catch(() => {});
-      if (jobId) await updateAiJob(jobId, {
-        status: 'failed', error_code: 'PAYLOAD_INVALID', completed_at: new Date().toISOString(),
-      }, userId);
-      return { success: false, eroare: 'Payload invalid pentru analiza imaginii.' };
-    }
-
-    const valideazaImagine = creeazaValideazaUrlImagine({
-      gazdePermise: construiesteGazdePermise({
-        imagekitUrlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
-        supabaseUrl: process.env.SUPABASE_URL,
-      }),
-      folderPrefix: `/mancare/${userId}/`,
-    });
-    const verificare = valideazaImagine(imageUrl);
-    if (!verificare.ok) {
-      await settlePhotoCredit({ userId, reservationId, action: 'release', reason: 'URL_IMAGINE_INVALIDA' }).catch(() => {});
-      if (jobId) await updateAiJob(jobId, {
-        status: 'failed', error_code: 'URL_IMAGINE_INVALIDA', completed_at: new Date().toISOString(),
-      }, userId);
-      return { success: false, eroare: verificare.eroare };
-    }
-
     try {
-      await requireOwnedJob({ jobId, userId, imageUrl: verificare.url, reservationId });
+      if (VARIABILE_OBLIGATORII.some((cheie) => !process.env[cheie]?.trim())) {
+        throw Object.assign(new Error('PHOTO_TASK_CONFIGURATION_MISSING'), { code: 'NEEDS_CONFIG' });
+      }
+
+      if (typeof imageUrl !== 'string' || !imageUrl.trim() || !esteUuid(userId)) {
+        throw Object.assign(new Error('PHOTO_TASK_PAYLOAD_INVALID'), { code: 'PAYLOAD_INVALID' });
+      }
+
+      const valideazaImagine = creeazaValideazaUrlImagine({
+        gazdePermise: construiesteGazdePermise({
+          imagekitUrlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+          supabaseUrl: process.env.SUPABASE_URL,
+        }),
+        folderPrefix: `/mancare/${userId}/`,
+      });
+      const verificare = valideazaImagine(imageUrl);
+      if (!verificare.ok) {
+        throw Object.assign(new Error('PHOTO_IMAGE_URL_INVALID'), { code: 'URL_IMAGINE_INVALIDA' });
+      }
+
+      if (typeof logicalAnalysisId !== 'string' || !logicalAnalysisId.trim()
+        || typeof requestFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(requestFingerprint)) {
+        throw new Error('PHOTO_JOB_CONTRACT_MISSING');
+      }
+      await requireOwnedJob({
+        jobId, userId, imageUrl: verificare.url, imageFileId, logicalAnalysisId, reservationId,
+      });
+      const reservation = await readPhotoReservation({ userId, reservationId });
+      if (reservation.logical_analysis_id !== logicalAnalysisId
+        || reservation.request_fingerprint !== requestFingerprint) {
+        throw new Error('JOB_OWNERSHIP_MISMATCH');
+      }
+      if (reservation.result) return await finalizeStoredPhotoResult(payload, reservation.result);
+      if (reservation.status !== 'RESERVED') throw new Error('PHOTO_RESERVATION_NOT_ACTIVE');
+      if (reservation.inference_claimed_at) throw new Error('PHOTO_OUTCOME_UNKNOWN');
+
       const resp = await fetch(verificare.url, {
         signal: AbortSignal.timeout(20000),
         redirect: 'manual',
@@ -282,45 +380,30 @@ exports.analizaMancareTask = task({
       const mimeDetectat = detecteazaMime(buffer);
       if (!mimeDetectat || mimeDetectat !== mimeDeclarat) throw new Error('SEMNATURA_IMAGINE_INVALIDA');
 
-      const imagePart = { inlineData: { data: buffer.toString('base64'), mimeType: mimeDetectat } };
-      let text = null;
-      let ultimaEroare = null;
-      const chei = [
-        process.env.GEMINI_API_KEY,
-        process.env.GEMINI_API_KEY_2,
-        process.env.GEMINI_API_KEY_3,
-        process.env.GEMINI_API_KEY_4,
-      ].map((cheie) => cheie?.trim()).filter(Boolean);
-
       const incercariGemini = construiesteIncercariGemini({
         preferredModel: process.env.GEMINI_MODEL,
-        keys: chei,
-        maxAttempts: Number(process.env.GEMINI_PHOTO_ATTEMPTS_PER_RUN || 2),
+        keys: [process.env.GEMINI_API_KEY],
+        maxAttempts: 1,
       });
-      for (let i = 0; i < incercariGemini.length; i++) {
-        const { key, model: modelName } = incercariGemini[i];
-        const client = new GoogleGenerativeAI(key);
-        try {
-          const model = client.getGenerativeModel({ model: modelName });
-          const result = await callWithSoftTimeout(model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: obtinePromptAnalizaFoto(limba) }, imagePart] }],
-            generationConfig: { responseMimeType: 'application/json' },
-          }), 30000);
-          text = result?.response?.text();
-        } catch (err) {
-          ultimaEroare = err;
-          const code = codEroareSigur(err);
-          if (code === 'TIMEOUT') inregistreazaOperational('gemini.timeout');
-          if (code === 'AI_RATE_LIMITED' || String(err?.status || err?.code || err?.message || '').includes('429')) {
-            inregistreazaOperational('gemini.429');
-          }
-          if (code === 'AI_HIGH_DEMAND' && i < incercariGemini.length - 1) {
-            await new Promise((r) => setTimeout(r, 1500));
-          }
-        }
-        if (text) break;
+      const claim = await claimPhotoInference({
+        userId, reservationId, requestFingerprint, jobId, logicalAnalysisId,
+        imageUrl: verificare.url, imageFileId,
+      });
+      if (claim.acquired !== true) {
+        if (claim.result) return await finalizeStoredPhotoResult(payload, claim.result);
+        throw new Error('PHOTO_OUTCOME_UNKNOWN');
       }
-      if (!text) throw ultimaEroare || new Error('NICIUN_MODEL_DISPONIBIL');
+
+      const imagePart = { inlineData: { data: buffer.toString('base64'), mimeType: mimeDetectat } };
+      const [{ key, model: modelName }] = incercariGemini;
+      const client = new GoogleGenerativeAI(key);
+      const model = client.getGenerativeModel({ model: modelName });
+      const response = await callWithSoftTimeout(model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: obtinePromptAnalizaFoto(limba) }, imagePart] }],
+        generationConfig: { responseMimeType: 'application/json' },
+      }), 30000);
+      const text = response?.response?.text();
+      if (!text) throw new Error('AI_EMPTY_RESULT');
 
       const items = parseJsonFromLlm(text, { asteapta: 'array' });
       if (!Array.isArray(items)) throw new Error('JSON_AI_INVALID');
@@ -338,13 +421,8 @@ exports.analizaMancareTask = task({
           eroare: 'Imaginea încărcată nu pare să conțină alimente. Te rugăm să încerci cu o poză clară a unei mese.',
           processedAt: new Date().toISOString(),
         };
-        // Rezultat procesat valid: creditul se restituie, iar jobul este marcat NOT_FOOD
-        await settlePhotoCredit({ userId, reservationId, action: 'release', reason: 'NOT_FOOD' });
-        if (jobId) await updateAiJob(jobId, {
-          status: 'failed', result: rezultatNotFood, error_code: 'NOT_FOOD',
-          completed_at: new Date().toISOString(),
-        }, userId);
-        return rezultatNotFood;
+        await recordPhotoResult({ userId, reservationId, requestFingerprint, result: rezultatNotFood });
+        return await finalizeStoredPhotoResult(payload, rezultatNotFood);
       }
 
       const normalizate = normalizePhotoItems(items.slice(0, MAX_ALIMENTE));
@@ -361,11 +439,8 @@ exports.analizaMancareTask = task({
         userId,
         processedAt: new Date().toISOString(),
       };
-      await settlePhotoCredit({ userId, reservationId, action: 'commit' });
-      if (jobId) await updateAiJob(jobId, {
-        status: 'succeeded', result: rezultatFinal, error_code: null,
-        completed_at: new Date().toISOString(),
-      }, userId);
+      await recordPhotoResult({ userId, reservationId, requestFingerprint, result: rezultatFinal });
+      await finalizeStoredPhotoResult(payload, rezultatFinal);
       inregistreazaOperational('photo.succeeded', Date.now() - executionStartedAt);
       return rezultatFinal;
     } catch (err) {
@@ -385,9 +460,10 @@ exports.analizaMancareTask = task({
         }
       }
       const cod = codEroareSigur(err);
+      if (cod === 'TIMEOUT') inregistreazaOperational('gemini.timeout');
+      if (cod === 'AI_RATE_LIMITED') inregistreazaOperational('gemini.429');
       console.error('[Trigger analiza-mancare-ai] Esuare:', cod);
-      // Starea ramane running intre incercari. Doar hook-ul terminal onFailure
-      // marcheaza failed si elibereaza rezervarea, evitand refund intre retry-uri.
+      // A claimed call with no durable result is ambiguous; retries must not infer again.
       if (jobId) await updateAiJob(jobId, { error_code: cod }, userId);
       throw err;
     }

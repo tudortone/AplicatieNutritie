@@ -13,13 +13,15 @@ import {
   createPlayIntegrityClient,
 } from '../lib/playIntegrity';
 
-const HASH = 'Q35Hmy8PctX3pjA2L-1-35r3R6U5L9y1WC6LMEEcsXE';
+const HASH = 'nrESUAoHEF6FyQcY3LL2bsXtTsxtbc5_W87OHrlHmDU';
+const USER_ID = 'user-1';
 
 describe('Play Integrity client request binding', () => {
   test('matches the server canonical request hash', async () => {
     await expect(buildPlayIntegrityRequestHash({
       method: 'post',
       path: '/billing/google/verify',
+      userId: USER_ID,
       idempotencyKey: 'idem-1',
       body: { purchaseToken: 'token-123' },
     })).resolves.toBe(HASH);
@@ -38,6 +40,7 @@ describe('Play Integrity client request binding', () => {
     const input = {
       method: 'POST',
       path: '/billing/google/verify',
+      userId: USER_ID,
       idempotencyKey: 'idem-1',
       body: { purchaseToken: 'token-123' },
     };
@@ -58,8 +61,8 @@ describe('Play Integrity client request binding', () => {
     const ios = createPlayIntegrityClient({ platform: 'ios', cloudProjectNumber: '123', prepare, requestToken });
     const unconfigured = createPlayIntegrityClient({ platform: 'android', cloudProjectNumber: '', prepare, requestToken });
 
-    await expect(ios.headers({ method: 'POST', path: '/photo-jobs', body: {} })).resolves.toEqual({});
-    await expect(unconfigured.headers({ method: 'POST', path: '/photo-jobs', body: {} })).resolves.toEqual({});
+    await expect(ios.headers({ method: 'POST', path: '/photo-jobs', userId: USER_ID, body: {} })).resolves.toEqual({});
+    await expect(unconfigured.headers({ method: 'POST', path: '/photo-jobs', userId: USER_ID, body: {} })).resolves.toEqual({});
     expect(requestToken).not.toHaveBeenCalled();
   });
 
@@ -73,7 +76,7 @@ describe('Play Integrity client request binding', () => {
     const client = createPlayIntegrityClient({
       platform: 'android', cloudProjectNumber: '123456789', prepare, requestToken,
     });
-    const input = { method: 'POST', path: '/rewarded/intents', body: {} };
+    const input = { method: 'POST', path: '/rewarded/intents', userId: USER_ID, body: {} };
 
     await expect(client.headers(input)).resolves.toEqual({});
     await expect(client.headers(input)).resolves.toEqual(expect.objectContaining({

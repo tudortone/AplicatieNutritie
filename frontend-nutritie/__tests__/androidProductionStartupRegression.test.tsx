@@ -159,7 +159,7 @@ describe('androidProductionStartupRegression — Complete Android Startup Contra
         requestToken: jest.fn(),
       });
 
-      const headers = await client.headers({ method: 'POST', path: '/auth/login' });
+      const headers = await client.headers({ method: 'POST', path: '/auth/login', userId: 'user-1' });
       expect(headers).toEqual({});
     });
 
@@ -171,7 +171,7 @@ describe('androidProductionStartupRegression — Complete Android Startup Contra
         requestToken: jest.fn(),
       });
 
-      const headers = await client.headers({ method: 'GET', path: '/api/status' });
+      const headers = await client.headers({ method: 'GET', path: '/api/status', userId: 'user-1' });
       expect(headers).toEqual({});
     });
   });

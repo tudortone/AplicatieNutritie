@@ -38,6 +38,16 @@ function harness({ reserveResult, dispatchError } = {}) {
       source: 'DAILY',
       status: 'RESERVED',
     })),
+    reconcilePhotoResult: jest.fn(async ({ jobId }) => {
+      const job = records.get(jobId);
+      if (job?.result) {
+        Object.assign(job, {
+          status: job.result.success ? 'succeeded' : 'failed',
+          errorCode: job.result.success ? null : 'NOT_FOOD',
+        });
+      }
+      return { ok: true, pending: false };
+    }),
     releasePhoto: jest.fn(async () => ({ ok: true, status: 'RELEASED' })),
   };
   const tasks = {
@@ -95,6 +105,21 @@ describe('durable Photo AI job admission', () => {
     expect(h.tasks.trigger).toHaveBeenCalledTimes(1);
   });
 
+  test('reconciles a stored result before returning an ambiguous job replay', async () => {
+    const h = harness();
+    const job = await h.service.submit(input);
+    Object.assign(h.records.get(job.id), {
+      status: 'failed', errorCode: 'PHOTO_OUTCOME_UNKNOWN', result: { success: true, items: [] },
+    });
+
+    await expect(h.service.submit(input)).resolves.toMatchObject({ status: 'succeeded', errorCode: null });
+    expect(h.flowCredits.reconcilePhotoResult).toHaveBeenCalledWith(expect.objectContaining({
+      userId: USER_A, reservationId: 'reservation-1', jobId: job.id,
+    }));
+    expect(h.flowCredits.reservePhoto).toHaveBeenCalledTimes(1);
+    expect(h.tasks.trigger).toHaveBeenCalledTimes(1);
+  });
+
   test('another active Photo for the user is rejected truthfully for every entitlement', async () => {
     for (const code of ['PHOTO_IN_PROGRESS']) {
       const h = harness({ reserveResult: { ok: false, code } });
@@ -115,15 +140,15 @@ describe('durable Photo AI job admission', () => {
     expect(premium.flowCredits.reservePhoto).toHaveBeenCalledWith(expect.objectContaining({ entitlement: 'premium' }));
   });
 
-  test('Trigger dispatch rejection marks the job failed and releases exactly once', async () => {
+  test('ambiguous Trigger dispatch leaves the durable job and reservation for same-key reconciliation', async () => {
     const h = harness({ dispatchError: new Error('network unavailable') });
     await expect(h.service.submit(input)).rejects.toBeInstanceOf(PhotoJobError);
-    expect(h.repo.markFailed).toHaveBeenCalledWith(expect.objectContaining({ errorCode: 'TRIGGER_DISPATCH_FAILED' }));
-    expect(h.flowCredits.releasePhoto).toHaveBeenCalledTimes(1);
-    expect(h.flowCredits.releasePhoto).toHaveBeenCalledWith(expect.objectContaining({
-      userId: USER_A,
-      reservationId: 'reservation-1',
-    }));
+    expect(h.repo.markFailed).not.toHaveBeenCalled();
+    expect(h.flowCredits.releasePhoto).not.toHaveBeenCalled();
+    expect(h.records.get('job-1')).toMatchObject({ status: 'queued', creditReservationId: 'reservation-1' });
+    expect(h.tasks.trigger).toHaveBeenCalledTimes(2);
+    expect(h.tasks.trigger.mock.calls[0][2].idempotencyKey)
+      .toBe(h.tasks.trigger.mock.calls[1][2].idempotencyKey);
   });
 
   test('job result and active recovery are always scoped to the authenticated account', async () => {

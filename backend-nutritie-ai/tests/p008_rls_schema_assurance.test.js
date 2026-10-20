@@ -208,6 +208,7 @@ describe('P0-08 — schema REALA respecta invariantii de securitate', () => {
     const backend = rezultat.tabele.filter((t) => t.clasificare === CLASIFICARE.BACKEND_ONLY);
     expect(backend.length).toBeGreaterThan(0);
     for (const t of backend) expect(t.privilegiiClient).toEqual([]);
+    expect(backend.map((t) => t.nume)).toContain('flow_reward_intent_secrets');
   });
 
   it('nicio functie SECURITY DEFINER fara search_path fix', () => {

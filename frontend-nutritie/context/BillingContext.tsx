@@ -65,7 +65,7 @@ async function billingFetch<T>(
   try {
     const method = body ? 'POST' : 'GET';
     const integrityHeaders = body
-      ? await getPlayIntegrityHeaders({ method, path, body })
+      ? await getPlayIntegrityHeaders({ method, path, userId: auth.userId, body })
       : {};
     const response = await fetch(buildApiUrl(path), {
       method,

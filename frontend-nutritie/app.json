@@ -107,6 +107,7 @@
         }
       ],
       "expo-iap",
+      "./plugins/withAndroidResponsiveWindow",
       "@sentry/react-native"
     ],
     "experiments": {

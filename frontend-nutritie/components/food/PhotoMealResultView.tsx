@@ -231,11 +231,26 @@ export function PhotoMealResultView({
             </View>
 
             {/* Credit Consumption Status Badge */}
-            <View style={styles.creditStatusRow} testID="photo-credit-status-badge">
-              <FlowIcon name="zap" size={11} color="#CCFF00" />
-              <Text style={styles.creditStatusText}>
-                {flowCredits.unlimited
+            <View
+              style={[styles.creditStatusRow, pendingPhotoSaveLocked && styles.creditStatusRowDraft]}
+              testID="photo-credit-status-badge"
+            >
+              <FlowIcon
+                name={pendingPhotoSaveLocked ? 'file-text' : 'zap'}
+                size={11}
+                color={pendingPhotoSaveLocked ? '#8B93A0' : '#CCFF00'}
+              />
+              <Text style={[styles.creditStatusText, pendingPhotoSaveLocked && styles.creditStatusTextDraft]}>
+                {pendingPhotoSaveLocked
+                  ? t('camera.draftRestoredNoCredit', 'Ciornă restaurată • Fără cost suplimentar')
+                  : flowCredits.unlimited
                   ? t('camera.creditsUnlimited', 'Acces Premium Nelimitat')
+                  : flowCredits.lastConsumedCategory === 'daily'
+                  ? t('camera.dailyCreditConsumedCount', '1 Credit Gratuit folosit • {{count}} rămase', { count: flowCredits.balance.total })
+                  : flowCredits.lastConsumedCategory === 'rewarded'
+                  ? t('camera.rewardedCreditConsumedCount', '1 Credit Reclamă folosit • {{count}} rămase', { count: flowCredits.balance.total })
+                  : flowCredits.lastConsumedCategory === 'purchased'
+                  ? t('camera.purchasedCreditConsumedCount', '1 Credit Cumpărat folosit • {{count}} rămase', { count: flowCredits.balance.total })
                   : t('camera.creditConsumedCount', '1 Flow Credit folosit • {{count}} rămase', { count: flowCredits.balance.total })}
               </Text>
             </View>
@@ -763,9 +778,16 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(204, 255, 0, 0.2)',
     alignSelf: 'flex-start',
   },
+  creditStatusRowDraft: {
+    backgroundColor: 'rgba(139, 147, 160, 0.08)',
+    borderColor: 'rgba(139, 147, 160, 0.2)',
+  },
   creditStatusText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#CCFF00',
+  },
+  creditStatusTextDraft: {
+    color: '#8B93A0',
   },
 });

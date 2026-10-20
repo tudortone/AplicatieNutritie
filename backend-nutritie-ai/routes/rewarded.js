@@ -17,6 +17,12 @@ function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, bi
   const intentIntegrity = integrityGuard({ action: 'rewarded.intent', canonicalPath: '/rewarded/intents' });
   router.post('/rewarded/intents', requireAuth, generalLimiter, intentIntegrity, async (req, res) => {
     try {
+      if (req.playIntegrity?.trusted !== true
+        || !/^[a-f0-9]{64}$/.test(req.playIntegrity.tokenHash || '')
+        || typeof req.playIntegrity.requestHash !== 'string'
+        || !req.playIntegrity.requestHash) {
+        throw Object.assign(new Error('A verified reward request binding is required.'), { code: 'PLAY_INTEGRITY_REQUIRED', status: 403 });
+      }
       if (req.user?.esteAdmin === true || req.user?.esteTester === true) {
         throw Object.assign(new Error('Rewarded ads are not available for full-access accounts.'), { code: 'REWARDED_NOT_ELIGIBLE', status: 403 });
       }
@@ -27,8 +33,17 @@ function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, bi
       if (paidEntitlement?.premium !== false) {
         throw Object.assign(new Error('Paid access could not be verified.'), { code: 'REWARDED_ENTITLEMENT_UNAVAILABLE', status: 503 });
       }
-      const intent = await rewardedService.createIntent({ userId: req.user.id });
-      return res.status(201).json({ intentId: intent.intentId, expiresAt: intent.expiresAt, ssv: { userId: intent.intentId, customData: intent.customData } });
+      const intent = await rewardedService.createIntent({
+        userId: req.user.id,
+        tokenHash: req.playIntegrity.tokenHash,
+        requestHash: req.playIntegrity.requestHash,
+      });
+      return res.status(intent.replay === true ? 200 : 201).json({
+        intentId: intent.intentId,
+        expiresAt: intent.expiresAt,
+        status: intent.status,
+        ssv: { userId: intent.intentId, customData: intent.customData },
+      });
     } catch (error) {
       return safeError(res, error);
     }

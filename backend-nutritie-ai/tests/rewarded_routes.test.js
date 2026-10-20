@@ -3,10 +3,12 @@
 const express = require('express');
 const request = require('supertest');
 const createRewardedRouter = require('../routes/rewarded');
+const TOKEN_HASH = 'a'.repeat(64);
+const REQUEST_HASH = 'b'.repeat(43);
 
-function build({ verifyError, applyError, verified, intentStatus = { status: 'PENDING', expiresAt: '2030-01-01T00:10:00.000Z' }, integrityError, user = {}, paidEntitlement = { premium: false }, entitlementError } = {}) {
+function build({ verifyError, applyError, verified, intentStatus = { status: 'PENDING', expiresAt: '2030-01-01T00:10:00.000Z' }, integrityError, integrityValue, user = {}, paidEntitlement = { premium: false }, entitlementError } = {}) {
   const rewardedService = {
-    createIntent: jest.fn(async () => ({ intentId: 'intent-1', customData: 'secret-1', expiresAt: '2030-01-01T00:10:00Z' })),
+    createIntent: jest.fn(async () => ({ intentId: 'intent-1', customData: 'secret-1', expiresAt: '2030-01-01T00:10:00Z', status: 'PENDING' })),
     getIntentStatus: jest.fn(async ({ userId }) => userId.endsWith('1111') ? intentStatus : null),
     applyVerified: jest.fn(async () => { if (applyError) throw applyError; return { applied: true, amount: 1 }; }),
   };
@@ -16,7 +18,11 @@ function build({ verifyError, applyError, verified, intentStatus = { status: 'PE
   const integrityCalls = [];
   const integrityGuard = (policy) => {
     integrityCalls.push(policy);
-    return (_req, res, next) => integrityError ? res.status(403).json({ cod: 'PLAY_INTEGRITY_FAILED' }) : next();
+    return (req, res, next) => {
+      if (integrityError) return res.status(403).json({ cod: 'PLAY_INTEGRITY_FAILED' });
+      req.playIntegrity = integrityValue || { trusted: true, tokenHash: TOKEN_HASH, requestHash: REQUEST_HASH };
+      return next();
+    };
   };
   const app = express(); app.use(express.json()); app.use('/api/v1', createRewardedRouter({ requireAuth, generalLimiter: (_q, _s, n) => n(), rewardedService, billingService, verifier, integrityGuard }));
   return { app, rewardedService, billingService, integrityCalls };
@@ -50,9 +56,44 @@ describe('rewarded routes', () => {
     await request(app).get('/api/v1/rewarded/intents/other-intent').set('Authorization', 'Bearer valid').expect(404, { eroare: 'Creditul recompensat nu a putut fi procesat.', cod: 'REWARDED_INTENT_NOT_FOUND' });
   });
   test('passes intent creation through the configured Play Integrity guard', async () => {
-    const { app, integrityCalls } = build();
+    const { app, integrityCalls, rewardedService } = build();
     await request(app).post('/api/v1/rewarded/intents').set('Authorization', 'Bearer valid').expect(201);
     expect(integrityCalls).toContainEqual({ action: 'rewarded.intent', canonicalPath: '/rewarded/intents' });
+    expect(rewardedService.createIntent).toHaveBeenCalledWith({
+      userId: '11111111-1111-4111-8111-111111111111', tokenHash: TOKEN_HASH, requestHash: REQUEST_HASH,
+    });
+  });
+  test('does not create a rewarded intent without a verified durable binding', async () => {
+    const { app, rewardedService } = build({ integrityValue: { trusted: false, reason: 'DISABLED' } });
+    await request(app).post('/api/v1/rewarded/intents').set('Authorization', 'Bearer valid').expect(403);
+    expect(rewardedService.createIntent).not.toHaveBeenCalled();
+  });
+  test('returns the same intent status on verified token replay', async () => {
+    const { app, rewardedService } = build();
+    await request(app).post('/api/v1/rewarded/intents').set('Authorization', 'Bearer valid').expect(201);
+    rewardedService.createIntent.mockResolvedValueOnce({
+      intentId: 'intent-1', customData: 'secret-1', expiresAt: '2030-01-01T00:10:00Z', status: 'PENDING', replay: true,
+    });
+    await request(app).post('/api/v1/rewarded/intents').set('Authorization', 'Bearer valid').expect(200);
+    expect(rewardedService.createIntent).toHaveBeenNthCalledWith(1, {
+      userId: '11111111-1111-4111-8111-111111111111', tokenHash: TOKEN_HASH, requestHash: REQUEST_HASH,
+    });
+    expect(rewardedService.createIntent).toHaveBeenNthCalledWith(2, {
+      userId: '11111111-1111-4111-8111-111111111111', tokenHash: TOKEN_HASH, requestHash: REQUEST_HASH,
+    });
+  });
+  test('includes the unchanged expired state on exact replay and never reactivates it', async () => {
+    const { app, rewardedService } = build();
+    rewardedService.createIntent.mockResolvedValueOnce({
+      intentId: 'intent-expired', customData: 'secret-expired', expiresAt: '2029-12-31T23:59:59Z',
+      status: 'EXPIRED', replay: true,
+    });
+    await request(app).post('/api/v1/rewarded/intents').set('Authorization', 'Bearer valid')
+      .expect(200).expect(({ body }) => expect(body).toEqual({
+        intentId: 'intent-expired', expiresAt: '2029-12-31T23:59:59Z', status: 'EXPIRED',
+        ssv: { userId: 'intent-expired', customData: 'secret-expired' },
+      }));
+    expect(rewardedService.createIntent).toHaveBeenCalledTimes(1);
   });
   test('rejects intent creation when Play Integrity is enforcing and the request is invalid', async () => {
     const { app, rewardedService } = build({ integrityError: true });

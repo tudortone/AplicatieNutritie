@@ -46,7 +46,10 @@ function validateExistingJobForReplay(existing, { userId, imageUrl, imageFileId 
     throw new PhotoJobError('LOGICAL_ID_IMAGE_MISMATCH', 409);
   }
   if (existing.status === 'failed' || existing.status === 'cancelled') {
-    throw new PhotoJobError('PHOTO_RESERVATION_RELEASED', 409);
+    throw new PhotoJobError(
+      existing.errorCode === 'PHOTO_OUTCOME_UNKNOWN' ? 'PHOTO_OUTCOME_UNKNOWN' : 'PHOTO_RESERVATION_RELEASED',
+      409,
+    );
   }
   return Object.freeze({ ...existing, replay: true });
 }
@@ -90,6 +93,16 @@ function validateFreshPhotoReservation(reservation, userId) {
   return reservation.reservationId.trim();
 }
 
+async function triggerIdempotent(tasks, payload, idempotencyKey) {
+  const options = { idempotencyKey, idempotencyKeyTTL: '24h' };
+  try {
+    return await tasks.trigger('analiza-mancare-ai', payload, options);
+  } catch {
+    // A retry with the same key reconciles an accepted run whose HTTP response was lost.
+    return tasks.trigger('analiza-mancare-ai', payload, options);
+  }
+}
+
 function createPhotoJobService({ repo, flowCredits, tasks, billing } = {}) {
   if (!repo || !flowCredits || !tasks || !billing) {
     throw new TypeError('Photo job dependencies are required.');
@@ -107,6 +120,9 @@ function createPhotoJobService({ repo, flowCredits, tasks, billing } = {}) {
       const normalizedImageFileId = typeof input.imageFileId === 'string' && input.imageFileId.trim()
         ? input.imageFileId.trim().slice(0, 512)
         : null;
+      const requestFingerprint = crypto.createHash('sha256')
+        .update(`${normalizedImageFileId || ''}\0${normalizedImageUrl}`)
+        .digest('hex');
 
       const existing = await repo.findByLogicalId({
         ctx: input.dataContext,
@@ -114,11 +130,42 @@ function createPhotoJobService({ repo, flowCredits, tasks, billing } = {}) {
         logicalAnalysisId,
       });
       if (existing) {
-        return validateExistingJobForReplay(existing, {
+        let existingJob = existing;
+        if (existingJob.result && (existingJob.status === 'failed' && existingJob.errorCode === 'PHOTO_OUTCOME_UNKNOWN')) {
+          await flowCredits.reconcilePhotoResult({
+            userId,
+            reservationId: existingJob.creditReservationId,
+            jobId: existingJob.id,
+          });
+          existingJob = await repo.findByLogicalId({ ctx: input.dataContext, userId, logicalAnalysisId });
+        }
+        if (!existingJob) throw new PhotoJobError('PHOTO_JOB_NOT_FOUND', 404);
+        const replay = validateExistingJobForReplay(existingJob, {
           userId,
           imageUrl: normalizedImageUrl,
           imageFileId: normalizedImageFileId,
         });
+        if (existingJob.status !== 'queued' || existingJob.triggerRunId) return replay;
+        const idempotencyKey = crypto.createHash('sha256')
+          .update(`getflow-photo:${userId}:${logicalAnalysisId}`)
+          .digest('hex');
+        try {
+          const handle = await triggerIdempotent(tasks, {
+            jobId: existingJob.id,
+            userId,
+            logicalAnalysisId,
+            requestFingerprint,
+            imageUrl: normalizedImageUrl,
+            imageFileId: normalizedImageFileId,
+            tipMasa: input.mealType || 'Pranz',
+            limba: input.language || 'ro',
+            reservationId: existingJob.creditReservationId,
+          }, idempotencyKey);
+          await repo.attachTriggerRun({ jobId: existingJob.id, triggerRunId: handle.id });
+          return Object.freeze({ ...replay, triggerRunId: handle.id });
+        } catch {
+          throw new PhotoJobError('TRIGGER_DISPATCH_UNKNOWN');
+        }
       }
 
       let entitlement = 'free';
@@ -131,6 +178,7 @@ function createPhotoJobService({ repo, flowCredits, tasks, billing } = {}) {
       const reservation = await flowCredits.reservePhoto({
         userId,
         logicalAnalysisId,
+        requestFingerprint,
         entitlement,
       });
 
@@ -171,34 +219,31 @@ function createPhotoJobService({ repo, flowCredits, tasks, billing } = {}) {
         const idempotencyKey = crypto.createHash('sha256')
           .update(`getflow-photo:${userId}:${logicalAnalysisId}`)
           .digest('hex');
-        const handle = await tasks.trigger('analiza-mancare-ai', {
+        const handle = await triggerIdempotent(tasks, {
           jobId: job.id,
           userId,
+          logicalAnalysisId,
+          requestFingerprint,
           imageUrl: normalizedImageUrl,
           imageFileId: normalizedImageFileId,
           tipMasa: input.mealType || 'Pranz',
           limba: input.language || 'ro',
           reservationId,
-        }, {
-          idempotencyKey,
-          idempotencyKeyTTL: '24h',
-        });
+        }, idempotencyKey);
         await repo.attachTriggerRun({ jobId: job.id, triggerRunId: handle.id });
         inregistreazaOperational('photo.queued');
         return Object.freeze({ ...job, triggerRunId: handle.id, replay: false });
       } catch (error) {
         if (job?.id) {
-          await repo.markFailed({ jobId: job.id, errorCode: 'TRIGGER_DISPATCH_FAILED' }).catch(() => {});
+          // Keep the durable queued job and reservation; Trigger acceptance may be ambiguous.
+          inregistreazaOperational('photo.dispatch_unknown');
+          throw new PhotoJobError('TRIGGER_DISPATCH_UNKNOWN');
         }
-        await flowCredits.releasePhoto({
-          userId,
-          reservationId,
-          reason: 'TRIGGER_DISPATCH_FAILED',
-        }).catch(() => {});
+        await flowCredits.releasePhoto({ userId, reservationId, reason: 'PHOTO_JOB_PERSISTENCE_FAILED' }).catch(() => {});
         inregistreazaOperational('credit.release');
         inregistreazaOperational('photo.dispatch_failed');
         if (error instanceof PhotoJobError) throw error;
-        throw new PhotoJobError('TRIGGER_DISPATCH_FAILED');
+        throw new PhotoJobError('PHOTO_JOB_PERSISTENCE_FAILED');
       }
     },
 
@@ -209,6 +254,16 @@ function createPhotoJobService({ repo, flowCredits, tasks, billing } = {}) {
         jobId: requireString(jobId, 'INVALID_JOB_ID', 128),
       });
       if (!owned) throw new PhotoJobError('PHOTO_JOB_NOT_FOUND', 404);
+      if (owned.result && owned.errorCode === 'PHOTO_OUTCOME_UNKNOWN') {
+        await flowCredits.reconcilePhotoResult({
+          userId,
+          reservationId: owned.creditReservationId,
+          jobId: owned.id,
+        });
+        const reconciled = await repo.getOwned({ ctx: dataContext, userId, jobId });
+        if (reconciled) return reconciled;
+        throw new PhotoJobError('PHOTO_JOB_NOT_FOUND', 404);
+      }
       return owned;
     },
 

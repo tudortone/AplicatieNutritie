@@ -57,6 +57,7 @@ const createUserRouter = require('./routes/user');
 const createBillingGoogleRouter = require('./routes/billingGoogle');
 const createPhotoFlowRouter = require('./routes/photoFlow');
 const createRewardedRouter = require('./routes/rewarded');
+const createPhotoOutcomeOpsRouter = require('./routes/photoOutcomeOps');
 const createFeedbackRouter = require('./routes/feedback');
 const createVersionCheckRouter = require('./routes/versionCheck');
 const createGooglePlayWebhookRouter = require('./routes/webhooksGooglePlay');
@@ -190,6 +191,17 @@ const playIntegrityGuard = config.playIntegrity.mode === 'off'
     verifier: createPlayIntegrityVerifier({
       packageName: config.playIntegrity.packageName,
       decodeToken: createGooglePlayIntegrityDecoder({ packageName: config.playIntegrity.packageName }),
+      bindToken: async ({ tokenHash, expectedRequestHash, userId, contentDigest, expiresAt }) => {
+        const { data, error } = await supabaseAdmin.rpc('claim_play_integrity_token', {
+          p_token_hash: tokenHash,
+          p_request_hash: expectedRequestHash,
+          p_user_id: userId,
+          p_content_digest: contentDigest,
+          p_expires_at: expiresAt,
+        });
+        if (error) throw error;
+        return data === true;
+      },
     }),
   });
 const checkAiUsageQuota = creeazaCheckAiUsageQuota({ supabaseAdmin, billingService: googleBillingService });
@@ -459,6 +471,11 @@ const rewardedR = createRewardedRouter({
     expectedRewardItem: config.admob.rewardedItem,
   }),
 });
+const photoOutcomeOpsR = createPhotoOutcomeOpsRouter({
+  requireAuth,
+  generalLimiter,
+  flowCredits: flowCreditsService,
+});
 const statusR = createStatusRouter({
   getProviderStatus: serviciuCascada.getProviderStatus,
   getAiStatistici,
@@ -488,6 +505,7 @@ app.use('/api/v1', statusR);
 app.use('/api/v1', aiR);
 app.use('/api/v1', photoFlowR);
 app.use('/api/v1', rewardedR);
+app.use('/api/v1', photoOutcomeOpsR);
 app.use('/api/v1', barcodeR);
 app.use('/api/v1', profilR);
 app.use('/api/v1', meseR);

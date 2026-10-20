@@ -2,6 +2,7 @@
 
 const express = require('express');
 const request = require('supertest');
+const crypto = require('crypto');
 
 const {
   buildPlayIntegrityRequestHash,
@@ -13,7 +14,8 @@ const {
 } = require('../utils/playIntegrity');
 
 const NOW = 1_800_000_000_000;
-const HASH = 'Q35Hmy8PctX3pjA2L-1-35r3R6U5L9y1WC6LMEEcsXE';
+const HASH = 'nrESUAoHEF6FyQcY3LL2bsXtTsxtbc5_W87OHrlHmDU';
+const USER_ID = 'user-1';
 
 function validPayload(overrides = {}) {
   return {
@@ -36,11 +38,37 @@ function validPayload(overrides = {}) {
   };
 }
 
+function createMemoryTokenBinder() {
+  const bindings = new Map();
+  return async ({ tokenHash, expectedRequestHash, userId, contentDigest }) => {
+    const binding = { expectedRequestHash, userId, contentDigest };
+    const existing = bindings.get(tokenHash);
+    if (!existing) {
+      bindings.set(tokenHash, binding);
+      return true;
+    }
+    return existing.expectedRequestHash === binding.expectedRequestHash
+      && existing.userId === binding.userId
+      && existing.contentDigest === binding.contentDigest;
+  };
+}
+
+function createTestVerifier(options = {}) {
+  return createPlayIntegrityVerifier({
+    packageName: 'com.totsrl.getflo',
+    decodeToken: async () => validPayload(),
+    bindToken: createMemoryTokenBinder(),
+    now: () => NOW,
+    ...options,
+  });
+}
+
 describe('Play Integrity request binding', () => {
   test('binds method, canonical path, idempotency key and canonical body', () => {
     expect(buildPlayIntegrityRequestHash({
       method: 'post',
       path: '/billing/google/verify',
+      userId: USER_ID,
       idempotencyKey: 'idem-1',
       body: { purchaseToken: 'token-123' },
     })).toBe(HASH);
@@ -48,6 +76,7 @@ describe('Play Integrity request binding', () => {
     expect(buildPlayIntegrityRequestHash({
       method: 'POST',
       path: '/billing/google/verify',
+      userId: USER_ID,
       idempotencyKey: 'idem-1',
       body: { purchaseToken: 'token-123' },
     })).toBe(HASH);
@@ -55,12 +84,28 @@ describe('Play Integrity request binding', () => {
 
   test('a token bound to one action cannot be replayed for another action', () => {
     const verifyHash = buildPlayIntegrityRequestHash({
-      method: 'POST', path: '/billing/google/verify', body: { purchaseToken: 'token-123' },
+      method: 'POST', path: '/billing/google/verify', userId: USER_ID, body: { purchaseToken: 'token-123' },
     });
     const photoHash = buildPlayIntegrityRequestHash({
-      method: 'POST', path: '/photo-jobs', body: { purchaseToken: 'token-123' },
+      method: 'POST', path: '/photo-jobs', userId: USER_ID, body: { purchaseToken: 'token-123' },
     });
     expect(verifyHash).not.toBe(photoHash);
+  });
+
+  test('the account ID is part of the request hash and durable token binding', async () => {
+    const accountBHash = buildPlayIntegrityRequestHash({
+      method: 'POST', path: '/billing/google/verify', userId: 'user-2',
+      idempotencyKey: 'idem-1', body: { purchaseToken: 'token-123' },
+    });
+    expect(accountBHash).not.toBe(HASH);
+
+    const verifier = createTestVerifier({
+      decodeToken: async () => validPayload(),
+    });
+    await expect(verifier.verify({ token: 'opaque-token', expectedRequestHash: HASH, userId: USER_ID }))
+      .resolves.toMatchObject({ trusted: true });
+    await expect(verifier.verify({ token: 'opaque-token', expectedRequestHash: HASH, userId: 'user-2' }))
+      .resolves.toMatchObject({ trusted: false, reason: 'TOKEN_REPLAYED' });
   });
 });
 
@@ -96,14 +141,17 @@ describe('Play Integrity Google decoder', () => {
 
 describe('Play Integrity server verification', () => {
   test('accepts only a fresh, request-bound Play-recognized licensed app on a trusted device', async () => {
-    const verifier = createPlayIntegrityVerifier({
-      packageName: 'com.totsrl.getflo',
+    const verifier = createTestVerifier({
       decodeToken: async () => validPayload(),
-      now: () => NOW,
     });
 
-    await expect(verifier.verify({ token: 'opaque-token', expectedRequestHash: HASH }))
-      .resolves.toMatchObject({ trusted: true, reason: 'VERIFIED' });
+    await expect(verifier.verify({ token: 'opaque-token', expectedRequestHash: HASH, userId: USER_ID }))
+      .resolves.toMatchObject({
+        trusted: true,
+        reason: 'VERIFIED',
+        tokenHash: crypto.createHash('sha256').update('opaque-token').digest('hex'),
+        requestHash: HASH,
+      });
   });
 
   test.each([
@@ -115,22 +163,18 @@ describe('Play Integrity server verification', () => {
     ['untrusted device', validPayload({ deviceIntegrity: { deviceRecognitionVerdict: [] } }), 'DEVICE_NOT_TRUSTED'],
     ['unlicensed account', validPayload({ accountDetails: { appLicensingVerdict: 'UNLICENSED' } }), 'ACCOUNT_NOT_LICENSED'],
   ])('rejects %s', async (_label, payload, reason) => {
-    const verifier = createPlayIntegrityVerifier({
-      packageName: 'com.totsrl.getflo',
+    const verifier = createTestVerifier({
       decodeToken: async () => payload,
-      now: () => NOW,
     });
-    await expect(verifier.verify({ token: 'opaque-token', expectedRequestHash: HASH }))
+    await expect(verifier.verify({ token: 'opaque-token', expectedRequestHash: HASH, userId: USER_ID }))
       .resolves.toMatchObject({ trusted: false, reason });
   });
 
   test('fails closed without trusting client booleans or malformed decoder responses', async () => {
-    const verifier = createPlayIntegrityVerifier({
-      packageName: 'com.totsrl.getflo',
+    const verifier = createTestVerifier({
       decodeToken: async () => ({ isDeviceValid: true }),
-      now: () => NOW,
     });
-    await expect(verifier.verify({ token: 'opaque-token', expectedRequestHash: HASH }))
+    await expect(verifier.verify({ token: 'opaque-token', expectedRequestHash: HASH, userId: USER_ID }))
       .resolves.toEqual({ trusted: false, reason: 'MALFORMED_VERDICT' });
   });
 
@@ -138,10 +182,10 @@ describe('Play Integrity server verification', () => {
     ['', async () => validPayload(), 'TOKEN_MISSING'],
     ['opaque-token', async () => { throw new Error('provider unavailable'); }, 'DECODE_UNAVAILABLE'],
   ])('fails closed for missing/provider-failed token verification', async (token, decodeToken, reason) => {
-    const verifier = createPlayIntegrityVerifier({
-      packageName: 'com.totsrl.getflo', decodeToken, now: () => NOW,
+    const verifier = createTestVerifier({
+      decodeToken,
     });
-    await expect(verifier.verify({ token, expectedRequestHash: HASH }))
+    await expect(verifier.verify({ token, expectedRequestHash: HASH, userId: USER_ID }))
       .resolves.toEqual({ trusted: false, reason });
   });
 });
@@ -258,12 +302,10 @@ describe('Play Integrity Play Protect risk verdicts handling', () => {
     const payload = validPayload({
       environmentDetails: { playProtectVerdict: verdict },
     });
-    const verifier = createPlayIntegrityVerifier({
-      packageName: 'com.totsrl.getflo',
+    const verifier = createTestVerifier({
       decodeToken: async () => payload,
-      now: () => NOW,
     });
-    const result = await verifier.verify({ token: 'opaque-token', expectedRequestHash: HASH });
+    const result = await verifier.verify({ token: 'opaque-token', expectedRequestHash: HASH, userId: USER_ID });
     expect(result.trusted).toBe(expectedTrusted);
     expect(result.verdicts.playProtect).toBe(verdict);
   });
@@ -272,13 +314,11 @@ describe('Play Integrity Play Protect risk verdicts handling', () => {
     const payload = validPayload({
       environmentDetails: { playProtectVerdict: 'HIGH_RISK' },
     });
-    const strictVerifier = createPlayIntegrityVerifier({
-      packageName: 'com.totsrl.getflo',
+    const strictVerifier = createTestVerifier({
       decodeToken: async () => payload,
-      now: () => NOW,
       rejectHighRiskMalware: true,
     });
-    const result = await strictVerifier.verify({ token: 'opaque-token', expectedRequestHash: HASH });
+    const result = await strictVerifier.verify({ token: 'opaque-token', expectedRequestHash: HASH, userId: USER_ID });
     expect(result.trusted).toBe(false);
     expect(result.reason).toBe('DEVICE_HIGH_RISK_MALWARE');
     expect(result.verdicts.playProtect).toBe('HIGH_RISK');
@@ -289,13 +329,11 @@ describe('Play Integrity Play Protect risk verdicts handling', () => {
       const payload = validPayload({
         environmentDetails: { playProtectVerdict: verdict },
       });
-      const strictVerifier = createPlayIntegrityVerifier({
-        packageName: 'com.totsrl.getflo',
+      const strictVerifier = createTestVerifier({
         decodeToken: async () => payload,
-        now: () => NOW,
         rejectHighRiskMalware: true,
       });
-      const result = await strictVerifier.verify({ token: 'opaque-token', expectedRequestHash: HASH });
+      const result = await strictVerifier.verify({ token: 'opaque-token', expectedRequestHash: HASH, userId: USER_ID });
       expect(result.trusted).toBe(true);
       expect(result.reason).toBe('VERIFIED');
       expect(result.verdicts.playProtect).toBe(verdict);

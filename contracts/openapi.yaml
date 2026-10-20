@@ -188,6 +188,74 @@ paths:
   /api/v1/photo-assets/cleanup: { $ref: '#/components/pathItems/PhotoAssetCleanup' }
   /api/v1/rewarded/intents: { $ref: '#/components/pathItems/RewardedIntent' }
   /api/v1/rewarded/intents/{intentId}: { $ref: '#/components/pathItems/RewardedIntentStatus' }
+  /api/v1/admin/photo-outcomes/unknown:
+    get:
+      summary: Citește coada limitată de reconciliere Photo AI (administratori)
+      description: Returnează metadate fără URL-uri de imagini. Citirea marchează necunoscutele stale și eliberează doar rezervările care nu au revendicat inferența.
+      responses:
+        '200':
+          description: Maximum 50 de operații incerte, ordonate după vechime
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [outcomes]
+                properties:
+                  outcomes:
+                    type: array
+                    items:
+                      type: object
+                      required: [reservation_id, user_id, logical_analysis_id, outcome_unknown_at, inference_claimed_at]
+                      properties:
+                        reservation_id: { type: string, format: uuid }
+                        user_id: { type: string, format: uuid }
+                        logical_analysis_id: { type: string }
+                        outcome_unknown_at: { type: string, format: date-time }
+                        inference_claimed_at: { type: string, format: date-time }
+                        job_id: { type: [string, 'null'], format: uuid }
+                        trigger_run_id: { type: [string, 'null'] }
+                        job_status: { type: [string, 'null'] }
+                        error_code: { type: [string, 'null'] }
+                      additionalProperties: false
+                additionalProperties: false
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/v1/admin/photo-outcomes/{userId}/{reservationId}/confirm-failure:
+    post:
+      summary: Eliberează o rezervare Photo AI numai după eșec confirmat și dovadă
+      parameters:
+        - { in: path, name: userId, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: reservationId, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmedFailure, evidenceReference]
+              properties:
+                confirmedFailure: { const: true }
+                evidenceReference: { type: string, minLength: 1, maxLength: 256, pattern: '^[A-Za-z0-9._:-]+$' }
+              additionalProperties: false
+      responses:
+        '200':
+          description: Rezervarea a fost eliberată sau răspunsul anterior a fost reluat
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, replay]
+                properties:
+                  status: { const: RELEASED }
+                  replay: { type: boolean }
+                additionalProperties: false
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/v1/webhooks/admob/rewarded: { $ref: '#/components/pathItems/AdmobRewardedWebhook' }
   /api/v1/user/export-data: { $ref: '#/components/pathItems/ExportData' }
   /api/v1/user/delete-account: { $ref: '#/components/pathItems/DeleteAccount' }
@@ -1393,8 +1461,31 @@ components:
       post:
         summary: Creează un intent opac pentru AdMob SSV
         responses:
-          <<: *authLimited
-          '201': { description: Intent SSV cu expirare }
+          '400': { $ref: '#/components/responses/BadRequest' }
+          '401': { $ref: '#/components/responses/Unauthorized' }
+          '403': { $ref: '#/components/responses/Forbidden' }
+          '429': { $ref: '#/components/responses/RateLimited' }
+          '503': { $ref: '#/components/responses/ServiceUnavailable' }
+          '200': &rewardIntentSuccess
+            description: Intent original returnat la replay exact, fără prelungirea expirării
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required: [intentId, expiresAt, status, ssv]
+                  properties:
+                    intentId: { type: string, maxLength: 64 }
+                    expiresAt: { type: string, format: date-time }
+                    status: { type: string, enum: [PENDING, GRANTED, DENIED_LIMIT, EXPIRED] }
+                    ssv:
+                      type: object
+                      required: [userId, customData]
+                      properties:
+                        userId: { type: string, maxLength: 64 }
+                        customData: { type: string, maxLength: 256 }
+                      additionalProperties: false
+                  additionalProperties: false
+          '201': *rewardIntentSuccess
     RewardedIntentStatus:
       get:
         summary: Citește starea intentului AdMob deținut de utilizatorul autentificat

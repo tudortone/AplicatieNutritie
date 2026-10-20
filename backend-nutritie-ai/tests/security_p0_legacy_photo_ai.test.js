@@ -81,21 +81,56 @@ function createHarness({
   };
 
   const flowCredits = {
-    reservePhoto: jest.fn(async ({ logicalAnalysisId }) => {
+    reservationState: null,
+    claimedReservations: new Set(),
+    reservePhoto: jest.fn(async ({ logicalAnalysisId, requestFingerprint }) => {
       if (typeof reserveResult === 'function') {
         return reserveResult({ logicalAnalysisId });
       }
       if (reserveResult) return reserveResult;
-      return {
+      if (flowCredits.reservationState) {
+        return { ...flowCredits.reservationState, replay: true };
+      }
+      flowCredits.reservationState = {
         ok: true,
         reservationId: `res-${logicalAnalysisId}`,
         source: 'DAILY',
         status: 'RESERVED',
+        requestFingerprint,
+        inferenceClaimed: false,
         replay: false,
       };
+      return {
+        ...flowCredits.reservationState,
+      };
     }),
-    releasePhoto: jest.fn(async () => ({ ok: true, status: 'RELEASED' })),
-    commitPhoto: jest.fn(async () => ({ ok: true, status: 'COMMITTED' })),
+    claimPhotoInference: jest.fn(async ({ reservationId }) => {
+      if (flowCredits.claimedReservations.has(reservationId)) {
+        return { ok: true, acquired: false, status: 'running', inferenceClaimed: true };
+      }
+      flowCredits.claimedReservations.add(reservationId);
+      if (flowCredits.reservationState) flowCredits.reservationState.inferenceClaimed = true;
+      return { ok: true, acquired: true, status: 'RESERVED' };
+    }),
+    recordPhotoResult: jest.fn(async ({ result }) => {
+      if (flowCredits.reservationState) flowCredits.reservationState.result = result;
+      return { ok: true, result, replay: false };
+    }),
+    releasePhoto: jest.fn(async () => {
+      if (flowCredits.reservationState?.inferenceClaimed
+        && flowCredits.reservationState.result?.success !== false) {
+        return { ok: false, code: 'PHOTO_OUTCOME_UNKNOWN' };
+      }
+      if (flowCredits.reservationState) flowCredits.reservationState.status = 'RELEASED';
+      return { ok: true, status: 'RELEASED' };
+    }),
+    commitPhoto: jest.fn(async () => {
+      if (flowCredits.reservationState?.result?.success !== true) {
+        return { ok: false, code: 'VALID_PHOTO_RESULT_REQUIRED' };
+      }
+      if (flowCredits.reservationState) flowCredits.reservationState.status = 'COMMITTED';
+      return { ok: true, status: 'COMMITTED' };
+    }),
   };
 
   const tasks = {
@@ -319,7 +354,7 @@ describe('P0 Security Remediation — Legacy Photo AI Endpoints & Job Ownership'
     expect(h.flowCredits.releasePhoto).not.toHaveBeenCalled();
   });
 
-  test('5. failed and non-food jobs release reserved credits on both async and sync legacy routes', async () => {
+  test('5. ambiguous dispatch/provider outcomes stay reserved; confirmed non-food releases the credit', async () => {
     const hDispatchFail = createHarness({
       triggerError: new Error('TRIGGER_UNAVAILABLE'),
     });
@@ -330,10 +365,7 @@ describe('P0 Security Remediation — Legacy Photo AI Endpoints & Job Ownership'
 
     expect(rAsyncFail.status).toBe(503);
     expect(hDispatchFail.flowCredits.reservePhoto).toHaveBeenCalledTimes(1);
-    expect(hDispatchFail.flowCredits.releasePhoto).toHaveBeenCalledWith(expect.objectContaining({
-      userId: USER_ID,
-      reason: 'TRIGGER_DISPATCH_FAILED',
-    }));
+    expect(hDispatchFail.flowCredits.releasePhoto).not.toHaveBeenCalled();
 
     const hNotFood = createHarness({
       visionResponse: JSON.stringify([]),
@@ -362,8 +394,9 @@ describe('P0 Security Remediation — Legacy Photo AI Endpoints & Job Ownership'
 
     expect(rVisionErr.status).toBe(500);
     expect(hVisionErr.flowCredits.reservePhoto).toHaveBeenCalledTimes(1);
-    expect(hVisionErr.flowCredits.releasePhoto).toHaveBeenCalledTimes(1);
+    expect(hVisionErr.flowCredits.releasePhoto).not.toHaveBeenCalled();
     expect(hVisionErr.flowCredits.commitPhoto).not.toHaveBeenCalled();
+    expect(hVisionErr.flowCredits.reservationState.status).toBe('RESERVED');
   });
 
   test('6. replay and parallel requests cannot duplicate work or overspend', async () => {
@@ -565,21 +598,48 @@ describe('P0 Security Remediation — Legacy Photo AI Endpoints & Job Ownership'
     expect(hCrossAccount.flowCredits.releasePhoto).not.toHaveBeenCalled();
   });
 
-  test('10. settlement failure or ambiguous commitPhoto response never returns free 200 analysis or orphans reservation', async () => {
+  test('10. ambiguous commit is reconciled without blindly releasing the reservation', async () => {
     const hCommitThrows = createHarness();
     hCommitThrows.flowCredits.commitPhoto.mockRejectedValueOnce(new Error('DB_COMMIT_TIMEOUT'));
+    hCommitThrows.flowCredits.reservePhoto.mockResolvedValueOnce({
+      ok: true, reservationId: 'res-commit-throws-1', source: 'DAILY', status: 'RESERVED', replay: false,
+    }).mockResolvedValueOnce({
+      ok: true,
+      reservationId: 'res-commit-throws-1',
+      source: 'DAILY',
+      status: 'COMMITTED',
+      replay: true,
+    });
 
     const rThrows = await request(hCommitThrows.app)
       .post('/api/v1/analiza-foto')
       .set('Idempotency-Key', 'commit-throws-1')
       .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
 
-    expect(rThrows.status).toBe(503);
-    expect(rThrows.body.code || rThrows.body.cod).toBe('CREDIT_SETTLEMENT_FAILED');
-    expect(hCommitThrows.flowCredits.releasePhoto).toHaveBeenCalledWith(expect.objectContaining({
-      userId: USER_ID,
-      reason: 'COMMIT_FAILED',
-    }));
+    expect(rThrows.status).toBe(200);
+    expect(hCommitThrows.flowCredits.releasePhoto).not.toHaveBeenCalled();
+    expect(hCommitThrows.flowCredits.reservePhoto).toHaveBeenCalledTimes(2);
+
+    const hCommitStillReserved = createHarness();
+    hCommitStillReserved.flowCredits.commitPhoto.mockRejectedValueOnce(new Error('DB_COMMIT_TIMEOUT'));
+    hCommitStillReserved.flowCredits.reservePhoto.mockResolvedValueOnce({
+      ok: true, reservationId: 'res-commit-throws-1', source: 'DAILY', status: 'RESERVED', replay: false,
+    }).mockResolvedValueOnce({
+      ok: true,
+      reservationId: 'res-commit-throws-1',
+      source: 'DAILY',
+      status: 'RESERVED',
+      replay: true,
+    });
+    const rStillReserved = await request(hCommitStillReserved.app)
+      .post('/api/v1/analiza-foto')
+      .set('Idempotency-Key', 'commit-still-reserved-1')
+      .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
+
+    expect(rStillReserved.status).toBe(503);
+    expect(rStillReserved.body.code || rStillReserved.body.cod).toBe('CREDIT_SETTLEMENT_PENDING');
+    expect(hCommitStillReserved.flowCredits.releasePhoto).not.toHaveBeenCalled();
+    expect(hCommitStillReserved.serviciuCascada.ruleazaCascadaVision).toHaveBeenCalledTimes(1);
 
     const hCommitRejected = createHarness();
     hCommitRejected.flowCredits.commitPhoto.mockResolvedValueOnce({
@@ -593,7 +653,7 @@ describe('P0 Security Remediation — Legacy Photo AI Endpoints & Job Ownership'
       .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
 
     expect(rRejected.status).toBe(503);
-    expect(rRejected.body.code || rRejected.body.cod).toBe('CREDIT_SETTLEMENT_FAILED');
+    expect(rRejected.body.code || rRejected.body.cod).toBe('CREDIT_SETTLEMENT_PENDING');
 
     const hCommitReplayed = createHarness();
     hCommitReplayed.flowCredits.commitPhoto.mockResolvedValueOnce({
@@ -607,8 +667,7 @@ describe('P0 Security Remediation — Legacy Photo AI Endpoints & Job Ownership'
       .set('Idempotency-Key', 'commit-replayed-1')
       .attach('imagine', VALID_PNG, { filename: 'meal.png', contentType: 'image/png' });
 
-    expect(rReplayedCommit.status).toBe(409);
-    expect(rReplayedCommit.body.code || rReplayedCommit.body.cod).toBe('PHOTO_RESERVATION_ALREADY_COMMITTED');
+    expect(rReplayedCommit.status).toBe(200);
   });
 
   test('11. concurrent requests enforce single authoritative processing ownership per logical operation and per user', async () => {
@@ -704,14 +763,27 @@ describe('P0 Security Remediation — Legacy Photo AI Endpoints & Job Ownership'
     const hashForPhotoA = buildPlayIntegrityRequestHash({
       method: 'POST',
       path: '/analiza-foto',
+      userId: USER_ID,
       idempotencyKey: 'integrity-photo-binding-1',
       payloadFingerprint: digestA,
       body: {},
     });
 
+    const tokenBindings = new Map();
     const realVerifier = createPlayIntegrityVerifier({
       packageName: 'com.totsrl.getflo',
       now: () => NOW,
+      bindToken: async ({ tokenHash, expectedRequestHash, userId, contentDigest }) => {
+        const binding = { expectedRequestHash, userId, contentDigest };
+        const existing = tokenBindings.get(tokenHash);
+        if (!existing) {
+          tokenBindings.set(tokenHash, binding);
+          return true;
+        }
+        return existing.expectedRequestHash === binding.expectedRequestHash
+          && existing.userId === binding.userId
+          && existing.contentDigest === binding.contentDigest;
+      },
       decodeToken: async (token) => {
         if (token !== 'token-for-photo-A') throw new Error('unknown token');
         return {

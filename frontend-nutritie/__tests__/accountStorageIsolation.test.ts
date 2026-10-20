@@ -307,4 +307,23 @@ describe('P0-02 — cross-account local persistence boundary', () => {
     expect(await AsyncStorage.getItem('@getflow/photo-job/v1/user-B')).toBe(pointerB);
     expect(await AsyncStorage.getItem(`@getflow/chat_daily_user-B_${DAY}`)).toBe(JSON.stringify({ remaining: 9 }));
   });
+
+  test('16. companion names remain user-scoped across logout and only the deleted user name is purged', async () => {
+    await AsyncStorage.multiSet([
+      ['@getflow:companion_name_user-A', 'Sprout-A'],
+      ['@getflow:companion_name_user-B', 'Sprout-B'],
+      ['@getflow:companion_name', 'Legacy-Unknown-Owner'],
+    ]);
+
+    await prepareLocalDataForUser('user-A');
+    await clearLocalUserData();
+    await prepareLocalDataForUser('user-B');
+    expect(await AsyncStorage.getItem('@getflow:companion_name_user-A')).toBe('Sprout-A');
+    expect(await AsyncStorage.getItem('@getflow:companion_name_user-B')).toBe('Sprout-B');
+
+    await purgeLocalDataForUser('user-A');
+    expect(await AsyncStorage.getItem('@getflow:companion_name_user-A')).toBeNull();
+    expect(await AsyncStorage.getItem('@getflow:companion_name_user-B')).toBe('Sprout-B');
+    expect(await AsyncStorage.getItem('@getflow:companion_name')).toBe('Legacy-Unknown-Owner');
+  });
 });

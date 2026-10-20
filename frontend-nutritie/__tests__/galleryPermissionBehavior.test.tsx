@@ -162,6 +162,16 @@ jest.mock('@/context/AdsContext', () => ({
 }));
 
 const mockFlowCreditsReturn = {
+  balance: {
+    dailyRemaining: 0,
+    rewarded: 0,
+    purchased: 0,
+    total: 0,
+    rewardedGrantsRemaining: 0,
+    serverDay: null,
+  },
+  unlimited: false,
+  consumeOptimisticCredit: jest.fn(() => 'daily'),
   refresh: jest.fn(async () => null),
   open: jest.fn(),
 };

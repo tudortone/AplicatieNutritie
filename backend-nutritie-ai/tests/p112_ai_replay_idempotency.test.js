@@ -58,6 +58,9 @@ function creeazaRegistruFals() {
 function construiesteApp({ userId = USER_A, tasks = null, registru: registruInjectat = null } = {}) {
   const apeluriFurnizor = { chat: 0, text: 0, vision: 0, profil: 0 };
   const mutatiiCota = { consum: 0 };
+  const photoReservations = new Map();
+  const aiJobs = new Map();
+  let nextJobId = 1;
   const registru = registruInjectat || creeazaRegistruFals();
 
   const middlewareCritic = creeazaMiddlewareIdempotenta({
@@ -123,14 +126,67 @@ function construiesteApp({ userId = USER_A, tasks = null, registru: registruInje
     },
     semaforAi: { ruleaza: async (fn) => fn() },
     idempotencyCritic: middlewareCritic,
-    supabaseAdmin: null,
-    flowCredits: {
-      reservePhoto: async ({ logicalAnalysisId }) => {
-        mutatiiCota.consum += 1;
-        return { ok: true, reservationId: `res-${logicalAnalysisId}`, source: 'DAILY', status: 'RESERVED', replay: false };
+    supabaseAdmin: tasks ? {
+      from: () => {
+        let inserted = null;
+        return {
+          insert(value) { inserted = value; return this; },
+          select() { return this; },
+          async single() {
+            const id = `job-${nextJobId++}`;
+            aiJobs.set(id, { id, ...inserted });
+            return { data: { id }, error: null };
+          },
+          update(value) { Object.assign(inserted || {}, value); return this; },
+          async eq() { return { error: null }; },
+        };
       },
-      commitPhoto: async () => ({ ok: true, status: 'COMMITTED' }),
-      releasePhoto: async () => ({ ok: true, status: 'RELEASED' }),
+    } : null,
+    flowCredits: {
+      reservePhoto: async ({ logicalAnalysisId, requestFingerprint }) => {
+        const existing = photoReservations.get(logicalAnalysisId);
+        if (existing) {
+          if (existing.requestFingerprint !== requestFingerprint) {
+            return { ok: false, code: 'LOGICAL_ID_IMAGE_MISMATCH' };
+          }
+          return { ...existing, replay: true };
+        }
+        mutatiiCota.consum += 1;
+        const reservation = {
+          ok: true,
+          reservationId: `res-${logicalAnalysisId}`,
+          requestFingerprint,
+          source: 'DAILY',
+          status: 'RESERVED',
+          replay: false,
+          inferenceClaimed: false,
+          result: null,
+        };
+        photoReservations.set(logicalAnalysisId, reservation);
+        return reservation;
+      },
+      claimPhotoInference: async ({ reservationId }) => {
+        const reservation = [...photoReservations.values()].find((row) => row.reservationId === reservationId);
+        if (!reservation) return { ok: false, code: 'RESERVATION_NOT_FOUND' };
+        if (reservation.inferenceClaimed) return { ok: true, acquired: false, result: reservation.result };
+        reservation.inferenceClaimed = true;
+        return { ok: true, acquired: true };
+      },
+      recordPhotoResult: async ({ reservationId, result }) => {
+        const reservation = [...photoReservations.values()].find((row) => row.reservationId === reservationId);
+        reservation.result = result;
+        return { ok: true, result };
+      },
+      commitPhoto: async ({ reservationId }) => {
+        const reservation = [...photoReservations.values()].find((row) => row.reservationId === reservationId);
+        if (reservation) reservation.status = 'COMMITTED';
+        return { ok: true, status: 'COMMITTED' };
+      },
+      releasePhoto: async ({ reservationId }) => {
+        const reservation = [...photoReservations.values()].find((row) => row.reservationId === reservationId);
+        if (reservation) reservation.status = 'RELEASED';
+        return { ok: true, status: 'RELEASED' };
+      },
     },
   });
 

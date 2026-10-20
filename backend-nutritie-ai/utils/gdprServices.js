@@ -145,13 +145,14 @@ async function filtreazaFileIdsProprii({ userId, fileIds, privateKey, onBeforeSt
  * Clerk (vechiul `app_user_id` de plata poate fi oricare dintre ele), deci stergem dupa
  * ambele identitati.
  */
-async function stergeDeadLetterUtilizator({ supabaseAdmin, userId, clerkUserId }) {
+async function stergeDeadLetterUtilizator({ supabaseAdmin, userId, clerkUserId, onBeforeDelete = null }) {
   const identitati = [userId, clerkUserId].filter(
     (v) => typeof v === 'string' && v.trim().length > 0,
   );
   if (identitati.length === 0) return;
 
   const incearca = async (executa) => {
+    if (typeof onBeforeDelete === 'function') await onBeforeDelete();
     const rezultat = await executa();
     const eroare = rezultat?.error;
     if (eroare && !CODURI_TABELA_INEXISTENTA.has(eroare.code)) throw eroare;
@@ -247,7 +248,7 @@ async function exportaAbonamenteGooglePlay({ supabaseAdmin, userId }) {
  * Evenimentele RTDN nu au user_id, dar hash-ul tokenului le leagă de un cont.
  * Le ștergem înaintea abonamentelor, cât relația încă poate fi rezolvată.
  */
-async function stergeEvenimenteRtdnUtilizator({ supabaseAdmin, userId }) {
+async function stergeEvenimenteRtdnUtilizator({ supabaseAdmin, userId, onBeforeDelete = null }) {
   const abonamente = await citesteTotPaginat({
     client: supabaseAdmin,
     tabela: 'google_play_subscriptions',
@@ -260,6 +261,7 @@ async function stergeEvenimenteRtdnUtilizator({ supabaseAdmin, userId }) {
     .filter((hash) => typeof hash === 'string' && hash.length > 0))];
   if (hashuri.length === 0) return;
 
+  if (typeof onBeforeDelete === 'function') await onBeforeDelete();
   const rezultat = await supabaseAdmin
     .from('google_play_rtdn_events')
     .delete()

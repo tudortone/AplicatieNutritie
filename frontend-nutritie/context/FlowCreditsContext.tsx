@@ -95,7 +95,7 @@ async function authenticatedFetch(path: string, init?: RequestInit, expectedUser
           }
         } catch {}
       }
-      integrityHeaders = await getPlayIntegrityHeaders({ method: 'POST', path, body });
+      integrityHeaders = await getPlayIntegrityHeaders({ method: 'POST', path, userId: data.session.user.id, body });
     }
     return await fetch(buildApiUrl(path), {
       ...init,
@@ -228,9 +228,11 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
         updateState(response.status === 429 ? 'limit' : 'unavailable');
         return response.status === 429 ? 'limit' as const : 'unavailable' as const;
       }
-      const intent = await response.json() as { intentId?: string; ssv?: { userId?: string; customData?: string } };
+      const intent = await response.json() as { intentId?: string; status?: string; ssv?: { userId?: string; customData?: string } };
       if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
-      if (!intent.intentId || intent.ssv?.userId !== intent.intentId || !intent.ssv.customData) throw new Error('INVALID_REWARD_INTENT');
+      if (intent.status !== 'PENDING' || !intent.intentId || intent.ssv?.userId !== intent.intentId || !intent.ssv.customData) {
+        throw new Error('INVALID_REWARD_INTENT');
+      }
       const outcome = await showRewardedAdWithSsv({ intentId: intent.intentId, customData: intent.ssv.customData });
       if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
       if (outcome !== 'earned-awaiting-server') {

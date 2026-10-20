@@ -25,6 +25,7 @@ function mapPhotoAdmissionStatus(code) {
     code === 'PHOTO_IN_PROGRESS'
     || code === 'PHOTO_RESERVATION_ALREADY_COMMITTED'
     || code === 'PHOTO_RESERVATION_RELEASED'
+    || code === 'PHOTO_OUTCOME_UNKNOWN'
     || code === 'CREDIT_RESERVATION_EXPIRED'
     || code === 'LOGICAL_ID_IMAGE_MISMATCH'
   ) {
@@ -80,6 +81,49 @@ function valideazaRezervareProaspataFoto(reservation, userId) {
     }
   }
   return { ok: true, reservationId: reservation.reservationId.trim() };
+}
+
+async function settlePhotoAndReconcile(flowCredits, input) {
+  const expected = input.action === 'commit' ? 'COMMITTED' : 'RELEASED';
+  const settle = () => input.action === 'commit'
+    ? flowCredits.commitPhoto({ userId: input.userId, reservationId: input.reservationId })
+    : flowCredits.releasePhoto({
+      userId: input.userId,
+      reservationId: input.reservationId,
+      reason: input.reason,
+    });
+  const isSettled = (result) => result?.ok === true && result.status === expected;
+
+  try {
+    const result = await settle();
+    if (isSettled(result)) return result;
+    if (result?.ok === false) return null;
+  } catch {}
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let state;
+    try {
+      state = await flowCredits.reservePhoto({
+        userId: input.userId,
+        logicalAnalysisId: input.logicalAnalysisId,
+        requestFingerprint: input.requestFingerprint,
+        entitlement: 'free',
+      });
+    } catch {
+      return null;
+    }
+    if (!state?.ok || state.reservationId !== input.reservationId) return null;
+    if (state.status === expected) return { ...state, ok: true };
+    if (state.status !== 'RESERVED') return null;
+    if (input.action === 'commit' && state.result?.success !== true) return null;
+    if (input.action === 'release' && state.result?.success === true) return null;
+    try {
+      const result = await settle();
+      if (isSettled(result)) return result;
+      if (result?.ok === false) return null;
+    } catch {}
+  }
+  return null;
 }
 
 /**
@@ -204,7 +248,13 @@ function createAiRouter({
       return res.json(cota);
     } catch (err) {
       console.error('[AI route]', rezumatEroareSigur(err, { operation: 'get_chat_quota' }));
-      return res.status(500).json({ eroare: 'Nu s-a putut citi cota de mesaje chat.' });
+      const unavailable = err?.code === 'CHAT_QUOTA_STORE_UNAVAILABLE';
+      return res.status(unavailable ? 503 : 500).json({
+        ...(unavailable ? { cod: 'CHAT_QUOTA_STORE_UNAVAILABLE' } : {}),
+        eroare: unavailable
+          ? 'Contorul de mesaje chat este temporar indisponibil.'
+          : 'Nu s-a putut citi cota de mesaje chat.',
+      });
     }
   });
 
@@ -282,13 +332,18 @@ function createAiRouter({
         ? req.body.analysisId.trim()
         : null;
       const logicalAnalysisId = suppliedAnalysisId || cheieIdempotentaRun;
+      const imageFileId = typeof req.body?.imageFileId === 'string' ? req.body.imageFileId.trim() : null;
+      const requestFingerprint = crypto.createHash('sha256')
+        .update(`${imageFileId || ''}\0${verificare.url}`)
+        .digest('hex');
 
       if (photoJobs && typeof photoJobs.submit === 'function') {
         const job = await photoJobs.submit({
           userId: req.user.id,
           logicalAnalysisId,
+          requestFingerprint,
           imageUrl: verificare.url,
-          imageFileId: typeof req.body?.imageFileId === 'string' ? req.body.imageFileId : null,
+          imageFileId,
           mealType: tipMasa || 'Pranz',
           language: req.body?.limba || req.body?.language || 'ro',
           fullAccess: req.user.esteTester === true,
@@ -313,6 +368,7 @@ function createAiRouter({
       const reservation = await flowCredits.reservePhoto({
         userId: req.user.id,
         logicalAnalysisId,
+        requestFingerprint,
         entitlement,
       });
       const verificareRezervare = valideazaRezervareProaspataFoto(reservation, req.user.id);
@@ -320,60 +376,67 @@ function createAiRouter({
         return sendPhotoAdmissionError(res, verificareRezervare.code);
       }
 
-      let jobId = null;
-      try {
-        if (supabaseAdmin) {
-          const { data: rand, error: insertErr } = await supabaseAdmin
-            .from('ai_jobs')
-            .insert({
-              user_id: req.user.id,
-              status: 'queued',
-              logical_analysis_id: logicalAnalysisId,
-              image_url: verificare.url,
-              credit_reservation_id: verificareRezervare.reservationId,
-            })
-            .select('id')
-            .single();
-          if (!insertErr) {
-            jobId = rand?.id || null;
-            inregistreazaUtilizareAdmin();
-          }
-        }
-
-        const handle = await tasks.trigger('analiza-mancare-ai', {
-          imageUrl: verificare.url,
-          tipMasa: tipMasa || 'Pranz',
-          userId: req.user.id,
-          jobId,
-          reservationId: verificareRezervare.reservationId,
-        }, {
-          idempotencyKey: cheieIdempotentaRun,
-          idempotencyKeyTTL: '15m',
+      if (!supabaseAdmin) {
+        await settlePhotoAndReconcile(flowCredits, {
+          userId: req.user.id, reservationId: verificareRezervare.reservationId,
+          logicalAnalysisId, requestFingerprint, action: 'release', reason: 'PHOTO_JOB_PERSISTENCE_FAILED',
         });
-
-        if (jobId && supabaseAdmin) {
-          await supabaseAdmin
-            .from('ai_jobs')
-            .update({ trigger_run_id: handle.id })
-            .eq('id', jobId);
-          inregistreazaUtilizareAdmin();
-        }
-
-        return res.status(202).json({
-          jobId,
-          succes: true,
-          taskId: handle.id,
-          status: 'pending',
-          mesaj: 'Analiza AI a fost trimisa in fundal prin Trigger.dev.',
-        });
-      } catch {
-        await flowCredits.releasePhoto({
-          userId: req.user.id,
-          reservationId: verificareRezervare.reservationId,
-          reason: 'TRIGGER_DISPATCH_FAILED',
-        }).catch(() => {});
-        throw new PhotoJobError('TRIGGER_DISPATCH_FAILED', 503);
+        return sendPhotoAdmissionError(res, 'PHOTO_JOB_PERSISTENCE_FAILED');
       }
+      const { data: rand, error: insertErr } = await supabaseAdmin.from('ai_jobs')
+        .insert({
+          user_id: req.user.id,
+          status: 'queued',
+          logical_analysis_id: logicalAnalysisId,
+          image_url: verificare.url,
+          image_file_id: imageFileId,
+          credit_reservation_id: verificareRezervare.reservationId,
+        })
+        .select('id')
+        .single();
+      const jobId = rand?.id || null;
+      if (insertErr || !jobId) {
+        await settlePhotoAndReconcile(flowCredits, {
+          userId: req.user.id, reservationId: verificareRezervare.reservationId,
+          logicalAnalysisId, requestFingerprint, action: 'release', reason: 'PHOTO_JOB_PERSISTENCE_FAILED',
+        });
+        return sendPhotoAdmissionError(res, 'PHOTO_JOB_PERSISTENCE_FAILED');
+      }
+      inregistreazaUtilizareAdmin();
+
+      const triggerPayload = {
+        imageUrl: verificare.url,
+        imageFileId,
+        requestFingerprint,
+        logicalAnalysisId,
+        tipMasa: tipMasa || 'Pranz',
+        limba: req.body?.limba || req.body?.language || 'ro',
+        userId: req.user.id,
+        jobId,
+        reservationId: verificareRezervare.reservationId,
+      };
+      const triggerOptions = { idempotencyKey: cheieIdempotentaRun, idempotencyKeyTTL: '24h' };
+      let handle;
+      try {
+        handle = await tasks.trigger('analiza-mancare-ai', triggerPayload, triggerOptions);
+      } catch {
+        try {
+          handle = await tasks.trigger('analiza-mancare-ai', triggerPayload, triggerOptions);
+        } catch {
+          await supabaseAdmin.from('ai_jobs').update({ error_code: 'TRIGGER_DISPATCH_UNKNOWN' }).eq('id', jobId);
+          return sendPhotoAdmissionError(res, 'TRIGGER_DISPATCH_UNKNOWN');
+        }
+      }
+
+      await supabaseAdmin.from('ai_jobs').update({ trigger_run_id: handle.id }).eq('id', jobId);
+      inregistreazaUtilizareAdmin();
+      return res.status(202).json({
+        jobId,
+        succes: true,
+        taskId: handle.id,
+        status: 'pending',
+        mesaj: 'Analiza AI a fost trimisa in fundal prin Trigger.dev.',
+      });
     } catch (err) {
       if (err instanceof PhotoJobError || err instanceof FlowCreditsError) {
         return sendPhotoAdmissionError(res, err.code);
@@ -389,7 +452,11 @@ function createAiRouter({
   // ==========================================
   const handleAnalizaFoto = async (req, res) => {
     let reservationId = null;
+    let logicalAnalysisId = null;
+    let requestFingerprint = null;
     let ownsFreshReservation = false;
+    let inferenceClaimed = false;
+    let persistedResult = null;
     let settled = false;
     let logicalInFlightKey = null;
     let userInFlightLocked = false;
@@ -397,6 +464,7 @@ function createAiRouter({
     const releaseReserved = async (reason) => {
       if (
         settled
+        || (inferenceClaimed && persistedResult?.success !== false)
         || !ownsFreshReservation
         || !reservationId
         || !flowCredits
@@ -405,14 +473,15 @@ function createAiRouter({
         return false;
       }
       try {
-        const releaseResult = await flowCredits.releasePhoto({
+        const releaseResult = await settlePhotoAndReconcile(flowCredits, {
           userId: req.user?.id,
           reservationId,
+          logicalAnalysisId,
+          requestFingerprint,
+          action: 'release',
           reason,
         });
-        if (releaseResult && releaseResult.ok === false) {
-          return false;
-        }
+        if (!releaseResult || releaseResult.ok !== true || releaseResult.status !== 'RELEASED') return false;
         settled = true;
         inregistreazaOperational('credit.release');
         return true;
@@ -463,9 +532,10 @@ function createAiRouter({
 
       const headerKey = (typeof req.get === 'function' && (req.get('Idempotency-Key') || req.get('X-Payload-Fingerprint'))) || '';
       const imageDigest = req.imageContentSha256 || crypto.createHash('sha256').update(fileBuffer).digest('hex');
-      const logicalAnalysisId = crypto
+      requestFingerprint = imageDigest;
+      logicalAnalysisId = crypto
         .createHash('sha256')
-        .update(`sync-photo:${req.user.id}:${headerKey}:${imageDigest}`)
+        .update(`sync-photo:${req.user.id}:${headerKey || imageDigest}`)
         .digest('hex');
 
       logicalInFlightKey = `${req.user.id}:${logicalAnalysisId}`;
@@ -481,15 +551,57 @@ function createAiRouter({
       const reservation = await flowCredits.reservePhoto({
         userId: req.user.id,
         logicalAnalysisId,
+        requestFingerprint,
         entitlement,
       });
-      const verificareRezervare = valideazaRezervareProaspataFoto(reservation, req.user.id);
+      const savedResult = reservation?.result;
+      if (savedResult && Array.isArray(savedResult.payload)) {
+        if (reservation.status === 'COMMITTED' || reservation.status === 'RELEASED') {
+          return res.json(savedResult.payload);
+        }
+        if (reservation.status === 'RESERVED') {
+          const action = savedResult.success === true ? 'commit' : 'release';
+          const settlement = await settlePhotoAndReconcile(flowCredits, {
+            userId: req.user.id, reservationId: reservation.reservationId,
+            logicalAnalysisId, requestFingerprint, action, reason: 'PHOTO_RESULT_RECONCILIATION',
+          });
+          if (settlement) return res.json(savedResult.payload);
+          return sendPhotoAdmissionError(res, 'CREDIT_SETTLEMENT_PENDING');
+        }
+      }
+      if (reservation?.status === 'RESERVED' && reservation.inferenceClaimed === true && !savedResult) {
+        return sendPhotoAdmissionError(res, 'PHOTO_OUTCOME_UNKNOWN');
+      }
+      const mayClaimUnstartedReplay = reservation?.ok === true
+        && reservation.status === 'RESERVED'
+        && reservation.inferenceClaimed === false;
+      const verificareRezervare = valideazaRezervareProaspataFoto(
+        mayClaimUnstartedReplay ? { ...reservation, replay: false } : reservation,
+        req.user.id,
+      );
       if (!verificareRezervare.ok) {
         return sendPhotoAdmissionError(res, verificareRezervare.code);
       }
       reservationId = verificareRezervare.reservationId;
       ownsFreshReservation = true;
       inregistreazaOperational('credit.reserve');
+
+      const claim = await flowCredits.claimPhotoInference({
+        userId: req.user.id, reservationId, requestFingerprint,
+      });
+      if (claim?.ok !== true) return sendPhotoAdmissionError(res, claim?.code || 'PHOTO_CLAIM_FAILED');
+      if (claim.acquired !== true) {
+        if (claim.result && Array.isArray(claim.result.payload)) {
+          const action = claim.result.success === true ? 'commit' : 'release';
+          const settlement = await settlePhotoAndReconcile(flowCredits, {
+            userId: req.user.id, reservationId, logicalAnalysisId, requestFingerprint,
+            action, reason: 'PHOTO_RESULT_RECONCILIATION',
+          });
+          if (settlement) return res.json(claim.result.payload);
+        }
+        return sendPhotoAdmissionError(res, 'PHOTO_OUTCOME_UNKNOWN');
+      }
+      inferenceClaimed = true;
 
       // Semnal comun de anulare: daca clientul se deconecteaza inca din coada,
       // intrarea se scoate din semafor si slotul ramane liber pentru ceilalti.
@@ -576,6 +688,10 @@ function createAiRouter({
         !item || typeof item !== 'object' || /nu.*(mancare|aliment)|non-food|nu s-a detectat|nu contine|not.*food|no.*food/i.test(String(item.nume || ''))
       );
       if (isNotFood) {
+        persistedResult = { success: false, isNotFood: true, payload: validated };
+        await flowCredits.recordPhotoResult({
+          userId: req.user.id, reservationId, requestFingerprint, result: persistedResult,
+        });
         const released = await releaseReserved('NOT_FOOD');
         if (!released) {
           return sendPhotoAdmissionError(res, 'CREDIT_SETTLEMENT_FAILED');
@@ -583,36 +699,28 @@ function createAiRouter({
         return res.json(validated);
       }
 
-      if (typeof flowCredits.commitPhoto !== 'function') {
-        await releaseReserved('COMMIT_UNSUPPORTED');
-        return sendPhotoAdmissionError(res, 'CREDIT_SETTLEMENT_FAILED');
-      }
-
-      let commitResult = null;
-      try {
-        commitResult = await flowCredits.commitPhoto({
-          userId: req.user.id,
-          reservationId,
-        });
-      } catch {
-        await releaseReserved('COMMIT_FAILED');
-        return sendPhotoAdmissionError(res, 'CREDIT_SETTLEMENT_FAILED');
-      }
-
-      if (commitResult?.ok === true && commitResult.status === 'COMMITTED' && commitResult.replay === true) {
-        settled = true;
-        return sendPhotoAdmissionError(res, 'PHOTO_RESERVATION_ALREADY_COMMITTED');
-      }
-      if (!commitResult || commitResult.ok !== true || commitResult.status !== 'COMMITTED') {
-        await releaseReserved('COMMIT_FAILED');
-        return sendPhotoAdmissionError(res, 'CREDIT_SETTLEMENT_FAILED');
-      }
+      persistedResult = { success: true, payload: validated };
+      await flowCredits.recordPhotoResult({
+        userId: req.user.id, reservationId, requestFingerprint, result: persistedResult,
+      });
+      const commitResult = await settlePhotoAndReconcile(flowCredits, {
+        userId: req.user.id, reservationId, logicalAnalysisId, requestFingerprint,
+        action: 'commit', reason: 'VALID_PHOTO_RESULT',
+      });
+      if (!commitResult) return sendPhotoAdmissionError(res, 'CREDIT_SETTLEMENT_PENDING');
 
       settled = true;
       inregistreazaOperational('credit.commit');
 
       return res.json(validated);
     } catch (error) {
+      if (persistedResult?.success === true && reservationId && logicalAnalysisId) {
+        const commitResult = await settlePhotoAndReconcile(flowCredits, {
+          userId: req.user?.id, reservationId, logicalAnalysisId, requestFingerprint,
+          action: 'commit', reason: 'VALID_PHOTO_RESULT_RECONCILIATION',
+        });
+        if (commitResult) return res.json(persistedResult.payload);
+      }
       await releaseReserved('ANALIZA_ESUATA');
       console.error('[AI route]', rezumatEroareSigur(error, { operation: 'photo_analysis' }));
       return res.status(500).json({ eroare: 'Eroare la analiza imaginii cu AI.' });

@@ -3,7 +3,7 @@
 const express = require('express');
 const request = require('supertest');
 const { creeazaServiciuChatQuota } = require('../utils/chatQuota');
-const { ContorLocalCuTtl } = require('../utils/contorPartajat');
+const { ContorLocalCuTtl, creeazaContorPartajat } = require('../utils/contorPartajat');
 
 describe('AI Chat Quota & Cost Protection (Phase 6)', () => {
   let app;
@@ -56,6 +56,26 @@ describe('AI Chat Quota & Cost Protection (Phase 6)', () => {
       }
       res.json({ raspuns: 'Salut! Cu ce te pot ajuta astăzi?' });
     });
+  });
+
+  it('fails closed when the shared quota counter is unavailable', async () => {
+    const counter = creeazaContorPartajat({ fallbackLocal: false });
+    const service = creeazaServiciuChatQuota({ contor: counter, billingService: mockBillingService });
+    const req = { user: { id: 'quota-store-unavailable-user' } };
+    const res = {
+      status: jest.fn(function status(code) { this.statusCode = code; return this; }),
+      json: jest.fn(function json(body) { this.body = body; return this; }),
+    };
+    const next = jest.fn();
+
+    await expect(service.obtineCota(req.user)).rejects.toMatchObject({
+      code: 'CHAT_QUOTA_STORE_UNAVAILABLE',
+    });
+    await service.middlewareCotaChat(req, res, next);
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body.cod).toBe('CHAT_QUOTA_STORE_UNAVAILABLE');
+    expect(next).not.toHaveBeenCalled();
   });
 
   describe('1. Free User Quota Enforcement', () => {
