@@ -39,6 +39,7 @@ let mockScreenHeight = 844;
 let mockFontScale = 1;
 let mockChatLocale = 'en';
 let mockResolveChatTranslations = false;
+let mockPremium = false;
 
 jest.mock('../lib/offlineQueue', () => ({
   pushOfflineMeal: jest.fn(async (p: unknown) => { mockEnqueue.push(p); return 1; }),
@@ -89,6 +90,9 @@ jest.mock('../lib/parseMealProposal', () => ({
 jest.mock('../context/AuthContext', () => ({
   useAuth: () => ({ session: { user: { id: mockActiveUserId }, access_token: 'tok' }, user: { id: mockActiveUserId } }),
 }));
+jest.mock('../context/PremiumContext', () => ({
+  usePremium: () => ({ isPremium: mockPremium, hasFullAccess: mockPremium }),
+}));
 jest.mock('../context/ThemeContext', () => ({
   useTheme: () => ({ colors: new Proxy({}, { get: () => '#fff' }), theme: 'dark' }),
 }));
@@ -117,13 +121,16 @@ jest.mock('../hooks/useResponsiveLayout', () => ({
 }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, values?: Record<string, string | number>) => {
       if (!mockResolveChatTranslations) return key;
       const resources: Record<string, Record<string, unknown>> = {
         ro: require('../i18n/locales/ro.json'), en: require('../i18n/locales/en.json'),
         fr: require('../i18n/locales/fr.json'), de: require('../i18n/locales/de.json'),
       };
-      return key.split('.').reduce((value: any, part) => value?.[part], resources[mockChatLocale]) ?? 'Text unavailable';
+      const result = key.split('.').reduce((value: any, part) => value?.[part], resources[mockChatLocale]);
+      return typeof result === 'string'
+        ? result.replace(/{{(\w+)}}/g, (_match: string, name: string) => String(values?.[name] ?? ''))
+        : 'Text unavailable';
     },
     i18n: { language: mockChatLocale },
   }),
@@ -246,10 +253,103 @@ beforeEach(() => {
   mockFontScale = 1;
   mockChatLocale = 'en';
   mockResolveChatTranslations = false;
+  mockPremium = false;
 });
 
 afterEach(() => cleanup());
 
+describe('Chat quota is server-authoritative', () => {
+  const quota = (total: number, ramase: number, tier = 'free') => ({
+    ok: true, status: 200,
+    json: async () => ({ total, ramase, consumate: total - ramase, tier, reseteazaLa: '2026-10-22T00:00:00.000Z' }),
+  });
+
+  test('an unavailable quota endpoint never invents a numeric allowance or blocks composing', async () => {
+    mockResolveChatTranslations = true;
+    global.fetch = jest.fn(async () => ({ ok: false, status: 404 })) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    expect(view.queryByText(/\b10\/10\b|\b10\s*mesaje\b/)).toBeNull();
+    expect(view.getByTestId('chat-input').props.editable).toBe(true);
+  });
+
+  test('a network failure clears stale quota instead of presenting it as current', async () => {
+    mockResolveChatTranslations = true;
+    let online = true;
+    global.fetch = jest.fn(async () => {
+      if (!online) throw new Error('network unavailable');
+      return quota(5, 2);
+    }) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(view.getByText(/2\/5/)).toBeTruthy());
+    online = false;
+    const { useFocusRefresh } = require('../hooks/useFocusRefresh');
+    const focusCallback = (useFocusRefresh as jest.Mock).mock.calls.at(-1)?.[0];
+    await act(async () => { focusCallback?.(); });
+    await waitFor(() => expect(view.getByText('AI allowance temporarily unavailable')).toBeTruthy());
+    expect(view.queryByText(/2\/5/)).toBeNull();
+  });
+
+  test('shows the authenticated Free allowance and refreshes from server after a message', async () => {
+    mockResolveChatTranslations = true;
+    mockAreoPropunere = false;
+    let remaining = 2;
+    global.fetch = jest.fn(async (url: string) => {
+      if (url.endsWith('/chat/quota')) return quota(5, remaining);
+      remaining = 1;
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ raspuns: 'OK' }) };
+    }) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(view.getByText(/2\/5/)).toBeTruthy());
+    expect((global.fetch as jest.Mock).mock.calls.every(([url]) => String(url).endsWith('/chat/quota'))).toBe(true);
+    await act(async () => { fireEvent.changeText(view.getByTestId('chat-input'), 'Ce părere ai despre mere?'); });
+    await act(async () => { fireEvent.press(view.getByTestId('send-button')); });
+    await waitFor(() => expect(view.getByText(/1\/5/)).toBeTruthy());
+  });
+
+  test('premium allowance comes from the server and a quota rejection reconciles to zero', async () => {
+    mockResolveChatTranslations = true;
+    let remaining = 149;
+    global.fetch = jest.fn(async (url: string) => {
+      if (url.endsWith('/chat/quota')) return quota(150, remaining, 'premium');
+      remaining = 0;
+      return { ok: false, status: 429, headers: { get: () => null }, json: async () => ({ cod: 'CHAT_QUOTA_EXCEEDED', total: 150, ramase: 0, tier: 'premium' }) };
+    }) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(view.getByText(/149\/150/)).toBeTruthy());
+    await act(async () => { fireEvent.changeText(view.getByTestId('chat-input'), 'Cum cresc proteinele?'); });
+    await act(async () => { fireEvent.press(view.getByTestId('send-button')); });
+    await waitFor(() => expect(view.getByText(/0\/150/)).toBeTruthy());
+    expect(view.getByTestId('chat-quota-exhausted-banner')).toBeTruthy();
+  });
+
+  test('entitlement changes invalidate the displayed allowance and fetch the new server tier', async () => {
+    mockResolveChatTranslations = true;
+    global.fetch = jest.fn(async () => mockPremium ? quota(150, 149, 'premium') : quota(5, 2)) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(view.getByText(/2\/5/)).toBeTruthy());
+    mockPremium = true;
+    await act(async () => { view.rerender(<ChatScreen />); });
+    await waitFor(() => expect(view.getByText(/149\/150/)).toBeTruthy());
+  });
+
+  test('a late response from account A cannot display its quota for account B', async () => {
+    mockResolveChatTranslations = true;
+    let resolveA: ((value: ReturnType<typeof quota>) => void) | undefined;
+    global.fetch = jest.fn(async (url: string) => {
+      if (!url.endsWith('/chat/quota')) throw new Error('unexpected');
+      if (mockActiveUserId === UTILIZATOR.id) return new Promise<ReturnType<typeof quota>>((resolve) => { resolveA = resolve; });
+      return quota(150, 148, 'premium');
+    }) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(resolveA).toBeDefined());
+    mockActiveUserId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    await act(async () => { view.rerender(<ChatScreen />); });
+    await waitFor(() => expect(view.getByText(/148\/150/)).toBeTruthy());
+    await act(async () => { resolveA?.(quota(5, 1)); });
+    expect(view.getByText(/148\/150/)).toBeTruthy();
+  });
+});
 describe('P1-02 — chat: confirmarea offline trebuie să fie adevărată', () => {
   test('an empty insert representation cannot confirm Journal persistence', async () => {
     mockInsertMode = 'empty';
@@ -545,10 +645,9 @@ describe('Coach suggestion → explicit Journal confirmation', () => {
     });
     expect(mockInserted).toHaveLength(1);
     mockActiveUserId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-    view.rerender(<ChatScreen />);
+    await act(async () => { view.rerender(<ChatScreen />); });
     await act(async () => { mockPendingInsertResolve?.({ data: [mockInserted[0]], error: null }); });
     expect(view.queryByText('CONFIRMARE_SUCCES')).toBeNull();
     expect(mockFreshness.mark).not.toHaveBeenCalled();
   });
-
 });

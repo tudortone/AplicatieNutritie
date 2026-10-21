@@ -180,6 +180,7 @@ describe('Flow Companion & Nutritional Limit Beacon Suite', () => {
       );
 
       expect(view.getByTestId('flow-companion-modal-sheet')).toBeTruthy();
+      expect(view.getByText('Sprout')).toBeTruthy();
       expect(view.getByText('Râs Electric')).toBeTruthy();
       expect(view.getByText('Etapa 3 din 5')).toBeTruthy();
       expect(view.getByText('Becul de Limită Nutrițională')).toBeTruthy();
@@ -211,7 +212,7 @@ describe('Flow Companion & Nutritional Limit Beacon Suite', () => {
       const view = await render(<FlowCompanionModal {...props} userId="user-A" />);
 
       await waitFor(() => {
-        expect(view.getByText('Sprout-A (Râs Electric)')).toBeTruthy();
+        expect(view.getByText('Sprout-A')).toBeTruthy();
       });
 
       await act(async () => {
@@ -255,6 +256,24 @@ describe('Flow Companion & Nutritional Limit Beacon Suite', () => {
       const confirmButton = alertCall?.[2]?.find((button) => button.text === 'Confirmă');
       await act(async () => confirmButton?.onPress?.());
       expect(await AsyncStorage.getItem('@getflow:companion_name_user-Y')).toBe('NumeFoarteLungCareDe');
+      alertSpy.mockRestore();
+    });
+
+    it('keeps the prior name when durable rename storage fails', async () => {
+      await AsyncStorage.setItem('@getflow:companion_name_user-Z', 'Sprout');
+      const alertSpy = jest.spyOn(Alert, 'alert');
+      const view = await render(<FlowCompanionModal visible onClose={jest.fn()} streak={0} caloriiConsumate={0} caloriiTinta={2000} userId="user-Z" />);
+      await waitFor(() => expect(view.getByText('Sprout')).toBeTruthy());
+      await act(async () => { fireEvent.press(view.getByTestId('flow-companion-edit-name-btn')); });
+      await act(async () => { fireEvent.changeText(view.getByTestId('flow-companion-name-input'), 'Nova'); });
+      await act(async () => { fireEvent.press(view.getByTestId('flow-companion-name-confirm')); });
+      const confirm = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]?.[2]?.find((button) => button.text === 'Confirmă');
+      const write = jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('disk unavailable'));
+      await act(async () => { await confirm?.onPress?.(); });
+      expect(view.getByText('Sprout')).toBeTruthy();
+      expect(await AsyncStorage.getItem('@getflow:companion_name_user-Z')).toBe('Sprout');
+      expect(alertSpy).toHaveBeenCalledWith(expect.any(String), expect.any(String));
+      write.mockRestore();
       alertSpy.mockRestore();
     });
   });

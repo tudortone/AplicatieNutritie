@@ -25,6 +25,9 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export type RunnerSphereState = 'idle' | 'processing' | 'completed' | 'failed';
 
+export const shouldAnimateRunner = (state: RunnerSphereState, reduceMotion: boolean): boolean =>
+  state === 'processing' && !reduceMotion;
+
 interface RunnerSphereProps {
   state?: RunnerSphereState;
   onPress: () => void;
@@ -167,10 +170,11 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
 
   const isProcessing = state === 'processing';
   const isCompleted = state === 'completed';
+  const runMotion = shouldAnimateRunner(state, reduceMotion);
 
   // 1. Authentic Stride Cycle driven 100% on Reanimated UI thread (0 to 6 over 600ms gait cycle)
   useEffect(() => {
-    if (!isProcessing || reduceMotion) {
+    if (!runMotion) {
       cancelAnimation(stridePhase);
       stridePhase.value = 0;
       return;
@@ -181,32 +185,23 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
       false
     );
     return () => cancelAnimation(stridePhase);
-  }, [isProcessing, reduceMotion, stridePhase]);
+  }, [runMotion, stridePhase]);
 
   // 2. Kinetic Orbital Spin
   useEffect(() => {
-    if (reduceMotion) {
-      spinRotation.value = 0;
+    if (!runMotion) {
       cancelAnimation(spinRotation);
+      spinRotation.value = 0;
       return;
     }
-
-    if (isProcessing) {
-      spinRotation.value = withRepeat(
-        withTiming(360, { duration: 1100, easing: Easing.linear }),
-        -1,
-        false
-      );
-    } else {
-      spinRotation.value = withRepeat(
-        withTiming(360, { duration: 5000, easing: Easing.linear }),
-        -1,
-        false
-      );
-    }
+    spinRotation.value = withRepeat(
+      withTiming(360, { duration: 1100, easing: Easing.linear }),
+      -1,
+      false
+    );
 
     return () => cancelAnimation(spinRotation);
-  }, [isProcessing, reduceMotion, spinRotation]);
+  }, [runMotion, spinRotation]);
 
   // 3. Complete pulse
   useEffect(() => {
@@ -216,6 +211,7 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
         withTiming(1, { duration: 320, easing: Easing.inOut(Easing.ease) })
       );
     } else {
+      cancelAnimation(pulseScale);
       pulseScale.value = 1;
     }
   }, [isCompleted, reduceMotion, pulseScale]);
@@ -229,7 +225,7 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
     transform: [{ scale: pulseScale.value }],
   }));
 
-  const pose = useDerivedValue(() => isProcessing && !reduceMotion
+  const pose = useDerivedValue(() => runMotion
     ? interpolateRunnerFrame(stridePhase.value) : IDLE_FRAME);
   const headProps = useAnimatedProps(() => ({ cx: pose.value.head.cx, cy: pose.value.head.cy }));
   const torsoProps = useAnimatedProps(() => ({ d: pose.value.torso }));

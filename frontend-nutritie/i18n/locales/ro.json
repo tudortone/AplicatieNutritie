@@ -424,6 +424,12 @@
     "inputA11y": "Scrie un mesaj către GetFlow",
     "inputPlaceholder": "Scrie un mesaj...",
     "sendA11y": "Trimite mesajul",
+    "quotaRemaining": "Mesaje AI: {{remaining}}/{{total}} rămase",
+    "quotaAdmin": "Mesaje AI: nelimitat",
+    "quotaLoading": "Se încarcă limita AI...",
+    "quotaUnavailable": "Limita AI indisponibilă momentan",
+    "quotaResetAt": "Se resetează la {{time}}",
+    "quotaExhausted": "Ai atins limita de mesaje AI. Verifică din nou după resetare.",
     "quickAnalyzeTitle": "Analiza zilei",
     "quickAnalyzeText": "Vezi unde ești cu kcal și proteine",
     "quickAnalyzeA11y": "Analiza zilei: vezi unde ești cu kcal și proteine",
@@ -1689,6 +1695,7 @@
     }
   },
   "flowCompanion": {
+    "defaultName": "Sprout",
     "pillA11y": "Companionul tău Flow și starea limitei calorice",
     "stage1Name": "Sparky (Ou)",
     "stage2Name": "Pui de Foc",
@@ -1704,18 +1711,23 @@
     "exceededDesc": "Ținta calorică a fost depășită. Concentrează-te pe hidratare și odihnă.",
     "modalTitle": "Companionul Tău Flow",
     "evolutionTitle": "Evoluție & Streak",
-    "nextEvolutionIn": "Mai ai {{days}} zile de streak până la următoarea formă!",
-    "maxEvolutionReached": "Ai atins forma supremă de Legendă!",
+    "nextEvolutionIn": "Mai ai {{days}} zile de streak până la etapa următoare.",
+    "maxEvolutionReached": "Ai atins etapa 5 din 5.",
     "beaconTitle": "Becul de Limită Nutrițională",
     "caloriesProgress": "{{consumed}} din {{target}} kcal consumate",
     "close": "Am înțeles",
     "aboutTitle": "Despre Sprout",
-    "aboutDesc": "Sprout este companionul tău inteligent de nutriție. Crește și evoluează alături de tine cu fiecare zi de streak înregistrată în jurnal.",
+    "aboutDesc": "Etapa Sprout urmează streak-ul validat: într-o zi ai nevoie de cel puțin 15 minute de mișcare, un antrenament și atingerea țintei de proteine. Etapele schimbă numele, nu aspectul actual al companionului.",
     "accessoriesTitle": "Personalizare & Accesorii",
     "comingSoon": "În curând",
     "giveName": "Dă-i un nume",
     "editName": "Modifică numele",
     "confirmNameTitle": "Confirmare Nume Companion",
-    "confirmNamePrompt": "Ești sigur că vrei să alegi numele «{{name}}»? Numele va fi asociat companionului tău."
+    "confirmNamePrompt": "Ești sigur că vrei să alegi numele «{{name}}»? Numele va fi asociat companionului tău.",
+    "namePlaceholder": "Numele companionului",
+    "invalidNameTitle": "Nume invalid",
+    "invalidName": "Introdu un nume de până la 20 de caractere.",
+    "nameSaveFailedTitle": "Numele nu a fost salvat",
+    "nameSaveFailed": "Încearcă din nou. Numele anterior a rămas neschimbat."
   }
 }

@@ -1,8 +1,16 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { RunnerSphere, RUN_FRAMES, IDLE_FRAME, interpolateRunnerFrame } from '../components/home/RunnerSphere';
+import { RunnerSphere, RUN_FRAMES, IDLE_FRAME, interpolateRunnerFrame, shouldAnimateRunner } from '../components/home/RunnerSphere';
 import { PixelCompanion } from '../components/home/PixelCompanion';
 import { RunnerSphereCompanionCluster } from '../components/home/RunnerSphereCompanionCluster';
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, values?: { stage?: number }) => key === 'flowCompanion.defaultName'
+      ? 'Sprout'
+      : key === 'flowCompanion.stageLabel' ? `Etapa ${values?.stage} din 5` : key,
+  }),
+}));
 
 // Mock expo-router
 const mockPush = jest.fn();
@@ -56,6 +64,13 @@ beforeEach(() => {
 });
 
 describe('RunnerSphere Component', () => {
+  it('only allows a motion loop for active processing without reduced motion', () => {
+    expect(shouldAnimateRunner('idle', false)).toBe(false);
+    expect(shouldAnimateRunner('completed', false)).toBe(false);
+    expect(shouldAnimateRunner('failed', false)).toBe(false);
+    expect(shouldAnimateRunner('processing', true)).toBe(false);
+    expect(shouldAnimateRunner('processing', false)).toBe(true);
+  });
   it('renders idle state with accessible label', async () => {
     const onPress = jest.fn();
     const view = await render(
@@ -122,14 +137,15 @@ describe('RunnerSphere Component', () => {
 });
 
 describe('PixelCompanion Component', () => {
-  it('renders pixel creature with calculated level from streak', async () => {
+  it('shows the canonical Sprout stage rather than an invented streak-based level', async () => {
     const onPress = jest.fn();
     const view = await render(
       <PixelCompanion streak={6} onPress={onPress} size={32} />
     );
 
     expect(view.getByTestId('pixel-companion-widget')).toBeTruthy();
-    expect(view.getByText('Lv 3')).toBeTruthy();
+    expect(view.getByText('2/5')).toBeTruthy();
+    expect(view.getByLabelText('Sprout, Etapa 2 din 5')).toBeTruthy();
 
     fireEvent.press(view.getByTestId('pixel-companion-widget'));
     expect(onPress).toHaveBeenCalledTimes(1);

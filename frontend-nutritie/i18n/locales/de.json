@@ -438,6 +438,12 @@
     "inputA11y": "Nachricht an GetFlow schreiben",
     "inputPlaceholder": "Nachricht schreiben...",
     "sendA11y": "Nachricht senden",
+    "quotaRemaining": "KI-Nachrichten: {{remaining}}/{{total}} übrig",
+    "quotaAdmin": "KI-Nachrichten: unbegrenzt",
+    "quotaLoading": "KI-Kontingent wird geladen...",
+    "quotaUnavailable": "KI-Kontingent derzeit nicht verfügbar",
+    "quotaResetAt": "Zurücksetzung am {{time}}",
+    "quotaExhausted": "Dein KI-Nachrichtenlimit ist erreicht. Versuche es nach der Zurücksetzung erneut.",
     "quickAnalyzeTitle": "Tagesanalyse",
     "quickAnalyzeText": "Überblick über Kalorien und Proteine",
     "quickAnalyzeA11y": "Tagesanalyse: Überblick über Kalorien und Proteine",
@@ -1689,6 +1695,7 @@
     }
   },
   "flowCompanion": {
+    "defaultName": "Sprout",
     "pillA11y": "Dein Flow-Begleiter und Kalorienlimit-Status",
     "stage1Name": "Spark-Ei",
     "stage2Name": "Feuerfuchs",
@@ -1704,18 +1711,23 @@
     "exceededDesc": "Tagesziel überschritten. Konzentriere dich auf Hydration und Erholung.",
     "modalTitle": "Dein Flow-Begleiter",
     "evolutionTitle": "Evolution & Streak",
-    "nextEvolutionIn": "Noch {{days}} Streak-Tage bis zur nächsten Evolution!",
-    "maxEvolutionReached": "Du hast die höchste Legenden-Stufe erreicht!",
+    "nextEvolutionIn": "Noch {{days}} Streak-Tage bis zur nächsten Stufe.",
+    "maxEvolutionReached": "Du hast Stufe 5 von 5 erreicht.",
     "beaconTitle": "Ernährungs-Limit-Leuchte",
     "caloriesProgress": "{{consumed}} von {{target}} kcal verbraucht",
     "close": "Verstanden",
     "aboutTitle": "Über Sprout",
-    "aboutDesc": "Sprout ist dein intelligenter Ernährungsbegleiter. Er wächst und entwickelt sich mit jedem im Tagebuch erfassten Streak-Tag.",
+    "aboutDesc": "Sprouts Stufe folgt deinem bestätigten Streak: Erreiche am selben Tag mindestens 15 Minuten Bewegung, ein Training und dein Proteinziel. Die Stufen ändern den Namen, nicht die aktuelle Darstellung des Begleiters.",
     "accessoriesTitle": "Anpassung & Zubehör",
     "comingSoon": "Demnächst",
     "giveName": "Einen Namen geben",
     "editName": "Namen bearbeiten",
     "confirmNameTitle": "Begleiternamen bestätigen",
-    "confirmNamePrompt": "Möchtest du wirklich den Namen «{{name}}» wählen? Der Name wird für deinen Begleiter gespeichert."
+    "confirmNamePrompt": "Möchtest du wirklich den Namen «{{name}}» wählen? Der Name wird für deinen Begleiter gespeichert.",
+    "namePlaceholder": "Name des Begleiters",
+    "invalidNameTitle": "Ungültiger Name",
+    "invalidName": "Gib einen Namen mit höchstens 20 Zeichen ein.",
+    "nameSaveFailedTitle": "Name nicht gespeichert",
+    "nameSaveFailed": "Bitte versuche es erneut. Der bisherige Name bleibt unverändert."
   }
 }

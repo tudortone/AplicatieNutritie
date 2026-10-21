@@ -27,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 import i18n from '../../i18n';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
+import { usePremium } from '../../context/PremiumContext';
 import { useAds } from '../../context/AdsContext';
 import BouncingDot from '../../components/BouncingDot';
 import { RecipeGeneratorModal } from '../../components/RecipeGeneratorModal';
@@ -264,6 +265,7 @@ export default function ChatScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { session } = useAuth();
+  const { isPremium, hasFullAccess } = usePremium();
   const router = useRouter();
   const { recordChatUserMessage, maybeShowInterstitial } = useAds();
   const [successModalData, setSuccessModalData] = useState<MealSuccessData | null>(null);
@@ -279,65 +281,58 @@ export default function ChatScreen() {
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<CoachMealDraft | null>(null);
   const [savingProposal, setSavingProposal] = useState(false);
-  const DEFAULT_CHAT_QUOTA_TOTAL = 10;
-  const getDailyChatUsageKey = (userId?: string) =>
-    `@getflow/chat_daily_${userId || 'anon'}_${localDayKey(new Date())}`;
-
   const [chatQuota, setChatQuota] = useState<{
+    userId: string;
     total: number;
-    consumate: number;
     ramase: number;
     tier: string;
-    reseteazaLa?: string;
-    oreRamase?: number;
-  }>({
-    total: DEFAULT_CHAT_QUOTA_TOTAL,
-    consumate: 0,
-    ramase: DEFAULT_CHAT_QUOTA_TOTAL,
-    tier: 'free',
-  });
-
-  useEffect(() => {
-    let activ = true;
-    const loadLocalQuota = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(getDailyChatUsageKey(session?.user?.id));
-        if (stored && activ) {
-          const used = Math.max(0, parseInt(stored, 10) || 0);
-          setChatQuota((prev) => ({
-            ...prev,
-            consumate: used,
-            ramase: Math.max(0, prev.total - used),
-          }));
-        }
-      } catch {}
-    };
-    void loadLocalQuota();
-    return () => { activ = false; };
-  }, [session?.user?.id]);
+    reseteazaLa: string | null;
+  } | null>(null);
+  const [quotaLoading, setQuotaLoading] = useState(true);
+  const quotaRequestRef = useRef(0);
+  const quotaUserRef = useRef(session?.user?.id);
+  quotaUserRef.current = session?.user?.id;
+  const currentQuota = chatQuota?.userId === session?.user?.id ? chatQuota : null;
 
   const fetchChatQuota = useCallback(async () => {
-    if (!session?.access_token) return;
+    const userId = session?.user?.id;
+    const token = session?.access_token;
+    const request = ++quotaRequestRef.current;
+    if (!userId || !token) {
+      setChatQuota(null);
+      setQuotaLoading(false);
+      return;
+    }
+    setQuotaLoading(true);
     try {
       const resp = await fetch(buildApiUrl('/chat/quota'), {
-        headers: { 'Authorization': `Bearer ${session.access_token}` },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (typeof data?.total === 'number' && typeof data?.ramase === 'number') {
-          setChatQuota(data);
-          const used = data.consumate ?? Math.max(0, data.total - data.ramase);
-          void AsyncStorage.setItem(getDailyChatUsageKey(session?.user?.id), String(used)).catch(() => {});
-        }
+      if (!resp.ok) throw new Error('quota unavailable');
+      const data: unknown = await resp.json();
+      const quota = data && typeof data === 'object' ? data as Record<string, unknown> : null;
+      if (!quota || !Number.isSafeInteger(quota.total) || !Number.isSafeInteger(quota.ramase)
+        || Number(quota.total) <= 0 || Number(quota.ramase) < 0
+        || Number(quota.ramase) > Number(quota.total) || typeof quota.tier !== 'string') {
+        throw new Error('invalid quota');
+      }
+      if (request === quotaRequestRef.current && quotaUserRef.current === userId) {
+        setChatQuota({
+          userId, total: Number(quota.total), ramase: Number(quota.ramase), tier: quota.tier,
+          reseteazaLa: typeof quota.reseteazaLa === 'string' && !Number.isNaN(Date.parse(quota.reseteazaLa))
+            ? quota.reseteazaLa : null,
+        });
       }
     } catch {
-      // fail safe: păstrăm cota locală zilnică
+      if (request === quotaRequestRef.current && quotaUserRef.current === userId) setChatQuota(null);
+    } finally {
+      if (request === quotaRequestRef.current && quotaUserRef.current === userId) setQuotaLoading(false);
     }
   }, [session?.access_token, session?.user?.id]);
 
   useEffect(() => {
     fetchChatQuota();
-  }, [fetchChatQuota]);
+  }, [fetchChatQuota, isPremium, hasFullAccess]);
 
   const [mesaje, setMesaje] = useState<ChatMessage[]>([
     buleMesaj('ai', t('chat.welcome'))
@@ -688,14 +683,6 @@ export default function ChatScreen() {
       }
 
       if (!raspuns.ok) {
-        if (date?.cod === 'CHAT_QUOTA_EXCEEDED') {
-          setChatQuota((prev) => ({
-            ...prev,
-            ramase: 0,
-            consumate: prev.total,
-          }));
-          void AsyncStorage.setItem(getDailyChatUsageKey(session?.user?.id), '10').catch(() => {});
-        }
         // Statusurile non-2xx se mapau pe mesaje clare; altfel un 401/429/500
         // apărea ca un răspuns AI normal ("Eroare la procesarea răspunsului.").
         const mesajServer = date?.raspuns || date?.eroare || date?.message;
@@ -709,34 +696,6 @@ export default function ChatScreen() {
         }
         adaugaMesaj(buleMesaj('ai', textEroare, true));
         return;
-      }
-
-      // Sincronizăm cota rămasă din antetele autoritative de răspuns
-      const remainingHeader = raspuns.headers?.get?.('x-ai-chat-quota-remaining') || raspuns.headers?.get?.('X-AI-Chat-Quota-Remaining') || null;
-      const totalHeader = raspuns.headers?.get?.('x-ai-chat-quota-total') || raspuns.headers?.get?.('X-AI-Chat-Quota-Total') || null;
-      const tierHeader = raspuns.headers?.get?.('x-ai-chat-quota-tier') || raspuns.headers?.get?.('X-AI-Chat-Quota-Tier') || null;
-      if (remainingHeader !== null && totalHeader !== null) {
-        const total = Number(totalHeader) || 10;
-        const ramase = Number(remainingHeader);
-        const consumate = Math.max(0, total - ramase);
-        setChatQuota({
-          total,
-          consumate,
-          ramase,
-          tier: tierHeader || 'free',
-        });
-        void AsyncStorage.setItem(getDailyChatUsageKey(session.user?.id), String(consumate)).catch(() => {});
-      } else {
-        setChatQuota((prev) => {
-          const newConsumate = prev.consumate + 1;
-          const newRamase = Math.max(0, prev.total - newConsumate);
-          void AsyncStorage.setItem(getDailyChatUsageKey(session.user?.id), String(newConsumate)).catch(() => {});
-          return {
-            ...prev,
-            consumate: newConsumate,
-            ramase: newRamase,
-          };
-        });
       }
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -773,6 +732,7 @@ export default function ChatScreen() {
       if (currentUserRef.current === session.user.id) adaugaMesaj(buleMesaj('ai', t('chat.errorConnection'), true));
     } finally {
       clearTimeout(timeoutId);
+      if (currentUserRef.current === session.user.id) void fetchChatQuota();
       if (activeRequestRef.current === controller) {
         activeRequestRef.current = null;
         loadingRef.current = false;
@@ -1037,17 +997,20 @@ export default function ChatScreen() {
               <View style={[styles.miniIndicator, { backgroundColor: colors.accentSecondary }]} />
               <Text style={[styles.contextChipText, { color: colors.textPrimary }]}>{totalProteine} / {proteineTinta} g proteine</Text>
             </View>
-            {chatQuota && typeof chatQuota.total === 'number' && typeof chatQuota.ramase === 'number' ? (
-              <View testID="chat-quota-chip" style={[styles.contextChip, { backgroundColor: colors.surfaceElevated, borderColor: chatQuota.ramase === 0 ? '#EF4444' : colors.cardBorder }]}>
-                <View style={[styles.miniIndicator, { backgroundColor: chatQuota.ramase === 0 ? '#EF4444' : colors.accent }]} />
-                <Text style={[styles.contextChipText, { color: chatQuota.ramase === 0 ? '#EF4444' : colors.textPrimary }]}>
-                  {chatQuota.tier === 'admin'
-                    ? 'Nelimitat'
-                    : `${chatQuota.ramase}/${chatQuota.total} mesaje`}
-                </Text>
-              </View>
-            ) : null}
+            <View testID="chat-quota-chip" style={[styles.contextChip, { backgroundColor: colors.surfaceElevated, borderColor: currentQuota?.ramase === 0 ? '#EF4444' : colors.cardBorder }]}>
+              <View style={[styles.miniIndicator, { backgroundColor: currentQuota?.ramase === 0 ? '#EF4444' : colors.accent }]} />
+              <Text style={[styles.contextChipText, { color: currentQuota?.ramase === 0 ? '#EF4444' : colors.textPrimary }]}>
+                {currentQuota?.tier === 'admin' ? t('chat.quotaAdmin')
+                  : currentQuota ? t('chat.quotaRemaining', { remaining: currentQuota.ramase, total: currentQuota.total })
+                    : t(quotaLoading ? 'chat.quotaLoading' : 'chat.quotaUnavailable')}
+              </Text>
+            </View>
           </View>
+          {currentQuota?.reseteazaLa && currentQuota.tier !== 'admin' ? (
+            <Text style={[styles.contextChipText, { color: colors.textSecondary }]}>
+              {t('chat.quotaResetAt', { time: new Date(currentQuota.reseteazaLa).toLocaleString() })}
+            </Text>
+          ) : null}
         </Animated.View>
 
         {showNewChatBanner && (
@@ -1166,10 +1129,10 @@ export default function ChatScreen() {
           </Animated.View>
         ) : null}
 
-        {chatQuota && chatQuota.ramase === 0 ? (
+        {currentQuota?.ramase === 0 ? (
           <View testID="chat-quota-exhausted-banner" style={[styles.quotaExhaustedBanner, { backgroundColor: '#EF444415', borderColor: '#EF444455' }]}>
             <Text style={[styles.quotaExhaustedText, { color: colors.textPrimary }]}>
-              {t('chat.quotaExhausted', 'Ai atins limita gratuită de mesaje pentru astăzi. Limita se resetează la miezul nopții.')}
+              {t('chat.quotaExhausted')}
             </Text>
           </View>
         ) : null}
@@ -1186,15 +1149,15 @@ export default function ChatScreen() {
                 testID="chat-input"
                 accessibilityLabel={t('chat.inputA11y')}
                 style={[styles.input, { color: colors.textPrimary }]}
-                placeholder={chatQuota && chatQuota.ramase === 0 ? 'Limita zilnică de mesaje a fost atinsă' : t('chat.inputPlaceholder')}
+                placeholder={currentQuota?.ramase === 0 ? t('chat.quotaExhausted') : t('chat.inputPlaceholder')}
                 placeholderTextColor={colors.textSecondary}
                 value={chatInput}
                 onChangeText={setChatInput}
-                editable={!chatQuota || typeof chatQuota.ramase !== 'number' || chatQuota.ramase > 0}
+                editable={currentQuota?.ramase !== 0}
                 multiline
                 maxLength={1000}
                 returnKeyType="send"
-                onSubmitEditing={() => { if (!loadingChat && chatInput.trim() && (!chatQuota || typeof chatQuota.ramase !== 'number' || chatQuota.ramase > 0)) trimiteMesaj(); }}
+                onSubmitEditing={() => { if (!loadingChat && chatInput.trim() && currentQuota?.ramase !== 0) trimiteMesaj(); }}
                 blurOnSubmit={false}
               />
               <TouchableOpacity
@@ -1202,9 +1165,9 @@ export default function ChatScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={t('chat.sendA11y')}
                 hitSlop={4}
-                style={[styles.sendBtn, (!chatInput.trim() || (chatQuota && chatQuota.ramase === 0)) && { opacity: 0.4 }]}
+                style={[styles.sendBtn, (!chatInput.trim() || currentQuota?.ramase === 0) && { opacity: 0.4 }]}
                 onPress={trimiteMesaj}
-                disabled={loadingChat || !chatInput.trim() || (chatQuota ? chatQuota.ramase === 0 : false)}
+                disabled={loadingChat || !chatInput.trim() || currentQuota?.ramase === 0}
               >
                 <LinearGradient colors={colors.accentGradient} style={styles.sendGrad}>
                   <Send size={18} color={colors.background} strokeWidth={2.5} />

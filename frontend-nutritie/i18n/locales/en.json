@@ -438,6 +438,12 @@
     "inputA11y": "Type a message to GetFlow",
     "inputPlaceholder": "Type a message...",
     "sendA11y": "Send message",
+    "quotaRemaining": "AI messages: {{remaining}}/{{total}} left",
+    "quotaAdmin": "AI messages: unlimited",
+    "quotaLoading": "Loading AI allowance...",
+    "quotaUnavailable": "AI allowance temporarily unavailable",
+    "quotaResetAt": "Resets at {{time}}",
+    "quotaExhausted": "You've reached your AI message limit. Check again after it resets.",
     "quickAnalyzeTitle": "Day analysis",
     "quickAnalyzeText": "See where you stand with kcal and protein",
     "quickAnalyzeA11y": "Day analysis: see where you stand with kcal and protein",
@@ -1689,6 +1695,7 @@
     }
   },
   "flowCompanion": {
+    "defaultName": "Sprout",
     "pillA11y": "Your Flow Companion and calorie limit status",
     "stage1Name": "Spark Egg",
     "stage2Name": "Ember Fox",
@@ -1704,18 +1711,23 @@
     "exceededDesc": "Daily calorie target exceeded. Focus on hydration and recovery.",
     "modalTitle": "Your Flow Companion",
     "evolutionTitle": "Evolution & Streak",
-    "nextEvolutionIn": "{{days}} more streak days to unlock next evolution!",
-    "maxEvolutionReached": "You reached the supreme Legend form!",
+    "nextEvolutionIn": "{{days}} more streak days until the next stage.",
+    "maxEvolutionReached": "You reached stage 5 of 5.",
     "beaconTitle": "Nutrition Limit Beacon",
     "caloriesProgress": "{{consumed}} of {{target}} kcal consumed",
     "close": "Got it",
     "aboutTitle": "About Sprout",
-    "aboutDesc": "Sprout is your intelligent nutrition companion. It grows and evolves with you with every streak day logged in your journal.",
+    "aboutDesc": "Sprout's stage follows your verified streak: on the same day, complete at least 15 minutes of movement, one workout, and your protein target. Stages change the name, not the current companion artwork.",
     "accessoriesTitle": "Customization & Accessories",
     "comingSoon": "Coming Soon",
     "giveName": "Name your companion",
     "editName": "Edit name",
     "confirmNameTitle": "Confirm Companion Name",
-    "confirmNamePrompt": "Are you sure you want to name your companion \"{{name}}\"? The name will be saved for your companion."
+    "confirmNamePrompt": "Are you sure you want to name your companion \"{{name}}\"? The name will be saved for your companion.",
+    "namePlaceholder": "Companion name",
+    "invalidNameTitle": "Invalid name",
+    "invalidName": "Enter a name of up to 20 characters.",
+    "nameSaveFailedTitle": "Name not saved",
+    "nameSaveFailed": "Please try again. The previous name is unchanged."
   }
 }

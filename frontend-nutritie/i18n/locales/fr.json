@@ -438,6 +438,12 @@
     "inputA11y": "Écrire un message à GetFlow",
     "inputPlaceholder": "Écrivez un message...",
     "sendA11y": "Envoyer le message",
+    "quotaRemaining": "Messages IA : {{remaining}}/{{total}} restants",
+    "quotaAdmin": "Messages IA : illimités",
+    "quotaLoading": "Chargement du quota IA...",
+    "quotaUnavailable": "Quota IA momentanément indisponible",
+    "quotaResetAt": "Réinitialisation le {{time}}",
+    "quotaExhausted": "Vous avez atteint votre limite de messages IA. Réessayez après la réinitialisation.",
     "quickAnalyzeTitle": "Analyse du jour",
     "quickAnalyzeText": "Faites le point sur vos calories et protéines",
     "quickAnalyzeA11y": "Analyse du jour : faites le point sur vos calories et protéines",
@@ -1689,6 +1695,7 @@
     }
   },
   "flowCompanion": {
+    "defaultName": "Sprout",
     "pillA11y": "Votre Compagnon Flow et statut de limite calorique",
     "stage1Name": "Œuf Spark",
     "stage2Name": "Renard de Feu",
@@ -1704,18 +1711,23 @@
     "exceededDesc": "Objectif calorique dépassé. Concentrez-vous sur l'hydratation et le repos.",
     "modalTitle": "Votre Compagnon Flow",
     "evolutionTitle": "Évolution & Série",
-    "nextEvolutionIn": "Plus que {{days}} jours de série pour la prochaine évolution !",
-    "maxEvolutionReached": "Vous avez atteint la forme suprême Légende !",
+    "nextEvolutionIn": "Encore {{days}} jours de série avant la prochaine étape.",
+    "maxEvolutionReached": "Vous avez atteint l'étape 5 sur 5.",
     "beaconTitle": "Balise de Limite Nutritionnelle",
     "caloriesProgress": "{{consumed}} sur {{target}} kcal consommées",
     "close": "Compris",
     "aboutTitle": "À propos de Sprout",
-    "aboutDesc": "Sprout est votre compagnon nutritionnel intelligent. Il grandit et évolue avec vous à chaque jour de série enregistré dans votre journal.",
+    "aboutDesc": "L'étape de Sprout suit votre série validée : le même jour, faites au moins 15 minutes d'activité, un entraînement et atteignez votre objectif de protéines. Les étapes changent le nom, pas l'apparence actuelle du compagnon.",
     "accessoriesTitle": "Personnalisation & Accessoires",
     "comingSoon": "Bientôt",
     "giveName": "Donner un nom",
     "editName": "Modifier le nom",
     "confirmNameTitle": "Confirmer le nom du compagnon",
-    "confirmNamePrompt": "Voulez-vous vraiment choisir le nom «{{name}}» ? Ce nom sera associé à votre compagnon."
+    "confirmNamePrompt": "Voulez-vous vraiment choisir le nom «{{name}}» ? Ce nom sera associé à votre compagnon.",
+    "namePlaceholder": "Nom du compagnon",
+    "invalidNameTitle": "Nom invalide",
+    "invalidName": "Saisissez un nom de 20 caractères maximum.",
+    "nameSaveFailedTitle": "Nom non enregistré",
+    "nameSaveFailed": "Réessayez. Le nom précédent est inchangé."
   }
 }

@@ -11,14 +11,15 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Rect, G } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { getCompanionStage } from '../../lib/flowCompanion';
 
 const SafeSvg: any = Svg || (({ children }: any) => children || null);
 const SafeRect: any = Rect || (() => null);
 const SafeG: any = G || (({ children }: any) => children || null);
 
 interface PixelCompanionProps {
-  level?: number;
   streak?: number;
   onPress?: () => void;
   size?: number;
@@ -143,11 +144,11 @@ function PixelSproutSvg({ size = 28 }: { size?: number }) {
 }
 
 export function PixelCompanion({
-  level,
   streak = 0,
   onPress,
   size = 32,
 }: PixelCompanionProps) {
+  const { t } = useTranslation();
   const reduceMotion = useReducedMotion();
   const translateY = useSharedValue(0);
   const hopScale = useSharedValue(1);
@@ -191,17 +192,14 @@ export function PixelCompanion({
     onPress?.();
   };
 
-  const calculatedLevel = Math.max(
-    1,
-    Math.min(99, level !== undefined ? level : streak > 0 ? Math.floor(streak / 3) + 1 : 1)
-  );
+  const stage = getCompanionStage(streak).stage;
 
   return (
     <Pressable
       testID="pixel-companion-widget"
       onPress={handlePress}
       accessibilityRole="button"
-      accessibilityLabel={`Companion GetFlow nivelul ${calculatedLevel}.`}
+      accessibilityLabel={`${t('flowCompanion.defaultName')}, ${t('flowCompanion.stageLabel', { stage })}`}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       style={styles.container}
     >
@@ -209,10 +207,10 @@ export function PixelCompanion({
         <PixelSproutSvg size={size - 4} />
       </Animated.View>
 
-      {/* Compact Level Pill */}
+      {/* Existing streak stage, not a separate companion XP level. */}
       <View style={styles.levelBadge}>
         <Text style={styles.levelText} maxFontSizeMultiplier={1.2}>
-          Lv {calculatedLevel}
+          {stage}/5
         </Text>
       </View>
     </Pressable>

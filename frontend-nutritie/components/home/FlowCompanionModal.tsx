@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Alert,
   Image,
@@ -66,8 +66,11 @@ export function FlowCompanionModal({
   const [storedCompanionNameKey, setStoredCompanionNameKey] = useState<string | null>(null);
   const [namingKey, setNamingKey] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
+  const savingNameRef = useRef(false);
 
   const companionKey = userId ? `@getflow:companion_name_${userId}` : '@getflow:companion_name_guest';
+  const activeKeyRef = useRef(companionKey);
+  activeKeyRef.current = companionKey;
   const companionName = storedCompanionNameKey === companionKey ? storedCompanionName : null;
   const isNamingActive = namingKey === companionKey;
 
@@ -95,8 +98,7 @@ export function FlowCompanionModal({
   const handleConfirmName = () => {
     const sanitized = draftName.trim().slice(0, 20);
     if (!sanitized) {
-      setNamingKey(null);
-      setDraftName('');
+      Alert.alert(t('flowCompanion.invalidNameTitle'), t('flowCompanion.invalidName'));
       return;
     }
     Alert.alert(
@@ -107,12 +109,24 @@ export function FlowCompanionModal({
         {
           text: t('common.confirm', 'Confirmă'),
           onPress: async () => {
-            setStoredCompanionName(sanitized);
-            setStoredCompanionNameKey(companionKey);
-            setNamingKey(null);
-            setDraftName('');
-            await AsyncStorage.setItem(companionKey, sanitized).catch(() => {});
-            try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+            if (savingNameRef.current) return;
+            savingNameRef.current = true;
+            try {
+              await AsyncStorage.setItem(companionKey, sanitized);
+              if (activeKeyRef.current === companionKey) {
+                setStoredCompanionName(sanitized);
+                setStoredCompanionNameKey(companionKey);
+                setNamingKey(null);
+                setDraftName('');
+                try { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch {}
+              }
+            } catch {
+              if (activeKeyRef.current === companionKey) {
+                Alert.alert(t('flowCompanion.nameSaveFailedTitle'), t('flowCompanion.nameSaveFailed'));
+              }
+            } finally {
+              savingNameRef.current = false;
+            }
           },
         },
       ]
@@ -204,7 +218,7 @@ export function FlowCompanionModal({
 
               <View style={styles.heroNameRow}>
                 <Text style={[styles.heroName, { color: colors.textPrimary }]}>
-                  {companionName ? `${companionName} (${stageName})` : stageName}
+                  {companionName || t('flowCompanion.defaultName', 'Sprout')}
                 </Text>
                 {companionName && !isNamingActive ? (
                   <TouchableOpacity
@@ -246,7 +260,7 @@ export function FlowCompanionModal({
                     testID="flow-companion-name-input"
                     value={draftName}
                     onChangeText={setDraftName}
-                    placeholder="Ex: Sprout, Kiko, Rex"
+                    placeholder={t('flowCompanion.namePlaceholder')}
                     placeholderTextColor={colors.textSecondary}
                     style={[styles.namingInput, { color: colors.textPrimary }]}
                     maxLength={20}
@@ -280,6 +294,7 @@ export function FlowCompanionModal({
 
               <View style={[styles.stageBadge, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '44' }]}>
                 {renderStageBadgeIcon(stage.id)}
+                <Text style={[styles.stageBadgeText, { color: colors.accent }]}>{stageName}</Text>
                 <Text style={[styles.stageBadgeText, { color: colors.accent }]}>
                   {t('flowCompanion.stageLabel', { stage: stage.stage })}
                 </Text>
@@ -489,9 +504,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     right: 18,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
     backgroundColor: 'rgba(255,255,255,0.06)',
     alignItems: 'center',
@@ -539,6 +554,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: -0.3,
+    flexShrink: 1,
   },
   nameEditBtn: {
     flexDirection: 'row',
@@ -548,6 +564,9 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 10,
     borderWidth: 1,
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
   },
   nameEditBtnText: {
     fontSize: 11,
@@ -562,7 +581,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     marginBottom: 10,
-    width: 220,
+    width: 264,
   },
   namingInput: {
     flex: 1,
@@ -571,17 +590,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   namingCancelBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
   },
   namingConfirmBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
