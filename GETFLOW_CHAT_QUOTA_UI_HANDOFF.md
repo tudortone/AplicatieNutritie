@@ -30,6 +30,6 @@
 
 ## Design and release notes
 
-- Consulted: `test-driven-development`, `tdd-workflow`, `react-native-patterns`, `react-testing`, `verification-before-completion`, `systematic-debugging`, `code-review`, Apple Design, and SwiftUI Design Skill (principles translated to React Native/Android).
+- Consulted: `ponytail`, `test-driven-development`, `tdd-workflow`, `react-native-patterns`, `react-testing`, `verification-before-completion`, `systematic-debugging`, `code-review`, Apple Design, and SwiftUI Design Skill (principles translated to React Native/Android).
 - Expo/React Native conventions retained; no SwiftUI code or new dependency introduced. Device visual QA remains outstanding.
 - Release/integration blocker: full frontend suite is not green and native QA is pending. Re-run CI under Node 22 with generated Android project files, then verify on an Android device before release.
