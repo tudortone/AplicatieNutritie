@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, act, fireEvent, waitFor, cleanup } from '@testing-library/react-native';
+import { render, act, fireEvent, waitFor, cleanup, within } from '@testing-library/react-native';
 import { Keyboard, Platform, StyleSheet } from 'react-native';
 
 import ChatScreen from '../app/(tabs)/chat';
@@ -264,13 +264,54 @@ describe('Chat quota is server-authoritative', () => {
     json: async () => ({ total, ramase, consumate: total - ramase, tier, reseteazaLa: '2026-10-22T00:00:00.000Z' }),
   });
 
+  test('opens accessible server-derived quota details from the Chat header', async () => {
+    mockResolveChatTranslations = true;
+    global.fetch = jest.fn(async () => quota(5, 2)) as never;
+    const view = await render(<ChatScreen />);
+    const indicatorLabel = 'Chat AI allowance: 2 of 5 messages remaining';
+
+    await waitFor(() => expect(view.getByLabelText(indicatorLabel)).toBeTruthy());
+    expect(within(view.getByTestId('coach-compact-header')).getByLabelText(indicatorLabel)).toBeTruthy();
+    await act(async () => { fireEvent.press(view.getByLabelText(indicatorLabel)); });
+
+    expect(view.getByTestId('chat-quota-details')).toBeTruthy();
+    expect(view.getByText('Available messages: 2')).toBeTruthy();
+    expect(view.getByText('Messages used: 3')).toBeTruthy();
+    expect(view.getByText('Total messages: 5')).toBeTruthy();
+    expect(view.getByText(/Resets at /)).toBeTruthy();
+    expect(view.getByText('Only a few Chat AI messages remain.')).toBeTruthy();
+    expect(view.getByTestId('chat-quota-progress').props.accessibilityValue).toEqual({ min: 0, max: 5, now: 2 });
+    expect(view.getByText(/Sending pauses when the allowance is used/)).toBeTruthy();
+  });
+
+  test('keeps the conversation writable when the authoritative quota is exhausted', async () => {
+    mockResolveChatTranslations = true;
+    global.fetch = jest.fn(async (url: string) => url.endsWith('/chat/quota')
+      ? quota(5, 0)
+      : { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ raspuns: 'Unexpected' }) }) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(view.getByTestId('chat-quota-exhausted-banner')).toBeTruthy());
+
+    const input = view.getByTestId('chat-input');
+    expect(input.props.editable).not.toBe(false);
+    await act(async () => { fireEvent.changeText(input, 'A message I can keep drafting'); });
+    expect(view.getByTestId('chat-input').props.value).toBe('A message I can keep drafting');
+    await act(async () => { fireEvent.press(view.getByTestId('send-button')); });
+    expect((global.fetch as jest.Mock).mock.calls.some(([url]) => !String(url).endsWith('/chat/quota'))).toBe(false);
+  });
+
   test('an unavailable quota endpoint never invents a numeric allowance or blocks composing', async () => {
     mockResolveChatTranslations = true;
     global.fetch = jest.fn(async () => ({ ok: false, status: 404 })) as never;
     const view = await render(<ChatScreen />);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
     expect(view.queryByText(/\b10\/10\b|\b10\s*mesaje\b/)).toBeNull();
-    expect(view.getByTestId('chat-input').props.editable).toBe(true);
+    expect(view.getByTestId('chat-input').props.editable).not.toBe(false);
+    await act(async () => { fireEvent.changeText(view.getByTestId('chat-input'), 'Draft while quota is unavailable'); });
+    expect(view.getByTestId('chat-input').props.value).toBe('Draft while quota is unavailable');
+    await act(async () => { fireEvent.press(view.getByTestId('chat-quota-indicator')); });
+    expect(view.getByText('The Chat AI allowance service is temporarily unavailable.')).toBeTruthy();
+    expect(view.queryByText(/0 of \d+ messages/)).toBeNull();
   });
 
   test('a network failure clears stale quota instead of presenting it as current', async () => {
@@ -286,8 +327,10 @@ describe('Chat quota is server-authoritative', () => {
     const { useFocusRefresh } = require('../hooks/useFocusRefresh');
     const focusCallback = (useFocusRefresh as jest.Mock).mock.calls.at(-1)?.[0];
     await act(async () => { focusCallback?.(); });
-    await waitFor(() => expect(view.getByText('AI allowance temporarily unavailable')).toBeTruthy());
+    await waitFor(() => expect(view.getByLabelText('Chat AI allowance unavailable')).toBeTruthy());
     expect(view.queryByText(/2\/5/)).toBeNull();
+    await act(async () => { fireEvent.press(view.getByTestId('chat-quota-indicator')); });
+    expect(view.getByText('The Chat AI allowance is unavailable. Check your connection and try again.')).toBeTruthy();
   });
 
   test('shows the authenticated Free allowance and refreshes from server after a message', async () => {
@@ -317,10 +360,25 @@ describe('Chat quota is server-authoritative', () => {
     }) as never;
     const view = await render(<ChatScreen />);
     await waitFor(() => expect(view.getByText(/149\/150/)).toBeTruthy());
+    await act(async () => { fireEvent.press(view.getByTestId('chat-quota-indicator')); });
+    expect(view.getByText('Plan: Premium')).toBeTruthy();
+    expect(view.getByText('Available messages: 149')).toBeTruthy();
     await act(async () => { fireEvent.changeText(view.getByTestId('chat-input'), 'Cum cresc proteinele?'); });
     await act(async () => { fireEvent.press(view.getByTestId('send-button')); });
     await waitFor(() => expect(view.getByText(/0\/150/)).toBeTruthy());
     expect(view.getByTestId('chat-quota-exhausted-banner')).toBeTruthy();
+  });
+
+  test('admin quota is shown as the server count rather than an unlimited claim', async () => {
+    mockResolveChatTranslations = true;
+    global.fetch = jest.fn(async () => quota(999999, 999999, 'admin')) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(view.getByText(/999999\/999999/)).toBeTruthy());
+    await act(async () => { fireEvent.press(view.getByTestId('chat-quota-indicator')); });
+
+    expect(view.getByText('Plan: Admin')).toBeTruthy();
+    expect(view.getByText('Available messages: 999999')).toBeTruthy();
+    expect(view.queryByText(/unlimited/i)).toBeNull();
   });
 
   test('entitlement changes invalidate the displayed allowance and fetch the new server tier', async () => {
@@ -330,6 +388,25 @@ describe('Chat quota is server-authoritative', () => {
     await waitFor(() => expect(view.getByText(/2\/5/)).toBeTruthy());
     mockPremium = true;
     await act(async () => { view.rerender(<ChatScreen />); });
+    await waitFor(() => expect(view.getByText(/149\/150/)).toBeTruthy());
+  });
+
+  test('does not show the previous entitlement while its replacement quota is loading', async () => {
+    mockResolveChatTranslations = true;
+    let resolvePremiumQuota: ((value: ReturnType<typeof quota>) => void) | undefined;
+    global.fetch = jest.fn(async () => mockPremium
+      ? new Promise<ReturnType<typeof quota>>((resolve) => { resolvePremiumQuota = resolve; })
+      : quota(5, 2)) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(view.getByText(/2\/5/)).toBeTruthy());
+
+    mockPremium = true;
+    await act(async () => { view.rerender(<ChatScreen />); });
+    await waitFor(() => expect(resolvePremiumQuota).toBeDefined());
+    expect(view.queryByText(/2\/5/)).toBeNull();
+    expect(view.getByLabelText('Loading Chat AI allowance')).toBeTruthy();
+
+    await act(async () => { resolvePremiumQuota?.(quota(150, 149, 'premium')); });
     await waitFor(() => expect(view.getByText(/149\/150/)).toBeTruthy());
   });
 

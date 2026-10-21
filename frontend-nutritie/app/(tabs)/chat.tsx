@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity, Image,
+  View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ActivityIndicator,
   ScrollView, Keyboard, Alert, Modal, Platform
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -58,6 +58,7 @@ const newMsgId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 // CHAT-006: 160s — peste bugetul de procesare al serverului (~125-155s), ca un
 // raspuns AI lent legitim sa nu fie taiat de client inainte de timp.
 const AI_REQUEST_TIMEOUT_MS = 160000;
+const CHAT_QUOTA_LOW_REMAINING = 2;
 
 interface ChatMessage {
   // FIX UI: fara id stabil, key={index} facea Reanimated sa reutilizeze bula
@@ -283,16 +284,32 @@ export default function ChatScreen() {
   const [savingProposal, setSavingProposal] = useState(false);
   const [chatQuota, setChatQuota] = useState<{
     userId: string;
+    isPremium: boolean;
+    hasFullAccess: boolean;
     total: number;
     ramase: number;
     tier: string;
     reseteazaLa: string | null;
   } | null>(null);
   const [quotaLoading, setQuotaLoading] = useState(true);
+  const [quotaUnavailableReason, setQuotaUnavailableReason] = useState<'network' | 'endpoint' | null>(null);
+  const [quotaDetailsVisible, setQuotaDetailsVisible] = useState(false);
   const quotaRequestRef = useRef(0);
   const quotaUserRef = useRef(session?.user?.id);
   quotaUserRef.current = session?.user?.id;
-  const currentQuota = chatQuota?.userId === session?.user?.id ? chatQuota : null;
+  const quotaContextChanged = Boolean(session?.user?.id) && chatQuota !== null && (
+    chatQuota.userId !== session?.user?.id
+    || chatQuota.isPremium !== isPremium
+    || chatQuota.hasFullAccess !== hasFullAccess
+  );
+  const quotaIsLoading = quotaLoading || quotaContextChanged;
+  const currentQuota = !quotaContextChanged && chatQuota?.userId === session?.user?.id ? chatQuota : null;
+  const quotaLow = currentQuota !== null && currentQuota.ramase > 0 && currentQuota.ramase <= CHAT_QUOTA_LOW_REMAINING;
+  const quotaUnavailableMessage = quotaUnavailableReason === 'endpoint' ? t('chat.quotaEndpointUnavailable')
+    : quotaUnavailableReason === 'network' ? t('chat.quotaNetworkUnavailable') : t('chat.quotaUnavailable');
+  const quotaTierLabel = currentQuota?.tier === 'free' ? t('chat.quotaTierFree')
+    : currentQuota?.tier === 'premium' ? t('chat.quotaTierPremium')
+      : currentQuota?.tier === 'admin' ? t('chat.quotaTierAdmin') : currentQuota?.tier;
 
   const fetchChatQuota = useCallback(async () => {
     const userId = session?.user?.id;
@@ -301,14 +318,21 @@ export default function ChatScreen() {
     if (!userId || !token) {
       setChatQuota(null);
       setQuotaLoading(false);
+      setQuotaUnavailableReason(null);
       return;
     }
     setQuotaLoading(true);
+    setQuotaUnavailableReason(null);
+    let failureReason: 'network' | 'endpoint' = 'network';
     try {
       const resp = await fetch(buildApiUrl('/chat/quota'), {
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      if (!resp.ok) throw new Error('quota unavailable');
+      if (!resp.ok) {
+        failureReason = 'endpoint';
+        throw new Error('quota unavailable');
+      }
+      failureReason = 'endpoint';
       const data: unknown = await resp.json();
       const quota = data && typeof data === 'object' ? data as Record<string, unknown> : null;
       if (!quota || !Number.isSafeInteger(quota.total) || !Number.isSafeInteger(quota.ramase)
@@ -318,17 +342,21 @@ export default function ChatScreen() {
       }
       if (request === quotaRequestRef.current && quotaUserRef.current === userId) {
         setChatQuota({
-          userId, total: Number(quota.total), ramase: Number(quota.ramase), tier: quota.tier,
+          userId, isPremium, hasFullAccess,
+          total: Number(quota.total), ramase: Number(quota.ramase), tier: quota.tier,
           reseteazaLa: typeof quota.reseteazaLa === 'string' && !Number.isNaN(Date.parse(quota.reseteazaLa))
             ? quota.reseteazaLa : null,
         });
       }
     } catch {
-      if (request === quotaRequestRef.current && quotaUserRef.current === userId) setChatQuota(null);
+      if (request === quotaRequestRef.current && quotaUserRef.current === userId) {
+        setChatQuota(null);
+        setQuotaUnavailableReason(failureReason);
+      }
     } finally {
       if (request === quotaRequestRef.current && quotaUserRef.current === userId) setQuotaLoading(false);
     }
-  }, [session?.access_token, session?.user?.id]);
+  }, [session?.access_token, session?.user?.id, isPremium, hasFullAccess]);
 
   useEffect(() => {
     fetchChatQuota();
@@ -976,17 +1004,109 @@ export default function ChatScreen() {
               </View>
             </View>
 
-            <TouchableOpacity
-              onPress={handleResetChat}
-              style={[styles.newChatPill, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-              activeOpacity={0.85}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel={t('chat.newChatA11y')}
-            >
-              <Text style={[styles.newChatPillText, { color: colors.textPrimary }]}>{t('chat.newChat')}</Text>
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                testID="chat-quota-indicator"
+                onPress={() => setQuotaDetailsVisible((visible) => !visible)}
+                style={[styles.quotaIndicator, {
+                  backgroundColor: colors.surfaceBg,
+                  borderColor: currentQuota?.ramase === 0 ? colors.danger : quotaLow ? colors.warning : colors.cardBorder,
+                }]}
+                activeOpacity={0.85}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel={currentQuota
+                  ? t('chat.quotaIndicatorA11y', { remaining: currentQuota.ramase, total: currentQuota.total })
+                  : t(quotaIsLoading ? 'chat.quotaLoadingA11y' : 'chat.quotaUnavailableA11y')}
+                accessibilityHint={t('chat.quotaOpenHint')}
+                accessibilityState={{ expanded: quotaDetailsVisible }}
+              >
+                {currentQuota ? (
+                  <>
+                    <Text style={[styles.quotaIndicatorText, {
+                      color: currentQuota.ramase === 0 ? colors.danger : quotaLow ? colors.warning : colors.textPrimary,
+                    }]}>{currentQuota.ramase}/{currentQuota.total}</Text>
+                    <View testID="chat-quota-indicator-track" style={[styles.quotaTrack, { backgroundColor: colors.cardBorder }]} accessible={false}>
+                      <View style={[styles.quotaProgressFill, {
+                        width: `${(currentQuota.ramase / currentQuota.total) * 100}%`,
+                        backgroundColor: currentQuota.ramase === 0 ? colors.danger : quotaLow ? colors.warning : colors.accent,
+                      }]} />
+                    </View>
+                  </>
+                ) : quotaLoading ? (
+                  <ActivityIndicator size="small" color={colors.accent} />
+                ) : (
+                  <Text style={[styles.quotaIndicatorText, { color: colors.textSecondary }]}>—</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleResetChat}
+                style={[styles.newChatPill, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+                activeOpacity={0.85}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={t('chat.newChatA11y')}
+              >
+                <Text numberOfLines={1} style={[styles.newChatPillText, { color: colors.textPrimary }]}>{t('chat.newChat')}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+
+          {quotaDetailsVisible ? (
+            <View testID="chat-quota-details" style={[styles.quotaDetails, { backgroundColor: colors.surfaceElevated, borderColor: colors.cardBorder }]} accessibilityLiveRegion="polite">
+              <View style={styles.quotaDetailsHeader}>
+                <Text style={[styles.quotaDetailsTitle, { color: colors.textPrimary }]}>{t('chat.quotaDetailsTitle')}</Text>
+                {currentQuota && quotaTierLabel ? (
+                  <Text style={[styles.quotaDetailsTier, { color: colors.textSecondary }]}>
+                    {t('chat.quotaPlanLabel', { tier: quotaTierLabel })}
+                  </Text>
+                ) : null}
+              </View>
+              {currentQuota ? (
+                <>
+                  <View
+                    testID="chat-quota-progress"
+                    style={[styles.quotaTrack, styles.quotaDetailsTrack, { backgroundColor: colors.cardBorder }]}
+                    accessibilityRole="progressbar"
+                    accessibilityLabel={t('chat.quotaProgressA11y')}
+                    accessibilityValue={{ min: 0, max: currentQuota.total, now: currentQuota.ramase }}
+                  >
+                    <View style={[styles.quotaProgressFill, {
+                      width: `${(currentQuota.ramase / currentQuota.total) * 100}%`,
+                      backgroundColor: currentQuota.ramase === 0 ? colors.danger : quotaLow ? colors.warning : colors.accent,
+                    }]} />
+                  </View>
+                  <Text style={[styles.quotaDetailsCopy, { color: colors.textPrimary }]}>
+                    {t('chat.quotaAvailableCount', { count: currentQuota.ramase })}
+                  </Text>
+                  <Text style={[styles.quotaDetailsCopy, { color: colors.textPrimary }]}>
+                    {t('chat.quotaUsedCount', { count: currentQuota.total - currentQuota.ramase })}
+                  </Text>
+                  <Text style={[styles.quotaDetailsCopy, { color: colors.textPrimary }]}>
+                    {t('chat.quotaTotalCount', { count: currentQuota.total })}
+                  </Text>
+                  {currentQuota.reseteazaLa ? (
+                    <Text style={[styles.quotaDetailsCopy, { color: colors.textSecondary }]}>
+                      {t('chat.quotaResetAt', { time: new Date(currentQuota.reseteazaLa).toLocaleString() })}
+                    </Text>
+                  ) : null}
+                  <Text style={[styles.quotaDetailsCopy, { color: colors.textSecondary }]}>
+                    {t('chat.quotaReachedBehavior')}
+                  </Text>
+                  {quotaLow ? (
+                    <Text style={[styles.quotaDetailsCopy, { color: colors.warning }]}>
+                      {t('chat.quotaLowNotice', { count: currentQuota.ramase })}
+                    </Text>
+                  ) : null}
+                </>
+              ) : (
+                <Text style={[styles.quotaDetailsCopy, { color: colors.textSecondary }]}>
+                  {quotaIsLoading ? t('chat.quotaLoading') : quotaUnavailableMessage}
+                </Text>
+              )}
+            </View>
+          ) : null}
 
           <View style={styles.headerStatsRow}>
             <View style={[styles.contextChip, { backgroundColor: colors.surfaceElevated, borderColor: colors.cardBorder }]}>
@@ -997,20 +1117,7 @@ export default function ChatScreen() {
               <View style={[styles.miniIndicator, { backgroundColor: colors.accentSecondary }]} />
               <Text style={[styles.contextChipText, { color: colors.textPrimary }]}>{totalProteine} / {proteineTinta} g proteine</Text>
             </View>
-            <View testID="chat-quota-chip" style={[styles.contextChip, { backgroundColor: colors.surfaceElevated, borderColor: currentQuota?.ramase === 0 ? '#EF4444' : colors.cardBorder }]}>
-              <View style={[styles.miniIndicator, { backgroundColor: currentQuota?.ramase === 0 ? '#EF4444' : colors.accent }]} />
-              <Text style={[styles.contextChipText, { color: currentQuota?.ramase === 0 ? '#EF4444' : colors.textPrimary }]}>
-                {currentQuota?.tier === 'admin' ? t('chat.quotaAdmin')
-                  : currentQuota ? t('chat.quotaRemaining', { remaining: currentQuota.ramase, total: currentQuota.total })
-                    : t(quotaLoading ? 'chat.quotaLoading' : 'chat.quotaUnavailable')}
-              </Text>
-            </View>
           </View>
-          {currentQuota?.reseteazaLa && currentQuota.tier !== 'admin' ? (
-            <Text style={[styles.contextChipText, { color: colors.textSecondary }]}>
-              {t('chat.quotaResetAt', { time: new Date(currentQuota.reseteazaLa).toLocaleString() })}
-            </Text>
-          ) : null}
         </Animated.View>
 
         {showNewChatBanner && (
@@ -1130,10 +1237,15 @@ export default function ChatScreen() {
         ) : null}
 
         {currentQuota?.ramase === 0 ? (
-          <View testID="chat-quota-exhausted-banner" style={[styles.quotaExhaustedBanner, { backgroundColor: '#EF444415', borderColor: '#EF444455' }]}>
+          <View testID="chat-quota-exhausted-banner" style={[styles.quotaExhaustedBanner, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}>
             <Text style={[styles.quotaExhaustedText, { color: colors.textPrimary }]}>
-              {t('chat.quotaExhausted')}
+              {t('chat.quotaReachedBehavior')}
             </Text>
+            {currentQuota.reseteazaLa ? (
+              <Text style={[styles.quotaExhaustedText, { color: colors.textSecondary }]}>
+                {t('chat.quotaResetAt', { time: new Date(currentQuota.reseteazaLa).toLocaleString() })}
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -1149,11 +1261,10 @@ export default function ChatScreen() {
                 testID="chat-input"
                 accessibilityLabel={t('chat.inputA11y')}
                 style={[styles.input, { color: colors.textPrimary }]}
-                placeholder={currentQuota?.ramase === 0 ? t('chat.quotaExhausted') : t('chat.inputPlaceholder')}
+                placeholder={t('chat.inputPlaceholder')}
                 placeholderTextColor={colors.textSecondary}
                 value={chatInput}
                 onChangeText={setChatInput}
-                editable={currentQuota?.ramase !== 0}
                 multiline
                 maxLength={1000}
                 returnKeyType="send"
@@ -1306,6 +1417,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',
+    lineHeight: 17,
   },
   outerContainer: { flex: 1 },
   container: { flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center' },
@@ -1327,10 +1439,31 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 6,
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
+  quotaIndicator: {
+    minHeight: 44,
+    paddingHorizontal: 8,
+    borderRadius: 11,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  quotaIndicatorText: { fontSize: 12, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  quotaTrack: { width: 24, height: 4, borderRadius: 2, overflow: 'hidden' },
+  quotaProgressFill: { height: '100%', borderRadius: 2 },
+  quotaDetails: { marginTop: 6, marginBottom: 8, padding: 12, borderRadius: 14, borderWidth: 1 },
+  quotaDetailsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 },
+  quotaDetailsTitle: { fontSize: 13, fontWeight: '800' },
+  quotaDetailsTier: { fontSize: 11, fontWeight: '700' },
+  quotaDetailsTrack: { width: '100%', height: 5, marginTop: 9, marginBottom: 3 },
+  quotaDetailsCopy: { fontSize: 12, lineHeight: 17, marginTop: 4 },
   headerIdentity: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    minWidth: 0,
   },
   aiAvatar: {
     width: 40,
