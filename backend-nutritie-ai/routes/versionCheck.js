@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const DEFAULT_MIN_SUPPORTED_VERSION_CODE = 31;
 
 /**
  * Endpoint public de verificare a versiunii GetFlow.
@@ -15,7 +16,7 @@ function createVersionCheckRouter({ config, versionLimiter }) {
   const limiter = versionLimiter || ((_req, _res, next) => next());
 
   router.get('/version-check', limiter, (req, res) => {
-    const minVersionCode = Number(process.env.APP_MIN_VERSION_CODE || config?.app?.minVersionCode || 32);
+    const minVersionCode = Number(process.env.APP_MIN_VERSION_CODE || config?.app?.minVersionCode || DEFAULT_MIN_SUPPORTED_VERSION_CODE);
     const latestVersionCode = Number(process.env.APP_LATEST_VERSION_CODE || config?.app?.latestVersionCode || 32);
     const latestVersionName = String(process.env.APP_LATEST_VERSION_NAME || config?.app?.latestVersionName || '1.0.0');
     const forceUpdateGlobal = String(process.env.APP_FORCE_UPDATE || 'false').toLowerCase() === 'true';

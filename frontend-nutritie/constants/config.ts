@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import './qaEnvironment';
 
 // Folosim variabila de mediu dacă e setată, altfel alegem adresa potrivită pentru emulator.
 // Pe emulatorul Android standard, `localhost` din aplicație nu ajunge la serverul local,

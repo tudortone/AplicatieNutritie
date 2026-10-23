@@ -4,6 +4,20 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "qa-isolated": {
+      "node": "22.20.0",
+      "distribution": "internal",
+      "environment": "development",
+      "channel": "qa-isolated",
+      "autoIncrement": false,
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "qa",
+        "EXPO_PUBLIC_ADS_MODE": "disabled",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "qa-synthetic-anon-key",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
+    },
     "development": {
       "developmentClient": true,
       "distribution": "internal",

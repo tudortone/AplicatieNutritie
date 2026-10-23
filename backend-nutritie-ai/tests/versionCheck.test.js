@@ -61,6 +61,23 @@ describe('Version Check API', () => {
     expect(res.body.isOutdated).toBe(true);
   });
 
+  test('keeps production v31 usable when no minimum-version override is configured', async () => {
+    const defaultApp = express();
+    defaultApp.use('/api/v1', createVersionCheckRouter({ config: {} }));
+    const res = await request(defaultApp).get('/api/v1/version-check?versionCode=31');
+    expect(res.status).toBe(200);
+    expect(res.body.forceUpdate).toBe(false);
+    expect(res.body.isOutdated).toBe(true);
+  });
+
+  test('preserves an explicitly configured minimum version', async () => {
+    process.env.APP_MIN_VERSION_CODE = '32';
+    const res = await request(app).get('/api/v1/version-check?versionCode=31');
+    expect(res.status).toBe(200);
+    expect(res.body.minVersionCode).toBe(32);
+    expect(res.body.forceUpdate).toBe(true);
+  });
+
   test('Priority 6: all local modules required by server.js resolve and are tracked in git for clean-checkout boot', () => {
     const backendDir = path.resolve(__dirname, '..');
     const serverSource = fs.readFileSync(path.join(backendDir, 'server.js'), 'utf8');

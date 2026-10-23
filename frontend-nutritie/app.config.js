@@ -1,11 +1,14 @@
 'use strict';
 
+const { assertQaEnvironment } = require('./lib/qaEnvironment');
+
 const {
   valideazaMediuProductie,
   valideazaConfigurareAdMob,
 } = require('./scripts/preSubmissionConfig');
 
 module.exports = ({ config }) => {
+  assertQaEnvironment(process.env);
   const platforma = process.env.EAS_BUILD_PLATFORM === 'ios' ? 'ios' : 'android';
 
   if (process.env.EAS_BUILD_PROFILE === 'production') {
@@ -46,5 +49,12 @@ module.exports = ({ config }) => {
     ]);
   }
 
+  if (process.env.EXPO_PUBLIC_APP_ENV === 'qa') {
+    return {
+      ...config, plugins, name: 'GetFlow QA', scheme: 'getflow-qa',
+      android: { ...config.android, package: 'com.totsrl.getflo.qa' },
+      updates: { ...config.updates, enabled: false },
+    };
+  }
   return { ...config, plugins };
 };
