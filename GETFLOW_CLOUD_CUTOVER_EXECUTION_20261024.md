@@ -158,3 +158,78 @@ Render source inspection confirms npm start → server.js, SIGTERM handler stops
 Application/backend/SQL/marketing diff against b95b761 remains empty, exit0. No new logic or changed dependency requires a test rerun. Only this existing checkpoint is updated; no new report, service, laboratory or cryptographic infrastructure.
 
 [Audit & Skills Report] Consulted executing-plans, verification-before-completion, security-review, code-review and computer-use; retained local-only finishing-a-development-branch instructions. No new bug/code logic justified TDD or suite replay. No subagents, CMS, puzzle/TheRoute work, Windows policy changes, OneDrive source changes, marketing edits, cloud writes or paid operation.
+
+## Current continuation — GitHub/Trigger/Render preparation, backup paused
+
+This entry supersedes earlier candidate/dependency pins and open owner-storage questions. Owner explicitly paused all disk-encryption/destination investigations for this session. No administrator/storage questions, backup preparation, B2 access, export, restore, SQL mutation or migration were resumed. Supabase migrations status is **BLOCKED_BACKUP_PENDING**; REAL_BACKUP_RESTORE_VERIFIED remains mandatory. No live Supabase/Render/Trigger metadata was invented in the absence of dashboards.
+
+### A. GitHub — LOCAL_SECURITY_FIXES_VERIFIED / PUBLICATION_BLOCKED
+
+New dependency-remediation commit: **4365a8edb2f96eaffdb0e5245a5f728c398f4c25**. Exactly6 changed source paths: package.json/package-lock.json in backend-nutritie-ai, frontend-nutritie and tools/scratch_anatomy_svg. No application logic, SQL, workflow, scanner threshold/ignore, audit exception, Production/QA profile or marketing change. No push, PR, merge or branch creation. Current main was reconfirmed as bf7ca4c77701e4ee78d9bffd3a329d779e8e7d6f, protected=false. The main/candidate ancestry remains linear. Final HEAD includes this documentation update in addition to the dependency commit.
+
+Reproduced npm registry lockfile audits and the exact3-lockfile OSV gate before edits, with no scripts/install side effects. Backend RED:7 high vulnerable graph nodes; frontend RED:8 high+1 moderate. OSV identified8 affected package/version entries across the3 lockfiles. These are package/graph counts, not8 distinct advisories.
+
+| Dependency | Before → after | Validation |
+| --- | --- | --- |
+| Backend @trigger.dev/sdk and core |4.5.10 → **4.6.4**, SDK pinned exactly | SDK4.6.0–4.6.3 warm-start warning avoided; targeted4.6.4 chosen, not latest4.8.1 |
+| Backend Zod / validation adapter |3.25.76 →4.6.7; adapter1.5.0 →5.0.0 through supported Trigger dependencies | No forced global major override; reviewed upstream Zod switch; real SDK/config and operation-binding smoke passed |
+| Backend body-parser |2.3.0 →2.4.0 | Same-major fix for GHSA-27r3-jxmh-p828 |
+| Backend multer |2.4.0 →2.5.0, pinned exactly | Same-major fix for GHSA-q7qp-rjg7-q26m |
+| Frontend fast-uri / undici |3.1.8 →3.1.9 /6.29.0 →6.29.1 | Minimum safe override ranges updated; same majors |
+| Scratch tool undici |7.30.0 and8.11.2 →7.30.1 and8.12.2 | Same-major lockfile fixes; no SVG/image/tool execution |
+
+Backend npm audit **exit0, zero vulnerabilities**. Frontend raw npm audit **exit1,7 high graph nodes**, all rooted in node-forge1.4.0/GHSA-86w9-cpqp-85rv; fast-uri and undici findings removed. The unchanged existing frontend audit evaluator returns valid=true, blocked=[], permitted7 under its pre-existing expiring node-forge exception; no exception added/expanded. **OSV still exits1** for node-forge1.4.0 only. No broad Expo44/old Sentry/old Ads downgrade was applied to silence npm.
+
+The official [node-forge advisory](https://github.com/advisories/GHSA-86w9-cpqp-85rv) lists no patched version; official registry latest was1.4.0. This is a real unresolved HIGH, not a clean security gate or an accepted release exception for OSV. Existing audit policy acceptance does not make the strict CI green. Old remote CI failures remain distinct from this candidate; no remote candidate CI has run.
+
+Whole proposed-history scan: downloaded official Gitleaks8.30.1 Windows archive and verified published SHA256 D29144DEFF3A68AA93CED33DDDF84B7FDC26070ADD4AA0F4513094C8332AFC4E. Initial bf7ca4c..ad3ef6cc scan covered **78 commits**, ~10MB, exit0/zero findings; full redaction, allow-comments ignored, archive depth2, no network credential verification. This is scanner coverage, not proof that arbitrary encrypted/binary data cannot contain secrets. The final range bf7ca4c..HEAD is rescanned after committing this checkpoint; preserved redacted output is ../cloud-preparation-20261024/history-secrets-final.json and corresponding stderr/stdout. No raw secret output or provider validation occurred.
+
+Auto-deploy investigation: read-only public GitHub deployment metadata confirms two recurring Preview environments, aplicatie-nutritie and aplicatie-nutritie-1nsb, alongside the earlier Vercel commit status contexts. Latest visible pair IDs7007270132/7007269335, SHA fec781f74982faf9b4cf55a8ff8c6bb39e9683bd,2026-10-12. These establish observed preview integrations, not their current trigger filters or cost. Render/Trigger/Vercel connection settings cannot be fully enumerated with the available access. Therefore **publication remains blocked on automatic effects and explicit exact-ref approval**, not merely on Git ancestry. The existing explicit URL/ref publication template is retained; origin still points to a local checkout.
+
+### B. Trigger — SDK_LOCAL_VERIFIED / CLI_SECURITY_BLOCKED / LIVE_UNVERIFIED
+
+Worker source remains **1970f93a5cf46f72fe0334849708f9abaa0ed6cd**. New backend tree **e3bc645f090fb44d3b6b3b5e2e7a459484791298**; backend lock Git blob **e9a00aa4cefcd35fa45ea782d8824453499e345e**. SDK/core4.6.4, Zod4.6.7 installed in fresh private modules without lifecycle scripts; previous shared modules preserved. Existing config/task IDs, queue,3 attempts,300s max duration, concurrency limits, payload guards and reservation/result/settlement logic unchanged. Legacy v1 SQL interfaces still required; a legacy payload without the v2 binding fields is not made compatible by this SDK update. No job replay/cancellation or environment pinning.
+
+Installed official CLI **4.6.4** in ../cloud-preparation-20261024/trigger-cli-4.6.4 only, with exact package pin, scripts disabled and a tool-local same-major Zod4.5.4→4.6.6 security override. CLI package-lock SHA256 F0383FD510FC9F5749EC8124B1F6355DE7F3D240269A80BCED9005D548B2D2DB. Version, deploy --help and promote --help each exit0, telemetry disabled, no login/config authentication/deploy command run. Actual pinned help confirms --config, --env, --dry-run, --skip-promotion, --skip-sync-env-vars, --skip-update-check and --external-id, and promote [version]. No bundling/upload/dry-run was attempted: a dry-run must not be presumed offline or free before its full workflow is verified.
+
+CLI's **own audit FAILS:13 graph nodes,1 critical+6 high+6 moderate**. Critical tar6.2.1 via c12→giget remains; additional root findings include deepmerge-ts7.x (fixed8.0.0), ws8.x, engine.io-client and esbuild0.23.x (fix outside its current minor). npm's proposed downgrade to trigger.dev1.0.8 is rejected as incompatible. Major transitive overrides would need demonstrated CLI/build compatibility; none were forced merely to obtain PASS. **Do not use this installed CLI for deployment, template download, archive extraction or promotion.** It is retained as an isolated blocked tool/provenance artifact, not part of application dependencies or published source. Backend's zero-vulnerability audit does not cover this tool.
+
+Real SDK smoke,2/2 tests exit0, all fetches intercepted and restricted to synthetic127.0.0.1 URL: actual tasks.trigger serializes explicit version as lockToVersion, repeated operation key yields identical wire binding, distinct key differs, and the4.5.10/4.6.4 wire idempotency key agrees for the same input. Both real config formats load and agree on project/dirs/retry/duration. This is serialization/config compatibility, not server exact-once or cloud version-routing proof. The first smoke assertions incorrectly expected public option names and plaintext idempotency keys on the wire; corrected the synthetic harness after reading actual SDK serialization, without changing production code or weakening the binding comparison. Script is preserved at ../cloud-preparation-20261024/trigger-sdk-smoke.cjs.
+
+Future deployment template now has locally confirmed flags, but remains **not executable/approved** until CLI security, schema38, live accepted-job routing and separate deploy/promotion approval are satisfied. Live version/deploy IDs/queues/legacy jobs remain unverified.
+
+### C. Render — LOCAL_BACKEND_REGRESSIONS_PASS / SCHEMA31_DEPLOY_BLOCKED
+
+New backend dependency tree above is locally validated; no server/route/business logic or version policy changed.18 suites134 tests cover auth/revocation/isolation, legacy and v2 Photo admission/credit state, duplicate/retry/unknown outcomes, worker contracts, Chat admission, Google Billing/RTDN-related service paths, AdMob SSV, GDPR recovery, webhooks/rate limits and version policy. First sandbox run hit EACCES on synthetic loopback sockets (55 test failures); rerun with only required local socket permissions passed **134/134**, exit0. No application fix was fabricated for a sandbox failure. Backend focused ESLint exit0.
+
+Current producer/worker still require v2 RPCs absent from the retained31 snapshot. A **complete backend deploy cannot be claimed schema31-compatible** and remains blocked pending verified schema38. Existing old-client/v1 contracts are preserved in source/local tests, not proven live. Last actual public observations remain health200 and both real version aliases404; current live SHA/branch/autodeploy/commands/rollback bundle unavailable. No additional redundant health poll, backend startup, remote call, paid AI or canary was performed in this continuation.
+
+### D. Supabase — READ_ONLY_ACCESS_PENDING / BLOCKED_BACKUP_PENDING
+
+No authenticated dashboard or approved private runner access became available. No new SQL run; prior two exact approved reads remain authorized and unmodified.31/38 and v1-present/v2-absent remain dated evidence only. No migration, ACL/RLS/grant, reservation settlement, export or restore. Backup/disk/B2 work is paused explicitly; no related owner request made in this execution.
+
+### E. Newly executed checks and local isolation
+
+| Check | Actual result / exit |
+| --- | --- |
+| Backend audit before → after |7 high →0 total;1→0 |
+| Frontend raw audit before → after |8 high+1 moderate →7 high rooted in node-forge;1→1 |
+| Existing frontend gate applied to fresh report | PASS under unchanged existing exception;0 |
+| OSV2.5.0 exact CI lockfiles/policy |8 affected package/version entries →1 node-forge entry;1→1 |
+| Backend selected regressions on new dependencies |18 suites134/134;0 after resolving local socket restriction |
+| Frontend affected QA/config/update/audit regressions |9 suites91/91;0 |
+| Real SDK/config offline smoke |2/2;0 |
+| Frontend typecheck / canonical focused Expo lint |0 /0; lint0 errors,4 existing import-order warnings |
+| Backend focused lint |0 |
+| Pinned CLI version/deploy-help/promote-help |0/0/0; tool security audit remains FAIL |
+| Source policy/config/SQL/marketing unchanged checks |0 |
+
+Total new regression assertions counted as tests: **227 PASS,0 FAIL** in their successful final runs; not a complete application suite. Initial environment/harness failures are retained, not counted as passing runs. Official OSV binary2.5.0 SHA2564342285BD8BE36B9F113468F3EEA86E7900BEFBCD19CA8DC6AC4F0F6CBE7C362 matched before execution. Scanner data and raw audit/test JSON are in the sibling cloud-preparation-20261024 directory, outside Git publication.
+
+Fresh npm ci installations used only new backend-dependencies/frontend-dependencies directories, --ignore-scripts; root candidate node_modules junctions now point to those new private trees. Old shared/frozen QA modules and OneDrive contents were not modified. Sandbox initially denied creation of the new backend junction; authorized isolated-path retry restored the link successfully before testing. No application secrets copied, lifecycle scripts run or external service started. No generated anatomy/marketing asset changed.
+
+### F. Approvals and verdicts
+
+No write operation is currently ready for an execution approval: Git publication still requires verified automatic integration effects and cannot be described as CI-green; Trigger requires a security-acceptable pinned CLI plus schema/job routing; Render requires DB/worker and live identity gates. Therefore **zero new approvals requested**, rather than asking for a speculative push/deploy/backup exception. No renewed storage/admin request; no Supabase migration bypass. Continue from these exact artifacts when missing access or an upstream fix becomes available.
+
+Skills used selectively: executing-plans, verification-before-completion, security-review, code-review, blast-radius and tdd-workflow (failing vulnerability gates before minimum dependency remediation; existing behavioral regressions reused). No subagents or general architecture refactor. Production remains unchanged; CLOUD_READY is not asserted.
