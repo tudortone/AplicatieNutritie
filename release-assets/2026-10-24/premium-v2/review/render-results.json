@@ -1,0 +1,154 @@
+[
+  {
+    "file": "concepts/a/01-hero-en-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "concepts/a/02-photo-ai-en-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "concepts/a/03-nutrition-en-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "concepts/b/01-hero-en-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "concepts/b/02-photo-ai-en-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "concepts/b/03-nutrition-en-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "layouts/en/01-hero-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "layouts/en/02-photo-ai-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "layouts/en/03-nutrition-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "layouts/en/04-food-journal-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "layouts/en/05-training-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "layouts/en/06-ai-assistant-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "layouts/en/07-progress-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "layouts/en/08-ecosystem-DRAFT.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING"
+  },
+  {
+    "file": "feature/getflow-feature-en.png",
+    "width": 1024,
+    "height": 500,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "BRAND_ART_OWNER_REVIEW"
+  },
+  {
+    "file": "video/title-01-hero-en.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "BRAND_ART_OWNER_REVIEW"
+  },
+  {
+    "file": "video/title-04-food-journal-en.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "BRAND_ART_OWNER_REVIEW"
+  },
+  {
+    "file": "video/title-05-training-en.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "BRAND_ART_OWNER_REVIEW"
+  },
+  {
+    "file": "video/title-08-ecosystem-en.png",
+    "width": 1080,
+    "height": 1920,
+    "fontsLoaded": true,
+    "textOverflow": false,
+    "status": "BRAND_ART_OWNER_REVIEW"
+  }
+]

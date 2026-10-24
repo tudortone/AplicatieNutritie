@@ -1,0 +1,183 @@
+{
+  "status": "DESIGN_PREVIEW_AUTHENTIC_CAPTURE_MISSING",
+  "sourceCodeSha": "2680eaf381604713d6bdefff084c2b3ea97f4e13",
+  "ownerConfirmedNoApprovedCaptures": true,
+  "directions": {
+    "a": "Flow Precision — product-first dark editorial",
+    "b": "The Daily Table — food-first expressive editorial"
+  },
+  "tokens": {
+    "background": "#090C0E",
+    "emerald": "#123D2C",
+    "surface": "#13211C",
+    "lime": "#CCFF00",
+    "white": "#F5F7F2",
+    "secondary": "#C4D0CB",
+    "muted": "#8EA899",
+    "margin": 80,
+    "display": 94,
+    "body": 42,
+    "caption": 24
+  },
+  "screens": [
+    {
+      "id": "01-hero",
+      "capture": "01-home.png",
+      "secondCapture": null,
+      "route": "app/(tabs)/index.tsx",
+      "gate": "Actual synthetic dashboard and combined nutrition/workout acceptance",
+      "photo": true,
+      "en": {
+        "tag": "NUTRITION + FITNESS",
+        "headline": [
+          "Eat.",
+          "Move.",
+          "Find your flow."
+        ],
+        "body": "Your meals and movement.\nOne place for your daily routine.",
+        "screen": "Home screen"
+      }
+    },
+    {
+      "id": "02-photo-ai",
+      "capture": "02-photo.png",
+      "secondCapture": null,
+      "route": "app/camera.tsx",
+      "gate": "Actual successful Photo AI, reviewed estimate and journal insertion; no accuracy promise",
+      "photo": true,
+      "en": {
+        "tag": "PHOTO → FOOD JOURNAL",
+        "headline": [
+          "From your plate",
+          "to your journal."
+        ],
+        "body": "Take a photo. Review the estimate.\nSave after you confirm.",
+        "screen": "Food analysis screen"
+      }
+    },
+    {
+      "id": "03-nutrition",
+      "capture": "03-nutrition.png",
+      "secondCapture": null,
+      "route": "app/(tabs)/index.tsx",
+      "gate": "Actual calories/macros with verified synthetic quantities",
+      "photo": false,
+      "en": {
+        "tag": "CALORIES + MACROS",
+        "headline": [
+          "Your calories.",
+          "A clearer view."
+        ],
+        "body": "See daily intake and macronutrients\nalongside your own goals.",
+        "screen": "Daily nutrition",
+        "side": [
+          "Protein.",
+          "Carbs.",
+          "Fat."
+        ]
+      }
+    },
+    {
+      "id": "04-food-journal",
+      "capture": "04-journal.png",
+      "secondCapture": null,
+      "route": "app/(tabs)/istoric.tsx",
+      "gate": "Actual meal journal, search/manual save and editing",
+      "photo": false,
+      "en": {
+        "tag": "FOOD JOURNAL",
+        "headline": [
+          "Your meals,",
+          "together."
+        ],
+        "body": "Add food. Adjust quantities.\nRevisit the meals you record.",
+        "screen": "Food journal",
+        "side": [
+          "Breakfast.",
+          "Lunch.",
+          "Dinner."
+        ]
+      }
+    },
+    {
+      "id": "05-training",
+      "capture": "05-training.png",
+      "secondCapture": null,
+      "route": "app/jurnal-antrenamente.tsx",
+      "gate": "Existing released routines/history only, not Training 2.0 preview",
+      "photo": false,
+      "en": {
+        "tag": "WORKOUTS + ROUTINES",
+        "headline": [
+          "Your pace.",
+          "Your routine."
+        ],
+        "body": "Keep track of your workouts\nand the routines you use.",
+        "screen": "Existing workout tracking",
+        "side": [
+          "Routines.",
+          "Sessions.",
+          "History."
+        ]
+      }
+    },
+    {
+      "id": "06-ai-assistant",
+      "capture": "06-chat.png",
+      "secondCapture": null,
+      "route": "app/(tabs)/chat.tsx",
+      "gate": "Actual safe nutrition Chat response; training advice not independently accepted",
+      "photo": false,
+      "en": {
+        "tag": "AI ASSISTANCE",
+        "headline": [
+          "Questions",
+          "about food?"
+        ],
+        "body": "Explore ideas in conversation.\nCheck information before acting on it.",
+        "screen": "Real chat, synthetic account"
+      }
+    },
+    {
+      "id": "07-progress",
+      "capture": "07-history.png",
+      "secondCapture": null,
+      "route": "app/(tabs)/statistici.tsx",
+      "gate": "Actual historical entries; no invented weight-loss graph or success metrics",
+      "photo": false,
+      "en": {
+        "tag": "DAY BY DAY",
+        "headline": [
+          "See your days.",
+          "Find your rhythm."
+        ],
+        "body": "Revisit your entries\nand follow your routine over time.",
+        "screen": "Real history, synthetic data",
+        "side": [
+          "Today.",
+          "Yesterday.",
+          "Over time."
+        ]
+      }
+    },
+    {
+      "id": "08-ecosystem",
+      "capture": "01-home.png",
+      "secondCapture": "05-training.png",
+      "route": "home + existing workouts",
+      "gate": "Both source captures require accepted released functionality; no future ecosystem claims",
+      "photo": false,
+      "en": {
+        "tag": "THE GETFLOW EXPERIENCE",
+        "headline": [
+          "Food and fitness.",
+          "One GetFlow."
+        ],
+        "body": "Two parts of your routine,\nin the same app.",
+        "screen": "Nutrition + workouts"
+      }
+    }
+  ],
+  "language": "en",
+  "englishOnly": true
+}

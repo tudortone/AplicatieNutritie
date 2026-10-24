@@ -1,0 +1,30 @@
+{
+  "duration": 14.979133,
+  "width": 1080,
+  "height": 1920,
+  "frames": [
+    {
+      "time": 1,
+      "saved": true
+    },
+    {
+      "time": 4.5,
+      "saved": true
+    },
+    {
+      "time": 8.5,
+      "saved": true
+    },
+    {
+      "time": 12.5,
+      "saved": true
+    },
+    {
+      "time": 14.5,
+      "saved": true
+    }
+  ],
+  "bytes": 8927424,
+  "mp4Container": true,
+  "decodeAndSeek": true
+}

@@ -1,0 +1,362 @@
+[
+  {
+    "file": "README.md",
+    "bytes": 11327,
+    "sha256": "ab47ef3cd18ee8954993182cc5f1bd18a1e2053f11a038787cc21d9c4ae2c334"
+  },
+  {
+    "file": "concepts/a/01-hero-en-DRAFT.png",
+    "bytes": 481387,
+    "sha256": "b76dcfa68392baa6848886941926897dbafbe5f0e4fd2cf98936e6d73712e7e9"
+  },
+  {
+    "file": "concepts/a/02-photo-ai-en-DRAFT.png",
+    "bytes": 644808,
+    "sha256": "e6ede95826e95d0eea002853c46cf05f940049a2964d45b3728bf13e888e13a0"
+  },
+  {
+    "file": "concepts/a/03-nutrition-en-DRAFT.png",
+    "bytes": 229372,
+    "sha256": "0b715f642e9900230812360159ee02a5f304d5d92ddd1fc51b8abcbbc9b1a095"
+  },
+  {
+    "file": "concepts/b/01-hero-en-DRAFT.png",
+    "bytes": 767613,
+    "sha256": "3603cbee6934010c600324a25ddda39bc83275e4141997ae8befa6a543a43d36"
+  },
+  {
+    "file": "concepts/b/02-photo-ai-en-DRAFT.png",
+    "bytes": 771541,
+    "sha256": "c55a0fb6f3eb832db01dd50b195a2170197e76c3731debb531b1911ea38b2a65"
+  },
+  {
+    "file": "concepts/b/03-nutrition-en-DRAFT.png",
+    "bytes": 127862,
+    "sha256": "ade90a063bc23f74552c742d326e6ffa734eb993dad7082bc89f36a35d66ebe0"
+  },
+  {
+    "file": "feature/getflow-feature-en.png",
+    "bytes": 358048,
+    "sha256": "f3034241a12c403bcb2825de67ebaf079a9ff559ea245119aa227514cd2d4df6"
+  },
+  {
+    "file": "layouts/en/01-hero-DRAFT.png",
+    "bytes": 481387,
+    "sha256": "b76dcfa68392baa6848886941926897dbafbe5f0e4fd2cf98936e6d73712e7e9"
+  },
+  {
+    "file": "layouts/en/02-photo-ai-DRAFT.png",
+    "bytes": 644808,
+    "sha256": "e6ede95826e95d0eea002853c46cf05f940049a2964d45b3728bf13e888e13a0"
+  },
+  {
+    "file": "layouts/en/03-nutrition-DRAFT.png",
+    "bytes": 229372,
+    "sha256": "0b715f642e9900230812360159ee02a5f304d5d92ddd1fc51b8abcbbc9b1a095"
+  },
+  {
+    "file": "layouts/en/04-food-journal-DRAFT.png",
+    "bytes": 359586,
+    "sha256": "c4dc7118eab0cb3fee801d71233238de202cb33120eff8b58602692156d42e0b"
+  },
+  {
+    "file": "layouts/en/05-training-DRAFT.png",
+    "bytes": 226065,
+    "sha256": "18ba1fc7f11621f8543bd3bb4c04487db555bb06b31646c6ff355534788825cb"
+  },
+  {
+    "file": "layouts/en/06-ai-assistant-DRAFT.png",
+    "bytes": 286358,
+    "sha256": "8e18cbb82d10d4f1f6fdd6474199af7b2f7e24967986d762c978cf919f1adbf4"
+  },
+  {
+    "file": "layouts/en/07-progress-DRAFT.png",
+    "bytes": 224364,
+    "sha256": "0bce269c54a1e330fa876b564e64662949b481bdbd3fa11274eadb8c927017b0"
+  },
+  {
+    "file": "layouts/en/08-ecosystem-DRAFT.png",
+    "bytes": 251590,
+    "sha256": "9704795e7ea3d164183f3c43a71b30b42af7aa3a39f0b040cc13a900b25464c8"
+  },
+  {
+    "file": "project/contact.mjs",
+    "bytes": 2605,
+    "sha256": "6ecf1ad1505fb7c05a9826292dbab7ef10a80540ac7d3470e06141fbfded5210"
+  },
+  {
+    "file": "project/design.json",
+    "bytes": 5185,
+    "sha256": "13edd039f62b02c92bd5c505bdfd1b05b1fe084fa3a2526aaa2c231b9d325c0f"
+  },
+  {
+    "file": "project/inspect-video.mjs",
+    "bytes": 2581,
+    "sha256": "863d20f3b126ad97e7a6f1daa1147b732c6a80804a7a99e7dcd11fa62d2016c2"
+  },
+  {
+    "file": "project/pages/concepts-a-01-hero-en-DRAFT.html",
+    "bytes": 407876,
+    "sha256": "bbe77f296811b009332e1a6c4317ed08eed028e6083080a74837d78f35320bad"
+  },
+  {
+    "file": "project/pages/concepts-a-02-photo-ai-en-DRAFT.html",
+    "bytes": 407881,
+    "sha256": "d40deb259a128bb3d97cf74b6fa945639c29901352a71d47b3f29c760217b927"
+  },
+  {
+    "file": "project/pages/concepts-a-03-nutrition-en-DRAFT.html",
+    "bytes": 407811,
+    "sha256": "81075a4f7c88a793b71bded8d40e758843ca9524bed74b5b209e07dfdad999e5"
+  },
+  {
+    "file": "project/pages/concepts-b-01-hero-en-DRAFT.html",
+    "bytes": 407876,
+    "sha256": "bb9d043f2f1dfca7419e4185c1fe926ac5139175dd3c4a696038b9eedebc5359"
+  },
+  {
+    "file": "project/pages/concepts-b-02-photo-ai-en-DRAFT.html",
+    "bytes": 407881,
+    "sha256": "6d65d5c20bd1d12b93469877458cc58adad2e32e6d2aa79cc658547c4116dfdb"
+  },
+  {
+    "file": "project/pages/concepts-b-03-nutrition-en-DRAFT.html",
+    "bytes": 407811,
+    "sha256": "ab16df0bf433408932576fd01f974e2f9467032efa23b05dbeb6187c5145cad2"
+  },
+  {
+    "file": "project/pages/feature-getflow-feature-en.html",
+    "bytes": 407423,
+    "sha256": "f26923a8f3b8977726fd8b879b945a223ce41ba9d407a7034d59507030b81693"
+  },
+  {
+    "file": "project/pages/layouts-en-01-hero-DRAFT.html",
+    "bytes": 407873,
+    "sha256": "56a2522dca18266db2e3c5ce4d300ad8fde7d32a91ae731fcf825d3d9223b003"
+  },
+  {
+    "file": "project/pages/layouts-en-02-photo-ai-DRAFT.html",
+    "bytes": 407878,
+    "sha256": "21115479bb8717551ae2e5f46624487df6786fd0410aecd3147b32f86eeae8c8"
+  },
+  {
+    "file": "project/pages/layouts-en-03-nutrition-DRAFT.html",
+    "bytes": 407808,
+    "sha256": "cbf3641122250e76326a9c2f2fefc69dbf8a031a341930a3ec1e4574efdae6a7"
+  },
+  {
+    "file": "project/pages/layouts-en-04-food-journal-DRAFT.html",
+    "bytes": 407796,
+    "sha256": "9baa1df0750ace5e23af080bbe92142e4ef54ad2fafdb7e5909ca09388da728a"
+  },
+  {
+    "file": "project/pages/layouts-en-05-training-DRAFT.html",
+    "bytes": 407813,
+    "sha256": "c44bf0a421cb2a707c93eaf9311f44ffa00d1ac303975ac3684fc3803fa7a31f"
+  },
+  {
+    "file": "project/pages/layouts-en-06-ai-assistant-DRAFT.html",
+    "bytes": 407734,
+    "sha256": "0fb2b93aef0a5b77f5ec672fdae6786198e34349dc64d6e31260e70f1324d7ed"
+  },
+  {
+    "file": "project/pages/layouts-en-07-progress-DRAFT.html",
+    "bytes": 407817,
+    "sha256": "135f382114ac093aab353c9352b486e3eb1fa239e464e5afba9f3fcbc9e0383b"
+  },
+  {
+    "file": "project/pages/layouts-en-08-ecosystem-DRAFT.html",
+    "bytes": 408030,
+    "sha256": "04c807ae788c21a6a0b7548c31697ab186b9ed5bb43d1e4824188f8889f83772"
+  },
+  {
+    "file": "project/pages/video-title-01-hero-en.html",
+    "bytes": 407555,
+    "sha256": "7f32693111bebf0d37cab9b7bd03e5f9f0db2b647ea122bce2ddd8589c1efe95"
+  },
+  {
+    "file": "project/pages/video-title-04-food-journal-en.html",
+    "bytes": 407539,
+    "sha256": "5cef28b6e036009b1081dd852241a9b98187e79b76b339dd1440540a16159ab7"
+  },
+  {
+    "file": "project/pages/video-title-05-training-en.html",
+    "bytes": 407540,
+    "sha256": "bd1e4e88d3291dfd4de9e590958405e7deeee7b19c34941028a340a8663a367b"
+  },
+  {
+    "file": "project/pages/video-title-08-ecosystem-en.html",
+    "bytes": 407540,
+    "sha256": "cda5fa2dd22f626c4e0178f79250263c0931b016a88a7624d56263f8751d035c"
+  },
+  {
+    "file": "project/render.mjs",
+    "bytes": 4348,
+    "sha256": "3ca1922c5e2588ca60bc10d5b74c70d4162f0aaf07a74b2c27aa8aef2b3f717d"
+  },
+  {
+    "file": "project/styles.css",
+    "bytes": 4838,
+    "sha256": "62ae7320948409210f58f708db2c79d7e6e15a93c6aa775aeb36f688a6da8b52"
+  },
+  {
+    "file": "project/templates.mjs",
+    "bytes": 3085,
+    "sha256": "082317700688a3c072cbf0390fd8865963900fde8d4be50796229a24d0d977d7"
+  },
+  {
+    "file": "project/verify.mjs",
+    "bytes": 3984,
+    "sha256": "d2423e2cd6944a0625ae6a4a8df689449363e6f1d24f83227ee5f7550563797b"
+  },
+  {
+    "file": "project/video.mjs",
+    "bytes": 3558,
+    "sha256": "23ffbbee995e590244fc33963e0ce7a290e6249f261b0fc11861dd3bc56041ab"
+  },
+  {
+    "file": "review/contact-en-180px.png",
+    "bytes": 235279,
+    "sha256": "f350811ed307673d0bdb4fc05cae25afddf202ea3d333d95184b11073d2f0865"
+  },
+  {
+    "file": "review/contact-en-360px.png",
+    "bytes": 672092,
+    "sha256": "899c363cdd546c65bb8f65c5105ceeb5125f7041e12af055382404b5a7bfc55c"
+  },
+  {
+    "file": "review/directions-A-vs-B.png",
+    "bytes": 492463,
+    "sha256": "2323092e63e0cbfdba5bec8686b8a229c97627da10a9ff58c7bdfbfcf8b113d7"
+  },
+  {
+    "file": "review/feature-340px.png",
+    "bytes": 60026,
+    "sha256": "48096b5983ddd650baec30127163f2cf67f16c333234187ec3f6d1fd60f59d1e"
+  },
+  {
+    "file": "review/render-results.json",
+    "bytes": 3815,
+    "sha256": "207e2b1e64fb00f6db0a5e207b5acfd69e845b5a773e04f4a8daf0ec2ddef29e"
+  },
+  {
+    "file": "review/social-cover-180px.png",
+    "bytes": 52606,
+    "sha256": "e20ca57d4909ee834eced40534e79423e48dc118f46cea36d5756fd1131b8929"
+  },
+  {
+    "file": "review/video-frame-1.png",
+    "bytes": 1304780,
+    "sha256": "29da954eec8688285aca623e3c434a4bbab35a62b0d39731048fd56a3bcd3528"
+  },
+  {
+    "file": "review/video-frame-12.5.png",
+    "bytes": 1551059,
+    "sha256": "e2116968ea61d90f768ad58eeac537ad70a2b07ccf80f33dae1f9fd381222e31"
+  },
+  {
+    "file": "review/video-frame-14.5.png",
+    "bytes": 1484068,
+    "sha256": "d60504fbe345b924c04b25eabf486b0ac94ca29eb847ed18c999d3bdeaf4d0c7"
+  },
+  {
+    "file": "review/video-frame-4.5.png",
+    "bytes": 1346626,
+    "sha256": "d9d57a409e0c30c98dccf08befb903e3e93196ec1b2ac75c6263df97e1387f3d"
+  },
+  {
+    "file": "review/video-frame-8.5.png",
+    "bytes": 1415251,
+    "sha256": "75ab8e36a8712fa1b0b7a8f38bcd67834db7ea1995de4b87e5a09dc60e0b7a0a"
+  },
+  {
+    "file": "review/video-frames.png",
+    "bytes": 382824,
+    "sha256": "de504060984e0dc68c8e08cd0d28a1256ad4913c3c8d37c406dd0e1d318a94e5"
+  },
+  {
+    "file": "review/video-playback.json",
+    "bytes": 409,
+    "sha256": "f377f9c0bcdf498e5301fac781979efe32c78c77e9096dcfe9ec7c91f2ffd729"
+  },
+  {
+    "file": "review/video-recording-en.json",
+    "bytes": 157,
+    "sha256": "c58f7e07e5b5f73483d1edfef7c54188fcc48e1390033281cdc1e3b2b06139f7"
+  },
+  {
+    "file": "review/visual-review.md",
+    "bytes": 3626,
+    "sha256": "02c39408a3be12df1da4d857a711741896c660cb7ef4aff4e1c3d9053243926a"
+  },
+  {
+    "file": "sources/brand/getflow-approved-512.png",
+    "bytes": 190679,
+    "sha256": "9a2b871933071ff6179c7e7ebb6c94beb06446bc8d9e444957a611baf5faa0f7"
+  },
+  {
+    "file": "sources/fonts/Manrope-OFL.txt",
+    "bytes": 4386,
+    "sha256": "d6a309fcfb963d329a93baf9df66fa5f3c23a4be2b5f67edf24d6cafecde12ac"
+  },
+  {
+    "file": "sources/fonts/Manrope.ttf",
+    "bytes": 164700,
+    "sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6"
+  },
+  {
+    "file": "sources/fonts/SpaceGrotesk-OFL.txt",
+    "bytes": 4401,
+    "sha256": "18a4de52385f6b988782639d5d0cc1326e5a8c2de9a7f01d7b20d9aedcc60943"
+  },
+  {
+    "file": "sources/fonts/SpaceGrotesk.ttf",
+    "bytes": 136676,
+    "sha256": "acad6de1fc93436f5c0f1f4137751ef04f1aea3063e7036535970ffcfbd79f72"
+  },
+  {
+    "file": "sources/photography/editorial-bowl.png",
+    "bytes": 2478200,
+    "sha256": "8a3cd4ebc5d2e3c25e7bad9b592caeeb330c979aaa50fcd06008710ddd818f6c"
+  },
+  {
+    "file": "sources/provenance.json",
+    "bytes": 2761,
+    "sha256": "1faab7ae4d1f98973b65a8dc5ab1c8f5a6abdbc9d723765207667a469f953df8"
+  },
+  {
+    "file": "video/brand-motion-en.srt",
+    "bytes": 236,
+    "sha256": "db0fca670b999544d149c6da46f1e803019a9fa6e37e62fe580f30ede4bbcb08"
+  },
+  {
+    "file": "video/getflow-brand-motion-en-NOT-APP-DEMO.mp4",
+    "bytes": 8927424,
+    "sha256": "141570e57297c5f1e6ff556f5e79002661dd8f6e848b278c4f15a2a40901afe4"
+  },
+  {
+    "file": "video/social-cover-en.png",
+    "bytes": 1138733,
+    "sha256": "10147e551cb0fc53227b890f4d240ec5ffe6e0162eade9a95e0f12bec88ceb5f"
+  },
+  {
+    "file": "video/title-01-hero-en.png",
+    "bytes": 1138733,
+    "sha256": "10147e551cb0fc53227b890f4d240ec5ffe6e0162eade9a95e0f12bec88ceb5f"
+  },
+  {
+    "file": "video/title-04-food-journal-en.png",
+    "bytes": 1133042,
+    "sha256": "51b09e3d1a5ddcbde7298b9d24e650c67e5d1c288584c61e85df71e8d786b919"
+  },
+  {
+    "file": "video/title-05-training-en.png",
+    "bytes": 1136377,
+    "sha256": "f0703c4063bdfac562ba47ae24bb00f90d2f88ebc12fb1802228e752ff3b9b3b"
+  },
+  {
+    "file": "video/title-08-ecosystem-en.png",
+    "bytes": 1137780,
+    "sha256": "dffb029cc8a6c51af9d443c0aaaeaa7d91e1fdeff404a7b673669f013442ad8c"
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "status": "PASS_LOCAL_DESIGN_ONLY",
+  "language": "English only",
+  "draftLayouts": 8,
+  "competingConcepts": 6,
+  "renderedImages": 19,
+  "videoDurationSeconds": 14.979133,
+  "contrasts": {
+    "headline": 18.186022420588,
+    "accent": 16.69380325610976,
+    "body": 12.359926319181,
+    "mutedOnSurface": 6.50648996880345
+  },
+  "inventoryFiles": 72,
+  "authenticScreenshots": 0,
+  "appFootage": false
+}

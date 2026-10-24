@@ -1,0 +1,50 @@
+{
+  "language": "en",
+  "englishOnlyOwnerRequirement": true,
+  "authenticScreenshotsAvailable": false,
+  "appFootageAvailable": false,
+  "approvedIcon": {
+    "source": "frontend-nutritie/assets/images/playstore-icon-512.png",
+    "file": "brand/getflow-approved-512.png",
+    "sha256": "9A2B871933071FF6179C7E7EBB6C94BEB06446BC8D9E444957A611BAF5FAA0F7",
+    "use": "Original icon unchanged; not a redesigned mark"
+  },
+  "food": {
+    "source": "built-in image_gen",
+    "originalOutput": "exec-ad1d05a1-747f-4ab4-8713-a1343ebfe0be.png",
+    "file": "photography/editorial-bowl.png",
+    "transparentBackgroundRequested": true,
+    "classification": "Original generated editorial food illustration, never an actual GetFlow camera/analysis output",
+    "prompt": "Create one premium editorial food-photography cutout for GetFlow. Single matte dark ceramic shallow bowl, 35-degree overhead view, whole bowl with transparent margins: grilled salmon, quinoa, avocado, cherry tomatoes, cucumber, greens and lemon. Natural realistic textures, restrained warm upper-left studio light, no CGI gloss/neon/floating ingredients. Genuine transparent background and small contact shadow, no tabletop, people, text, logo, numbers, phone or invented application UI. This is original AI-generated illustrative food photography, not a photo taken by GetFlow or proof of nutrition/AI accuracy. Do not reference or imitate competitor images."
+  },
+  "fonts": [
+    {
+      "family": "Space Grotesk",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf",
+      "licence": "fonts/SpaceGrotesk-OFL.txt",
+      "use": "Editable deterministic display typography"
+    },
+    {
+      "family": "Manrope",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/Manrope%5Bwght%5D.ttf",
+      "licence": "fonts/Manrope-OFL.txt",
+      "use": "Body and secondary text"
+    }
+  ],
+  "benchmarks": [
+    {
+      "name": "Cal AI",
+      "url": "https://play.google.com/store/apps/details?id=com.viraldevelopment.calai&hl=en",
+      "purpose": "Read-only visual production benchmark; no artwork copied"
+    },
+    {
+      "name": "BitePal",
+      "url": "https://play.google.com/store/apps/details?id=com.pookies.food.ai&hl=en",
+      "purpose": "Read-only visual production benchmark; no artwork copied"
+    }
+  ],
+  "audio": "None. No third-party soundtrack or audio licence claim.",
+  "licenceTextHandling": "Font licence wording and copyright preserved; only line endings and trailing formatting whitespace normalised in local copies.",
+  "video": "Original local brand-motion render from four English title cards; not app footage or a final Play preview.",
+  "fileHashes": "../review/inventory.json"
+}

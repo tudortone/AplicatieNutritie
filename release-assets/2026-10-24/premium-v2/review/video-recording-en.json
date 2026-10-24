@@ -1,0 +1,8 @@
+{
+  "draws": 2462,
+  "requestedFps": 30,
+  "requestedDurationMs": 15000,
+  "mime": "video/mp4;codecs=avc1.42001E",
+  "noAppFootage": true,
+  "audio": false
+}
