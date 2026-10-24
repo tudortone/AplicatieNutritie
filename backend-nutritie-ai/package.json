@@ -21,7 +21,7 @@
     "@google/generative-ai": "^0.24.1",
     "@sentry/node": "^10.69.0",
     "@supabase/supabase-js": "^2.109.0",
-    "@trigger.dev/sdk": "^4.5.9",
+    "@trigger.dev/sdk": "4.6.4",
     "compression": "^1.8.2",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -31,7 +31,7 @@
     "helmet": "^8.2.0",
     "imagekit": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
-    "multer": "^2.4.0",
+    "multer": "2.5.0",
     "rate-limit-redis": "^6.0.1",
     "redis": "^6.2.0",
     "svix": "^1.99.1"
