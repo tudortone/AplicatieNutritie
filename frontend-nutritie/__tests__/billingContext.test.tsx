@@ -50,6 +50,33 @@ function fakeService() {
 }
 
 let latest: ReturnType<typeof useBilling> | null = null;
+test('QA never starts Play Billing even when native availability is reported', async () => {
+  const previous = process.env.EXPO_PUBLIC_APP_ENV;
+  process.env.EXPO_PUBLIC_APP_ENV = 'qa';
+  try {
+    const service = fakeService();
+    const view = await render(<BillingProvider appUserId="synthetic" serviceOverride={service} nativeAvailableOverride><Probe /></BillingProvider>);
+    expect(view.getByTestId('billing').props.children).toContain('unavailable');
+    expect(service.start).not.toHaveBeenCalled();
+    await act(async () => { view.unmount(); });
+  } finally { process.env.EXPO_PUBLIC_APP_ENV = previous; }
+});
+test('QA rejects purchases and returns unavailable restoration without native calls', async () => {
+  const previous = process.env.EXPO_PUBLIC_APP_ENV;
+  process.env.EXPO_PUBLIC_APP_ENV = 'qa';
+  const service = fakeService();
+  const view = await render(<BillingProvider appUserId="synthetic" serviceOverride={service} nativeAvailableOverride><Probe /></BillingProvider>);
+  try {
+    const billing = latest as ReturnType<typeof useBilling> | null;
+    if (!billing) throw new Error('Billing provider missing');
+    await expect(billing.purchasePremium(PRODUCT_A, PRODUCT_A.offers[0])).rejects.toThrow(/QA/);
+    await expect(billing.purchaseCredits({ id: 'fixture', title: 'Fixture', description: 'Synthetic', displayPrice: '0', currencyCode: null })).rejects.toThrow(/QA/);
+    expect(await billing.restorePurchases()).toBe(false);
+    expect(service.purchasePremium).not.toHaveBeenCalled();
+    expect(service.purchaseCredits).not.toHaveBeenCalled();
+    expect(service.restorePurchases).not.toHaveBeenCalled();
+  } finally { await act(async () => { view.unmount(); }); process.env.EXPO_PUBLIC_APP_ENV = previous; }
+});
 function Probe() {
   const value = useBilling();
   latest = value;

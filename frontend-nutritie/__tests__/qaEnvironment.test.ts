@@ -76,7 +76,8 @@ describe('isolated QA configuration', () => {
     const profile = jest.requireActual<typeof import('../eas.json')>('../eas.json').build['qa-isolated'];
     expect(profile).not.toHaveProperty('extends');
     expect(profile.environment).toBe('development');
-    expect(profile.env).not.toHaveProperty('EXPO_PUBLIC_API_URL');
+    expect(profile.env.EXPO_PUBLIC_API_URL).toBe('http://127.0.0.1:3000');
+    expect(profile.env.EXPO_PUBLIC_SUPABASE_URL).toBe('http://127.0.0.1:54321');
     configure({ ...profile.env, EAS_BUILD_PROFILE: 'qa-isolated', EXPO_PUBLIC_API_URL: undefined });
     expect(loadConfig).toThrow(/QA/);
   });
