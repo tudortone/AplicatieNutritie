@@ -1,0 +1,72 @@
+[
+  {
+    "path": "asset-manifest.md",
+    "bytes": 8313,
+    "sha256": "A55BD906DEB17B68B2998AEB5F5F2241132E75708D9E18DB2914982CAF761F74"
+  },
+  {
+    "path": "copy/store-listing.json",
+    "bytes": 3583,
+    "sha256": "C577B87440D22EA1150EE8388091CC3A3A14ADF75D205821FA1BA8A1EC3A0029"
+  },
+  {
+    "path": "export-stills.mjs",
+    "bytes": 1928,
+    "sha256": "B78726D4D7DF0BB9D0AA0C2D1D03BA8F8B0E1B2514D0C9722986FCCC7049620C"
+  },
+  {
+    "path": "feature-graphic/generated-source.png",
+    "bytes": 1390924,
+    "sha256": "D70CE93893C48BD2520D0F15ACA7EB99FF993B5A8FC43C2BE70B1902403A4D45"
+  },
+  {
+    "path": "feature-graphic/getflow-feature-ro-1024x500.png",
+    "bytes": 510005,
+    "sha256": "CAB7D34E632D9602955F311E929B39770B60A23A879C2867BA089E2F8AFF49D9"
+  },
+  {
+    "path": "icon/getflow-approved-512.png",
+    "bytes": 190679,
+    "sha256": "9A2B871933071FF6179C7E7EBB6C94BEB06446BC8D9E444957A611BAF5FAA0F7"
+  },
+  {
+    "path": "video/google-play/getflow-thumbnail-ro-1280x720.png",
+    "bytes": 775834,
+    "sha256": "D27D5F44A8F03103CB942F54A5B7CEBE8032B8DD164354355C05AFD65F4EF363"
+  },
+  {
+    "path": "video/project/render-video.mjs",
+    "bytes": 2158,
+    "sha256": "F067F91840C4F20BFBBA62E8D4A46ACCFA665A6ADA5526AAAFBB329BFC3CAAA0"
+  },
+  {
+    "path": "video/project/subtitles-en.srt",
+    "bytes": 405,
+    "sha256": "2E1D75A144AE5EAAB03C975EDC00DBE0830320CFDB4DAC39D28EE8CB4BC26320"
+  },
+  {
+    "path": "video/project/subtitles-ro.srt",
+    "bytes": 447,
+    "sha256": "08BB3895D50256A1CE24A78E752310C87874AE53AC2B872506E83423930F9BB4"
+  },
+  {
+    "path": "video/project/timeline.json",
+    "bytes": 1013,
+    "sha256": "6125448AD1C6A27E50ED811AD38BFAABC06F067AD09AE58D9206A6A7E27CDA89"
+  },
+  {
+    "path": "video/project/verify-source.mjs",
+    "bytes": 1250,
+    "sha256": "0B13D6F7C8B7AA13F1CB94F12F0BCB1198628F136021878E6D179907D26FAEAA"
+  },
+  {
+    "path": "video/social/generated-source.png",
+    "bytes": 1407777,
+    "sha256": "AEE818EE90412D108F73550EE23D503589E2790510C7D24273ED7B4666362749"
+  },
+  {
+    "path": "video/social/getflow-cover-ro-1080x1920.png",
+    "bytes": 1661595,
+    "sha256": "1B3969B290AA6F4058BC6643373A461872F8A16670781E35AA349F0AF33383AE"
+  }
+]

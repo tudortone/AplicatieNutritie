@@ -1,0 +1,23 @@
+1
+00:00:00,000 --> 00:00:04,000
+GetFlow. Food and movement, at your pace.
+
+2
+00:00:04,000 --> 00:00:09,000
+Record meals and adjust quantities.
+
+3
+00:00:09,000 --> 00:00:14,000
+Take a photo. Review the estimate. Add to your journal.
+
+4
+00:00:14,000 --> 00:00:19,000
+Keep a record of your workouts.
+
+5
+00:00:19,000 --> 00:00:23,000
+Revisit your history, day by day.
+
+6
+00:00:23,000 --> 00:00:26,000
+GetFlow

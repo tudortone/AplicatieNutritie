@@ -1,0 +1,23 @@
+1
+00:00:00,000 --> 00:00:04,000
+GetFlow. Nutriție și mișcare, în ritmul tău.
+
+2
+00:00:04,000 --> 00:00:09,000
+Înregistrează mesele și ajustează cantitățile.
+
+3
+00:00:09,000 --> 00:00:14,000
+Fotografiază. Verifică estimarea. Adaugă în jurnal.
+
+4
+00:00:14,000 --> 00:00:19,000
+Păstrează evidența antrenamentelor tale.
+
+5
+00:00:19,000 --> 00:00:23,000
+Revino la istoricul tău, zi după zi.
+
+6
+00:00:23,000 --> 00:00:26,000
+GetFlow

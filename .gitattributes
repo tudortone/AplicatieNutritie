@@ -1,0 +1,3 @@
+# Keep checksum-bound release artifacts byte-identical on Windows checkout.
+release-assets/** -text
+release-proof/** -text

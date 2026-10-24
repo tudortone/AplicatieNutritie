@@ -1,0 +1,40 @@
+{
+  "baseSha": "751461f7f6fd726019b90215c14e4e3eadccbb30",
+  "verifiedCodeSha": "2680eaf381604713d6bdefff084c2b3ea97f4e13",
+  "branch": "codex/launch-closure-20261024",
+  "qaUnchangedSha": "a5c3414bae308042f5048dca08f8bbc17afff867",
+  "files": [
+    {
+      "path": "frontend-nutritie/package-lock.json",
+      "sha256": "5F62D59B99A30E2F6CAE9397859E42EDA01AD5B36B65BE299232B564DD5BD995"
+    },
+    {
+      "path": "backend-nutritie-ai/package-lock.json",
+      "sha256": "040CA326D6CED97B2ED42DF82528F183883C7368FD2C2780A2BF71764AF47538"
+    },
+    {
+      "path": "frontend-nutritie/app.config.js",
+      "sha256": "345B1F7BA905CE5F6B4812F1D846F47864C5293B063F6E8F199DF3BF6182E56F"
+    },
+    {
+      "path": "frontend-nutritie/app.json",
+      "sha256": "77D9A74BE829557F85780BDA2AB5B3622198D42EE0764B0C13BB5ECE135777B9"
+    },
+    {
+      "path": "frontend-nutritie/eas.json",
+      "sha256": "08EC0FE50BA4116B0E6CED942C2C0381B1238BCA9B9F264EE940AA0AED730776"
+    },
+    {
+      "path": "backend-nutritie-ai/trigger.config.mjs",
+      "sha256": "4D7CF20066FCB614F8D3D73E09FBEF86470D71956E737A5749F470DAA9178D7B"
+    },
+    {
+      "path": "release-proof/frontend-update.json",
+      "sha256": "2349987171095F582330658301EF860F6B7B54E54D3B7C5D653B1836AEC4028D"
+    },
+    {
+      "path": "release-proof/backend-critical.json",
+      "sha256": "1AEDB298C5F9F9E0FD6C1733A582DF5CCE46AAD7D16215A5EBD2AD235BE7E253"
+    }
+  ]
+}

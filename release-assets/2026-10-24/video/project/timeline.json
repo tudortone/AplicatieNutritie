@@ -1,0 +1,16 @@
+{
+  "status": "AWAITING_AUTHENTIC_SANITIZED_CAPTURE",
+  "durationSeconds": 26,
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "audio": "none; no music licence required",
+  "shots": [
+    { "start": 0, "duration": 4, "file": "01-dashboard.mp4", "screen": "Real dashboard with synthetic account; GetFlow proposition" },
+    { "start": 4, "duration": 5, "file": "02-journal.mp4", "screen": "Real food search and adding a meal; no private history" },
+    { "start": 9, "duration": 5, "file": "03-photo.mp4", "screen": "Actual successful food-photo analysis to journal; only after real acceptance" },
+    { "start": 14, "duration": 5, "file": "04-workout.mp4", "screen": "Existing workout tracking; exclude Training 2.0 preview" },
+    { "start": 19, "duration": 4, "file": "05-history.mp4", "screen": "Actual synthetic journal history/progress" },
+    { "start": 23, "duration": 3, "file": "../../feature-graphic/getflow-feature-ro-1024x500.png", "screen": "Brand close; editorial graphic, not product UI" }
+  ]
+}
