@@ -137,6 +137,24 @@ Use existing verified Android SDK tools, not assumed PATH executables: adb/apksi
 
 Production closed in this task: **none**. Closed locally: exact remote ancestry, source/SQL binding, SQL-client preflight, complete code-only TLS runtime assembly and non-secret parsing/hash checks; live GitHub branch/CI metadata and actual Render route observations collected. Application sources/tests/marketing unchanged. One new checkpoint document only in the candidate; runtime copies contain code only outside that repository.
 
-First owner action is to answer the pending destination/independent-recovery question and identify an approvable inert restore target; no secret values. Then finalize exact A/B/C export/storage/restore scopes and ask for those specific approvals. No vague export authorization is requested while these facts are missing. Supabase SQL → GitHub publication → compatible Trigger → Render → bounded canary → owner PC/Samsung handoff remain gated in that order. No new master prompt is required after an exact approval.
+Owner answered explicitly: **no adequate encrypted destination or independent recovery-key copy is currently confirmed**. Owner will inspect local disk encryption and prepare controlled storage. Destination and recovery are **NOT APPROVED**. Production export, real-data storage in sandbox/OneDrive/Git/.codex and real-data restore remain prohibited. Standard encrypted backup remains the chosen approach; CMS is excluded. No new destination, credential or recovery setup was inferred from this answer.
+
+Next owner prerequisite is explicit confirmation of the actual encrypted destination, independent recovery and an approvable inert restore target, without secret values. Then finalize exact A/B/C export/storage/restore scopes and ask for those specific approvals. No vague export authorization is requested while these facts are missing. Supabase SQL → GitHub publication → compatible Trigger → Render → bounded canary → owner PC/Samsung handoff remain gated in that order. No new master prompt is required after an exact approval.
+
+### Independent preparation completed after the owner response
+
+Read-only `git ls-remote` exited0: main remains bf7ca4c77701e4ee78d9bffd3a329d779e8e7d6f; refs/heads/codex/launch-closure-20261024 is absent. No branch was created. Conditional publication is prepared as an explicit URL/ref operation, not a push to the local origin:
+
+```text
+git push --porcelain https://github.com/tudortone/AplicatieNutritie.git <explicitly-approved-final-SHA>:refs/heads/codex/launch-closure-20261024
+```
+
+**Not executed and not yet approved.** Recheck Render/Trigger/Vercel automatic deployment effects before requesting publication approval. A pull request may also cause preview deployments; neither branch publication nor PR creation is implied by this preparation. Current workflow needs a PR to main for this codex branch to receive its CI checks. No force push, merge or protection change is proposed.
+
+Installed Trigger core type v3/types/tasks.d.ts confirms SDK4.5.10 supports `tasks.trigger(..., {version: '<deployed-version>'})` and documents TRIGGER_VERSION as a global alternative. Inspected producer call sites in services/ai/photoJobService.js and routes/ai.js currently pass idempotency options without an explicit version. This confirms a possible pinning mechanism, not configured live routing. No pinning code/environment change was made; exact old/new deployment versions, global configuration, accepted/queued-run behavior and the absent CLI remain live gates. A deployment external-id from newer documentation must not be assumed interchangeable with this installed SDK's version option without verification.
+
+Render source inspection confirms npm start → server.js, SIGTERM handler stops the billing worker and closes the server with a10s forced-exit timer. This source observation does not prove in-flight request drain, old deployment rollback compatibility or current Render shutdown behavior. No blueprint/Dockerfile/Procfile was found at repository/backend top level; dashboard build/start overrides remain unknown. No restart or deployment occurred.
+
+Application/backend/SQL/marketing diff against b95b761 remains empty, exit0. No new logic or changed dependency requires a test rerun. Only this existing checkpoint is updated; no new report, service, laboratory or cryptographic infrastructure.
 
 [Audit & Skills Report] Consulted executing-plans, verification-before-completion, security-review, code-review and computer-use; retained local-only finishing-a-development-branch instructions. No new bug/code logic justified TDD or suite replay. No subagents, CMS, puzzle/TheRoute work, Windows policy changes, OneDrive source changes, marketing edits, cloud writes or paid operation.
