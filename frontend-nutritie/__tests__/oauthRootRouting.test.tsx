@@ -15,8 +15,8 @@ const mockFetch = jest.fn();
 const mockPassthrough = ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
 jest.mock('expo-router', () => {
-  const Stack = ({ children }: { children: React.ReactNode }) => <>{children}</>;
-  Stack.Screen = () => null;
+  const Stack = function MockStack({ children }: { children: React.ReactNode }) { return <>{children}</>; };
+  Stack.Screen = function MockScreen() { return null; };
   return { Stack, useRouter: () => mockRouter, usePathname: () => mockPath, useSegments: () => mockPath.startsWith('/auth') ? ['auth'] : ['onboarding'] };
 });
 jest.mock('../context/AuthContext', () => ({ AuthProvider: (props: { children: React.ReactNode }) => mockPassthrough(props), useAuth: () => ({ session: mockSession, loadingAuth: mockLoading }) }));
@@ -35,7 +35,9 @@ jest.mock('../context/AdsContext', () => ({ AdsProvider: (props: { children: Rea
 jest.mock('../components/GlobalErrorBoundary', () => ({ GlobalErrorBoundary: (props: { children: React.ReactNode }) => mockPassthrough(props) }));
 jest.mock('@gorhom/bottom-sheet', () => ({ BottomSheetModalProvider: (props: { children: React.ReactNode }) => mockPassthrough(props) }));
 jest.mock('react-native-gesture-handler', () => ({ GestureHandlerRootView: (props: { children: React.ReactNode }) => mockPassthrough(props) }));
-jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: (props: { children: React.ReactNode }) => mockPassthrough(props) }));
+jest.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: (props: { children: React.ReactNode }) => mockPassthrough(props), useSafeAreaInsets: () => ({ top: 0 }) }));
+jest.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { resolvedLanguage: 'en' } }) }));
+jest.mock('../lib/versionCheck', () => ({ checkForAppUpdate: jest.fn(async () => ({ needsOptionalUpdate: false })), openAppStore: jest.fn() }));
 jest.mock('@react-navigation/native', () => ({ DarkTheme: { colors: {} }, ThemeProvider: (props: { children: React.ReactNode }) => mockPassthrough(props) }));
 jest.mock('@sentry/react-native', () => ({}));
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));

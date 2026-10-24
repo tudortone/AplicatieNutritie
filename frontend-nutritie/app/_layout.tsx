@@ -30,6 +30,7 @@ import { FlowCreditsModalHost } from '../components/FlowCreditsModalHost';
 import { useDailySync } from '../hooks/useDailySync';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import OfflineBanner from '../components/OfflineBanner';
+import { AppUpdateNotice } from '../components/AppUpdateNotice';
 import { GlobalErrorBoundary } from '../components/GlobalErrorBoundary';
 import { buildApiUrl } from '../lib/api';
 import { restaureazaProfilLocal, type ProfilRestaurare } from '../lib/onboarding';
@@ -463,6 +464,7 @@ function RootNavigator() {
     </BillingProvider>
     {session && isLocked ? <LockScreen biometricType={biometricType} onUnlock={unlockApp} /> : null}
     <AppSplashScreen isReady={storageReady && !loadingAuth} />
+    <AppUpdateNotice enabled={storageReady && !loadingAuth && !isLocked} />
     <StatusBar style="light" />
   </ThemeProvider>;
 }

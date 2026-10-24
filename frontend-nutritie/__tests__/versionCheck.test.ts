@@ -1,8 +1,8 @@
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import { checkForAppUpdate, getCurrentVersionCode, openAppStore } from '../lib/versionCheck';
 import * as Application from 'expo-application';
 
-jest.mock('expo-application', () => ({ nativeBuildVersion: '37', nativeApplicationVersion: '1.0.0', applicationId: 'com.totsrl.getflo' }));
+jest.mock('expo-application', () => ({ __esModule: true, nativeBuildVersion: '37', nativeApplicationVersion: '1.0.0', applicationId: 'com.totsrl.getflo' }));
 jest.mock('expo-constants', () => ({ expoConfig: { android: { versionCode: 999 }, version: 'wrong-ota-label' } }));
 jest.mock('../lib/api', () => ({ buildApiUrl: (p: string) => `https://example.invalid/api/v1${p}` }));
 
@@ -14,10 +14,11 @@ const respond = (body: unknown) => jest.fn().mockResolvedValue({ ok: true, json:
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.replaceProperty(Platform, 'OS', 'android');
   mutableApp.nativeBuildVersion = '37'; mutableApp.applicationId = 'com.totsrl.getflo';
   global.fetch = respond(policy);
 });
-afterEach(() => { global.fetch = originalFetch; jest.useRealTimers(); });
+afterEach(() => { global.fetch = originalFetch; jest.useRealTimers(); jest.restoreAllMocks(); });
 
 test('uses the installed native build, never app config or a hardcoded fallback', () => {
   expect(getCurrentVersionCode()).toBe(37);

@@ -2,6 +2,8 @@
 
 const express = require('express');
 const DEFAULT_MIN_SUPPORTED_VERSION_CODE = 31;
+const MAX_VERSION_CODE = 2100000000;
+const validCode = code => Number.isSafeInteger(code) && code > 0 && code <= MAX_VERSION_CODE;
 
 /**
  * Endpoint public de verificare a versiunii GetFlow.
@@ -21,7 +23,14 @@ function createVersionCheckRouter({ config, versionLimiter }) {
     const latestVersionName = String(process.env.APP_LATEST_VERSION_NAME || config?.app?.latestVersionName || '1.0.0');
     const forceUpdateGlobal = String(process.env.APP_FORCE_UPDATE || 'false').toLowerCase() === 'true';
 
-    const clientVersionCode = Number(req.query.versionCode || 0);
+    if (!validCode(minVersionCode) || !validCode(latestVersionCode) || minVersionCode > latestVersionCode) {
+      return res.status(503).json({ code: 'VERSION_POLICY_UNAVAILABLE', forceUpdate: false });
+    }
+    const rawCode = req.query.versionCode;
+    const clientVersionCode = rawCode === undefined ? 0 : Number(rawCode);
+    if (rawCode !== undefined && (typeof rawCode !== 'string' || !/^\d+$/.test(rawCode) || !validCode(clientVersionCode))) {
+      return res.status(400).json({ code: 'INVALID_VERSION_CODE', forceUpdate: false });
+    }
     const clientPlatform = String(req.query.platform || 'android').toLowerCase();
 
     // Verifică dacă versiunea e inferioară minimului sau dacă forțarea e globală

@@ -72,6 +72,7 @@ describe('Version Check API', () => {
 
   test('preserves an explicitly configured minimum version', async () => {
     process.env.APP_MIN_VERSION_CODE = '32';
+    process.env.APP_LATEST_VERSION_CODE = '32';
     const res = await request(app).get('/api/v1/version-check?versionCode=31');
     expect(res.status).toBe(200);
     expect(res.body.minVersionCode).toBe(32);

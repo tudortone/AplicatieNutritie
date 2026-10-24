@@ -1,151 +1,83 @@
 import { Linking, Platform } from 'react-native';
-import Constants from 'expo-constants';
+import * as Application from 'expo-application';
 import { buildApiUrl } from './api';
 
+export const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.totsrl.getflo';
+export const PLAY_MARKET_URL = 'market://details?id=com.totsrl.getflo';
+const MAX_VERSION_CODE = 2100000000;
+
+export interface UpdateInfo {
+  minVersionCode: number;
+  latestVersionCode: number;
+  latestVersionName: string;
+  forceUpdate: boolean;
+  isOutdated: boolean;
+  storeUrl: string;
+  marketUrl: string;
+}
 export interface VersionCheckResult {
   checked: boolean;
   needsForceUpdate: boolean;
   needsOptionalUpdate: boolean;
-  currentVersionCode: number;
+  requiresUpdate: boolean;
+  currentVersionCode: number | null;
   currentVersionName: string;
-  updateInfo: {
-    minVersionCode: number;
-    latestVersionCode: number;
-    latestVersionName: string;
-    forceUpdate: boolean;
-    isOutdated: boolean;
-    storeUrl: string;
-    marketUrl: string;
-    title?: Record<string, string>;
-    message?: Record<string, string>;
-    releaseNotes?: Record<string, string>;
-  } | null;
+  updateInfo: UpdateInfo | null;
 }
-
-const DEFAULT_STORE_URL = 'https://play.google.com/store/apps/details?id=com.totsrl.getflo';
-const DEFAULT_MARKET_URL = 'market://details?id=com.totsrl.getflo';
-
-/**
- * Returnează codul numeric de versiune instalat pe dispozitiv.
- * Fallback la 31 (versiunea build-ului curent conform app.json).
- */
-export function getCurrentVersionCode(): number {
-  const code = Constants.expoConfig?.android?.versionCode;
-  if (typeof code === 'number' && Number.isFinite(code) && code > 0) {
-    return code;
-  }
-  return 31;
+function isVersionCode(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= MAX_VERSION_CODE;
 }
-
-/**
- * Returnează numele versiunii semantice instalate (ex: "1.0.0").
- */
+export function getCurrentVersionCode(): number | null {
+  const raw = Application.nativeBuildVersion;
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  const code = Number(raw);
+  return isVersionCode(code) ? code : null;
+}
 export function getCurrentVersionName(): string {
-  return Constants.expoConfig?.version || '1.0.0';
+  return Application.nativeApplicationVersion || '';
 }
-
-/**
- * Deschide pagina aplicației GetFlow din magazinul oficial.
- * Încearcă protocolul nativ market:// (Google Play Store app),
- * cu fallback automat la URL-ul web HTTPS dacă aplicația Store nu e instalată.
- */
-export async function openAppStore(customMarketUrl?: string, customStoreUrl?: string): Promise<boolean> {
-  const market = customMarketUrl || DEFAULT_MARKET_URL;
-  const web = customStoreUrl || DEFAULT_STORE_URL;
-
+function parsePolicy(value: unknown): UpdateInfo | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const data = value as Record<string, unknown>;
+  if (!isVersionCode(data.minVersionCode) || !isVersionCode(data.latestVersionCode)
+    || data.minVersionCode > data.latestVersionCode || typeof data.forceUpdate !== 'boolean'
+    || typeof data.isOutdated !== 'boolean' || typeof data.latestVersionName !== 'string'
+    || data.latestVersionName.length > 32 || !data.latestVersionName.trim()
+    || data.storeUrl !== PLAY_STORE_URL || data.marketUrl !== PLAY_MARKET_URL) return null;
+  return data as unknown as UpdateInfo;
+}
+export async function openAppStore(_customMarketUrl?: string, _customStoreUrl?: string): Promise<boolean> {
   try {
-    const canOpenMarket = await Linking.canOpenURL(market);
-    if (canOpenMarket) {
-      await Linking.openURL(market);
+    if (await Linking.canOpenURL(PLAY_MARKET_URL)) {
+      await Linking.openURL(PLAY_MARKET_URL);
       return true;
     }
-  } catch {
-    // Fallback la browser / web URL
-  }
-
-  try {
-    await Linking.openURL(web);
-    return true;
-  } catch (err) {
-    console.warn('[VersionCheck] Nu s-a putut deschide pagina din magazin:', err);
-    return false;
-  }
+  } catch { /* The canonical HTTPS destination is the only fallback. */ }
+  try { await Linking.openURL(PLAY_STORE_URL); return true; } catch { return false; }
 }
-
-/**
- * Verifică pe server dacă versiunea curentă necesită actualizare obligatorie sau opțională.
- * Are un timeout strict de 4 secunde și tratează căderile de rețea în mod grațios
- * (un utilizator offline nu este niciodată blocat).
- */
+async function readPolicy(version: number, signal: AbortSignal): Promise<UpdateInfo | null> {
+  const url = buildApiUrl('/version-check?versionCode=' + version + '&platform=android');
+  const response = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' }, signal });
+  return response.ok ? parsePolicy(await response.json()) : null;
+}
 export async function checkForAppUpdate(timeoutMs = 4000): Promise<VersionCheckResult> {
   const currentVersionCode = getCurrentVersionCode();
-  const currentVersionName = getCurrentVersionName();
-
-  const fallback: VersionCheckResult = {
-    checked: false,
-    needsForceUpdate: false,
-    needsOptionalUpdate: false,
-    currentVersionCode,
-    currentVersionName,
-    updateInfo: null,
-  };
-
+  const fallback: VersionCheckResult = { checked: false, needsForceUpdate: false, requiresUpdate: false,
+    needsOptionalUpdate: false, currentVersionCode, currentVersionName: getCurrentVersionName(), updateInfo: null };
+  if (Platform.OS !== 'android' || Application.applicationId !== 'com.totsrl.getflo'
+    || currentVersionCode === null || process.env.EXPO_PUBLIC_APP_ENV === 'qa') return fallback;
   const controller = new AbortController();
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-    const platform = Platform.OS === 'ios' ? 'ios' : 'android';
-    const url = buildApiUrl(`/version-check?versionCode=${currentVersionCode}&platform=${platform}`);
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-      },
-      signal: controller.signal,
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => { controller.abort(); resolve(null); }, Math.min(Math.max(timeoutMs, 100), 10000));
     });
-
-    if (!response.ok) {
-      return fallback;
-    }
-
-    const data = await response.json();
-    const minCode = Number(data.minVersionCode || 0);
-    const latestCode = Number(data.latestVersionCode || 0);
-    const serverForce = Boolean(data.forceUpdate);
-
-    // Condiție de forțare: versiune sub minimul acceptat sau flag forceUpdate activat
-    const needsForceUpdate = currentVersionCode < minCode || (serverForce && currentVersionCode < latestCode);
-    const needsOptionalUpdate = !needsForceUpdate && currentVersionCode < latestCode;
-
-    return {
-      checked: true,
-      needsForceUpdate,
-      needsOptionalUpdate,
-      currentVersionCode,
-      currentVersionName,
-      updateInfo: {
-        minVersionCode: minCode,
-        latestVersionCode: latestCode,
-        latestVersionName: String(data.latestVersionName || currentVersionName),
-        forceUpdate: serverForce,
-        isOutdated: Boolean(data.isOutdated),
-        storeUrl: String(data.storeUrl || DEFAULT_STORE_URL),
-        marketUrl: String(data.marketUrl || DEFAULT_MARKET_URL),
-        title: data.title,
-        message: data.message,
-        releaseNotes: data.releaseNotes,
-      },
-    };
-  } catch (err) {
-    if (__DEV__) {
-      console.log('[VersionCheck] Verificarea versiunii nu a putut fi finalizată (offline/timeout):', err);
-    }
-    return fallback;
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  }
+    const data = await Promise.race([readPolicy(currentVersionCode, controller.signal), timeout]);
+    if (!data) return fallback;
+    const outdated = currentVersionCode < data.latestVersionCode;
+    // shortcut: no per-user Play availability API; retain dismissible advice until native availability is verified.
+    return { ...fallback, checked: true, updateInfo: data, needsOptionalUpdate: outdated,
+      requiresUpdate: outdated && (currentVersionCode < data.minVersionCode || data.forceUpdate) };
+  } catch { return fallback; }
+  finally { if (timer !== undefined) clearTimeout(timer); controller.abort(); }
 }
