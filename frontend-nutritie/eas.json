@@ -13,6 +13,8 @@
       "android": { "buildType": "apk" },
       "env": {
         "EXPO_PUBLIC_APP_ENV": "qa",
+        "EXPO_PUBLIC_API_URL": "http://127.0.0.1:3000",
+        "EXPO_PUBLIC_SUPABASE_URL": "http://127.0.0.1:54321",
         "EXPO_PUBLIC_ADS_MODE": "disabled",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "qa-synthetic-anon-key",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"

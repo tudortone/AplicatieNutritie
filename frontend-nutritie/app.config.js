@@ -50,8 +50,14 @@ module.exports = ({ config }) => {
   }
 
   if (process.env.EXPO_PUBLIC_APP_ENV === 'qa') {
+    const qaProfile = require('./eas.json').build['qa-isolated'];
+    if (qaProfile.extends || qaProfile.environment !== 'development') {
+      throw new Error('QA profile must be standalone and use only the development EAS environment.');
+    }
+    const qaPlugins = plugins.filter((p) => !['@sentry/react-native', '@sentry/react-native/expo'].includes(Array.isArray(p) ? p[0] : p));
+    qaPlugins.push('./plugins/withQaLoopbackNetwork');
     return {
-      ...config, plugins, name: 'GetFlow QA', scheme: 'getflow-qa',
+      ...config, plugins: qaPlugins, name: 'GetFlow QA', scheme: 'getflow-qa',
       android: { ...config.android, package: 'com.totsrl.getflo.qa' },
       updates: { ...config.updates, enabled: false },
     };

@@ -1,0 +1,12 @@
+[
+  {
+    "url": "https://nutritie-backend-ai.onrender.com/health",
+    "status": 200,
+    "observedAtUtc": "2026-10-24T13:31:36.9141032Z"
+  },
+  {
+    "url": "https://nutritie-backend-ai.onrender.com/version-check",
+    "status": 404,
+    "observedAtUtc": "2026-10-24T13:31:36.9900810Z"
+  }
+]

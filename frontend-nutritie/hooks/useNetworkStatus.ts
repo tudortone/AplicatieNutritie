@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
 import { AppState, Platform } from 'react-native';
+import { API_URL } from '../constants/config';
 
 /**
  * Monitorizează starea conectivității.
@@ -13,8 +14,9 @@ export function useNetworkStatus(pollIntervalMs = 45_000) {
   const lastState = useRef<NetInfoState | null>(null);
 
   useEffect(() => {
+    const qa = process.env.EXPO_PUBLIC_APP_ENV === 'qa';
     // NetInfo oferă detecție la nivel de interfață (WiFi / Cellular on/off)
-    const unsubscribe = NetInfo.addEventListener((state) => {
+    const unsubscribe = qa ? () => {} : NetInfo.addEventListener((state) => {
       lastState.current = state;
       setIsConnected(Boolean(state.isConnected));
       setIsInternetReachable(state.isInternetReachable);
@@ -33,18 +35,20 @@ export function useNetworkStatus(pollIntervalMs = 45_000) {
         }
         return;
       }
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
         // Folosim un URL cunoscut care răspunde rapid (fără auth).
-        const res = await fetch('https://clients3.google.com/generate_204', {
-          method: 'HEAD',
+        const res = await fetch(qa ? `${API_URL}/health` : 'https://clients3.google.com/generate_204', {
+          method: qa ? 'GET' : 'HEAD',
           signal: controller.signal,
         });
-        clearTimeout(timeout);
+        if (qa && mounted) setIsConnected(res.ok);
         if (mounted) setIsInternetReachable(res.ok);
       } catch {
         if (mounted) setIsInternetReachable(false);
+      } finally {
+        clearTimeout(timeout);
       }
     };
 
@@ -69,6 +73,7 @@ export function useNetworkStatus(pollIntervalMs = 45_000) {
 
     const appSubscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
+        if (qa) { startPolling(); return; }
         // La revenirea din background, forțăm o reîmprospătare NetInfo
         NetInfo.fetch().then((s) => {
           lastState.current = s;

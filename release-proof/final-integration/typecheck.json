@@ -1,0 +1,4 @@
+{
+  "command": "Node22 tsc --noEmit",
+  "exitCode": 0
+}

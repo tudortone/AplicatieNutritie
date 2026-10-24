@@ -3,7 +3,7 @@
 // shortcut: fixture-only loopback QA; approve a separate contract before using hosted staging.
 function assertQaEnvironment(env) {
   if (env.EAS_BUILD_PROFILE !== 'qa-isolated' && env.EXPO_PUBLIC_APP_ENV !== 'qa') return;
-  if (env.EXPO_PUBLIC_APP_ENV !== 'qa' || env.EAS_BUILD_PROFILE === 'production' || env.APP_ENV === 'production') {
+  if (env.EXPO_PUBLIC_APP_ENV !== 'qa' || (env.EAS_BUILD_PROFILE && env.EAS_BUILD_PROFILE !== 'qa-isolated') || env.APP_ENV === 'production') {
     throw new Error('QA requires an explicit qa environment, separate from Production.');
   }
   for (const key of ['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_SUPABASE_URL']) {

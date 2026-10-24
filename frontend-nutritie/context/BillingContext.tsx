@@ -143,8 +143,9 @@ export function BillingProvider({
   if (!serviceRef.current) serviceRef.current = serviceOverride ?? createDefaultService();
   const service = serviceRef.current;
   const startPromiseRef = useRef<Promise<void> | null>(null);
-  const nativeAvailable = nativeAvailableOverride ??
-    (Platform.OS === 'android' && Constants.appOwnership !== 'expo');
+  const qa = process.env.EXPO_PUBLIC_APP_ENV === 'qa';
+  const nativeAvailable = !qa && (nativeAvailableOverride ??
+    (Platform.OS === 'android' && Constants.appOwnership !== 'expo'));
   const [operation, setOperation] = useState<BillingOperationState>(
     nativeAvailable ? service.getState() : { status: 'unavailable' },
   );
@@ -212,14 +213,14 @@ export function BillingProvider({
   }, [appUserId, nativeAvailable, refreshProducts]);
 
   const purchasePremium = useCallback(
-    (product: BillingProduct, offer: BillingOffer) => service.purchasePremium(product, offer),
-    [service],
+    (product: BillingProduct, offer: BillingOffer) => qa ? Promise.reject(new Error('QA purchases are unavailable.')) : service.purchasePremium(product, offer),
+    [qa, service],
   );
   const purchaseCredits = useCallback(
-    (product: BillingCreditProduct) => service.purchaseCredits(product),
-    [service],
+    (product: BillingCreditProduct) => qa ? Promise.reject(new Error('QA purchases are unavailable.')) : service.purchaseCredits(product),
+    [qa, service],
   );
-  const restorePurchases = useCallback(() => service.restorePurchases(), [service]);
+  const restorePurchases = useCallback(() => qa ? Promise.resolve(false) : service.restorePurchases(), [qa, service]);
   const purchasesAvailable = nativeAvailable && appUserId != null && operation.status !== 'unavailable';
 
   const value = useMemo<BillingContextValue>(() => ({
