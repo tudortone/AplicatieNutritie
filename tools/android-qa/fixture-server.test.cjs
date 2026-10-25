@@ -25,6 +25,18 @@ test('bootstrap is explicitly synthetic and remote Host/Origin requests are reje
   assert.equal((await fetch(`${base}/health`, { headers: { Origin: 'https://attacker.invalid' } })).status, 403);
 }));
 
+test('legal pages are exact local release documents, with no remote content allowed', () => withServer(async (base) => {
+  const { readFileSync } = require('node:fs');
+  const { resolve } = require('node:path');
+  for (const [route, file] of [['terms', 'termeni-si-conditii.html'], ['privacy', 'politica-de-confidentialitate.html']]) {
+    const response = await fetch(`${base}/${route}`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /^text\/html/);
+    assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'");
+    assert.equal(await response.text(), readFileSync(resolve(__dirname, '../../backend-nutritie-ai/public', file), 'utf8'));
+  }
+}));
+
 test('only synthetic password identity is accepted; malformed bodies and wrong keys fail closed', () => withServer(async (base) => {
   const request = (body, key = 'qa-synthetic-anon-key') => fetch(`${base}/auth/v1/token?grant_type=password`, {
     method: 'POST', headers: { apikey: key, 'Content-Type': 'application/json' }, body,

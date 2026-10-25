@@ -24,6 +24,12 @@ export function getLegalUrls(overrides?: {
   termsUrl?: string;
   privacyUrl?: string;
 }): { termsUrl: string; privacyUrl: string } {
+  if (process.env.EXPO_PUBLIC_APP_ENV === 'qa') {
+    return {
+      termsUrl: 'http://127.0.0.1:3000/terms',
+      privacyUrl: 'http://127.0.0.1:3000/privacy',
+    };
+  }
   // Accesul static este obligatoriu pentru ca Expo să inline-uiască EXPO_PUBLIC_* la build.
   return {
     termsUrl: validateLegalUrl(

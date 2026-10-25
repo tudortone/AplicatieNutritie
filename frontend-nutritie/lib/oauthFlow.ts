@@ -1,10 +1,13 @@
 import type { Session } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
+import Constants from 'expo-constants';
 import { supabase } from '../supabase';
 import appConfig from '../app.json';
 
-// Același scheme este înregistrat de Expo în manifestul aplicației native.
-export const OAUTH_REDIRECT_URI = `${appConfig.expo.scheme}://auth/callback`;
+// app.config.js overrides the native scheme for the isolated QA application.
+const configuredScheme = Constants.expoConfig?.scheme;
+const nativeScheme = (Array.isArray(configuredScheme) ? configuredScheme[0] : configuredScheme) || appConfig.expo.scheme;
+export const OAUTH_REDIRECT_URI = `${nativeScheme}://auth/callback`;
 WebBrowser.maybeCompleteAuthSession();
 
 export type CallbackParams = Record<string, string | string[] | undefined>;

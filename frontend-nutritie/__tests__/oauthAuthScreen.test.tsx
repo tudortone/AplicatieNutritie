@@ -57,6 +57,22 @@ describe('AUTH-OAUTH-001 auth UI cancellation and retry', () => {
     expect(view.getByPlaceholderText('auth.emailPlaceholder')).toBeTruthy();
   });
 
+  it('explains fixture-only QA without opening a real OAuth browser session', async () => {
+    const previousEnvironment = process.env.EXPO_PUBLIC_APP_ENV;
+    process.env.EXPO_PUBLIC_APP_ENV = 'qa';
+    try {
+      Platform.OS = 'android';
+      const view = await render(<AuthScreen />);
+      await fireEvent.press(view.getByLabelText('Continuă cu Google'));
+      expect(view.getByText('auth.qaOAuthUnavailable')).toBeTruthy();
+      expect(mockAuthorize).not.toHaveBeenCalled();
+      expect(mockBrowser).not.toHaveBeenCalled();
+    } finally {
+      if (previousEnvironment === undefined) delete process.env.EXPO_PUBLIC_APP_ENV;
+      else process.env.EXPO_PUBLIC_APP_ENV = previousEnvironment;
+    }
+  });
+
   it.each(['ios', 'web'] as const)('keeps Apple available on %s', async platform => {
     Platform.OS = platform;
     const view = await render(<AuthScreen />);

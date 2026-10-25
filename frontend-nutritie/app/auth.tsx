@@ -207,6 +207,10 @@ export default function AuthScreen() {
 
   const signInWithOAuth = async (provider: 'google' | 'apple') => {
     if (loadingOAuth) return;
+    if (process.env.EXPO_PUBLIC_APP_ENV === 'qa') {
+      setAuthError(t('auth.qaOAuthUnavailable', 'Google and Apple sign-in are unavailable in isolated QA. Use the synthetic email account.'));
+      return;
+    }
     if (Platform.OS === 'android' && provider === 'apple') {
       return;
     }

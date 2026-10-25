@@ -1,6 +1,8 @@
 'use strict';
 const http = require('node:http');
 const { randomBytes } = require('node:crypto');
+const { readFileSync } = require('node:fs');
+const { resolve } = require('node:path');
 const { handleMeals } = require('./manual-meals.cjs');
 const BODY_LIMIT = 8192;
 const KEY = 'qa-synthetic-anon-key';
@@ -16,6 +18,17 @@ function reply(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store',
     'X-GetFlow-Fixture': 'synthetic-only', 'X-Content-Type-Options': 'nosniff' });
   res.end(JSON.stringify(body));
+}
+
+function serveLegal(res, pathname) {
+  const documents = { '/terms': 'termeni-si-conditii.html', '/privacy': 'politica-de-confidentialitate.html' };
+  if (!Object.hasOwn(documents, pathname)) return false;
+  const body = readFileSync(resolve(__dirname, '../../backend-nutritie-ai/public', documents[pathname]), 'utf8');
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
+    'X-GetFlow-Fixture': 'synthetic-only', 'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'" });
+  res.end(body);
+  return true;
 }
 
 function readJson(req) {
@@ -49,6 +62,7 @@ function createFixtureServer(state = { session: null }) {
       return reply(res, 403, { code: 'LOCAL_CLIENT_ONLY' });
     }
     const url = new URL(req.url, `http://${authority}`);
+    if (req.method === 'GET' && serveLegal(res, url.pathname)) return;
     if (req.method === 'GET' && url.pathname === '/health') return reply(res, 200, { fixtureOnly: true });
     const supabase = url.pathname.startsWith('/auth/') || url.pathname.startsWith('/rest/');
     if (supabase && req.headers.apikey !== KEY) return reply(res, 401, { code: 'SYNTHETIC_KEY_REQUIRED' });

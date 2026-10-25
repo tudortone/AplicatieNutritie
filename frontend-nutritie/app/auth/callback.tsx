@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { ActivityIndicator, Alert, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import { oauthFlow } from '../../lib/oauthFlow';
-import AuthCompletionScreen from './complete';
+import { useTheme } from '../../context/ThemeContext';
 
 // Expo Router montează această rută pentru Linking (warm) și URL-ul inițial
 // (cold). Browserul folosește exact același schimb PKCE.
@@ -12,6 +12,7 @@ export default function AuthCallbackScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const { t } = useTranslation();
+  const { colors } = useTheme();
   const { session, loadingAuth } = useAuth();
   const [completion, setCompletion] = useState<{ code: string | string[] | undefined; userId: string } | null>(null);
   const code = params.code;
@@ -41,5 +42,11 @@ export default function AuthCallbackScreen() {
     router.replace(recovery ? '/auth/noua-parola' : '/auth/complete');
   }, [completion, code, error, errorDescription, loadingAuth, session, recovery, router]);
 
-  return <AuthCompletionScreen />;
+  // The completion route can navigate; mount it only after PKCE and identity convergence.
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, backgroundColor: colors.background }}>
+      <ActivityIndicator size="large" color={colors.accent} />
+      <Text style={{ color: colors.textSecondary }}>{t('oauth.completing')}</Text>
+    </View>
+  );
 }
