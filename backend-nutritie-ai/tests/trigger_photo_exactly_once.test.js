@@ -202,6 +202,20 @@ describe('photo worker durable inference and settlement', () => {
     expect(mockState.job.error_code).toBe('PHOTO_OUTCOME_UNKNOWN');
   });
 
+  test('an unbound legacy payload cannot infer, settle, or release a reserved credit on the v2 worker', async () => {
+    const legacyPayload = {
+      imageUrl: PAYLOAD.imageUrl, userId: PAYLOAD.userId,
+      jobId: PAYLOAD.jobId, reservationId: PAYLOAD.reservationId,
+    };
+
+    await expect(task.run(legacyPayload)).rejects.toThrow('PHOTO_JOB_CONTRACT_MISSING');
+
+    expect(mockState.inferenceCalls).toBe(0);
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockState.events).toEqual([]);
+    expect(mockState.reservation.status).toBe('RESERVED');
+  });
+
   test('concurrent delivery grants only one inference claim for the same logical operation', async () => {
     const results = await Promise.allSettled([task.run(PAYLOAD), task.run(PAYLOAD)]);
 

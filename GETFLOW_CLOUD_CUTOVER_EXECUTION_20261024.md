@@ -4,7 +4,7 @@
 
 ## Candidate and verification
 
-Resumed the same clean checkout `release-closure-20261024`, branch `codex/launch-closure-20261024`, application candidate **b95b76185d940a2a12878766e35ba6016c119741**. QA integration **4116e17e5113ea3c74a6e64e217e193640aad5b9** remains included. This checkpoint adds documentation only; application/backend/worker/SQL content is unchanged. No worktree creation, reset, clean, rebase, source reapplication, protected-checkout write or marketing change.
+Resumed the same clean checkout `release-closure-20261024`, branch `codex/launch-closure-20261024`, application candidate **b95b76185d940a2a12878766e35ba6016c119741**. QA integration **4116e17e5113ea3c74a6e64e217e193640aad5b9** remains included. This checkpoint adds documentation only; application/backend/worker/SQL content is unchanged. No worktree creation, reset , clean, rebase, source reapplication, protected-checkout write or marketing change.
 
 Read the eight requested checkpoints. Retained results were inspected, not rerun: frontend76/76 + EAS6/6; typecheck0; canonical focused lint0 with4 warnings; backend13 suites103 tests. `git diff --quiet 2680eaf381604713d6bdefff084c2b3ea97f4e13 HEAD -- backend-nutritie-ai supabase/migrations` exited0, binding the backend/SQL to the tested source. These are preserved local results, not new live acceptance.
 
@@ -233,3 +233,71 @@ Fresh npm ci installations used only new backend-dependencies/frontend-dependenc
 No write operation is currently ready for an execution approval: Git publication still requires verified automatic integration effects and cannot be described as CI-green; Trigger requires a security-acceptable pinned CLI plus schema/job routing; Render requires DB/worker and live identity gates. Therefore **zero new approvals requested**, rather than asking for a speculative push/deploy/backup exception. No renewed storage/admin request; no Supabase migration bypass. Continue from these exact artifacts when missing access or an upstream fix becomes available.
 
 Skills used selectively: executing-plans, verification-before-completion, security-review, code-review, blast-radius and tdd-workflow (failing vulnerability gates before minimum dependency remediation; existing behavioral regressions reused). No subagents or general architecture refactor. Production remains unchanged; CLOUD_READY is not asserted.
+
+## 25 October 2026 — final local security blocker investigation
+
+Starting HEAD8a77f73e2ba6819454906fabe31a0405434b6d60 was clean. Runtime source, manifests, lockfiles, Production/QA profiles, SQL, scanner policies and marketing remain unchanged in this execution. The only candidate changes are this checkpoint and one14-line worker regression. Evidence/tooling is isolated in sibling **last-local-security-20261025/**, not included in Git publication. No global installs, subagents, credentials, login, deployment, Android, backup or Production operation.
+
+### A. node-forge — BLOCKED_UPSTREAM_NO_SAFE_REMOVAL
+
+Fresh npm explain exit0 and lockfile/source inspection confirm node-forge1.4.0 is **dev=false, optional=false**. That npm classification must not be presented as proof of phone-runtime execution. Mandatory chains:
+
+1. frontend →expo54.0.37 →nested @expo/cli54.0.27 →node-forge^1.3.3, directly.
+2. The same CLI →@expo/code-signing-certificates0.0.6 →node-forge^1.3.3.
+3. frontend →expo-updates29.0.20 →@expo/code-signing-certificates0.0.6 →node-forge.
+
+Concrete uses in installed code: @expo/code-signing-certificates/build/main.js validateSelfSignedCertificate calls certificate.verify(certificate); signBufferRSASHA256AndVerify signs then locally verifies a SHA256 signature; generateDevelopmentCertificateFromCSR calls csr.verify(csr). Expo CLI src/utils/codesigning.js loads configured local certificate/private-key files, validates them and signs development manifests. expo-updates/cli/build/configureCodeSigningAsync.js is a command-line certificate configuration consumer. CLI src/run/ios/codeSigning/Security.js also parses certificates through node-forge. Source files were inspected, **no private certificate/key file was opened**.
+
+No node-forge/code-signing-certificates import was found in GetFlow app/components/context/lib/backend runtime source or the installed Expo/ExpoUpdates runtime JS entry trees inspected. No food/chat/image request path was found calling these cryptographic functions. This is source reachability evidence, not a new Android bundle/runtime inspection. It supports a tooling/signing risk classification; it does not certify unreachability for every possible build/plugin configuration.
+
+The [official HIGH advisory](https://github.com/advisories/GHSA-86w9-cpqp-85rv) still has **no patched version**. An attacker controlling a relevant certificate/CSR/signature could exploit incorrect PKCS#1 v1.5 DigestAlgorithm validation under the advisory's key/input conditions. Current inspected manifest signing verifies freshly generated local signatures, not an uploaded user-photo signature; a remotely exploitable GetFlow API route has not been demonstrated. Untrusted signing material/build inputs still require protection. No cryptographic patch or exploit was introduced.
+
+Removal is not safe or sufficient: removing expo-updates alone leaves Expo CLI's direct edge; removing Expo/its required CLI breaks the application's framework/development/build contract. Omit-dev/omit-optional would neither remove this mandatory edge nor solve the full-lockfile OSV gate. Official metadata for compatible CLI54.0.28 still declares node-forge^1.3.3; latest CLI58.1.15 and signing package0.0.7 still require node-forge^1.4.0. Therefore no tested parent replacement/removal solves this advisory today; no unrelated Expo migration, falsified optional marking, stub or crypto replacement applied.
+
+Fresh application checks: npm frontend audit **exit1,7 high graph nodes rooted in this one advisory**; exact OSV2.5.0 scan of all3 configured lockfiles **exit1,only node-forge1.4.0**. Existing exception/OSV/Gitleaks policies unchanged. The security gate remains open explicitly.
+
+### B. Trigger CLI4.6.4 versus4.7.7 — RUNTIME_FIX_CONFIRMED / DEPLOYMENT_TOOL_STILL_BLOCKED
+
+[Official4.7.7 release](https://github.com/triggerdotdev/trigger.dev/releases/tag/v4.7.7), published22October, confirms October Node security runtime updates and TLS hostname verification fixes. It also documents removal of compromised CA trust in relevant images. Existing deployed tasks do not acquire these updates without redeployment; none occurred here.
+
+Resolved **pristine** exact4.6.4 and4.7.7 graphs using the same npm10.9.9, registry and scripts-disabled policy. No latest tag, global install, credentials or lifecycle execution. Complete npm lockfile audits, including transitive packages:
+
+| Isolated tool graph | critical | high | moderate | Total graph nodes | Audit exit |
+| --- | --- | --- | --- | --- | --- |
+| CLI4.6.4 pristine |1|7|6|14|1|
+| CLI4.7.7 pristine |1|7|6|14|1|
+| CLI4.7.7 same-major hardening proposal |1|5|1|7|1|
+
+Both pristine graphs contain the **same17 distinct directly reported advisory URLs**, zero set differences, including tar, deepmerge-ts, esbuild, ws and Zod. This comparison is not merely total-count equality. Earlier4.6.4 result13 included an existing local Zod override, so it was not an equivalent pristine baseline. Node/TLS/base-image fixes are real even though these npm findings remain.
+
+Independent OSV2.5.0 scan with unchanged policy confirms both pristine CLI graphs have5 affected packages/17 advisory IDs (deepmerge-ts, esbuild, tar, ws, zod). The reduced same-major graph has3 affected packages/14 advisory IDs (deepmerge-ts, esbuild, tar). All3 remain FAIL, command exit1. npm reports affected dependency-graph nodes including parents; OSV package/advisory counts are distinct metrics. Full JSON retained as cli-osv-comparison.json.
+
+Additional isolated **lockfile-only** hardening proposal pins published Zod4.6.7, ws8.21.3 and socket.io-client4.8.3 within existing major families, removing their findings and transitive graph warnings. This does not suppress advisories. Initial resolution specified unavailable engine.io-client6.6.11; npm rejected it with ETARGET before installation. Removed that redundant override after confirming the actual dependency findings; published-version resolution then succeeded. Pristine graphs and application lockfiles were preserved.
+
+Still unresolved in the reduced proposal: **tar6.2.1 CRITICAL** via trigger.dev→c12→giget→tar; **deepmerge-ts7.1.5 HIGH** via @trigger.dev/build→@prisma/config; **esbuild0.23.1 MODERATE**, plus their affected parents. Fixes require crossing tar6's major family, deepmerge-ts8 and esbuild's0.x compatibility boundary. No such override was forced without archive/config/bundler compatibility evidence. The critical archive-extraction dependency is inappropriate for a credential-bearing deploy tool merely because its executable lives in an isolated directory. Keep both versions blocked for deployment; no security exception/threshold change requested.
+
+Lockfile SHA256: pristine4.6.4 **9684F4C51C358F8349853A85039205C3348EF5E2139585CC391FC1679A075CA6**; pristine4.7.7 **2EF2210E2D6FBE880EFBEC7196F787269158C079F561C26FCAC701A198A60083**; reduced4.7.7 proposal **62F72980B07343A1D2BECD4FCF0D6798118B22B7E51C372F5BF51E5EB1AE020F**. Only pristine4.7.7 was fully installed for bounded offline inspection; reduced proposal remains graph/audit evidence, not an executable or validated deploy artifact. Detailed audit JSON retained next to each graph.
+
+#### SDK, runtime, TLS and payload checks
+
+CLI4.7.7 engine remains Node>=18.20.0, but an engine range is not a security-patch guarantee. Downloaded official **Node22.23.4** into this isolated evidence directory; verified archive SHA256 **CBC74B5E0982C9DBB41525FD8FB5DCD32FBEE237863F7829072F4639A1CE5F20** against vendor checksums. Host/global/OneDrive Node binaries unchanged. New process reports Node22.23.4/OpenSSL3.5.9,116 bundled roots. Synthetic checkServerIdentity accepts matching hostname and rejects mismatched hostname; this is not a full TLS handshake or certificate-chain recovery test.
+
+CLI4.7.7 version/deploy-help/promote-help each exit0 under patched Node with telemetry disabled and no auth/deploy invocation. Actual installed buildImage.js contains pinned new base images, emSign distrust roots and rejected intermediates, update-ca-certificates and NODE_OPTIONS=--use-openssl-ca. Config runtime remains 'node'; this CLI maps the generic Node image to Node24, not an implicit Node22 promise. No container was built or live runtime/trust store attested.
+
+Application SDK/core stay **4.6.4**, vulnerability-free in the prior verified backend graph. Offline tests sent bounded synthetic requests through the real SDK to intercepted127.0.0.1 fetch only: actual task ID, v1/v2 payload roundtrips through **both4.6.4 and4.7.7 core schemas/packet decoders**, stable replay key, distinct-operation key, explicit lockToVersion, equal actual CJS/ESM config. SDK payloads use a packet envelope, so the initial harness's raw-JSON expectation failed; switched to the real packet decoders rather than changing application transport. Final **6/6 tests PASS**, exit0, including the2 hostname cases. Script cli-sdk-compatibility.cjs SHA256 **ABD23E0DCF1D49F1090688C975E57AAF34DD4D722D3DFE378B9C545639815994**, with TAP preserved. This proves bounded wire/config compatibility, not deployment acceptance.
+
+**Important version gate:** installed CLI4.7.7 deploy calls updateTriggerPackages before authentication; in CI/agent mode its actual code aborts on package-version mismatch. Thus SDK4.6.4+CLI4.7.7 is **not approved as a deploy pairing**, despite wire tests passing. Earlier deployment templates containing --skip-update-check are **withdrawn as execution instructions**: that flag also bypasses this package-match check. Do not use it to force this pairing, do not run auto-update, and do not promote a worker just to obtain the runtime patch. Any future4.7.7 pairing must align/retest SDK and CLI after tool dependency security is solved. No SDK upgrade was justified while that gate remains blocked.
+
+New candidate regression confirms that a legacy payload lacking logical operation/fingerprint binding is rejected by the existing v2 worker **before fetch/inference, settlement or release**, preserving its reserved credit. Together with current v2 duplicate/ambiguous-outcome tests, **2 suites12/12 PASS**, exit0; focused test lint0. This explicitly does **not** make accepted legacy runs safe on the new worker. Preserve the old deployment/routing and v1 RPCs; live queue/version evidence is still required. No financial or runtime production code modified.
+
+### C. GitHub / CI / final local disposition
+
+Official connected read reconfirmed main **bf7ca4c77701e4ee78d9bffd3a329d779e8e7d6f**, protected=false. Available browser inventory had no cloud dashboard tabs; no unrelated app/window operated. Earlier observed Vercel Preview integrations remain evidence of publication side effects; current Render/Trigger/Vercel trigger filters are unverified. No main change, remote branch, PR, push, auto-deploy setting or cloud operation.
+
+Candidate publication remains blocked by the unchanged **node-forge OSV finding**, unknown automatic deployment effects and missing explicit exact-ref approval. CLI security and SDK/CLI alignment separately block worker deployment; neither is silently converted into a blanket GitHub release exception. CI also still needs a real remote run on the eventual approved ref; local checks do not certify every unrelated remote job. No administrator, backup/storage or Production approval requested.
+
+New results: npm explain0;3 CLI graph resolutions0 after the recorded ETARGET correction; pristine CLI audits1/1, reduced proposal1; frontend raw audit1; exact OSV1; offline compatibility6/6 and worker regression12/12, both0; focused lint0.18 tests passed in final runs. Historical227 tests were not repeated. Only checkpoint and the new regression are committed; no application dependencies or policies changed. Full proposed-history Gitleaks is refreshed for the final commit, with redacted result under last-local-security-20261025/history-secrets-final.*.
+
+Recommendation: **no deploy-approved CLI version yet**.4.7.7 is the verified runtime-security target, not a clean JavaScript toolchain. Same-major proposal reduces findings but remains blocked. First eligible external approval will be exact Git ref/SHA publication only after the automatic effects and security/CI gates are resolved; no ready safe write is currently presented for approval. Supabase remains BLOCKED_BACKUP_PENDING; backup stays suspended.
+
+[Audit & Skills Report] executing-plans, security-review, code-review and verification-before-completion consulted selectively. No cryptographic remediation or business-code bug warranted TDD production changes; one behavioral regression added. No subagents, general audit, marketing, Android, OneDrive or Production modifications.
