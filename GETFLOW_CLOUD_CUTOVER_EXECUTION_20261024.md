@@ -1,6 +1,6 @@
 # GetFlow cloud cutover execution — 24 October 2026
 
-Latest continuation: **25 October — first approved QA command failed before cloud build creation; fingerprint defect corrected locally; NEW SHA APPROVAL REQUIRED**. See the final dated continuation. Trigger reproducibility remains verified; Production cutover remains blocked. Earlier counts/SHA entries are historical. Backup destination follows the owner's Google Drive decision; B2/CMS provisioning is superseded.
+Latest continuation: **25 October — corrected SHA approved; one EAS QA build CREATED and IN_PROGRESS**. Build0cbadf94-3051-4f97-a87d-9dc3fbbec386, source e3a4beac610e26372db2a196fcff0504fc76071b. No APK installation, Play or Production action authorized. See the final dated continuation. Earlier pending-approval statements are historical. Backup destination remains the owner's Google Drive decision.
 
 **BLOCKED_WITH_EXACT_OWNER_ACTION**. No Production write, export, backup, real-data restore, publication or deployment executed. Owner explicitly confirmed that authenticated dashboards are unavailable and requested local continuation. This checkpoint records executed preparation, not a completed cutover.
 
@@ -564,3 +564,123 @@ Evidence remains in sibling release-repro-20261025: single-qa-build-* records/lo
 **Next exact authorization:** one QA APK using the new corrected local commit SHA reported in the handoff, same package/version38/profile/existing signer/loopback and Free quota, using a clean source snapshot. The prior SHA-specific build approval does not authorize a changed commit. Existing narrow node-forge acceptance is retained; do not ask again for the same risk scope or turn it into a CI exception. No build has been resubmitted on the new SHA. No installation approval requested before an artifact exists.
 
 [Audit & Skills Report] executing-plans, verification-before-completion, systematic-debugging and tdd-workflow consulted for this turn. Existing security-review/code-review principles retained. Root causes reproduced before fixes; no guards relaxed. Cleanup limited to dependency scope, reproducible regression/CI wiring and documentation. Native device behavior, final APK manifest/signature, Play, Production and real backup remain unverified and untouched.
+
+## 25 October — one corrected QA cloud build authorized and created
+
+Owner explicitly approved **one build of e3a4beac610e26372db2a196fcff0504fc76071b**, qa-isolated/com.totsrl.getflo.qa/version38/existing QA signer/loopback, Free quota, no unconfirmed extra cost, installation or Play. Existing narrowly scoped node-forge risk acceptance remains active until2026-11-01T00:00:00Z; no scanner or CI exception was added. The prior source04c6afe and its failed-attempt records remain preserved.
+
+Reconfirmed signing/version identity, development env variables0, zero pre-existing QA jobs, Free Android quota13/15 and cost0. Corrected source snapshot and actual archive were clean of browser/render/test caches and private credential inputs; application files match the approved commit. Raw clean-archive scan retains the same four manually reviewed nonsecret source fixtures/keys; no ignore or finding suppression. Short private TEMP, process-only core.longpaths and cleared public QA environment retained. A local runner-generation quoting error stopped before invoking EAS and before creating an attempt marker; it was corrected locally. No duplicate submission followed.
+
+Exactly one EAS invocation for the corrected SHA started **2026-10-25T10:56:22Z**, returned **exit0 at10:57:04Z**, and created **0cbadf94-3051-4f97-a87d-9dc3fbbec386**. Official build fingerprint computed normally: **d870827151cceb924ff148a1ad9dd5a54e2addd5**. Remote metadata confirms project18cf8908-194b-4386-a700-22dea945da47, ANDROID, INTERNAL, qa-isolated, version38 and exact source SHA. Existing remote QA credential used; no keystore generation, version increment, source push or submission.
+
+Build entered IN_PROGRESS at10:57:12Z. At11:09:01Z it was in RUN_GRADLEW; logs showed1045 distinct task names, latest :app:generateReleaseResources. Dependency install, prebuild, credential/version configuration and JS bundling had completed. These observations are progress, not a completed build or device acceptance. Only phase/task identifiers were exposed from cloud logs; signed log/artifact URLs and credential values were not printed.
+
+Evidence: sibling release-repro-20261025/corrected-single-qa-build-attempt.json, corrected-single-qa-build-result.json, corrected-qa-build-status.json and corrected-qa-status-history.jsonl. Durable marker prevents another submission. Prepared offline download, signature/identity/permissions/loopback-manifest inspection using Android build-tools36 and Android Studio JBR21. No APK downloaded before FINISHED; no phone operation, fixture session, ADB reverse or install executed.
+
+**Current gate: QA_CLOUD_BUILD_IN_PROGRESS.** Continue only read-only monitoring/download/inspection of this exact build. Do not create another build, change source, skip fingerprinting, promote, submit or install. Final APK verification and any device session require their respective evidence/approval.
+
+## 25 October continuation — actual APK, authenticated cloud inventory and Samsung defects
+
+This section supersedes the historical IN_PROGRESS gate above. Build **0cbadf94-3051-4f97-a87d-9dc3fbbec386 FINISHED at2026-10-25T11:19:27.454Z**, source **e3a4beac610e26372db2a196fcff0504fc76071b**, QA package/version38. APK128417448bytes, SHA256 **ee81a1de6b71b4a47befac39eff656f13662643b198c44628508da8a29d551ed**. apksigner/manifest/bundle checks exit0: QA signer0d32f59b93ec6d37a82040f75545227e409790845d50d3701d76f8dc7fbc1837; API3000/Supabase54321 loopback, synthetic key, OTA disabled, automatic Ads/Sentry providers absent, CAMERA present and six denied permissions absent. Other autolinked SDK permissions remain; this is not proof of total SDK removal. Optimized network XML is res/VO.xml, not the source filename; base cleartext false,127.0.0.1-only HTTP exception. Original inspector representation/resource-path errors were corrected without relaxing checks. Free Android quota14/15, observed cost0; QA/Production public version and credential metadata remained identical before/after.
+
+Owner separately approved installation, fixture startup, reverse3000/54321, synthetic tests/captures. Verified Samsung **SM-S928B Android16/API36**, owner user0. Installed this APK successfully; QA38 and Production **37** coexist, Production unchanged. No access to protected Android user150, no uninstall/pm-clear/real purchase/cloud AI. Cold Activity launch TotalTime631ms is one activity metric, not end-to-end performance. Real loopback requests200 confirm USB reverse works. Native CAMERA permission granted. Captures in sibling release-repro-20261025 are authentic, unaltered QA evidence; no final marketing export or new branding was produced.
+
+### Cloud evidence refreshed read-only
+
+| Component | Observed live | Material gate |
+| --- | --- | --- |
+| GitHub main | bf7ca4c77701e4ee78d9bffd3a329d779e8e7d6f; latest CI39755529421 failed | Local candidate unpublished; OSV/node-forge gate retained; Vercel/Trigger publication side effects not fully verified |
+| Supabase tfqcihbjgmscsseyzifs | Authenticated Free/main/Production; postgres17.6; **31** migration versions, latest20261004090000 | Seven candidate migrations remain unapplied; no backup/cutover authorization |
+| Trigger | Current deployment **p1srfix5**, version **20261012.2**, Node22.16.0,2tasks; task table showed0running | Git provenance absent in current deployment row; new worker not deployed; DB v2 missing |
+| Render | Live **fbf4e0741f102f37f6bcfc009383a4a9c0a2793b**, dep-db93i167bikc73bqvdkg, Free | Auto-deploy disabled after exact-commit deployment; candidate absent |
+
+Single public Render probes: /health200/824ms; /api/v1/version-check?versionCode=37&platform=android404/152ms; /api/version-check?versionCode=37&platform=android404/68ms. These are three individual reads, not p50/p95 or cold-start evidence. Existing client update flow remains dismissible, native-version based, canonical Play destination and offline fail-open; no minVersion change, Play-availability PASS, new native update SDK or OTA publication.
+
+Both approved SQL file hashes remain unchanged: Hosted52B7D94BE360ACD3E48F5CFB2B63E892230439CBFBC3982CDDE11315C7C62722; reconciliation82310C4915EABB14C58986830C71BD0FE62BCBE45E94D6A543107CA7D7D3098D. Dashboard shows only the last result set and its Export emitted no download. Approved projections were therefore read individually under their unchanged original READ ONLY/timeouts/ROLLBACK headers; snapshots are separate transactions, not one atomic export. UI grid paging recovered all31 migration versions and all9 columns of5 RPC rows. No arbitrary SQL, user rows, payloads or mutable operation.
+
+Current flow RPCs: flow_credits_balance, grant_flow_reward_ssv, grant_flow_reward, reserve_flow_photo_credit and settle_flow_photo_credit(uuid,uuid,text,text,timestamptz). All5 returnjsonb, ownerpostgres, SECURITY DEFINER, search_path=public, ACL EXECUTE onlypostgres/service_role. All15 effective grants captured: anon/authenticatedfalse, service_roletrue. **Settlement v2 is absent.** Aggregate reservations27COMMITTED/17RELEASED; no RESERVED group returned. Claimed/unknown/result counters0 are pre-v2 JSON-key-compatible counters and do not establish absence of historical ambiguous provider outcomes. ai_jobs:27succeeded,16failed(error_code Error),1cancelled(CLEANUP_BEFORE_PROD_TEST); accounts11, invalid balances0. No failed job retried/cancelled/settled. Raw DOM-derived sanitized evidence: supabase-migrations-current.json, supabase-rpc-current.json, supabase-rpc-grants-current.json, supabase-aggregates-current.json. Complete Hosted catalog result sets are not all re-exported; historical excess table ACL gate remains open, not silently reaccepted.
+
+### Google, legal documents and actual device testing
+
+Owner confirmed the failing login was **GetFlow QA**, not Play/Web. QA /auth/v1/authorize returned401SYNTHETIC_KEY_REQUIRED: the local fixture is not Google OAuth. Hosted Google provider is ENABLED and nutriai://auth/callback is allowlisted; no secret fields or settings changed and no real Google session completed. Source additionally used static Production scheme despite QA registeringgetflow-qa, and callback mounted a navigating completion screen before identity convergence. Both bugs were reproduced and corrected locally. QA now explains unavailable Google/Apple sign-in without launching a browser; legal links resolve only to local/terms and/privacy, serving byte-identical existing release documents with restrictive CSP. Production HTTPS validation and callback scheme retained.
+
+First verified source fix commit **61046dd718ed85b13671d9bfb074bdfd70bb697e**,9files. Its focused verification99frontend tests/12suites,15Node fixture tests, typecheck0, canonical focused Expo lint0errors/2existingwarnings, Gitleaks0. The installed APK is still e3a4bea; these JS changes require a separately approved build because OTA is disabled.
+
+Actual synthetic email login200, profile/user/credit reads200, Journal navigation and logout200 were exercised. ADB field preparation initially failed focus guards and one submitted email had an extra character; exact-field replacement without Ctrl+A then succeeded. No credential values/tokens were logged. First meal saves400 exposed a fixture contract bug: UUID inputs returned generic400 instead of Postgres22P02, preventing the app's existing BIGINT fallback. A regression reproduced it; fixture now returns22P02. After normal synthetic logout, only the owned fixture process was restarted (current PID40504, execsession55107, loopback only). New login and manual catalog selection→portion→save yielded **400/22P02 then201**, one synthetic meal and confirmed Journal totals **70kcal,6g protein**. This demonstrates the existing fallback, not durable UUID idempotency on a BIGINT Production schema. Original rejected actions/queued synthetic state were not declared saved. Fixture persistence is process-memory only.
+
+Owner-reported Sprout inconsistency and tiny widget: modal still used legacy JPG while Home used pixel Sprout. Local patch reuses one memoized existing Sprout artwork in both and enlarges Home to44dp, preserving existing1–5 streak stages. No new mascot/XP. Portion scroll regression reproduced stale880px vs current260px and animated scrolling: local patch reads live layout refs and jumps without animation after the existing150ms layout wait. Native old APK also required manual scrolling; bottom navigation can cover low catalog entries, so controls under it were not treated as tappable.
+
+Photo capture and AI are distinct: CAMERA granted, ImageKit deliberately unconfigured, imagekit-auth501 and no supported cloud inference fixture. Local QA patch explains unavailable analysis after capture/selection and releases the shutter lock without upload/submission. It does not claim real AI verification. Camera regressions36/36exit0; diagnostic --detectOpenHandles repeat also36/36exit0, no --forceExit. Sprout/scroll/auth/config/update/payload regressions154/154exit0, fixture16/16exit0 before the final profile change below. Full historical suites, Gradle and audits were not intentionally repeated; an incorrect Jest plural filter started unrelated tests and was interrupted, never reported as full-suite PASS.
+
+**LOCAL_DEVICE_FIXES_IN_VERIFICATION:** device also reproduced returning-account targets falling back to2000 despite a complete server profile and a freshly calculated synthetic2672 plan. Existing profiles must win over anonymous questionnaires; the missing step is restoring their current targets before AuthContext publishes the account. Minimal correction is being tested within the existing serialized account transition, with offline cache preservation and no repeated fetch on token refresh. Do not label the new source, native fixes, Photo AI/Billing E2E, cloud cutover or marketing accepted until final evidence is appended.
+
+
+## 25 October — single release consolidation completed locally; cloud cutover blocked
+
+This section is the current checkpoint. Owner's latest instructions supersede the previous device/QA-build continuation: no further Android UI/ADB actions, screenshots, marketing, qa-isolated builds, new branches/checkouts or backup work. None was performed after that instruction. All code is consolidated in the existing release-closure-20261024 checkout, branch codex/qa-fingerprint-20261025; the branch's historical name does not imply another QA artifact.
+
+**Verified application source commit: 015fa41d2848bc201e1c635479dce98dfc69dcc6**, following OAuth/legal commit61046dd718ed85b13671d9bfb074bdfd70bb697e. No source branch was reset, rebased, overwritten or published. Canonical OneDrive main HEADf588e22370ea29856f1c32b54c0314808f573a34 is an ancestor of this candidate; its11 tracked dirty files were read and preserved. Their useful account/credits/photo/companion/localization changes are already present with subsequent safeguards in the candidate; older dirty variants were not copied over newer code. Local origin is a local repository, not the official GitHub destination.
+
+### Final known-bug corrections
+
+- Returning accounts restore validated server caloric/macronutrient targets before session publication, inside the existing serialized account transition. Owner-filtered reads; offline/missing/invalid profile preserves the already isolated account cache; failed durable storage prevents session publication. Token refresh does not refetch the profile. An in-flight old-account hydration cannot publish or contaminate the newer account workspace.
+- Manual-meal fixture returns the actual22P02 BIGINT error for UUID input, allowing the existing app fallback; real save/duplicate/owner guards remain. Portion scrolling reads current layout positions and jumps without animation after the existing layout wait.
+- Active Home and Sprout detail use the same existing memoized pixel artwork; Home44dp/detail156dp. Existing streak stages1–5 retained. Removed active legacy image import/require/style and unused test imports. No new mascot asset, progression rule or visual redesign.
+- Camera capture remains enabled. Isolated QA explains unavailable inference after capture/selection and releases the lock without cloud upload; Production submission path remains unchanged.
+- The preceding verified OAuth/legal commit retains Production nutriai callback, uses the configured QA scheme, prevents premature callback navigation, explains unavailable fixture OAuth and serves the existing legal documents locally. Google Production end-to-end login is OWNER_DEVICE_TEST_PENDING.
+
+No bulk file/cache deletion: no additional candidate file was demonstrated both useless and safe to discard. Important tests, migrations, financial/security code and reproducible tooling retained. Inactive legacy pill/art asset has no application caller and was not swept away with its historical tests.
+
+### Verification — exact retained results, no historical full-suite claim
+
+| Evidence in sibling release-repro-20261025 | Result | Exit |
+| --- | --- | --- |
+| release-device-profile-final.json |20 affected suites185/185 |0 |
+| profile-boundary-final.json, after adding account-transition regression |2 suites10/10, replaces9 earlier tests |0 |
+| camera-qa-final.json |1 suite36/36 |0 |
+| Distinct affected frontend tests across the retained runs |**222/222 across21 suites**, not one full frontend run |0 |
+| device-fixture-final.tap |16/16 Node tests |0 |
+| consolidation-typecheck.log |Frontend tsc --noEmit |0 |
+| Canonical focused Expo lint, consolidation-lint.log |0 errors/11 existing warnings in its final cohort; earlier changed-file cohorts also0errors |0 |
+| git diff --check before source commit |PASS |0 |
+| final-integration-gitleaks.json,61046..015fa41 |1 new source commit, no leaks |0 |
+
+Source/lockfiles did not change after these checks; full historical frontend/backend/Gradle/migration suites were not repeated. The earlier wrongly filtered interrupted Jest run remains excluded from PASS counts. An automatic-review usage-limit interruption did not execute its action; after availability returned, the missing account-transition test was applied normally and passed. No policy bypass.
+
+### Authenticated cloud refresh and exact compatibility dependency
+
+| Component | Historical reference | Current confirmed | Action |
+| --- | --- | --- | --- |
+| Supabase |31/38, v1 only |tfqcihbjgmscsseyzifs,Free,PG17.6;31 versions/latest20261004090000;5 flow RPCs, settlementv1 only |Approved read-only projections only, no migration/security write |
+| GitHub |main bf7ca4c |main bf7ca4c77701e4ee78d9bffd3a329d779e8e7d6f; CI39755529421 failed; candidate branch absent remotely |Connector read-only; no push/PR/merge |
+| Trigger |20261012.2 |20261012.2 / p1srfix5 / Node22.16.0,2tasks |Read-only deployments/runs; queued,pending-version,delayed,dequeued,executing,waiting-to-resume filter over30days returned no runs; no retry/cancel/deploy |
+| Render |fbf4e07 |fbf4e0741f102f37f6bcfc009383a4a9c0a2793b / dep-db93i167bikc73bqvdkg |Read-only; auto-deploy disabled; PR previews Off; build npm install, start node server.js, no pre-deploy command |
+
+Render service srv-d921o9nlk1mc73dkok10, root backend-nutritie-ai; previous rollback commit95d1f45cc93ab89e35605372e3475fddb38f051d / dep-db619jajnfac73c2arg0. Only35 environment variable names inspected, no values; presence does not establish Play Integrity enforce or credential correctness. Commands saved in render-current-commands.json, names in render-current-environment-names.json. Earlier single probes health200 and both version-check paths404 remain the current noninvasive evidence, not functional release acceptance. Runtime application-error logs were not comprehensively assessed.
+
+Missing seven SQL versions:
+20261009090000,20261018000001,20261020090000,20261020120000,20261020130000,20261021100000,20261021110000.
+The dependency is concrete: backend repositories/flowCreditsRepo.js calls reserve_flow_photo_credit_v2, claim_flow_photo_inference and settle_flow_photo_credit_v2; src/trigger/analiza-mancare-ai.js also calls claim/settlementv2 and rejects missing new job contract with PHOTO_JOB_CONTRACT_MISSING. No compatible safe v1 fallback exists in this path. Deploying the candidate on the current schema is blocked; no financial bypass added. Existing excessive table ACL finding remains unresolved, not newly classified as an HTTP exploit.
+
+**Single schema decision:** retain existing live backend/worker until verified recovery and separately authorized seven-migration/security cutover are available. Backup work is postponed by owner, so no recovery infrastructure or export was restarted. Postponement cannot count as a migration waiver.
+
+Trigger Git/Vercel integration page loaded headings but exposed no conclusive repository/automatic-deployment state; absence of details is UNVERIFIED, not proof of no integration. Vercel dashboard redirected to Login; no authentication/cookie extraction or configuration change attempted. Render push/PR effects are known off, Vercel/Trigger effects remain insufficiently verified for publication. Existing CI triggers push onlymain/ci-integration/* or PRtomain; pushing the existing codex branch alone would not create CI. Proposed publication remains the existing branch to the official tudortone/AplicatieNutritie repository followed by PRtomain, only after integration-effect verification and exact SHA/ref approval.
+
+Known node-forge1.4.0/GHSA-86w9-cpqp-85rv remains a security/CI gate. Official GitHub advisory rechecked25October still lists <=1.4.0 affected and no patched version: https://github.com/advisories/GHSA-86w9-cpqp-85rv . Retained npm/OSV findings remain unchanged; no audit repeated for unchanged dependencies, scanner disabled or exception extended. Owner's narrow acceptance covered only the prior single QA build, not Production, CI or this distribution.
+
+### Official Play artifact readiness
+
+Authenticated GetFlow package **com.totsrl.getflo**. Fresh tracks: Production31, Internal38, Alpha38, older closed14 plus an unassigned draft. All17 bundle codes recovered across both pages:
+38,33,32,31,30,29,27,21,14,13,12,9,8,7,6,5,3.
+Maximum38; **39 proposed** for the next official candidate, not written to EAS or Play. Evidence play-current-version-inventory.json. Historical phone-installed37 is not the current Production track version.
+
+No new AAB, build ID, upload, promotion or verified installation link for this candidate exists. The existing QA APK and existing Internal38 do not contain the current fixes and are not represented as the new release. Future official artifact must use the existing real applicationId and compatible upload signing; never the QA keystore. Build/upload approvals remain separate and premature until cloud/security gates close.
+
+Owner critical acceptance remains: Google Login; saved targets across login/accounts; Journal save/totals/portion; camera/PhotoAI and credit retry; Chat; workouts; sandbox subscription/restore/rewarded. All new native scenarios are OWNER_DEVICE_TEST_PENDING. No further ADB or native UI testing performed.
+
+**Verdict: BLOCKED_WITH_EXACT_ACTION.** Local source consolidation complete. Remaining gates: (1) recoverable-data prerequisite plus approved SQL/security cutover, (2) existing node-forge security/CI gate resolution, (3) authenticated Vercel/Trigger publication-effect verification followed by exact candidate push/PR approval, (4) compatible Trigger then Render deployments and canary authorization, (5) official version39 build/signing/Internal upload authorization after those gates. No Production GO or owner-installability claim.
+
+[Audit & Skills Report] Consulted executing-plans, systematic-debugging, test-driven-development/tdd-workflow, verification-before-completion, code-review/security-review, react-native-patterns, apple-design and swiftui-design-skill. Existing React Native/Android conventions retained; no SwiftUI or redesign. Account isolation/stale writes, duplicate save, current-layout scrolling, camera retry and fail-closed environment covered by focused regressions. Native/OAuth/live AI/payment acceptance remains with owner and safe test services.
+Final Play signing read-only follow-up: Play App Signing is active for com.totsrl.getflo. Public SHA256 copy controls returned E4336E887A1B7F384382509B96FBBB98C4DB87715E313E64FD3379E23194FEA4; the displayed Digital Asset Links snippet lists672F69ADBF51099C6B37B73B236ADA70D237AB398C110051558000F91E0750A4. Public metadata only is saved in play-current-signing-public.json; clipboard timing required separate reads. These observations do not resolve signing-key lineage/rotation or prove a future AAB signer. No certificates downloaded, private keys accessed, key reset, credential creation or signing configuration change. Verify the actual upload certificate and resulting AAB before any authorized distribution; never use the QA key.
+
+Prepared publication command (NOT EXECUTED): git push https://github.com/tudortone/AplicatieNutritie.git HEAD:refs/heads/codex/qa-fingerprint-20261025 . Review/authorize the final checkpoint HEAD and known deployment effects before running; no force flag. A PR to main would trigger CI and must await the same effect review. Only the existing checkpoint document changes after application source015fa41; no application/dependency source changes after its verified tests.
