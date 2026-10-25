@@ -38,7 +38,7 @@ export const DEVICE_GLOBAL_EXACT_KEYS = new Set([
 export const USER_BOUND_EXACT_KEYS = new Set([
   'greutate', 'greutateTinta', 'caloriiTinta', 'proteineTinta',
   'carbiTinta', 'grasimiTinta', 'nume_profil', 'avatar_url',
-  'sex', 'varsta', 'inaltime', 'nivel_activitate', 'obiectiv',
+  'sex', 'varsta', 'inaltime', 'nivel_activitate', 'obiectiv', 'dieta',
   'greutate_istoric', 'favorite_foods', 'chat_history',
   'current_workout_session', 'current_workout_session_meta',
   'nutriai_active_workout_timer', 'nutriai_antrenamente_local_v2',

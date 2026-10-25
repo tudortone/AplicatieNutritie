@@ -1,5 +1,7 @@
 # GetFlow cloud cutover execution — 24 October 2026
 
+Latest continuation: **25 October — TRIGGER_CLI_REPRODUCIBLE_PASS; isolated QA locally prepared; Production cutover BLOCKED**. See the dated continuation at the end. Earlier counts/SHA entries remain historical evidence, not current cloud state. Backup destination now follows the owner's Google Drive decision; B2/CMS provisioning is superseded.
+
 **BLOCKED_WITH_EXACT_OWNER_ACTION**. No Production write, export, backup, real-data restore, publication or deployment executed. Owner explicitly confirmed that authenticated dashboards are unavailable and requested local continuation. This checkpoint records executed preparation, not a completed cutover.
 
 ## Candidate and verification
@@ -392,3 +394,122 @@ New committed tests: backend-nutritie-ai/tests/trigger_sdk_routing.test.js and t
 **First concrete owner decision:** review the exact seven-day node-forge tooling-risk proposal in A, including whether to authorize a narrowly scoped CI treatment preserving raw findings. No exception has been applied, and declining it leaves publication blocked. Current automatic integration settings require read-only access already authorized; no new write approval is requested for them. No push/deploy/DB/backup approval is solicited prematurely. CLI security closure alone does not unblock Production.
 
 [Audit & Skills Report] Consulted executing-plans, security-review, code-review, blast-radius, verification-before-completion, tdd-workflow (strict failing SDK extractor proof before the minimal fix), and finishing-a-development-branch as a reference. User's scoped-test and preserve-local-branch instructions take precedence over its generic full-suite/merge menu. SDK routing/replay/registration and credit-boundary regressions verified; no DB/memory architecture changes. Cleanup removed the invalid in-Jest SDK probe in favor of a native Node fixture; no unrelated cleanup, subagents, CMS, B2, backup, SQL, Android, marketing or Production work.
+
+## 25 October — reproducible CLI, connected Samsung and existing profile data flow
+
+Continued the same checkout, branch codex/launch-closure-20261024, starting HEAD **56effcb3c1d904b7ef9ba98d6ef997f42e0af22a**. No new worktree, protected checkout write, reset, historical migration rehearsal, marketing change or subagent. The final local integration commit contains this continuation; its complete SHA is recorded by the final handoff rather than a self-referential commit hash inside this file. Evidence: sibling **release-repro-20261025/**. This section supersedes earlier readiness statements where facts differ.
+
+### Reproducible Trigger tool — PASS, bounded to local verification
+
+Versioned tools/trigger-cli contains exact manifest/lock, Node22.23.4 pin, checksum-enforced applicator, minimal metadata patch, tests and instructions. Fresh official Node22.23.4/npm10.9.9 was extracted after verifying ZIP SHA256 **CBC74B5E0982C9DBB41525FD8FB5DCD32FBEE237863F7829072F4639A1CE5F20**. A new empty tool directory received only manifest/lock; scripts-disabled npm ci installed300 packages, exit0. No shared node_modules or old patched files were copied. A second verification used a cleared child environment with private HOME/temp/cache and no provider/deployment credentials; environment names alone are recorded.
+
+Actual reproducibility defect: the old saved patch omitted the final LF added by the original editing tool. The fresh applicator correctly rejected its calculated output before writing. Byte comparison proved the sole omitted byte. The versioned patch now explicitly represents it, without changing either original/final vendor code hashes or weakening validation:
+
+| Artifact | SHA256 |
+| --- | --- |
+| tools/trigger-cli/package-lock.json | 00A3870A556439EE1EB10B02BEF98DC5F0E88D8A862758BC79170663D7DF16CA |
+| tools/trigger-cli/sdk-metadata-4.8.1.patch | E66FB60DBE990F744B5A5E5DDA6577DFF72A0364F20FEA853929258E698CFA03 |
+| Published plugins.js | B600ABC9246DD442A58CDA39653A8123FC70BDF03BAFFC2FCE62CE34C1161AF6 |
+| Verified patched plugins.js | 8519E16566E7BB3261DEC30C92501732EFCB23AB8067538388CBE0AE2C49A696 |
+
+Lock/patch bytes have explicit Git -text attributes. Applicator rejects unknown inputs, changed patch, OneDrive paths and module links escaping the private tool root; repeat is a verified no-op. Installed versions and official SRI declarations are checked. Actual CLI loads CJS/ESM config, uses explicit trigger.config.mjs to build, registers both real task IDs, tests deepmerge8/tar7/giget behavior and emits digest-pinned Node24/default-CA Containerfile. Two independent worker bundles have the same content hash and all74 output hashes; tar recovery is byte-identical. No image build, login, deployment, run, paid inference or cloud promotion occurred.
+
+Final **17/17 Node tests**, exit0 (13 tool tests +4 SDK routing tests); clean-env run also17/17. Fresh tool npm audit0/OSV0. New credential-free CI job repeats install/patch/audit/tests; OSV covers the fourth lockfile. Actual GitHub execution and Linux image runtime remain UNVERIFIED. Verdict **TRIGGER_CLI_REPRODUCIBLE_PASS**, not Production deployment acceptance.
+
+### Existing onboarding → dashboard → Chat data — locally corrected
+
+Owner explicitly approved repairing existing collected data, with no new screen/field. Real defects reproduced before fixes: upsert failure returned true; selected diet disappeared; invalid zero/negative pending/metadata targets replaced valid saved targets. RED evidence: personalization-red.json,3 failed/15 passed; backend-context-red.json,1 failed/5 passed. Initial new context-reader test also recorded missing-module RED before implementation.
+
+Minimal changes: retain the existing selected diet in the account workspace and include it in the canonical logout/account-switch/GDPR cleanup registry; return the actual upsert outcome while retaining failed raw staging for retry; ignore nonpositive/nonfinite targets without changing valid pending→metadata→local precedence. Existing-profile overwrite/read-failure guards remain intact. Chat reads only enum-validated goal/activity/diet after checking workspace owner before and after storage reads; it drops context on account change/storage failure. The caller rechecks session/abort before sending. Backend inserts fixed whitelisted labels only, never arbitrary profile JSON, identity, birth date or body measurements. Existing medical/language, quota, idempotency and provider error contracts are retained; tests inspect the actual service's outbound AI request with mocked fetch.
+
+Real onboarding persistence is tested through the shared dashboard/Chat hook, and through the context reader after account initialization. Diet remains **local per account**: no current SQL column exists, so cross-device diet restoration is not claimed. No schema, Auth metadata or financial authority was added. No visual/UI change; a UI redesign or device interaction acceptance is not implied by source tests.
+
+### Isolated Samsung QA — prepared, not built or installed
+
+Added versioned tools/android-qa fixtures/tests/README. Before fix, all manual-meal writes returned501 and the new3 scenario tests failed. Minimal process-memory handler now supports synthetic manual create/read/edit/delete through the actual Supabase SDK. Duplicate IDs return23505 and preserve original content; auth, owner, field, nutrient, date and bounded capacity checks reject invalid requests. Unsupported AI, ads, real purchases and other writes still fail explicitly. **14/14 fixture tests**, exit0. No long-running fixture server or reverse rule started. Profile fixture is pre-initialized; first-account onboarding writes are not supported or claimed as device-tested.
+
+QA builder Node alone changed22.20.0→22.23.4; all other EAS profiles remain unchanged. Its new assertion failed before the change. qaNetworkStatus test now sets QA environment before importing the real hook/constants; the earlier failure captured a mocked Production URL because imports preceded setup, not a real request. Existing assertions were preserved, not relaxed. Final JS/EAS official resolver checks6/6: explicit http://127.0.0.1:3000 and :54321, independent qa-isolated profile, APK internal, no autoIncrement, remote credentials default, disabled Ads/native Billing initialization/Sentry/OTA, negative config cases fail closed. No dotenv-only dependency.
+
+Read-only EAS snapshot **2026-10-25T09:06:46Z**: project18cf8908-194b-4386-a700-22dea945da47/@totsrl/nutriai; QA38; existing one QA credential; development environment variables0. QA public signer **0d32f59b93ec6d37a82040f75545227e409790845d50d3701d76f8dc7fbc1837**; Production signer **e4336e887a1b7f384382509b96fbbb98c4db87715e313e64fd3379e23194fea4**, distinct. Production EAS remote version30 is not Play state. Official build:list at **10:02:07Z** returned **zero QA builds**. No credentials or version numbers were mutated.
+
+After owner reconnect, ADB read-only: one authorized SM-S928B, Android16/API36. Installed com.totsrl.getflo is **37**, version1.0.0, target36, installer null; this is not proof of Play installation or live track versions. QA absent, reverse list empty. Public installed base APK signature verified (apksigner exit0) and matches the Production signer above; no user data accessed. Evidence installed-production-v37-base.apk stays outside Git, SHA256 **AC1207AAC6032DA50A1A0E62615E2E551D070A4EBEFE42096B0CC37769E179C2**. No install, uninstall, data clearing or app launch.
+
+Historical merged manifest proof retained without repeating139 Gradle tasks: QA package/target36/version38, SHA256 **1AEAA2EA7C9680FBC0D26976F5109F821C1CBEAE0E86330D164662D43C8721F0**. Native config/plugin inputs are unchanged; JS dependencies and QA Node changed. Broad media/mic removals and removed automatic SDK providers remain source/config evidence. Autolinked SDK presence means blanket native zero-egress is not asserted. Final new APK manifest, signer and physical loopback transport remain UNVERIFIED.
+
+Prepared one-build command, **NOT executed**, from frontend-nutritie at the frozen final local SHA, using the verified Node22.23.4 and official existing EAS CLI:
+
+```powershell
+& '<private-runtime>\node.exe' 'C:\Users\tudor\AppData\Roaming\npm\node_modules\eas-cli\bin\run' build --platform android --profile qa-isolated --non-interactive --freeze-credentials --no-wait
+```
+
+Run only with a clean allowlisted public QA child environment, EXPO_NO_DOTENV=1, both loopback URLs and existing QA credential/version38, no Production variables. Exactly one build; quota/possible cost must be accepted by owner first. node-forge tooling risk is a separate unapproved decision; no waiver or scanner ignore is implied by building. Future local fixture start, two serial-targeted adb reverse rules and verified QA-only APK installation require their own scope. See tools/android-qa/README.md. No request to replace Production37 or install an unsigned/debug artifact.
+
+### Current cloud evidence and remaining release gates
+
+GitHub main still **bf7ca4c77701e4ee78d9bffd3a329d779e8e7d6f**; exact ls-remote found no codex/launch-closure-20261024 remote ref. Two Vercel combined-status contexts are successful, but actual latest main Actions run39755529421 is failure: backend npm audit, frontend audit gate and OSV fail; RLS and secret scanning pass. These results belong to main, not this unpublished candidate. Vercel/Render/Trigger publication side effects/filters remain unknown. No push/PR authorized as safe, and no remote operation was attempted.
+
+Computer Use stopped this turn because the tool could not establish the Chrome URL confidently enough to enforce policy. No further UI automation or alternative-window bypass. No current authenticated Supabase/Render/Trigger connector was available. Thus Free plan/31-of38 migrations are historical; live schema/RPC/ACL/reservations, Render SHA/auto-deploy and Trigger deployment/run bindings remain **UNVERIFIED**, not absent. Owner checklist: authenticated dedicated dashboard; project tfqcihbjgmscsseyzifs; already approved exact SQL scripts/result sets only; Render current live commit/filter; Trigger current deployment/task versions and aggregate queued/running/retrying binding counts, no PII payloads. Current source cannot replace those readings.
+
+Fresh four-lock OSV scan, unchanged policy: **one finding node-forge1.4.0/GHSA-86w9-cpqp-85rv**, exit1. Hardened private Trigger graph has no findings. Previous advisory reachability analysis and Android JS-map exclusion remain retained, not rerun. Temporary tooling-risk proposal expires **2026-11-01T00:00:00Z**, still NOT approved; no ignore, allowlist expansion or lowered gate. No green CI claim. Initial local scan failed from sandbox DNS; authenticated/network-capable retry completed and preserved raw finding visibility.
+
+Release sequence remains: demonstrated recoverable backup → reviewed SQL/security with v1 compatibility → legacy-safe/version-bound Trigger → schema-compatible Render → approved financial/AI/monetization canaries → actual Android/device acceptance. No uncertain reservation is released or replayed blindly. Each external write requires distinct authorization. The independent fixture-only QA lane does not require Production cutover but cannot validate Photo AI/Billing/SSV/Integrity.
+
+### Backup decision — Google Drive manual upload, age proposal
+
+Owner explicitly has **no confirmed encrypted restore volume or independent recovery-key copy**. Personal Google Drive replaces B2 for the proposed backup destination. No B2/CMS/DPAPI/Restic work is continued. Do not infer that Google Drive encryption at rest protects a plaintext local export. No Production export, real restore, owner key generation or upload performed.
+
+Recommend one age-encrypted PostgreSQL custom archive **getflow-<UTC>.dump.age**, manually uploaded by owner. age1.3.2 official Windows archive SHA256 **F48D8F8F9EBE903AB5027ED067652F2CC1DB94BC206976430133B905DCD8E8C7** verified against official release metadata, then extracted only in sibling proof directory. This is TLS/release-checksum provenance, not an independently verified Sigsum proof. Sources: [official age](https://github.com/FiloSottile/age), [v1.3.2 manual](https://github.com/FiloSottile/age/blob/v1.3.2/doc/age.1).
+
+Synthetic-only evaluation **5/5**, exit0: all256 byte values survive encryption/decryption; existing593,305-byte synthetic PGDMP archive decrypts to the same SHA256 **f1db935fa8cb5d0778ca2ca8e4428fde832a61485201ed06c032fab2841bbcee**; wrong key/corrupted/truncated ciphertext fail. No new plaintext staging or key file; synthetic identity stayed in child/stdin memory and was not logged/persisted. Cipher SHA **c71f5b6bb6be265dd407e421af912f3684245e92b5780ec1fdb800bc2a73245a**. This proves binary transport, not a Production export or real-data recovery. Existing synthetic restore evidence is retained without another lab or restore run.
+
+Owner-only preparation, after approving age and choosing a private folder outside OneDrive/Git/.codex (examples below are placeholders, not created paths):
+
+```powershell
+# Private terminal, verified age binaries; both destination files MUST be absent.
+# Enter a strong nonempty passphrase at age's terminal prompt, never as an argument.
+& '<verified-age>\age-keygen.exe' | & '<verified-age>\age.exe' -p -o '<owner-folder>\identity.age'
+# Record only the PUBLIC age1... recipient printed by keygen.
+# Encrypt one synthetic probe containing no account or database data:
+'GetFlow independent recovery probe' | & '<verified-age>\age.exe' -r '<PUBLIC-age1-recipient>' -o '<owner-folder>\probe.age'
+Get-FileHash -Algorithm SHA256 -LiteralPath '<owner-folder>\identity.age','<owner-folder>\probe.age'
+```
+
+This is the official encrypted-identity capture pattern, not a custom CMS scheme. Refuse existing output paths first: age -o can overwrite. Check command exits and prove recovery; a mere encrypted file is insufficient. Never leave the passphrase empty (auto-generated output would be unsuitable for a shared terminal). Do not run keygen through AI tools. No secret in script text, command arguments, environment or log output; do not disable existing Windows logging. Private process memory/terminal access still requires a trusted owner-controlled computer.
+
+Owner transfers encrypted identity.age + probe.age to independent controlled storage, compares SHA256 after transfer, keeps passphrase separately (independently recoverable password manager/offline record, not solely on this PC). On a second trusted environment with verified age, privately run:
+
+```powershell
+& '<verified-age>\age.exe' -d -i '<recovered-folder>\identity.age' '<recovered-folder>\probe.age'
+```
+
+Only the synthetic phrase may be displayed; never share the private identity or passphrase. Confirm successful independent decryption and recipient match without giving the key. **KEY_RECOVERY_PENDING**, not RECOVERY_PASS. Do not put the passphrase alongside encrypted identity/backup in the same Drive account.
+
+Before real export: owner-selected private output directory (ciphertext only), public recipient, independent recovery confirmed, exact SQL export coverage and TLS verify-full/CA/hostname verified, approved inert PG17 restore target with encryption at rest and no external effects. Existing protected B2/Restic runner is not a Google Drive adapter and currently uses sslmode=require; no protected change here. Its binary-stream pattern can be reused in a separately reviewed isolated pg_dump→age adapter. It must use native binary streams, check BOTH producer/consumer exit statuses, reject partial archives, refuse overwrite and emit only sanitized status/ciphertext checksum. Never rely solely on final pipeline exit or PowerShell text conversion.
+
+After specific export approval: capture authorized security/coverage metadata, produce ciphertext only; manual upload/download, compare ciphertext SHA256; fully authenticate a first decryption pass to a memory/hash sink before any DB restore, then decrypt again into the isolated restore. age may yield a valid plaintext prefix before rejecting a later corrupt chunk, so piping directly into a writable DB without prior full verification is insufficient. A recovered SQL database still creates real plaintext inside the restore volume: absence of an encrypted target remains a blocker.
+
+One .dump.age covers only the explicitly exported DB schemas/data. Auth/Storage SQL metadata, hosted owners/roles/ACL/RLS/SECURITY DEFINER/search_path, Vault secret recoverability, extensions, Auth configuration, Storage/ImageKit media and other cloud settings need their own reviewed scope/manifest; do not claim all are included. If a manifest must accompany the dump inside a single encrypted standard archive, review that packaging before export; do not silently drop the manifest to claim single-file complete DR.
+
+Next backup decision is acceptance of this standard age approach and owner confirmation of public recipient/independent recovery/restore target (never secret values), followed by a separately reviewed streaming adapter and exact export approval. Not an approval request for a Production export today.
+
+### New verification ledger
+
+| Check | Result / exit |
+| --- | --- |
+| Fresh tool npm ci, scripts disabled | 300 packages;0 |
+| Final tool/SDK Node tests; clean environment repeat | 17/17;0,17/17;0 |
+| Fresh hardened CLI npm audit / OSV | 0 findings;0/0 |
+| Four CI locks OSV, unchanged policy | node-forge1 finding;1 |
+| Frontend affected QA/profile/Chat tests | 9 suites78/78;0 |
+| Auth/root/onboarding/version boundary regressions | 5 suites38/38;0 |
+| Backend Chat/locale/admission/quota/provider regressions | 5 suites50/50;0 |
+| Fixture HTTP/Supabase integration | 14/14;0 |
+| Current official EAS resolution/config tests | 6/6;0 |
+| Synthetic age binary/negative checks | 5/5;0 |
+| Frontend typecheck |0 |
+| Canonical focused Expo lint |0 errors,2 pre-existing warnings;0 |
+| Backend canonical lint wrapper (runs whole backend) |0 errors,4 pre-existing warnings;0 |
+
+Frontend total **116** distinct Jest tests, backend50; standalone Node final checks42 (17+14+6+5). Do not add the repeated clean-environment run or earlier RED/GREEN reruns again. Initial harness/network failures remain documented: Jest cache EPERM, missing guessed test paths, raw-profile credentials default assertion, sandbox Supertest EACCES/OSV DNS/EAS read restrictions. Corrected commands/config-resolver assertions and network-capable local retry passed; no application/security guard relaxed. No broad historical frontend/backend/migration suite repeated. Fresh Git diff/hash/secret-scan verification is part of the final local commit handoff.
+
+[Audit & Skills Report] executing-plans, verification-before-completion, security-review, code-review, blast-radius, tdd-workflow, react-native-patterns and computer-use consulted; finishing-a-development-branch used only as a reference. No visual changes, so no design skill or device visual PASS claimed. New helpers keep account boundaries, bounded fixture state and enum-only model context. Cleanup limited to affected tests/dead empty meal fixture/new helper structure; no architectural refactor. Observed shared account usage:50% of5h,8% weekly at the captured check, not a measured task-only delta.

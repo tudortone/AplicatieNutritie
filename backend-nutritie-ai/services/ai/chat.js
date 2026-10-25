@@ -7,6 +7,7 @@ const { construiesteIstoricSigur } = require('../../utils/promptSafety');
 const { parseJsonFromLlm } = require('../../utils/llmJson');
 const { rezumatEroareSigur } = require('../../utils/sentrySanitize');
 const { creeazaServiciuVision, numarModel } = require('./vision');
+const { contextProfilChat } = require('../../utils/chatProfileContext');
 
 /**
  * Eroare de client (400). Transporta mesajul exact pe care ruta il pune in
@@ -325,7 +326,7 @@ function creeazaServiciuChat({ config, genAI }) {
       protTinta,
     });
 
-    const messages = [{ role: 'system', content: systemPrompt }];
+    const messages = [{ role: 'system', content: systemPrompt + contextProfilChat(corp.profil) }];
 
     // Securitate: INTREGUL istoric este validat, nu doar ultimul mesaj. Anterior,
     // o injectie plasata pe pozitia 0 trecea neverificata direct in prompt.

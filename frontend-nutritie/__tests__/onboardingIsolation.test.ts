@@ -19,6 +19,7 @@ import {
   type DateOnboarding,
 } from '../lib/onboarding';
 import { clearLocalUserData, prepareLocalDataForUser } from '../lib/userDataCleanup';
+import { citesteContextProfilChat } from '../lib/chatProfileContext';
 
 jest.mock('@react-native-async-storage/async-storage', () => {
   let store: Record<string, string> = {};
@@ -299,5 +300,34 @@ describe('F-02 — izolarea onboarding-ului intre conturi', () => {
 
     // Blob-ul ramane: altfel profilul din DB nu s-ar mai popula niciodata.
     expect(await incarcaDateOnboarding()).not.toBeNull();
+  });
+
+  it('raporteaza esecul unui upsert real si pastreaza raspunsurile pentru retry', async () => {
+    await salveazaDateOnboarding(DATE_B);
+    await prepareLocalDataForUser('user-B');
+    const client = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+        upsert: async () => ({ error: { message: 'synthetic transport failure' } }),
+      }),
+    };
+    await expect(sincronizeazaOnboardingLaProfil('user-B', client)).resolves.toBe(false);
+    expect(await incarcaDateOnboarding()).toMatchObject(DATE_B);
+  });
+
+  it('pastreaza dieta aleasa doar in spatiul contului, inclusiv la revenire', async () => {
+    await salveazaDateOnboarding(DATE_B);
+    await prepareLocalDataForUser('user-B');
+    await sincronizeazaOnboardingLaProfil('user-B', creeazaSupabaseFals());
+    expect(await AsyncStorage.getItem('dieta')).toBe('vegana');
+    expect(await citesteContextProfilChat('user-B')).toEqual({
+      obiectiv: DATE_B.scop, activitate: DATE_B.activitate, dieta: DATE_B.dieta,
+    });
+    await prepareLocalDataForUser('user-A');
+    expect(await AsyncStorage.getItem('dieta')).toBeNull();
+    await prepareLocalDataForUser('user-B');
+    expect(await AsyncStorage.getItem('dieta')).toBe('vegana');
+    await clearLocalUserData();
+    expect(await AsyncStorage.getItem('dieta')).toBeNull();
   });
 });

@@ -314,6 +314,7 @@ export async function sincronizeazaOnboardingLaProfil(
 			['inaltime', String(date.inaltimeCm)],
 			['nivel_activitate', String(date.activitate)],
 			['obiectiv', String(date.scop)],
+			['dieta', String(date.dieta)],
 		])
 
 		let upsertReusit = true
@@ -336,7 +337,7 @@ export async function sincronizeazaOnboardingLaProfil(
 			await stergeDateOnboarding()
 		}
 
-		return true
+		return upsertReusit
 	} catch (e) {
 		console.warn('[OnboardingSync] Eroare sincronizare profil:', e)
 		return false

@@ -5,7 +5,7 @@
   },
   "build": {
     "qa-isolated": {
-      "node": "22.20.0",
+      "node": "22.23.4",
       "distribution": "internal",
       "environment": "development",
       "channel": "qa-isolated",

@@ -1,3 +1,5 @@
 # Keep checksum-bound release artifacts byte-identical on Windows checkout.
 release-assets/** -text
 release-proof/** -text
+tools/trigger-cli/package-lock.json -text whitespace=cr-at-eol
+tools/trigger-cli/sdk-metadata-4.8.1.patch -text

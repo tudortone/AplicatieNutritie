@@ -210,8 +210,8 @@ export function useMeseAzi(dataSelectata?: Date) {
             storedStr: string | null,
             fallback: number
           ): number => {
-            if (typeof localVal === 'number' && Number.isFinite(localVal)) return localVal;
-            if (typeof metadataVal === 'number' && Number.isFinite(metadataVal)) return metadataVal;
+            if (typeof localVal === 'number' && Number.isFinite(localVal) && localVal > 0) return localVal;
+            if (typeof metadataVal === 'number' && Number.isFinite(metadataVal) && metadataVal > 0) return metadataVal;
             const parsedStored = storedStr ? Number(storedStr) : NaN;
             if (Number.isFinite(parsedStored) && parsedStored > 0) return parsedStored;
             return fallback;

@@ -205,6 +205,8 @@ jobs:
 
       - name: Run Frontend Tests (P-14)
         run: npm run test:ci
+      - name: Verify synthetic Android QA fixtures
+        run: node --test ../tools/android-qa/fixture-server.test.cjs ../tools/android-qa/manual-meals.test.cjs
 
   # -----------------------------------------------------------------------
   # Job 4: Secret scanning (P-16)
@@ -227,6 +229,35 @@ jobs:
   # -----------------------------------------------------------------------
   # Job 5: Scanare vulnerabilitati dependente (P-16)
   # -----------------------------------------------------------------------
+  trigger-cli-checks:
+    name: Reproducible Trigger CLI
+    runs-on: ubuntu-latest
+    env:
+      GETFLOW_TRIGGER_TOOL_ROOT: ${{ github.workspace }}/tools/trigger-cli
+      GETFLOW_RELEASE_ROOT: ${{ github.workspace }}
+      GETFLOW_PROOF_DIR: ${{ runner.temp }}/getflow-trigger-proof
+      TRIGGER_TELEMETRY_DISABLED: '1'
+      DO_NOT_TRACK: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: tools/trigger-cli/.node-version
+      - name: Install locked dependencies without lifecycle scripts
+        run: |
+          npm ci --prefix tools/trigger-cli --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend-nutritie-ai --ignore-scripts --no-audit --no-fund
+          mkdir -p "$GETFLOW_PROOF_DIR"
+      - name: Apply checksum-bound metadata fix
+        run: node tools/trigger-cli/apply-sdk-metadata-patch.cjs "$GETFLOW_TRIGGER_TOOL_ROOT"
+      - name: Audit complete CLI graph
+        working-directory: tools/trigger-cli
+        run: npm audit --json > "$GETFLOW_PROOF_DIR/npm-audit.json"
+      - name: Verify provenance, bundling and task registration
+        run: node --test tools/trigger-cli/*.test.cjs
+      - name: Verify producer version and idempotency contracts
+        run: node --test backend-nutritie-ai/tests/fixtures/triggerSdkRoutingProbe.cjs
+
   dep-scan:
     name: Dependency Vulnerability Scan
     runs-on: ubuntu-latest
@@ -242,3 +273,4 @@ jobs:
             --lockfile=./backend-nutritie-ai/package-lock.json
             --lockfile=./frontend-nutritie/package-lock.json
             --lockfile=./tools/scratch_anatomy_svg/package-lock.json
+            --lockfile=./tools/trigger-cli/package-lock.json

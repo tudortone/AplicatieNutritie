@@ -1,0 +1,20 @@
+--- a/node_modules/trigger.dev/dist/esm/build/plugins.js
++++ b/node_modules/trigger.dev/dist/esm/build/plugins.js
+@@ -95,8 +95,8 @@ export class SdkVersionExtractor {
+                             test: async (filePath) => {
+                                 try {
+                                     const candidate = await readJSONFile(filePath);
+-                                    // Exclude esm type markers
+-                                    return Object.keys(candidate).length > 1 || !candidate.type;
++                                    // ESM markers may also contain sideEffects; require actual SDK metadata.
++                                    return candidate.name === "@trigger.dev/sdk" && typeof candidate.version === "string";
+                                 }
+                                 catch (error) {
+                                     logger.debug("[SdkVersionExtractor] Error during package.json test", {
+@@ -142,4 +142,4 @@ export class SdkVersionExtractor {
+         };
+     }
+ }
+-//# sourceMappingURL=plugins.js.map
+\ No newline at end of file
++//# sourceMappingURL=plugins.js.map

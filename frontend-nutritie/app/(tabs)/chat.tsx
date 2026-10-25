@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildApiUrl } from '@/lib/api';
+import { citesteContextProfilChat } from '../../lib/chatProfileContext';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -677,6 +678,8 @@ export default function ChatScreen() {
       // CHAT-001: aceeași întrebare cu același istoric trimisă din nou (retry după
       // timeout) primește răspunsul înregistrat, nu o a doua generare/facturare.
       const cheieIdempotentaChat = cheieIdempotenta(mesajText, istoricActivat, session.user?.id);
+      const profil = await citesteContextProfilChat(session.user.id);
+      if (currentUserRef.current !== session.user.id || controller.signal.aborted) return;
       const raspuns = await fetch(buildApiUrl('/chat'), {
         method: 'POST',
         headers: {
@@ -692,6 +695,7 @@ export default function ChatScreen() {
           caloriiTinta,
           proteineConsumate: totalProteine,
           proteineTinta,
+          profil,
           limba: i18n.language || 'ro'
         }),
       });

@@ -2,6 +2,7 @@ import { act, renderHook, waitFor, cleanup } from '@testing-library/react-native
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMeseAzi } from '../hooks/useMeseAzi';
 import { clearJournalCache } from '../lib/journalCache';
+import { calculeazaPlan, salveazaDateOnboarding, sincronizeazaOnboardingLaProfil, type DateOnboarding } from '../lib/onboarding';
 
 let mockUser: { id: string; user_metadata: Record<string, unknown> } = { id: 'user-a', user_metadata: {} };
 let mockPending: { userId: string; targets: Record<string, unknown> } | null = null;
@@ -97,6 +98,34 @@ describe('useMeseAzi real profile weight source', () => {
     const result = await readWeight();
     expect(result.greutate).toBe(75);
     expect(result.greutateIntrodusaKg).toBeNull();
+  });
+
+  it('uses restored onboarding targets when pending and metadata targets are invalid', async () => {
+    mockUser.user_metadata = { caloriiTinta: 0, proteineTinta: -5, carbiTinta: 0, grasimiTinta: -1 };
+    mockPending = { userId: 'user-a', targets: { caloriiTinta: -1, proteineTinta: 0, carbiTinta: NaN, grasimiTinta: Infinity } };
+    await AsyncStorage.multiSet([
+      ['caloriiTinta', '2150'], ['proteineTinta', '135'], ['carbiTinta', '260'], ['grasimiTinta', '65'],
+    ]);
+    const result = await readWeight();
+    expect([result.caloriiTinta, result.proteineTinta, result.carbiTinta, result.grasimiTinta])
+      .toEqual([2150, 135, 260, 65]);
+  });
+
+  it('uses the actual persisted onboarding plan in the dashboard and Chat shared hook', async () => {
+    const answers: DateOnboarding = {
+      gen: 'feminin', dataNasterii: '2000-01-20', inaltimeCm: 160, greutateKg: 55,
+      scop: 'masa', greutateTintaKg: 60, activitate: 'sedentar', ritmKgSaptamana: 0.25, dieta: 'vegana',
+    };
+    await salveazaDateOnboarding(answers);
+    const client = { from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+      upsert: async () => ({ error: null }),
+    }) };
+    expect(await sincronizeazaOnboardingLaProfil('user-a', client)).toBe(true);
+    const plan = calculeazaPlan(answers)!;
+    const result = await readWeight();
+    expect([result.caloriiTinta, result.proteineTinta, result.carbiTinta, result.grasimiTinta])
+      .toEqual([plan.calorii, plan.proteineG, plan.carbohidratiG, plan.grasimiG]);
   });
 
   it('drops a late user-A Journal query before user-B data is displayed', async () => {

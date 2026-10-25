@@ -35,3 +35,4 @@ frontend-nutritie/graphify-out/
 backend-nutritie-ai/graphify-out/
 supabase/.temp/
 backend-nutritie-ai/.tmp-jest-backend/
+tools/trigger-cli/compat-fixture/
