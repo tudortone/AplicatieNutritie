@@ -6,7 +6,7 @@ import {
   prepareLocalDataForNoSession,
   prepareLocalDataForUser,
 } from '../lib/userDataCleanup';
-import { sincronizeazaOnboardingLaProfil } from '../lib/onboarding';
+import { restaureazaProfilSesiune, sincronizeazaOnboardingLaProfil } from '../lib/onboarding';
 import { useAppStore } from '../hooks/useAppStore';
 
 interface AuthContextType {
@@ -43,6 +43,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await useAppStore.getState().setOnboardingDone(false);
           }
           await sincronizeazaOnboardingLaProfil(nextSession.user.id, supabase);
+          if (mounted && version === revision && appliedUser !== nextSession.user.id) {
+            await restaureazaProfilSesiune(nextSession.user.id, supabase);
+          }
         } else {
           let aveaSpatiuActiv = false;
           if (clearWhenEmpty) {

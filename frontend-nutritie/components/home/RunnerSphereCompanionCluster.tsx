@@ -124,11 +124,11 @@ export function RunnerSphereCompanionCluster({
         size={44}
       />
 
-      {/* 2. Right: 32dp Handcrafted Micro Pixel-Art Sprout Companion */}
+      {/* Same Sprout artwork as the detail view, readable beside the runner. */}
       <PixelCompanion
         streak={streak}
         onPress={onCompanionPress}
-        size={32}
+        size={44}
       />
     </View>
   );

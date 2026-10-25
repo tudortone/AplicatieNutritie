@@ -71,6 +71,9 @@ async function handleMeals(req, res, url, state, { reply, readJson, userId }) {
     const supplied = Array.isArray(body) && body.length === 1 ? body[0] : body;
     if (supplied?.user_id !== undefined && supplied.user_id !== userId) return reply(res, 403, { code: 'SYNTHETIC_USER_ONLY' });
     if (req.method === 'POST' && supplied?.user_id !== userId) invalid();
+    if (supplied?.id !== undefined && !/^[1-9]\d{0,18}$/.test(String(supplied.id))) {
+      return reply(res, 400, { code: '22P02', message: 'invalid input syntax for type bigint' });
+    }
     result = validate(body, previous, state);
     if (req.method === 'POST' && state.meals.has(result.id)) return reply(res, 409, { code: '23505', message: 'Synthetic meal id already exists' });
     if (req.method === 'POST' && state.meals.size >= MAX_MEALS) return reply(res, 409, { code: 'FIXTURE_CAPACITY_REACHED' });

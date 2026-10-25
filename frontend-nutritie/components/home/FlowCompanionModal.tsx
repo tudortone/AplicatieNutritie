@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Alert,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -31,6 +30,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useTheme } from '../../context/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { SproutArtwork } from './PixelCompanion';
 import {
   getCompanionStage,
   getDaysUntilNextEvolution,
@@ -38,8 +38,6 @@ import {
   getLimitBeaconStatus,
   type CompanionStageId,
 } from '../../lib/flowCompanion';
-
-const COMPANION_FULL_IMAGE = require('../../assets/images/flow-companion-full.jpg');
 
 export interface FlowCompanionModalProps {
   visible: boolean;
@@ -209,11 +207,7 @@ export function FlowCompanionModal({
                   },
                 ]}
               >
-                <Image
-                  source={COMPANION_FULL_IMAGE}
-                  style={styles.heroArtwork}
-                  resizeMode="cover"
-                />
+                <SproutArtwork size={156} />
               </View>
 
               <View style={styles.heroNameRow}>
@@ -539,10 +533,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 14,
     elevation: 8,
-  },
-  heroArtwork: {
-    width: '100%',
-    height: '100%',
   },
   heroNameRow: {
     flexDirection: 'row',

@@ -1,7 +1,6 @@
 import React from 'react';
 import { Alert, Platform } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-import * as ImagePicker from 'expo-image-picker';
 
 // Mock expo-image-picker
 const mockRequestPermissions = jest.fn();
@@ -608,6 +607,27 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
 
       await waitFor(() => expect(view.getByText('camera.genericScanError')).toBeTruthy());
       expect(view.queryByText('PHOTO_SERVICE_UNAVAILABLE')).toBeNull();
+    });
+
+    it('ISOLATED QA: captures locally, explains unavailable cloud analysis and re-enables the shutter', async () => {
+      const previousEnvironment = process.env.EXPO_PUBLIC_APP_ENV;
+      process.env.EXPO_PUBLIC_APP_ENV = 'qa';
+      try {
+        Platform.OS = 'android';
+        const imageKit = jest.requireMock('../lib/imagekit') as { uploadImageToImageKit: jest.Mock };
+        const view = await render(<CameraScreen />);
+        await fireEvent.press(view.getByTestId('shutter-button'));
+        await waitFor(() => expect(view.getByText('camera.qaAnalysisUnavailable')).toBeTruthy());
+        expect(mockTakePictureAsync).toHaveBeenCalledTimes(1);
+        expect(imageKit.uploadImageToImageKit).not.toHaveBeenCalled();
+        expect(submitPhotoJob).not.toHaveBeenCalled();
+        expect(view.getByTestId('shutter-button').props.accessibilityState.disabled).toBe(false);
+        await fireEvent.press(view.getByTestId('shutter-button'));
+        await waitFor(() => expect(mockTakePictureAsync).toHaveBeenCalledTimes(2));
+      } finally {
+        if (previousEnvironment === undefined) delete process.env.EXPO_PUBLIC_APP_ENV;
+        else process.env.EXPO_PUBLIC_APP_ENV = previousEnvironment;
+      }
     });
 
     it('CAMERA CAPTURE: pressing shutter captures image and triggers Photo AI analysis', async () => {

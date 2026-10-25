@@ -2,7 +2,7 @@ import React from 'react';
 import { render, act, fireEvent } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 
-import { AddMealBottomSheet } from '../components/AddMealBottomSheet';
+import { AddMealBottomSheet, type AddMealBottomSheetRef } from '../components/AddMealBottomSheet';
 
 /**
  * P1-01 (remediere finală, Blocant B) — salvarea manuală, la nivel de COMPONENTĂ.
@@ -28,6 +28,7 @@ let mockEcouInsert = false;
 let mockEroareInsert: unknown = null;
 const mockCoada: unknown[] = [];
 const mockInserturi: unknown[] = [];
+const mockScrollTo = jest.fn();
 
 jest.mock('../supabase', () => ({
   supabase: {
@@ -101,7 +102,10 @@ jest.mock('@gorhom/bottom-sheet', () => {
     __esModule: true,
     default: Sheet,
     BottomSheetView: ({ children }: any) => R.createElement(View, null, children),
-    BottomSheetScrollView: ({ children }: any) => R.createElement(View, null, children),
+    BottomSheetScrollView: R.forwardRef((props: { children?: React.ReactNode }, ref: React.Ref<unknown>) => {
+      R.useImperativeHandle(ref, () => ({ scrollTo: mockScrollTo }));
+      return R.createElement(View, props, props.children);
+    }),
     BottomSheetBackdrop: () => null,
     BottomSheetTextInput: require('react-native').TextInput,
   };
@@ -109,6 +113,22 @@ jest.mock('@gorhom/bottom-sheet', () => {
 jest.mock('lucide-react-native', () => new Proxy({}, { get: () => () => null }));
 
 const NUTRITIE = { calorii: 500, proteine: 40, carbohidrati: 30, grasimi: 20 };
+
+it('scrolls directly to the current portion layout after a selection changes the form height', async () => {
+  jest.useFakeTimers();
+  try {
+    const ref = React.createRef<AddMealBottomSheetRef>();
+    const view = await render(<AddMealBottomSheet ref={ref} />);
+    await fireEvent(view.getByTestId('meal-form-section'), 'layout', { nativeEvent: { layout: { y: 600 } } });
+    await fireEvent(view.getByTestId('meal-portion-section'), 'layout', { nativeEvent: { layout: { y: 300 } } });
+    await act(async () => ref.current?.openWithItem({ nume: 'Synthetic oats', ...NUTRITIE, gramajDefault: 100 }));
+    await act(async () => jest.advanceTimersByTime(350));
+    await fireEvent(view.getByTestId('meal-form-section'), 'layout', { nativeEvent: { layout: { y: 200 } } });
+    await fireEvent(view.getByTestId('meal-portion-section'), 'layout', { nativeEvent: { layout: { y: 80 } } });
+    await act(async () => jest.advanceTimersByTime(150));
+    expect(mockScrollTo).toHaveBeenLastCalledWith({ y: 260, animated: false });
+  } finally { jest.useRealTimers(); }
+});
 
 async function monteazaSiSalveaza() {
   const ref = React.createRef<never>();

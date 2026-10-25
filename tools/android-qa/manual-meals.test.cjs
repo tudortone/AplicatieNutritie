@@ -31,6 +31,18 @@ test('manual synthetic insert/read/replay preserves confirmed values and does no
   assert.deepEqual(restored.data, meal);
 }));
 
+test('the BIGINT fixture exposes the real UUID error so the existing app fallback can save', () => session(async (client) => {
+  const input = { ...meal, id: '11111111-2222-5333-a444-555555555555' };
+  const rejected = await client.from('mese').insert(input).select();
+  assert.equal(rejected.error?.code, '22P02');
+  const fallback = { ...input };
+  delete fallback.id;
+  const saved = await client.from('mese').insert(fallback).select();
+  assert.equal(saved.error, null);
+  assert.match(saved.data[0].id, /^[1-9]\d*$/);
+  assert.equal((await client.from('mese').select('*')).data.length, 1);
+}));
+
 test('edit/delete are bounded by one row; journal date reads reflect synthetic state', () => session(async (client) => {
   assert.equal((await client.from('mese').insert(meal).select()).error, null);
   assert.equal((await client.from('mese').update({ calorii: 400 }).select()).status, 400);

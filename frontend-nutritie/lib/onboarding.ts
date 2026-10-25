@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 /** Cheia sub care tinem raspunsurile pana cand utilizatorul isi face cont. */
 export const CHEIE_ONBOARDING = 'nutriai-onboarding-date'
@@ -358,6 +359,30 @@ export type ProfilRestaurare = {
 	carbiTinta?: number | null
 }
 
+/** Run inside AuthContext's serialized account transition, before publishing the session. */
+export async function restaureazaProfilSesiune(userId: string, client: Pick<SupabaseClient, 'from'>): Promise<boolean> {
+	if (!userId.trim()) return false
+	let row: Record<string, unknown>
+	try {
+		const { data, error } = await client.from('profil')
+			.select('calorii_tinta,proteine_tinta,carbi_tinta,grasimi_tinta,greutate,varsta,inaltime,sex,activitate,obiectiv')
+			.eq('user_id', userId).maybeSingle()
+		if (error || !data) return false
+		row = data as Record<string, unknown>
+	} catch { return false } // Offline retains only the already isolated account workspace.
+	const number = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+	const text = (value: unknown) => typeof value === 'string' && value.length <= 64 ? value : undefined
+	if (!number(row.calorii_tinta)) return false
+	await restaureazaProfilLocal({
+		caloriiTinta: number(row.calorii_tinta),
+		proteineTinta: number(row.proteine_tinta), carbiTinta: number(row.carbi_tinta),
+		grasimiTinta: number(row.grasimi_tinta), greutate: number(row.greutate),
+		varsta: number(row.varsta), inaltime: number(row.inaltime),
+		sex: text(row.sex), activitate: text(row.activitate), obiectiv: text(row.obiectiv),
+	})
+	return true
+}
+
 /**
  * Restaureaza cheile locale din profilul DB (pentru un utilizator existent pe un
  * dispozitiv nou / dupa stergerea storage-ului), ca sa nu repete chestionarul.
@@ -384,6 +409,7 @@ export async function restaureazaProfilLocal(profil: ProfilRestaurare): Promise<
 		if (perechi.length > 0) await AsyncStorage.multiSet(perechi)
 	} catch (e) {
 		console.warn('[OnboardingSync] Eroare restaurare profil local:', e)
+		throw e
 	}
 }
 

@@ -8,7 +8,6 @@ import {
   getDaysUntilNextEvolution,
   getEvolutionProgressPercent,
   getLimitBeaconStatus,
-  COMPANION_STAGES,
 } from '../lib/flowCompanion';
 import { FlowCompanionPill } from '../components/home/FlowCompanionPill';
 import { FlowCompanionModal } from '../components/home/FlowCompanionModal';
@@ -180,6 +179,7 @@ describe('Flow Companion & Nutritional Limit Beacon Suite', () => {
       );
 
       expect(view.getByTestId('flow-companion-modal-sheet')).toBeTruthy();
+      expect(view.getByTestId('sprout-artwork').props.width).toBeGreaterThanOrEqual(140);
       expect(view.getByText('Sprout')).toBeTruthy();
       expect(view.getByText('Râs Electric')).toBeTruthy();
       expect(view.getByText('Etapa 3 din 5')).toBeTruthy();

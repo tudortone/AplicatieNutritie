@@ -269,6 +269,12 @@ export default function CameraScreen() {
     const ownerId = session.user.id;
     const accountGeneration = accountGenerationRef.current;
     if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+    if (process.env.EXPO_PUBLIC_APP_ENV === 'qa') {
+      setSeIncarca(false);
+      setPhotoPhase('idle');
+      setScanError(t('camera.qaAnalysisUnavailable', 'Image captured or selected locally. Cloud photo analysis is unavailable in isolated QA.'));
+      return;
+    }
     let hasPendingSave: boolean;
     try {
       hasPendingSave = await hasPendingPhotoSave(ownerId);

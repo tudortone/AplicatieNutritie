@@ -98,8 +98,8 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
       scrollTimersRef.current.add(timer);
     }, []);
     useEffect(() => clearScrollTimers, [clearScrollTimers]);
-    const [formSectionY, setFormSectionY] = useState<number>(0);
-    const [gramajSectionY, setGramajSectionY] = useState<number>(0);
+    const formSectionY = useRef(0);
+    const gramajSectionY = useRef(0);
     const [highlightGramaj, setHighlightGramaj] = useState(false);
     const pantryProductNameRef = useRef<string | undefined>(undefined);
     // BUG-041: guard sincron anti dublu-tap (ref, nu stare — răspunde în același
@@ -194,16 +194,16 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
       scheduleScrollWork(() => setHighlightGramaj(false), 2000);
       scheduleScrollWork(() => {
         if (scrollViewRef.current && typeof scrollViewRef.current.scrollTo === 'function') {
-          const targetY = Math.max(0, formSectionY + gramajSectionY - 20);
+          const targetY = Math.max(0, formSectionY.current + gramajSectionY.current - 20);
           try {
             scrollViewRef.current.scrollTo({
               y: targetY,
-              animated: true,
+              animated: false,
             });
           } catch {}
         }
       }, 150);
-    }, [clearScrollTimers, formSectionY, gramajSectionY, scheduleScrollWork]);
+    }, [clearScrollTimers, scheduleScrollWork]);
 
     const resetScrollToTop = useCallback(() => {
       if (scrollViewRef.current && typeof scrollViewRef.current.scrollTo === 'function') {
@@ -983,7 +983,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
             </View>
           )}
 
-          <View style={styles.formSection} onLayout={(e) => setFormSectionY(e.nativeEvent.layout.y)}>
+          <View testID="meal-form-section" style={styles.formSection} onLayout={(e) => { formSectionY.current = e.nativeEvent.layout.y; }}>
             {/* Meal Category Selector */}
             <View style={{ marginBottom: 16 }}>
               <Text style={[styles.label, { color: colors.textSecondary }]}>{t('jurnal.mealCategory')}</Text>
@@ -1091,9 +1091,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
 
             {/* Secțiunea de Gramaj (P0.2) */}
             <View
+              testID="meal-portion-section"
               onLayout={(e) => {
                 const { y } = e.nativeEvent.layout;
-                setGramajSectionY(y);
+                gramajSectionY.current = y;
               }}
               style={[
                 styles.gramajSectionContainer,

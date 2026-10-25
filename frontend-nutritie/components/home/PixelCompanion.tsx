@@ -126,7 +126,7 @@ function PixelSproutSvg({ size = 28 }: { size?: number }) {
   ];
 
   return (
-    <SafeSvg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <SafeSvg testID="sprout-artwork" width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <SafeG>
         {pixels.map(([x, y, color], idx) => (
           <SafeRect
@@ -142,6 +142,8 @@ function PixelSproutSvg({ size = 28 }: { size?: number }) {
     </SafeSvg>
   );
 }
+
+export const SproutArtwork = React.memo(PixelSproutSvg);
 
 export function PixelCompanion({
   streak = 0,
@@ -204,7 +206,7 @@ export function PixelCompanion({
       style={styles.container}
     >
       <Animated.View style={[styles.companionWrapper, animatedStyle]}>
-        <PixelSproutSvg size={size - 4} />
+        <SproutArtwork size={size - 4} />
       </Animated.View>
 
       {/* Existing streak stage, not a separate companion XP level. */}
