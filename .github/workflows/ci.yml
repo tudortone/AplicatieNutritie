@@ -206,7 +206,7 @@ jobs:
       - name: Run Frontend Tests (P-14)
         run: npm run test:ci
       - name: Verify synthetic Android QA fixtures
-        run: node --test ../tools/android-qa/fixture-server.test.cjs ../tools/android-qa/manual-meals.test.cjs
+        run: node --test ../tools/android-qa/fixture-server.test.cjs ../tools/android-qa/manual-meals.test.cjs ../tools/android-qa/fingerprint.test.cjs
 
   # -----------------------------------------------------------------------
   # Job 4: Secret scanning (P-16)

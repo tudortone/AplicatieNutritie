@@ -1,6 +1,6 @@
 # GetFlow cloud cutover execution — 24 October 2026
 
-Latest continuation: **25 October — TRIGGER_CLI_REPRODUCIBLE_PASS; isolated QA locally prepared; Production cutover BLOCKED**. See the dated continuation at the end. Earlier counts/SHA entries remain historical evidence, not current cloud state. Backup destination now follows the owner's Google Drive decision; B2/CMS provisioning is superseded.
+Latest continuation: **25 October — first approved QA command failed before cloud build creation; fingerprint defect corrected locally; NEW SHA APPROVAL REQUIRED**. See the final dated continuation. Trigger reproducibility remains verified; Production cutover remains blocked. Earlier counts/SHA entries are historical. Backup destination follows the owner's Google Drive decision; B2/CMS provisioning is superseded.
 
 **BLOCKED_WITH_EXACT_OWNER_ACTION**. No Production write, export, backup, real-data restore, publication or deployment executed. Owner explicitly confirmed that authenticated dashboards are unavailable and requested local continuation. This checkpoint records executed preparation, not a completed cutover.
 
@@ -513,3 +513,54 @@ Next backup decision is acceptance of this standard age approach and owner confi
 Frontend total **116** distinct Jest tests, backend50; standalone Node final checks42 (17+14+6+5). Do not add the repeated clean-environment run or earlier RED/GREEN reruns again. Initial harness/network failures remain documented: Jest cache EPERM, missing guessed test paths, raw-profile credentials default assertion, sandbox Supertest EACCES/OSV DNS/EAS read restrictions. Corrected commands/config-resolver assertions and network-capable local retry passed; no application/security guard relaxed. No broad historical frontend/backend/migration suite repeated. Fresh Git diff/hash/secret-scan verification is part of the final local commit handoff.
 
 [Audit & Skills Report] executing-plans, verification-before-completion, security-review, code-review, blast-radius, tdd-workflow, react-native-patterns and computer-use consulted; finishing-a-development-branch used only as a reference. No visual changes, so no design skill or device visual PASS claimed. New helpers keep account boundaries, bounded fixture state and enum-only model context. Cleanup limited to affected tests/dead empty meal fixture/new helper structure; no architectural refactor. Observed shared account usage:50% of5h,8% weekly at the captured check, not a measured task-only delta.
+
+## 25 October — owner-approved single QA attempt and fingerprint correction
+
+Owner explicitly accepted node-forge tooling risk **only for the first isolated QA build**, expiring2026-11-01T00:00:00Z, and approved one APK from **04c6afe0bb2ba34d47264ab92ded88744a83ba9e**, qa-isolated/com.totsrl.getflo.qa/version38/existing QA signer. No CI waiver, scanner ignore, installation, Play, Production or paid upgrade was authorized. This supersedes the earlier NOT-approved risk status only for that narrow operation. Raw npm/OSV findings remain visible.
+
+Fresh EAS reads confirmed project18cf8908-194b-4386-a700-22dea945da47, development variables0, QA38, Production EAS30 and exact unchanged credential IDs/public signers. Free account Android usage13/15, total estimated build cost0. A nonzero overage rollup was not interpreted as a charge: official EAS CLI code explicitly distinguishes Free plans and actual cost. No plan upgrade or payment action was taken.
+
+### Archive safety and Windows preflight
+
+EAS CLI20.5.1 archive inspection first rejected an unsupported inspect-only --non-interactive flag, then Git clone failed. A shorter diagnostic clone passed; an equal-length UUID destination failed with **cannot write pack-*.keep: Filename too long**. A short private TEMP under the visualization root and process-only core.longpaths corrected this; no persistent/global Git configuration was changed. Existing failed output directories/evidence were preserved rather than deleted.
+
+The actual EAS archive revealed root untracked render/test caches, including Chromium render profiles; a clean Git status alone did not exclude them. Nested frontend .easignore is not sufficient for this CLI's Git-root archive handling. **That unsafe archive was never uploaded.** A temporary clean local clone of the exact approved commit, qa-build-source-04c6afe, was used instead; only a private verified node_modules junction was added locally. No application file changed; native android/ios and private credential inputs were absent. Critical source/config hashes matched the approved source after Git line-ending normalization. Browser/render/test caches were absent from the uploaded source snapshot.
+
+Raw clean-archive Gitleaks returned4 existing nonsecret source findings (exit1): fixed local CI anon JWT/test signing string, empty integration env placeholders, synthetic idempotency test key and local quest storage key. Manual source inspection classified these without changing policy or hiding raw reports. The earlier dirty-cache archive had additional browser-preference detections; its content was neither printed nor uploaded. Reports remain redacted. No browser secret extraction or credential rotation occurred.
+
+### Exactly one CLI build invocation — no cloud job created
+
+At **2026-10-25T10:26:06Z**, invoked official EAS once with Node22.23.4, allowlisted public QA environment, EXPO_NO_DOTENV=1, --platform android --profile qa-isolated --non-interactive --freeze-credentials --no-wait --json. Existing remote QA credential was used. EAS created only the QA update channel/branch metadata **qa-isolated** as a standard profile side effect; OTA remains disabled and no update was published. Production channels, signing and numbering were not changed.
+
+Source upload completed, then the CLI failed **before job creation** at its mandatory fingerprint calculation: `(0 , brace_expansion_1.expand) is not a function`, exit1 at10:26:54Z. No skip flag, retry submission, second build, cancellation or promotion was performed. Durable single-qa-build-attempt/result records preserve the ambiguous-attempt guard. Read-only build:list at10:27:48Z and again **10:38:01Z** returned **zero QA builds**; therefore no build ID or APK exists. Subsequent public metadata equals the preflight for both version records and both credential lists; Android quota remains13/15 and estimated cost0. No Samsung operation was performed in this turn.
+
+### Root cause and minimal local correction
+
+The approved frontend manifest globally overrode **all brace-expansion versions to^1.1.21**. Actual @expo/fingerprint0.15.5 uses minimatch10.2.5, whose declared dependency is brace-expansion^5.0.5 and whose code calls the named expand export. The global override supplied the incompatible1.x default-function API. This is a real candidate dependency-contract defect, not an auth outage or reason to disable fingerprinting.
+
+Preserved the approved branch codex/launch-closure-20261024 at04c6afe0bb2ba34d47264ab92ded88744a83ba9e. Created only local branch **codex/qa-fingerprint-20261025** in the existing isolated checkout for the correction. Original frozen staging and protected OneDrive checkout remain untouched. Tests first reproduced both actual brace API failure and actual Expo fingerprint failure: **0/2 PASS**, fingerprint-red.tap.
+
+Minimal package change: scope the override to **brace-expansion@^1.1.0**, retaining the existing safe1.x range. Lockfile adds74 lines/seven entries only: brace-expansion5.0.12 (three graph locations), balanced-match4.0.4 (three) and brace-expansion2.1.7 (one). **No existing package version changed or entry was removed.** No Expo/RN/CLI upgrade, shim, custom crypto patch or dependency substitution. New entries have official npm URLs and SHA512 integrity. Separate fresh dependency directory installed1220 packages with lifecycle scripts disabled; original shared dependencies were not modified. Only this isolated branch's frontend junction points to the fresh tree.
+
+New tools/android-qa/fingerprint.test.cjs exercises actual legacy, middle and modern minimatch brace expansion plus the real Android Expo fingerprint, never mocks or a skip flag. CI invokes it alongside existing fixture tests. README records clean-source staging and short-TEMP requirements. No application behavior, QA identity, environment values, signing, version, worker, SQL or marketing change.
+
+### Post-correction verification
+
+| Verification | Result / exit |
+| --- | --- |
+| Fresh isolated npm ci, scripts disabled |1220 packages;0 |
+| Actual brace contracts + Expo fingerprint |2/2;0 (RED0/2 preserved) |
+| Same tests plus real SDK fixture integrations |16/16;0 |
+| QA/Billing/config/profile/Chat affected frontend suites |9 suites78/78;0 |
+| Official EAS20.5.1 createFingerprintAsync, managed Android |0; hash2ea9804a1400f7b083630306b8b14a374d0bb478;530 sources;not skipped |
+| Official EAS configuration/resolution regressions |6/6;0 |
+| Frontend typecheck |0 |
+| Canonical focused Expo lint |0 errors,1 existing warning;0 |
+| Full frontend npm audit |same7 high graph nodes rooted in node-forge;1 |
+| Four-lock OSV, unchanged policy |only node-forge1.4.0/GHSA-86w9-cpqp-85rv;1 |
+
+Evidence remains in sibling release-repro-20261025: single-qa-build-* records/logs, clean-archive proofs, fingerprint-red/green/final TAP, fresh npm audit/OSV, official-eas-fingerprint-fixed.json and post-failure public cloud snapshots. No historical full application, migration or Gradle suite repeated. Build failed before cloud compilation; do not label it Android build PASS or device QA.
+
+**Next exact authorization:** one QA APK using the new corrected local commit SHA reported in the handoff, same package/version38/profile/existing signer/loopback and Free quota, using a clean source snapshot. The prior SHA-specific build approval does not authorize a changed commit. Existing narrow node-forge acceptance is retained; do not ask again for the same risk scope or turn it into a CI exception. No build has been resubmitted on the new SHA. No installation approval requested before an artifact exists.
+
+[Audit & Skills Report] executing-plans, verification-before-completion, systematic-debugging and tdd-workflow consulted for this turn. Existing security-review/code-review principles retained. Root causes reproduced before fixes; no guards relaxed. Cleanup limited to dependency scope, reproducible regression/CI wiring and documentation. Native device behavior, final APK manifest/signature, Play, Production and real backup remain unverified and untouched.
