@@ -21,7 +21,7 @@
     "@google/generative-ai": "^0.24.1",
     "@sentry/node": "^10.69.0",
     "@supabase/supabase-js": "^2.109.0",
-    "@trigger.dev/sdk": "4.6.4",
+    "@trigger.dev/sdk": "4.8.1",
     "compression": "^1.8.2",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
