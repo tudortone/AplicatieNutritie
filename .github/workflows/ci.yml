@@ -235,7 +235,6 @@ jobs:
     env:
       GETFLOW_TRIGGER_TOOL_ROOT: ${{ github.workspace }}/tools/trigger-cli
       GETFLOW_RELEASE_ROOT: ${{ github.workspace }}
-      GETFLOW_PROOF_DIR: ${{ runner.temp }}/getflow-trigger-proof
       TRIGGER_TELEMETRY_DISABLED: '1'
       DO_NOT_TRACK: '1'
     steps:
@@ -243,11 +242,15 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: tools/trigger-cli/.node-version
+      - name: Initialize Trigger proof directory
+        shell: bash
+        run: |
+          echo "GETFLOW_PROOF_DIR=$RUNNER_TEMP/getflow-trigger-proof" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/getflow-trigger-proof"
       - name: Install locked dependencies without lifecycle scripts
         run: |
           npm ci --prefix tools/trigger-cli --ignore-scripts --no-audit --no-fund
           npm ci --prefix backend-nutritie-ai --ignore-scripts --no-audit --no-fund
-          mkdir -p "$GETFLOW_PROOF_DIR"
       - name: Apply checksum-bound metadata fix
         run: node tools/trigger-cli/apply-sdk-metadata-patch.cjs "$GETFLOW_TRIGGER_TOOL_ROOT"
       - name: Audit complete CLI graph
