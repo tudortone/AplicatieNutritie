@@ -1,6 +1,8 @@
+/** @jest-environment-options {"customExportConditions":["node","node-addons"]} */
 import { renderHook } from '@testing-library/react-native';
 import fs from 'fs';
 import path from 'path';
+import { AndroidConfig, type ExportedConfig } from 'expo/config-plugins';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 let mockWidth = 360;
@@ -115,27 +117,45 @@ describe('Android 15/16 Edge-to-Edge & Large Screen Compatibility', () => {
       expect(appJson.expo.orientation).toBe('default');
       expect(appJson.expo.android.edgeToEdgeEnabled).toBe(true);
       expect(appJson.expo.android.softwareKeyboardLayoutMode).toBe('resize');
+      expect(appJson.expo.plugins).toContain('./plugins/withAndroidResponsiveWindow');
     });
 
-    test('AndroidManifest.xml MainActivity has resizeableActivity true and NO portrait lock', () => {
-      const manifestPath = path.resolve(__dirname, '../android/app/src/main/AndroidManifest.xml');
-      const manifestContent = fs.readFileSync(manifestPath, 'utf8');
-
-      // MainActivity must NOT have screenOrientation="portrait"
-      expect(manifestContent).not.toMatch(/<activity[^>]*MainActivity[^>]*android:screenOrientation="portrait"/);
-      // MainActivity must declare resizeableActivity="true"
-      expect(manifestContent).toMatch(/<activity[^>]*MainActivity[^>]*android:resizeableActivity="true"/);
-      // supports-screens must declare resizeable="true"
-      expect(manifestContent).toMatch(/<supports-screens[^>]*android:resizeable="true"/);
+    test('managed manifest transforms emit a resizable MainActivity without a portrait lock', async () => {
+      const withResponsiveWindow = jest.requireActual<(config: ExportedConfig) => ExportedConfig>('../plugins/withAndroidResponsiveWindow');
+      const config = withResponsiveWindow({ name: 'GetFlow', slug: 'nutriai', orientation: 'default' });
+      const transform = config.mods?.android?.manifest;
+      if (!transform) throw new Error('Responsive manifest mod is not registered');
+      const manifest: AndroidConfig.Manifest.AndroidManifest = { manifest: {
+        $: { 'xmlns:android': 'http://schemas.android.com/apk/res/android' }, queries: [],
+        application: [{ $: { 'android:name': '.MainApplication' }, activity: [{ $: { 'android:name': '.MainActivity' } }] }],
+      } };
+      const result = await transform({ ...config, modRawConfig: config,
+        modRequest: { projectRoot: __dirname, platformProjectRoot: __dirname, platform: 'android', modName: 'manifest', introspect: true },
+        modResults: AndroidConfig.Orientation.setAndroidOrientation(config, manifest),
+      });
+      const activity = AndroidConfig.Manifest.getMainActivityOrThrow(result.modResults);
+      expect(activity.$['android:screenOrientation']).toBe('unspecified');
+      expect(activity.$['android:resizeableActivity']).toBe('true');
+      expect(result.modResults.manifest).toEqual(expect.objectContaining({
+        'supports-screens': [{ $: { 'android:resizeable': 'true' } }],
+      }));
     });
 
-    test('styles.xml declares transparent status and navigation bars for Android 15/16', () => {
-      const stylesPath = path.resolve(__dirname, '../android/app/src/main/res/values/styles.xml');
-      const stylesContent = fs.readFileSync(stylesPath, 'utf8');
-
-      expect(stylesContent).toContain('<item name="android:statusBarColor">@android:color/transparent</item>');
-      expect(stylesContent).toContain('<item name="android:navigationBarColor">@android:color/transparent</item>');
-      expect(stylesContent).toContain('<item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>');
+    test('managed style transform emits transparent system bars and short-edge cutout policy', async () => {
+      const withResponsiveWindow = jest.requireActual<(config: ExportedConfig) => ExportedConfig>('../plugins/withAndroidResponsiveWindow');
+      const config = withResponsiveWindow({ name: 'GetFlow', slug: 'nutriai' });
+      const transform = config.mods?.android?.styles;
+      if (!transform) throw new Error('Responsive styles mod is not registered');
+      const result = await transform({ ...config, modRawConfig: config,
+        modRequest: { projectRoot: __dirname, platformProjectRoot: __dirname, platform: 'android', modName: 'styles', introspect: true },
+        modResults: { resources: { style: [{ $: { name: 'AppTheme', parent: 'Theme.AppCompat' }, item: [] }] } },
+      });
+      const items = result.modResults.resources.style?.[0].item;
+      expect(items).toEqual(expect.arrayContaining([
+        { $: { name: 'android:statusBarColor' }, _: '@android:color/transparent' },
+        { $: { name: 'android:navigationBarColor' }, _: '@android:color/transparent' },
+        { $: { name: 'android:windowLayoutInDisplayCutoutMode', 'tools:targetApi': '27' }, _: 'shortEdges' },
+      ]));
     });
 
     test('Zero app-owned deprecated window API invocations in application source code', () => {

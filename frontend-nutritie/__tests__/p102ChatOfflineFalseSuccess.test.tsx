@@ -67,7 +67,7 @@ jest.mock('../supabase', () => ({
   },
 }));
 jest.mock('../lib/freshnessMese', () => ({
-  marqueazaMeseModificate: (...args: unknown[]) => mockFreshness.mark(...args),
+  ...jest.requireActual('../lib/freshnessMese'),
   marcheazaMeseModificate: (...args: unknown[]) => mockFreshness.mark(...args),
   anuntaMasaSalvataVerificat: (...args: unknown[]) => mockFreshness.announce(...args),
 }));
