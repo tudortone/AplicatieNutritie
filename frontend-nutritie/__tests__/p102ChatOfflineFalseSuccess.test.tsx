@@ -256,12 +256,15 @@ beforeEach(() => {
   mockPremium = false;
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  jest.useRealTimers();
+});
 
 describe('Chat quota is server-authoritative', () => {
-  const quota = (total: number, ramase: number, tier = 'free') => ({
+  const quota = (total: number, ramase: number, tier = 'free', reseteazaLa = new Date(Date.now() + 60_000).toISOString()) => ({
     ok: true, status: 200,
-    json: async () => ({ total, ramase, consumate: total - ramase, tier, reseteazaLa: '2026-10-22T00:00:00.000Z' }),
+    json: async () => ({ total, ramase, consumate: total - ramase, tier, reseteazaLa }),
   });
 
   test('opens accessible server-derived quota details from the Chat header', async () => {
@@ -312,6 +315,94 @@ describe('Chat quota is server-authoritative', () => {
     await act(async () => { fireEvent.press(view.getByTestId('chat-quota-indicator')); });
     expect(view.getByText('The Chat AI allowance service is temporarily unavailable.')).toBeTruthy();
     expect(view.queryByText(/0 of \d+ messages/)).toBeNull();
+  });
+
+  test.each(['chat.quickAnalyzeA11y', 'chat.quickProteinA11y', 'chat.planNextMealA11y'])(
+    'does not submit the quick action %s when the Free allowance is 0/10', async (label) => {
+      mockAreoPropunere = false;
+      global.fetch = jest.fn(async (url: string) => url.endsWith('/chat/quota')
+        ? quota(10, 0)
+        : { ok: true, status: 200, json: async () => ({ raspuns: 'Unexpected' }) }) as never;
+      const view = await render(<ChatScreen />);
+      await waitFor(() => expect(view.getByTestId('chat-quota-exhausted-banner')).toBeTruthy());
+
+      await act(async () => { fireEvent.press(view.getByLabelText(label)); });
+
+      expect((global.fetch as jest.Mock).mock.calls.every(([url]) => String(url).endsWith('/chat/quota'))).toBe(true);
+      expect(mockAds.recordChatUserMessage).not.toHaveBeenCalled();
+      expect(view.getByTestId('chat-quota-details')).toBeTruthy();
+    },
+  );
+
+  test.each(['composer', 'quick action'])('refreshes the server allowance at UTC reset and recovers the %s without leaving Chat', async (action) => {
+    jest.useFakeTimers({ now: new Date('2026-10-27T23:59:59.000Z') });
+    mockAreoPropunere = false;
+    let quotaRequests = 0;
+    global.fetch = jest.fn(async (url: string) => {
+      if (url.endsWith('/chat/quota')) {
+        quotaRequests += 1;
+        return quotaRequests === 1
+          ? quota(10, 0, 'free', '2026-10-28T00:00:00.000Z')
+          : quota(10, 10, 'free', '2026-10-29T00:00:00.000Z');
+      }
+      return { ok: true, status: 200, json: async () => ({ raspuns: 'OK' }) };
+    }) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(view.getByText('0/10')).toBeTruthy());
+    await act(async () => { fireEvent.changeText(view.getByTestId('chat-input'), 'Ce părere ai despre mere?'); });
+    expect(view.getByTestId('send-button')).toBeDisabled();
+    await act(async () => { fireEvent.press(view.getByLabelText('chat.quickAnalyzeA11y')); });
+    expect(quotaRequests).toBe(1);
+
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+
+    await waitFor(() => expect(view.getByText('10/10')).toBeTruthy());
+    expect(view.getByTestId('send-button')).toBeEnabled();
+    expect(view.getByTestId('chat-input').props.value).toBe('Ce părere ai despre mere?');
+    await act(async () => {
+      fireEvent.press(action === 'composer' ? view.getByTestId('send-button') : view.getByLabelText('chat.quickAnalyzeA11y'));
+    });
+    expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).endsWith('/chat'))).toHaveLength(1);
+  });
+
+  test('refreshes an expired reset once without a request loop when the server keeps returning it', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-28T00:00:01.000Z') });
+    global.fetch = jest.fn(async () => quota(10, 0, 'free', '2026-10-28T00:00:00.000Z')) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(view.getByText('0/10')).toBeTruthy());
+
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    await act(async () => { await jest.advanceTimersByTimeAsync(60_000); });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('cancels the scheduled quota refresh when Chat unmounts', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-27T23:59:59.000Z') });
+    global.fetch = jest.fn(async () => quota(10, 0, 'free', '2026-10-28T00:00:00.000Z')) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(view.getByText('0/10')).toBeTruthy());
+    await act(async () => { view.unmount(); });
+
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('replaces the previous account reset timer when switching accounts', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-27T23:59:59.000Z') });
+    global.fetch = jest.fn(async () => quota(10, 0, 'free', mockActiveUserId === UTILIZATOR.id
+      ? '2026-10-28T00:00:00.000Z' : '2026-10-29T00:00:00.000Z')) as never;
+    const view = await render(<ChatScreen />);
+    await waitFor(() => expect(view.getByText('0/10')).toBeTruthy());
+    mockActiveUserId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    await act(async () => { view.rerender(<ChatScreen />); });
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+
+    await act(async () => { await jest.advanceTimersByTimeAsync(1000); });
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
   test('a network failure clears stale quota instead of presenting it as current', async () => {

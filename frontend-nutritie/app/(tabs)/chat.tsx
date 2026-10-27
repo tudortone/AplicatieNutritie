@@ -60,6 +60,7 @@ const newMsgId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 // raspuns AI lent legitim sa nu fie taiat de client inainte de timp.
 const AI_REQUEST_TIMEOUT_MS = 160000;
 const CHAT_QUOTA_LOW_REMAINING = 2;
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 interface ChatMessage {
   // FIX UI: fara id stabil, key={index} facea Reanimated sa reutilizeze bula
@@ -296,6 +297,7 @@ export default function ChatScreen() {
   const [quotaUnavailableReason, setQuotaUnavailableReason] = useState<'network' | 'endpoint' | null>(null);
   const [quotaDetailsVisible, setQuotaDetailsVisible] = useState(false);
   const quotaRequestRef = useRef(0);
+  const quotaResetRefreshRef = useRef<string | null>(null);
   const quotaUserRef = useRef(session?.user?.id);
   quotaUserRef.current = session?.user?.id;
   const quotaContextChanged = Boolean(session?.user?.id) && chatQuota !== null && (
@@ -362,6 +364,20 @@ export default function ChatScreen() {
   useEffect(() => {
     fetchChatQuota();
   }, [fetchChatQuota, isPremium, hasFullAccess]);
+
+  useEffect(() => {
+    if (!currentQuota?.reseteazaLa) return;
+    const resetKey = `${currentQuota.userId}:${currentQuota.reseteazaLa}`;
+    if (quotaResetRefreshRef.current === resetKey) return;
+    const delay = Date.parse(currentQuota.reseteazaLa) - Date.now();
+    if (delay > MAX_TIMER_DELAY_MS) return;
+    const timer = setTimeout(() => {
+      // Refresh once per server reset; an expired response must not start a loop.
+      quotaResetRefreshRef.current = resetKey;
+      void fetchChatQuota();
+    }, Math.max(0, delay));
+    return () => clearTimeout(timer);
+  }, [currentQuota, fetchChatQuota]);
 
   const [mesaje, setMesaje] = useState<ChatMessage[]>([
     buleMesaj('ai', t('chat.welcome'))
@@ -617,6 +633,10 @@ export default function ChatScreen() {
     // (răspunsuri în ordine inversă, dublu credit).
     if (loadingRef.current) return;
     if (!mesajText.trim()) return;
+    if (currentQuota?.ramase === 0) {
+      setQuotaDetailsVisible(true);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // BUG-061: la retry (esteRetry=true) bulele de utilizator există deja în
     // istoric — nu o adăugăm încă o dată, altfel retrimiterea ar duplica bulele.
