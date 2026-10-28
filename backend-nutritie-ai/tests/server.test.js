@@ -72,6 +72,37 @@ describe('Backend API Tests', () => {
       expect(res.body.status).toBe('ok');
       expect(res.body).toHaveProperty('timestamp');
     });
+
+    it.each([
+      ['missing schema cache table', 404, 'PGRST205', 200],
+      ['missing PostgreSQL table', 400, '42P01', 200],
+      ['database unavailable', 503, 'PGRST003', 503],
+      ['invalid database credentials', 401, 'PGRST301', 503],
+      ['database permission denied', 403, '42501', 503],
+      ['unexpected database error', 500, 'XX000', 503],
+    ])('reports readiness for %s', async (_label, status, code, expected) => {
+      const client = require('@supabase/supabase-js').createClient.mock.results[0].value;
+      client.from.mockReturnValueOnce({
+        select: () => ({ maybeSingle: async () => ({
+          data: null, status, error: { code, message: 'private upstream details' },
+        }) }),
+      });
+      const res = await request(app).get('/health');
+      expect(res.statusCode).toBe(expected);
+      expect(res.body.healthy).toBe(expected === 200);
+      expect(JSON.stringify(res.body)).not.toContain('private upstream details');
+    });
+
+    it('reports unavailable on a rejected database request', async () => {
+      const client = require('@supabase/supabase-js').createClient.mock.results[0].value;
+      client.from.mockReturnValueOnce({
+        select: () => ({ maybeSingle: async () => { throw new Error('private network details'); } }),
+      });
+      const res = await request(app).get('/health');
+      expect(res.statusCode).toBe(503);
+      expect(res.body.healthy).toBe(false);
+      expect(JSON.stringify(res.body)).not.toContain('private network details');
+    });
   });
 
   describe('Autentificare middleware requireAuth', () => {

@@ -368,13 +368,14 @@ app.get('/', (_req, res) => {
   });
 });
 // S4-01: /health face acum un ping real catre Supabase (readiness), nu doar
-// versiunea statica. Daca PostgREST/Supabase sunt jos, fetch-ul prin wrapper-ul
-// fetchCuTimeoutSupabase (S4-06, 10s) arunca si raspundem 503. Runda de tabele
+// versiunea statica. Supabase poate returna error fara sa arunce; atat acest
+// caz, cat si timeoutul fetchCuTimeoutSupabase (S4-06, 10s), trebuie sa dea 503. Runda de tabele
 // de sanatate este aleasa ca sa nu depinda de date: intereseaza doar ca reteaua
 // si PostgREST raspund; eroarea de tabel inexistent este ignorata.
 app.get('/health', healthLimiter, async (_req, res) => {
   try {
-    await supabase.from('health_check').select('*').maybeSingle();
+    const { error } = await supabase.from('health_check').select('*').maybeSingle();
+    if (error && !['PGRST205', '42P01'].includes(error.code)) throw error;
     res.status(200).json({
       status: 'ok',
       healthy: true,
