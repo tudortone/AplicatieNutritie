@@ -4,3 +4,8 @@
 # and future advisory for a package, regardless of severity or version.
 # Keep the scan fail-closed across all checked lockfiles. SDK upgrade planning
 # does not justify hiding findings from the dependency scanner.
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = 2026-11-15
+reason = "deepmerge@4.3.1 (CVE-2026-93753, GitHub severity LOW): no upstream patch (>4.3.1) or patched parent (jest-config, @expo/config) published on npm; upstream maintainer closed PR #274 and Issue #273 without fix. Reachable only at local/CI Jest and Expo config boundaries; zero runtime imports or HTTP user-input paths in backend-nutritie-ai or frontend-nutritie. Remove immediately when deepmerge > 4.3.1 or parent replacements land."
