@@ -47,6 +47,26 @@ spec-compliance/
 .zcode/
 .mcp.json
 
+# Non-mobile sub-trees and docs
+backend-nutritie/
+backend-nutritie-ai/
+supabase/
+contracts/
+docs/
+tools/
+base/
+BUNDLE-METADATA/
+public/
+release-artifacts/
+release-assets/
+release-proof/
+.qa*/
+.ci_logs/
+*.md
+*.txt
+*.bat
+*.ps1
+
 frontend-nutritie/.playwright-cli/
 frontend-nutritie/.tmp/
 frontend-nutritie/.claude/
