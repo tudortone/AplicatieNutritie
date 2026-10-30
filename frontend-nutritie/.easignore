@@ -39,6 +39,7 @@ coverage/
 /.qa*/
 
 # Local agent/tool metadata in the Git root is not mobile build input.
+/.agent/
 /.agents/
 /.claude/
 /.playwright-mcp/
