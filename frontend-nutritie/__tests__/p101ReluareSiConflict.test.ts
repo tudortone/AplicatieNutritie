@@ -93,7 +93,7 @@ describe('P1-01 — verificarea reluării pe 23505 (Blocant 1)', () => {
 
   test('5. diferențe numerice nesemnificative (float) NU sunt conflict', async () => {
     const trimis = payload('OP-1', { proteine: 40 });
-    const persistat = { ...payload('OP-1'), proteine: '40.0' };
+    const persistat = { ...trimis, proteine: '40.0' };
 
     const rezultat = await verificaReluareMasa(clientCuRand(persistat), trimis);
 
