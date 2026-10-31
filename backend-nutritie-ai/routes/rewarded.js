@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const express = require('express');
 
 function safeError(res, error, { log = false } = {}) {

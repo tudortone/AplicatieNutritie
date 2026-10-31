@@ -47,7 +47,7 @@ describe('notificationStartupGuard', () => {
   describe('createNotificationResponseDispatcher', () => {
     it('dispatches a new notification and saves its key', async () => {
       const savedKeys: string[][] = [];
-      const navigated: Array<[string, NotificationResponseLike]> = [];
+      const navigated: [string, NotificationResponseLike][] = [];
 
       const dispatch = createNotificationResponseDispatcher({
         loadHandledKeys: async () => [],
@@ -156,7 +156,7 @@ describe('notificationStartupGuard', () => {
       // Logica de navigate conform app/_layout.tsx
       const navigateHandler = (destination: string, response: NotificationResponseLike) => {
         const rawData = response?.notification?.request?.content?.data as Record<string, unknown> | undefined;
-        if (!rawData?.route || destination === '/' || destination === '/(tabs)') {
+        if (!rawData?.route || destination === '/' || destination === '/(tabs)' || destination === '/notificari') {
           return;
         }
         explicitNotificationTap = true;
@@ -198,7 +198,7 @@ describe('notificationStartupGuard', () => {
 
       const navigateHandler = (destination: string, response: NotificationResponseLike) => {
         const rawData = response?.notification?.request?.content?.data as Record<string, unknown> | undefined;
-        if (!rawData?.route || destination === '/' || destination === '/(tabs)') {
+        if (!rawData?.route || destination === '/' || destination === '/(tabs)' || destination === '/notificari') {
           return;
         }
         explicitNotificationTap = true;
@@ -235,7 +235,7 @@ describe('notificationStartupGuard', () => {
 
       const navigateHandler = (destination: string, response: NotificationResponseLike) => {
         const rawData = response?.notification?.request?.content?.data as Record<string, unknown> | undefined;
-        if (!rawData?.route || destination === '/' || destination === '/(tabs)') {
+        if (!rawData?.route || destination === '/' || destination === '/(tabs)' || destination === '/notificari') {
           return;
         }
         explicitNotificationTap = true;
@@ -264,6 +264,43 @@ describe('notificationStartupGuard', () => {
       expect(handled).toBe(true);
       expect(routerPush).toHaveBeenCalledWith('/(tabs)/antrenamente');
       expect(explicitNotificationTap).toBe(true);
+    });
+
+    it('blocks explicit navigation if notification data specifies route /notificari', async () => {
+      const routerPush = jest.fn();
+      let explicitNotificationTap = false;
+
+      const navigateHandler = (destination: string, response: NotificationResponseLike) => {
+        const rawData = response?.notification?.request?.content?.data as Record<string, unknown> | undefined;
+        if (!rawData?.route || destination === '/' || destination === '/(tabs)' || destination === '/notificari') {
+          return;
+        }
+        explicitNotificationTap = true;
+        routerPush(destination);
+      };
+
+      const dispatch = createNotificationResponseDispatcher({
+        loadHandledKeys: async () => [],
+        saveHandledKeys: async () => {},
+        getLastResponse: () => null,
+        clearLastResponse: jest.fn(),
+        navigate: navigateHandler,
+      });
+
+      const notifPointingToNotificari: NotificationResponseLike = {
+        notification: {
+          date: 7000,
+          request: {
+            identifier: 'notif-pointing-to-inbox',
+            content: { data: { route: '/notificari' } },
+          },
+        },
+      };
+
+      const handled = await dispatch(notifPointingToNotificari);
+      expect(handled).toBe(true);
+      expect(routerPush).not.toHaveBeenCalled();
+      expect(explicitNotificationTap).toBe(false);
     });
   });
 

@@ -4,32 +4,90 @@ function createRewardedRepo({ supabaseAdmin, dailyLimit = 5 } = {}) {
   if (!supabaseAdmin?.from || !supabaseAdmin?.rpc) throw new TypeError('Supabase admin client is required.');
   return Object.freeze({
     async findByIntegrityTokenHash({ tokenHash }) {
-      const { data, error } = await supabaseAdmin.rpc('get_flow_reward_intent_by_integrity_token', {
-        p_token_hash: tokenHash,
-      });
-      if (error) throw error;
-      if (!data) return null;
-      return {
-        id: data.id,
-        userId: data.userId,
-        requestHash: data.requestHash,
-        customData: data.customData,
-        expiresAt: data.expiresAt,
-        status: data.status,
-      };
+      try {
+        const { data, error } = await supabaseAdmin.rpc('get_flow_reward_intent_by_integrity_token', {
+          p_token_hash: tokenHash,
+        });
+        if (error) {
+          if (error.code === 'PGRST202' || error.code === '42883' || String(error.message || '').includes('get_flow_reward_intent_by_integrity_token')) {
+            return null;
+          }
+          throw error;
+        }
+        if (!data) return null;
+        return {
+          id: data.id,
+          userId: data.userId,
+          requestHash: data.requestHash,
+          customData: data.customData,
+          expiresAt: data.expiresAt,
+          status: data.status,
+        };
+      } catch (err) {
+        if (err.code === 'PGRST202' || err.code === '42883' || String(err.message || '').includes('get_flow_reward_intent_by_integrity_token')) {
+          return null;
+        }
+        throw err;
+      }
     },
     async createIntent({ id, userId, customData, customDataHash, tokenHash, requestHash, expiresAt }) {
-      const { data, error } = await supabaseAdmin.rpc('create_flow_reward_intent_idempotent', {
-        p_id: id,
-        p_user_id: userId,
-        p_custom_data: customData,
-        p_custom_data_hash: customDataHash,
-        p_token_hash: tokenHash,
-        p_request_hash: requestHash,
-        p_expires_at: expiresAt,
-      });
-      if (error) throw error;
-      return data;
+      try {
+        const { data, error } = await supabaseAdmin.rpc('create_flow_reward_intent_idempotent', {
+          p_id: id,
+          p_user_id: userId,
+          p_custom_data: customData,
+          p_custom_data_hash: customDataHash,
+          p_token_hash: tokenHash,
+          p_request_hash: requestHash,
+          p_expires_at: expiresAt,
+        });
+        if (error) {
+          if (error.code === 'PGRST202' || error.code === '42883' || String(error.message || '').includes('create_flow_reward_intent_idempotent')) {
+            const insertResult = await supabaseAdmin.from('flow_reward_intents').insert({
+              id,
+              user_id: userId,
+              custom_data_hash: customDataHash,
+              expires_at: expiresAt,
+              status: 'PENDING',
+            });
+            if (insertResult.error) throw insertResult.error;
+            return {
+              ok: true,
+              id,
+              userId,
+              customData,
+              requestHash,
+              expiresAt,
+              status: 'PENDING',
+              replay: false,
+            };
+          }
+          throw error;
+        }
+        return data;
+      } catch (err) {
+        if (err.code === 'PGRST202' || err.code === '42883' || String(err.message || '').includes('create_flow_reward_intent_idempotent')) {
+          const insertResult = await supabaseAdmin.from('flow_reward_intents').insert({
+            id,
+            user_id: userId,
+            custom_data_hash: customDataHash,
+            expires_at: expiresAt,
+            status: 'PENDING',
+          });
+          if (insertResult.error) throw insertResult.error;
+          return {
+            ok: true,
+            id,
+            userId,
+            customData,
+            requestHash,
+            expiresAt,
+            status: 'PENDING',
+            replay: false,
+          };
+        }
+        throw err;
+      }
     },
     async getIntentStatus({ intentId, userId }) {
       const { data, error } = await supabaseAdmin

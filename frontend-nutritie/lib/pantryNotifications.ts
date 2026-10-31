@@ -91,7 +91,7 @@ export async function checkAndSchedulePantryExpiryNotification(produse: ProdusCa
         body: `Ai ${expiringSoon.length} aliment(e) pe cale să expire: ${numeAlimente}${plusOthers}. Intră în Cămară și folosește „Gătește cu AI” pentru o rețetă rapidă!`,
         sound: true,
         color: '#FF003C',
-        data: { type: 'pantry_expiry', count: expiringSoon.length },
+        data: { type: 'pantry_expiry', count: expiringSoon.length, route: '/(tabs)/chat' },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,

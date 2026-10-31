@@ -261,7 +261,7 @@ function RootNavigator() {
             const date = Number(initialLast.notification?.date || 0);
             const isStale = date > 0 && Date.now() - date > 15000;
             const data = initialLast.notification?.request?.content?.data as Record<string, unknown> | undefined;
-            if (isStale || !data?.route) {
+            if (isStale || !data?.route || data.route === '/notificari' || data.route === '/' || data.route === '/(tabs)') {
               void Notifications.clearLastNotificationResponseAsync?.().catch(() => {});
             }
           }
@@ -294,7 +294,7 @@ function RootNavigator() {
         },
         navigate: (destination, response) => {
           const rawData = response?.notification?.request?.content?.data as Record<string, unknown> | undefined;
-          if (!rawData?.route || destination === '/' || destination === '/(tabs)') {
+          if (!rawData?.route || destination === '/' || destination === '/(tabs)' || destination === '/notificari') {
             return;
           }
           explicitNotificationTapRef.current = true;
@@ -347,11 +347,14 @@ function RootNavigator() {
       try {
         const consent = await getConsent();
         const managed = await getManagedReminders();
+        const REMINDERS_MIGRATION_KEY = '@getflow/reminders-route-migrated/v1';
+        const isMigrated = await AsyncStorage.getItem(REMINDERS_MIGRATION_KEY);
         const needsReschedule =
           consent.accepted &&
-          (managed.ids.length === 0 || managed.accountId !== accountId);
+          (managed.ids.length === 0 || managed.accountId !== accountId || !isMigrated);
         if (needsReschedule) {
           await scheduleDailyMealReminders(DEFAULT_MEAL_REMINDERS, accountId);
+          await AsyncStorage.setItem(REMINDERS_MIGRATION_KEY, 'true');
         } else if (!consent.accepted && managed.ids.length > 0) {
           await cancelManagedReminders();
         }

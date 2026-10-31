@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { buildApiUrl } from '../lib/api';
-import { showRewardedAdWithSsv, type RewardedAdOutcome } from '../lib/ads/adsService';
+import { showRewardedAdWithSsv, initializeAdsSdk, type RewardedAdOutcome } from '../lib/ads/adsService';
+import { isConsentResolved, resolveAdsConsent } from '../lib/ads/adsConsent';
 import { supabase } from '../supabase';
 import { useBilling } from './BillingContext';
 import { usePremium } from './PremiumContext';
@@ -233,6 +234,14 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
       if (intent.status !== 'PENDING' || !intent.intentId || intent.ssv?.userId !== intent.intentId || !intent.ssv.customData) {
         throw new Error('INVALID_REWARD_INTENT');
       }
+      if (!isConsentResolved()) {
+        try {
+          await resolveAdsConsent();
+        } catch {}
+      }
+      try {
+        await initializeAdsSdk();
+      } catch {}
       const outcome = await showRewardedAdWithSsv({ intentId: intent.intentId, customData: intent.ssv.customData });
       if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
       if (outcome !== 'earned-awaiting-server') {
@@ -357,7 +366,10 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     rewardState,
     creditProducts: billing.creditProducts,
     lastConsumedCategory,
-    open: () => setVisible(true),
+    open: () => {
+      void refresh();
+      setVisible(true);
+    },
     close: () => setVisible(false),
     refresh,
     consumeOptimisticCredit,

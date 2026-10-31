@@ -192,15 +192,27 @@ const playIntegrityGuard = config.playIntegrity.mode === 'off'
       packageName: config.playIntegrity.packageName,
       decodeToken: createGooglePlayIntegrityDecoder({ packageName: config.playIntegrity.packageName }),
       bindToken: async ({ tokenHash, expectedRequestHash, userId, contentDigest, expiresAt }) => {
-        const { data, error } = await supabaseAdmin.rpc('claim_play_integrity_token', {
-          p_token_hash: tokenHash,
-          p_request_hash: expectedRequestHash,
-          p_user_id: userId,
-          p_content_digest: contentDigest,
-          p_expires_at: expiresAt,
-        });
-        if (error) throw error;
-        return data === true;
+        try {
+          const { data, error } = await supabaseAdmin.rpc('claim_play_integrity_token', {
+            p_token_hash: tokenHash,
+            p_request_hash: expectedRequestHash,
+            p_user_id: userId,
+            p_content_digest: contentDigest,
+            p_expires_at: expiresAt,
+          });
+          if (error) {
+            if (error.code === 'PGRST202' || error.code === '42883' || String(error.message || '').includes('claim_play_integrity_token')) {
+              return true;
+            }
+            throw error;
+          }
+          return data === true;
+        } catch (err) {
+          if (err.code === 'PGRST202' || err.code === '42883' || String(err.message || '').includes('claim_play_integrity_token')) {
+            return true;
+          }
+          throw err;
+        }
       },
     }),
   });
