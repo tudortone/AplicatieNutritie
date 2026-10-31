@@ -285,7 +285,7 @@ Sarcina ta: Răspunde prietenos, ținând cont de istoricul discuției și de ca
 
 function creeazaServiciuChat({ config, genAI }) {
   const serviciuVision = creeazaServiciuVision({ config });
-  const groqApiKey = process.env.GROQ_API_KEY || null;
+  const getGroqKeysList = () => serviciuVision.getApiKeysList('GROQ_API_KEY');
   const groqTextModels = config?.ai?.groqTextModels || ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'];
 
   const getGeminiModelsList = () => serviciuVision.getGeminiModelsList();
@@ -358,69 +358,72 @@ function creeazaServiciuChat({ config, genAI }) {
     const isMealLog = REGEX_MEAL_LOG_MULTILINGUAL.test(ultimulMesaj);
 
     try {
-      if (!groqApiKey) {
-        // Groq nu e configurat: nu trimitem 'Bearer undefined'. /api/chat are un
-        // fallback Gemini real mai jos, deci nu 503 — sarim doar peste Groq si
-        // cererea ramane deservita de al doilea furnizor.
+      const groqKeys = getGroqKeysList();
+      if (groqKeys.length === 0) {
         throw new Error('Groq nu este configurat (lipseste GROQ_API_KEY); se trece pe fallback.');
       }
 
       let ultimulEsecGroq = null;
 
-      for (const modelName of groqTextModels) {
-        try {
-          const groqBody = {
-            model: modelName,
-            messages,
-            temperature: isMealLog ? 0.2 : 0.7,
-            max_tokens: 1500,
-          };
-          if (isMealLog) {
-            groqBody.response_format = { type: 'json_object' };
-          }
+      cheiLoop: for (const key of groqKeys) {
+        for (const modelName of groqTextModels) {
+          try {
+            const groqBody = {
+              model: modelName,
+              messages,
+              temperature: isMealLog ? 0.2 : 0.7,
+              max_tokens: 1500,
+            };
+            if (isMealLog) {
+              groqBody.response_format = { type: 'json_object' };
+            }
 
-          const response = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${groqApiKey}`,
-            },
-            body: JSON.stringify(groqBody),
-            signal,
-          }), 35000, semnalAnulare);
+            const response = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${key}`,
+              },
+              body: JSON.stringify(groqBody),
+              signal,
+            }), 35000, semnalAnulare);
 
-          if (!response.ok) {
-            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', ok: false });
-            ultimulEsecGroq = new Error(`Eroare Groq API (${response.status}) pe modelul ${modelName}`);
-            continue;
-          }
-
-          const data = await response.json();
-          const rawContent = data.choices?.[0]?.message?.content;
-          if (!rawContent) {
-            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', ok: false });
-            ultimulEsecGroq = new Error(`Raspuns gol primit de la AI pe modelul ${modelName}`);
-            continue;
-          }
-
-          if (isMealLog) {
-            const parsed = parseJsonFromLlm(rawContent, { asteapta: 'obiect' });
-            if (!estePropunereMasaValida(parsed)) {
+            if (!response.ok) {
               inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', ok: false });
-              ultimulEsecGroq = new Error(`Raspuns JSON invalid pentru MEAL_PROPOSAL pe modelul ${modelName}`);
+              ultimulEsecGroq = new Error(`Eroare Groq API (${response.status}) pe modelul ${modelName}`);
+              if (response.status === 401 || response.status === 403 || response.status === 429) {
+                break; // Incearca urmatoarea cheie Groq
+              }
               continue;
             }
-          }
 
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', usage: data.usage, ok: true });
-          return { raspuns: rawContent };
-        } catch (err) {
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', ok: false });
-          ultimulEsecGroq = err;
+            const data = await response.json();
+            const rawContent = data.choices?.[0]?.message?.content;
+            if (!rawContent) {
+              inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', ok: false });
+              ultimulEsecGroq = new Error(`Raspuns gol primit de la AI pe modelul ${modelName}`);
+              continue;
+            }
+
+            if (isMealLog) {
+              const parsed = parseJsonFromLlm(rawContent, { asteapta: 'obiect' });
+              if (!estePropunereMasaValida(parsed)) {
+                inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', ok: false });
+                ultimulEsecGroq = new Error(`Raspuns JSON invalid pentru MEAL_PROPOSAL pe modelul ${modelName}`);
+                continue;
+              }
+            }
+
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', usage: data.usage, ok: true });
+            return { raspuns: rawContent };
+          } catch (err) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', ok: false });
+            ultimulEsecGroq = err;
+          }
         }
       }
 
-      throw (ultimulEsecGroq || new Error('Toate modelele Groq au esuat'));
+      throw (ultimulEsecGroq || new Error('Toate cheile si modelele Groq au esuat'));
     } catch (groqError) {
       console.warn('[AI provider fallback]', rezumatEroareSigur(groqError, {
         operation: 'chat_completion',
@@ -472,7 +475,8 @@ function creeazaServiciuChat({ config, genAI }) {
       throw new EroareAiClient(400, 'Mesajul contine instructiuni interzise.');
     }
 
-    if (!groqApiKey && !genAI) {
+    const groqKeys = getGroqKeysList();
+    if (groqKeys.length === 0) {
       throw new EroareAiClient(503, 'Serviciul de planificare a mesei nu este disponibil momentan.');
     }
 
@@ -519,57 +523,62 @@ RETURNEAZA STRICT UN OBIECT JSON valid in acest format:
     let parsed = null;
     let ultimulEsec = null;
 
-    if (groqApiKey) {
-      for (const modelName of groqTextModels) {
-        try {
-          const response = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${groqApiKey}`,
-            },
-            body: JSON.stringify({
-              model: modelName,
-              messages: [{ role: 'user', content: prompt }],
-              temperature: 0.1,
-              max_tokens: 1500,
-              response_format: { type: 'json_object' },
-              reasoning_effort: 'low',
-            }),
-            signal,
-          }), 25000, semnalAnulare);
+    if (groqKeys.length > 0) {
+      cheiLoop: for (const key of groqKeys) {
+        for (const modelName of groqTextModels) {
+          try {
+            const response = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${key}`,
+              },
+              body: JSON.stringify({
+                model: modelName,
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.1,
+                max_tokens: 1500,
+                response_format: { type: 'json_object' },
+                reasoning_effort: 'low',
+              }),
+              signal,
+            }), 25000, semnalAnulare);
 
-          if (!response.ok) {
-            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
-            ultimulEsec = new Error(`Eroare Groq /api/log-food-from-chat (${response.status}) pe modelul ${modelName}`);
-            continue;
-          }
-          const data = await response.json();
-          const content = data.choices?.[0]?.message?.content;
-          if (!content) {
-            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
-            ultimulEsec = new Error('Raspuns gol primit de la AI.');
-            continue;
-          }
+            if (!response.ok) {
+              inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
+              ultimulEsec = new Error(`Eroare Groq /api/log-food-from-chat (${response.status}) pe modelul ${modelName}`);
+              if (response.status === 401 || response.status === 403 || response.status === 429) {
+                break; // Incearca urmatoarea cheie Groq
+              }
+              continue;
+            }
+            const data = await response.json();
+            const content = data.choices?.[0]?.message?.content;
+            if (!content) {
+              inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
+              ultimulEsec = new Error('Raspuns gol primit de la AI.');
+              continue;
+            }
 
-          const candidate = parseJsonFromLlm(content, { asteapta: 'obiect' });
-          if (!candidate || (candidate.type !== 'MEAL_PROPOSAL' && !Array.isArray(candidate.items))) {
-            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
-            ultimulEsec = new Error('JSON invalid pentru MEAL_PROPOSAL.');
-            continue;
-          }
+            const candidate = parseJsonFromLlm(content, { asteapta: 'obiect' });
+            if (!candidate || (candidate.type !== 'MEAL_PROPOSAL' && !Array.isArray(candidate.items))) {
+              inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
+              ultimulEsec = new Error('JSON invalid pentru MEAL_PROPOSAL.');
+              continue;
+            }
 
-          if (!areValoriMasaEditabile(candidate)) {
-            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
-            continue;
-          }
+            if (!areValoriMasaEditabile(candidate)) {
+              inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
+              continue;
+            }
 
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', usage: data.usage, ok: true });
-          parsed = candidate;
-          break;
-        } catch (err) {
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
-          ultimulEsec = err;
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', usage: data.usage, ok: true });
+            parsed = candidate;
+            break cheiLoop;
+          } catch (err) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
+            ultimulEsec = err;
+          }
         }
       }
     }
@@ -603,7 +612,7 @@ RETURNEAZA STRICT UN OBIECT JSON valid in acest format:
     }
 
     if (!parsed) {
-      if (!groqApiKey) {
+      if (groqKeys.length === 0 && !genAI) {
         throw new EroareAiClient(503, 'Serviciul de planificare a mesei nu este disponibil momentan.');
       }
       throw (ultimulEsec || new Error('Nu s-a putut genera MEAL_PROPOSAL prin modelele disponibile.'));
@@ -628,7 +637,8 @@ RETURNEAZA STRICT UN OBIECT JSON valid in acest format:
       throw new EroareAiClient(400, 'Textul contine instructiuni interzise.');
     }
 
-    if (!groqApiKey) {
+    const groqKeys = getGroqKeysList();
+    if (groqKeys.length === 0) {
       // /estimeaza-mancare-text depinde exclusiv de Groq. Fara cheie, 503 onest.
       throw new EroareAiClient(503, 'Serviciul de estimare AI nu este disponibil momentan.');
     }
@@ -642,46 +652,51 @@ RETURNEAZA STRICT UN OBIECT JSON in formatul: {"nume": ${JSON.stringify(curatat)
     let parsed = null;
     let ultimulEsec = null;
 
-    for (const modelName of groqTextModels) {
-      try {
-        const groqResponse = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${groqApiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: modelName,
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.2,
-            response_format: { type: 'json_object' },
-          }),
-          signal,
-        }), 25000, semnalAnulare);
+    cheiLoop: for (const key of groqKeys) {
+      for (const modelName of groqTextModels) {
+        try {
+          const groqResponse = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: modelName,
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.2,
+              response_format: { type: 'json_object' },
+            }),
+            signal,
+          }), 25000, semnalAnulare);
 
-        if (!groqResponse.ok) {
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'estimeaza-mancare-text', ok: false });
-          ultimulEsec = new Error(`Eroare Groq API (${groqResponse.status}) pe modelul ${modelName}`);
-          continue;
-        }
-        const data = await groqResponse.json();
-        const content = data.choices?.[0]?.message?.content;
-        if (!content) {
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'estimeaza-mancare-text', ok: false });
-          ultimulEsec = new Error('Raspuns gol primit de la AI.');
-          continue;
-        }
+          if (!groqResponse.ok) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'estimeaza-mancare-text', ok: false });
+            ultimulEsec = new Error(`Eroare Groq API (${groqResponse.status}) pe modelul ${modelName}`);
+            if (groqResponse.status === 401 || groqResponse.status === 403 || groqResponse.status === 429) {
+              break; // Incearca urmatoarea cheie Groq
+            }
+            continue;
+          }
+          const data = await groqResponse.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (!content) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'estimeaza-mancare-text', ok: false });
+            ultimulEsec = new Error('Raspuns gol primit de la AI.');
+            continue;
+          }
 
-        const candidate = parseJsonFromLlm(content, { asteapta: 'obiect' });
-        if (!candidate) {
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'estimeaza-mancare-text', ok: false });
-          ultimulEsec = new Error('Nu s-a putut interpreta raspunsul ca JSON.');
-          continue;
-        }
+          const candidate = parseJsonFromLlm(content, { asteapta: 'obiect' });
+          if (!candidate) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'estimeaza-mancare-text', ok: false });
+            ultimulEsec = new Error('Nu s-a putut interpreta raspunsul ca JSON.');
+            continue;
+          }
 
-        inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'estimeaza-mancare-text', usage: data.usage, ok: true });
-        parsed = candidate;
-        break;
-      } catch (err) {
-        inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'estimeaza-mancare-text', ok: false });
-        ultimulEsec = err;
+          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'estimeaza-mancare-text', usage: data.usage, ok: true });
+          parsed = candidate;
+          break cheiLoop;
+        } catch (err) {
+          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'estimeaza-mancare-text', ok: false });
+          ultimulEsec = err;
+        }
       }
     }
 
@@ -715,7 +730,8 @@ RETURNEAZA STRICT UN OBIECT JSON in formatul: {"nume": ${JSON.stringify(curatat)
       throw new EroareAiClient(400, 'Aliment invalid.');
     }
 
-    if (!groqApiKey) {
+    const groqKeys = getGroqKeysList();
+    if (groqKeys.length === 0) {
       // /profil-nutritiv depinde exclusiv de Groq. Fara cheie, 503 onest.
       throw new EroareAiClient(503, 'Serviciul de generare a profilului nutritiv nu este disponibil momentan.');
     }
@@ -739,46 +755,51 @@ Valorile sunt estimari de referinta (gen USDA). Daca nu esti sigur de un micronu
     let parsed = null;
     let ultimulEsec = null;
 
-    for (const modelName of groqTextModels) {
-      try {
-        const groqResponse = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${groqApiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: modelName,
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.2,
-            response_format: { type: 'json_object' },
-          }),
-          signal,
-        }), 25000, semnalAnulare);
+    cheiLoop: for (const key of groqKeys) {
+      for (const modelName of groqTextModels) {
+        try {
+          const groqResponse = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: modelName,
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.2,
+              response_format: { type: 'json_object' },
+            }),
+            signal,
+          }), 25000, semnalAnulare);
 
-        if (!groqResponse.ok) {
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'profil-nutritiv', ok: false });
-          ultimulEsec = new Error(`Eroare Groq API (${groqResponse.status}) pe modelul ${modelName}`);
-          continue;
-        }
-        const data = await groqResponse.json();
-        const content = data.choices?.[0]?.message?.content;
-        if (!content) {
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'profil-nutritiv', ok: false });
-          ultimulEsec = new Error('Raspuns gol primit de la AI.');
-          continue;
-        }
+          if (!groqResponse.ok) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'profil-nutritiv', ok: false });
+            ultimulEsec = new Error(`Eroare Groq API (${groqResponse.status}) pe modelul ${modelName}`);
+            if (groqResponse.status === 401 || groqResponse.status === 403 || groqResponse.status === 429) {
+              break; // Incearca urmatoarea cheie Groq
+            }
+            continue;
+          }
+          const data = await groqResponse.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (!content) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'profil-nutritiv', ok: false });
+            ultimulEsec = new Error('Raspuns gol primit de la AI.');
+            continue;
+          }
 
-        const candidate = parseJsonFromLlm(content, { asteapta: 'obiect' });
-        if (!candidate) {
-          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'profil-nutritiv', ok: false });
-          ultimulEsec = new Error('Nu s-a putut interpreta raspunsul ca JSON.');
-          continue;
-        }
+          const candidate = parseJsonFromLlm(content, { asteapta: 'obiect' });
+          if (!candidate) {
+            inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'profil-nutritiv', ok: false });
+            ultimulEsec = new Error('Nu s-a putut interpreta raspunsul ca JSON.');
+            continue;
+          }
 
-        inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'profil-nutritiv', usage: data.usage, ok: true });
-        parsed = candidate;
-        break;
-      } catch (err) {
-        inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'profil-nutritiv', ok: false });
-        ultimulEsec = err;
+          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'profil-nutritiv', usage: data.usage, ok: true });
+          parsed = candidate;
+          break cheiLoop;
+        } catch (err) {
+          inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'profil-nutritiv', ok: false });
+          ultimulEsec = err;
+        }
       }
     }
 

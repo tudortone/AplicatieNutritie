@@ -5,7 +5,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { callWithTimeout } = require('../utils/httpTimeout');
 const { parseJsonFromLlm } = require('../utils/llmJson');
-const { numarModel } = require('../services/ai/vision');
+const { numarModel, getApiKeysList } = require('../services/ai/vision');
 const { construiesteUrlOpenFoodFacts, EroareProprietateProdus } = require('../utils/barcode');
 // Task 1: codEroare mutat în utilitarul comun (utils/codEroare.js) — aceeași
 // definiție ca în storePartajat/gdpr, ca tot backendul să logheze coduri identice.
@@ -392,8 +392,8 @@ function createBarcodeRouter({
         }
       }
 
-      const groqApiKey = process.env.GROQ_API_KEY?.trim();
-      if (!groqApiKey || groqTextModels.length === 0) {
+      const groqKeys = getApiKeysList('GROQ_API_KEY');
+      if (groqKeys.length === 0 || groqTextModels.length === 0) {
         return res.status(404).json({
           eroare: 'Produsul nu a fost gasit.',
           allowManualEntry: true,
@@ -403,7 +403,7 @@ function createBarcodeRouter({
 
       // Lookup-urile locale/OFF sunt gratuite. Numai miss-ul care urmeaza sa
       // invoce Groq avanseaza la limitatorul si quota canonica AI de mai jos.
-      res.locals.barcodeAi = { code, ctx, groqApiKey };
+      res.locals.barcodeAi = { code, ctx, groqKeys };
       return next();
     } catch (err) {
       console.error('[Barcode] Interogare esuata:', codEroare(err));
@@ -412,7 +412,7 @@ function createBarcodeRouter({
     // P1-12: zălogul atomic se interpune ÎNAINTE de aiLimiter/checkAiUsageQuota,
     // deci înainte de orice debitare și înainte de orice apel la furnizor.
   }, revendicaFallbackAi, aiLimiter, checkAiUsageQuota, async (_req, res) => {
-    const { code, ctx, groqApiKey } = res.locals.barcodeAi;
+    const { code, ctx, groqKeys } = res.locals.barcodeAi;
     const aiPrompt = `Utilizatorul din Romania a scanat codul de bare EAN/UPC "${code}" dar produsul nu a fost gasit. Daca il cunosti cu certitudine, returneaza date reale; altfel returneaza un profil generic marcat ca estimare. Returneaza strict JSON cu codBare, nume, brand, cantitate, calorii, proteine, carbohidrati si grasimi.`;
 
     // P1-12 (decontare) — „rezultat utilizabil" = utilizatorul chiar a obținut ceva:
@@ -425,28 +425,32 @@ function createBarcodeRouter({
     // încheiat și după persistare/tratarea eșecului — niciodată la deconectarea
     // clientului. Un `return` din interior trece tot prin `finally`.
     try {
-      for (const modelName of groqTextModels) {
-        try {
-          const aiResp = await callWithTimeout((signal) => fetch(GROQ_CHAT_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${groqApiKey}`,
-            },
-            body: JSON.stringify({
-              model: modelName,
-              messages: [{ role: 'user', content: aiPrompt }],
-              temperature: 0.1,
-              max_tokens: 400,
-              response_format: { type: 'json_object' },
-            }),
-            signal,
-          }), 18000);
+      cheiLoop: for (const key of groqKeys) {
+        for (const modelName of groqTextModels) {
+          try {
+            const aiResp = await callWithTimeout((signal) => fetch(GROQ_CHAT_URL, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${key}`,
+              },
+              body: JSON.stringify({
+                model: modelName,
+                messages: [{ role: 'user', content: aiPrompt }],
+                temperature: 0.1,
+                max_tokens: 400,
+                response_format: { type: 'json_object' },
+              }),
+              signal,
+            }), 18000);
 
-          if (!aiResp.ok) {
-            metrics.inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'barcode-estimate', ok: false });
-            continue;
-          }
+            if (!aiResp.ok) {
+              metrics.inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'barcode-estimate', ok: false });
+              if (aiResp.status === 401 || aiResp.status === 403 || aiResp.status === 429) {
+                break; // Incearca urmatoarea cheie Groq
+              }
+              continue;
+            }
 
           const aiData = await aiResp.json();
           const content = aiData.choices?.[0]?.message?.content;
@@ -499,6 +503,7 @@ function createBarcodeRouter({
           console.warn(`[Barcode] Estimare AI esuata pe modelul ${modelName}:`, codEroare(err));
         }
       }
+    }
 
       if (res.destroyed || res.writableEnded) return undefined;
       return res.status(404).json({

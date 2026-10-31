@@ -420,4 +420,104 @@ describe('AI Text Models & Contracts (RC-001, RC-003, RC-004, CORR-003)', () => 
       }
     });
   });
+  describe('RC-005: Multi-Key Rotation Failover on 401 / 429', () => {
+    afterEach(() => {
+      delete process.env.GROQ_API_KEY_2;
+    });
+
+    it('1. ruleazaChat trece pe cheia secundara cand cheia primara returneaza 401', async () => {
+      process.env.GROQ_API_KEY = 'gsk_mock_key_primary';
+      process.env.GROQ_API_KEY_2 = 'gsk_mock_key_secondary';
+
+      const authHeaders = [];
+      global.fetch = jest.fn(async (url, optiuni) => {
+        const auth = optiuni.headers?.Authorization;
+        authHeaders.push(auth);
+        if (auth === 'Bearer gsk_mock_key_primary') {
+          return { ok: false, status: 401, json: async () => ({ error: { message: 'Invalid API Key' } }) };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{ message: { content: 'Raspuns de la cheia secundara' } }],
+            usage: { prompt_tokens: 15, completion_tokens: 15 },
+          }),
+        };
+      });
+
+      const serviciu = creeazaServiciuCuConfig();
+      const res = await serviciu.ruleazaChat({ mesaj: 'Salut, ce mananc azi?' });
+
+      expect(res.raspuns).toBe('Raspuns de la cheia secundara');
+      expect(authHeaders).toEqual(['Bearer gsk_mock_key_primary', 'Bearer gsk_mock_key_secondary']);
+    });
+
+    function creeazaAppLocal() {
+      const app = express();
+      app.use(express.json());
+      const router = createBarcodeRouter({
+        requireAuth: (req, _res, next) => { req.user = { id: 'test-user' }; next(); },
+        generalLimiter: (_req, _res, next) => next(),
+        aiLimiter: (_req, _res, next) => next(),
+        checkAiUsageQuota: (_req, _res, next) => next(),
+        contextDate: () => ({ userId: 'test-user' }),
+        config: {
+          ai: {
+            groqTextModels: ['openai/gpt-oss-120b', 'qwen/qwen3.6-27b'],
+          },
+        },
+        barcodeRepo: {
+          getProdusBarcode: async () => null,
+          citesteEstimareUtilizator: async () => null,
+          salveazaEstimareUtilizator: async () => {},
+        },
+      });
+      app.use(router);
+      return app;
+    }
+
+    it('2. Barcode AI trece pe cheia secundara cand cheia primara returneaza 429', async () => {
+      process.env.GROQ_API_KEY = 'gsk_mock_key_primary';
+      process.env.GROQ_API_KEY_2 = 'gsk_mock_key_secondary';
+
+      const authHeaders = [];
+      global.fetch = jest.fn(async (url, optiuni) => {
+        if (url.includes('openfoodfacts')) {
+          return { ok: false, status: 404, json: async () => ({ status: 0 }) };
+        }
+        const auth = optiuni.headers?.Authorization;
+        authHeaders.push(auth);
+        if (auth === 'Bearer gsk_mock_key_primary') {
+          return { ok: false, status: 429, json: async () => ({ error: { message: 'Rate limit exceeded' } }) };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  codBare: '5941234567890',
+                  nume: 'Produs salvat de Cheia 2',
+                  brand: 'Brand Secundar',
+                  cantitate: '100g',
+                  calorii: 150,
+                  proteine: 10,
+                  carbohidrati: 15,
+                  grasimi: 5,
+                }),
+              },
+            }],
+            usage: { prompt_tokens: 20, completion_tokens: 20 },
+          }),
+        };
+      });
+
+      const app = creeazaAppLocal();
+      const res = await request(app).get('/produs-barcode/5941234567890');
+
+      expect(res.status).toBe(200);
+      expect(res.body.produs.nume).toBe('Produs salvat de Cheia 2');
+      expect(authHeaders).toEqual(['Bearer gsk_mock_key_primary', 'Bearer gsk_mock_key_secondary']);
+    });
+  });
 });

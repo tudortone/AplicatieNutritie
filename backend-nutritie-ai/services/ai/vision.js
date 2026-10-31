@@ -64,6 +64,22 @@ const PROMPT_ANALIZA_FOTO = obtinePromptAnalizaFoto('ro');
  * functii pure (fara IO, fara stari), folosite de cascade, de chat si de
  * handler-ele de ruta din server.js.
  */
+// Extragere chei API multiple (rotatie automata la eroare/cota depasita)
+function getApiKeysList(envPrefix) {
+  const keys = [];
+  if (process.env[envPrefix]) keys.push(process.env[envPrefix]);
+  if (process.env[envPrefix + 'S']) {
+    process.env[envPrefix + 'S'].split(',').forEach((k) => {
+      const trimmed = k.trim();
+      if (trimmed) keys.push(trimmed);
+    });
+  }
+  for (let i = 2; i <= 5; i++) {
+    if (process.env[envPrefix + '_' + i]) keys.push(process.env[envPrefix + '_' + i]);
+  }
+  return keys.filter((v, i, a) => v && a.indexOf(v) === i);
+}
+
 function creeazaServiciuVision({ config }) {
   const getGeminiModelsList = () => {
     const preferat = (config.ai.geminiModel || '').trim();
@@ -115,6 +131,7 @@ function creeazaServiciuVision({ config }) {
 }
 
 module.exports = {
+  getApiKeysList,
   creeazaServiciuVision,
   numarModel,
   GEMINI_FALLBACK_MODELS,
