@@ -42,7 +42,7 @@ import {
   cancelManagedReminders,
 } from '../lib/notificationConsent';
 import { processOfflineQueue, type SupabaseMinimalClient } from '../lib/offlineQueue';
-import { resolveNotificationDestination, shouldReturnFromNotificationsOnResume } from '../lib/resumeNavigation';
+import { shouldReturnFromNotificationsOnResume } from '../lib/resumeNavigation';
 import { createNotificationResponseDispatcher, type NotificationResponseLike } from '../lib/notificationNavigation';
 import { sincronizeazaTargeturiLocale } from '../lib/sincronizeazaTargeturi';
 import { supabase } from '../supabase';
@@ -292,8 +292,9 @@ function RootNavigator() {
         clearLastResponse: () => {
           void Notifications.clearLastNotificationResponseAsync?.().catch(() => {});
         },
-        navigate: (destination) => {
-          if (destination === '/' || destination === '/(tabs)') {
+        navigate: (destination, response) => {
+          const rawData = response?.notification?.request?.content?.data as Record<string, unknown> | undefined;
+          if (!rawData?.route || destination === '/' || destination === '/(tabs)') {
             return;
           }
           explicitNotificationTapRef.current = true;

@@ -230,7 +230,7 @@ export function useHealthSync(): HealthSyncState {
     } catch (e) {
       console.error('Eroare citire pași azi:', e);
     }
-  }, [healthConnectProvider, isAvailable, weight, persistaTotalPași]);
+  }, [healthConnectProvider, weight, persistaTotalPași]);
 
   // 3. Monitorizare în timp real a pașilor (dacă aplicația este deschisă)
   const startWatchingSteps = useCallback(() => {
