@@ -145,12 +145,33 @@ export function useHealthSync(): HealthSyncState {
     weightRef.current = weight;
   }, [weight]);
 
+  const isAvailableRef = useRef(isAvailable);
+  useEffect(() => {
+    isAvailableRef.current = isAvailable;
+  }, [isAvailable]);
+
   const providerInfo = HEALTH_PROVIDERS.find(p => p.id === selectedProvider) || HEALTH_PROVIDERS[0];
   const platformName = providerInfo.name;
 
   // 1. Extragem pașii de la miezul nopții până acum
-  const fetchStepsToday = useCallback(async (sensorAvailable = isAvailable, currentWeight = weight) => {
+  const fetchStepsToday = useCallback(async (sensorAvailable?: boolean, currentWeight = weight) => {
     try {
+      let effectiveAvailable = sensorAvailable ?? isAvailableRef.current;
+      if (!effectiveAvailable && Platform.OS === 'android' && healthConnectProvider) {
+        try {
+          effectiveAvailable = Boolean(
+            await healthConnectProvider.initialize() &&
+            await healthConnectProvider.hasReadPermission()
+          );
+          if (effectiveAvailable !== isAvailableRef.current) {
+            isAvailableRef.current = effectiveAvailable;
+            setIsAvailable(effectiveAvailable);
+          }
+        } catch {
+          effectiveAvailable = false;
+        }
+      }
+
       const todayStr = ziLocalDeAzi();
       const manualKey = `${MANUAL_STEPS_KEY_PREFIX}${todayStr}`;
       const manualStr = await AsyncStorage.getItem(manualKey);
@@ -160,7 +181,7 @@ export function useHealthSync(): HealthSyncState {
 
       let sensorSteps = 0;
       let citireSenzorOk = false;
-      if (sensorAvailable && Platform.OS === 'android' && healthConnectProvider) {
+      if (effectiveAvailable && Platform.OS === 'android' && healthConnectProvider) {
         try {
           const aggregated = await healthConnectProvider.readToday();
           if (aggregated !== null) {
@@ -170,7 +191,7 @@ export function useHealthSync(): HealthSyncState {
         } catch (err) {
           if (__DEV__) console.debug('[useHealthSync] Health Connect indisponibil:', err);
         }
-      } else if (sensorAvailable && Platform.OS === 'ios') {
+      } else if (effectiveAvailable && Platform.OS === 'ios') {
         const end = new Date();
         const start = new Date();
         start.setHours(0, 0, 0, 0);
@@ -351,6 +372,19 @@ export function useHealthSync(): HealthSyncState {
     return () => sub.remove();
   }, [isEnabled, fetchStepsToday, startWatchingSteps, stopWatchingSteps]);
 
+  // Polling discret pe Android în prim-plan pentru a elimina delay-ul față de senzorii telefonului
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !isEnabled || !isAvailable || process.env.NODE_ENV === 'test') {
+      return;
+    }
+    const interval = setInterval(() => {
+      if (AppState.currentState === 'active') {
+        void fetchStepsToday(true, weightRef.current);
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [isEnabled, isAvailable, fetchStepsToday]);
+
   // 4. Comutare activare sincronizare
   const toggleSync = async (enable: boolean): Promise<boolean> => {
     try {
@@ -384,7 +418,7 @@ export function useHealthSync(): HealthSyncState {
         await fetchStepsToday(avail);
         if (Platform.OS !== 'android') startWatchingSteps();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        return true;
+        return avail;
       } else {
         setIsEnabled(false);
         stopWatchingSteps();

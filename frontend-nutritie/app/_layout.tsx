@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -42,6 +43,7 @@ import {
 } from '../lib/notificationConsent';
 import { processOfflineQueue, type SupabaseMinimalClient } from '../lib/offlineQueue';
 import { resolveNotificationDestination, shouldReturnFromNotificationsOnResume } from '../lib/resumeNavigation';
+import { createNotificationResponseDispatcher, type NotificationResponseLike } from '../lib/notificationNavigation';
 import { sincronizeazaTargeturiLocale } from '../lib/sincronizeazaTargeturi';
 import { supabase } from '../supabase';
 import {
@@ -251,9 +253,56 @@ function RootNavigator() {
   useEffect(() => {
     if (Constants.appOwnership === 'expo') return;
     try {
+      const STORAGE_KEY = '@getflow/handled-notification-responses/v1';
+
+      try {
+        void Notifications.getLastNotificationResponseAsync?.().then((initialLast) => {
+          if (initialLast) {
+            const date = Number(initialLast.notification?.date || 0);
+            const isStale = date > 0 && Date.now() - date > 15000;
+            const data = initialLast.notification?.request?.content?.data as Record<string, unknown> | undefined;
+            if (isStale || !data?.route) {
+              void Notifications.clearLastNotificationResponseAsync?.().catch(() => {});
+            }
+          }
+        }).catch(() => {});
+      } catch {}
+
+      const dispatch = createNotificationResponseDispatcher({
+        loadHandledKeys: async () => {
+          try {
+            const raw = await AsyncStorage.getItem(STORAGE_KEY);
+            return raw ? JSON.parse(raw) : [];
+          } catch {
+            return [];
+          }
+        },
+        saveHandledKeys: async (keys) => {
+          try {
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(keys.slice(-50)));
+          } catch {}
+        },
+        getLastResponse: () => {
+          try {
+            return (Notifications as unknown as { getLastNotificationResponse?: () => NotificationResponseLike | null }).getLastNotificationResponse?.() ?? null;
+          } catch {
+            return null;
+          }
+        },
+        clearLastResponse: () => {
+          void Notifications.clearLastNotificationResponseAsync?.().catch(() => {});
+        },
+        navigate: (destination) => {
+          if (destination === '/' || destination === '/(tabs)') {
+            return;
+          }
+          explicitNotificationTapRef.current = true;
+          router.push(destination);
+        },
+      });
+
       const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-        explicitNotificationTapRef.current = true;
-        router.push(resolveNotificationDestination(response.notification.request.content.data));
+        void dispatch(response as NotificationResponseLike);
       });
       return () => subscription.remove();
     } catch {}

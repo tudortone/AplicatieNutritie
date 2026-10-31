@@ -459,7 +459,16 @@ export default function HomeScreen() {
         automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
         contentContainerStyle={[s.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom, paddingHorizontal: horizontalPadding, width: '100%', maxWidth: isTablet ? 800 : 560, alignSelf: 'center' }]}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={() => refresh(false, true)} tintColor={colors.accent} colors={[colors.accent]} />
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={() => {
+              refresh(false, true);
+              void refreshSteps();
+              void refreshAntrenamente();
+            }}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+          />
         }
       >
         {/* BUG-062: Home distinge eroare de rețea de o zi goală legitimă. Fără
@@ -777,6 +786,20 @@ export default function HomeScreen() {
                         : t('home.stepsSourceOffline', { provider: platformName })}
                     </Text>
                   </View>
+                  {isEnabled && isAvailable && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        void refreshSteps();
+                      }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('chat.retry', 'Sincronizează')}
+                      style={{ padding: 6, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)' }}
+                    >
+                      <RotateCcw size={16} color={colors.accent} />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
 
@@ -871,9 +894,6 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     onPress={async () => {
                       await toggleSync(true);
-                      if (!isAvailable) {
-                        await openStepsSettings();
-                      }
                     }}
                     style={[s.connectBtn, { backgroundColor: colors.accent }]}
                     accessibilityRole="button"

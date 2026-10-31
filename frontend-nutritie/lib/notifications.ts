@@ -86,6 +86,7 @@ export async function scheduleDailyMealReminders(
         content: {
           title: reminder.title,
           body: reminder.body,
+          data: { route: '/(tabs)' },
           sound: true,
           badge: 1,
         },
