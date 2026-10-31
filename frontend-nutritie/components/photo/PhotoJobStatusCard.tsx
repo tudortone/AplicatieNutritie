@@ -54,6 +54,7 @@ export function HomePhotoAnalysisIndicator() {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let requestInFlight = false;
+    let emptyRetries = 0;
 
     const refresh = async () => {
       if (requestInFlight) return;
@@ -67,6 +68,9 @@ export function HomePhotoAnalysisIndicator() {
         setVisibleJob(recovered);
         if (recovered && RUNNING.has(recovered.job.status)) {
           timer = setTimeout(refresh, 5000);
+        } else if (!recovered && emptyRetries < 2) {
+          emptyRetries++;
+          timer = setTimeout(refresh, 1500);
         }
       } catch {
         if (active) timer = setTimeout(refresh, 8000);

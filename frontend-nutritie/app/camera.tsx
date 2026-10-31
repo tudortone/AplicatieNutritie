@@ -44,6 +44,7 @@ import {
   PhotoApiError,
   type ActivePhotoJobPointer,
   type PhotoJob,
+  type RecoveredPhotoJobForCamera,
 } from '@/lib/photoJobs';
 import {
   evaluatePhotoMealQuality,
@@ -102,6 +103,9 @@ export default function CameraScreen() {
   const { t, i18n } = useTranslation();
   const reduceMotion = useReducedMotion();
   const flowCredits = useFlowCredits();
+  const refreshFlowCredits = flowCredits.refresh;
+  const openFlowCredits = flowCredits.open;
+  const consumeOptimisticCredit = flowCredits.consumeOptimisticCredit;
 
   const { session } = useAuth();
   const sessionUserId = session?.user?.id ?? null;
@@ -314,6 +318,7 @@ export default function CameraScreen() {
     setPhotoPhase(isRetry ? 'retrying' : 'uploading');
     let timeoutDepasit = false;
     let activePointer: ActivePhotoJobPointer | null = null;
+    let draftPersistentUri: string | null = null;
     const backgroundId = setTimeout(() => {
       if (!controller.signal.aborted && isPhotoOwnerCurrent(ownerId, accountGeneration)) setPhotoPhase('background');
     }, 15000);
@@ -327,7 +332,7 @@ export default function CameraScreen() {
     try {
       const imagineOptimizata = await optimizeImageBeforeUpload(imageUri);
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
-      const draftPersistentUri = await saveLocalImageDraft(imagineOptimizata.uri, ownerId);
+      draftPersistentUri = await saveLocalImageDraft(imagineOptimizata.uri, ownerId);
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       draftCurrentUriRef.current = draftPersistentUri;
 
@@ -379,7 +384,7 @@ export default function CameraScreen() {
         draftUri: draftPersistentUri,
         savedAt: Date.now(),
       };
-      flowCredits.consumeOptimisticCredit();
+      consumeOptimisticCredit();
       if (shouldGoHomeOnSubmitRef.current) {
         if (__DEV__) console.log('[Camera] Job pornit pe backend, utilizatorul a mers la Acasă:', submitted.id);
         setPhotoPhase('background');
@@ -406,9 +411,9 @@ export default function CameraScreen() {
       if (draftCurrentUriRef.current === draftPersistentUri) draftCurrentUriRef.current = null;
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void flowCredits.refresh();
+      if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void refreshFlowCredits();
     } catch (error) {
-      if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void flowCredits.refresh();
+      if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void refreshFlowCredits();
       if (abortControllerRef.current !== controller || !isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       if (error instanceof PhotoApiError && (
         error.code === 'FLOW_CREDITS_EXHAUSTED'
@@ -419,7 +424,7 @@ export default function CameraScreen() {
         setScanError(quotaMsg);
         Alert.alert(t('camera.quotaExceededTitle'), quotaMsg, [
           { text: t('common.cancel'), style: 'cancel' },
-          { text: t('camera.openCredits'), onPress: () => flowCredits.open() },
+          { text: t('camera.openCredits'), onPress: () => openFlowCredits() },
         ]);
         return;
       }
@@ -437,9 +442,26 @@ export default function CameraScreen() {
         || error.code === 'PHOTO_ANALYSIS_FAILED'
       );
       if (isNonFoodErrorCode) {
+        if (ownerId) {
+          await clearActivePhotoJob(ownerId, activePointer?.jobId || currentPhotoJobIdRef.current || undefined).catch(() => {});
+          if (draftPersistentUri) await discardLocalImageDraft(draftPersistentUri, ownerId).catch(() => {});
+        }
+        isTakingPhotoRef.current = false;
+        setSeIncarca(false);
+        setScanError(null);
         setPhotoPhase('failed');
         setFailedPhotoJob({
-          job: { id: activePointer?.jobId || currentPhotoJobIdRef.current || 'unknown', status: 'failed', errorCode: 'NOT_FOOD' },
+          job: {
+            id: activePointer?.jobId || currentPhotoJobIdRef.current || 'unknown',
+            status: 'failed',
+            errorCode: 'NOT_FOOD',
+            result: {
+              success: false,
+              items: [],
+              isNotFood: true,
+              ...(error instanceof PhotoApiError && error.data && typeof error.data === 'object' ? (error.data as Record<string, unknown>) : {}),
+            },
+          },
           pointer: activePointer || { userId: ownerId, jobId: 'unknown', savedAt: Date.now() },
         });
         return;
@@ -462,17 +484,19 @@ export default function CameraScreen() {
     } finally {
       clearTimeout(backgroundId);
       clearTimeout(timeoutId);
+      isTakingPhotoRef.current = false;
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
         if (isMountedRef.current) setSeIncarca(false);
       }
     }
-  }, [applyPhotoJobResult, flowCredits, i18n.language, isPhotoOwnerCurrent, session?.access_token, session?.user?.id, t]);
+  }, [applyPhotoJobResult, consumeOptimisticCredit, i18n.language, isPhotoOwnerCurrent, openFlowCredits, refreshFlowCredits, session?.access_token, session?.user?.id, t]);
 
   // Un job Photo AI este recuperabil după închiderea aplicației. Analiza rămâne
   // în Trigger; acest ecran doar reia polling-ul și reconstruiește review-ul.
   useEffect(() => {
     if (!session?.access_token || !session.user.id) return;
+    if (abortControllerRef.current !== null) return;
     const controller = new AbortController();
     const token = session.access_token;
     const userId = session.user.id;
@@ -484,8 +508,9 @@ export default function CameraScreen() {
     }
 
     const recover = async () => {
+      let active: RecoveredPhotoJobForCamera | null = null;
       try {
-        const active = await recoverPhotoJobForCamera({ token, userId, signal: controller.signal });
+        active = await recoverPhotoJobForCamera({ token, userId, signal: controller.signal });
         if (!active || controller.signal.aborted || !isPhotoOwnerCurrent(userId, accountGeneration)) return;
         if (active.missingJob) {
           const pointer = active.pointer;
@@ -567,7 +592,7 @@ export default function CameraScreen() {
           });
         if (!controller.signal.aborted && isPhotoOwnerCurrent(userId, accountGeneration)) {
           applyPhotoJobResult(completed, active.pointer, userId, accountGeneration);
-          void flowCredits.refresh();
+          void refreshFlowCredits();
         }
         if (controller.signal.aborted || !isPhotoOwnerCurrent(userId, accountGeneration)) return;
         if (active.pointer.draftUri) {
@@ -576,6 +601,24 @@ export default function CameraScreen() {
       } catch (error) {
         if (!controller.signal.aborted && isPhotoOwnerCurrent(userId, accountGeneration)
           && !(error instanceof DOMException && error.name === 'AbortError')) {
+          const isNonFood = error instanceof PhotoApiError && (
+            error.code === 'NOT_FOOD'
+            || error.code === 'NO_FOOD'
+            || error.code === 'PHOTO_RESULT_EMPTY'
+            || error.code === 'EMPTY_RESULT'
+            || error.code === 'PHOTO_RESULT_INVALID'
+            || (error.data as Record<string, unknown> | undefined)?.isNotFood === true
+          );
+          if (isNonFood) {
+            await clearActivePhotoJob(userId).catch(() => {});
+            setPhotoPhase('failed');
+            setScanError(null);
+            setFailedPhotoJob({
+              job: { id: active?.job?.id || 'unknown', status: 'failed', errorCode: 'NOT_FOOD' },
+              pointer: active?.pointer || { userId, jobId: 'unknown', savedAt: Date.now() },
+            });
+            return;
+          }
           setPhotoPhase('failed');
           setScanError(t('camera.genericScanError'));
           setRecoveryBlocked(error instanceof PhotoApiError && (
@@ -592,7 +635,7 @@ export default function CameraScreen() {
     };
     void recover();
     return () => controller.abort();
-  }, [applyPhotoJobResult, flowCredits, isPhotoOwnerCurrent, recoveryAttempt, session?.access_token, session?.user.id, t]);
+  }, [applyPhotoJobResult, refreshFlowCredits, isPhotoOwnerCurrent, recoveryAttempt, session?.access_token, session?.user.id, t]);
 
   const retryFailedPhotoJob = useCallback(async () => {
     if (!failedPhotoJob || !session?.user.id) return;
@@ -655,6 +698,7 @@ export default function CameraScreen() {
   }, [isPhotoOwnerCurrent, session?.access_token, session?.user.id, analizeazaImaginea, recoveryChecked, rezultat.length, scanError, seIncarca, t]);
 
   const anuleazaScanarea = useCallback(() => {
+    isTakingPhotoRef.current = false;
     // A prior save response may be ambiguous. Keep its exact payload and job
     // pointer recoverable instead of allowing a rescan to overwrite the retry key.
     if (pendingPhotoSavePayloadRef.current) return;
@@ -666,8 +710,8 @@ export default function CameraScreen() {
     abortControllerRef.current = null;
     imageKitUrlRef.current = null;
     imageKitFileIdRef.current = null;
-    if (currentPhotoJobIdRef.current && session?.user.id) {
-      clearActivePhotoJob(session.user.id, currentPhotoJobIdRef.current).catch(() => {});
+    if (session?.user.id) {
+      clearActivePhotoJob(session.user.id, currentPhotoJobIdRef.current || undefined).catch(() => {});
     }
     currentPhotoJobIdRef.current = null;
     setRezultat([]);
@@ -681,7 +725,12 @@ export default function CameraScreen() {
   }, [session?.user.id]);
 
   const lasaAnalizaInFundal = useCallback(() => {
-    if (!currentPhotoJobIdRef.current) return false;
+    if (!currentPhotoJobIdRef.current) {
+      shouldGoHomeOnSubmitRef.current = true;
+      setPhotoPhase('background');
+      setSeIncarca(false);
+      return true;
+    }
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setSeIncarca(false);
@@ -827,11 +876,20 @@ export default function CameraScreen() {
   }, [analizeazaImaginea, isPhotoOwnerCurrent, seIncarca, session, t]);
 
   const handleRetakePhoto = useCallback(() => {
+    isTakingPhotoRef.current = false;
+    abortControllerRef.current = null;
+    if (session?.user.id) {
+      void clearActivePhotoJob(session.user.id).catch(() => {});
+      void purgeLocalImageDrafts(session.user.id).catch(() => {});
+    }
     setFailedPhotoJob(null);
     setScanError(null);
+    setRecoveryBlocked(false);
+    setSeIncarca(false);
+    setRezultat([]);
     setPhotoPhase('idle');
     anuleazaScanarea();
-  }, [anuleazaScanarea]);
+  }, [anuleazaScanarea, session?.user.id]);
 
   const handleGalleryFromNotFood = useCallback(() => {
     setFailedPhotoJob(null);

@@ -178,7 +178,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
-    zIndex: 999,
+    zIndex: 10000,
+    elevation: 10,
   },
   blurCard: {
     width: '100%',
