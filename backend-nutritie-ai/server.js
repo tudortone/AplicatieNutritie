@@ -483,6 +483,7 @@ const rewardedR = createRewardedRouter({
     expectedRewardAmount: config.admob.rewardedAmount,
     expectedRewardItem: config.admob.rewardedItem,
   }),
+  config,
 });
 const photoOutcomeOpsR = createPhotoOutcomeOpsRouter({
   requireAuth,

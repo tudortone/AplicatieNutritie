@@ -89,6 +89,14 @@ export async function resolveAdsConsent(): Promise<AdsConsentResolution> {
 
       const { AdsConsentStatus, AdsConsentPrivacyOptionsRequirementStatus } = AdsModule;
       canRequestAdsCache = info?.canRequestAds === true;
+      const infoObj = info as any;
+      if (!canRequestAdsCache && (
+        infoObj?.status === (AdsConsentStatus as any)?.NOT_REQUIRED ||
+        String(infoObj?.status) === 'NOT_REQUIRED' ||
+        (infoObj?.isConsentFormAvailable === false && infoObj?.status !== AdsConsentStatus?.REQUIRED && String(infoObj?.status) !== 'REQUIRED')
+      )) {
+        canRequestAdsCache = true;
+      }
 
       const reqStatus = String(info?.privacyOptionsRequirementStatus || '');
       privacyOptionsRequiredCache =
@@ -139,8 +147,16 @@ export async function showAdsPrivacyOptionsForm(): Promise<boolean> {
   try {
     const info = await AdsModule.AdsConsent.showPrivacyOptionsForm();
     if (info) {
-      const { AdsConsentPrivacyOptionsRequirementStatus } = AdsModule;
+      const { AdsConsentStatus, AdsConsentPrivacyOptionsRequirementStatus } = AdsModule;
       canRequestAdsCache = info.canRequestAds === true;
+      const infoObj = info as any;
+      if (!canRequestAdsCache && (
+        infoObj?.status === (AdsConsentStatus as any)?.NOT_REQUIRED ||
+        String(infoObj?.status) === 'NOT_REQUIRED' ||
+        (infoObj?.isConsentFormAvailable === false && infoObj?.status !== AdsConsentStatus?.REQUIRED && String(infoObj?.status) !== 'REQUIRED')
+      )) {
+        canRequestAdsCache = true;
+      }
       const reqStatus = String(info.privacyOptionsRequirementStatus || '');
       privacyOptionsRequiredCache =
         reqStatus === AdsConsentPrivacyOptionsRequirementStatus?.REQUIRED ||

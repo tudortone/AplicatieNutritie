@@ -6,7 +6,7 @@ const createRewardedRouter = require('../routes/rewarded');
 const TOKEN_HASH = 'a'.repeat(64);
 const REQUEST_HASH = 'b'.repeat(43);
 
-function build({ verifyError, applyError, verified, intentStatus = { status: 'PENDING', expiresAt: '2030-01-01T00:10:00.000Z' }, integrityError, integrityValue, user = {}, paidEntitlement = { premium: false }, entitlementError } = {}) {
+function build({ verifyError, applyError, verified, intentStatus = { status: 'PENDING', expiresAt: '2030-01-01T00:10:00.000Z' }, integrityError, integrityValue, user = {}, paidEntitlement = { premium: false }, entitlementError, config } = {}) {
   const rewardedService = {
     createIntent: jest.fn(async () => ({ intentId: 'intent-1', customData: 'secret-1', expiresAt: '2030-01-01T00:10:00Z', status: 'PENDING' })),
     getIntentStatus: jest.fn(async ({ userId }) => userId.endsWith('1111') ? intentStatus : null),
@@ -24,7 +24,7 @@ function build({ verifyError, applyError, verified, intentStatus = { status: 'PE
       return next();
     };
   };
-  const app = express(); app.use(express.json()); app.use('/api/v1', createRewardedRouter({ requireAuth, generalLimiter: (_q, _s, n) => n(), rewardedService, billingService, verifier, integrityGuard }));
+  const app = express(); app.use(express.json()); app.use('/api/v1', createRewardedRouter({ requireAuth, generalLimiter: (_q, _s, n) => n(), rewardedService, billingService, verifier, integrityGuard, config }));
   return { app, rewardedService, billingService, integrityCalls };
 }
 
@@ -67,6 +67,19 @@ describe('rewarded routes', () => {
     const { app, rewardedService } = build({ integrityValue: { trusted: false, reason: 'DISABLED' } });
     await request(app).post('/api/v1/rewarded/intents').set('Authorization', 'Bearer valid').expect(403);
     expect(rewardedService.createIntent).not.toHaveBeenCalled();
+  });
+  test('creates a rewarded intent with fallback binding when playIntegrity mode is off in config', async () => {
+    const { app, rewardedService } = build({
+      integrityValue: { trusted: false, reason: 'DISABLED' },
+      config: { playIntegrity: { mode: 'off' } },
+    });
+    const response = await request(app).post('/api/v1/rewarded/intents').set('Authorization', 'Bearer valid').expect(201);
+    expect(response.body).toHaveProperty('intentId', 'intent-1');
+    expect(rewardedService.createIntent).toHaveBeenCalledTimes(1);
+    const callArgs = rewardedService.createIntent.mock.calls[0][0];
+    expect(callArgs.userId).toBe('11111111-1111-4111-8111-111111111111');
+    expect(callArgs.tokenHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(typeof callArgs.requestHash).toBe('string');
   });
   test('returns the same intent status on verified token replay', async () => {
     const { app, rewardedService } = build();

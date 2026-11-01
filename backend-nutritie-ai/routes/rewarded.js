@@ -10,7 +10,7 @@ function safeError(res, error, { log = false } = {}) {
   return res.status(status).json({ eroare: 'Creditul recompensat nu a putut fi procesat.', cod: code });
 }
 
-function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, billingService, verifier, integrityGuard } = {}) {
+function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, billingService, verifier, integrityGuard, config } = {}) {
   if (!rewardedService || !billingService || typeof billingService.getPaidEntitlement !== 'function' || !verifier || typeof requireAuth !== 'function' || typeof generalLimiter !== 'function' || typeof integrityGuard !== 'function') {
     throw new TypeError('Rewarded route dependencies are required.');
   }
@@ -18,11 +18,22 @@ function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, bi
   const intentIntegrity = integrityGuard({ action: 'rewarded.intent', canonicalPath: '/rewarded/intents' });
   router.post('/rewarded/intents', requireAuth, generalLimiter, intentIntegrity, async (req, res) => {
     try {
-      if (req.playIntegrity?.trusted !== true
-        || !/^[a-f0-9]{64}$/.test(req.playIntegrity.tokenHash || '')
-        || typeof req.playIntegrity.requestHash !== 'string'
-        || !req.playIntegrity.requestHash) {
-        throw Object.assign(new Error('A verified reward request binding is required.'), { code: 'PLAY_INTEGRITY_REQUIRED', status: 403 });
+      let tokenHash = req.playIntegrity?.tokenHash;
+      let requestHash = req.playIntegrity?.requestHash;
+
+      const isTrusted = req.playIntegrity?.trusted === true
+        && /^[a-f0-9]{64}$/.test(tokenHash || '')
+        && typeof requestHash === 'string'
+        && Boolean(requestHash);
+
+      if (!isTrusted) {
+        if (config?.playIntegrity?.mode === 'off' || config?.playIntegrity?.mode === 'observe') {
+          const fallbackSeed = `${req.user.id}:${req.get('x-play-integrity-request-hash') || req.get('idempotency-key') || crypto.randomUUID()}`;
+          tokenHash = crypto.createHash('sha256').update(`reward-intent-token:${fallbackSeed}`).digest('hex');
+          requestHash = crypto.createHash('sha256').update(`reward-intent-req:${fallbackSeed}`).digest('base64url');
+        } else {
+          throw Object.assign(new Error('A verified reward request binding is required.'), { code: 'PLAY_INTEGRITY_REQUIRED', status: 403 });
+        }
       }
       if (req.user?.esteAdmin === true || req.user?.esteTester === true) {
         throw Object.assign(new Error('Rewarded ads are not available for full-access accounts.'), { code: 'REWARDED_NOT_ELIGIBLE', status: 403 });
@@ -36,8 +47,8 @@ function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, bi
       }
       const intent = await rewardedService.createIntent({
         userId: req.user.id,
-        tokenHash: req.playIntegrity.tokenHash,
-        requestHash: req.playIntegrity.requestHash,
+        tokenHash,
+        requestHash,
       });
       return res.status(intent.replay === true ? 200 : 201).json({
         intentId: intent.intentId,
