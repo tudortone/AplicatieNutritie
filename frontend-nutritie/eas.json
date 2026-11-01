@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 3.8.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "qa-isolated": {
