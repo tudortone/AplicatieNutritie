@@ -7,7 +7,7 @@ import './qaEnvironment';
 // cu IP-ul mașinii tale, de exemplu `http://192.168.1.100:3000`.
 const envApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 
-export const PRODUCTION_API_URL = 'https://nutritie-backend-ai.onrender.com';
+export const PRODUCTION_API_URL = 'https://nutritie-backend-ai-435128681048.europe-west3.run.app';
 
 // Adresa de emulator (Android: 10.0.2.2, iOS: localhost). Pentru productie,
 // seteaza EXPO_PUBLIC_API_URL in .env sau foloseste fallback-ul PRODUCTION_API_URL.
