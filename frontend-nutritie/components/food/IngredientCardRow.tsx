@@ -46,7 +46,7 @@ export function IngredientCardRow({
           </Text>
 
           <Text maxFontSizeMultiplier={1.3} style={styles.macroText}>
-            {kcal} kcal · {prot}g {t('camera.proteinShort', 'prot.')} · {carb}g {t('camera.carbsShort', 'carb.')} · {gras}g {t('jurnal.macroFatsShort', 'gr.')}
+            {kcal} kcal · {prot}g {t('camera.proteinShort', 'prot.')} · {carb}g {t('camera.carbsShort', 'carb.')} · {gras}g {t('camera.fatShort', t('jurnal.macroFatsShort', 'fat'))}
           </Text>
         </View>
 
