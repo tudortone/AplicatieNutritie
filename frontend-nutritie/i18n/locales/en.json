@@ -1753,6 +1753,8 @@
     "speechExceeded": "Calorie target reached. Focus on hydration and recovery!",
     "toggle3d": "3D Mascot",
     "togglePixel": "Pixel Sprout",
+    "day": "day",
+    "days": "days",
     "aboutDescUpdated": "Your cyber companion grows and evolves alongside you with each streak day logged in your journal. Keep up your nutritional consistency to unlock new evolutionary stages!"
   }
 }

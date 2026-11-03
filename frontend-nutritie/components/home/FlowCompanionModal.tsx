@@ -391,7 +391,7 @@ export function FlowCompanionModal({
                   </Text>
                 </View>
                 <Text style={[styles.streakCount, { color: colors.accent }]}>
-                  {streak} {streak === 1 ? t('flowCompanion.day', 'zi') : t('flowCompanion.days', 'zile')}
+                  {t('home.streakDays', { count: streak })}
                 </Text>
               </View>
 
