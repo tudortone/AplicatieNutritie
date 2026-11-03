@@ -15,6 +15,7 @@ export type PhotoErrorType =
 interface PhotoMealErrorViewProps {
   testID?: string;
   errorType: PhotoErrorType;
+  customTitle?: string | null;
   customMessage?: string | null;
   onRetake: () => void;
   onGallery: () => void;
@@ -26,6 +27,7 @@ interface PhotoMealErrorViewProps {
 export function PhotoMealErrorView({
   testID,
   errorType,
+  customTitle,
   customMessage,
   onRetake,
   onGallery,
@@ -40,7 +42,7 @@ export function PhotoMealErrorView({
       case 'not_food':
         return {
           icon: <AlertTriangle size={36} color="#CCFF00" />,
-          title: t('camera.notFoodTitle', 'Nu am identificat alimente în fotografie.'),
+          title: customTitle || t('camera.notFoodTitle', 'Nu am identificat alimente în fotografie.'),
           body: customMessage || t('camera.notFoodMessage', 'Încearcă o fotografie cu mâncarea bine încadrată sau alege o imagine din galerie. Creditul tău este păstrat.'),
           primaryLabel: t('camera.retakePhoto', 'Refă fotografia'),
           primaryAction: onRetake,
@@ -50,9 +52,9 @@ export function PhotoMealErrorView({
       case 'network_error':
         return {
           icon: <WifiOff size={36} color="#FB923C" />,
-          title: 'Conexiunea a fost întreruptă',
+          title: customTitle || 'Conexiunea a fost întreruptă',
           body: customMessage || 'Nu am putut comunica cu serverul de analiză. Verifică conexiunea la internet.',
-          primaryLabel: 'Reîncearcă analiza',
+          primaryLabel: onRetry ? t('photoJob.retry', 'Reîncearcă') : 'Reîncearcă analiza',
           primaryAction: onRetry || onRetake,
           primaryIcon: <RefreshCw size={18} color="#000000" />,
           hasGallery: true,
@@ -60,9 +62,9 @@ export function PhotoMealErrorView({
       case 'provider_error':
         return {
           icon: <AlertTriangle size={36} color="#FB923C" />,
-          title: 'Modelul AI este temporar ocupat',
-          body: customMessage || 'Analiza foto a durat prea mult sau modelul AI este suprasolicitat. Creditul tău Flow a fost restituit integral.',
-          primaryLabel: 'Reîncearcă în siguranță',
+          title: customTitle || (testID === 'camera-failed-job' ? t('photoJob.failedTitle', 'Analiza nu a reușit') : 'Modelul AI este temporar ocupat'),
+          body: customMessage || (testID === 'camera-failed-job' ? t('photoJob.failedBody', 'Atinge pentru a reîncerca') : 'Analiza foto a durat prea mult sau modelul AI este suprasolicitat. Creditul tău Flow a fost restituit integral.'),
+          primaryLabel: onRetry ? t('photoJob.retry', 'Reîncearcă') : 'Reîncearcă în siguranță',
           primaryAction: onRetry || onRetake,
           primaryIcon: <RefreshCw size={18} color="#000000" />,
           hasGallery: true,
@@ -70,7 +72,7 @@ export function PhotoMealErrorView({
       case 'permission_denied':
         return {
           icon: <Lock size={36} color="#CCFF00" />,
-          title: t('camera.permissionTitle', 'Permisiune Cameră Necesară'),
+          title: customTitle || t('camera.permissionTitle', 'Permisiune Cameră Necesară'),
           body: customMessage || t('camera.permissionSubtitle', 'GetFlow are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.'),
           primaryLabel: t('camera.openSettings', 'Deschide Setări'),
           primaryAction: onOpenSettings || onRetake,
@@ -81,10 +83,10 @@ export function PhotoMealErrorView({
       default:
         return {
           icon: <AlertTriangle size={36} color="#EF4444" />,
-          title: 'Nu am putut structura datele',
-          body: customMessage || 'Imaginea nu a putut fi procesată în valori nutriționale sigure. Creditul tău nu a fost consumat.',
-          primaryLabel: 'Scanează din nou',
-          primaryAction: onRetake,
+          title: customTitle || (testID === 'camera-failed-job' ? t('photoJob.failedTitle', 'Analiza nu a reușit') : 'Nu am putut structura datele'),
+          body: customMessage || (testID === 'camera-failed-job' ? t('photoJob.failedBody', 'Atinge pentru a reîncerca') : 'Imaginea nu a putut fi procesată în valori nutriționale sigure. Creditul tău nu a fost consumat.'),
+          primaryLabel: onRetry ? t('photoJob.retry', 'Reîncearcă') : 'Scanează din nou',
+          primaryAction: onRetry || onRetake,
           primaryIcon: <RefreshCw size={18} color="#000000" />,
           hasGallery: true,
         };

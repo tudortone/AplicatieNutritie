@@ -113,3 +113,4 @@ describe('FlowCompanionCard Component', () => {
     });
   });
 });
+

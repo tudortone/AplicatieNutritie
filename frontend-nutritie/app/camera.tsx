@@ -662,7 +662,7 @@ export default function CameraScreen() {
   // Efectul stă DUPĂ `analizeazaImaginea` intenționat: referirea ei în dep array
   // înaintea declarației `const` ar arunca ReferenceError (temporal dead zone).
   useEffect(() => {
-    if (!recoveryChecked || scanError) return;
+    if (!recoveryChecked || scanError || failedPhotoJob || isNonFood) return;
     if (draftPromptAfisatRef.current) return;
     if (!session?.access_token || !session.user.id || seIncarca || rezultat.length > 0) return;
     draftPromptAfisatRef.current = true;
@@ -1362,28 +1362,27 @@ export default function CameraScreen() {
         <PhotoMealErrorView
           testID="camera-not-food-card"
           errorType="not_food"
-          customMessage={scanError}
+          customTitle={t('camera.notFoodTitle', 'Nu am identificat alimente în fotografie.')}
+          customMessage={scanError || t('camera.notFoodMessage', 'Încearcă o fotografie cu mâncarea bine încadrată sau alege o imagine din galerie. Creditul tău este păstrat.')}
           onRetake={handleRetakePhoto}
           onGallery={handleGalleryFromNotFood}
           onHome={handleHomeFromNotFood}
         />
       ) : failedPhotoJob ? (
-        <View testID="camera-failed-job" style={[styles.jobStateCard, { top: insets.top + 92, borderColor: colors.danger + '88' }]} accessibilityRole="alert">
-          <AlertTriangle size={22} color={colors.danger} />
-          <View style={styles.jobStateCopy}>
-            <Text style={[styles.jobStateTitle, { color: colors.textPrimary }]}>{t('photoJob.failedTitle')}</Text>
-            <Text style={[styles.jobStateBody, { color: colors.textSecondary }]}>{t('photoJob.failedBody')}</Text>
-          </View>
-          <Pressable
-            testID="camera-failed-retry"
-            onPress={() => void retryFailedPhotoJob()}
-            style={[styles.jobStateAction, { borderColor: colors.danger + '88' }]}
-            accessibilityRole="button"
-            accessibilityLabel={t('photoJob.retry')}
-          >
-            <Text style={[styles.jobStateActionText, { color: colors.danger }]}>{t('photoJob.retry')}</Text>
-          </Pressable>
-        </View>
+        <PhotoMealErrorView
+          testID="camera-failed-job"
+          errorType={
+            failedPhotoJob.job.errorCode === 'TIMEOUT' || failedPhotoJob.job.errorCode === 'AI_RATE_LIMITED'
+              ? 'provider_error'
+              : 'provider_error'
+          }
+          customTitle={t('photoJob.failedTitle')}
+          customMessage={scanError || t('photoJob.failedBody')}
+          onRetry={() => void retryFailedPhotoJob()}
+          onRetake={handleRetakePhoto}
+          onGallery={handleGalleryFromNotFood}
+          onHome={handleHomeFromNotFood}
+        />
       ) : null}
 
       {photoPhase === 'background' && !seIncarca && !failedPhotoJob ? (
