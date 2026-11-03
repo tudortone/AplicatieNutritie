@@ -1743,6 +1743,16 @@
     "invalidNameTitle": "Invalid name",
     "invalidName": "Enter a name of up to 20 characters.",
     "nameSaveFailedTitle": "Name not saved",
-    "nameSaveFailed": "Please try again. The previous name is unchanged."
+    "nameSaveFailed": "Please try again. The previous name is unchanged.",
+    "accessoryAura": "Neon Aura",
+    "accessoryCrown": "Crown",
+    "accessoryHeadphones": "Sport Headphones",
+    "analyzingFoodSpeech": "⚡ Analyzing your food... Check back in a few seconds!",
+    "speechOptimal": "Everything is on track. You have energy to spare for today!",
+    "speechNearLimit": "Over 85% of your daily budget reached. Choose lighter meals!",
+    "speechExceeded": "Calorie target reached. Focus on hydration and recovery!",
+    "toggle3d": "3D Mascot",
+    "togglePixel": "Pixel Sprout",
+    "aboutDescUpdated": "Your cyber companion grows and evolves alongside you with each streak day logged in your journal. Keep up your nutritional consistency to unlock new evolutionary stages!"
   }
 }

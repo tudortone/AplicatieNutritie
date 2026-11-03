@@ -1743,6 +1743,16 @@
     "invalidNameTitle": "Ungültiger Name",
     "invalidName": "Gib einen Namen mit höchstens 20 Zeichen ein.",
     "nameSaveFailedTitle": "Name nicht gespeichert",
-    "nameSaveFailed": "Bitte versuche es erneut. Der bisherige Name bleibt unverändert."
+    "nameSaveFailed": "Bitte versuche es erneut. Der bisherige Name bleibt unverändert.",
+    "accessoryAura": "Neon-Aura",
+    "accessoryCrown": "Krone",
+    "accessoryHeadphones": "Sport-Kopfhörer",
+    "analyzingFoodSpeech": "⚡ Ich analysiere dein Essen... Schau gleich wieder rein!",
+    "speechOptimal": "Alles im grünen Bereich. Du hast Energie für den Tag!",
+    "speechNearLimit": "Über 85% deines Budgets erreicht. Wähle leichtere Mahlzeiten!",
+    "speechExceeded": "Kalorienziel erreicht. Konzentriere dich auf Hydratation und Erholung!",
+    "toggle3d": "3D-Maskottchen",
+    "togglePixel": "Pixel Sprout",
+    "aboutDescUpdated": "Dein Cyber-Begleiter wächst und entwickelt sich mit jedem geloggten Streak-Tag. Bleibe am Ball für neue Entwicklungsstufen!"
   }
 }

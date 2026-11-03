@@ -1743,6 +1743,16 @@
     "invalidNameTitle": "Nom invalide",
     "invalidName": "Saisissez un nom de 20 caractères maximum.",
     "nameSaveFailedTitle": "Nom non enregistré",
-    "nameSaveFailed": "Réessayez. Le nom précédent est inchangé."
+    "nameSaveFailed": "Réessayez. Le nom précédent est inchangé.",
+    "accessoryAura": "Aura Néon",
+    "accessoryCrown": "Couronne",
+    "accessoryHeadphones": "Écouteurs Sport",
+    "analyzingFoodSpeech": "⚡ J'analyse votre repas... Revenez dans quelques secondes !",
+    "speechOptimal": "Tout est sur la bonne voie. Vous avez de l'énergie libre aujourd'hui !",
+    "speechNearLimit": "Plus de 85% du budget atteint. Privilégiez des repas légers !",
+    "speechExceeded": "Objectif calorique atteint. Hydratez-vous et reposez-vous !",
+    "toggle3d": "Mascotte 3D",
+    "togglePixel": "Pixel Sprout",
+    "aboutDescUpdated": "Votre compagnon cybernétique grandit et évolue à vos côtés à chaque jour de streak enregistré. Maintenez votre constance nutritionnelle !"
   }
 }

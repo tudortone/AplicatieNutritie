@@ -43,7 +43,7 @@ describe('isolated QA configuration', () => {
 
   const invalid: [string, Record<string, string | undefined>][] = [
     ['missing API', { EXPO_PUBLIC_API_URL: undefined }],
-    ['Production API', { EXPO_PUBLIC_API_URL: 'https://nutritie-backend-ai.onrender.com' }],
+    ['Production API', { EXPO_PUBLIC_API_URL: 'https://nutritie-backend-ai-435128681048.europe-west3.run.app' }],
     ['remote API', { EXPO_PUBLIC_API_URL: 'https://example.com' }],
     ['deceptive URL', { EXPO_PUBLIC_API_URL: 'http://127.0.0.1@nutritie-backend-ai.onrender.com' }],
     ['noncanonical loopback', { EXPO_PUBLIC_API_URL: 'http://127.1:3000' }],
@@ -69,7 +69,7 @@ describe('isolated QA configuration', () => {
 
   it('preserves the existing non-QA Production API fallback', () => {
     configure({ EXPO_PUBLIC_APP_ENV: 'production', EXPO_PUBLIC_API_URL: undefined });
-    expect(loadRuntime().API_URL).toBe('https://nutritie-backend-ai.onrender.com');
+    expect(loadRuntime().API_URL).toBe('https://nutritie-backend-ai-435128681048.europe-west3.run.app');
   });
 
   it('keeps the QA profile independent of Production and requires explicit fixture endpoints', () => {

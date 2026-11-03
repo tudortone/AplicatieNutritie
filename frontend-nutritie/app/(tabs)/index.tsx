@@ -37,6 +37,7 @@ import { FlowCreditsPill } from '../../components/FlowCreditsPill';
 import { WaterIntakeCard } from '../../components/home/WaterIntakeCard';
 import { RunnerSphereCompanionCluster } from '../../components/home/RunnerSphereCompanionCluster';
 import { FlowCompanionModal } from '../../components/home/FlowCompanionModal';
+import { FlowCompanionCard } from '../../components/home/FlowCompanionCard';
 import { useAuth } from '../../context/AuthContext';
 import { useFlowCredits } from '../../context/FlowCreditsContext';
 import { calculateDailyWaterTargetMl } from '../../lib/hydration';
@@ -686,6 +687,17 @@ export default function HomeScreen() {
               </View>
             </LinearGradient>
           </CardBackdrop>
+        </Animated.View>
+
+        {/* Flow Companion Card */}
+        <Animated.View>
+          <FlowCompanionCard
+            streak={streak}
+            caloriiConsumate={totalCalorii}
+            caloriiTinta={caloriiTinta}
+            userId={auth?.user?.id}
+            onPress={() => setCompanionModalVisible(true)}
+          />
         </Animated.View>
 
         {/* Camera scan CTA (Principal) */}

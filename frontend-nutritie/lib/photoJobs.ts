@@ -319,18 +319,6 @@ export async function recoverPhotoJobForCamera({
   if (pointer) {
     try {
       const fetchedJob = await getPhotoJob({ token, jobId: pointer.jobId, signal });
-      if (fetchedJob.status === 'failed' || fetchedJob.status === 'cancelled') {
-        const isNonFood = fetchedJob.errorCode === 'NOT_FOOD'
-          || fetchedJob.errorCode === 'NO_FOOD'
-          || fetchedJob.errorCode === 'PHOTO_RESULT_EMPTY'
-          || fetchedJob.errorCode === 'EMPTY_RESULT'
-          || fetchedJob.errorCode === 'PHOTO_RESULT_INVALID'
-          || (fetchedJob.result as Record<string, unknown> | undefined)?.isNotFood === true;
-        if (isNonFood) {
-          await clearActivePhotoJob(userId, pointer.jobId);
-          return null;
-        }
-      }
       return { job: fetchedJob, pointer };
     } catch (error) {
       if (!(error instanceof PhotoApiError) || error.status !== 404) throw error;
@@ -398,15 +386,6 @@ export async function waitForPhotoJob({
     onStatus?.(job);
     if (TERMINAL_SUCCESS.has(job.status)) return job;
     if (job.status === 'failed' || job.status === 'cancelled') {
-      const isNonFood = job.errorCode === 'NOT_FOOD'
-        || job.errorCode === 'NO_FOOD'
-        || job.errorCode === 'PHOTO_RESULT_EMPTY'
-        || job.errorCode === 'EMPTY_RESULT'
-        || job.errorCode === 'PHOTO_RESULT_INVALID'
-        || (job.result as Record<string, unknown> | undefined)?.isNotFood === true;
-      if (isNonFood && _userId) {
-        await clearActivePhotoJob(_userId, jobId).catch(() => {});
-      }
       throw new PhotoApiError(422, job.errorCode || 'PHOTO_ANALYSIS_FAILED', job.result ?? undefined);
     }
     await sleep(pollIntervalMs, signal);

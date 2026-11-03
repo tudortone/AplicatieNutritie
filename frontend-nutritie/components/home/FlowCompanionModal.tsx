@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Alert,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -11,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Egg,
   Flame,
@@ -31,6 +33,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { SproutArtwork } from './PixelCompanion';
+
+const COMPANION_FULL_IMAGE = require('../../assets/images/flow-companion-full.jpg');
 import {
   getCompanionStage,
   getDaysUntilNextEvolution,
@@ -38,6 +42,14 @@ import {
   getLimitBeaconStatus,
   type CompanionStageId,
 } from '../../lib/flowCompanion';
+
+function useSafeInsets() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
 
 export interface FlowCompanionModalProps {
   visible: boolean;
@@ -59,6 +71,8 @@ export function FlowCompanionModal({
   const { t } = useTranslation();
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
+  const insets = useSafeInsets();
+  const [artworkMode, setArtworkMode] = useState<'3d' | 'pixel'>('pixel');
 
   const [storedCompanionName, setStoredCompanionName] = useState<string | null>(null);
   const [storedCompanionNameKey, setStoredCompanionNameKey] = useState<string | null>(null);
@@ -191,7 +205,7 @@ export function FlowCompanionModal({
             <X size={16} color={colors.textSecondary} />
           </TouchableOpacity>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(34, insets.bottom + 20) }]}>
             {/* Hero Avatar Card */}
             <View style={styles.heroSection}>
               <LinearGradient
@@ -207,7 +221,54 @@ export function FlowCompanionModal({
                   },
                 ]}
               >
-                <SproutArtwork size={156} />
+                {artworkMode === '3d' ? (
+                  <Image
+                    source={COMPANION_FULL_IMAGE}
+                    style={styles.heroArtwork}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <SproutArtwork size={156} />
+                )}
+              </View>
+
+              {/* 3D vs Pixel Toggle */}
+              <View style={styles.toggleRow}>
+                <TouchableOpacity
+                  testID="flow-companion-toggle-3d"
+                  style={[
+                    styles.toggleBtn,
+                    artworkMode === '3d' && { backgroundColor: colors.accent + '25', borderColor: colors.accent },
+                  ]}
+                  onPress={() => {
+                    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                    setArtworkMode('3d');
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('flowCompanion.toggle3d', 'Mascotă 3D')}
+                >
+                  <Text style={[styles.toggleBtnText, { color: artworkMode === '3d' ? colors.accent : colors.textSecondary }]}>
+                    {t('flowCompanion.toggle3d', 'Mascotă 3D')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  testID="flow-companion-toggle-pixel"
+                  style={[
+                    styles.toggleBtn,
+                    artworkMode === 'pixel' && { backgroundColor: colors.accent + '25', borderColor: colors.accent },
+                  ]}
+                  onPress={() => {
+                    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                    setArtworkMode('pixel');
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('flowCompanion.togglePixel', 'Pixel Sprout')}
+                >
+                  <Text style={[styles.toggleBtnText, { color: artworkMode === 'pixel' ? colors.accent : colors.textSecondary }]}>
+                    {t('flowCompanion.togglePixel', 'Pixel Sprout')}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.heroNameRow}>
@@ -311,7 +372,7 @@ export function FlowCompanionModal({
                 </View>
               </View>
               <Text style={[styles.loreText, { color: colors.textSecondary }]}>
-                {t('flowCompanion.aboutDesc', 'Sprout este companionul tău inteligent de nutriție. Crește și evoluează alături de tine cu fiecare zi de streak înregistrată în jurnal.')}
+                {t('flowCompanion.aboutDescUpdated', t('flowCompanion.aboutDesc', 'Companionul tău inteligent crește și evoluează alături de tine cu fiecare zi de streak înregistrată în jurnal.'))}
               </Text>
             </View>
 
@@ -330,7 +391,7 @@ export function FlowCompanionModal({
                   </Text>
                 </View>
                 <Text style={[styles.streakCount, { color: colors.accent }]}>
-                  {streak} {streak === 1 ? 'zi' : 'zile'}
+                  {streak} {streak === 1 ? t('flowCompanion.day', 'zi') : t('flowCompanion.days', 'zile')}
                 </Text>
               </View>
 
@@ -424,15 +485,15 @@ export function FlowCompanionModal({
               <View style={styles.cosmeticSlotsRow}>
                 <View style={[styles.cosmeticSlot, { borderColor: colors.cardBorder }]}>
                   <Lock size={13} color={colors.textSecondary} />
-                  <Text style={[styles.cosmeticSlotName, { color: colors.textSecondary }]}>Aură Neon</Text>
+                  <Text style={[styles.cosmeticSlotName, { color: colors.textSecondary }]}>{t('flowCompanion.accessoryAura', 'Aură Neon')}</Text>
                 </View>
                 <View style={[styles.cosmeticSlot, { borderColor: colors.cardBorder }]}>
                   <Lock size={13} color={colors.textSecondary} />
-                  <Text style={[styles.cosmeticSlotName, { color: colors.textSecondary }]}>Coroniță</Text>
+                  <Text style={[styles.cosmeticSlotName, { color: colors.textSecondary }]}>{t('flowCompanion.accessoryCrown', 'Coroniță')}</Text>
                 </View>
                 <View style={[styles.cosmeticSlot, { borderColor: colors.cardBorder }]}>
                   <Lock size={13} color={colors.textSecondary} />
-                  <Text style={[styles.cosmeticSlotName, { color: colors.textSecondary }]}>Căști Sport</Text>
+                  <Text style={[styles.cosmeticSlotName, { color: colors.textSecondary }]}>{t('flowCompanion.accessoryHeadphones', 'Căști Sport')}</Text>
                 </View>
               </View>
             </View>
@@ -506,6 +567,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+  },
+  heroArtwork: {
+    width: '100%',
+    height: '100%',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  toggleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  toggleBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   heroSection: {
     alignItems: 'center',

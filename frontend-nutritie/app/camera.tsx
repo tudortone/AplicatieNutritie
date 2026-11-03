@@ -214,8 +214,8 @@ export default function CameraScreen() {
       // în fundal și va fi semnalizat pe Acasă prin Sfera Runner.
       if (!currentPhotoJobIdRef.current && !shouldGoHomeOnSubmitRef.current) {
         abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
       }
-      abortControllerRef.current = null;
     };
   }, []);
 
@@ -414,6 +414,9 @@ export default function CameraScreen() {
       if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void refreshFlowCredits();
     } catch (error) {
       if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void refreshFlowCredits();
+      if (shouldGoHomeOnSubmitRef.current || (error instanceof DOMException && error.name === 'AbortError')) {
+        return;
+      }
       if (abortControllerRef.current !== controller || !isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       if (error instanceof PhotoApiError && (
         error.code === 'FLOW_CREDITS_EXHAUSTED'
@@ -610,7 +613,6 @@ export default function CameraScreen() {
             || (error.data as Record<string, unknown> | undefined)?.isNotFood === true
           );
           if (isNonFood) {
-            await clearActivePhotoJob(userId).catch(() => {});
             setPhotoPhase('failed');
             setScanError(null);
             setFailedPhotoJob({
@@ -725,24 +727,17 @@ export default function CameraScreen() {
   }, [session?.user.id]);
 
   const lasaAnalizaInFundal = useCallback(() => {
-    if (!currentPhotoJobIdRef.current) {
-      shouldGoHomeOnSubmitRef.current = true;
-      setPhotoPhase('background');
-      setSeIncarca(false);
-      return true;
-    }
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    setSeIncarca(false);
+    shouldGoHomeOnSubmitRef.current = true;
     setPhotoPhase('background');
+    setSeIncarca(false);
     return true;
   }, []);
 
   const mergiLaAcasa = useCallback(() => {
     permitereNavigareRef.current = true;
-    if (!currentPhotoJobIdRef.current) {
-      shouldGoHomeOnSubmitRef.current = true;
-    }
+    shouldGoHomeOnSubmitRef.current = true;
+    setPhotoPhase('background');
+    setSeIncarca(false);
     if (router.canGoBack()) {
       router.back();
     } else {
