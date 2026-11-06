@@ -346,10 +346,12 @@ exports.analizaMancareTask = task({
         || typeof requestFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(requestFingerprint)) {
         throw new Error('PHOTO_JOB_CONTRACT_MISSING');
       }
-      await requireOwnedJob({
-        jobId, userId, imageUrl: verificare.url, imageFileId, logicalAnalysisId, reservationId,
-      });
-      const reservation = await readPhotoReservation({ userId, reservationId });
+      const [, reservation] = await Promise.all([
+        requireOwnedJob({
+          jobId, userId, imageUrl: verificare.url, imageFileId, logicalAnalysisId, reservationId,
+        }),
+        readPhotoReservation({ userId, reservationId }),
+      ]);
       if (reservation.logical_analysis_id !== logicalAnalysisId
         || reservation.request_fingerprint !== requestFingerprint) {
         throw new Error('JOB_OWNERSHIP_MISMATCH');
@@ -400,8 +402,13 @@ exports.analizaMancareTask = task({
       const model = client.getGenerativeModel({ model: modelName });
       const response = await callWithSoftTimeout(model.generateContent({
         contents: [{ role: 'user', parts: [{ text: obtinePromptAnalizaFoto(limba) }, imagePart] }],
-        generationConfig: { responseMimeType: 'application/json' },
-      }), 30000);
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+          maxOutputTokens: 1200,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }), 25000);
       const text = response?.response?.text();
       if (!text) throw new Error('AI_EMPTY_RESULT');
 

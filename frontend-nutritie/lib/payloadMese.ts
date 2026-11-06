@@ -55,6 +55,7 @@ export interface PayloadMasaCamera {
   fibre: number;
   tip_masa: TipMasa;
   alimente: AlimentScanatPayload[];
+  imagine_url?: string | null;
   data: string;
   ora: string;
   created_at: string;
@@ -105,6 +106,7 @@ export function construiestePayloadMasaCamera(params: {
       fibre: clampValoare(totalFibre, LIMITE_DB_MESE.fibre),
       tip_masa: normalizeTipMasa(params.tip_masa || getTipMasaDupaOra(now)),
       alimente,
+      ...(poza?.url ? { imagine_url: poza.url } : {}),
       data: localDayKey(now),
       ora: now.toTimeString().slice(0, 8),
       created_at: now.toISOString(),

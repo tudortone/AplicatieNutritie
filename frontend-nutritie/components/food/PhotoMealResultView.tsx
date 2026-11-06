@@ -143,6 +143,7 @@ export function PhotoMealResultView({
         carbohidrati_per_100g: candidate.carbohidrati_per_100g,
         grasimi_per_100g: candidate.grasimi_per_100g,
         fibre_per_100g: candidate.fibre_per_100g,
+        ...(photoUri ? { imageUrl: photoUri } : {}),
       };
       onUpdateRezultat([...rezultat, newItem]);
       setIsAddingNewIngredient(false);

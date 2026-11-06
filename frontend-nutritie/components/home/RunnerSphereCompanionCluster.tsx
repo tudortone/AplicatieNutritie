@@ -46,6 +46,7 @@ export function RunnerSphereCompanionCluster({
       let active = true;
       let timer: ReturnType<typeof setTimeout> | null = null;
       let inFlight = false;
+      let emptyPolls = 0;
 
       const poll = async () => {
         if (inFlight) return;
@@ -67,7 +68,13 @@ export function RunnerSphereCompanionCluster({
           }
           setActiveJob(recovered);
           if (recovered && RUNNING.has(recovered.job.status)) {
-            timer = setTimeout(poll, 4000);
+            emptyPolls = 0;
+            timer = setTimeout(poll, 2000);
+          } else if (!recovered && active && emptyPolls < 3) {
+            // If user navigated to Home while image was still uploading to ImageKit
+            // (before submitPhotoJob persisted the active job pointer), retry briefly.
+            emptyPolls += 1;
+            timer = setTimeout(poll, 1200);
           }
         } catch {
           if (active) timer = setTimeout(poll, 8000);

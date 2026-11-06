@@ -58,12 +58,26 @@ function getImageSize(uri: string): Promise<{ width: number; height: number }> {
   });
 }
 
-export async function optimizeImageBeforeUpload(uri: string): Promise<OptimizedImage> {
+export async function optimizeImageBeforeUpload(
+  uri: string,
+  knownDimensions?: { width?: number; height?: number },
+): Promise<OptimizedImage> {
   if (typeof uri !== 'string' || !uri.trim()) {
     throw new TypeError('URI-ul imaginii este invalid.');
   }
 
-  const original = await getImageSize(uri);
+  const hasValidKnownDimensions = Boolean(
+    knownDimensions
+    && typeof knownDimensions.width === 'number'
+    && typeof knownDimensions.height === 'number'
+    && Number.isFinite(knownDimensions.width)
+    && Number.isFinite(knownDimensions.height)
+    && knownDimensions.width > 0
+    && knownDimensions.height > 0
+  );
+  const original = hasValidKnownDimensions
+    ? { width: knownDimensions!.width!, height: knownDimensions!.height! }
+    : await getImageSize(uri);
   const largest = Math.max(original.width, original.height);
   const resize = largest <= MAX_DIMENSION
     ? []
