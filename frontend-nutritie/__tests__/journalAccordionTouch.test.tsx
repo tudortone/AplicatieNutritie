@@ -54,6 +54,14 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 24, right: 0, bottom: 20, left: 0 }),
 }));
 
+jest.mock('../context/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'user-123', email: 'owner@getflow.app' },
+    session: { access_token: 'test-token', user: { id: 'user-123' } },
+    loadingAuth: false,
+  }),
+}));
+
 
 
 jest.mock('react-native-reanimated', () => {
