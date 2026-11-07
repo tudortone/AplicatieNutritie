@@ -244,6 +244,24 @@ async function exportaAbonamenteGooglePlay({ supabaseAdmin, userId }) {
   });
 }
 
+const COLOANE_EXPORT_USER_FEEDBACK = [
+  'id',
+  'message',
+  'delivery_status',
+  'review_status',
+  'created_at',
+].join(',');
+
+async function exportaFeedbackUtilizator({ supabaseAdmin, userId }) {
+  return citesteTotPaginat({
+    client: supabaseAdmin,
+    tabela: 'user_feedback',
+    userId,
+    coloane: COLOANE_EXPORT_USER_FEEDBACK,
+    coloanaOrdine: 'id',
+  });
+}
+
 /**
  * Evenimentele RTDN nu au user_id, dar hash-ul tokenului le leagă de un cont.
  * Le ștergem înaintea abonamentelor, cât relația încă poate fi rezolvată.
@@ -424,6 +442,7 @@ module.exports = {
   DIMENSIUNE_PAGINA_EXPORT,
   COLOANE_EXPORT_ABONAMENTE_GOOGLE,
   exportaAbonamenteGooglePlay,
+  exportaFeedbackUtilizator,
   stergeEvenimenteRtdnUtilizator,
   stergeActiveImageKit,
   stergeFoldereImageKit,

@@ -188,12 +188,14 @@ describe('F-06 — exportul GDPR nu mai este truncat', () => {
     };
     const supabaseAdmin = {
       from: (tabela) => {
-        expect(tabela).toBe('google_play_subscriptions');
+        expect(['google_play_subscriptions', 'user_feedback']).toContain(tabela);
         const q = {
           select: (coloane) => {
-            expect(coloane).not.toContain('purchase_token,');
-            expect(coloane).not.toContain('linked_purchase_token');
-            expect(coloane).not.toContain('replaced_by_purchase_token');
+            if (tabela === 'google_play_subscriptions') {
+              expect(coloane).not.toContain('purchase_token,');
+              expect(coloane).not.toContain('linked_purchase_token');
+              expect(coloane).not.toContain('replaced_by_purchase_token');
+            }
             return q;
           },
           eq: (_coloana, valoare) => {
@@ -201,7 +203,12 @@ describe('F-06 — exportul GDPR nu mai este truncat', () => {
             return q;
           },
           order: () => q,
-          range: async () => ({ data: [{ ...abonament, purchase_token: undefined }], error: null }),
+          range: async () => ({
+            data: tabela === 'google_play_subscriptions'
+              ? [{ ...abonament, purchase_token: undefined }]
+              : [{ id: 'fb_1', message: 'Test feedback', delivery_status: 'sent', review_status: 'new', created_at: '2026-01-01T00:00:00Z' }],
+            error: null,
+          }),
         };
         return q;
       },
@@ -239,6 +246,7 @@ describe('F-06 — exportul GDPR nu mai este truncat', () => {
       'flow_reward_intents',
       'workout_templates',
       'abonamente_google_play',
+      'user_feedback',
     ]);
     expect(raspuns.body.abonamente_google_play[0]).not.toHaveProperty('purchase_token');
     expect(JSON.stringify(raspuns.body)).not.toContain('SECRET_TOKEN_NU_TREBUIE_EXPORTAT');

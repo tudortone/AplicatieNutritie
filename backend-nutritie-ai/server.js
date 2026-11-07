@@ -296,7 +296,10 @@ const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter,
 // ci direct pe ruta din routes/status.js (imprenn cu requireAuth).
 // Webhook-urile (inclusiv AdMob SSV) sunt protejate exclusiv de webhooksLimiter.
 app.use('/api/', (req, res, next) => {
-  if (req.path.startsWith('/v1/webhooks/') || req.path.startsWith('/webhooks/') || req.originalUrl?.includes('/webhooks/')) {
+  if (req.path === '/v1/webhooks/admob/rewarded' || req.path === '/webhooks/admob/rewarded') {
+    return webhooksLimiter(req, res, next);
+  }
+  if (req.path.startsWith('/v1/webhooks/') || req.path.startsWith('/webhooks/')) {
     return next();
   }
   return preAuthLimiter(req, res, next);

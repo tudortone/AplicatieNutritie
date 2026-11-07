@@ -415,7 +415,7 @@ exports.analizaMancareTask = task({
           responseMimeType: 'application/json',
           temperature: 0.1,
           maxOutputTokens: 1200,
-          thinkingConfig: { thinkingBudget: 0 },
+          ...(String(modelName).includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
         },
       }), 25000);
       const text = response?.response?.text();

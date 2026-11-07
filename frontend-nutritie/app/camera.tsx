@@ -329,7 +329,7 @@ export default function CameraScreen() {
     setPhotoPhase(isRetry ? 'retrying' : 'uploading');
     let timeoutDepasit = false;
     let activePointer: ActivePhotoJobPointer | null = null;
-    let draftPersistentUri: string | null = null;
+    let draftPersistentUri: string | undefined = undefined;
     const backgroundId = setTimeout(() => {
       if (!controller.signal.aborted && isPhotoOwnerCurrent(ownerId, accountGeneration)) setPhotoPhase('background');
     }, 15000);
@@ -344,8 +344,14 @@ export default function CameraScreen() {
       const imagineOptimizata = await optimizeImageBeforeUpload(imageUri, knownDimensions);
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
 
-      const [draftSaved, amprentaBaza, uploaded] = await Promise.all([
-        saveLocalImageDraft(imagineOptimizata.uri, ownerId),
+      const [, amprentaBaza, uploaded] = await Promise.all([
+        saveLocalImageDraft(imagineOptimizata.uri, ownerId).then((savedUri) => {
+          draftPersistentUri = savedUri;
+          if (isPhotoOwnerCurrent(ownerId, accountGeneration)) {
+            draftCurrentUriRef.current = savedUri;
+          }
+          return savedUri;
+        }),
         amprentaOperatieFoto(
           imagineOptimizata.uri,
           'auto',
@@ -358,8 +364,6 @@ export default function CameraScreen() {
           { skipOptimization: true },
         ),
       ]);
-      draftPersistentUri = draftSaved;
-      draftCurrentUriRef.current = draftPersistentUri;
       const amprentaOperatie = isRetry
         ? `${amprentaBaza}:retry:${idOperatieNoua()}`
         : amprentaBaza;
@@ -423,7 +427,7 @@ export default function CameraScreen() {
       applyPhotoJobResult(completed, activePointer, ownerId, accountGeneration);
       setSeIncarca(false);
 
-      await discardLocalImageDraft(draftPersistentUri, ownerId).catch(() => {});
+      if (draftPersistentUri) await discardLocalImageDraft(draftPersistentUri, ownerId).catch(() => {});
       if (draftCurrentUriRef.current === draftPersistentUri) draftCurrentUriRef.current = null;
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

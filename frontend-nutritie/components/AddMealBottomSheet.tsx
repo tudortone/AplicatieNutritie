@@ -77,10 +77,18 @@ interface BaseNutrition {
   grasimi: number;
 }
 
+function useSafeInsets() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, right: 0, bottom: 0, left: 0 };
+  }
+}
+
 export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBottomSheetProps>(
   ({ openOnMount = false, onSuccess, onMasaCreata, onPantryUsed }, ref) => {
     const { colors } = useTheme();
-    const insets = useSafeAreaInsets();
+    const insets = useSafeInsets();
     const { t, i18n } = useTranslation();
     const { user } = useAuth();
     const { favorite, addFavorite, removeFavorite, isFavorite } = useFavorite();

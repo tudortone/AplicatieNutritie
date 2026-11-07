@@ -44,6 +44,7 @@ const {
   stergeDeadLetterUtilizator,
   citesteTotPaginat,
   exportaAbonamenteGooglePlay,
+  exportaFeedbackUtilizator,
   stergeEvenimenteRtdnUtilizator,
 } = require('../utils/gdprServices');
 const {
@@ -108,17 +109,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         citeste('flow_reward_intents'),
         citeste('workout_templates'),
         exportaAbonamenteGooglePlay({ supabaseAdmin, userId }),
-        (async () => {
-          try {
-            const { data } = await supabaseAdmin
-              .from('user_feedback')
-              .select('id, rating, message, category, metadata, created_at')
-              .eq('user_id', userId);
-            return Array.isArray(data) ? data : [];
-          } catch {
-            return [];
-          }
-        })(),
+        exportaFeedbackUtilizator({ supabaseAdmin, userId }),
       ]);
 
       return res.json({

@@ -42,6 +42,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { FlowIcon } from '../../components/ui/FlowIcon';
 import { ConfirmSheet } from '../../components/ui/ConfirmSheet';
 import { useNotificationBanner } from '../../context/NotificationBannerContext';
+import { useAuth } from '../../context/AuthContext';
 import { NutrientFocusCard } from '../../components/jurnal/NutrientFocusCard';
 
 
@@ -75,6 +76,7 @@ function CategorieIcona({ cat, color, size = 22 }: { cat: CategorieMasaGrupata; 
 export default function HistoryScreen() {
   const { colors } = useTheme();
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
   const { showBanner } = useNotificationBanner();
   const [dataSelectata, setDataSelectata] = useState(new Date());
   const [afisarePoze, setAfisarePoze] = useState(true);
@@ -272,7 +274,12 @@ export default function HistoryScreen() {
         fibre: updated.fibre ?? 0,
       };
       try {
-        const { error, data } = await actualizeazaMasaCuPoza(supabase, updated.id, payload);
+        const { error, data } = await actualizeazaMasaCuPoza(
+          supabase,
+          updated.id,
+          payload,
+          updated.user_id || user?.id,
+        );
         if (error) {
           console.error('[Istoric] Actualizare masa esuata:', error.message);
           showBanner({
@@ -313,7 +320,7 @@ export default function HistoryScreen() {
         return false;
       }
     },
-    [refresh, refreshZileCuMese, showBanner, t],
+    [refresh, refreshZileCuMese, showBanner, t, user?.id],
   );
 
   // BUG-029: listă aplatizată pentru FlashList — doar categoriile cu mese, în
