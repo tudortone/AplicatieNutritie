@@ -18,6 +18,6 @@ test('real SDK preserves legacy/v2 routing, replay bindings and CJS/ESM registra
       DO_NOT_TRACK: '1',
     },
   });
-  expect(output).toMatch(/# pass 4\b/);
-  expect(output).toMatch(/# fail 0\b/);
+  expect(output).toMatch(/(?:#|ℹ)\s*pass 4\b/);
+  expect(output).toMatch(/(?:#|ℹ)\s*fail 0\b/);
 }, 25000);

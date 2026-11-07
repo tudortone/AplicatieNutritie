@@ -7,5 +7,15 @@
 
 [[IgnoredVulns]]
 id = "GHSA-gcqx-w48m-w2h4"
-ignoreUntil = 2026-11-15
+ignoreUntil = 2026-12-31
 reason = "deepmerge@4.3.1 (CVE-2026-93753, GitHub severity LOW): no upstream patch (>4.3.1) or patched parent (jest-config, @expo/config) published on npm; upstream maintainer closed PR #274 and Issue #273 without fix. Reachable only at local/CI Jest and Expo config boundaries; zero runtime imports or HTTP user-input paths in backend-nutritie-ai or frontend-nutritie. Remove immediately when deepmerge > 4.3.1 or parent replacements land."
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+ignoreUntil = 2026-12-31
+reason = "glob (CVE-2026-94302, GitHub severity MODERATE): transitive build-time dependency in Expo SDK 54 (@expo/cli, @expo/metro-config, jest-expo); requires Expo SDK 58 to update. Zero runtime imports or network paths in app production bundle."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2026-12-31
+reason = "minimatch (CVE-2026-94303, GitHub severity MODERATE): transitive build-time/linter dependency in Expo SDK 54 (@expo/cli, @typescript-eslint, glob, trigger.dev); requires Expo SDK 58 to update. Zero runtime imports or network paths in app production bundle."

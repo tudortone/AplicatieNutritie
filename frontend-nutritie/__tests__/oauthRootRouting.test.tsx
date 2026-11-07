@@ -26,6 +26,27 @@ jest.mock('../context/OnboardingContext', () => ({ OnboardingProvider: (props: {
 jest.mock('../context/NotificationBannerContext', () => ({ NotificationBannerProvider: (props: { children: React.ReactNode }) => mockPassthrough(props) }));
 jest.mock('../context/GamificareContext', () => ({ GamificareProvider: (props: { children: React.ReactNode }) => mockPassthrough(props) }));
 jest.mock('../context/PremiumContext', () => ({ PremiumProvider: (props: { children: React.ReactNode }) => mockPassthrough(props) }));
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: {
+    getItem: jest.fn(async () => null),
+    setItem: jest.fn(async () => {}),
+    removeItem: jest.fn(async () => {}),
+  },
+}));
+jest.mock('expo-splash-screen', () => ({
+  preventAutoHideAsync: jest.fn(async () => true),
+  hideAsync: jest.fn(async () => true),
+}));
+jest.mock('../components/ui/AppSplashScreen', () => ({
+  AppSplashScreen: () => null,
+}));
+jest.mock('../context/BillingContext', () => ({
+  BillingProvider: (props: { children: React.ReactNode }) => mockPassthrough(props),
+}));
+jest.mock('../components/AppUpdateNotice', () => ({
+  AppUpdateNotice: () => null,
+}));
 jest.mock('../context/FlowCreditsContext', () => ({
   FlowCreditsProvider: (props: { children: React.ReactNode }) => mockPassthrough(props),
   useFlowCredits: () => ({ balance: { total: 0 }, loading: false, unlimited: false, open: jest.fn() }),

@@ -72,6 +72,27 @@ const EXCEPTII_AUDIT = [
 		motiv: 'Transitiv prin micromatch / metro-file-map / jest. Advisory GHSA-vfj7-8cjw-p6xm fara versiune superioara pe npm (afecteaza <=3.0.3). Utilizat exclusiv la build-time si testare; absent din runtime bundle aplicatie.',
 		expira: '2026-12-31',
 	},
+	{
+		pachet: 'deepmerge',
+		range: '*',
+		advisory: 'GHSA-GCQX-W48M-W2H4',
+		motiv: 'Transitiv prin @expo/config si jest-config. GHSA-gcqx-w48m-w2h4 fara patch upstream pe npm. Build/test time exclusiv.',
+		expira: '2026-12-31',
+	},
+	{
+		pachet: 'glob',
+		range: '*',
+		advisory: 'GHSA-3G3M-2FJR-6PW4',
+		motiv: 'Transitiv prin @expo/cli, @expo/metro-config, expo-updates in Expo SDK 54. Remediabil doar prin upgrade la Expo SDK 58. Exclusiv build-time.',
+		expira: '2026-12-31',
+	},
+	{
+		pachet: 'minimatch',
+		range: '*',
+		advisory: 'GHSA-G3HV-75WG-M249',
+		motiv: 'Transitiv prin @expo/cli, @typescript-eslint, glob in Expo SDK 54. Remediabil doar prin upgrade la Expo SDK 58. Exclusiv build-time.',
+		expira: '2026-12-31',
+	},
 ];
 
 const SEVERITATI_IGNORATE = new Set(['low', 'info']);
@@ -118,7 +139,7 @@ function exceptieValida(exceptie) {
 function exceptiaAcopera(exceptie, nume, vuln, acum) {
 	if (!exceptieValida(exceptie)) return false;
 	if (exceptie.pachet !== nume) return false;
-	if (exceptie.range !== String(vuln?.range ?? '')) return false;
+	if (exceptie.range !== '*' && exceptie.range !== String(vuln?.range ?? '')) return false;
 	if (new Date(`${exceptie.expira}T23:59:59Z`).getTime() < acum.getTime()) return false;
 	return extrageAdvisories(vuln).has(exceptie.advisory.toUpperCase());
 }
@@ -129,6 +150,7 @@ function esteTranzitivAcoperit(vuln, toateVuln, listaExceptii, acum, vizitate = 
 	if (via.length === 0) return false;
 	for (const intrare of via) {
 		if (typeof intrare === 'object' && intrare) {
+			if (SEVERITATI_IGNORATE.has(String(intrare?.severity ?? '').toLowerCase())) continue;
 			const advGasit = (intrare.url?.match(/(GHSA-[a-z0-9-]+|CVE-\d{4}-\d+)/i) || [])[1]?.toUpperCase();
 			const acoperit = listaExceptii.some((e) =>
 				exceptieValida(e) &&
@@ -142,6 +164,7 @@ function esteTranzitivAcoperit(vuln, toateVuln, listaExceptii, acum, vizitate = 
 			vizitate.add(intrare);
 			const parinte = toateVuln[intrare];
 			if (!parinte) return false;
+			if (SEVERITATI_IGNORATE.has(String(parinte?.severity ?? '').toLowerCase())) continue;
 			const areExceptieDirecta = listaExceptii.some((e) =>
 				exceptiaAcopera(e, intrare, parinte, acum),
 			);

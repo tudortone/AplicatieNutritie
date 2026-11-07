@@ -124,6 +124,16 @@ export default function CameraScreen() {
   const [photoStateOwnerId, setPhotoStateOwnerId] = useState<string | null>(sessionUserId);
   const [photoPhase, setPhotoPhase] = useState<'idle' | 'uploading' | 'processing' | 'background' | 'retrying' | 'completed' | 'failed'>('idle');
   const [failedPhotoJob, setFailedPhotoJob] = useState<{ job: PhotoJob; pointer: ActivePhotoJobPointer } | null>(null);
+  const isNonFood = Boolean(
+    failedPhotoJob && (
+      failedPhotoJob.job.errorCode === 'NOT_FOOD'
+      || failedPhotoJob.job.errorCode === 'NO_FOOD'
+      || failedPhotoJob.job.errorCode === 'PHOTO_RESULT_EMPTY'
+      || failedPhotoJob.job.errorCode === 'EMPTY_RESULT'
+      || failedPhotoJob.job.errorCode === 'PHOTO_RESULT_INVALID'
+      || (failedPhotoJob.job.result as Record<string, unknown> | undefined)?.isNotFood === true
+    )
+  );
   const [analysisStage, setAnalysisStage] = useState<1 | 2 | 3 | 4>(1);
   // REMED-009: categoria mesei scanate — implicit = sugestia după oră, dar
   // utilizatorul o poate suprascrie din chip-urile din foaia de review.
@@ -705,8 +715,15 @@ export default function CameraScreen() {
 
     listPendingDrafts(ownerId)
       .then((pending) => {
-        if (pending.length === 0 || !isMountedRef.current
-          || !isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+        if (
+          pending.length === 0 ||
+          !isMountedRef.current ||
+          !isPhotoOwnerCurrent(ownerId, accountGeneration) ||
+          isTakingPhotoRef.current ||
+          abortControllerRef.current !== null
+        ) {
+          return;
+        }
         const ultimulDraft = pending[pending.length - 1];
         Alert.alert(
           t('camera.pendingDraftTitle'),
@@ -731,7 +748,19 @@ export default function CameraScreen() {
         );
       })
       .catch(() => {});
-  }, [isPhotoOwnerCurrent, session?.access_token, session?.user.id, analizeazaImaginea, recoveryChecked, rezultat.length, scanError, seIncarca, t]);
+  }, [
+    isPhotoOwnerCurrent,
+    session?.access_token,
+    session?.user.id,
+    analizeazaImaginea,
+    recoveryChecked,
+    rezultat.length,
+    scanError,
+    failedPhotoJob,
+    isNonFood,
+    seIncarca,
+    t,
+  ]);
 
   const anuleazaScanarea = useCallback(() => {
     isTakingPhotoRef.current = false;
@@ -836,17 +865,6 @@ export default function CameraScreen() {
     carbohidrati: quality.totals.carbs,
     fibre: quality.totals.fiber,
   }), [quality.totals]);
-
-  const isNonFood = Boolean(
-    failedPhotoJob && (
-      failedPhotoJob.job.errorCode === 'NOT_FOOD'
-      || failedPhotoJob.job.errorCode === 'NO_FOOD'
-      || failedPhotoJob.job.errorCode === 'PHOTO_RESULT_EMPTY'
-      || failedPhotoJob.job.errorCode === 'EMPTY_RESULT'
-      || failedPhotoJob.job.errorCode === 'PHOTO_RESULT_INVALID'
-      || (failedPhotoJob.job.result as Record<string, unknown> | undefined)?.isNotFood === true
-    )
-  );
 
   const analizeazaFoto = async () => {
     if (!cameraRef.current || isTakingPhotoRef.current || seIncarca || !session) return;
