@@ -1,13 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, Dimensions } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Modal,
+  TouchableOpacity,
+  TextInput,
+  useWindowDimensions,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInUp, FadeOut, FadeOutDown } from 'react-native-reanimated';
 import { Scale, X, Check, Target } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-
-const { width } = Dimensions.get('window');
 
 interface AddWeightModalProps {
   visible: boolean;
@@ -29,6 +38,8 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
   initialTab = 'curenta',
 }) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
+  const { width } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
   const [activeTab, setActiveTab] = useState<'curenta' | 'tinta'>(initialTab);
   const [inputVal, setInputVal] = useState(greutateCurenta?.toString() ?? '');
@@ -81,109 +92,127 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
-        <Animated.View
-          entering={reduceMotion ? FadeIn.duration(150) : FadeInUp.duration(350).springify()}
-          exiting={reduceMotion ? FadeOut.duration(100) : FadeOutDown.duration(250)}
-          style={[styles.modalCard, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardAvoid}
         >
-          <View style={[styles.glowTop, { backgroundColor: activeTab === 'curenta' ? colors.accentSecondary : colors.accent }]} />
+          <Animated.View
+            entering={reduceMotion ? FadeIn.duration(150) : FadeInUp.duration(350).springify()}
+            exiting={reduceMotion ? FadeOut.duration(100) : FadeOutDown.duration(250)}
+            style={[
+              styles.modalCard,
+              {
+                width: Math.min(width - 40, 420),
+                backgroundColor: colors.background,
+                borderColor: colors.cardBorder,
+              },
+            ]}
+          >
+            <View style={[styles.glowTop, { backgroundColor: activeTab === 'curenta' ? colors.accentSecondary : colors.accent }]} />
 
-          <View style={styles.header}>
-            <View style={styles.titleRow}>
-              <View style={[styles.iconRing, { backgroundColor: (activeTab === 'curenta' ? colors.accentSecondary : colors.accent) + '25' }]}>
-                {activeTab === 'curenta' ? (
-                  <Scale size={22} color={colors.accentSecondary} />
-                ) : (
-                  <Target size={22} color={colors.accent} />
-                )}
+            <View style={styles.header}>
+              <View style={styles.titleRow}>
+                <View style={[styles.iconRing, { backgroundColor: (activeTab === 'curenta' ? colors.accentSecondary : colors.accent) + '25' }]}>
+                  {activeTab === 'curenta' ? (
+                    <Scale size={22} color={colors.accentSecondary} />
+                  ) : (
+                    <Target size={22} color={colors.accent} />
+                  )}
+                </View>
+                <View>
+                  <Text style={[styles.title, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
+                    {activeTab === 'curenta'
+                      ? t('weightModal.currentWeightTitle', 'Greutate Curentă')
+                      : t('weightModal.targetWeightTitle', 'Greutate Țintă')}
+                  </Text>
+                  <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                    {activeTab === 'curenta'
+                      ? t('weightModal.currentWeightSubtitle', 'Monitorizează-ți progresul pe cântar azi')
+                      : t('weightModal.targetWeightSubtitle', 'Setați noul obiectiv de greutate dorită')}
+                  </Text>
+                </View>
               </View>
-              <View>
-                <Text style={[styles.title, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
-                  {activeTab === 'curenta' ? 'Greutate Curentă' : 'Greutate Țintă'}
-                </Text>
-                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                  {activeTab === 'curenta' ? 'Monitorizează-ți progresul pe cântar azi' : 'Setați noul obiectiv de greutate dorită'}
-                </Text>
+              <TouchableOpacity style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} onPress={onClose} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+                <X size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Tab Switcher */}
+            {onSaveTinta && (
+              <View style={[styles.tabContainer, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
+                <TouchableOpacity
+                  style={[styles.tabBtn, activeTab === 'curenta' && { backgroundColor: colors.accentSecondary }]}
+                  onPress={() => handleTabSwitch('curenta')}
+                >
+                  <View style={styles.tabContent}>
+                    <Scale size={14} color={activeTab === 'curenta' ? colors.background : colors.textSecondary} />
+                    <Text style={[styles.tabText, { color: activeTab === 'curenta' ? colors.background : colors.textSecondary }]}>
+                      {t('weightModal.currentTab', 'Curentă ({{val}} kg)', { val: greutateCurenta ?? '—' })}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tabBtn, activeTab === 'tinta' && { backgroundColor: colors.accent }]}
+                  onPress={() => handleTabSwitch('tinta')}
+                >
+                  <View style={styles.tabContent}>
+                    <Target size={14} color={activeTab === 'tinta' ? colors.textOnAccent : colors.textSecondary} />
+                    <Text style={[styles.tabText, { color: activeTab === 'tinta' ? colors.textOnAccent : colors.textSecondary }]}>
+                      {t('weightModal.targetTab', 'Țintă ({{val}} kg)', { val: greutateTinta ?? '—' })}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Big Input Box */}
+            <View style={styles.inputContainer}>
+              <View style={[styles.inputBox, { borderColor: (activeTab === 'curenta' ? colors.accentSecondary : colors.accent) + '50', backgroundColor: colors.surfaceBg }]}>
+                <TextInput
+                  testID="weight-current-input"
+                  style={[styles.input, { color: colors.textPrimary }]}
+                  maxFontSizeMultiplier={1.3}
+                  value={inputVal}
+                  onChangeText={setInputVal}
+                  keyboardType="decimal-pad"
+                  maxLength={5}
+                  selectTextOnFocus
+                  autoFocus
+                />
+                <Text style={[styles.unit, { color: activeTab === 'curenta' ? colors.accentSecondary : colors.accent }]}>kg</Text>
+              </View>
+
+              {/* Quick +/- adjustment buttons */}
+              <View style={styles.quickButtons}>
+                <TouchableOpacity testID="weight-adjust-minus-05" accessibilityState={{ disabled: !canAdjustCurrentWeight }} disabled={!canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(-0.5)}>
+                  <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>−0.5</Text>
+                </TouchableOpacity>
+                <TouchableOpacity accessibilityState={{ disabled: !canAdjustCurrentWeight }} disabled={!canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(-0.1)}>
+                  <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>−0.1</Text>
+                </TouchableOpacity>
+                <TouchableOpacity accessibilityState={{ disabled: !canAdjustCurrentWeight }} disabled={!canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(0.1)}>
+                  <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>+0.1</Text>
+                </TouchableOpacity>
+                <TouchableOpacity accessibilityState={{ disabled: !canAdjustCurrentWeight }} disabled={!canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(0.5)}>
+                  <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>+0.5</Text>
+                </TouchableOpacity>
               </View>
             </View>
-            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} onPress={onClose} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
-              <X size={20} color={colors.textSecondary} />
+
+            {/* Save Button */}
+            <TouchableOpacity testID="weight-save" style={[styles.saveBtn, { shadowColor: activeTab === 'curenta' ? colors.accentSecondary : colors.accent }]} onPress={handleSave} activeOpacity={0.85}>
+              <LinearGradient colors={activeTab === 'curenta' ? colors.accentSecondaryGradient : colors.accentGradient} style={styles.saveGrad}>
+                <Check size={20} color={activeTab === 'curenta' ? colors.background : colors.textOnAccent} strokeWidth={3} />
+                <Text style={[styles.saveText, { color: activeTab === 'curenta' ? colors.background : colors.textOnAccent }]}>
+                  {activeTab === 'curenta'
+                    ? t('weightModal.saveCurrent', 'Salvează Istoric Cântărire')
+                    : t('weightModal.saveTarget', 'Salvează Noua Țintă')}
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
-          </View>
 
-          {/* Tab Switcher */}
-          {onSaveTinta && (
-            <View style={[styles.tabContainer, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
-              <TouchableOpacity
-                style={[styles.tabBtn, activeTab === 'curenta' && { backgroundColor: colors.accentSecondary }]}
-                onPress={() => handleTabSwitch('curenta')}
-              >
-                <View style={styles.tabContent}>
-                  <Scale size={14} color={activeTab === 'curenta' ? colors.background : colors.textSecondary} />
-                  <Text style={[styles.tabText, { color: activeTab === 'curenta' ? colors.background : colors.textSecondary }]}>
-                    Curentă ({greutateCurenta ?? '—'} kg)
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tabBtn, activeTab === 'tinta' && { backgroundColor: colors.accent }]}
-                onPress={() => handleTabSwitch('tinta')}
-              >
-                <View style={styles.tabContent}>
-                  <Target size={14} color={activeTab === 'tinta' ? colors.textOnAccent : colors.textSecondary} />
-                  <Text style={[styles.tabText, { color: activeTab === 'tinta' ? colors.textOnAccent : colors.textSecondary }]}>
-                    Țintă ({greutateTinta ?? '—'} kg)
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Big Input Box */}
-          <View style={styles.inputContainer}>
-            <View style={[styles.inputBox, { borderColor: (activeTab === 'curenta' ? colors.accentSecondary : colors.accent) + '50', backgroundColor: colors.surfaceBg }]}>
-              <TextInput
-                testID="weight-current-input"
-                style={[styles.input, { color: colors.textPrimary }]}
-                maxFontSizeMultiplier={1.3}
-                value={inputVal}
-                onChangeText={setInputVal}
-                keyboardType="decimal-pad"
-                maxLength={5}
-                selectTextOnFocus
-                autoFocus
-              />
-              <Text style={[styles.unit, { color: activeTab === 'curenta' ? colors.accentSecondary : colors.accent }]}>kg</Text>
-            </View>
-
-            {/* Quick +/- adjustment buttons */}
-            <View style={styles.quickButtons}>
-              <TouchableOpacity testID="weight-adjust-minus-05" accessibilityState={{ disabled: !canAdjustCurrentWeight }} disabled={!canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(-0.5)}>
-                <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>−0.5</Text>
-              </TouchableOpacity>
-              <TouchableOpacity accessibilityState={{ disabled: !canAdjustCurrentWeight }} disabled={!canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(-0.1)}>
-                <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>−0.1</Text>
-              </TouchableOpacity>
-              <TouchableOpacity accessibilityState={{ disabled: !canAdjustCurrentWeight }} disabled={!canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(0.1)}>
-                <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>+0.1</Text>
-              </TouchableOpacity>
-              <TouchableOpacity accessibilityState={{ disabled: !canAdjustCurrentWeight }} disabled={!canAdjustCurrentWeight} style={[styles.quickBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, opacity: !canAdjustCurrentWeight ? 0.45 : 1 }]} onPress={() => adaugaRaport(0.5)}>
-                <Text style={[styles.quickBtnText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>+0.5</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Save Button */}
-          <TouchableOpacity testID="weight-save" style={[styles.saveBtn, { shadowColor: activeTab === 'curenta' ? colors.accentSecondary : colors.accent }]} onPress={handleSave} activeOpacity={0.85}>
-            <LinearGradient colors={activeTab === 'curenta' ? colors.accentSecondaryGradient : colors.accentGradient} style={styles.saveGrad}>
-              <Check size={20} color={activeTab === 'curenta' ? colors.background : colors.textOnAccent} strokeWidth={3} />
-              <Text style={[styles.saveText, { color: activeTab === 'curenta' ? colors.background : colors.textOnAccent }]}>
-                {activeTab === 'curenta' ? 'Salvează Istoric Cântărire' : 'Salvează Noua Țintă'}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-
-        </Animated.View>
+          </Animated.View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -192,7 +221,8 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   backdrop: { ...StyleSheet.absoluteFillObject },
-  modalCard: { width: width - 40, borderRadius: 28, borderWidth: 1, overflow: 'hidden', padding: 24 },
+  keyboardAvoid: { width: '100%', alignItems: 'center' },
+  modalCard: { borderRadius: 28, borderWidth: 1, overflow: 'hidden', padding: 24, maxWidth: 420 },
   glowTop: { position: 'absolute', top: -80, alignSelf: 'center', width: 250, height: 250, borderRadius: 125, opacity: 0.12 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

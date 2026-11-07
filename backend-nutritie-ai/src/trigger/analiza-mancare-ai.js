@@ -42,7 +42,16 @@ function supabaseAiJobs() {
   const url = (process.env.SUPABASE_URL || '').trim();
   const cheie = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   if (!url || !cheie) return null;
-  clientAiJobs = createClient(url, cheie);
+  clientAiJobs = createClient(url, cheie, {
+    global: {
+      fetch: (input, init = {}) => {
+        const semnalCombinat = init.signal
+          ? AbortSignal.any([init.signal, AbortSignal.timeout(10000)])
+          : AbortSignal.timeout(10000);
+        return fetch(input, { ...init, signal: semnalCombinat });
+      },
+    },
+  });
   return clientAiJobs;
 }
 

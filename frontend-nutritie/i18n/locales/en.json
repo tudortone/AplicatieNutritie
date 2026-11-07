@@ -377,7 +377,11 @@
     "rewardedCreditConsumedCount": "1 Ad Credit used • {{count}} left",
     "purchasedCreditConsumedCount": "1 Purchased Credit used • {{count}} left",
     "draftRestoredNoCredit": "Restored draft • No extra credit used",
-    "searchFoodPlaceholder": "Search food or ingredient..."
+    "searchFoodPlaceholder": "Search food or ingredient...",
+    "qaAnalysisUnavailable": "QA photo analysis is unavailable on the server.",
+    "aiProviderErrorMessage": "The AI provider is experiencing temporary issues. Please try again.",
+    "networkErrorMessage": "Network issue. Please check your internet connection and try again.",
+    "saveFailedMessage": "Could not save meal to journal. Please try again."
   },
   "photoJob": {
     "backgroundTitle": "Analysis continues in the background",
@@ -731,7 +735,10 @@
     "removeFavorite": "Remove from favorites",
     "removedFromFavorites": "Removed from favorites",
     "streakHeader": "CURRENT STREAK",
-    "streakDays": "{{count}} days in a row"
+    "streakDays": "{{count}} days in a row",
+    "todayA11y": "Today",
+    "selectedA11y": "Selected",
+    "goToToday": "Go to today"
   },
   "access": {
     "testerTitle": "Tester access active",
@@ -1131,7 +1138,8 @@
     "errGeneral": "An authentication issue occurred.",
     "errConnection": "Could not establish connection to the server.",
     "errResetProgressTitle": "Progress not saved",
-    "errResetProgressMsg": "Could not reset questionnaire on this device. Try again."
+    "errResetProgressMsg": "Could not reset questionnaire on this device. Try again.",
+    "qaOAuthUnavailable": "QA OAuth authentication is unavailable in the current environment."
   },
   "anatomy": {
     "workoutTitle": "Anatomy",
@@ -1164,7 +1172,9 @@
     "error": "Error",
     "success": "Success",
     "retry": "Try again",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "expanded": "Expanded",
+    "collapsed": "Collapsed"
   },
   "notFound": {
     "title": "Page not found",
@@ -1353,7 +1363,8 @@
     "freezerBadge": "•  FREEZER",
     "daysBadge": "•  ~{{count}} days",
     "otherManualA11y": "Enter another product completely manually",
-    "otherManual": "Enter another product completely manually"
+    "otherManual": "Enter another product completely manually",
+    "decreaseQuantityA11y": "Decrease quantity for {{name}}"
   },
   "flowCredits": {
     "openA11y": "Open Flow Credits",
@@ -1381,7 +1392,9 @@
     "bestValue": "Best Value",
     "storeUnavailable": "Google Play prices are temporarily unavailable.",
     "upgradePremium": "Upgrade to GetFlow Premium",
-    "serverAuthority": "Credits and purchases are confirmed securely by GetFlow servers. Purchased credits never expire."
+    "serverAuthority": "Credits and purchases are confirmed securely by GetFlow servers. Purchased credits never expire.",
+    "photoAnalyses": "photo analyses",
+    "freeBadge": "GetFlow Free"
   },
   "calculatorAi": {
     "badge": "AI nutrition algorithm. Enter your accurate details for precise nutrition targets.",
@@ -1760,5 +1773,15 @@
     "day": "day",
     "days": "days",
     "aboutDescUpdated": "Your cyber companion grows and evolves alongside you with each streak day logged in your journal. Keep up your nutritional consistency to unlock new evolutionary stages!"
+  },
+  "weightModal": {
+    "currentWeightTitle": "Current Weight",
+    "targetWeightTitle": "Target Weight",
+    "currentWeightSubtitle": "Track your weigh-in progress today",
+    "targetWeightSubtitle": "Set your desired target weight goal",
+    "currentTab": "Current ({{val}} kg)",
+    "targetTab": "Target ({{val}} kg)",
+    "saveCurrent": "Save Weigh-in History",
+    "saveTarget": "Save New Target"
   }
 }

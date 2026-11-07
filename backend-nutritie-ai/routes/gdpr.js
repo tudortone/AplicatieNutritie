@@ -90,6 +90,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         intentiiRecompensa,
         workoutTemplates,
         abonamenteGooglePlay,
+        userFeedback,
       ] = await Promise.all([
         citeste('mese'),
         profilRepo.getProfil(ctx),
@@ -107,6 +108,17 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         citeste('flow_reward_intents'),
         citeste('workout_templates'),
         exportaAbonamenteGooglePlay({ supabaseAdmin, userId }),
+        (async () => {
+          try {
+            const { data } = await supabaseAdmin
+              .from('user_feedback')
+              .select('id, rating, message, category, metadata, created_at')
+              .eq('user_id', userId);
+            return Array.isArray(data) ? data : [];
+          } catch {
+            return [];
+          }
+        })(),
       ]);
 
       return res.json({
@@ -133,6 +145,7 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
         flow_reward_intents: intentiiRecompensa,
         workout_templates: workoutTemplates,
         abonamente_google_play: abonamenteGooglePlay,
+        user_feedback: userFeedback,
       });
     } catch (err) {
       console.error('[GDPR] Export esuat:', codEroare(err));

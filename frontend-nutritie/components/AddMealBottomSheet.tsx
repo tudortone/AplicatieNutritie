@@ -16,6 +16,7 @@ import BottomSheet, {
   BottomSheetBackdrop, 
   BottomSheetTextInput 
 } from '@gorhom/bottom-sheet';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Check, X, Heart, Trash2, Scale, Search, UtensilsCrossed } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -79,6 +80,7 @@ interface BaseNutrition {
 export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBottomSheetProps>(
   ({ openOnMount = false, onSuccess, onMasaCreata, onPantryUsed }, ref) => {
     const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
     const { t, i18n } = useTranslation();
     const { user } = useAuth();
     const { favorite, addFavorite, removeFavorite, isFavorite } = useFavorite();
@@ -774,6 +776,10 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                   >
                     <TouchableOpacity
                       onPress={() => {
+                        setSelectedPreset(null);
+                        setBaseNutrition(null);
+                        setGrame('');
+                        setFibre('');
                         setNume(fav.nume);
                         setCalorii(String(fav.calorii));
                         setProteine(String(fav.proteine));
@@ -1402,7 +1408,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           presentationStyle="pageSheet"
           onRequestClose={() => setProductSearchModalVisible(false)}
         >
-          <View style={{ flex: 1, backgroundColor: colors.background, padding: 16 }}>
+          <View style={{ flex: 1, backgroundColor: colors.background, padding: 16, paddingTop: Math.max(insets?.top || 0, 16) }}>
             <ProductSearch
               onMealAdded={(masa) => {
                 setProductSearchModalVisible(false);

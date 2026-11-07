@@ -388,6 +388,7 @@ export async function actualizeazaMasaCuPoza(
   client: any,
   id: string | number,
   valori: Record<string, unknown>,
+  userId?: string | null,
 ): Promise<{ error: any; data?: any }> {
   const valoriCurate: Record<string, unknown> = { ...valori };
   if (valoriCurate.id !== undefined && (typeof valoriCurate.id !== 'number' || isNaN(valoriCurate.id) || !Number.isInteger(valoriCurate.id))) {
@@ -399,11 +400,17 @@ export async function actualizeazaMasaCuPoza(
   if (valoriCurate.grasimi !== undefined) valoriCurate.grasimi = clampValoare(Math.round(Number(valoriCurate.grasimi) || 0), LIMITE_DB_MESE.grasimi, 0);
   if (valoriCurate.fibre !== undefined) valoriCurate.fibre = clampValoare(Math.round((Number(valoriCurate.fibre) || 0) * 10) / 10, LIMITE_DB_MESE.fibre, 0);
 
-  const prima = await client.from('mese').update(valoriCurate).eq('id', id).select();
+  const effectiveUserId = userId || (typeof valoriCurate.user_id === 'string' ? valoriCurate.user_id : undefined);
+
+  let query = client.from('mese').update(valoriCurate).eq('id', id);
+  if (effectiveUserId) query = query.eq('user_id', effectiveUserId);
+  const prima = await query.select();
   if (prima.error && SEMNALE_COLOANA_LIPSA.test(String(prima.error.message))) {
     const faraPoza = { ...valoriCurate };
     delete faraPoza.imagine_url;
-    return client.from('mese').update(faraPoza).eq('id', id).select();
+    let queryFaraPoza = client.from('mese').update(faraPoza).eq('id', id);
+    if (effectiveUserId) queryFaraPoza = queryFaraPoza.eq('user_id', effectiveUserId);
+    return queryFaraPoza.select();
   }
   return prima;
 }

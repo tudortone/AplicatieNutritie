@@ -45,6 +45,8 @@ export async function buildCompleteUserExport({
   const encodedOwnerPrefix = `${USER_STORAGE_PREFIX}${encodeURIComponent(owner)}:`;
   const chatPrefix = `chat_history_${owner}_`;
   const chatDailyPrefix = `@getflow/chat_daily_${owner}_`;
+  const favoritePrefix = `favorite_foods_${owner}`;
+  const companionKey = `@getflow:companion_name_${owner}`;
   const accountKeys = allKeys.filter((key) =>
     key.startsWith(encodedOwnerPrefix) ||
     key === `chat_history_${owner}` ||
@@ -52,7 +54,10 @@ export async function buildCompleteUserExport({
     key === `@nutri_offline_meals_queue_${owner}` ||
     key === `@nutri_pending_macro_targets_${owner}` ||
     key === `@getflow/photo-job/v1/${owner}` ||
-    key.startsWith(chatDailyPrefix),
+    key.startsWith(chatDailyPrefix) ||
+    key === favoritePrefix ||
+    key.startsWith(`${favoritePrefix}_`) ||
+    key === companionKey,
   );
   const workspaceKeys = activeOwner === owner
     ? allKeys.filter(isUserBoundWorkspaceKey)

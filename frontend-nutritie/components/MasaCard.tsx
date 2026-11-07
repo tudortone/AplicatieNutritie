@@ -170,7 +170,7 @@ export const MasaCard = React.memo(function MasaCard({
               ]}
             >
               <Text style={[styles.ingredientsHeading, { color: colors.textSecondary }]}>
-                {t('jurnal.ingredientDetails')}
+                {t('jurnal.ingredientDetails', { nume: masa.nume })}
               </Text>
               {alimenteSubList.map((al, subIdx) => (
                 <Pressable

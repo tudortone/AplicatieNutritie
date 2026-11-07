@@ -9,7 +9,7 @@ function createRewardedRepo({ supabaseAdmin, dailyLimit = 5 } = {}) {
           p_token_hash: tokenHash,
         });
         if (error) {
-          if (error.code === 'PGRST202' || error.code === '42883' || String(error.message || '').includes('get_flow_reward_intent_by_integrity_token')) {
+          if (error.code === 'PGRST202' || error.code === '42883') {
             return null;
           }
           throw error;
@@ -24,7 +24,7 @@ function createRewardedRepo({ supabaseAdmin, dailyLimit = 5 } = {}) {
           status: data.status,
         };
       } catch (err) {
-        if (err.code === 'PGRST202' || err.code === '42883' || String(err.message || '').includes('get_flow_reward_intent_by_integrity_token')) {
+        if (err.code === 'PGRST202' || err.code === '42883') {
           return null;
         }
         throw err;
@@ -42,7 +42,7 @@ function createRewardedRepo({ supabaseAdmin, dailyLimit = 5 } = {}) {
           p_expires_at: expiresAt,
         });
         if (error) {
-          if (error.code === 'PGRST202' || error.code === '42883' || String(error.message || '').includes('create_flow_reward_intent_idempotent')) {
+          if (error.code === 'PGRST202' || error.code === '42883') {
             const insertResult = await supabaseAdmin.from('flow_reward_intents').insert({
               id,
               user_id: userId,
@@ -66,7 +66,7 @@ function createRewardedRepo({ supabaseAdmin, dailyLimit = 5 } = {}) {
         }
         return data;
       } catch (err) {
-        if (err.code === 'PGRST202' || err.code === '42883' || String(err.message || '').includes('create_flow_reward_intent_idempotent')) {
+        if (err.code === 'PGRST202' || err.code === '42883') {
           const insertResult = await supabaseAdmin.from('flow_reward_intents').insert({
             id,
             user_id: userId,

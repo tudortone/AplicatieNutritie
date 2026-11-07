@@ -31,7 +31,7 @@ import { PressableScale } from '../../components/ui/PressableScale';
 import { AddWeightModal } from '../../components/AddWeightModal';
 import { supabase } from '../../supabase';
 import { localDayKey } from '../../lib/dateUtils';
-import { TARGETURI_PENDING_KEY } from '../../lib/sincronizeazaTargeturi';
+import { salveazaTargeturiPending, stergeTargeturiPending } from '../../lib/sincronizeazaTargeturi';
 import { anatomyMapSize, singleAnatomyMapWidth } from '../../lib/anatomyLayout';
 import { FlowCreditsPill } from '../../components/FlowCreditsPill';
 import { WaterIntakeCard } from '../../components/home/WaterIntakeCard';
@@ -40,7 +40,7 @@ import { FlowCompanionModal } from '../../components/home/FlowCompanionModal';
 import { useAuth } from '../../context/AuthContext';
 import { useFlowCredits } from '../../context/FlowCreditsContext';
 import { calculateDailyWaterTargetMl } from '../../lib/hydration';
-import { aboneazaLaMeseSalvateVerificat } from '../../lib/freshnessMese';
+import { aboneazaLaMeseSalvateVerificat, marcheazaMeseModificate } from '../../lib/freshnessMese';
 import { decideCalorieRingUpdate } from '../../lib/mealRingAnimation';
 
 
@@ -283,19 +283,25 @@ export default function HomeScreen() {
       await AsyncStorage.setItem('greutate_istoric', JSON.stringify(nouIstoric));
 
       const { data: { user: userCurent } } = await supabase.auth.getUser();
+      const userId = userCurent?.id || auth?.user?.id;
       if (userCurent) {
         await supabase.auth.updateUser({ data: { greutate: nouaValoare, greutate_istoric: nouIstoric } });
       }
-      // Serverul a confirmat -> nicio modificare locală în așteptare (BUG-035).
-      await AsyncStorage.removeItem(TARGETURI_PENDING_KEY);
+      if (userId) {
+        await stergeTargeturiPending(userId);
+        marcheazaMeseModificate(userId);
+      }
 
       setWeightModalVisible(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       refresh(true);
     } catch (e) {
-      // BUG-035: server indisponibil -> marcăm targeturi locale nesincronizate,
-      // ca useMeseAzi să citească valoarea locală (nu metadata stale).
-      await AsyncStorage.setItem(TARGETURI_PENDING_KEY, '1').catch(() => {});
+      const { data: { user: userCurent } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+      const userId = userCurent?.id || auth?.user?.id;
+      if (userId) {
+        await salveazaTargeturiPending(userId, { greutate: nouaValoare }).catch(() => {});
+        marcheazaMeseModificate(userId);
+      }
       console.error('Eroare la salvarea greutății:', e);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
@@ -306,16 +312,25 @@ export default function HomeScreen() {
       await AsyncStorage.setItem('greutateTinta', nouaValoare.toString());
 
       const { data: { user: userCurent } } = await supabase.auth.getUser();
+      const userId = userCurent?.id || auth?.user?.id;
       if (userCurent) {
         await supabase.auth.updateUser({ data: { greutateTinta: nouaValoare } });
       }
-      await AsyncStorage.removeItem(TARGETURI_PENDING_KEY);
+      if (userId) {
+        await stergeTargeturiPending(userId);
+        marcheazaMeseModificate(userId);
+      }
 
       setGreutateTinta(nouaValoare);
       setWeightModalVisible(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
-      await AsyncStorage.setItem(TARGETURI_PENDING_KEY, '1').catch(() => {});
+      const { data: { user: userCurent } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+      const userId = userCurent?.id || auth?.user?.id;
+      if (userId) {
+        await salveazaTargeturiPending(userId, { greutateTinta: nouaValoare }).catch(() => {});
+        marcheazaMeseModificate(userId);
+      }
       console.error('Eroare la salvarea greutății țintă:', e);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }

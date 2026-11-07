@@ -87,6 +87,22 @@ function createFlowCreditsRepo({ supabaseAdmin, rewardLimit = 5, dailyLimit = 3,
         p_now: now || new Date().toISOString(),
       }), 'settlePhoto');
     },
+    async grantReward({ userId, eventId, now }) {
+      return unwrapRpc(await supabaseAdmin.rpc('grant_flow_reward', {
+        p_user_id: userId,
+        p_event_id: eventId,
+        p_now: now || new Date().toISOString(),
+        p_reward_limit: rewardLimit,
+      }), 'grantReward');
+    },
+    async grantPack({ userId, eventId, productId, now }) {
+      return unwrapRpc(await supabaseAdmin.rpc('grant_flow_pack', {
+        p_user_id: userId,
+        p_event_id: eventId,
+        p_product_id: productId,
+        p_now: now || new Date().toISOString(),
+      }), 'grantPack');
+    },
   });
 }
 

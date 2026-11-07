@@ -41,6 +41,9 @@ const TABELE_BACKEND_ONLY = new Set([
   'credite_esuate',
   'flow_reward_intent_secrets',
   'gdpr_deletions',
+  'play_integrity_token_bindings',
+  'photo_outcome_resolutions',
+  'user_feedback',
 ]);
 
 /** Cataloage publice, fara date personale (verificate: nicio coloana de owner). */

@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import Constants from 'expo-constants';
 import InAppNotification from '../components/InAppNotification';
+import { supabase } from '../supabase';
 
 export type NotificationType = 'success' | 'info' | 'warning' | 'error' | 'reward' | 'reminder';
 
@@ -98,33 +99,11 @@ export function NotificationBannerProvider({ children }: { children: React.React
   // BUG-008: oglinda sincronă a listei pentru updateri puri — calculele se fac
   // din ref (mereu la zi, chiar între două render-uri), nu din closure învechit.
   const notificationsRef = useRef(notifications);
+  const activeUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     notificationsRef.current = notifications;
   }, [notifications]);
-
-  // Încarcă istoricul notificărilor din AsyncStorage
-  useEffect(() => {
-    (async () => {
-      try {
-        const stored = await AsyncStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored) as AppNotification[];
-          setNotifications(parsed);
-        }
-      } catch {
-        // Ignoră eroarea de citire
-      }
-    })();
-  }, []);
-
-  const saveNotifications = async (list: AppNotification[]) => {
-    try {
-      await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(list));
-    } catch {
-      // Ignoră eroarea de stocare
-    }
-  };
 
   const hideBanner = useCallback(() => {
     if (timeoutRef.current) {
@@ -133,6 +112,63 @@ export function NotificationBannerProvider({ children }: { children: React.React
     }
     setBannerState((prev) => ({ ...prev, visible: false }));
   }, []);
+
+  // Încarcă istoricul notificărilor din AsyncStorage cu izolare strictă per cont
+  useEffect(() => {
+    let montat = true;
+
+    const incarcaPentruUser = async (userId: string | null) => {
+      try {
+        if (!userId) {
+          if (montat) {
+            setNotifications([]);
+            notificationsRef.current = [];
+          }
+          return;
+        }
+        const stored = await AsyncStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+        if (montat && activeUserIdRef.current === userId && stored) {
+          const parsed = JSON.parse(stored) as AppNotification[];
+          setNotifications(parsed);
+          notificationsRef.current = parsed;
+        }
+      } catch {
+        // Ignoră eroarea de citire
+      }
+    };
+
+    supabase.auth.getSession().then(({ data }: any) => {
+      if (!montat) return;
+      const initialUserId = data.session?.user?.id ?? null;
+      activeUserIdRef.current = initialUserId;
+      void incarcaPentruUser(initialUserId);
+    }).catch(() => {});
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+      if (!montat) return;
+      const nextUserId = session?.user?.id ?? null;
+      if (nextUserId !== activeUserIdRef.current) {
+        activeUserIdRef.current = nextUserId;
+        hideBanner();
+        setNotifications([]);
+        notificationsRef.current = [];
+        void incarcaPentruUser(nextUserId);
+      }
+    });
+
+    return () => {
+      montat = false;
+      authListener?.subscription?.unsubscribe();
+    };
+  }, [hideBanner]);
+
+  const saveNotifications = async (list: AppNotification[]) => {
+    try {
+      await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(list));
+    } catch {
+      // Ignoră eroarea de stocare
+    }
+  };
 
   const showNotification = useCallback(
     ({

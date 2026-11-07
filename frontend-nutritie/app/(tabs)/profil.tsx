@@ -24,6 +24,7 @@ import { DEFAULT_MEAL_REMINDERS } from '../../lib/notifications';
 import { FlowIcon } from '../../components/ui/FlowIcon';
 import { useAuth } from '../../context/AuthContext';
 import { useAds } from '../../context/AdsContext';
+import { usePremium } from '../../context/PremiumContext';
 import { useFlowCredits } from '../../context/FlowCreditsContext';
 import { useBiometrics } from '../../hooks/useBiometrics';
 import { useHealthSync } from '../../hooks/useHealthSync';
@@ -67,6 +68,7 @@ export default function ProfilScreen() {
   const watchSheetRef = React.useRef<WatchSelectorSheetRef>(null);
   const { session, user, loadingAuth } = useAuth();
   const { privacyOptionsRequired, showPrivacyOptions } = useAds();
+  const { isPremium, hasFullAccess } = usePremium();
   const flowCredits = useFlowCredits();
   const { showBanner } = useNotificationBannerActions();
   const notify = useNotify();
@@ -206,12 +208,22 @@ export default function ProfilScreen() {
         const pending = await citesteTargeturiPending(session.user.id);
         const pTargets = pending?.userId === session.user.id ? pending.targets : undefined;
 
-        let g = pTargets?.greutate ?? metadata.greutate;
-        let gt = pTargets?.greutateTinta ?? metadata.greutateTinta;
-        let c = pTargets?.caloriiTinta ?? metadata.caloriiTinta;
-        let p = pTargets?.proteineTinta ?? metadata.proteineTinta;
-        let cb = pTargets?.carbiTinta ?? metadata.carbiTinta;
-        let gr = pTargets?.grasimiTinta ?? metadata.grasimiTinta;
+        const localPairs = await AsyncStorage.multiGet([
+          'greutate',
+          'greutateTinta',
+          'caloriiTinta',
+          'proteineTinta',
+          'carbiTinta',
+          'grasimiTinta',
+        ]).catch(() => [] as [string, string | null][]);
+        const localMap = Object.fromEntries(localPairs);
+
+        let g = pTargets?.greutate ?? (localMap.greutate ? parseFloat(localMap.greutate) : undefined) ?? metadata.greutate;
+        let gt = pTargets?.greutateTinta ?? (localMap.greutateTinta ? parseFloat(localMap.greutateTinta) : undefined) ?? metadata.greutateTinta;
+        let c = pTargets?.caloriiTinta ?? (localMap.caloriiTinta ? parseFloat(localMap.caloriiTinta) : undefined) ?? metadata.caloriiTinta;
+        let p = pTargets?.proteineTinta ?? (localMap.proteineTinta ? parseFloat(localMap.proteineTinta) : undefined) ?? metadata.proteineTinta;
+        let cb = pTargets?.carbiTinta ?? (localMap.carbiTinta ? parseFloat(localMap.carbiTinta) : undefined) ?? metadata.carbiTinta;
+        let gr = pTargets?.grasimiTinta ?? (localMap.grasimiTinta ? parseFloat(localMap.grasimiTinta) : undefined) ?? metadata.grasimiTinta;
 
         let nm = pTargets?.nume || metadata.nume || metadata.display_name;
         let av = pTargets?.avatar_url || metadata.avatar_url;
@@ -504,10 +516,19 @@ export default function ProfilScreen() {
           <Text maxFontSizeMultiplier={1.3} style={[styles.displayName, { color: colors.textPrimary }]}>{nume || session.user.email?.split('@')[0]}</Text>
           <Text style={[styles.emailText, { color: colors.textSecondary }]}>{session.user.email}</Text>
 
-          <View style={[styles.planBadge, { borderColor: colors.accent + '33' }]}>
-            <LinearGradient colors={[colors.accent + '25', 'rgba(0,0,0,0)']} style={styles.planBadgeGrad}>
-              <Zap size={14} color={colors.accent} />
-              <Text style={[styles.planBadgeText, { color: colors.accent }]}>{t('profile.premiumTitle')}</Text>
+          <View style={[styles.planBadge, { borderColor: (isPremium || hasFullAccess) ? colors.accent + '33' : colors.cardBorder }]}>
+            <LinearGradient
+              colors={(isPremium || hasFullAccess) ? [colors.accent + '25', 'rgba(0,0,0,0)'] : ['rgba(255,255,255,0.05)', 'rgba(0,0,0,0)']}
+              style={styles.planBadgeGrad}
+            >
+              {(isPremium || hasFullAccess) ? (
+                <>
+                  <Zap size={14} color={colors.accent} />
+                  <Text style={[styles.planBadgeText, { color: colors.accent }]}>{t('profile.premiumTitle')}</Text>
+                </>
+              ) : (
+                <Text style={[styles.planBadgeText, { color: colors.textSecondary }]}>{t('flowCredits.freeBadge', 'GetFlow Free')}</Text>
+              )}
             </LinearGradient>
           </View>
         </Animated.View>

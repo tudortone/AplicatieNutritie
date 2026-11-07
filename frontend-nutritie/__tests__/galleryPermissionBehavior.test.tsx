@@ -1370,7 +1370,7 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       });
 
       const view = await render(<ProfilScreen />);
-      expect(view.getAllByText('profile.premiumTitle')).toHaveLength(2);
+      expect(view.getByText('profile.premiumTitle')).toBeTruthy();
       expect(view.getByText('profile.displayNameLabel')).toBeTruthy();
       expect(view.getByPlaceholderText('profile.displayNamePlaceholder')).toBeTruthy();
       expect(view.getAllByLabelText('profile.themeA11y')).toHaveLength(3);

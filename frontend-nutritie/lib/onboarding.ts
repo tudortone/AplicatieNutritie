@@ -349,6 +349,7 @@ export async function sincronizeazaOnboardingLaProfil(
 export type ProfilRestaurare = {
 	varsta?: number | null
 	greutate?: number | null
+	greutateTinta?: number | null
 	inaltime?: number | null
 	sex?: string | null
 	activitate?: string | null
@@ -400,7 +401,7 @@ export async function restaureazaProfilLocal(profil: ProfilRestaurare): Promise<
 		pune('carbiTinta', profil.carbiTinta)
 		pune('grasimiTinta', profil.grasimiTinta)
 		pune('greutate', profil.greutate)
-		pune('greutateTinta', profil.greutate)
+		pune('greutateTinta', profil.greutateTinta ?? profil.greutate)
 		pune('sex', profil.sex)
 		pune('varsta', profil.varsta)
 		pune('inaltime', profil.inaltime)

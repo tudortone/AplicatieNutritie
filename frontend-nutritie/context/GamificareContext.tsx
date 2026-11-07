@@ -169,9 +169,14 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
         }
         setStare(locala);
         stareRef.current = locala;
+      } else {
+        setStare(STARE_INITIALA);
+        stareRef.current = STARE_INITIALA;
       }
     } catch {
       locala = null;
+      setStare(STARE_INITIALA);
+      stareRef.current = STARE_INITIALA;
     }
 
     try {
@@ -205,12 +210,40 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
       }
     } catch (err) {
       if (__DEV__) console.debug('[Gamificare] Sincronizarea server nu este disponibila.', err);
-      if (!locala) await aplicaStare(stareRef.current);
+      if (!locala) {
+        setStare(STARE_INITIALA);
+        stareRef.current = STARE_INITIALA;
+      }
     }
   }, [aplicaStare, showNotification]);
 
+  const activeUserIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    void refreshGamificare();
+    let montat = true;
+    supabase.auth.getSession().then(({ data }: any) => {
+      if (!montat) return;
+      activeUserIdRef.current = data.session?.user?.id ?? null;
+      void refreshGamificare();
+    }).catch(() => {});
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+      if (!montat) return;
+      const nextUserId = session?.user?.id ?? null;
+      if (nextUserId !== activeUserIdRef.current) {
+        activeUserIdRef.current = nextUserId;
+        stareRef.current = STARE_INITIALA;
+        setStare(STARE_INITIALA);
+        if (nextUserId) {
+          void refreshGamificare();
+        }
+      }
+    });
+
+    return () => {
+      montat = false;
+      authListener?.subscription?.unsubscribe();
+    };
   }, [refreshGamificare]);
 
   // BUG-008: updaterul de setState trebuie sa fie PUR sub React Compiler — fara

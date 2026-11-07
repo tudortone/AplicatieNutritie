@@ -33,8 +33,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { SproutArtwork } from './PixelCompanion';
-
-const COMPANION_FULL_IMAGE = require('../../assets/images/flow-companion-full.jpg');
 import {
   getCompanionStage,
   getDaysUntilNextEvolution,
@@ -42,6 +40,8 @@ import {
   getLimitBeaconStatus,
   type CompanionStageId,
 } from '../../lib/flowCompanion';
+
+const COMPANION_FULL_IMAGE = require('../../assets/images/flow-companion-full.jpg');
 
 function useSafeInsets() {
   try {

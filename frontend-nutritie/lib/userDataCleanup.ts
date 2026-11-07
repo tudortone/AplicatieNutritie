@@ -56,6 +56,7 @@ export const USER_BOUND_EXACT_KEYS = new Set([
   'nutriai_camara_local_v3', 'nutriai_pantry_expiry_notif_enabled',
   'exercitii_recente', 'ascundeCardHealth',
   '@getflow_nutrient_focus_prefs_v1',
+  '@getflow:custom_foods',
 ]);
 
 export const USER_BOUND_PREFIXES = [
@@ -77,6 +78,7 @@ export const ALREADY_USER_SCOPED_PREFIXES = [
   '@nutri_offline_meals_queue_',
   '@nutri_pending_macro_targets_',
   '@getflow:companion_name_',
+  'favorite_foods_',
   '@getflow/photo-job/v1/',
   '@getflow/chat_daily_',
 ] as const;
@@ -258,6 +260,8 @@ async function purgeDeletedUserData(owner: string): Promise<void> {
     key === `@nutri_offline_meals_queue_${owner}` ||
     key === `@nutri_pending_macro_targets_${owner}` ||
     key === `@getflow:companion_name_${owner}` ||
+    key === `favorite_foods_${owner}` ||
+    key.startsWith(`favorite_foods_${owner}_`) ||
     key === `@getflow/photo-job/v1/${owner}` ||
     key.startsWith(chatDailyPrefix),
   );

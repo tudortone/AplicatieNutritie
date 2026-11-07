@@ -150,6 +150,12 @@ function creeazaClientUtilizator({ url, anonKey, token }) {
 	return createClient(url, anonKey, {
 		global: {
 			headers: { Authorization: 'Bearer ' + token },
+			fetch: (input, init = {}) => {
+				const semnalCombinat = init.signal
+					? AbortSignal.any([init.signal, AbortSignal.timeout(10000)])
+					: AbortSignal.timeout(10000);
+				return fetch(input, { ...init, signal: semnalCombinat });
+			},
 		},
 		auth: {
 			persistSession: false,

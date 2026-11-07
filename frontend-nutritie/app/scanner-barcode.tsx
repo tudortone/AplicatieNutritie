@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { ScanLine, X, Plus, Package, Trash2, ArrowLeft, CheckCircle2, ShoppingBag, Snowflake, ChefHat, Clock, Check, Wand2 } from 'lucide-react-native';
+import { ScanLine, X, Plus, Minus, Package, Trash2, ArrowLeft, CheckCircle2, ShoppingBag, Snowflake, ChefHat, Clock, Check, Wand2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { useTranslation } from 'react-i18next';
@@ -298,6 +298,19 @@ export default function ScannerBarcodeScreen() {
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {/* Butoane stack +/- */}
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.selectionAsync();
+              modificaCantitate(item.id, -1);
+            }}
+            style={[styles.stackBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
+            hitSlop={5}
+            accessibilityRole="button"
+            accessibilityLabel={t('scannerBarcode.decreaseQuantityA11y', 'Scade cantitatea pentru {{name}}', { name: item.nume })}
+          >
+            <Minus size={14} color={colors.textPrimary} />
+          </TouchableOpacity>
+
           <TouchableOpacity
             onPress={() => {
               Haptics.selectionAsync();
@@ -876,7 +889,7 @@ export default function ScannerBarcodeScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setFullManualModalVisible(false)}
       >
-        <View style={{ flex: 1, backgroundColor: colors.background, padding: 16 }}>
+        <View style={{ flex: 1, backgroundColor: colors.background, padding: 16, paddingTop: Math.max(insets.top, 16) }}>
           <ManualProductForm
             initialBarcode={codNegasit || ''}
             onSave={async (prod, gr) => {
@@ -894,6 +907,7 @@ export default function ScannerBarcodeScreen() {
                   zileValabilitate: 14,
                   isCongelat: false,
                   cantitate: 1,
+                  cantitate_g: gr || prod.servingGrams || 100,
                 }
               );
               setFullManualModalVisible(false);

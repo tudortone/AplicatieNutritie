@@ -201,14 +201,14 @@ const playIntegrityGuard = config.playIntegrity.mode === 'off'
             p_expires_at: expiresAt,
           });
           if (error) {
-            if (error.code === 'PGRST202' || error.code === '42883' || String(error.message || '').includes('claim_play_integrity_token')) {
+            if (error.code === 'PGRST202' || error.code === '42883') {
               return true;
             }
             throw error;
           }
           return data === true;
         } catch (err) {
-          if (err.code === 'PGRST202' || err.code === '42883' || String(err.message || '').includes('claim_play_integrity_token')) {
+          if (err.code === 'PGRST202' || err.code === '42883') {
             return true;
           }
           throw err;
@@ -294,7 +294,13 @@ const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter,
 
 // PR1-backend: statusLimiter nu mai e aplicat global pe /ai-status in server.js,
 // ci direct pe ruta din routes/status.js (imprenn cu requireAuth).
-app.use('/api/', (req, res, next) => preAuthLimiter(req, res, next));
+// Webhook-urile (inclusiv AdMob SSV) sunt protejate exclusiv de webhooksLimiter.
+app.use('/api/', (req, res, next) => {
+  if (req.path.startsWith('/v1/webhooks/') || req.path.startsWith('/webhooks/') || req.originalUrl?.includes('/webhooks/')) {
+    return next();
+  }
+  return preAuthLimiter(req, res, next);
+});
 
 const EXTENSIE_MIMETYPE = {
   'image/jpeg': '.jpg',

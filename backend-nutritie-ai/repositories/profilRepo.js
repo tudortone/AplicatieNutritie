@@ -11,10 +11,11 @@ const { tabelUtilizator } = require('../utils/clientUtilizator');
 function createProfilRepo() {
   return {
     async getProfil(ctx) {
-      const { data } = await tabelUtilizator(ctx, 'profil')
+      const { data, error } = await tabelUtilizator(ctx, 'profil')
         .select('*')
         .eq('user_id', ctx.userId)
         .maybeSingle();
+      if (error) throw error;
       return data ?? null;
     },
   };

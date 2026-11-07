@@ -324,6 +324,15 @@ export default function CalculatorAIScreen() {
     } catch {}
 
     try {
+      const savedGreutateTinta = await AsyncStorage.getItem('greutateTinta');
+      const parsedGreutateTinta = savedGreutateTinta ? parseFloat(savedGreutateTinta) : NaN;
+      const userMetaGreutateTinta = typeof session.user.user_metadata?.greutateTinta === 'number'
+        ? session.user.user_metadata.greutateTinta
+        : (session.user.user_metadata?.greutateTinta ? parseFloat(String(session.user.user_metadata.greutateTinta)) : NaN);
+      const finalGreutateTinta = Number.isFinite(parsedGreutateTinta)
+        ? parsedGreutateTinta
+        : (Number.isFinite(userMetaGreutateTinta) ? userMetaGreutateTinta : greutateNum);
+
       // 1. AsyncStorage multiSet pentru toate cheile locale
       await AsyncStorage.multiSet([
         ['caloriiTinta', String(caloriiTinta)],
@@ -331,7 +340,7 @@ export default function CalculatorAIScreen() {
         ['carbiTinta', String(carbiTinta)],
         ['grasimiTinta', String(grasimiTinta)],
         ['greutate', String(greutateNum)],
-        ['greutateTinta', String(greutateNum)],
+        ['greutateTinta', String(finalGreutateTinta)],
         ['inaltime', String(inaltimeNum)],
         ['varsta', String(varstaNum)],
         ['sex', form.sex],
@@ -346,7 +355,7 @@ export default function CalculatorAIScreen() {
         carbiTinta,
         grasimiTinta,
         greutate: greutateNum,
-        greutateTinta: greutateNum,
+        greutateTinta: finalGreutateTinta,
       });
 
       // 3. Supabase Auth user metadata update
@@ -358,7 +367,7 @@ export default function CalculatorAIScreen() {
             carbiTinta,
             grasimiTinta,
             greutate: greutateNum,
-            greutateTinta: greutateNum,
+            greutateTinta: finalGreutateTinta,
             varsta: varstaNum,
             inaltime: inaltimeNum,
           },

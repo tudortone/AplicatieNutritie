@@ -430,9 +430,14 @@ function creeazaServiciuChat({ config, genAI }) {
         provider: 'groq',
       }));
 
-      const geminiPrompt = `${systemPrompt}\n\nIstoricul conversatiei si intrebarea curenta:\n${messages.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n')}\n\nASSISTANT:`;
+      const conversatieFaraSystem = messages
+        .filter((m) => m.role !== 'system')
+        .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+        .join('\n\n');
+      const geminiPrompt = `${systemPrompt}\n\nIstoricul conversatiei si intrebarea curenta:\n${conversatieFaraSystem}\n\nASSISTANT:`;
 
       for (const modelName of getGeminiModelsList().filter(Boolean)) {
+        if (semnalAnulare?.aborted) break;
         try {
           const model = genAI.getGenerativeModel({ model: modelName });
           const result = await callWithSoftTimeout(model.generateContent({
@@ -585,6 +590,7 @@ RETURNEAZA STRICT UN OBIECT JSON valid in acest format:
 
     if (!parsed && genAI) {
       for (const modelName of getGeminiModelsList().filter(Boolean)) {
+        if (semnalAnulare?.aborted) break;
         try {
           const model = genAI.getGenerativeModel({
             model: modelName,

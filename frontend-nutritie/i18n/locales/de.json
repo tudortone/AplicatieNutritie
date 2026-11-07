@@ -377,7 +377,11 @@
     "rewardedCreditConsumedCount": "1 Werbe-Credit verbraucht • {{count}} übrig",
     "purchasedCreditConsumedCount": "1 Gekaufter Credit verbraucht • {{count}} übrig",
     "draftRestoredNoCredit": "Wiederhergestellter Entwurf • Kein zusätzlicher Credit verbraucht",
-    "searchFoodPlaceholder": "Lebensmittel oder Zutat suchen..."
+    "searchFoodPlaceholder": "Lebensmittel oder Zutat suchen...",
+    "qaAnalysisUnavailable": "QA-Fotoanalyse ist auf dem Server nicht verfügbar.",
+    "aiProviderErrorMessage": "Der KI-Anbieter hat vorübergehend Probleme. Bitte versuchen Sie es erneut.",
+    "networkErrorMessage": "Netzwerkproblem. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+    "saveFailedMessage": "Die Mahlzeit konnte nicht im Tagebuch gespeichert werden. Bitte versuchen Sie es erneut."
   },
   "photoJob": {
     "backgroundTitle": "Die Analyse läuft im Hintergrund weiter",
@@ -731,7 +735,10 @@
     "removeFavorite": "Aus Favoriten entfernen",
     "removedFromFavorites": "Aus Favoriten entfernt",
     "streakHeader": "AKTUELLE SERIE",
-    "streakDays": "{{count}} Tage in Folge"
+    "streakDays": "{{count}} Tage in Folge",
+    "todayA11y": "Heute",
+    "selectedA11y": "Ausgewählt",
+    "goToToday": "Zu heute gehen"
   },
   "access": {
     "testerTitle": "Testerzugang aktiv",
@@ -1131,7 +1138,8 @@
     "errGeneral": "Bei der Authentifizierung ist ein Fehler aufgetreten.",
     "errConnection": "Verbindung zum Server konnte nicht hergestellt werden.",
     "errResetProgressTitle": "Fortschritt nicht gespeichert",
-    "errResetProgressMsg": "Der Fragebogen konnte nicht zurückgesetzt werden. Erneut versuchen."
+    "errResetProgressMsg": "Der Fragebogen konnte nicht zurückgesetzt werden. Erneut versuchen.",
+    "qaOAuthUnavailable": "QA OAuth-Authentifizierung ist in der aktuellen Umgebung nicht verfügbar."
   },
   "anatomy": {
     "workoutTitle": "Anatomie",
@@ -1164,7 +1172,9 @@
     "error": "Fehler",
     "success": "Erfolg",
     "retry": "Wiederholen",
-    "loading": "Wird geladen..."
+    "loading": "Wird geladen...",
+    "expanded": "Erweitert",
+    "collapsed": "Eingeklappt"
   },
   "notFound": {
     "title": "Seite nicht gefunden",
@@ -1353,7 +1363,8 @@
     "freezerBadge": "•  GEFRIERSCHRANK",
     "daysBadge": "•  ~{{count}} Tage",
     "otherManualA11y": "Weiteres Produkt vollständig manuell eingeben",
-    "otherManual": "Weiteres Produkt vollständig manuell eingeben"
+    "otherManual": "Weiteres Produkt vollständig manuell eingeben",
+    "decreaseQuantityA11y": "Menge für {{name}} verringern"
   },
   "flowCredits": {
     "openA11y": "Flow Credits öffnen",
@@ -1381,7 +1392,9 @@
     "bestValue": "Bestes Angebot",
     "storeUnavailable": "Google-Play-Preise sind vorübergehend nicht verfügbar.",
     "upgradePremium": "Auf GetFlow Premium upgraden",
-    "serverAuthority": "Credits und Käufe werden sicher von GetFlow-Servern bestätigt. Gekaufte Credits verfallen nie."
+    "serverAuthority": "Credits und Käufe werden sicher von GetFlow-Servern bestätigt. Gekaufte Credits verfallen nie.",
+    "photoAnalyses": "Foto-Analysen",
+    "freeBadge": "GetFlow Free"
   },
   "calculatorAi": {
     "badge": "KI-Ernährungsalgorithmus. Gib deine Daten ein, um präzise Ernährungsziele zu erhalten.",
@@ -1760,5 +1773,15 @@
     "day": "Tag",
     "days": "Tage",
     "aboutDescUpdated": "Dein Cyber-Begleiter wächst und entwickelt sich mit jedem geloggten Streak-Tag. Bleibe am Ball für neue Entwicklungsstufen!"
+  },
+  "weightModal": {
+    "currentWeightTitle": "Aktuelles Gewicht",
+    "targetWeightTitle": "Zielgewicht",
+    "currentWeightSubtitle": "Verfolge deinen Fortschritt auf der Waage heute",
+    "targetWeightSubtitle": "Setze dein neues gewünschtes Zielgewicht",
+    "currentTab": "Aktuell ({{val}} kg)",
+    "targetTab": "Ziel ({{val}} kg)",
+    "saveCurrent": "Wiegeverlauf speichern",
+    "saveTarget": "Neues Ziel speichern"
   }
 }

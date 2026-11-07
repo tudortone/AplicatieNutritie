@@ -134,12 +134,13 @@ export function useCamara() {
    * Adaugă produs sau STACHEAZĂ (crește cantitatea) dacă produsul există deja în Cămară
    */
   const adaugaProdus = async (
-    item: ProdusScanat,
+    item: ProdusScanat & { cantitate_g?: number },
     options?: {
       zileValabilitate?: number;
       dataExpirare?: string;
       isCongelat?: boolean;
       cantitate?: number;
+      cantitate_g?: number;
     }
   ): Promise<ProdusCamara> => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -177,7 +178,8 @@ export function useCamara() {
           await supabase
             .from('produse_camara')
             .update({ cantitate: nouaCantitate })
-            .eq('id', produsExistent.id);
+            .eq('id', produsExistent.id)
+            .eq('user_id', user.id);
         } catch {}
       }
       return actualizat;
@@ -200,6 +202,7 @@ export function useCamara() {
       imagine_url: item.imagine_url || undefined,
       created_at: now,
       cantitate: options?.cantitate || 1,
+      cantitate_g: options?.cantitate_g ?? item.cantitate_g ?? undefined,
       data_expirare: dataExp,
       zile_valabilitate: dLeft !== null ? dLeft : zileVal,
       is_congelat: options?.isCongelat || false,
@@ -220,6 +223,7 @@ export function useCamara() {
           created_at: now,
           // FIX: aceste coloane exista in schema dar nu erau trimise => se pierdeau la reinstalare.
           cantitate: nouProdus.cantitate ?? 1,
+          cantitate_g: nouProdus.cantitate_g ?? null,
           data_expirare: nouProdus.data_expirare || null,
           zile_valabilitate: nouProdus.zile_valabilitate ?? null,
           is_congelat: nouProdus.is_congelat ?? false,
@@ -281,6 +285,24 @@ export function useCamara() {
     });
     setProduse(nouaLista);
     await salveazaLocalList(nouaLista);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && !id.startsWith('camara_')) {
+      const actualizat = nouaLista.find((p) => p.id === id);
+      if (actualizat) {
+        try {
+          await supabase
+            .from('produse_camara')
+            .update({
+              is_congelat: actualizat.is_congelat,
+              data_expirare: actualizat.data_expirare,
+              zile_valabilitate: actualizat.zile_valabilitate,
+            })
+            .eq('id', id)
+            .eq('user_id', user.id);
+        } catch {}
+      }
+    }
   };
 
   const modificaCantitate = async (id: string, delta: number) => {
@@ -294,6 +316,17 @@ export function useCamara() {
     const nouaLista = produse.map((p) => (p.id === id ? { ...p, cantitate: nouaCantitate } : p));
     setProduse(nouaLista);
     await salveazaLocalList(nouaLista);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && !id.startsWith('camara_')) {
+      try {
+        await supabase
+          .from('produse_camara')
+          .update({ cantitate: nouaCantitate })
+          .eq('id', id)
+          .eq('user_id', user.id);
+      } catch {}
+    }
   };
 
   const stergeProdus = async (id: string) => {

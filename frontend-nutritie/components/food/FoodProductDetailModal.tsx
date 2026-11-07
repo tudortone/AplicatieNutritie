@@ -44,6 +44,7 @@ import { NovaBadge } from './NovaBadge';
 import { MealSaveSuccessModal, type MealSuccessData } from '../ui/MealSaveSuccessModal';
 import { getDetaliiCompleteProdus } from '../../lib/openfoodfacts';
 import { pushOfflineMealVerificat, type MasaOfflinePayload } from '../../lib/offlineQueue';
+import { idOperatieNoua } from '../../lib/idUtils';
 import type { FoodProduct } from './types';
 import type { TipMasa, Masa, AlimentDetaliat } from '../../types';
 
@@ -154,7 +155,7 @@ export const FoodProductDetailModal: React.FC<FoodProductDetailModalProps> = ({
     const acum = new Date();
     const dataISO = `${acum.getFullYear()}-${String(acum.getMonth() + 1).padStart(2, '0')}-${String(acum.getDate()).padStart(2, '0')}`;
     const oraStr = `${String(acum.getHours()).padStart(2, '0')}:${String(acum.getMinutes()).padStart(2, '0')}`;
-    const mealId = `meal_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const mealId = idOperatieNoua();
 
     const alimentItem: AlimentDetaliat = {
       nume: product.brand ? `${product.name} (${product.brand})` : product.name,
@@ -209,7 +210,7 @@ export const FoodProductDetailModal: React.FC<FoodProductDetailModalProps> = ({
             created_at: acum.toISOString(),
           };
           const pushOk = await pushOfflineMealVerificat(payloadOffline);
-          if (pushOk) {
+          if (pushOk.persistat) {
             marcheazaMeseModificate(effectiveUserId);
             setSuccessData({
               nume: alimentItem.nume,
