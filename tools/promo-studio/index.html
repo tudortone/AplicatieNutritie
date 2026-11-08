@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GetFlow Motion & Promo Studio</title>
+  <style>
+    :root {
+      --bg: #090C0E;
+      --surface: #12171D;
+      --surface-elevated: #19222C;
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-glow: rgba(204, 255, 0, 0.4);
+      --accent: #CCFF00;
+      --accent-glow: rgba(204, 255, 0, 0.35);
+      --protein: #00E5FF;
+      --carbs: #A855F7;
+      --fat: #F59E0B;
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+      --text-dim: #64748B;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #000;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* Studio Top Toolbar */
+    .studio-toolbar {
+      background: rgba(18, 23, 29, 0.95);
+      border-bottom: 1px solid var(--card-border);
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 9999;
+      backdrop-filter: blur(12px);
+    }
+    .studio-toolbar.hidden {
+      display: none !important;
+    }
+    .studio-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 1.1rem;
+    }
+    .studio-brand span { color: var(--accent); }
+    .studio-controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    select, button {
+      background: var(--surface-elevated);
+      color: #FFF;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      outline: none;
+    }
+    select:hover, button:hover {
+      border-color: var(--accent);
+    }
+    .btn-action {
+      background: var(--accent);
+      color: #090C0E;
+      font-weight: 700;
+      border-color: var(--accent);
+    }
+
+    /* Main Viewport Container */
+    .viewport-stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      background: radial-gradient(circle at center, #11161D 0%, #000 80%);
+      overflow: auto;
+    }
+
+    /* Target Aspect-Ratio Canvas */
+    .canvas-frame {
+      position: relative;
+      background: var(--bg);
+      overflow: hidden;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.9);
+      display: flex;
+      flex-direction: column;
+    }
+    /* Size presets */
+    .size-story { width: 1080px; height: 1920px; }
+    .size-feed { width: 1080px; height: 1350px; }
+    .size-landscape { width: 1920px; height: 1080px; }
+    .size-feature { width: 1024px; height: 500px; }
+
+    /* Scaling helper for preview inside desktop window */
+    .scale-preview {
+      transform-origin: center center;
+    }
+
+    /* Brand Background Mesh */
+    .bg-mesh {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 10% 15%, rgba(204, 255, 0, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 90% 85%, rgba(0, 229, 255, 0.06) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(18, 23, 29, 0.9) 0%, var(--bg) 100%);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* Grid overlay for high tech feeling */
+    .bg-grid {
+      position: absolute;
+      inset: 0;
+      background-size: 60px 60px;
+      background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /* Content Area */
+    .scene-content {
+      position: relative;
+      z-index: 5;
+      width: 100%;
+      height: 100%;
+      padding: 80px 70px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .size-feed .scene-content { padding: 60px 60px; }
+    .size-landscape .scene-content { padding: 60px 80px; }
+    .size-feature .scene-content { padding: 30px 40px; }
+
+    /* Header in Graphic */
+    .graphic-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .graphic-brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .graphic-logo-icon {
+      width: 54px;
+      height: 54px;
+      border-radius: 16px;
+      background: #000;
+      border: 3px solid var(--accent);
+      box-shadow: 0 0 25px var(--accent-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .graphic-logo-icon::after {
+      content: '';
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .graphic-brand-name {
+      font-size: 2.2rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+    }
+    .graphic-brand-name span { color: var(--accent); }
+    .graphic-badge {
+      padding: 10px 24px;
+      background: rgba(204, 255, 0, 0.12);
+      border: 2px solid var(--accent);
+      border-radius: 9999px;
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 1.1rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    /* Core Visual Area */
+    .graphic-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+    }
+    .headline-wrap {
+      margin-bottom: 40px;
+    }
+    .kicker {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+    .headline {
+      font-size: 4.2rem;
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+    .headline span.highlight {
+      color: var(--accent);
+    }
+    .subheadline {
+      font-size: 1.8rem;
+      color: var(--text-muted);
+      margin-top: 18px;
+      max-width: 850px;
+      line-height: 1.4;
+    }
+
+    /* Post Visual Showcases */
+    .visual-showcase {
+      display: flex;
+      gap: 30px;
+      align-items: center;
+      position: relative;
+    }
+
+    /* Split-screen Card (Hero Scan) */
+    .scan-split-card {
+      width: 100%;
+      background: var(--surface);
+      border: 2px solid var(--card-border);
+      border-radius: 36px;
+      overflow: hidden;
+      position: relative;
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    }
+    .size-story .scan-split-card {
+      grid-template-columns: 1fr;
+    }
+
+    .plate-photo-pane {
+      height: 480px;
+      background: radial-gradient(circle at center, #263342 0%, #10161D 100%);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .plate-big {
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      border: 4px solid rgba(255, 255, 255, 0.15);
+      background: #19232E;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7);
+    }
+    .food-chicken-big {
+      position: absolute;
+      width: 150px;
+      height: 100px;
+      background: #A0643A;
+      border-radius: 40% 60% 50% 50%;
+      top: 70px;
+      left: 60px;
+      box-shadow: inset 0 -8px 16px rgba(0, 0, 0, 0.5);
+    }
+    .food-rice-big {
+      position: absolute;
+      width: 120px;
+      height: 110px;
+      background: #E2E8F0;
+      border-radius: 50%;
+      bottom: 40px;
+      right: 50px;
+    }
+    .food-greens-big {
+      position: absolute;
+      width: 90px;
+      height: 80px;
+      background: #15803D;
+      border-radius: 40%;
+      top: 60px;
+      right: 70px;
+    }
+    .laser-beam-big {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 6px;
+      background: var(--accent);
+      box-shadow: 0 0 28px 6px var(--accent), 0 0 60px 15px rgba(204, 255, 0, 0.5);
+      animation: laserSweep 3s infinite ease-in-out;
+    }
+    @keyframes laserSweep {
+      0%, 100% { top: 10%; opacity: 0; }
+      15%, 85% { opacity: 1; }
+      50% { top: 90%; }
+    }
+    .badge-scan-time {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      background: rgba(9, 12, 14, 0.9);
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      padding: 10px 20px;
+      border-radius: 14px;
+      font-size: 1.3rem;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+    }
+
+    .plate-data-pane {
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: var(--surface-elevated);
+    }
+    .data-dish-title {
+      font-size: 2.2rem;
+      font-weight: 900;
+      color: #FFF;
+      margin-bottom: 8px;
+    }
+    .data-dish-cal {
+      font-size: 4.5rem;
+      font-weight: 900;
+      color: var(--accent);
+      line-height: 1;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+    .data-dish-cal span {
+      font-size: 1.8rem;
+      color: #94A3B8;
+      font-weight: 700;
+    }
+    .macro-row-big {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .macro-box-big {
+      background: #090C0E;
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 16px;
+      text-align: center;
+    }
+    .macro-box-big.p { border-top: 4px solid var(--protein); }
+    .macro-box-big.c { border-top: 4px solid var(--carbs); }
+    .macro-box-big.f { border-top: 4px solid var(--fat); }
+    .macro-val-big { font-size: 2rem; font-weight: 900; }
+    .macro-lbl-big { font-size: 0.95rem; color: #94A3B8; font-weight: 700; text-transform: uppercase; margin-top: 4px; }
+
+    /* Companion 3D Canvas Showcase */
+    .companion-showcase {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 50px;
+      width: 100%;
+    }
+    .sphere-giant {
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #FFF 0%, var(--accent) 35%, #0099FF 75%, #000 100%);
+      box-shadow: 0 0 90px var(--accent-glow);
+      position: relative;
+      animation: giantPulse 3.5s infinite ease-in-out;
+    }
+    @keyframes giantPulse {
+      0%, 100% { transform: scale(1); filter: brightness(1); }
+      50% { transform: scale(1.08); filter: brightness(1.25); }
+    }
+    .sphere-ring-giant {
+      position: absolute;
+      width: 360px;
+      height: 120px;
+      border: 4px solid rgba(204, 255, 0, 0.45);
+      border-radius: 50%;
+      top: 60px;
+      left: -60px;
+      transform: rotate(-25deg);
+      box-shadow: 0 0 35px var(--accent);
+      pointer-events: none;
+    }
+
+    /* Footer in Graphic */
+    .graphic-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 2px solid var(--card-border);
+      padding-top: 36px;
+    }
+    .cta-pill-giant {
+      background: var(--accent);
+      color: #090C0E;
+      font-size: 1.8rem;
+      font-weight: 900;
+      padding: 20px 48px;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 10px 40px var(--accent-glow);
+      text-decoration: none;
+    }
+    .play-badge-graphic {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 1.4rem;
+      color: #94A3B8;
+      font-weight: 700;
+    }
+    .play-badge-graphic svg {
+      width: 38px;
+      height: 38px;
+      fill: #FFF;
+    }
+
+    /* Motion Animation Scenes Player */
+    .animation-layer {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 90px 70px;
+      background: var(--bg);
+      z-index: 10;
+    }
+    .animation-layer.active {
+      display: flex;
+    }
+
+    /* Scene 1: Scan Reveal Animation (12s) */
+    .anim-timer-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 6px;
+      background: var(--accent);
+      box-shadow: 0 0 15px var(--accent);
+      width: 0%;
+    }
+    .playing .anim-timer-bar {
+      animation: progressTime 12s linear forwards;
+    }
+    @keyframes progressTime {
+      from { width: 0%; }
+      to { width: 100%; }
+    }
+
+    .anim-hook-text {
+      font-size: 5rem;
+      font-weight: 900;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+    .strike-text {
+      position: relative;
+      display: inline-block;
+    }
+    .strike-text::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 55%;
+      height: 8px;
+      background: var(--accent);
+      box-shadow: 0 0 20px var(--accent);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.5s ease-out;
+    }
+    .struck .strike-text::after {
+      transform: scaleX(1);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Studio Controls Bar (hide with ?clean=true) -->
+  <div class="studio-toolbar" id="toolbar">
+    <div class="studio-brand">
+      Get<span>Flow</span> Promo & Motion Studio
+    </div>
+    <div class="studio-controls">
+      <select id="sceneSelect">
+        <optgroup label="Postări Statice (Ultra-HD PNG)">
+          <option value="post-01">Post 1: Hero Scan 2sec</option>
+          <option value="post-02">Post 2: Background Magic</option>
+          <option value="post-03">Post 3: Companion Evolution</option>
+          <option value="post-04">Post 4: Pantry to Plate</option>
+          <option value="post-05">Post 5: Anatomy Workouts</option>
+          <option value="post-06">Post 6: Barcode Instant</option>
+        </optgroup>
+        <optgroup label="Animații 60fps (Video-Ready)">
+          <option value="anim-01">Animație 1: Scan Reveal (12s)</option>
+          <option value="anim-02">Animație 2: Companion Streak (10s)</option>
+          <option value="anim-03">Animație 3: All-in-One Powerhouse (15s)</option>
+        </optgroup>
+      </select>
+
+      <select id="formatSelect">
+        <option value="size-story">9:16 Vertical (1080×1920)</option>
+        <option value="size-feed">4:5 Portrait (1080×1350)</option>
+        <option value="size-landscape">16:9 Landscape (1920×1080)</option>
+        <option value="size-feature">Google Play Feature (1024×500)</option>
+      </select>
+
+      <select id="langSelect">
+        <option value="ro">Română (RO)</option>
+        <option value="en">English (EN)</option>
+      </select>
+
+      <button id="btnPlay">▶ Play Animație</button>
+      <button id="btnCleanToggle">Ascunde Meniul (Mod Captură)</button>
+    </div>
+  </div>
+
+  <!-- Stage Viewport -->
+  <div class="viewport-stage" id="stage">
+    <div class="canvas-frame size-story scale-preview" id="canvasFrame">
+      <div class="bg-mesh"></div>
+      <div class="bg-grid"></div>
+
+      <!-- Static Post Showcase View -->
+      <div class="scene-content" id="staticSceneContent">
+        <!-- Top Graphic Header -->
+        <div class="graphic-header">
+          <div class="graphic-brand">
+            <div class="graphic-logo-icon"></div>
+            <div class="graphic-brand-name">Get<span>Flow</span></div>
+          </div>
+          <div class="graphic-badge" id="graphicBadge">Scanare Foto AI</div>
+        </div>
+
+        <!-- Central Showcase -->
+        <div class="graphic-body">
+          <div class="headline-wrap">
+            <div class="kicker" id="graphicKicker">Viteza care schimbă totul</div>
+            <h1 class="headline" id="graphicHeadline">
+              Fă o poză.<br>
+              <span class="highlight">Află caloriile în 2 secunde.</span>
+            </h1>
+            <p class="subheadline" id="graphicSub">
+              Inteligența artificială GetFlow recunoaște instant ingredientele din farfurie, porțiile și caloriile fără să mai cântărești nimic manual.
+            </p>
+          </div>
+
+          <!-- Dynamic Visual Card -->
+          <div class="visual-showcase" id="visualShowcase">
+            <div class="scan-split-card">
+              <div class="plate-photo-pane">
+                <div class="laser-beam-big"></div>
+                <div class="plate-big">
+                  <div class="food-chicken-big"></div>
+                  <div class="food-rice-big"></div>
+                  <div class="food-greens-big"></div>
+                </div>
+                <div class="badge-scan-time">⚡ 1.4 SECUNDE</div>
+              </div>
+              <div class="plate-data-pane">
+                <div class="data-dish-title" id="dishName">Piept de pui cu orez & legume</div>
+                <div class="data-dish-cal">640 <span>kcal</span></div>
+                <div class="macro-row-big">
+                  <div class="macro-box-big p">
+                    <div class="macro-val-big" style="color:var(--protein)">48g</div>
+                    <div class="macro-lbl-big">Proteine</div>
+                  </div>
+                  <div class="macro-box-big c">
+                    <div class="macro-val-big" style="color:var(--carbs)">55g</div>
+                    <div class="macro-lbl-big">Carbi</div>
+                  </div>
+                  <div class="macro-box-big f">
+                    <div class="macro-val-big" style="color:var(--fat)">22g</div>
+                    <div class="macro-lbl-big">Grăsimi</div>
+                  </div>
+                </div>
+                <div style="font-size: 1.2rem; color: #94A3B8; font-weight: 600;">
+                  ✓ Recunoaște uleiul ascuns la gătit
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Graphic Footer -->
+        <div class="graphic-footer">
+          <div class="cta-pill-giant">
+            <span>Descarcă Gratuit</span> &rarr;
+          </div>
+          <div class="play-badge-graphic">
+            <svg viewBox="0 0 24 24"><path d="M3.609 1.814L13.793 12 3.61 22.186a1.99 1.99 0 0 1-.61-1.42V3.233c0-.53.21-1.04.61-1.42zm11.604 11.603l2.36 2.36-12.06 6.89 9.7-9.25zm0-2.834L5.513 1.334l12.06 6.89-2.36 2.36zm1.414 1.417l3.81 2.176c1.03.59 1.03 1.55 0 2.14l-3.81 2.18-2.12-2.12 2.12-2.376z"/></svg>
+            <span>Disponibil pe Google Play</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Animation Layer: Scene 1 (Scan Reveal 12s) -->
+      <div class="animation-layer" id="animLayer1">
+        <div class="anim-timer-bar"></div>
+        <div class="graphic-header">
+          <div class="graphic-brand">
+            <div class="graphic-logo-icon"></div>
+            <div class="graphic-brand-name">Get<span>Flow</span></div>
+          </div>
+          <div class="graphic-badge">AI Motion 60fps</div>
+        </div>
+
+        <div class="graphic-body" style="text-align: center; align-items: center;">
+          <div class="anim-hook-text" id="anim1Hook">
+            Încă mai cântărești<br>
+            <span class="strike-text">mâncarea manual?</span>
+          </div>
+          <div id="anim1Reveal" style="opacity: 0; transform: translateY(40px); transition: all 0.6s ease; margin-top: 40px; width: 100%;">
+            <div class="scan-split-card" style="box-shadow: 0 0 80px var(--accent-glow);">
+              <div class="plate-photo-pane" style="height: 380px;">
+                <div class="laser-beam-big"></div>
+                <div class="plate-big" style="width:260px; height:260px;">
+                  <div class="food-chicken-big"></div>
+                  <div class="food-rice-big"></div>
+                </div>
+                <div class="badge-scan-time">SCANAT ÎN 1.4s</div>
+              </div>
+              <div class="plate-data-pane">
+                <div class="data-dish-title">Farfuria ta completă</div>
+                <div class="data-dish-cal">640 <span>kcal</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="graphic-footer" style="justify-content: center;">
+          <div class="cta-pill-giant" id="anim1Cta" style="opacity: 0; transform: scale(0.9); transition: all 0.4s ease;">
+            Instalează GetFlow pe Google Play
+          </div>
+        </div>
+      </div>
+
+      <!-- Animation Layer: Scene 2 (Companion Streak 10s) -->
+      <div class="animation-layer" id="animLayer2">
+        <div class="anim-timer-bar" style="animation-duration: 10s;"></div>
+        <div class="graphic-header">
+          <div class="graphic-brand">
+            <div class="graphic-logo-icon"></div>
+            <div class="graphic-brand-name">Get<span>Flow</span></div>
+          </div>
+          <div class="graphic-badge">3D Gamificare</div>
+        </div>
+
+        <div class="graphic-body" style="text-align: center; align-items: center;">
+          <div class="kicker" id="anim2Kicker">Companionul tău energetic</div>
+          <h2 class="headline" id="anim2Title" style="font-size: 3.5rem;">Evoluează odată cu tine</h2>
+          <div class="companion-showcase" style="margin-top: 50px;">
+            <div class="sphere-giant">
+              <div class="sphere-ring-giant"></div>
+            </div>
+          </div>
+          <div style="font-size: 2.2rem; font-weight: 900; color: var(--accent); margin-top: 40px;" id="anim2Streak">
+            🔥 30 Zile Consecutive • Nivelul 7
+          </div>
+        </div>
+
+        <div class="graphic-footer" style="justify-content: center;">
+          <div class="cta-pill-giant">Începe-ți Streak-ul Gratuit</div>
+        </div>
+      </div>
+
+      <!-- Animation Layer: Scene 3 (All-in-One 15s) -->
+      <div class="animation-layer" id="animLayer3">
+        <div class="anim-timer-bar" style="animation-duration: 15s;"></div>
+        <div class="graphic-header">
+          <div class="graphic-brand">
+            <div class="graphic-logo-icon"></div>
+            <div class="graphic-brand-name">Get<span>Flow</span></div>
+          </div>
+          <div class="graphic-badge">All-In-One Powerhouse</div>
+        </div>
+
+        <div class="graphic-body">
+          <div class="headline-wrap">
+            <div class="kicker">4 Super-Puteri într-o singură aplicație</div>
+            <h2 class="headline" style="font-size: 3.6rem;">Nutriție, Cămară, Coach & Mușchi</h2>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; width: 100%;">
+            <div style="background: var(--surface); padding: 30px; border-radius: 24px; border: 2px solid var(--accent);">
+              <h3 style="font-size: 1.8rem; font-weight: 800; color: var(--accent);">📸 Foto AI &lt; 2s</h3>
+              <p style="font-size: 1.2rem; color: #94A3B8; margin-top: 8px;">Recunoaștere automată în fundal.</p>
+            </div>
+            <div style="background: var(--surface); padding: 30px; border-radius: 24px; border: 2px solid var(--protein);">
+              <h3 style="font-size: 1.8rem; font-weight: 800; color: var(--protein);">📦 Cămară & Cod Bare</h3>
+              <p style="font-size: 1.2rem; color: #94A3B8; margin-top: 8px;">Rețete din ce ai în frigider.</p>
+            </div>
+            <div style="background: var(--surface); padding: 30px; border-radius: 24px; border: 2px solid var(--carbs);">
+              <h3 style="font-size: 1.8rem; font-weight: 800; color: var(--carbs);">🔮 Companion 3D</h3>
+              <p style="font-size: 1.2rem; color: #94A3B8; margin-top: 8px;">Gamificare zilnică a energiei.</p>
+            </div>
+            <div style="background: var(--surface); padding: 30px; border-radius: 24px; border: 2px solid var(--fat);">
+              <h3 style="font-size: 1.8rem; font-weight: 800; color: var(--fat);">💪 Antrenament Anatomic</h3>
+              <p style="font-size: 1.2rem; color: #94A3B8; margin-top: 8px;">Hartă musculară pe 14 grupe.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="graphic-footer" style="justify-content: center;">
+          <div class="cta-pill-giant">Descarcă GetFlow pe Google Play</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      // Configuration & Content Matrix for the 6 Static Posts in RO and EN
+      const POSTS = {
+        'post-01': {
+          badge: { ro: 'Scanare Foto AI', en: 'AI Photo Scanner' },
+          kicker: { ro: 'Viteza care schimbă totul', en: 'The Speed that Changes Everything' },
+          headline: {
+            ro: 'Fă o poză.<br><span class="highlight">Află caloriile în 2 secunde.</span>',
+            en: 'Snap a photo.<br><span class="highlight">Get calories in 2 seconds.</span>'
+          },
+          sub: {
+            ro: 'Fără cântărit manual. GetFlow recunoaște automat ingredientele, porțiile și uleiul ascuns din farfurie.',
+            en: 'No food scale needed. GetFlow instantly detects ingredients, portion sizes, and hidden cooking oils.'
+          },
+          cta: { ro: 'Descarcă Gratuit', en: 'Download for Free' }
+        },
+        'post-02': {
+          badge: { ro: 'Background Magic', en: 'Background Magic' },
+          kicker: { ro: 'Zero timp pierdut', en: 'Zero Time Wasted' },
+          headline: {
+            ro: 'Fără așteptare.<br><span class="highlight">Fă poza și închide telefonul.</span>',
+            en: 'Zero waiting.<br><span class="highlight">Snap the photo & lock your phone.</span>'
+          },
+          sub: {
+            ro: 'Analiza rulează în fundal fără să-ți consume bateria. Sfera 3D te anunță când masa e salvată în jurnal.',
+            en: 'Analysis runs silently in the background. The 3D Companion notifies you once the meal is saved to your journal.'
+          },
+          cta: { ro: 'Instalează pe Google Play', en: 'Get it on Google Play' }
+        },
+        'post-03': {
+          badge: { ro: 'Gamificare 3D', en: '3D Gamification' },
+          kicker: { ro: 'Motivație care nu dispare', en: 'Unstoppable Motivation' },
+          headline: {
+            ro: 'Companionul tău Flow<br><span class="highlight">evoluează odată cu tine.</span>',
+            en: 'Your Flow Companion<br><span class="highlight">evolves with your consistency.</span>'
+          },
+          sub: {
+            ro: 'Fiecare zi cu mese înregistrate crește energia sferei tale 3D. Menține-ți streak-ul și atinge-ți obiectivele.',
+            en: 'Every logged day powers up your personal 3D energetic sphere. Build your streak and hit your physique goals.'
+          },
+          cta: { ro: 'Activează Companionul', en: 'Activate Your Companion' }
+        },
+        'post-04': {
+          badge: { ro: 'Cămară Inteligentă', en: 'Smart Pantry' },
+          kicker: { ro: 'Rețete din ce ai deja acasă', en: 'Recipes from What You Have' },
+          headline: {
+            ro: 'Nu știi ce să gătești?<br><span class="highlight">AI-ul îți face rețeta din frigider.</span>',
+            en: 'Wondering what to cook?<br><span class="highlight">AI creates recipes from your fridge.</span>'
+          },
+          sub: {
+            ro: 'Adaugă ingredientele din cămară și primești rețete personalizate pe caloriile tale rămase pe ziua de azi.',
+            en: 'Add your pantry items and let AI craft personalized, high-protein recipes fitting your exact remaining macros.'
+          },
+          cta: { ro: 'Gătește Inteligent', en: 'Cook Intelligently' }
+        },
+        'post-05': {
+          badge: { ro: 'Anatomie V2', en: 'Anatomy V2' },
+          kicker: { ro: 'Nutriție + Antrenament', en: 'Nutrition + Training' },
+          headline: {
+            ro: 'Harta Musculară 3D<br><span class="highlight">și Nutriția într-un singur loc.</span>',
+            en: '3D Muscle Heatmap<br><span class="highlight">& Nutrition in One Single App.</span>'
+          },
+          sub: {
+            ro: 'Vezi activarea pe 14 grupe musculare și vorbește 24/7 cu antrenorul AI GetFlow pentru sfaturi sportive reale.',
+            en: 'Visualize muscle activation across 14 muscle groups with dynamic heatmaps plus 24/7 AI coach guidance.'
+          },
+          cta: { ro: 'Transformă-ți Corpul', en: 'Transform Your Physique' }
+        },
+        'post-06': {
+          badge: { ro: 'Scanner Instant', en: 'Instant Scanner' },
+          kicker: { ro: 'Bază de date europeană', en: 'European Database' },
+          headline: {
+            ro: 'Scanează orice cod de bare<br><span class="highlight">din România și Europa.</span>',
+            en: 'Scan any barcode<br><span class="highlight">across Europe & Romania.</span>'
+          },
+          sub: {
+            ro: 'Alimente din Lidl, Kaufland, Mega Image sau Carrefour recunoscute instant cu scor nutrițional detaliat.',
+            en: 'Packaged foods from all major European supermarkets recognized instantly with comprehensive nutritional grades.'
+          },
+          cta: { ro: 'Scanează Gratuit', en: 'Scan for Free' }
+        }
+      };
+
+      const sceneSelect = document.getElementById('sceneSelect');
+      const formatSelect = document.getElementById('formatSelect');
+      const langSelect = document.getElementById('langSelect');
+      const btnPlay = document.getElementById('btnPlay');
+      const btnClean = document.getElementById('btnCleanToggle');
+      const canvasFrame = document.getElementById('canvasFrame');
+      const toolbar = document.getElementById('toolbar');
+
+      let currentScene = 'post-01';
+      let currentFormat = 'size-story';
+      let currentLang = 'ro';
+
+      function updateScene() {
+        const isAnim = currentScene.startsWith('anim-');
+        document.getElementById('staticSceneContent').style.display = isAnim ? 'none' : 'flex';
+        document.getElementById('animLayer1').classList.remove('active', 'playing');
+        document.getElementById('animLayer2').classList.remove('active', 'playing');
+        document.getElementById('animLayer3').classList.remove('active', 'playing');
+
+        if (!isAnim) {
+          const data = POSTS[currentScene];
+          if (data) {
+            document.getElementById('graphicBadge').innerText = data.badge[currentLang];
+            document.getElementById('graphicKicker').innerText = data.kicker[currentLang];
+            document.getElementById('graphicHeadline').innerHTML = data.headline[currentLang];
+            document.getElementById('graphicSub').innerText = data.sub[currentLang];
+            document.querySelector('.cta-pill-giant span').innerText = data.cta[currentLang];
+          }
+        } else {
+          if (currentScene === 'anim-01') {
+            const l1 = document.getElementById('animLayer1');
+            l1.classList.add('active');
+            playAnim1();
+          } else if (currentScene === 'anim-02') {
+            const l2 = document.getElementById('animLayer2');
+            l2.classList.add('active');
+          } else if (currentScene === 'anim-03') {
+            const l3 = document.getElementById('animLayer3');
+            l3.classList.add('active');
+          }
+        }
+      }
+
+      function playAnim1() {
+        const l1 = document.getElementById('animLayer1');
+        l1.classList.remove('playing');
+        void l1.offsetWidth;
+        l1.classList.add('playing');
+
+        const hook = document.getElementById('anim1Hook');
+        const reveal = document.getElementById('anim1Reveal');
+        const cta = document.getElementById('anim1Cta');
+
+        hook.classList.remove('struck');
+        reveal.style.opacity = '0';
+        reveal.style.transform = 'translateY(40px)';
+        cta.style.opacity = '0';
+
+        setTimeout(() => hook.classList.add('struck'), 1600);
+        setTimeout(() => {
+          reveal.style.opacity = '1';
+          reveal.style.transform = 'translateY(0)';
+        }, 3200);
+        setTimeout(() => {
+          cta.style.opacity = '1';
+          cta.style.transform = 'scale(1)';
+        }, 7000);
+      }
+
+      function updateFormat() {
+        canvasFrame.className = 'canvas-frame ' + currentFormat + ' scale-preview';
+        // Auto scale to fit window preview
+        const stageH = document.getElementById('stage').clientHeight - 60;
+        let targetH = 1920;
+        if (currentFormat === 'size-feed') targetH = 1350;
+        if (currentFormat === 'size-landscape') targetH = 1080;
+        if (currentFormat === 'size-feature') targetH = 500;
+        const scale = Math.min(1, stageH / targetH);
+        canvasFrame.style.transform = 'scale(' + scale + ')';
+      }
+
+      sceneSelect.addEventListener('change', (e) => {
+        currentScene = e.target.value;
+        updateScene();
+      });
+
+      formatSelect.addEventListener('change', (e) => {
+        currentFormat = e.target.value;
+        updateFormat();
+      });
+
+      langSelect.addEventListener('change', (e) => {
+        currentLang = e.target.value;
+        updateScene();
+      });
+
+      btnPlay.addEventListener('click', () => {
+        if (currentScene.startsWith('anim-')) {
+          updateScene();
+        } else {
+          currentScene = 'anim-01';
+          sceneSelect.value = 'anim-01';
+          updateScene();
+        }
+      });
+
+      btnClean.addEventListener('click', () => {
+        toolbar.classList.add('hidden');
+        canvasFrame.style.transform = 'scale(1)';
+      });
+
+      // Keyboard shortcut 'H' to toggle toolbar
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'h' || e.key === 'H') {
+          toolbar.classList.toggle('hidden');
+        }
+      });
+
+      // Parse URL parameters for automatic headless export
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('scene')) {
+        currentScene = params.get('scene');
+        sceneSelect.value = currentScene;
+      }
+      if (params.get('format')) {
+        currentFormat = params.get('format');
+        formatSelect.value = currentFormat;
+      }
+      if (params.get('lang')) {
+        currentLang = params.get('lang');
+        langSelect.value = currentLang;
+      }
+      if (params.get('clean') === 'true') {
+        toolbar.classList.add('hidden');
+        canvasFrame.style.transform = 'scale(1)';
+      }
+
+      window.addEventListener('resize', updateFormat);
+      updateFormat();
+      updateScene();
+    })();
+  </script>
+</body>
+</html>
+

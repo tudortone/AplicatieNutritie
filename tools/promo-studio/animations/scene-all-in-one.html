@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <title>Scene 3: All-in-One Powerhouse (15s)</title>
+  <style>
+    :root {
+      --bg: #090C0E;
+      --accent: #CCFF00;
+      --protein: #00E5FF;
+      --carbs: #A855F7;
+      --fat: #F59E0B;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: #FFF;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 100px 80px;
+    }
+    .header { display: flex; justify-content: space-between; align-items: center; }
+    .logo { font-size: 2.8rem; font-weight: 900; }
+    .logo span { color: var(--accent); }
+    .title { font-size: 4.8rem; font-weight: 900; line-height: 1.1; margin-bottom: 50px; }
+    .title span { color: var(--accent); }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      width: 100%;
+    }
+    .grid-card {
+      background: #121820;
+      border: 3px solid;
+      border-radius: 32px;
+      padding: 40px;
+    }
+    .grid-card h3 { font-size: 2.4rem; font-weight: 900; margin-bottom: 12px; }
+    .grid-card p { font-size: 1.5rem; color: #94A3B8; line-height: 1.4; }
+    .footer { display: flex; justify-content: center; }
+    .cta {
+      background: var(--accent);
+      color: #090C0E;
+      font-size: 2.2rem;
+      font-weight: 900;
+      padding: 24px 64px;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">Get<span>Flow</span></div>
+    <div style="font-size: 1.5rem; color: var(--accent); font-weight: 800;">ALL-IN-ONE</div>
+  </div>
+  <div>
+    <div class="title">4 Super-Puteri.<br><span>O Singură Aplicație.</span></div>
+    <div class="grid-4">
+      <div class="grid-card" style="border-color: var(--accent);">
+        <h3 style="color: var(--accent);">📸 Foto AI &lt; 2s</h3>
+        <p>Recunoaștere automată fără cântărit manual.</p>
+      </div>
+      <div class="grid-card" style="border-color: var(--protein);">
+        <h3 style="color: var(--protein);">📦 Cămară & Cod</h3>
+        <p>Rețete inteligente din ce ai în frigider.</p>
+      </div>
+      <div class="grid-card" style="border-color: var(--carbs);">
+        <h3 style="color: var(--carbs);">🔮 Sferă 3D</h3>
+        <p>Companion care evoluează cu consecvența ta.</p>
+      </div>
+      <div class="grid-card" style="border-color: var(--fat);">
+        <h3 style="color: var(--fat);">💪 Mușchi 3D</h3>
+        <p>Hartă anatomică cu activare termică pe 14 grupe.</p>
+      </div>
+    </div>
+  </div>
+  <div class="footer">
+    <div class="cta">Instalează GetFlow pe Google Play</div>
+  </div>
+</body>
+</html>
+

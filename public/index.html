@@ -2,188 +2,1674 @@
 <html lang="ro">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GetFlow — Nutriție Inteligentă & Harta Musculară Live</title>
-  <meta name="description" content="GetFlow este asistentul tău personal de nutriție și fitness cu inteligență artificială, scanare alimente și analiză musculară live.">
-  
-  
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>GetFlow — Nutriție Inteligentă, Scanare Foto AI & Companion 3D</title>
+  <meta name="description" content="Scanează mâncarea în 2 secunde cu AI de ultimă generație. Monitorizează caloriile, macronutrienții, evoluția greutății și antrenamentele anatomice cu GetFlow.">
+  <meta name="theme-color" content="#090C0E">
+  <meta property="og:title" content="GetFlow — Nutriție Inteligentă & Scanare Foto AI">
+  <meta property="og:description" content="Fă o poză farfuriei. Află caloriile și macronutrienții în 2 secunde.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%23090C0E'/><circle cx='16' cy='16' r='10' fill='none' stroke='%23CCFF00' stroke-width='3'/><circle cx='16' cy='16' r='4' fill='%23CCFF00'/></svg>">
   <style>
     :root {
       --bg: #090C0E;
-      --card-bg: rgba(22, 28, 36, 0.7);
-      --accent: #10B981;
-      --accent-glow: rgba(16, 185, 129, 0.25);
-      --text: #F3F4F6;
-      --text-muted: #9CA3AF;
-      --border: rgba(255, 255, 255, 0.08);
-      --glass-bg: rgba(15, 23, 42, 0.65);
+      --bg-elevated: #12171D;
+      --bg-surface: #182028;
+      --card-bg: rgba(18, 23, 29, 0.78);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-hover: rgba(204, 255, 0, 0.35);
+      --accent: #CCFF00;
+      --accent-glow: rgba(204, 255, 0, 0.28);
+      --accent-muted: rgba(204, 255, 0, 0.12);
+      --protein: #00E5FF;
+      --protein-glow: rgba(0, 229, 255, 0.2);
+      --carbs: #A855F7;
+      --carbs-glow: rgba(168, 85, 247, 0.2);
+      --fat: #F59E0B;
+      --fat-glow: rgba(245, 158, 11, 0.2);
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+      --text-dim: #64748B;
+      --radius-sm: 8px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+      --radius-xl: 32px;
+      --container: 1200px;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background-color: var(--bg);
       color: var(--text);
-      line-height: 1.6;
+      line-height: 1.5;
       overflow-x: hidden;
-      background-image: 
-        radial-gradient(circle at 20% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
-        radial-gradient(circle at 80% 80%, rgba(59, 130, 246, 0.06) 0%, transparent 40%);
+      min-height: 100vh;
+      background-image:
+        radial-gradient(circle at 15% 15%, rgba(204, 255, 0, 0.05) 0%, transparent 45%),
+        radial-gradient(circle at 85% 65%, rgba(0, 229, 255, 0.04) 0%, transparent 50%),
+        radial-gradient(circle at 50% 90%, rgba(168, 85, 247, 0.03) 0%, transparent 40%);
     }
+
+    /* Top Navigation */
     header {
-      padding: 1.5rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: rgba(9, 12, 14, 0.85);
+      border-bottom: 1px solid var(--card-border);
+      padding: 1rem 1.5rem;
+    }
+    .header-inner {
+      max-width: var(--container);
+      margin: 0 auto;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      max-width: 1200px;
-      margin: 0 auto;
-      border-bottom: 1px solid var(--border);
     }
-    .logo {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: 1.6rem;
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--text);
       font-weight: 800;
-      background: linear-gradient(135deg, #10B981, #3B82F6);
+      font-size: 1.35rem;
+      letter-spacing: -0.02em;
+    }
+    .brand-symbol {
+      width: 34px;
+      height: 34px;
+      background: #000;
+      border: 2px solid var(--accent);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+    .brand-symbol::after {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+    }
+    .brand-name {
+      color: var(--text);
+    }
+    .brand-name span {
+      color: var(--accent);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+    .lang-switcher {
+      background: var(--bg-surface);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: border-color 0.2s;
+    }
+    .lang-switcher:hover {
+      border-color: var(--accent);
+    }
+    .nav-btn {
+      background: var(--accent);
+      color: #090C0E;
+      font-weight: 700;
+      font-size: 0.9rem;
+      padding: 0.55rem 1.25rem;
+      border-radius: 9999px;
+      text-decoration: none;
+      transition: transform 0.15s, box-shadow 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .nav-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px var(--accent-glow);
+    }
+
+    /* Hero Section */
+    .hero {
+      max-width: var(--container);
+      margin: 3.5rem auto 5rem;
+      padding: 0 1.5rem;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 3.5rem;
+      align-items: center;
+    }
+    @media (max-width: 960px) {
+      .hero {
+        grid-template-columns: 1fr;
+        margin: 2rem auto 3rem;
+        gap: 2.5rem;
+        text-align: center;
+      }
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      background: var(--accent-muted);
+      border: 1px solid rgba(204, 255, 0, 0.3);
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 1.25rem;
+    }
+    .hero-badge-pulse {
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--accent);
+      animation: pulseDot 1.8s infinite ease-in-out;
+    }
+    @keyframes pulseDot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.6); opacity: 0.4; }
+    }
+
+    h1 {
+      font-size: clamp(2.4rem, 4.5vw, 3.8rem);
+      font-weight: 900;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.25rem;
+    }
+    h1 .gradient-text {
+      background: linear-gradient(135deg, #FFFFFF 30%, #94A3B8 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
+    }
+    h1 .accent-text {
+      color: var(--accent);
+    }
+    .hero-subtitle {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 540px;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 960px) {
+      .hero-subtitle { margin: 0 auto 2rem; }
+    }
+
+    .hero-cta-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+    }
+    @media (max-width: 960px) {
+      .hero-cta-group { justify-content: center; }
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #090C0E;
+      font-weight: 800;
+      font-size: 1.05rem;
+      padding: 0.9rem 1.8rem;
+      border-radius: 9999px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      box-shadow: 0 10px 30px var(--accent-glow);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 16px 36px var(--accent-glow);
+    }
+    .btn-secondary {
+      background: var(--bg-surface);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      font-weight: 600;
+      font-size: 1rem;
+      padding: 0.85rem 1.6rem;
+      border-radius: 9999px;
+      text-decoration: none;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .btn-secondary:hover {
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-2px);
+    }
+    .hero-trust {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      margin-top: 2rem;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+    @media (max-width: 960px) {
+      .hero-trust { justify-content: center; }
+    }
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .trust-item svg {
+      color: var(--accent);
+    }
+
+    /* 60fps Interactive Phone Mockup */
+    .phone-stage {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .phone-glow {
+      position: absolute;
+      width: 320px;
+      height: 540px;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      filter: blur(50px);
+      z-index: 0;
+      pointer-events: none;
+    }
+    .phone-frame {
+      position: relative;
+      z-index: 1;
+      width: 320px;
+      height: 640px;
+      background: #000;
+      border-radius: 46px;
+      border: 4px solid #232B35;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .phone-notch {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 96px;
+      height: 22px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+    }
+    .notch-camera {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #111822;
+      border: 1px solid #1E293B;
+    }
+    .notch-speaker {
+      width: 44px;
+      height: 3px;
+      border-radius: 2px;
+      background: #1E293B;
+    }
+
+    /* Phone Display & Animation States */
+    .phone-screen {
+      flex: 1;
+      background: #090C0E;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding-top: 36px;
+    }
+    .phone-header {
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .phone-time {
+      font-size: 11px;
+      font-weight: 700;
+      color: #94A3B8;
+    }
+    .phone-network {
+      font-size: 10px;
+      color: var(--accent);
+      font-weight: 800;
+      letter-spacing: 0.05em;
+    }
+
+    /* Camera / Scan Viewport */
+    .view-camera {
+      position: relative;
+      height: 250px;
+      margin: 12px 14px;
+      border-radius: 20px;
+      overflow: hidden;
+      background: #121820;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .plate-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      background: radial-gradient(circle at 50% 50%, #1E293B 0%, #0F172A 100%);
+    }
+    .plate-sim {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(circle at 50% 45%, #2A3644 0%, #131A22 65%),
+        linear-gradient(180deg, #10151C 0%, #090C0E 100%);
+    }
+    .plate-art {
+      width: 170px;
+      height: 170px;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #19222D;
+    }
+    .food-chicken {
+      position: absolute;
+      width: 80px;
+      height: 52px;
+      background: #A0643A;
+      border-radius: 40% 60% 50% 50% / 50% 50% 50% 50%;
+      top: 35px;
+      left: 32px;
+      box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.4);
+    }
+    .food-rice {
+      position: absolute;
+      width: 65px;
+      height: 60px;
+      background: #E2E8F0;
+      border-radius: 50%;
+      bottom: 25px;
+      right: 25px;
+      opacity: 0.9;
+    }
+    .food-greens {
+      position: absolute;
+      width: 45px;
+      height: 45px;
+      background: #15803D;
+      border-radius: 40%;
+      top: 40px;
+      right: 35px;
+    }
+
+    /* Laser Scanner Beam */
+    .scan-laser {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--accent);
+      box-shadow: 0 0 18px 4px var(--accent), 0 0 40px 10px rgba(204, 255, 0, 0.4);
+      animation: laserSweep 3.2s infinite ease-in-out;
+      z-index: 10;
+    }
+    @keyframes laserSweep {
+      0% { top: 8%; opacity: 0; }
+      15% { opacity: 1; }
+      50% { top: 92%; opacity: 1; }
+      85% { opacity: 1; }
+      100% { top: 8%; opacity: 0; }
+    }
+    .scan-corners {
+      position: absolute;
+      inset: 12px;
+      border: 2px dashed rgba(204, 255, 0, 0.45);
+      border-radius: 12px;
+      pointer-events: none;
+    }
+    .scan-tag {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(9, 12, 14, 0.85);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* Results Card inside Phone */
+    .phone-result-card {
+      margin: 0 14px 12px;
+      background: rgba(24, 32, 40, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 18px;
+      padding: 12px 14px;
+      animation: cardPulse 6.4s infinite ease-in-out;
+    }
+    @keyframes cardPulse {
+      0%, 40% { transform: scale(1); border-color: rgba(255, 255, 255, 0.1); }
+      45%, 90% { transform: scale(1.02); border-color: var(--accent); box-shadow: 0 8px 24px rgba(204, 255, 0, 0.15); }
+      95%, 100% { transform: scale(1); border-color: rgba(255, 255, 255, 0.1); }
+    }
+    .result-row-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+    .result-cal-title {
+      font-size: 11px;
+      color: #94A3B8;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .result-calories {
+      font-size: 22px;
+      font-weight: 900;
+      color: #FFF;
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+    }
+    .result-calories span {
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    /* Macro Bar inside Phone */
+    .macro-bar-track {
+      height: 6px;
+      background: #1A222C;
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+      margin-bottom: 10px;
+    }
+    .macro-seg-p { width: 35%; background: var(--protein); box-shadow: 0 0 8px var(--protein); }
+    .macro-seg-c { width: 42%; background: var(--carbs); box-shadow: 0 0 8px var(--carbs); }
+    .macro-seg-f { width: 23%; background: var(--fat); box-shadow: 0 0 8px var(--fat); }
+
+    .macro-pill-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .macro-pill {
+      flex: 1;
+      background: #11171E;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 5px;
+      text-align: center;
+    }
+    .macro-pill-val {
+      font-size: 12px;
+      font-weight: 800;
+      display: block;
+    }
+    .macro-pill-lbl {
+      font-size: 9px;
+      color: #94A3B8;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    /* Companion Widget inside Phone */
+    .phone-companion-bar {
+      margin: 0 14px;
+      background: #10161D;
+      border: 1px solid rgba(204, 255, 0, 0.25);
+      border-radius: 16px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .companion-canvas-mini {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent) 0%, #0099FF 60%, transparent 75%);
+      box-shadow: 0 0 12px var(--accent);
+      animation: miniPulse 2.4s infinite ease-in-out;
+    }
+    @keyframes miniPulse {
+      0%, 100% { transform: scale(1); filter: brightness(1); }
+      50% { transform: scale(1.15); filter: brightness(1.3); }
+    }
+    .comp-info { flex: 1; }
+    .comp-name { font-size: 11px; font-weight: 800; color: #FFF; display: flex; align-items: center; gap: 4px; }
+    .comp-sub { font-size: 9px; color: var(--accent); font-weight: 600; }
+
+    /* Interactive "Testează Viteza AI" Section */
+    .interactive-demo {
+      max-width: var(--container);
+      margin: 5rem auto;
+      padding: 0 1.5rem;
+    }
+    .section-head {
+      text-align: center;
+      max-width: 680px;
+      margin: 0 auto 3rem;
+    }
+    .section-badge {
+      display: inline-block;
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+    .section-title {
+      font-size: clamp(2rem, 3.2vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+    .section-sub {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+    }
+
+    .demo-container {
+      background: var(--bg-elevated);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-xl);
+      padding: 2.5rem;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    }
+    @media (max-width: 768px) {
+      .demo-container { padding: 1.5rem; }
+    }
+
+    .demo-tabs {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+    .demo-tab-btn {
+      background: var(--bg-surface);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 0.75rem 1.4rem;
+      border-radius: 9999px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
       display: flex;
       align-items: center;
       gap: 0.5rem;
+      transition: all 0.2s ease;
     }
-    nav { display: flex; gap: 1.5rem; }
-    nav a {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-weight: 500;
-      transition: color 0.2s;
+    .demo-tab-btn:hover {
+      border-color: rgba(204, 255, 0, 0.4);
     }
-    nav a:hover { color: var(--accent); }
-    .hero {
-      max-width: 1100px;
-      margin: 4rem auto;
-      text-align: center;
-      padding: 0 1.5rem;
+    .demo-tab-btn.active {
+      background: var(--accent);
+      color: #090C0E;
+      border-color: var(--accent);
+      box-shadow: 0 4px 18px var(--accent-glow);
     }
-    .badge {
-      display: inline-block;
-      padding: 0.4rem 1.2rem;
-      border-radius: 9999px;
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      color: #10B981;
-      font-size: 0.875rem;
-      font-weight: 600;
-      margin-bottom: 1.5rem;
-    }
-    h1 {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: clamp(2.5rem, 5vw, 4rem);
-      font-weight: 800;
-      line-height: 1.15;
-      margin-bottom: 1.5rem;
-      background: linear-gradient(180deg, #FFFFFF 0%, #D1D5DB 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .hero p {
-      font-size: 1.2rem;
-      color: var(--text-muted);
-      max-width: 700px;
-      margin: 0 auto 2.5rem;
-    }
-    .grid {
+
+    .demo-screen {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 2rem;
-      max-width: 1200px;
-      margin: 3rem auto;
-      padding: 0 1.5rem;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 2.5rem;
+      align-items: center;
     }
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 1.25rem;
-      padding: 2rem;
-      backdrop-filter: blur(16px);
-      transition: transform 0.3s, border-color 0.3s;
+    @media (max-width: 860px) {
+      .demo-screen { grid-template-columns: 1fr; }
     }
-    .card:hover {
-      transform: translateY(-4px);
-      border-color: rgba(16, 185, 129, 0.4);
+    .demo-card-visual {
+      background: #090C0E;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
     }
-    .card h3 {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: 1.3rem;
-      margin-bottom: 0.75rem;
+    .demo-sim-laser {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 3px;
+      background: var(--accent);
+      box-shadow: 0 0 15px var(--accent);
+      display: none;
+    }
+    .scanning .demo-sim-laser {
+      display: block;
+      animation: laserSweepOnce 0.8s ease-in-out forwards;
+    }
+    @keyframes laserSweepOnce {
+      0% { top: 0%; opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+
+    .demo-food-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #FFF;
+      margin-bottom: 0.5rem;
+    }
+    .demo-food-sub {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.25rem;
+    }
+    .demo-stat-hero {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .demo-stat-cal {
+      font-size: 2.8rem;
+      font-weight: 900;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .demo-stat-unit {
+      color: var(--text-muted);
+      font-size: 1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .demo-macros-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .demo-macro-box {
+      background: var(--bg-surface);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-md);
+      padding: 0.85rem;
+    }
+    .demo-macro-box.protein { border-top: 3px solid var(--protein); }
+    .demo-macro-box.carbs { border-top: 3px solid var(--carbs); }
+    .demo-macro-box.fat { border-top: 3px solid var(--fat); }
+    .demo-macro-val { font-size: 1.25rem; font-weight: 800; }
+    .demo-macro-lbl { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+
+    .demo-ingredients-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .demo-ing-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.9rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-surface);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--card-border);
+    }
+    .demo-ing-name { font-weight: 600; }
+    .demo-ing-wt { color: var(--accent); font-weight: 700; font-size: 0.85rem; }
+
+    .demo-insights {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .insight-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+    }
+    .insight-head {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 0.5rem;
       color: #FFF;
     }
-    .card p { color: var(--text-muted); font-size: 0.95rem; }
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 3rem 1.5rem;
-      margin-top: 5rem;
-      text-align: center;
-      background: rgba(9, 12, 14, 0.9);
+    .insight-head svg { color: var(--accent); }
+    .insight-text { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; }
+
+    /* Bento Grid (Apple HIG Craft) */
+    .bento-section {
+      max-width: var(--container);
+      margin: 6rem auto;
+      padding: 0 1.5rem;
     }
+    .bento-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+    @media (max-width: 960px) {
+      .bento-grid { grid-template-columns: 1fr; }
+    }
+    .bento-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-xl);
+      padding: 2.25rem;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: border-color 0.25s, transform 0.25s;
+    }
+    .bento-card:hover {
+      border-color: var(--card-border-hover);
+      transform: translateY(-4px);
+    }
+    .col-span-2 {
+      grid-column: span 2;
+    }
+    @media (max-width: 960px) {
+      .col-span-2 { grid-column: span 1; }
+    }
+
+    .bento-badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.75rem;
+    }
+    .bento-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      color: #FFF;
+      margin-bottom: 0.75rem;
+    }
+    .bento-desc {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    .bento-visual {
+      background: #090C0E;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .companion-sphere-art {
+      height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .sphere-core {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #FFF 0%, var(--accent) 40%, #0088CC 100%);
+      box-shadow: 0 0 35px var(--accent-glow);
+      animation: floatSphere 3s infinite ease-in-out;
+    }
+    .sphere-ring {
+      position: absolute;
+      width: 110px;
+      height: 40px;
+      border: 2px solid rgba(204, 255, 0, 0.4);
+      border-radius: 50%;
+      transform: rotate(-25deg);
+      box-shadow: 0 0 15px rgba(204, 255, 0, 0.2);
+    }
+    @keyframes floatSphere {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    .muscle-heatmap-art {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .muscle-group {
+      flex: 1;
+      background: var(--bg-surface);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 10px;
+      text-align: center;
+    }
+    .muscle-meter {
+      height: 4px;
+      background: #232D38;
+      border-radius: 2px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+    .muscle-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    /* Comparison Table */
+    .pricing-section {
+      max-width: var(--container);
+      margin: 6rem auto;
+      padding: 0 1.5rem;
+    }
+    .pricing-table-wrap {
+      overflow-x: auto;
+      background: var(--bg-elevated);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-xl);
+      padding: 1rem;
+    }
+    table.pricing-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    table.pricing-table th, table.pricing-table td {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+    table.pricing-table th {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #FFF;
+    }
+    table.pricing-table th.col-feature { width: 40%; }
+    table.pricing-table th.col-tier { width: 20%; text-align: center; }
+    table.pricing-table td.col-tier { text-align: center; font-weight: 600; }
+    .badge-pop {
+      background: var(--accent);
+      color: #090C0E;
+      font-size: 0.75rem;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      margin-left: 6px;
+      text-transform: uppercase;
+    }
+    .check-yes { color: var(--accent); font-weight: 900; }
+    .check-no { color: var(--text-dim); }
+
+    /* Floating Download CTA */
+    .floating-cta {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      background: rgba(18, 23, 29, 0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--accent);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 25px var(--accent-glow);
+      padding: 10px 24px;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      animation: floatUp 0.4s ease-out;
+    }
+    @keyframes floatUp {
+      from { transform: translate(-50%, 40px); opacity: 0; }
+      to { transform: translate(-50%, 0); opacity: 1; }
+    }
+    .float-text {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #FFF;
+    }
+    .float-btn {
+      background: var(--accent);
+      color: #090C0E;
+      font-weight: 800;
+      font-size: 0.85rem;
+      padding: 0.5rem 1.15rem;
+      border-radius: 9999px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: transform 0.15s;
+    }
+    .float-btn:hover {
+      transform: scale(1.05);
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--card-border);
+      padding: 4rem 1.5rem 6rem;
+      background: rgba(9, 12, 14, 0.95);
+      text-align: center;
+    }
+    .footer-brand {
+      margin-bottom: 1.5rem;
+      font-size: 1.4rem;
+      font-weight: 800;
+    }
+    .footer-brand span { color: var(--accent); }
     .footer-links {
       display: flex;
       justify-content: center;
       gap: 2rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 2rem;
       flex-wrap: wrap;
     }
     .footer-links a {
       color: var(--text-muted);
       text-decoration: none;
       font-size: 0.95rem;
+      font-weight: 500;
       transition: color 0.2s;
     }
-    .footer-links a:hover { color: var(--accent); }
-    .copyright { color: #6B7280; font-size: 0.875rem; }
+    .footer-links a:hover {
+      color: var(--accent);
+    }
+    .footer-legal {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
+
+  <!-- Top Sticky Navigation -->
   <header>
-    <div class="logo">
-      <span>🥗</span> GetFlow
+    <div class="header-inner">
+      <a href="/" class="brand">
+        <div class="brand-symbol"></div>
+        <div class="brand-name">Get<span>Flow</span></div>
+      </a>
+      <div class="nav-actions">
+        <button id="langToggle" class="lang-switcher" aria-label="Schimbă limba">
+          <span id="langCurrent">RO</span> ▾
+        </button>
+        <a href="#demo" class="btn-secondary" id="navDemoBtn" style="padding: 0.45rem 1rem; font-size: 0.85rem;">Demo AI</a>
+        <a href="#descarca" class="nav-btn" id="navDownloadBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5v-17c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v17c0 .83-.67 1.5-1.5 1.5S3 21.33 3 20.5zm6-14v11c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-11c0-.83-.67-1.5-1.5-1.5S9 5.67 9 6.5zm6-3v17c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-17c0-.83-.67-1.5-1.5-1.5S15 2.67 15 3.5z"/></svg>
+          <span data-i18n="nav.download">Descarcă</span>
+        </a>
+      </div>
     </div>
-    <nav>
-      <a href="/politica-de-confidentialitate.html">Politică de Confidențialitate</a>
-      <a href="/termeni-si-conditii.html">Termeni și Condiții</a>
-      <a href="/stergere-cont.html">Ștergere Cont</a>
-    </nav>
   </header>
 
+  <!-- Hero Section -->
   <main class="hero">
-    <div class="badge">✨ Aplicație Nutrițională & Fitness AI</div>
-    <h1>Nutriția ta inteligentă & Harta Musculară Live</h1>
-    <p>Scanează mâncarea în secunde cu AI, monitorizează-ți macronuțrienții și vizualizează starea masei musculare în timp real.</p>
+    <div class="hero-content">
+      <div class="hero-badge">
+        <div class="hero-badge-pulse"></div>
+        <span data-i18n="hero.badge">Scanare Foto AI în &lt; 2 secunde</span>
+      </div>
+      <h1>
+        <span class="gradient-text" data-i18n="hero.title1">Faci o poză.</span><br>
+        <span class="accent-text" data-i18n="hero.title2">Află caloriile instant.</span>
+      </h1>
+      <p class="hero-subtitle" data-i18n="hero.sub">
+        Fără cântărit manual. Inteligența artificială GetFlow recunoaște ingredientele din farfurie, porțiile, uleiul ascuns și îți calculează macronutrienții în mai puțin de 2 secunde.
+      </p>
+
+      <div class="hero-cta-group" id="descarca">
+        <a href="https://play.google.com/store/apps/details?id=com.totsrl.getflo" target="_blank" rel="noopener noreferrer" class="btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3.609 1.814L13.793 12 3.61 22.186a1.99 1.99 0 0 1-.61-1.42V3.233c0-.53.21-1.04.61-1.42zm11.604 11.603l2.36 2.36-12.06 6.89 9.7-9.25zm0-2.834L5.513 1.334l12.06 6.89-2.36 2.36zm1.414 1.417l3.81 2.176c1.03.59 1.03 1.55 0 2.14l-3.81 2.18-2.12-2.12 2.12-2.376z"/></svg>
+          <span data-i18n="hero.cta">Descarcă pe Google Play</span>
+        </a>
+        <a href="#demo" class="btn-secondary" data-i18n="hero.testDemo">
+          Testează Viteza AI
+        </a>
+      </div>
+
+      <div class="hero-trust">
+        <div class="trust-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+          <span data-i18n="hero.trust1">Recunoaște mâncăruri românești</span>
+        </div>
+        <div class="trust-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+          <span data-i18n="hero.trust2">Analiză silențioasă în fundal</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 60fps Interactive Phone Screen -->
+    <div class="phone-stage">
+      <div class="phone-glow"></div>
+      <div class="phone-frame">
+        <div class="phone-notch">
+          <div class="notch-camera"></div>
+          <div class="notch-speaker"></div>
+        </div>
+        <div class="phone-screen">
+          <div class="phone-header">
+            <span class="phone-time">12:30</span>
+            <span class="phone-network">GETFLOW AI • 60 FPS</span>
+          </div>
+
+          <!-- Live Scan Viewport -->
+          <div class="view-camera">
+            <div class="scan-laser"></div>
+            <div class="scan-corners"></div>
+            <div class="plate-sim">
+              <div class="plate-art">
+                <div class="food-chicken"></div>
+                <div class="food-rice"></div>
+                <div class="food-greens"></div>
+              </div>
+            </div>
+            <div class="scan-tag" data-i18n="phone.detecting">● DETECTAT: 640 KCAL</div>
+          </div>
+
+          <!-- Result Card -->
+          <div class="phone-result-card">
+            <div class="result-row-top">
+              <span class="result-cal-title" data-i18n="phone.plateTitle">Prânz Nutritiv</span>
+              <div class="result-calories">640 <span>kcal</span></div>
+            </div>
+            <div class="macro-bar-track">
+              <div class="macro-seg-p"></div>
+              <div class="macro-seg-c"></div>
+              <div class="macro-seg-f"></div>
+            </div>
+            <div class="macro-pill-row">
+              <div class="macro-pill">
+                <span class="macro-pill-val" style="color: var(--protein)">48g</span>
+                <span class="macro-pill-lbl" data-i18n="macro.protein">Proteine</span>
+              </div>
+              <div class="macro-pill">
+                <span class="macro-pill-val" style="color: var(--carbs)">55g</span>
+                <span class="macro-pill-lbl" data-i18n="macro.carbs">Carbi</span>
+              </div>
+              <div class="macro-pill">
+                <span class="macro-pill-val" style="color: var(--fat)">22g</span>
+                <span class="macro-pill-lbl" data-i18n="macro.fat">Grăsimi</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Flow Companion Mini Widget -->
+          <div class="phone-companion-bar">
+            <div class="companion-canvas-mini"></div>
+            <div class="comp-info">
+              <div class="comp-name">Flow Companion <span style="color:var(--accent)">Nv. 4</span></div>
+              <div class="comp-sub" data-i18n="phone.companionSub">7 zile consecutive de energie optimă</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </main>
 
-  <section class="grid">
-    <div class="card">
-      <h3>📸 Scanare foto instantanee AI</h3>
-      <p>Faci o poză farfuriei, iar modelele de viziune artificială identifică automat ingredientele, caloriile și macronuțrienții.</p>
+  <!-- Interactive "Testează Viteza AI" -->
+  <section class="interactive-demo" id="demo">
+    <div class="section-head">
+      <span class="section-badge" data-i18n="demo.badge">Simulare Live</span>
+      <h2 class="section-title" data-i18n="demo.title">Testează viteza AI-ului pe 3 mese reale</h2>
+      <p class="section-sub" data-i18n="demo.sub">Apasă pe oricare dintre mesele de mai jos pentru a vedea cum descompune GetFlow ingredientele și caloriile în mai puțin de o secundă.</p>
     </div>
-    <div class="card">
-      <h3>💪 Hartă Musculară Anatomică</h3>
-      <p>Vizualizează intensitatea antrenamentelor zilnice prin rampă termică direct pe harta anatomică 2D/3D a corpului tău.</p>
-    </div>
-    <div class="card">
-      <h3>💬 Asistent Nutrițional AI</h3>
-      <p>Pui întrebări despre dietă, rețete și stil de viață și primești răspunsuri personalizate pe baza profilului tău zilnic.</p>
+
+    <div class="demo-container">
+      <div class="demo-tabs">
+        <button class="demo-tab-btn active" data-meal="0">
+          🍳 <span data-i18n="demo.meal0.tab">Mic Dejun Echilibrat</span>
+        </button>
+        <button class="demo-tab-btn" data-meal="1">
+          🥗 <span data-i18n="demo.meal1.tab">Prânz Somon & Cartof Dulce</span>
+        </button>
+        <button class="demo-tab-btn" data-meal="2">
+          🍲 <span data-i18n="demo.meal2.tab">Cină Mușchiuleț cu Mămăliguță</span>
+        </button>
+      </div>
+
+      <div class="demo-screen">
+        <div class="demo-card-visual" id="demoVisualCard">
+          <div class="demo-sim-laser"></div>
+          <div class="demo-food-title" id="demoTitle">Omletă cu avocado & pâine integrală</div>
+          <div class="demo-food-sub" id="demoSub">Recunoaștere prin viziune computațională GetFlow Vision v2.5</div>
+
+          <div class="demo-stat-hero">
+            <div class="demo-stat-cal" id="demoCal">420</div>
+            <div class="demo-stat-unit">Kcal</div>
+          </div>
+
+          <div class="demo-macros-grid">
+            <div class="demo-macro-box protein">
+              <div class="demo-macro-val" style="color: var(--protein)" id="demoP">28g</div>
+              <div class="demo-macro-lbl" data-i18n="macro.protein">Proteine</div>
+            </div>
+            <div class="demo-macro-box carbs">
+              <div class="demo-macro-val" style="color: var(--carbs)" id="demoC">22g</div>
+              <div class="demo-macro-lbl" data-i18n="macro.carbs">Carbohidrați</div>
+            </div>
+            <div class="demo-macro-box fat">
+              <div class="demo-macro-val" style="color: var(--fat)" id="demoF">24g</div>
+              <div class="demo-macro-lbl" data-i18n="macro.fat">Grăsimi</div>
+            </div>
+          </div>
+
+          <div class="demo-ingredients-list" id="demoIngList">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+
+        <div class="demo-insights">
+          <div class="insight-card">
+            <div class="insight-head">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              <span data-i18n="demo.insight1.head">Timp estimat de procesare: 1.4 secunde</span>
+            </div>
+            <p class="insight-text" data-i18n="demo.insight1.text">Datorită pipeline-ului paralel de compresie și a modelului Gemini 2.5 Flash optimizat pe Trigger.dev, analiza este de peste 2x mai rapidă decât în orice altă aplicație clasică.</p>
+          </div>
+
+          <div class="insight-card">
+            <div class="insight-head">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span data-i18n="demo.insight2.head">Detecție automată a ingredientelor ascunse</span>
+            </div>
+            <p class="insight-text" data-i18n="demo.insight2.text">Modelul recunoaște urmele de ulei la gătit, dressing-urile și sosurile care altfel scapă la înregistrarea manuală și împiedică progresul dietei.</p>
+          </div>
+
+          <div class="insight-card">
+            <div class="insight-head">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/></svg>
+              <span data-i18n="demo.insight3.head">Poți închide aplicația imediat</span>
+            </div>
+            <p class="insight-text" data-i18n="demo.insight3.text">Apeși pe „Mergi la Acasă” sau blochezi ecranul. Sfera Flow Companion te notifică și salvează masa direct în jurnal când este gata.</p>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
-  <footer>
-    <div class="footer-links">
-      <a href="/politica-de-confidentialitate.html">Politică de Confidențialitate</a>
-      <a href="/termeni-si-conditii.html">Termeni și Condiții</a>
-      <a href="/stergere-cont.html">Ștergere Cont</a>
+  <!-- Asymmetric Bento Grid (Apple HIG Craft) -->
+  <section class="bento-section">
+    <div class="section-head">
+      <span class="section-badge" data-i18n="bento.badge">Ecosistem Complet</span>
+      <h2 class="section-title" data-i18n="bento.title">Tot ce ai nevoie pentru un corp sănătos</h2>
+      <p class="section-sub" data-i18n="bento.sub">O arhitectură integrată de inteligență artificială, gamificare și știință sportivă.</p>
     </div>
-    <div class="copyright">
-      &copy; 2026 GetFlow App. Toate drepturile rezervate.
+
+    <div class="bento-grid">
+      <!-- Card 1 (Span 2) -->
+      <div class="bento-card col-span-2">
+        <div>
+          <span class="bento-badge" data-i18n="bento.c1.badge">Tehnologie Viziune AI</span>
+          <h3 class="bento-title" data-i18n="bento.c1.title">Scanare Foto AI & Procesare în Fundal</h3>
+          <p class="bento-desc" data-i18n="bento.c1.desc">Faci poza când ești la masă și nu mai stai să aștepți cu ecranul pornit. Sistemul nostru de task-uri distribuite procesează imaginea în fundal, iar notificarea inteligentă te anunță când caloriile au fost adăugate în jurnal.</p>
+        </div>
+        <div class="bento-visual">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size: 0.95rem;">
+            <span>📸 <strong>Captură instant</strong> &rarr; Compresie 2-Step &rarr; Gemini Flash</span>
+            <span style="color:var(--accent); font-weight:800;">&lt; 2.0s</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="bento-card">
+        <div>
+          <span class="bento-badge" data-i18n="bento.c2.badge">Gamificare 3D</span>
+          <h3 class="bento-title" data-i18n="bento.c2.title">Flow Companion 3D</h3>
+          <p class="bento-desc" data-i18n="bento.c2.desc">Companionul tău energetic crește în nivel odată cu consecvența ta. Îți reflectă starea nutrițională și te motivează să-ți atingi țintele zilnice.</p>
+        </div>
+        <div class="bento-visual">
+          <div class="companion-sphere-art">
+            <div class="sphere-ring"></div>
+            <div class="sphere-core"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="bento-card">
+        <div>
+          <span class="bento-badge" data-i18n="bento.c3.badge">Cămară Inteligentă</span>
+          <h3 class="bento-title" data-i18n="bento.c3.title">Cod de Bare & Rețete din Frigider</h3>
+          <p class="bento-desc" data-i18n="bento.c3.desc">Scanează codurile de bare ale produselor din magazinele din România și Europa. Adaugă-le în cămara virtuală și cere AI-ului rețete din ce ai deja acasă.</p>
+        </div>
+        <div class="bento-visual">
+          <div style="font-size:0.85rem; color:#94A3B8;">
+            📦 Scanner coduri de bare EAN-13 integrat<br>
+            🥗 Sugestii inteligente bazate pe restul de calorii
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4 (Span 2) -->
+      <div class="bento-card col-span-2">
+        <div>
+          <span class="bento-badge" data-i18n="bento.c4.badge">Fitness Anatomic V2</span>
+          <h3 class="bento-title" data-i18n="bento.c4.title">Hartă Musculară Termică & Coach AI 24/7</h3>
+          <p class="bento-desc" data-i18n="bento.c4.desc">Urmărește intensitatea exercițiilor fizice pe 14 grupe musculare cu vizualizare termică dinamică. În plus, antrenorul AI GetFlow îți răspunde la orice întrebare legată de antrenamente, recuperare și suplimente.</p>
+        </div>
+        <div class="bento-visual">
+          <div class="muscle-heatmap-art">
+            <div class="muscle-group">
+              <span style="font-size:0.85rem; font-weight:700;">Piept & Umeri</span>
+              <div class="muscle-meter"><div class="muscle-fill" style="width:85%"></div></div>
+            </div>
+            <div class="muscle-group">
+              <span style="font-size:0.85rem; font-weight:700;">Spate & Biceps</span>
+              <div class="muscle-meter"><div class="muscle-fill" style="width:60%"></div></div>
+            </div>
+            <div class="muscle-group">
+              <span style="font-size:0.85rem; font-weight:700;">Picioare & Gambe</span>
+              <div class="muscle-meter"><div class="muscle-fill" style="width:95%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing Comparison Table -->
+  <section class="pricing-section">
+    <div class="section-head">
+      <span class="section-badge" data-i18n="pricing.badge">Acces & Transparență</span>
+      <h2 class="section-title" data-i18n="pricing.title">Alege modul în care folosești GetFlow</h2>
+      <p class="section-sub" data-i18n="pricing.sub">Poți folosi aplicația gratuit în fiecare zi, poți cumpăra credite flexibile sau poți trece la Pro.</p>
+    </div>
+
+    <div class="pricing-table-wrap">
+      <table class="pricing-table">
+        <thead>
+          <tr>
+            <th class="col-feature" data-i18n="table.feature">Funcționalitate</th>
+            <th class="col-tier">Free</th>
+            <th class="col-tier">Flow Credits <span class="badge-pop" data-i18n="table.flex">Flexibil</span></th>
+            <th class="col-tier" style="color:var(--accent);">GetFlow Pro</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-i18n="table.f1">Analize Foto AI zilnice</td>
+            <td class="col-tier">3 / zi</td>
+            <td class="col-tier">+10 sau +30 la cerere</td>
+            <td class="col-tier" style="color:var(--accent); font-weight:900;" data-i18n="table.unlimited">Nelimitate</td>
+          </tr>
+          <tr>
+            <td data-i18n="table.f2">Reclame rewarded pentru credite extra</td>
+            <td class="col-tier"><span class="check-yes">✓</span> (+5 / zi)</td>
+            <td class="col-tier"><span class="check-yes">✓</span></td>
+            <td class="col-tier"><span class="check-no">—</span></td>
+          </tr>
+          <tr>
+            <td data-i18n="table.f3">Jurnal alimentar & Calculator macronutrienți</td>
+            <td class="col-tier"><span class="check-yes">✓</span></td>
+            <td class="col-tier"><span class="check-yes">✓</span></td>
+            <td class="col-tier"><span class="check-yes">✓</span></td>
+          </tr>
+          <tr>
+            <td data-i18n="table.f4">Scanner Cod de Bare & Cămară Virtuală</td>
+            <td class="col-tier"><span class="check-yes">✓</span></td>
+            <td class="col-tier"><span class="check-yes">✓</span></td>
+            <td class="col-tier"><span class="check-yes">✓</span></td>
+          </tr>
+          <tr>
+            <td data-i18n="table.f5">Hartă Musculară Anatomică Live</td>
+            <td class="col-tier"><span class="check-yes">✓</span></td>
+            <td class="col-tier"><span class="check-yes">✓</span></td>
+            <td class="col-tier"><span class="check-yes">✓</span></td>
+          </tr>
+          <tr>
+            <td data-i18n="table.f6">Fără nicio reclamă în interfață</td>
+            <td class="col-tier"><span class="check-no">Reclame discrete</span></td>
+            <td class="col-tier"><span class="check-no">Reclame discrete</span></td>
+            <td class="col-tier" style="color:var(--accent); font-weight:800;">100% Fără Reclame</td>
+          </tr>
+          <tr>
+            <td data-i18n="table.f7">Preț</td>
+            <td class="col-tier" style="font-weight:800;" data-i18n="table.free">0 RON</td>
+            <td class="col-tier" data-i18n="table.pack">Pachete mici</td>
+            <td class="col-tier" style="color:var(--accent); font-weight:800;">Abonament Pro</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Floating Sticky Action Bar -->
+  <div class="floating-cta">
+    <div class="float-text" data-i18n="float.text">Instalează GetFlow gratuit</div>
+    <a href="https://play.google.com/store/apps/details?id=com.totsrl.getflo" target="_blank" rel="noopener noreferrer" class="float-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3.609 1.814L13.793 12 3.61 22.186a1.99 1.99 0 0 1-.61-1.42V3.233c0-.53.21-1.04.61-1.42zm11.604 11.603l2.36 2.36-12.06 6.89 9.7-9.25zm0-2.834L5.513 1.334l12.06 6.89-2.36 2.36zm1.414 1.417l3.81 2.176c1.03.59 1.03 1.55 0 2.14l-3.81 2.18-2.12-2.12 2.12-2.376z"/></svg>
+      <span data-i18n="float.btn">Google Play</span>
+    </a>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-brand">Get<span>Flow</span></div>
+    <div class="footer-links">
+      <a href="/politica-de-confidentialitate.html" data-i18n="footer.privacy">Politică de Confidențialitate</a>
+      <a href="/termeni-si-conditii.html" data-i18n="footer.terms">Termeni și Condiții</a>
+      <a href="/stergere-cont.html" data-i18n="footer.delete">Ștergere Cont & Date</a>
+      <a href="/app-ads.txt">app-ads.txt</a>
+    </div>
+    <div class="footer-legal">
+      &copy; 2026 GetFlow. Toate drepturile rezervate.<br>
+      Aplicație independentă de nutriție și stil de viață sportiv. Datele tale personale sunt protejate conform GDPR și criptate în tranzit.
     </div>
   </footer>
+
+  <!-- Interactive Logic & Multilingual Engine -->
+  <script>
+    (function() {
+      // 1. Interactive Demo Data
+      const MEALS = [
+        {
+          title: { ro: 'Omletă cu avocado & pâine integrală', en: 'Omelette with Avocado & Whole Toast' },
+          sub: { ro: 'Recunoaștere automată a 2 ouă, avocado și ulei de măsline', en: 'Automatic detection of 2 eggs, avocado, and olive oil' },
+          cal: 420,
+          p: '28g',
+          c: '22g',
+          f: '24g',
+          ingredients: [
+            { name: { ro: 'Ouă de găină proaspete (2 buc)', en: 'Fresh Chicken Eggs (2 pcs)' }, weight: '120g • 18g P' },
+            { name: { ro: 'Avocado copt feliat', en: 'Sliced Ripe Avocado' }, weight: '50g • 8g Grasimi' },
+            { name: { ro: 'Pâine integrală cu semințe (1 felie)', en: 'Whole Grain Seed Toast (1 slice)' }, weight: '45g • 18g Carbi' },
+            { name: { ro: 'Ulei de măsline (la tigaie)', en: 'Olive Oil (cooking estimate)' }, weight: '5g • Ulei ascuns' }
+          ]
+        },
+        {
+          title: { ro: 'Somon sălbatic la cuptor cu cartof dulce & sparanghel', en: 'Wild Baked Salmon with Sweet Potato & Asparagus' },
+          sub: { ro: 'Segmentare precisă a fileului de pește și a legumelor', en: 'Accurate segmentation of fish fillet and seasonal greens' },
+          cal: 680,
+          p: '46g',
+          c: '48g',
+          f: '32g',
+          ingredients: [
+            { name: { ro: 'File de somon sălbatic', en: 'Wild Salmon Fillet' }, weight: '200g • 40g P' },
+            { name: { ro: 'Cartof dulce copt în coajă', en: 'Baked Sweet Potato' }, weight: '180g • 36g Carbi' },
+            { name: { ro: 'Sparanghel sotat cu usturoi', en: 'Sauteed Asparagus with Garlic' }, weight: '100g • Fibre & Vitamine' },
+            { name: { ro: 'Ulei de măsline extra-virgin', en: 'Extra Virgin Olive Oil' }, weight: '8g • Grăsimi sănătoase' }
+          ]
+        },
+        {
+          title: { ro: 'Mușchiuleț de porc cu mămăliguță & salată de murături', en: 'Lean Pork Tenderloin with Polenta & Pickles' },
+          sub: { ro: 'Optimizat pentru rețete și gastronomie tradițională românească', en: 'Optimized for traditional European and Romanian recipes' },
+          cal: 530,
+          p: '42g',
+          c: '35g',
+          f: '22g',
+          ingredients: [
+            { name: { ro: 'Mușchiuleț de porc la grătar', en: 'Grilled Pork Tenderloin' }, weight: '170g • 38g P' },
+            { name: { ro: 'Mămăliguță caldă tradițională', en: 'Traditional Warm Polenta' }, weight: '150g • 30g Carbi' },
+            { name: { ro: 'Gogonele și castraveți murați', en: 'Pickled Tomatoes & Cucumbers' }, weight: '80g • 2g Carbi' }
+          ]
+        }
+      ];
+
+      // 2. Multilingual Translations
+      const DICT = {
+        ro: {
+          'nav.download': 'Descarcă',
+          'hero.badge': 'Scanare Foto AI în < 2 secunde',
+          'hero.title1': 'Faci o poză.',
+          'hero.title2': 'Află caloriile instant.',
+          'hero.sub': 'Fără cântărit manual. Inteligența artificială GetFlow recunoaște ingredientele din farfurie, porțiile, uleiul ascuns și îți calculează macronutrienții în mai puțin de 2 secunde.',
+          'hero.cta': 'Descarcă pe Google Play',
+          'hero.testDemo': 'Testează Viteza AI',
+          'hero.trust1': 'Recunoaște mâncăruri românești',
+          'hero.trust2': 'Analiză silențioasă în fundal',
+          'phone.detecting': '● DETECTAT: 640 KCAL',
+          'phone.plateTitle': 'Prânz Nutritiv',
+          'phone.companionSub': '7 zile consecutive de energie optimă',
+          'macro.protein': 'Proteine',
+          'macro.carbs': 'Carbohidrați',
+          'macro.fat': 'Grăsimi',
+          'demo.badge': 'Simulare Live',
+          'demo.title': 'Testează viteza AI-ului pe 3 mese reale',
+          'demo.sub': 'Apasă pe oricare dintre mesele de mai jos pentru a vedea cum descompune GetFlow ingredientele și caloriile în mai puțin de o secundă.',
+          'demo.meal0.tab': 'Mic Dejun Echilibrat',
+          'demo.meal1.tab': 'Prânz Somon & Cartof Dulce',
+          'demo.meal2.tab': 'Cină Mușchiuleț cu Mămăliguță',
+          'demo.insight1.head': 'Timp estimat de procesare: 1.4 secunde',
+          'demo.insight1.text': 'Datorită pipeline-ului paralel de compresie și a modelului Gemini 2.5 Flash optimizat pe Trigger.dev, analiza este de peste 2x mai rapidă decât în orice altă aplicație clasică.',
+          'demo.insight2.head': 'Detecție automată a ingredientelor ascunse',
+          'demo.insight2.text': 'Modelul recunoaște urmele de ulei la gătit, dressing-urile și sosurile care altfel scapă la înregistrarea manuală și împiedică progresul dietei.',
+          'demo.insight3.head': 'Poți închide aplicația imediat',
+          'demo.insight3.text': 'Apeși pe „Mergi la Acasă” sau blochezi ecranul. Sfera Flow Companion te notifică și salvează masa direct în jurnal când este gata.',
+          'bento.badge': 'Ecosistem Complet',
+          'bento.title': 'Tot ce ai nevoie pentru un corp sănătos',
+          'bento.sub': 'O arhitectură integrată de inteligență artificială, gamificare și știință sportivă.',
+          'bento.c1.badge': 'Tehnologie Viziune AI',
+          'bento.c1.title': 'Scanare Foto AI & Procesare în Fundal',
+          'bento.c1.desc': 'Faci poza când ești la masă și nu mai stai să aștepți cu ecranul pornit. Sistemul nostru de task-uri distribuite procesează imaginea în fundal, iar notificarea inteligentă te anunță când caloriile au fost adăugate în jurnal.',
+          'bento.c2.badge': 'Gamificare 3D',
+          'bento.c2.title': 'Flow Companion 3D',
+          'bento.c2.desc': 'Companionul tău energetic crește în nivel odată cu consecvența ta. Îți reflectă starea nutrițională și te motivează să-ți atingi țintele zilnice.',
+          'bento.c3.badge': 'Cămară Inteligentă',
+          'bento.c3.title': 'Cod de Bare & Rețete din Frigider',
+          'bento.c3.desc': 'Scanează codurile de bare ale produselor din magazinele din România și Europa. Adaugă-le în cămara virtuală și cere AI-ului rețete din ce ai deja acasă.',
+          'bento.c4.badge': 'Fitness Anatomic V2',
+          'bento.c4.title': 'Hartă Musculară Termică & Coach AI 24/7',
+          'bento.c4.desc': 'Urmărește intensitatea exercițiilor fizice pe 14 grupe musculare cu vizualizare termică dinamică. În plus, antrenorul AI GetFlow îți răspunde la orice întrebare legată de antrenamente, recuperare și suplimente.',
+          'pricing.badge': 'Acces & Transparență',
+          'pricing.title': 'Alege modul în care folosești GetFlow',
+          'pricing.sub': 'Poți folosi aplicația gratuit în fiecare zi, poți cumpăra credite flexibile sau poți trece la Pro.',
+          'table.feature': 'Funcționalitate',
+          'table.flex': 'Flexibil',
+          'table.f1': 'Analize Foto AI zilnice',
+          'table.unlimited': 'Nelimitate',
+          'table.f2': 'Reclame rewarded pentru credite extra',
+          'table.f3': 'Jurnal alimentar & Calculator macronutrienți',
+          'table.f4': 'Scanner Cod de Bare & Cămară Virtuală',
+          'table.f5': 'Hartă Musculară Anatomică Live',
+          'table.f6': 'Fără nicio reclamă în interfață',
+          'table.f7': 'Preț',
+          'table.free': '0 RON',
+          'table.pack': 'Pachete mici',
+          'float.text': 'Instalează GetFlow gratuit',
+          'float.btn': 'Google Play',
+          'footer.privacy': 'Politică de Confidențialitate',
+          'footer.terms': 'Termeni și Condiții',
+          'footer.delete': 'Ștergere Cont & Date'
+        },
+        en: {
+          'nav.download': 'Download',
+          'hero.badge': 'AI Photo Scan in < 2 seconds',
+          'hero.title1': 'Snap a photo.',
+          'hero.title2': 'Get calories instantly.',
+          'hero.sub': 'No food scales required. GetFlow AI detects food on your plate, portion weights, hidden cooking oils, and calculates full macros in under 2 seconds.',
+          'hero.cta': 'Get it on Google Play',
+          'hero.testDemo': 'Test AI Speed',
+          'hero.trust1': 'Recognizes European & global dishes',
+          'hero.trust2': 'Silent background processing',
+          'phone.detecting': '● DETECTED: 640 KCAL',
+          'phone.plateTitle': 'Nutritious Lunch',
+          'phone.companionSub': '7-day streak of optimal daily energy',
+          'macro.protein': 'Protein',
+          'macro.carbs': 'Carbs',
+          'macro.fat': 'Fats',
+          'demo.badge': 'Live Simulation',
+          'demo.title': 'Test AI speed across 3 real meals',
+          'demo.sub': 'Click any meal below to watch GetFlow break down ingredients and calories in under a second.',
+          'demo.meal0.tab': 'Balanced Breakfast',
+          'demo.meal1.tab': 'Salmon & Sweet Potato Lunch',
+          'demo.meal2.tab': 'Grilled Pork & Polenta Dinner',
+          'demo.insight1.head': 'Estimated processing time: 1.4 seconds',
+          'demo.insight1.text': 'Powered by our 2-step parallel compression pipeline and optimized Gemini 2.5 Flash on Trigger.dev Cloud, analysis is 2x faster than legacy nutrition apps.',
+          'demo.insight2.head': 'Automatic hidden oil & sauce detection',
+          'demo.insight2.text': 'The computer vision model catches cooking butter, dressing, and glazes that manual logging forgets and that stall diet progress.',
+          'demo.insight3.head': 'Close the app immediately',
+          'demo.insight3.text': 'Tap "Go Home" or lock your phone. The 3D Flow Companion notifies you and persists the meal straight to your journal when ready.',
+          'bento.badge': 'Full Ecosystem',
+          'bento.title': 'Everything your body needs to thrive',
+          'bento.sub': 'An integrated suite of computer vision, 3D gamification, and sports science.',
+          'bento.c1.badge': 'AI Vision Tech',
+          'bento.c1.title': 'AI Photo Scanning & Background Processing',
+          'bento.c1.desc': 'Snap a picture at the table and put your phone down. Our distributed worker pipeline processes the image in the background with zero battery drain.',
+          'bento.c2.badge': '3D Gamification',
+          'bento.c2.title': 'Flow Companion 3D',
+          'bento.c2.desc': 'Your personal energy companion levels up with your consistency, reflecting your nutritional status and keeping your streak alive.',
+          'bento.c3.badge': 'Smart Pantry',
+          'bento.c3.title': 'Barcode Scanner & Fridge Recipes',
+          'bento.c3.desc': 'Scan packaged goods across Europe. Keep track of expiration dates and generate healthy AI recipes from what is already in your kitchen.',
+          'bento.c4.badge': 'Anatomical Fitness V2',
+          'bento.c4.title': 'Thermal Muscle Heatmap & 24/7 AI Coach',
+          'bento.c4.desc': 'Track training strain across 14 anatomical muscle groups with dynamic heat mapping. Your dedicated AI coach answers diet and recovery questions anytime.',
+          'pricing.badge': 'Access & Transparency',
+          'pricing.title': 'Choose how you use GetFlow',
+          'pricing.sub': 'Enjoy free daily photo analyses, purchase pay-as-you-go credit packs, or upgrade to Pro.',
+          'table.feature': 'Feature',
+          'table.flex': 'Flexible',
+          'table.f1': 'Daily AI Photo Analyses',
+          'table.unlimited': 'Unlimited',
+          'table.f2': 'Rewarded ads for extra credits',
+          'table.f3': 'Food journal & macro calculator',
+          'table.f4': 'Barcode scanner & smart pantry',
+          'table.f5': 'Live anatomical muscle map',
+          'table.f6': 'Zero interface ads',
+          'table.f7': 'Pricing',
+          'table.free': '$0 Free',
+          'table.pack': 'Small packs',
+          'float.text': 'Install GetFlow for free',
+          'float.btn': 'Google Play',
+          'footer.privacy': 'Privacy Policy',
+          'footer.terms': 'Terms & Conditions',
+          'footer.delete': 'Account & Data Deletion'
+        }
+      };
+
+      let currentLang = 'ro';
+      let activeMealIdx = 0;
+
+      function renderDemoMeal(idx) {
+        activeMealIdx = idx;
+        const meal = MEALS[idx];
+        const card = document.getElementById('demoVisualCard');
+        card.classList.remove('scanning');
+        void card.offsetWidth; // trigger reflow
+        card.classList.add('scanning');
+
+        document.getElementById('demoTitle').innerText = meal.title[currentLang];
+        document.getElementById('demoSub').innerText = meal.sub[currentLang];
+        document.getElementById('demoCal').innerText = meal.cal;
+        document.getElementById('demoP').innerText = meal.p;
+        document.getElementById('demoC').innerText = meal.c;
+        document.getElementById('demoF').innerText = meal.f;
+
+        const listEl = document.getElementById('demoIngList');
+        listEl.innerHTML = '';
+        meal.ingredients.forEach(ing => {
+          const row = document.createElement('div');
+          row.className = 'demo-ing-item';
+          row.innerHTML = `<span class="demo-ing-name">${ing.name[currentLang]}</span><span class="demo-ing-wt">${ing.weight}</span>`;
+          listEl.appendChild(row);
+        });
+
+        document.querySelectorAll('.demo-tab-btn').forEach((btn, i) => {
+          btn.classList.toggle('active', i === idx);
+        });
+      }
+
+      function applyLanguage(lang) {
+        currentLang = lang;
+        document.documentElement.lang = lang;
+        document.getElementById('langCurrent').innerText = lang.toUpperCase();
+
+        const dict = DICT[lang] || DICT.ro;
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+          const key = el.getAttribute('data-i18n');
+          if (dict[key]) el.innerText = dict[key];
+        });
+
+        renderDemoMeal(activeMealIdx);
+      }
+
+      // Event Listeners
+      document.querySelectorAll('.demo-tab-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const idx = parseInt(this.getAttribute('data-meal'), 10);
+          renderDemoMeal(idx);
+        });
+      });
+
+      const langBtn = document.getElementById('langToggle');
+      if (langBtn) {
+        langBtn.addEventListener('click', function() {
+          const next = currentLang === 'ro' ? 'en' : 'ro';
+          try { localStorage.setItem('getflow_lang', next); } catch(e) {}
+          applyLanguage(next);
+        });
+      }
+
+      // Initial Lang check
+      try {
+        const saved = localStorage.getItem('getflow_lang');
+        if (saved && (saved === 'ro' || saved === 'en')) {
+          applyLanguage(saved);
+        } else {
+          applyLanguage('ro');
+        }
+      } catch(e) {
+        applyLanguage('ro');
+      }
+
+    })();
+  </script>
 </body>
 </html>

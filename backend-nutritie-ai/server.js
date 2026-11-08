@@ -380,7 +380,10 @@ const chatAdmission = createDistributedAdmission({
   ttlMs: 60_000,
 });
 
-app.get('/', (_req, res) => {
+app.get('/', (req, res, next) => {
+  if (req.accepts('html')) {
+    return next();
+  }
   res.json({
     status: 'OK',
     service: 'NutriAI Secure Backend',

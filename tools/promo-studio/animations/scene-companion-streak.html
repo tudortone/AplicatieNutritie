@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <title>Scene 2: Companion Streak (10s)</title>
+  <style>
+    :root {
+      --bg: #090C0E;
+      --accent: #CCFF00;
+      --accent-glow: rgba(204, 255, 0, 0.45);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: #FFF;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 100px 80px;
+      position: relative;
+    }
+    .header { display: flex; justify-content: space-between; align-items: center; }
+    .logo { font-size: 2.8rem; font-weight: 900; }
+    .logo span { color: var(--accent); }
+    .stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    .title { font-size: 4.8rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 20px; }
+    .title span { color: var(--accent); }
+    .sphere-box {
+      margin: 80px 0;
+      position: relative;
+      width: 320px;
+      height: 320px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sphere {
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #FFF 0%, var(--accent) 35%, #0099FF 75%, #000 100%);
+      box-shadow: 0 0 100px var(--accent-glow);
+      animation: pulseSphere 2.5s infinite ease-in-out;
+    }
+    .ring {
+      position: absolute;
+      width: 420px;
+      height: 140px;
+      border: 5px solid rgba(204, 255, 0, 0.4);
+      border-radius: 50%;
+      transform: rotate(-25deg);
+      box-shadow: 0 0 40px var(--accent);
+    }
+    @keyframes pulseSphere {
+      0%, 100% { transform: scale(1); filter: brightness(1); }
+      50% { transform: scale(1.1); filter: brightness(1.3); }
+    }
+    .streak-banner {
+      font-size: 3rem;
+      font-weight: 900;
+      color: var(--accent);
+      background: rgba(204, 255, 0, 0.1);
+      border: 2px solid var(--accent);
+      padding: 18px 40px;
+      border-radius: 9999px;
+      box-shadow: 0 0 40px var(--accent-glow);
+    }
+    .footer { display: flex; justify-content: center; }
+    .cta {
+      background: var(--accent);
+      color: #090C0E;
+      font-size: 2.2rem;
+      font-weight: 900;
+      padding: 24px 64px;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">Get<span>Flow</span></div>
+    <div style="font-size: 1.5rem; color: var(--accent); font-weight: 800;">3D GAMIFICARE</div>
+  </div>
+  <div class="stage">
+    <div class="title">Evoluează odată cu <span>tine</span></div>
+    <div class="sphere-box">
+      <div class="ring"></div>
+      <div class="sphere"></div>
+    </div>
+    <div class="streak-banner">🔥 Streak de 30 Zile • Nivelul 7</div>
+  </div>
+  <div class="footer">
+    <div class="cta">Începe-ți Călătoria Gratuit</div>
+  </div>
+</body>
+</html>
+
