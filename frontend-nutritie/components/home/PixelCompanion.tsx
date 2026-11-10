@@ -261,10 +261,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   companionNameText: {
+    color: '#F1F5F9',
     fontSize: 11,
     fontWeight: '700',
-    color: '#FFFFFF',
-    maxWidth: 64,
-    letterSpacing: 0.2,
+    maxWidth: 68,
+    letterSpacing: -0.2,
+    includeFontPadding: false,
   },
 });

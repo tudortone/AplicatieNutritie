@@ -164,8 +164,11 @@ export function useAntrenamente(dataSelectata?: Date) {
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(targetDate);
       endOfDay.setHours(23, 59, 59, 999);
-      const { data: sessionData } = await supabase.auth.getSession();
-      const currentUser = sessionData.session?.user ?? null;
+      let currentUser: User | null = null;
+      if (supabase?.auth && typeof supabase.auth.getSession === 'function') {
+        const sessionResult = await supabase.auth.getSession();
+        currentUser = sessionResult?.data?.session?.user ?? null;
+      }
       setUser(currentUser);
       if (currentUser) await syncPendingWorkouts(currentUser.id);
 
@@ -211,8 +214,11 @@ export function useAntrenamente(dataSelectata?: Date) {
     const pastDate = new Date();
     pastDate.setDate(pastDate.getDate() - zile);
     pastDate.setHours(0, 0, 0, 0);
-    const { data: authData } = await supabase.auth.getUser();
-    const currentUser = authData.user;
+    let currentUser: User | null = null;
+    if (supabase?.auth && typeof supabase.auth.getUser === 'function') {
+      const { data: authData } = await supabase.auth.getUser();
+      currentUser = authData?.user ?? null;
+    }
     const local = (await getLocalWorkouts()).filter((w) => {
       if (currentUser && w.user_id !== currentUser.id && w.user_id !== LOCAL_USER_ID) return false;
       return new Date(w.created_at) >= pastDate;
@@ -241,7 +247,11 @@ export function useAntrenamente(dataSelectata?: Date) {
       const today = localDayKey();
       const lastReset = await AsyncStorage.getItem(DAILY_RESET_KEY);
       if (lastReset !== today) {
-        await AsyncStorage.multiRemove(ACTIVE_SESSION_KEYS);
+        if (typeof AsyncStorage.multiRemove === 'function') {
+          await AsyncStorage.multiRemove(ACTIVE_SESSION_KEYS);
+        } else if (typeof AsyncStorage.removeItem === 'function') {
+          await Promise.all(ACTIVE_SESSION_KEYS.map((k) => AsyncStorage.removeItem(k)));
+        }
         await AsyncStorage.setItem(DAILY_RESET_KEY, today);
         setDayRevision((v) => v + 1);
       }
@@ -253,7 +263,21 @@ export function useAntrenamente(dataSelectata?: Date) {
     return () => { if (timer) clearTimeout(timer); };
   }, []);
 
-  useEffect(() => { fetchAntrenamente(); }, [fetchAntrenamente]);
+  useEffect(() => {
+    void fetchAntrenamente();
+    const authSub =
+      typeof supabase?.auth?.onAuthStateChange === 'function'
+        ? supabase.auth.onAuthStateChange((_event, session) => {
+            const nextUser = session?.user ?? null;
+            setUser(nextUser);
+            void fetchAntrenamente();
+          })
+        : null;
+    const subscription = authSub?.data?.subscription;
+    return () => {
+      subscription?.unsubscribe?.();
+    };
+  }, [fetchAntrenamente]);
 
   const adaugaAntrenament = async (payload: {
     nume: string;
@@ -265,8 +289,11 @@ export function useAntrenamente(dataSelectata?: Date) {
     volum_total?: number;
   }): Promise<Antrenament | null> => {
     try {
-      const { data: authData } = await supabase.auth.getUser();
-      const currentUser = authData.user;
+      let currentUser: User | null = null;
+      if (supabase?.auth && typeof supabase.auth.getUser === 'function') {
+        const { data: authData } = await supabase.auth.getUser();
+        currentUser = authData?.user ?? null;
+      }
       let calorii = payload.calorii_arse || 0;
       if (!calorii && payload.met) {
         const stored = await AsyncStorage.getItem('greutate');
@@ -341,13 +368,17 @@ export function useAntrenamente(dataSelectata?: Date) {
 
   const stergeAntrenament = async (id: string): Promise<void> => {
     await saveLocalWorkouts((await getLocalWorkouts()).filter((item) => item.id !== id));
-    const { data: authData } = await supabase.auth.getUser();
-    if (authData.user && isUuid(id)) {
+    let currentUser: User | null = null;
+    if (supabase?.auth && typeof supabase.auth.getUser === 'function') {
+      const { data: authData } = await supabase.auth.getUser();
+      currentUser = authData?.user ?? null;
+    }
+    if (currentUser && isUuid(id)) {
       const { error } = await supabase
         .from('antrenamente')
         .delete()
         .eq('id', id)
-        .eq('user_id', authData.user.id);
+        .eq('user_id', currentUser.id);
       if (error) throw error;
     }
     await fetchAntrenamente();
