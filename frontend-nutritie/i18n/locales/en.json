@@ -381,7 +381,17 @@
     "qaAnalysisUnavailable": "QA photo analysis is unavailable on the server.",
     "aiProviderErrorMessage": "The AI provider is experiencing temporary issues. Please try again.",
     "networkErrorMessage": "Network issue. Please check your internet connection and try again.",
-    "saveFailedMessage": "Could not save meal to journal. Please try again."
+    "saveFailedMessage": "Could not save meal to journal. Please try again.",
+    "addAnotherIngredient": "Add another ingredient",
+    "saveFailedTitle": "Save failed",
+    "saveFailedPreserved": "Your food and changes have been preserved intact.",
+    "aiEstimateBadge": "AI Estimate",
+    "undoDelete": "Undo delete",
+    "retrySaveWithCalories": "Retry save • {{calories}} kcal",
+    "saveOfflineSafe": "Save offline safely",
+    "changeIngredient": "Change",
+    "changeIngredientA11y": "Change ingredient {{name}}",
+    "deleteIngredientA11y": "Delete {{name}}"
   },
   "photoJob": {
     "backgroundTitle": "Analysis continues in the background",
@@ -1122,6 +1132,7 @@
     "orDivider": "or",
     "continueWithGoogle": "Continue with Google",
     "continueWithApple": "Continue with Apple",
+    "secureOAuthNotice": "Google/Apple sign-in is cryptographically secured via GetFlow's Supabase cloud infrastructure.",
     "planBadge": "Your daily plan calculated by AI",
     "kcalPerDay": "kcal/day",
     "planActivateCta": "Create your account or sign in to activate your plan in the app.",

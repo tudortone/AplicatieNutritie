@@ -167,14 +167,15 @@ export function PhotoMealResultView({
 
   return (
     <View style={styles.container} testID="photo-meal-result-view">
+      <View style={styles.dragHandle} />
       {/* 1. Resilient Save Failure Recovery Banner (If save failed) */}
       {saveFailureMessage ? (
         <View style={styles.saveFailureCard} testID="save-failure-banner">
           <AlertTriangle size={20} color="#FB923C" style={{ marginRight: 10 }} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.saveFailureTitle}>Salvarea a eșuat</Text>
+            <Text style={styles.saveFailureTitle}>{t('camera.saveFailedTitle', 'Salvarea a eșuat')}</Text>
             <Text style={styles.saveFailureBody}>
-              {saveFailureMessage}. Mâncarea și modificările tale sunt păstrate intacte.
+              {saveFailureMessage}. {t('camera.saveFailedPreserved', 'Mâncarea și modificările tale sunt păstrate intacte.')}
             </Text>
           </View>
         </View>
@@ -210,7 +211,7 @@ export function PhotoMealResultView({
             <View style={styles.metaRow}>
               <View style={styles.aiEstimateBadge}>
                 <View style={styles.aiEstimateDot} />
-                <Text style={styles.aiEstimateText}>AI Estimate</Text>
+                <Text style={styles.aiEstimateText}>{t('camera.aiEstimateBadge', 'Estimare AI')}</Text>
               </View>
 
               {/* Meal Category Dropdown Toggle */}
@@ -342,7 +343,7 @@ export function PhotoMealResultView({
           {lastDeletedItem && (
             <TouchableOpacity onPress={handleUndoDelete} style={styles.undoBtn}>
               <RotateCcw size={13} color="#CCFF00" style={{ marginRight: 4 }} />
-              <Text style={styles.undoBtnText}>Anulează ștergerea</Text>
+              <Text style={styles.undoBtnText}>{t('camera.undoDelete', 'Anulează ștergerea')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -374,10 +375,12 @@ export function PhotoMealResultView({
             }}
             style={styles.addIngredientDashedBtn}
             accessibilityRole="button"
-            accessibilityLabel="Adaugă alt ingredient în această masă"
+            accessibilityLabel={t('camera.addAnotherIngredient', 'Adaugă alt ingredient în această masă')}
           >
             <Plus size={16} color="#CCFF00" style={{ marginRight: 8 }} />
-            <Text style={styles.addIngredientDashedText}>+ Adaugă alt ingredient</Text>
+            <Text style={styles.addIngredientDashedText}>
+              {t('camera.addAnotherIngredient', 'Adaugă alt ingredient')}
+            </Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -392,13 +395,15 @@ export function PhotoMealResultView({
             disabled={isSaving}
             style={[styles.primaryCTA, styles.retrySaveCTA]}
             accessibilityRole="button"
-            accessibilityLabel={`Reîncearcă salvarea ${totals.calorii} kcal`}
+            accessibilityLabel={t('camera.retrySaveWithCalories', 'Reîncearcă salvarea • {{calories}} kcal', { calories: totals.calorii })}
           >
             <LinearGradient colors={['#FB923C', '#CCFF00']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ctaGrad}>
               {isSaving ? (
                 <ActivityIndicator size="small" color="#000000" />
               ) : (
-                <Text style={styles.ctaText}>Reîncearcă salvarea • {totals.calorii} kcal</Text>
+                <Text style={styles.ctaText}>
+                  {t('camera.retrySaveWithCalories', 'Reîncearcă salvarea • {{calories}} kcal', { calories: totals.calorii })}
+                </Text>
               )}
             </LinearGradient>
           </TouchableOpacity>
@@ -429,7 +434,7 @@ export function PhotoMealResultView({
         {/* Offline Save Fallback Option if Save Failed */}
         {saveFailureMessage && onSaveOffline && (
           <TouchableOpacity testID="save-offline-direct-btn" onPress={onSaveOffline} style={styles.saveOfflineBtn}>
-            <Text style={styles.saveOfflineText}>Salvează offline în siguranță</Text>
+            <Text style={styles.saveOfflineText}>{t('camera.saveOfflineSafe', 'Salvează offline în siguranță')}</Text>
           </TouchableOpacity>
         )}
 
@@ -470,6 +475,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#090C0E',
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 4,
   },
   saveFailureCard: {
     flexDirection: 'row',

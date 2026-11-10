@@ -381,7 +381,17 @@
     "qaAnalysisUnavailable": "QA-Fotoanalyse ist auf dem Server nicht verfügbar.",
     "aiProviderErrorMessage": "Der KI-Anbieter hat vorübergehend Probleme. Bitte versuchen Sie es erneut.",
     "networkErrorMessage": "Netzwerkproblem. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
-    "saveFailedMessage": "Die Mahlzeit konnte nicht im Tagebuch gespeichert werden. Bitte versuchen Sie es erneut."
+    "saveFailedMessage": "Die Mahlzeit konnte nicht im Tagebuch gespeichert werden. Bitte versuchen Sie es erneut.",
+    "addAnotherIngredient": "Weitere Zutat hinzufügen",
+    "saveFailedTitle": "Speichern fehlgeschlagen",
+    "saveFailedPreserved": "Ihre Speisen und Änderungen bleiben erhalten.",
+    "aiEstimateBadge": "KI-Schätzung",
+    "undoDelete": "Löschen rückgängig machen",
+    "retrySaveWithCalories": "Speichern wiederholen • {{calories}} kcal",
+    "saveOfflineSafe": "Sicher offline speichern",
+    "changeIngredient": "Ändern",
+    "changeIngredientA11y": "Zutat {{name}} ändern",
+    "deleteIngredientA11y": "{{name}} löschen"
   },
   "photoJob": {
     "backgroundTitle": "Die Analyse läuft im Hintergrund weiter",
@@ -1122,6 +1132,7 @@
     "orDivider": "oder",
     "continueWithGoogle": "Weiter mit Google",
     "continueWithApple": "Weiter mit Apple",
+    "secureOAuthNotice": "Die Google/Apple-Anmeldung ist über die Supabase-Cloud-Infrastruktur von GetFlow kryptografisch gesichert.",
     "planBadge": "Dein täglicher KI-berechneter Plan",
     "kcalPerDay": "kcal/Tag",
     "planActivateCta": "Erstelle dein Konto oder melde dich an, um deinen Plan zu aktivieren.",

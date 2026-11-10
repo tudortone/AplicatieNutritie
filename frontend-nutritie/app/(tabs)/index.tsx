@@ -204,6 +204,25 @@ export default function HomeScreen() {
     refresh,
     optimisticAddMeal,
   } = useMeseAzi(dataSelectata);
+
+  const effectiveUserId = auth?.user?.id ?? auth?.session?.user?.id ?? user?.id ?? null;
+  const [companionName, setCompanionName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCurrent = true;
+    const companionKey = effectiveUserId ? `@getflow:companion_name_${effectiveUserId}` : '@getflow:companion_name_guest';
+    AsyncStorage.getItem(companionKey)
+      .then((saved) => {
+        if (isCurrent) setCompanionName(saved?.trim() || null);
+      })
+      .catch(() => {
+        if (isCurrent) setCompanionName(null);
+      });
+    return () => {
+      isCurrent = false;
+    };
+  }, [effectiveUserId]);
+
   useEffect(() => aboneazaLaMeseSalvateVerificat((event) => {
     if (event.userId !== user?.id) return;
     if (event.dayKeys.length > 0 && !event.dayKeys.includes(localDayKey(dataSelectata))) return;
@@ -517,6 +536,7 @@ export default function HomeScreen() {
           <RunnerSphereCompanionCluster
             streak={streak}
             onCompanionPress={() => setCompanionModalVisible(true)}
+            companionName={companionName}
           />
           <View testID="home-header-actions" style={[s.headerActions, isCompact && s.headerActionsCompact]}>
             <FlowCreditsPill />
@@ -597,11 +617,11 @@ export default function HomeScreen() {
                     <Text style={[s.ringCardSubSep, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>  •  {t('home.target')} </Text>
                     <Text style={[s.ringCardSubValue, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.3}>{caloriiTinta} kcal</Text>
                   </View>
-                  {totalCaloriiArse > 0 && (
+                  {caloriiArseTotal > 0 && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
                       <Dumbbell size={14} color={colors.warning} />
                       <Text style={{ fontSize: 13, fontWeight: '800', color: colors.warning }} maxFontSizeMultiplier={1.3}>
-                        {t('home.burnedSportInline', { calories: totalCaloriiArse })}
+                        {t('home.burnedSportInline', { calories: caloriiArseTotal })}
                       </Text>
                     </View>
                   )}
@@ -1037,8 +1057,9 @@ export default function HomeScreen() {
         onClose={() => setCompanionModalVisible(false)}
         streak={streak}
         caloriiConsumate={totalCalorii}
-        caloriiTinta={caloriiTinta}
-        userId={auth?.user?.id}
+        caloriiTinta={bugetCaloricNet}
+        userId={effectiveUserId}
+        onCompanionNameChange={setCompanionName}
       />
     </Animated.View>
   );

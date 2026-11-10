@@ -17,6 +17,8 @@ import { Flame, Activity, PlusCircle, ChevronDown, ChevronUp, Eye, EyeOff, Utens
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi, type CategorieMasaGrupata } from '../../hooks/useMeseAzi';
+import { useHealthSync } from '../../hooks/useHealthSync';
+import { useAntrenamente } from '../../hooks/useAntrenamente';
 import { totaluriPentruAfisare } from '../../lib/nutritionTotals';
 import { useCurrentDayKey } from '../../hooks/useCurrentDayKey';
 import { useZileCuMese } from '../../hooks/useZileCuMese';
@@ -164,6 +166,9 @@ export default function HistoryScreen() {
     totalCalorii,
     totalProteine,
     caloriiTinta,
+    proteineTinta,
+    carbiTinta,
+    grasimiTinta,
     loading,
     eroareFetch,
     refresh,
@@ -171,8 +176,13 @@ export default function HistoryScreen() {
     optimisticAddMeal
   } = useMeseAzi(dataSelectata);
   const { zileCuMese, refreshZileCuMese } = useZileCuMese();
+  const { isEnabled: isHealthEnabled, activeCalories: trackerActiveCalories, refreshSteps } = useHealthSync();
+  const { totalCaloriiArse, refresh: refreshAntrenamente } = useAntrenamente();
 
   const esteAzi = new Date().toDateString() === dataSelectata.toDateString();
+  const caloriiArseZi = esteAzi ? ((isHealthEnabled ? trackerActiveCalories : 0) + (totalCaloriiArse || 0)) : 0;
+  const bugetCaloricSincronizat = (caloriiTinta || 2000) + caloriiArseZi;
+  const caloriiRamaseZi = bugetCaloricSincronizat - totalCalorii;
   const esteIeri = (() => {
     const ieri = new Date();
     ieri.setDate(ieri.getDate() - 1);
@@ -190,14 +200,16 @@ export default function HistoryScreen() {
     () => {
       refresh(true);
       refreshZileCuMese();
+      refreshSteps();
+      refreshAntrenamente();
     },
     5000,
-    [refresh, refreshZileCuMese, t],
+    [refresh, refreshZileCuMese, refreshSteps, refreshAntrenamente, t],
   );
 
   const onRefresh = useCallback(async () => {
-    await Promise.all([refresh(false, true), refreshZileCuMese()]);
-  }, [refresh, refreshZileCuMese]);
+    await Promise.all([refresh(false, true), refreshZileCuMese(), refreshSteps(), refreshAntrenamente()]);
+  }, [refresh, refreshZileCuMese, refreshSteps, refreshAntrenamente]);
 
   // 1. Ștergere masă cu confirmare GetFlow și UI optimist (U-09)
   const handleDelete = useCallback((masa: Masa) => {
@@ -562,7 +574,19 @@ export default function HistoryScreen() {
             <Text maxFontSizeMultiplier={1.3} style={[styles.summaryLabel, { color: colors.textSecondary }]}>{t('jurnal.caloricSummary')}</Text>
 
             <View style={{ alignItems: 'center', marginVertical: Spacing.md }}>
-              <MacroRing consumat={totalCalorii} tinta={caloriiTinta || 2000} size={150} strokeWidth={14} />
+              <MacroRing consumat={totalCalorii} tinta={bugetCaloricSincronizat} size={150} strokeWidth={14} />
+              <View style={{ marginTop: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: caloriiRamaseZi < 0 ? colors.danger : colors.accent }}>
+                  {caloriiRamaseZi >= 0
+                    ? `${caloriiRamaseZi} kcal ${t('home.caloriesRemaining', 'rămase')}`
+                    : `${Math.abs(caloriiRamaseZi)} kcal ${t('home.overLimit', 'peste limită')}`}
+                </Text>
+                {caloriiArseZi > 0 && (
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: colors.warning, marginTop: 2 }}>
+                    {t('home.burnedSportInline', { calories: caloriiArseZi })}
+                  </Text>
+                )}
+              </View>
             </View>
 
             <View style={[styles.summaryRow, { marginTop: Spacing.lg }]}>
@@ -602,7 +626,15 @@ export default function HistoryScreen() {
       </Animated.View>
 
       {/* Nutrient Focus / Health-Aware Journal */}
-      <NutrientFocusCard mese={mese} />
+      <NutrientFocusCard
+        mese={mese}
+        profileTargets={{
+          calories: bugetCaloricSincronizat,
+          protein: proteineTinta || 150,
+          carbs: carbiTinta || 250,
+          fat: grasimiTinta || 70,
+        }}
+      />
     </>
   );
 

@@ -535,6 +535,14 @@ export default function AuthScreen() {
                 ) : null}
               </View>
 
+              {/* OAuth Security Notice */}
+              <View style={styles.oauthSecurityRow}>
+                <ShieldCheck size={14} color={colors.accent} />
+                <Text style={[styles.oauthSecurityText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
+                  {t('auth.secureOAuthNotice', 'Autentificarea Google/Apple este securizată criptografic prin infrastructura cloud Supabase a GetFlow.')}
+                </Text>
+              </View>
+
               {/* Legal Consent Notice */}
               <View
                 style={[styles.legalConsentWrap, { borderTopColor: colors.cardBorder }]}
@@ -641,6 +649,20 @@ const styles = StyleSheet.create({
   oauthBtn: { flex: 1, height: 50, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
   oauthBtnText: { fontSize: 15, fontWeight: '700' },
   oauthBtnContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  oauthSecurityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  oauthSecurityText: {
+    fontSize: 11.5,
+    lineHeight: 16,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
   legalConsentWrap: {
     marginTop: 20,
     paddingTop: 16,

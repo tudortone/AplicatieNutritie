@@ -113,6 +113,7 @@ export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   
   const [rezultat, setRezultat] = useState<AlimentScanat[]>([]);
+  const [previewPhotoUri, setPreviewPhotoUri] = useState<string | null>(null);
   const [isSavingDiary, setIsSavingDiary] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
 
@@ -206,6 +207,7 @@ export default function CameraScreen() {
     draftPromptAfisatRef.current = false;
     setPhotoStateOwnerId(sessionUserId);
     setRezultat([]);
+    setPreviewPhotoUri(null);
     setTipMasaSelectat(getTipMasaDupaOra(new Date()));
     setIsSavingDiary(false);
     setScanError(null);
@@ -334,6 +336,7 @@ export default function CameraScreen() {
     abortControllerRef.current = controller;
     setScanError(null);
     setRezultat([]);
+    setPreviewPhotoUri(imageUri);
     setAnalysisStage(1);
     setSeIncarca(true);
     setPhotoPhase(isRetry ? 'retrying' : 'uploading');
@@ -353,6 +356,7 @@ export default function CameraScreen() {
     try {
       const imagineOptimizata = await optimizeImageBeforeUpload(imageUri, knownDimensions);
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+      setPreviewPhotoUri(imagineOptimizata.uri);
 
       const [, amprentaBaza, uploaded] = await Promise.all([
         saveLocalImageDraft(imagineOptimizata.uri, ownerId).then((savedUri) => {
@@ -568,6 +572,7 @@ export default function CameraScreen() {
           setPendingPhotoSaveLocked(true);
           setTipMasaSelectat(normalizeTipMasa(String(payload.tip_masa || '')));
           setRezultat(snapshotItems);
+          setPreviewPhotoUri(pointer.localImageUri || pointer.draftUri || imageKitUrlRef.current);
           setPhotoPhase('completed');
           setFailedPhotoJob(null);
 
@@ -1468,10 +1473,19 @@ export default function CameraScreen() {
       {/* Photo AI 2.0: Option A Athletic Pro HUD Result View */}
       {rezultat.length > 0 && (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={StyleSheet.absoluteFill} pointerEvents="box-none">
-          <Animated.View entering={FadeInUp.duration(500).springify()} style={[styles.resultSheet, { borderColor: colors.accent + '26' }]}>
+          <Animated.View
+            entering={FadeInUp.duration(500).springify()}
+            style={[
+              styles.resultSheet,
+              {
+                top: insets.top + 62,
+                borderColor: colors.accent + '26',
+              },
+            ]}
+          >
             <PhotoMealResultView
               rezultat={rezultat}
-              photoUri={imageKitUrlRef.current}
+              photoUri={previewPhotoUri || imageKitUrlRef.current}
               tipMasa={tipMasaSelectat}
               onChangeTipMasa={setTipMasaSelectat}
               onUpdateRezultat={setRezultat}
@@ -1646,7 +1660,18 @@ const styles = StyleSheet.create({
 
   scanHint: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '500', marginTop: 24, letterSpacing: 0.5 },
 
-  resultSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, borderTopLeftRadius: 36, borderTopRightRadius: 36, overflow: 'hidden', borderWidth: 1 },
+  resultSheet: {
+    position: 'absolute',
+    top: 72,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#090C0E',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
   resultBlur: { overflow: 'hidden' },
   resultGrad: { paddingTop: 16, paddingHorizontal: 18 },
   resultHandle: { width: 44, height: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, alignSelf: 'center', marginBottom: 16 },

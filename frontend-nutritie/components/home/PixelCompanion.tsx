@@ -23,6 +23,7 @@ interface PixelCompanionProps {
   streak?: number;
   onPress?: () => void;
   size?: number;
+  companionName?: string | null;
 }
 
 /**
@@ -149,6 +150,7 @@ export function PixelCompanion({
   streak = 0,
   onPress,
   size = 32,
+  companionName,
 }: PixelCompanionProps) {
   const { t } = useTranslation();
   const reduceMotion = useReducedMotion();
@@ -195,13 +197,14 @@ export function PixelCompanion({
   };
 
   const stage = getCompanionStage(streak).stage;
+  const displayName = companionName || t('flowCompanion.defaultName');
 
   return (
     <Pressable
       testID="pixel-companion-widget"
       onPress={handlePress}
       accessibilityRole="button"
-      accessibilityLabel={`${t('flowCompanion.defaultName')}, ${t('flowCompanion.stageLabel', { stage })}`}
+      accessibilityLabel={`${displayName}, ${t('flowCompanion.stageLabel', { stage })}`}
       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       style={styles.container}
     >
@@ -215,6 +218,17 @@ export function PixelCompanion({
           {stage}/5
         </Text>
       </View>
+
+      {companionName ? (
+        <Text
+          testID="pixel-companion-custom-name"
+          numberOfLines={1}
+          style={styles.companionNameText}
+          maxFontSizeMultiplier={1.2}
+        >
+          {companionName}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }
@@ -244,6 +258,13 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     color: '#CCFF00',
+    letterSpacing: 0.2,
+  },
+  companionNameText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    maxWidth: 64,
     letterSpacing: 0.2,
   },
 });

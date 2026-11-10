@@ -376,7 +376,17 @@
     "qaAnalysisUnavailable": "Analiza foto QA nu este disponibilă pe server.",
     "aiProviderErrorMessage": "Furnizorul AI întâmpină dificultăți temporare. Te rugăm să încerci din nou.",
     "networkErrorMessage": "Problemă de rețea. Verifică conexiunea la internet și reîncearcă.",
-    "saveFailedMessage": "Nu am putut salva masa în jurnal. Te rugăm să reîncerci."
+    "saveFailedMessage": "Nu am putut salva masa în jurnal. Te rugăm să reîncerci.",
+    "addAnotherIngredient": "Adaugă alt ingredient",
+    "saveFailedTitle": "Salvarea a eșuat",
+    "saveFailedPreserved": "Mâncarea și modificările tale sunt păstrate intacte.",
+    "aiEstimateBadge": "Estimare AI",
+    "undoDelete": "Anulează ștergerea",
+    "retrySaveWithCalories": "Reîncearcă salvarea • {{calories}} kcal",
+    "saveOfflineSafe": "Salvează offline în siguranță",
+    "changeIngredient": "Schimbă",
+    "changeIngredientA11y": "Schimbă ingredientul {{name}}",
+    "deleteIngredientA11y": "Șterge {{name}}"
   },
   "photoJob": {
     "backgroundTitle": "Analiza continuă în fundal",
@@ -1122,6 +1132,7 @@
     "orDivider": "sau",
     "continueWithGoogle": "Continuă cu Google",
     "continueWithApple": "Continuă cu Apple",
+    "secureOAuthNotice": "Autentificarea Google/Apple este securizată criptografic prin infrastructura cloud Supabase a GetFlow.",
     "planBadge": "Planul tău zilnic calculat AI",
     "kcalPerDay": "kcal/zi",
     "planActivateCta": "Creează-ți contul sau conectează-te pentru a-ți activa planul în aplicație.",

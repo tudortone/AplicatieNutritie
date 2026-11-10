@@ -43,10 +43,12 @@ export interface NutrientFocusCardProps {
   mese: Masa[];
   onOpenSettings?: () => void;
   onOpenDetails?: (nutrientId?: NutrientId) => void;
+  profileTargets?: Partial<Record<NutrientId, number>>;
 }
 
 export const NutrientFocusCard: React.FC<NutrientFocusCardProps> = ({
   mese,
+  profileTargets,
 }) => {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -75,12 +77,19 @@ export const NutrientFocusCard: React.FC<NutrientFocusCardProps> = ({
   }, [loadPreferences]);
 
   // Calcul agregat al nutrienților pe baza meselor curente
+  const effectiveTargets = useMemo(() => {
+    return {
+      ...(profileTargets || {}),
+      ...(preferences.customTargets || {}),
+    };
+  }, [profileTargets, preferences.customTargets]);
+
   const aggregatedNutrients: NutrientAggregatedItem[] = useMemo(() => {
     const order = preferences.nutrientOrder && preferences.nutrientOrder.length > 0
       ? preferences.nutrientOrder
       : preferences.trackedNutrients;
-    return calculateNutrientTotals(mese, order, preferences.customTargets);
-  }, [mese, preferences]);
+    return calculateNutrientTotals(mese, order, effectiveTargets);
+  }, [mese, preferences, effectiveTargets]);
 
   // Afișăm primii 4 nutrienți în cardul compact
   const displayNutrients = useMemo(() => {
@@ -264,6 +273,7 @@ export const NutrientFocusCard: React.FC<NutrientFocusCardProps> = ({
         mese={mese}
         initialNutrientId={selectedNutrientForDetail}
         preferences={preferences}
+        profileTargets={profileTargets}
         onSaveCustomTarget={async (nutrientId, val) => {
           const { setCustomNutrientTarget } = await import('../../lib/nutrientFocus');
           const updated = await setCustomNutrientTarget(nutrientId, val);

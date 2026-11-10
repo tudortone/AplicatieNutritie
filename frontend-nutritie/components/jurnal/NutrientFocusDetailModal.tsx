@@ -53,6 +53,7 @@ export interface NutrientFocusDetailModalProps {
   initialNutrientId?: NutrientId;
   preferences: NutrientFocusPreferences;
   onSaveCustomTarget?: (nutrientId: NutrientId, value: number | null) => Promise<void>;
+  profileTargets?: Partial<Record<NutrientId, number>>;
 }
 
 export const NutrientFocusDetailModal: React.FC<NutrientFocusDetailModalProps> = ({
@@ -62,6 +63,7 @@ export const NutrientFocusDetailModal: React.FC<NutrientFocusDetailModalProps> =
   initialNutrientId = 'carbs',
   preferences,
   onSaveCustomTarget,
+  profileTargets,
 }) => {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -79,20 +81,27 @@ export const NutrientFocusDetailModal: React.FC<NutrientFocusDetailModalProps> =
 
   const activeDef = NUTRIENT_DEFINITIONS[activeNutrientId] || NUTRIENT_DEFINITIONS.carbs;
 
+  const effectiveTargets = useMemo(() => {
+    return {
+      ...(profileTargets || {}),
+      ...(preferences.customTargets || {}),
+    };
+  }, [profileTargets, preferences.customTargets]);
+
   // Calcul agregat pentru toți nutrienții monitorizați
   const aggregatedList = useMemo(() => {
     const list = preferences.trackedNutrients && preferences.trackedNutrients.length > 0
       ? preferences.trackedNutrients
       : ['calories', 'protein', 'carbs', 'fat', 'fiber'];
-    return calculateNutrientTotals(mese, list as NutrientId[], preferences.customTargets);
-  }, [mese, preferences]);
+    return calculateNutrientTotals(mese, list as NutrientId[], effectiveTargets);
+  }, [mese, preferences, effectiveTargets]);
 
   const activeAggregated = useMemo(() => {
     return (
       aggregatedList.find((it) => it.nutrientId === activeNutrientId) ||
-      calculateNutrientTotals(mese, [activeNutrientId], preferences.customTargets)[0]
+      calculateNutrientTotals(mese, [activeNutrientId], effectiveTargets)[0]
     );
-  }, [aggregatedList, activeNutrientId, mese, preferences]);
+  }, [aggregatedList, activeNutrientId, mese, effectiveTargets]);
 
   // Top contributori de azi (Factual și Neutru)
   const topContributors = useMemo(() => {

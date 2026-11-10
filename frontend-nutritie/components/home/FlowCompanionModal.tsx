@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Alert,
   Image,
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -58,6 +59,7 @@ export interface FlowCompanionModalProps {
   caloriiConsumate: number;
   caloriiTinta: number;
   userId?: string | null;
+  onCompanionNameChange?: (name: string | null) => void;
 }
 
 export function FlowCompanionModal({
@@ -67,6 +69,7 @@ export function FlowCompanionModal({
   caloriiConsumate,
   caloriiTinta,
   userId,
+  onCompanionNameChange,
 }: FlowCompanionModalProps) {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -95,17 +98,20 @@ export function FlowCompanionModal({
     let isCurrent = true;
     AsyncStorage.getItem(companionKey).then((saved) => {
       if (!isCurrent) return;
-      setStoredCompanionName(saved?.trim() || null);
+      const loadedName = saved?.trim() || null;
+      setStoredCompanionName(loadedName);
       setStoredCompanionNameKey(companionKey);
+      onCompanionNameChange?.(loadedName);
     }).catch(() => {
       if (!isCurrent) return;
       setStoredCompanionName(null);
       setStoredCompanionNameKey(companionKey);
+      onCompanionNameChange?.(null);
     });
     return () => {
       isCurrent = false;
     };
-  }, [visible, companionKey]);
+  }, [visible, companionKey, onCompanionNameChange]);
 
   const handleConfirmName = () => {
     const sanitized = draftName.trim().slice(0, 20);
@@ -113,6 +119,7 @@ export function FlowCompanionModal({
       Alert.alert(t('flowCompanion.invalidNameTitle'), t('flowCompanion.invalidName'));
       return;
     }
+    Keyboard.dismiss();
     Alert.alert(
       t('flowCompanion.confirmNameTitle', 'Confirmare Nume Companion'),
       t('flowCompanion.confirmNamePrompt', `Ești sigur că vrei să alegi numele «${sanitized}»? Numele va fi asociat companionului tău.`, { name: sanitized }),
@@ -128,12 +135,15 @@ export function FlowCompanionModal({
               if (activeKeyRef.current === companionKey) {
                 setStoredCompanionName(sanitized);
                 setStoredCompanionNameKey(companionKey);
+                onCompanionNameChange?.(sanitized);
                 setNamingKey(null);
                 setDraftName('');
                 try { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); } catch {}
               }
             } catch {
               if (activeKeyRef.current === companionKey) {
+                setNamingKey(null);
+                setDraftName('');
                 Alert.alert(t('flowCompanion.nameSaveFailedTitle'), t('flowCompanion.nameSaveFailed'));
               }
             } finally {
@@ -273,7 +283,7 @@ export function FlowCompanionModal({
 
               <View style={styles.heroNameRow}>
                 <Text style={[styles.heroName, { color: colors.textPrimary }]}>
-                  {companionName || t('flowCompanion.defaultName', 'Sprout')}
+                  {isNamingActive && draftName.trim() ? draftName.trim().slice(0, 20) : companionName || t('flowCompanion.defaultName', 'Sprout')}
                 </Text>
                 {companionName && !isNamingActive ? (
                   <TouchableOpacity

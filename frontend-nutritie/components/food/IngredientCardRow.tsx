@@ -73,10 +73,10 @@ export function IngredientCardRow({
             style={styles.changeActionBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
-            accessibilityLabel={`Schimbă ingredientul ${ingredient.nume}`}
+            accessibilityLabel={t('camera.changeIngredientA11y', 'Schimbă ingredientul {{name}}', { name: ingredient.nume })}
           >
             <RefreshCw size={13} color="#8B93A0" style={{ marginRight: 5 }} />
-            <Text style={styles.changeActionText}>Schimbă</Text>
+            <Text style={styles.changeActionText}>{t('camera.changeIngredient', 'Schimbă')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -85,7 +85,7 @@ export function IngredientCardRow({
             style={styles.deleteActionBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
-            accessibilityLabel={`Șterge ${ingredient.nume}`}
+            accessibilityLabel={t('camera.deleteIngredientA11y', 'Șterge {{name}}', { name: ingredient.nume })}
           >
             <Trash2 size={15} color="#EF4444" />
           </TouchableOpacity>

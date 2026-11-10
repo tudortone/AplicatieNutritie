@@ -9,6 +9,7 @@ import { PixelCompanion } from './PixelCompanion';
 interface RunnerSphereCompanionClusterProps {
   streak?: number;
   onCompanionPress?: () => void;
+  companionName?: string | null;
 }
 
 const RUNNING = new Set(['queued', 'running', 'processing']);
@@ -25,6 +26,7 @@ function useSafeAuth() {
 export function RunnerSphereCompanionCluster({
   streak = 0,
   onCompanionPress,
+  companionName,
 }: RunnerSphereCompanionClusterProps) {
   const router = useRouter();
   const auth = useSafeAuth();
@@ -136,6 +138,7 @@ export function RunnerSphereCompanionCluster({
         streak={streak}
         onPress={onCompanionPress}
         size={44}
+        companionName={companionName}
       />
     </View>
   );

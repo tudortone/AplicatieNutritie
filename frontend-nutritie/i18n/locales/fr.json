@@ -381,7 +381,17 @@
     "qaAnalysisUnavailable": "L'analyse photo QA n'est pas disponible sur le serveur.",
     "aiProviderErrorMessage": "Le fournisseur d'IA rencontre des difficultés temporaires. Veuillez réessayer.",
     "networkErrorMessage": "Problème de réseau. Vérifiez votre connexion Internet et réessayez.",
-    "saveFailedMessage": "Impossible d'enregistrer le repas dans le journal. Veuillez réessayer."
+    "saveFailedMessage": "Impossible d'enregistrer le repas dans le journal. Veuillez réessayer.",
+    "addAnotherIngredient": "Ajouter un autre ingrédient",
+    "saveFailedTitle": "Échec de l'enregistrement",
+    "saveFailedPreserved": "Vos aliments et modifications sont conservés intacts.",
+    "aiEstimateBadge": "Estimation IA",
+    "undoDelete": "Annuler la suppression",
+    "retrySaveWithCalories": "Réessayer l'enregistrement • {{calories}} kcal",
+    "saveOfflineSafe": "Enregistrer hors ligne en toute sécurité",
+    "changeIngredient": "Modifier",
+    "changeIngredientA11y": "Modifier l'ingrédient {{name}}",
+    "deleteIngredientA11y": "Supprimer {{name}}"
   },
   "photoJob": {
     "backgroundTitle": "L’analyse continue en arrière-plan",
@@ -1122,6 +1132,7 @@
     "orDivider": "ou",
     "continueWithGoogle": "Continuer avec Google",
     "continueWithApple": "Continuer avec Apple",
+    "secureOAuthNotice": "La connexion Google/Apple est sécurisée par cryptographie via l'infrastructure cloud Supabase de GetFlow.",
     "planBadge": "Votre plan quotidien calculé par IA",
     "kcalPerDay": "kcal/jour",
     "planActivateCta": "Créez votre compte ou connectez-vous pour activer votre plan.",
