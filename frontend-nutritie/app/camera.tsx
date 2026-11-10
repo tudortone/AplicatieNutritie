@@ -261,6 +261,7 @@ export default function CameraScreen() {
 
     imageKitUrlRef.current = pointer?.imageUrl || job.imageUrl || imageKitUrlRef.current;
     imageKitFileIdRef.current = pointer?.imageFileId || job.imageFileId || imageKitFileIdRef.current;
+    setPreviewPhotoUri(pointer?.localImageUri || pointer?.draftUri || pointer?.imageUrl || job.imageUrl || imageKitUrlRef.current);
     currentPhotoJobIdRef.current = job.id;
     idOperatieSalvareRef.current = pointer?.saveOperationId || null;
     pendingPhotoSavePayloadRef.current = pointer?.savePayload || null;
@@ -788,6 +789,7 @@ export default function CameraScreen() {
     }
     currentPhotoJobIdRef.current = null;
     setRezultat([]);
+    setPreviewPhotoUri(null);
     setScanError(null);
     setSeIncarca(false);
     setPhotoPhase('idle');

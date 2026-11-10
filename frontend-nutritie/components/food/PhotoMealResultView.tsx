@@ -184,8 +184,9 @@ export function PhotoMealResultView({
       <ScrollView
         testID="camera-result-scroll"
         style={styles.scrollArea}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset + 96 }]}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(bottomInset, 16) + 128 }]}
+        showsVerticalScrollIndicator={true}
+        nestedScrollEnabled={true}
         keyboardShouldPersistTaps="handled"
       >
         {/* 2. Top Header: Thumbnail + Title + AI Estimate + Category Chip */}

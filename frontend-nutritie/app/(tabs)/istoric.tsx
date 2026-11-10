@@ -578,8 +578,8 @@ export default function HistoryScreen() {
               <View style={{ marginTop: 8, alignItems: 'center' }}>
                 <Text style={{ fontSize: 13, fontWeight: '700', color: caloriiRamaseZi < 0 ? colors.danger : colors.accent }}>
                   {caloriiRamaseZi >= 0
-                    ? `${caloriiRamaseZi} kcal ${t('home.caloriesRemaining', 'rămase')}`
-                    : `${Math.abs(caloriiRamaseZi)} kcal ${t('home.overLimit', 'peste limită')}`}
+                    ? `${t('home.caloriesRemaining')}: ${caloriiRamaseZi} kcal`
+                    : `${t('home.caloriesOver')}: ${Math.abs(caloriiRamaseZi)} kcal`}
                 </Text>
                 {caloriiArseZi > 0 && (
                   <Text style={{ fontSize: 11, fontWeight: '600', color: colors.warning, marginTop: 2 }}>

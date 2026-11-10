@@ -215,7 +215,11 @@ export function FlowCompanionModal({
             <X size={16} color={colors.textSecondary} />
           </TouchableOpacity>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(34, insets.bottom + 20) }]}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(34, insets.bottom + 20) }]}
+          >
             {/* Hero Avatar Card */}
             <View style={styles.heroSection}>
               <LinearGradient
@@ -329,6 +333,8 @@ export function FlowCompanionModal({
                     placeholderTextColor={colors.textSecondary}
                     style={[styles.namingInput, { color: colors.textPrimary }]}
                     maxLength={20}
+                    returnKeyType="done"
+                    onSubmitEditing={handleConfirmName}
                     autoFocus
                   />
                   <TouchableOpacity
