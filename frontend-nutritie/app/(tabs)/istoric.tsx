@@ -575,17 +575,23 @@ export default function HistoryScreen() {
 
             <View style={{ alignItems: 'center', marginVertical: Spacing.md }}>
               <MacroRing consumat={totalCalorii} tinta={bugetCaloricSincronizat} size={150} strokeWidth={14} />
-              <View style={{ marginTop: 8, alignItems: 'center' }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: caloriiRamaseZi < 0 ? colors.danger : colors.accent }}>
-                  {caloriiRamaseZi >= 0
-                    ? `${t('home.caloriesRemaining')}: ${caloriiRamaseZi} kcal`
-                    : `${t('home.caloriesOver')}: ${Math.abs(caloriiRamaseZi)} kcal`}
+              <View style={{ marginTop: 10, alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, color: colors.textSecondary }}>
+                  {t('home.caloriesRemaining', 'CALORII RĂMASE')}
                 </Text>
-                {caloriiArseZi > 0 && (
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: colors.warning, marginTop: 2 }}>
-                    {t('home.burnedSportInline', { calories: caloriiArseZi })}
+                <Text style={{ fontSize: 24, fontWeight: '900', color: caloriiRamaseZi < 0 ? colors.danger : colors.accent, letterSpacing: -0.5, marginTop: 2 }}>
+                  {caloriiRamaseZi < 0 ? `+${Math.abs(caloriiRamaseZi)}` : caloriiRamaseZi} kcal
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textTertiary }}>
+                    {t('home.consumed')}: {totalCalorii} • {t('home.target')}: {caloriiTinta || 2000} kcal
                   </Text>
-                )}
+                  {caloriiArseZi > 0 && (
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.warning }}>
+                      • 🔥 +{caloriiArseZi} {t('home.burned', 'arse')}
+                    </Text>
+                  )}
+                </View>
               </View>
             </View>
 

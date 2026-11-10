@@ -7,8 +7,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Modal,
+  Pressable,
 } from 'react-native';
-import { ChevronDown, AlertTriangle, Plus, RotateCcw } from 'lucide-react-native';
+import { ChevronDown, AlertTriangle, Plus, RotateCcw, Maximize2, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
@@ -69,6 +71,7 @@ export function PhotoMealResultView({
   const [changeSheetTargetIndex, setChangeSheetTargetIndex] = useState<number | null>(null);
   const [isAddingNewIngredient, setIsAddingNewIngredient] = useState(false);
   const [lastDeletedItem, setLastDeletedItem] = useState<{ item: AlimentScanat; index: number } | null>(null);
+  const [photoZoomVisible, setPhotoZoomVisible] = useState(false);
 
   // Synchronous macro recalculation from current items
   const totals = useMemo(() => {
@@ -189,86 +192,113 @@ export function PhotoMealResultView({
         nestedScrollEnabled={true}
         keyboardShouldPersistTaps="handled"
       >
-        {/* 2. Top Header: Thumbnail + Title + AI Estimate + Category Chip */}
-        <View style={styles.topHeader}>
-          {photoUri ? (
-            <Image source={{ uri: photoUri }} style={styles.thumbnail} />
-          ) : (
-            <View style={[styles.thumbnail, styles.thumbnailFallback]}>
-              <FlowIcon name="camera" size={24} color="#CCFF00" />
-            </View>
-          )}
-
-          <View style={styles.headerInfo}>
-            <Text maxFontSizeMultiplier={1.3} style={styles.eyebrowText}>
-              {t('camera.detectedMeal')}
-            </Text>
-            <View style={styles.titleBadgeRow}>
-              <Text numberOfLines={2} style={styles.mealTitle}>
-                {mealTitle}
-              </Text>
-            </View>
-
-            <View style={styles.metaRow}>
-              <View style={styles.aiEstimateBadge}>
-                <View style={styles.aiEstimateDot} />
-                <Text style={styles.aiEstimateText}>{t('camera.aiEstimateBadge', 'Estimare AI')}</Text>
+        {/* 2. Hero Meal Photo Card & Lightbox Preview */}
+        {photoUri ? (
+          <TouchableOpacity
+            testID="camera-hero-photo-preview"
+            activeOpacity={0.92}
+            onPress={() => {
+              try {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              } catch {}
+              setPhotoZoomVisible(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={t('camera.tapToZoomPhoto', 'Apasă pentru a mări poza')}
+            style={styles.heroPhotoCard}
+          >
+            <Image
+              source={{ uri: photoUri }}
+              style={styles.heroPhotoImage}
+              resizeMode="cover"
+            />
+            <LinearGradient
+              colors={['transparent', 'rgba(9, 12, 14, 0.85)']}
+              style={styles.heroPhotoGradient}
+            />
+            <View style={styles.heroPhotoTopRow}>
+              <View style={styles.heroPhotoAIBadge}>
+                <FlowIcon name="zap" size={11} color="#CCFF00" />
+                <Text style={styles.heroPhotoAIBadgeText}>Smart AI</Text>
               </View>
-
-              {/* Meal Category Dropdown Toggle */}
-              <TouchableOpacity
-                testID="camera-meal-correction-toggle"
-                disabled={disabled || pendingPhotoSaveLocked}
-                onPress={() => setMealCategoryOpen((prev) => !prev)}
-                style={styles.categoryChip}
-                accessibilityRole="button"
-                accessibilityLabel={t('camera.changeMealCategory', 'Corectează categoria mesei')}
-                accessibilityState={{ disabled: Boolean(disabled || pendingPhotoSaveLocked) }}
-              >
-                <FlowIcon name={CATEGORIE_ICONA[tipMasa]} size={12} color="#CCFF00" />
-                <Text style={styles.categoryChipText}>
-                  {t(`chat.mealCategory.${tipMasa}`, tipMasa)}
-                </Text>
-                <ChevronDown size={12} color="#CCFF00" />
-              </TouchableOpacity>
+              <View style={styles.heroPhotoZoomBadge}>
+                <Maximize2 size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={styles.heroPhotoZoomText}>{t('camera.tapToZoom', 'Zoom')}</Text>
+              </View>
             </View>
+          </TouchableOpacity>
+        ) : null}
 
-            {/* Credit Consumption Status Badge */}
-            <View
-              style={[styles.creditStatusRow, pendingPhotoSaveLocked && styles.creditStatusRowDraft]}
-              testID="photo-credit-status-badge"
-            >
-              <FlowIcon
-                name={pendingPhotoSaveLocked ? 'file-text' : 'zap'}
-                size={11}
-                color={pendingPhotoSaveLocked ? '#8B93A0' : '#CCFF00'}
-              />
-              <Text style={[styles.creditStatusText, pendingPhotoSaveLocked && styles.creditStatusTextDraft]}>
-                {pendingPhotoSaveLocked
-                  ? t('camera.draftRestoredNoCredit', 'Ciornă restaurată • Fără cost suplimentar')
-                  : flowCredits.unlimited
-                  ? t('camera.creditsUnlimited', 'Acces Premium Nelimitat')
-                  : flowCredits.lastConsumedCategory === 'daily'
-                  ? t('camera.dailyCreditConsumedCount', '1 Credit Gratuit folosit • {{count}} rămase', { count: flowCredits.balance.total })
-                  : flowCredits.lastConsumedCategory === 'rewarded'
-                  ? t('camera.rewardedCreditConsumedCount', '1 Credit Reclamă folosit • {{count}} rămase', { count: flowCredits.balance.total })
-                  : flowCredits.lastConsumedCategory === 'purchased'
-                  ? t('camera.purchasedCreditConsumedCount', '1 Credit Cumpărat folosit • {{count}} rămase', { count: flowCredits.balance.total })
-                  : t('camera.creditConsumedCount', '1 Flow Credit folosit • {{count}} rămase', { count: flowCredits.balance.total })}
-              </Text>
-            </View>
-
-            {/* Pending Photo Save Lock Notice */}
-            {pendingPhotoSaveLocked ? (
-              <Text
-                testID="camera-pending-save-lock-notice"
-                accessibilityRole="alert"
-                style={styles.pendingSaveLockedNotice}
-              >
-                {t('camera.pendingPhotoSaveLocked')}
-              </Text>
-            ) : null}
+        {/* Meal Header Info */}
+        <View style={styles.headerInfoBlock}>
+          <Text maxFontSizeMultiplier={1.3} style={styles.eyebrowText}>
+            {t('camera.detectedMeal')}
+          </Text>
+          <View style={styles.titleBadgeRow}>
+            <Text numberOfLines={2} style={styles.mealTitle}>
+              {mealTitle}
+            </Text>
           </View>
+
+          <View style={styles.metaRow}>
+            <View style={styles.aiEstimateBadge}>
+              <View style={styles.aiEstimateDot} />
+              <Text style={styles.aiEstimateText}>{t('camera.aiEstimateBadge', 'Estimare AI')}</Text>
+            </View>
+
+            {/* Meal Category Dropdown Toggle */}
+            <TouchableOpacity
+              testID="camera-meal-correction-toggle"
+              disabled={disabled || pendingPhotoSaveLocked}
+              onPress={() => setMealCategoryOpen((prev) => !prev)}
+              style={styles.categoryChip}
+              accessibilityRole="button"
+              accessibilityLabel={t('camera.changeMealCategory', 'Corectează categoria mesei')}
+              accessibilityState={{ disabled: Boolean(disabled || pendingPhotoSaveLocked) }}
+            >
+              <FlowIcon name={CATEGORIE_ICONA[tipMasa]} size={12} color="#CCFF00" />
+              <Text style={styles.categoryChipText}>
+                {t(`chat.mealCategory.${tipMasa}`, tipMasa)}
+              </Text>
+              <ChevronDown size={12} color="#CCFF00" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Credit Consumption Status Badge */}
+          <View
+            style={[styles.creditStatusRow, pendingPhotoSaveLocked && styles.creditStatusRowDraft]}
+            testID="photo-credit-status-badge"
+          >
+            <FlowIcon
+              name={pendingPhotoSaveLocked ? 'file-text' : 'zap'}
+              size={11}
+              color={pendingPhotoSaveLocked ? '#8B93A0' : '#CCFF00'}
+            />
+            <Text style={[styles.creditStatusText, pendingPhotoSaveLocked && styles.creditStatusTextDraft]}>
+              {pendingPhotoSaveLocked
+                ? t('camera.draftRestoredNoCredit', 'Ciornă restaurată • Fără cost suplimentar')
+                : flowCredits.unlimited
+                ? t('camera.creditsUnlimited', 'Acces Premium Nelimitat')
+                : flowCredits.lastConsumedCategory === 'daily'
+                ? t('camera.dailyCreditConsumedCount', '1 Credit Gratuit folosit • {{count}} rămase', { count: flowCredits.balance.total })
+                : flowCredits.lastConsumedCategory === 'rewarded'
+                ? t('camera.rewardedCreditConsumedCount', '1 Credit Reclamă folosit • {{count}} rămase', { count: flowCredits.balance.total })
+                : flowCredits.lastConsumedCategory === 'purchased'
+                ? t('camera.purchasedCreditConsumedCount', '1 Credit Cumpărat folosit • {{count}} rămase', { count: flowCredits.balance.total })
+                : t('camera.creditConsumedCount', '1 Flow Credit folosit • {{count}} rămase', { count: flowCredits.balance.total })}
+            </Text>
+          </View>
+
+          {/* Pending Photo Save Lock Notice */}
+          {pendingPhotoSaveLocked ? (
+            <Text
+              testID="camera-pending-save-lock-notice"
+              accessibilityRole="alert"
+              style={styles.pendingSaveLockedNotice}
+            >
+              {t('camera.pendingPhotoSaveLocked')}
+            </Text>
+          ) : null}
         </View>
 
         {/* Category Selection Row (Accordion) */}
@@ -468,6 +498,35 @@ export function PhotoMealResultView({
         }}
         onSelectCandidate={handleSelectCandidate}
       />
+
+      {/* 7. Lightbox Full-screen Modal for Photo Inspection */}
+      <Modal
+        visible={photoZoomVisible && Boolean(photoUri)}
+        transparent={false}
+        animationType="fade"
+        onRequestClose={() => setPhotoZoomVisible(false)}
+        testID="photo-zoom-lightbox-modal"
+      >
+        <View style={styles.lightboxContainer}>
+          <Pressable
+            testID="photo-zoom-close-btn"
+            onPress={() => setPhotoZoomVisible(false)}
+            style={styles.lightboxCloseBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.close', 'Închide')}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <X size={22} color="#FFFFFF" />
+          </Pressable>
+          {photoUri ? (
+            <Image
+              source={{ uri: photoUri }}
+              style={styles.lightboxImage}
+              resizeMode="contain"
+            />
+          ) : null}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -515,6 +574,93 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 10,
+  },
+  heroPhotoCard: {
+    width: '100%',
+    height: 200,
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 14,
+    backgroundColor: '#12161A',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  heroPhotoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroPhotoGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 70,
+  },
+  heroPhotoTopRow: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroPhotoAIBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(9, 12, 14, 0.75)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(204, 255, 0, 0.3)',
+  },
+  heroPhotoAIBadgeText: {
+    color: '#CCFF00',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  heroPhotoZoomBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(9, 12, 14, 0.75)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  heroPhotoZoomText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  headerInfoBlock: {
+    marginBottom: 14,
+  },
+  lightboxContainer: {
+    flex: 1,
+    backgroundColor: '#090C0E',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxCloseBtn: {
+    position: 'absolute',
+    top: 48,
+    right: 20,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxImage: {
+    width: '100%',
+    height: '85%',
   },
   topHeader: {
     flexDirection: 'row',

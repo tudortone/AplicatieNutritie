@@ -1480,7 +1480,7 @@ export default function CameraScreen() {
             style={[
               styles.resultSheet,
               {
-                top: insets.top + 62,
+                top: insets.top + 16,
                 borderColor: colors.accent + '26',
               },
             ]}
@@ -1669,8 +1669,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#090C0E',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     overflow: 'hidden',
     borderWidth: 1,
   },

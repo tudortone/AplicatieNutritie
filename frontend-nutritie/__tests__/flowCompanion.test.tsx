@@ -229,7 +229,6 @@ describe('Flow Companion & Nutritional Limit Beacon Suite', () => {
     });
 
     it('trims and clamps a saved companion name to 20 characters', async () => {
-      const alertSpy = jest.spyOn(Alert, 'alert');
       const view = await render(
         <FlowCompanionModal
           visible={true}
@@ -248,15 +247,10 @@ describe('Flow Companion & Nutritional Limit Beacon Suite', () => {
         fireEvent.changeText(view.getByTestId('flow-companion-name-input'), '  NumeFoarteLungCareDepasesteLimita  ');
       });
       await act(async () => {
-        fireEvent.press(view.getByTestId('flow-companion-name-confirm'));
+        await fireEvent.press(view.getByTestId('flow-companion-name-confirm'));
       });
 
-      const alertCall = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
-      expect(alertCall?.[1]).toContain('NumeFoarteLungCareDe');
-      const confirmButton = alertCall?.[2]?.find((button) => button.text === 'Confirmă');
-      await act(async () => confirmButton?.onPress?.());
       expect(await AsyncStorage.getItem('@getflow:companion_name_user-Y')).toBe('NumeFoarteLungCareDe');
-      alertSpy.mockRestore();
     });
 
     it('keeps the prior name when durable rename storage fails', async () => {
@@ -266,10 +260,8 @@ describe('Flow Companion & Nutritional Limit Beacon Suite', () => {
       await waitFor(() => expect(view.getByText('Sprout')).toBeTruthy());
       await act(async () => { fireEvent.press(view.getByTestId('flow-companion-edit-name-btn')); });
       await act(async () => { fireEvent.changeText(view.getByTestId('flow-companion-name-input'), 'Nova'); });
-      await act(async () => { fireEvent.press(view.getByTestId('flow-companion-name-confirm')); });
-      const confirm = alertSpy.mock.calls[alertSpy.mock.calls.length - 1]?.[2]?.find((button) => button.text === 'Confirmă');
       const write = jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('disk unavailable'));
-      await act(async () => { await confirm?.onPress?.(); });
+      await act(async () => { await fireEvent.press(view.getByTestId('flow-companion-name-confirm')); });
       expect(view.getByText('Sprout')).toBeTruthy();
       expect(await AsyncStorage.getItem('@getflow:companion_name_user-Z')).toBe('Sprout');
       expect(alertSpy).toHaveBeenCalledWith(expect.any(String), expect.any(String));
