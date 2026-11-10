@@ -59,13 +59,6 @@ const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
  */
 const EXCEPTII_AUDIT = [
 	{
-		pachet: 'node-forge',
-		range: '*',
-		advisory: 'GHSA-86W9-CPQP-85RV',
-		motiv: 'Transitiv prin @expo/code-signing-certificates. Advisory 2026-10-01 GHSA-86w9-cpqp-85rv fara versiune remediata pe npm (afecteaza <=1.4.0). Utilizat exclusiv la build-time in Expo CLI; absent din runtime bundle aplicatie.',
-		expira: '2026-12-31',
-	},
-	{
 		pachet: 'braces',
 		range: '*',
 		advisory: 'GHSA-VFJ7-8CJW-P6XM',

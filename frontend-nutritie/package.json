@@ -120,7 +120,8 @@
     },
     "metro": "0.83.8",
     "metro-config": "0.83.8",
-    "metro-transform-worker": "0.83.8"
+    "metro-transform-worker": "0.83.8",
+    "node-forge": "^1.4.3"
   },
   "private": true,
   "expo": {
