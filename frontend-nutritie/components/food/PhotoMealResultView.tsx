@@ -216,13 +216,9 @@ export function PhotoMealResultView({
               colors={['transparent', 'rgba(9, 12, 14, 0.85)']}
               style={styles.heroPhotoGradient}
             />
-            <View style={styles.heroPhotoTopRow}>
-              <View style={styles.heroPhotoAIBadge}>
-                <FlowIcon name="zap" size={11} color="#CCFF00" />
-                <Text style={styles.heroPhotoAIBadgeText}>Smart AI</Text>
-              </View>
+            <View style={styles.heroPhotoBottomRow}>
               <View style={styles.heroPhotoZoomBadge}>
-                <Maximize2 size={12} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Maximize2 size={12} color="#CCFF00" style={{ marginRight: 5 }} />
                 <Text style={styles.heroPhotoZoomText}>{t('camera.tapToZoom', 'Zoom')}</Text>
               </View>
             </View>
@@ -596,41 +592,23 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 70,
   },
-  heroPhotoTopRow: {
+  heroPhotoBottomRow: {
     position: 'absolute',
-    top: 12,
-    left: 12,
+    bottom: 10,
     right: 12,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-  },
-  heroPhotoAIBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(9, 12, 14, 0.75)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.3)',
-  },
-  heroPhotoAIBadgeText: {
-    color: '#CCFF00',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.3,
   },
   heroPhotoZoomBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(9, 12, 14, 0.75)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    backgroundColor: 'rgba(9, 12, 14, 0.82)',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderColor: 'rgba(204, 255, 0, 0.35)',
   },
   heroPhotoZoomText: {
     color: '#FFFFFF',

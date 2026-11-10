@@ -1480,7 +1480,7 @@ export default function CameraScreen() {
             style={[
               styles.resultSheet,
               {
-                top: insets.top + 16,
+                top: insets.top + 62,
                 borderColor: colors.accent + '26',
               },
             ]}

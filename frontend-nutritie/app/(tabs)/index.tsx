@@ -593,7 +593,7 @@ export default function HomeScreen() {
                 style={s.ringCardTop}
                 accessible={true}
                 accessibilityRole="summary"
-                accessibilityLabel={`${caloriiRamase < 0 ? t('home.caloriesOver') : t('home.caloriesRemaining')}: ${caloriiRamase < 0 ? Math.abs(caloriiRamase) : caloriiRamase} kcal. ${t('home.consumed')}: ${caloriiConsumate} kcal. ${t('home.target')}: ${caloriiTinta} kcal.${totalCaloriiArse > 0 ? ` ${t('home.burnedSportInline', { calories: totalCaloriiArse })}.` : ''}`}
+                accessibilityLabel={`${caloriiRamase < 0 ? t('home.caloriesOver') : t('home.caloriesRemaining')}: ${caloriiRamase < 0 ? Math.abs(caloriiRamase) : caloriiRamase} kcal. ${t('home.consumed')}: ${caloriiConsumate} kcal. ${t('home.target')}: ${caloriiTinta} kcal.${caloriiArseTotal > 0 ? ` ${t('home.burnedSportInline', { calories: caloriiArseTotal })}.` : ''}`}
               >
                 <View style={s.ringCardInfo}>
                   <Text style={[s.ringCardTitle, { color: caloriiRamase < 0 ? colors.danger : colors.textSecondary }]} maxFontSizeMultiplier={1.3}>

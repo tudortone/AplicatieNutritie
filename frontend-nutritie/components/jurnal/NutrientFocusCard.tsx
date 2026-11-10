@@ -78,14 +78,10 @@ export const NutrientFocusCard: React.FC<NutrientFocusCardProps> = ({
 
   // Calcul agregat al nutrienților pe baza meselor curente
   const effectiveTargets = useMemo(() => {
-    const combined = {
-      ...(preferences.customTargets || {}),
+    return {
       ...(profileTargets || {}),
+      ...(preferences.customTargets || {}),
     };
-    if (profileTargets?.calories && profileTargets.calories > 0) {
-      combined.calories = profileTargets.calories;
-    }
-    return combined;
   }, [profileTargets, preferences.customTargets]);
 
   const aggregatedNutrients: NutrientAggregatedItem[] = useMemo(() => {

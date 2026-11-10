@@ -177,10 +177,10 @@ export default function HistoryScreen() {
   } = useMeseAzi(dataSelectata);
   const { zileCuMese, refreshZileCuMese } = useZileCuMese();
   const { isEnabled: isHealthEnabled, activeCalories: trackerActiveCalories, refreshSteps } = useHealthSync();
-  const { totalCaloriiArse, refresh: refreshAntrenamente } = useAntrenamente();
+  const { totalCaloriiArse, refresh: refreshAntrenamente } = useAntrenamente(dataSelectata);
 
   const esteAzi = new Date().toDateString() === dataSelectata.toDateString();
-  const caloriiArseZi = esteAzi ? ((isHealthEnabled ? trackerActiveCalories : 0) + (totalCaloriiArse || 0)) : 0;
+  const caloriiArseZi = (esteAzi && isHealthEnabled ? trackerActiveCalories : 0) + (totalCaloriiArse || 0);
   const bugetCaloricSincronizat = (caloriiTinta || 2000) + caloriiArseZi;
   const caloriiRamaseZi = bugetCaloricSincronizat - totalCalorii;
   const esteIeri = (() => {
@@ -576,20 +576,24 @@ export default function HistoryScreen() {
             <View style={{ alignItems: 'center', marginVertical: Spacing.md }}>
               <MacroRing consumat={totalCalorii} tinta={bugetCaloricSincronizat} size={150} strokeWidth={14} />
               <View style={{ marginTop: 10, alignItems: 'center' }}>
-                <Text style={{ fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, color: colors.textSecondary }}>
-                  {t('home.caloriesRemaining', 'CALORII RĂMASE')}
+                <Text style={{ fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, color: caloriiRamaseZi < 0 ? colors.danger : colors.textSecondary }}>
+                  {caloriiRamaseZi < 0 ? t('home.caloriesOver', 'DEPĂȘIRE CALORII') : t('home.caloriesRemaining', 'CALORII RĂMASE')}
                 </Text>
                 <Text style={{ fontSize: 24, fontWeight: '900', color: caloriiRamaseZi < 0 ? colors.danger : colors.accent, letterSpacing: -0.5, marginTop: 2 }}>
-                  {caloriiRamaseZi < 0 ? `+${Math.abs(caloriiRamaseZi)}` : caloriiRamaseZi} kcal
+                  {caloriiRamaseZi < 0 ? Math.abs(caloriiRamaseZi) : caloriiRamaseZi} kcal
                 </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 4 }}>
                   <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textTertiary }}>
-                    {t('home.consumed')}: {totalCalorii} • {t('home.target')}: {caloriiTinta || 2000} kcal
+                    {t('home.consumed')} {totalCalorii} kcal • {t('home.target')} {caloriiTinta || 2000} kcal
                   </Text>
                   {caloriiArseZi > 0 && (
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.warning }}>
-                      • 🔥 +{caloriiArseZi} {t('home.burned', 'arse')}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.textTertiary }}>•</Text>
+                      <Flame size={12} color={colors.warning} />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: colors.warning }}>
+                        +{caloriiArseZi} {t('home.burned', 'arse')}
+                      </Text>
+                    </View>
                   )}
                 </View>
               </View>

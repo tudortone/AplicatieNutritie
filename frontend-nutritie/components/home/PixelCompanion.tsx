@@ -212,23 +212,24 @@ export function PixelCompanion({
         <SproutArtwork size={size - 4} />
       </Animated.View>
 
-      {/* Existing streak stage, not a separate companion XP level. */}
-      <View style={styles.levelBadge}>
-        <Text style={styles.levelText} maxFontSizeMultiplier={1.2}>
-          {stage}/5
-        </Text>
+      {/* Existing streak stage, plus optional custom companion name stacked cleanly. */}
+      <View style={styles.metaColumn}>
+        {companionName ? (
+          <Text
+            testID="pixel-companion-custom-name"
+            numberOfLines={1}
+            style={styles.companionNameText}
+            maxFontSizeMultiplier={1.2}
+          >
+            {companionName}
+          </Text>
+        ) : null}
+        <View style={styles.levelBadge}>
+          <Text style={styles.levelText} maxFontSizeMultiplier={1.2}>
+            {stage}/5
+          </Text>
+        </View>
       </View>
-
-      {companionName ? (
-        <Text
-          testID="pixel-companion-custom-name"
-          numberOfLines={1}
-          style={styles.companionNameText}
-          maxFontSizeMultiplier={1.2}
-        >
-          {companionName}
-        </Text>
-      ) : null}
     </Pressable>
   );
 }
@@ -240,11 +241,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 48,
     minWidth: 48,
-    gap: 4,
+    gap: 5,
   },
   companionWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  metaColumn: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: 2,
   },
   levelBadge: {
     paddingHorizontal: 5,
@@ -262,9 +269,9 @@ const styles = StyleSheet.create({
   },
   companionNameText: {
     color: '#F1F5F9',
-    fontSize: 11,
-    fontWeight: '700',
-    maxWidth: 68,
+    fontSize: 10.5,
+    fontWeight: '800',
+    maxWidth: 54,
     letterSpacing: -0.2,
     includeFontPadding: false,
   },

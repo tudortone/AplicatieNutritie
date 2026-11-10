@@ -277,7 +277,7 @@ export function FlowCompanionModal({
 
               <View style={styles.heroNameRow}>
                 <Text style={[styles.heroName, { color: colors.textPrimary }]}>
-                  {isNamingActive && draftName.length > 0 ? draftName : companionName || t('flowCompanion.defaultName', 'Sprout')}
+                  {isNamingActive && draftName.trim().length > 0 ? draftName.trim() : companionName || t('flowCompanion.defaultName', 'Sprout')}
                 </Text>
                 {companionName && !isNamingActive ? (
                   <TouchableOpacity
@@ -667,15 +667,11 @@ const styles = StyleSheet.create({
   namingInput: {
     flex: 1,
     minHeight: 44,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 8,
     paddingVertical: 8,
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
-    borderWidth: 1,
-    borderColor: 'rgba(204,255,0,0.35)',
     includeFontPadding: false,
     textAlignVertical: 'center',
   },
