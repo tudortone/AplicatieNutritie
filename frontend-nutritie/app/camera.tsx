@@ -41,6 +41,9 @@ import {
   savePhotoJobSaveAttempt,
   submitPhotoJob,
   waitForPhotoJob,
+  readPointer,
+  savePreliminaryPhotoJobPointer,
+  getPhotoJob,
   PhotoApiError,
   type ActivePhotoJobPointer,
   type PhotoJob,
@@ -358,6 +361,10 @@ export default function CameraScreen() {
       const imagineOptimizata = await optimizeImageBeforeUpload(imageUri, knownDimensions);
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       setPreviewPhotoUri(imagineOptimizata.uri);
+      void savePreliminaryPhotoJobPointer({
+        userId: ownerId,
+        localImageUri: imagineOptimizata.uri,
+      }).catch(() => { });
 
       const [, amprentaBaza, uploaded] = await Promise.all([
         saveLocalImageDraft(imagineOptimizata.uri, ownerId).then((savedUri) => {
@@ -460,15 +467,52 @@ export default function CameraScreen() {
       )) {
         const quotaMsg = t('camera.quotaExceededMessage');
         setScanError(quotaMsg);
+        setSeIncarca(false);
         Alert.alert(t('camera.quotaExceededTitle'), quotaMsg, [
           { text: t('common.cancel'), style: 'cancel' },
           { text: t('camera.openCredits'), onPress: () => openFlowCredits() },
         ]);
         return;
       }
+      if (error instanceof PhotoApiError && (error.code === 'PHOTO_IN_PROGRESS' || error.status === 409)) {
+        if (__DEV__) console.log('[Camera] Job already in progress on server, reconnecting...');
+        try {
+          const inProgress = await recoverPhotoJobForCamera({ token: session.access_token, userId: ownerId });
+          if (inProgress && !inProgress.missingJob && inProgress.job) {
+            currentPhotoJobIdRef.current = inProgress.job.id;
+            setPreviewPhotoUri(inProgress.pointer.localImageUri || inProgress.pointer.draftUri || inProgress.pointer.imageUrl || null);
+            setAnalysisStage(inProgress.job.status === 'queued' ? 2 : 3);
+            setPhotoPhase('processing');
+            setSeIncarca(true);
+            const completed = inProgress.job.status === 'succeeded' || inProgress.job.status === 'completed'
+              ? inProgress.job
+              : await waitForPhotoJob({
+                token: session.access_token,
+                userId: ownerId,
+                jobId: inProgress.job.id,
+                pollIntervalMs: 750,
+                signal: controller.signal,
+                onStatus: (job: PhotoJob) => {
+                  if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+                  if (job.status === 'queued') setAnalysisStage(2);
+                  else if (job.status === 'running' || job.status === 'processing') setAnalysisStage(3);
+                  else if (job.status === 'succeeded' || job.status === 'completed') setAnalysisStage(4);
+                },
+              });
+            if (isPhotoOwnerCurrent(ownerId, accountGeneration)) {
+              applyPhotoJobResult(completed, inProgress.pointer, ownerId, accountGeneration);
+              setSeIncarca(false);
+              return;
+            }
+          }
+        } catch (reconnectErr) {
+          if (__DEV__) console.warn('[Camera] Failed to reconnect to in-progress job:', reconnectErr);
+        }
+      }
       if (timeoutDepasit) {
         setPhotoPhase('background');
         setScanError(null);
+        setSeIncarca(false);
         return;
       }
       const isNonFoodErrorCode = error instanceof PhotoApiError && (
@@ -510,6 +554,7 @@ export default function CameraScreen() {
       }
       if (error instanceof PhotoApiError && error.status === 422 && activePointer) {
         setPhotoPhase('failed');
+        setSeIncarca(false);
         setFailedPhotoJob({
           job: { id: activePointer.jobId, status: 'failed', errorCode: error.code },
           pointer: activePointer,
@@ -523,13 +568,16 @@ export default function CameraScreen() {
           ? t('camera.networkErrorMessage', 'Conexiunea a fost întreruptă.')
           : t('camera.genericScanError', 'Analiza nu a putut fi finalizată.');
       setScanError(friendlyMsg);
+      setSeIncarca(false);
     } finally {
       clearTimeout(backgroundId);
       clearTimeout(timeoutId);
       isTakingPhotoRef.current = false;
       if (abortControllerRef.current === controller) {
         abortControllerRef.current = null;
-        if (isMountedRef.current) setSeIncarca(false);
+      }
+      if (isMountedRef.current && !currentPhotoJobIdRef.current) {
+        setSeIncarca(false);
       }
     }
   }, [applyPhotoJobResult, consumeOptimisticCredit, i18n.language, isPhotoOwnerCurrent, openFlowCredits, refreshFlowCredits, session?.access_token, session?.user?.id, t]);
@@ -612,19 +660,45 @@ export default function CameraScreen() {
           }
           return;
         }
+        if (active.job.id.startsWith('in_flight')) {
+          setPreviewPhotoUri(active.pointer.localImageUri || active.pointer.draftUri || null);
+          setAnalysisStage(1);
+          setPhotoPhase('processing');
+          setSeIncarca(true);
+          let realPointer: ActivePhotoJobPointer | null = null;
+          for (let i = 0; i < 20; i++) {
+            if (controller.signal.aborted || !isPhotoOwnerCurrent(userId, accountGeneration)) return;
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            const p = await readPointer(userId).catch(() => null);
+            if (p && !p.jobId.startsWith('in_flight')) {
+              realPointer = p;
+              break;
+            }
+          }
+          if (realPointer) {
+            const fetched = await getPhotoJob({ token, jobId: realPointer.jobId, signal: controller.signal });
+            active = { job: fetched, pointer: realPointer };
+          } else {
+            setSeIncarca(false);
+            setPhotoPhase('idle');
+            return;
+          }
+        }
         currentPhotoJobIdRef.current = active.job.id;
         imageKitUrlRef.current = active.pointer.imageUrl || active.job.imageUrl || null;
         imageKitFileIdRef.current = active.pointer.imageFileId || active.job.imageFileId || null;
+        setPreviewPhotoUri(active.pointer.localImageUri || active.pointer.draftUri || active.pointer.imageUrl || active.job.imageUrl || null);
         if (active.job.status === 'failed' || active.job.status === 'cancelled') {
           setPhotoPhase('failed');
           setFailedPhotoJob(active);
+          setSeIncarca(false);
           return;
         }
         if (active.job.status === 'queued') setAnalysisStage(2);
         else if (active.job.status === 'running' || active.job.status === 'processing') setAnalysisStage(3);
         else if (active.job.status === 'succeeded' || active.job.status === 'completed') setAnalysisStage(4);
         setSeIncarca(true);
-        setPhotoPhase(active.job.status === 'succeeded' || active.job.status === 'completed' ? 'completed' : 'background');
+        setPhotoPhase(active.job.status === 'succeeded' || active.job.status === 'completed' ? 'completed' : 'processing');
         const completed = active.job.status === 'succeeded' || active.job.status === 'completed'
           ? active.job
           : await waitForPhotoJob({
@@ -719,44 +793,53 @@ export default function CameraScreen() {
     if (!recoveryChecked || scanError || failedPhotoJob || isNonFood) return;
     if (draftPromptAfisatRef.current) return;
     if (!session?.access_token || !session.user.id || seIncarca || rezultat.length > 0) return;
-    draftPromptAfisatRef.current = true;
+    if (currentPhotoJobIdRef.current || photoPhase === 'processing' || photoPhase === 'background' || photoPhase === 'completed') {
+      return;
+    }
     const ownerId = session.user.id;
     const accountGeneration = accountGenerationRef.current;
 
-    listPendingDrafts(ownerId)
-      .then((pending) => {
-        if (
-          pending.length === 0 ||
-          !isMountedRef.current ||
-          !isPhotoOwnerCurrent(ownerId, accountGeneration) ||
-          isTakingPhotoRef.current ||
-          abortControllerRef.current !== null
-        ) {
-          return;
-        }
-        const ultimulDraft = pending[pending.length - 1];
-        Alert.alert(
-          t('camera.pendingDraftTitle'),
-          t('camera.pendingDraftMessage'),
-          [
-            {
-              text: t('alerts.butoane.anuleaza'),
-              style: 'destructive',
-              onPress: () => {
-                if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
-                purgeLocalImageDrafts(ownerId).catch(() => { });
-              },
+    readPointer(ownerId).then((pointer) => {
+      if (pointer) return [];
+      return listPendingDrafts(ownerId);
+    }).then((pending) => {
+      if (
+        !pending ||
+        pending.length === 0 ||
+        !isMountedRef.current ||
+        !isPhotoOwnerCurrent(ownerId, accountGeneration) ||
+        isTakingPhotoRef.current ||
+        abortControllerRef.current !== null ||
+        currentPhotoJobIdRef.current !== null
+      ) {
+        return;
+      }
+      const ultimulDraft = pending[pending.length - 1];
+      if (draftCurrentUriRef.current === ultimulDraft) return;
+
+      draftPromptAfisatRef.current = true;
+      Alert.alert(
+        t('camera.pendingDraftTitle'),
+        t('camera.pendingDraftMessage'),
+        [
+          {
+            text: t('alerts.butoane.anuleaza'),
+            style: 'destructive',
+            onPress: () => {
+              if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+              purgeLocalImageDrafts(ownerId).catch(() => { });
             },
-            {
-              text: t('camera.resumeAnalysis'),
-              onPress: () => {
-                if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
-                analizeazaImaginea(ultimulDraft, true);
-              },
+          },
+          {
+            text: t('camera.resumeAnalysis'),
+            onPress: () => {
+              if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+              analizeazaImaginea(ultimulDraft, true);
             },
-          ],
-        );
-      })
+          },
+        ],
+      );
+    })
       .catch(() => { });
   }, [
     isPhotoOwnerCurrent,
@@ -769,6 +852,7 @@ export default function CameraScreen() {
     failedPhotoJob,
     isNonFood,
     seIncarca,
+    photoPhase,
     t,
   ]);
 
@@ -809,21 +893,35 @@ export default function CameraScreen() {
     }
     shouldGoHomeOnSubmitRef.current = true;
     setPhotoPhase('background');
+    if (session?.user?.id) {
+      void savePreliminaryPhotoJobPointer({
+        userId: session.user.id,
+        localImageUri: previewPhotoUri || undefined,
+        draftUri: draftCurrentUriRef.current || undefined,
+      }).catch(() => { });
+    }
     setSeIncarca(false);
     return true;
-  }, [seIncarca]);
+  }, [seIncarca, session?.user?.id, previewPhotoUri]);
 
   const mergiLaAcasa = useCallback(() => {
     permitereNavigareRef.current = true;
     shouldGoHomeOnSubmitRef.current = true;
     setPhotoPhase('background');
+    if (session?.user?.id) {
+      void savePreliminaryPhotoJobPointer({
+        userId: session.user.id,
+        localImageUri: previewPhotoUri || undefined,
+        draftUri: draftCurrentUriRef.current || undefined,
+      }).catch(() => { });
+    }
     setSeIncarca(false);
     if (router.canGoBack()) {
       router.back();
     } else {
       router.replace('/(tabs)');
     }
-  }, [router]);
+  }, [router, session?.user?.id, previewPhotoUri]);
 
 
   // BUG-065: pe Android, butonul/gestul „Înapoi" peste modalul fullScreen ejecta

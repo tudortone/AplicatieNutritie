@@ -164,7 +164,7 @@ async function savePointer(pointer: ActivePhotoJobPointer): Promise<void> {
   await AsyncStorage.setItem(activePhotoJobKey(pointer.userId), JSON.stringify(pointer));
 }
 
-async function readPointer(userId: string): Promise<ActivePhotoJobPointer | null> {
+export async function readPointer(userId: string): Promise<ActivePhotoJobPointer | null> {
   const raw = await AsyncStorage.getItem(activePhotoJobKey(userId));
   if (!raw) return null;
   let value: unknown;
@@ -192,6 +192,30 @@ async function readPointer(userId: string): Promise<ActivePhotoJobPointer | null
   }
 
   return value as unknown as ActivePhotoJobPointer;
+}
+
+/**
+ * Persistă un pointer preliminar imediat ce utilizatorul declanșează analiza sau navighează
+ * la Acasă, înainte ca încărcarea pe ImageKit și submitPhotoJob să fi terminat.
+ * Asigură că ecranul Acasă (Sfera Kinetică) afișează instant starea de procesare fără întrerupere.
+ */
+export async function savePreliminaryPhotoJobPointer({
+  userId,
+  localImageUri,
+  draftUri,
+}: {
+  userId: string;
+  localImageUri?: string;
+  draftUri?: string;
+}): Promise<void> {
+  const pointer: ActivePhotoJobPointer = {
+    userId,
+    jobId: `in_flight_${Date.now()}`,
+    localImageUri,
+    draftUri,
+    savedAt: Date.now(),
+  };
+  await savePointer(pointer);
 }
 
 export async function clearActivePhotoJob(userId: string, jobId?: string): Promise<void> {
@@ -317,20 +341,38 @@ export async function recoverPhotoJobForCamera({
 }: { token: string; userId: string; signal?: AbortSignal }): Promise<RecoveredPhotoJobForCamera | null> {
   let pointer = await readPointer(userId);
   if (pointer) {
-    try {
-      const fetchedJob = await getPhotoJob({ token, jobId: pointer.jobId, signal });
-      return { job: fetchedJob, pointer };
-    } catch (error) {
-      if (!(error instanceof PhotoApiError) || error.status !== 404) throw error;
-      // A stale job record is normally safe to clear. Once a Journal write has
-      // an idempotency marker, its owner-bound exact payload is the only safe
-      // retry source and must remain available for explicit reconciliation.
-      if (pointer.saveOperationId && pointer.savePayload
-        && pointer.savePayload.user_id === userId) {
-        return { job: null, pointer, missingJob: true };
+    if (pointer.jobId && pointer.jobId.startsWith('in_flight')) {
+      const isStale = Date.now() - (pointer.savedAt || 0) > 60 * 1000;
+      if (isStale) {
+        await clearActivePhotoJob(userId, pointer.jobId);
+        pointer = null;
+      } else {
+        return {
+          job: {
+            id: pointer.jobId,
+            status: 'running',
+            imageUrl: pointer.imageUrl,
+            imageFileId: pointer.imageFileId,
+          },
+          pointer,
+        };
       }
-      await clearActivePhotoJob(userId, pointer.jobId);
-      pointer = null;
+    } else {
+      try {
+        const fetchedJob = await getPhotoJob({ token, jobId: pointer.jobId, signal });
+        return { job: fetchedJob, pointer };
+      } catch (error) {
+        if (!(error instanceof PhotoApiError) || error.status !== 404) throw error;
+        // A stale job record is normally safe to clear. Once a Journal write has
+        // an idempotency marker, its owner-bound exact payload is the only safe
+        // retry source and must remain available for explicit reconciliation.
+        if (pointer.saveOperationId && pointer.savePayload
+          && pointer.savePayload.user_id === userId) {
+          return { job: null, pointer, missingJob: true };
+        }
+        await clearActivePhotoJob(userId, pointer.jobId);
+        pointer = null;
+      }
     }
   }
   const job = await getBackendActivePhotoJob(token, signal);

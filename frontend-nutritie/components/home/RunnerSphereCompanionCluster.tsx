@@ -72,9 +72,9 @@ export function RunnerSphereCompanionCluster({
           if (recovered && RUNNING.has(recovered.job.status)) {
             emptyPolls = 0;
             timer = setTimeout(poll, 2000);
-          } else if (!recovered && active && emptyPolls < 3) {
+          } else if (!recovered && active && emptyPolls < 15) {
             // If user navigated to Home while image was still uploading to ImageKit
-            // (before submitPhotoJob persisted the active job pointer), retry briefly.
+            // (before submitPhotoJob persisted the active job pointer), retry gracefully up to ~18s.
             emptyPolls += 1;
             timer = setTimeout(poll, 1200);
           }

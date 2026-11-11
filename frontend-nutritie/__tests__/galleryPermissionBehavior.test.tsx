@@ -233,6 +233,9 @@ jest.mock('../lib/photoJobs', () => {
   cleanupPhotoAsset: jest.fn(async () => {}),
   recoverPhotoJob: mockedRecovery,
   recoverPhotoJobForCamera: mockedRecovery,
+  readPointer: jest.fn(async () => null),
+  savePreliminaryPhotoJobPointer: jest.fn(async () => {}),
+  getPhotoJob: jest.fn(async () => ({ id: 'photo-job-1', status: 'running' })),
   submitPhotoJob: jest.fn(async () => ({
     id: 'photo-job-1',
     status: 'succeeded',
@@ -399,6 +402,9 @@ import {
   submitPhotoJob,
   waitForPhotoJob,
   PhotoApiError,
+  readPointer,
+  savePreliminaryPhotoJobPointer,
+  getPhotoJob,
 } from '../lib/photoJobs';
 
 const originalFetch = global.fetch;
