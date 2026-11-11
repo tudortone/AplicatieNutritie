@@ -44,14 +44,18 @@ export async function getImageKitAuthParams(signal?: AbortSignal, forceRefresh =
   const currentUserId = data.session.user.id;
   const nowSec = Math.floor(Date.now() / 1000);
 
-  // Folosește parametrii din memorie dacă sunt pentru același utilizator și mai au cel puțin 60 secunde de valabilitate
+  // Folosește parametrii din memorie dacă sunt pentru același utilizator și mai au cel puțin 60 secunde de valabilitate.
+  // CRITIC: Tokenul ImageKit este de unică folosință (single-use nonce pe server).
+  // Când un set de auth params este extras pentru upload, el este consumat din memorie.
   if (
     !forceRefresh &&
     cachedAuthParams &&
     cachedAuthParams.userId === currentUserId &&
     cachedAuthParams.params.expire > nowSec + 60
   ) {
-    return cachedAuthParams.params;
+    const auth = cachedAuthParams.params;
+    cachedAuthParams = null;
+    return auth;
   }
 
   const res = await fetch(`${API_URL}${API_PREFIX}/imagekit-auth`, {
@@ -112,26 +116,46 @@ export async function uploadImageToImageKit(
   ]);
   const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 120) || 'mancare.jpg';
 
-  const formData = new FormData();
-  formData.append('file', {
-    uri: optimizedUri,
-    type: 'image/jpeg',
-    name: safeFileName,
-  } as unknown as Blob);
-  formData.append('fileName', safeFileName);
-  formData.append('token', authParams.token);
-  formData.append('expire', String(authParams.expire));
-  formData.append('signature', authParams.signature);
-  formData.append('publicKey', publicKey);
-  formData.append('useUniqueFileName', 'true');
-  formData.append('folder', `/mancare/${authParams.userId}`);
+  const creazaFormData = (auth: ImageKitAuthParams) => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: optimizedUri,
+      type: 'image/jpeg',
+      name: safeFileName,
+    } as unknown as Blob);
+    formData.append('fileName', safeFileName);
+    formData.append('token', auth.token);
+    formData.append('expire', String(auth.expire));
+    formData.append('signature', auth.signature);
+    formData.append('publicKey', publicKey);
+    formData.append('useUniqueFileName', 'true');
+    formData.append('folder', `/mancare/${auth.userId}`);
+    return formData;
+  };
 
-  const uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+  let uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
     method: 'POST',
-    body: formData,
+    body: creazaFormData(authParams),
     signal,
   });
+
+  // Dacă upload-ul eșuează cu HTTP 400 (ex: token refolosit sau expirat pe server), reîncercăm o dată cu un token proaspăt
+  if (!uploadRes.ok && uploadRes.status === 400 && !signal?.aborted) {
+    cachedAuthParams = null;
+    try {
+      const freshAuth = await getImageKitAuthParams(signal, true);
+      uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+        method: 'POST',
+        body: creazaFormData(freshAuth),
+        signal,
+      });
+    } catch {
+      // Păstrăm uploadRes inițial
+    }
+  }
+
   if (!uploadRes.ok) {
+    cachedAuthParams = null;
     throw new Error(`Încărcarea imaginii a eșuat (${uploadRes.status}).`);
   }
 
@@ -149,10 +173,58 @@ export async function uploadImageToImageKit(
   if (parsedUrl.protocol !== 'https:') throw new Error('ImageKit a returnat un URL nesigur.');
   const thumbnailUrl = textNenul(payload.thumbnailUrl) ? payload.thumbnailUrl : payload.url;
 
+  // Pre-warm în fundal pentru următoarea poză
+  void prewarmImageKitAuth();
+
   return {
     fileId: payload.fileId,
     url: payload.url,
     thumbnailUrl,
     name: payload.name,
   };
+}
+
+/** Pre-warm silențios al credențialelor ImageKit pentru a elimina latența la următoarea poză. */
+export async function prewarmImageKitAuth(): Promise<void> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session?.access_token || !data.session.user?.id) return;
+    const currentUserId = data.session.user.id;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (
+      cachedAuthParams &&
+      cachedAuthParams.userId === currentUserId &&
+      cachedAuthParams.params.expire > nowSec + 60
+    ) {
+      return;
+    }
+    const res = await fetch(`${API_URL}${API_PREFIX}/imagekit-auth`, {
+      headers: { Authorization: `Bearer ${data.session.access_token}` },
+    });
+    if (!res.ok) return;
+    const payload: unknown = await res.json();
+    if (
+      esteObiect(payload) &&
+      textNenul(payload.token) &&
+      textNenul(payload.signature) &&
+      textNenul(payload.urlEndpoint) &&
+      Number.isFinite(Number(payload.expire))
+    ) {
+      const expire = Number(payload.expire);
+      if (expire > nowSec + 15) {
+        cachedAuthParams = {
+          params: {
+            token: payload.token,
+            signature: payload.signature,
+            urlEndpoint: payload.urlEndpoint,
+            expire,
+            userId: currentUserId,
+          },
+          userId: currentUserId,
+        };
+      }
+    }
+  } catch {
+    // Non-blocking prewarm
+  }
 }

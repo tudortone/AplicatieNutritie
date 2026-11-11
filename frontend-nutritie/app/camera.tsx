@@ -111,7 +111,7 @@ export default function CameraScreen() {
   const sessionUserId = session?.user?.id ?? null;
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
-  
+
   const [rezultat, setRezultat] = useState<AlimentScanat[]>([]);
   const [previewPhotoUri, setPreviewPhotoUri] = useState<string | null>(null);
   const [isSavingDiary, setIsSavingDiary] = useState(false);
@@ -238,9 +238,9 @@ export default function CameraScreen() {
 
   useEffect(() => {
     if (session?.user?.id) {
-      processOfflineQueue(supabase).catch(() => {});
+      processOfflineQueue(supabase).catch(() => { });
       // Prewarm ImageKit auth cache in background so photo capture doesn't wait on auth roundtrip
-      getImageKitAuthParams().catch(() => {});
+      getImageKitAuthParams().catch(() => { });
     }
   }, [session?.user?.id]);
 
@@ -418,7 +418,7 @@ export default function CameraScreen() {
       if (shouldGoHomeOnSubmitRef.current) {
         if (__DEV__) console.log('[Camera] Job pornit pe backend, utilizatorul a mers la Acasă:', submitted.id);
         if (draftPersistentUri) {
-          void discardLocalImageDraft(draftPersistentUri, ownerId).catch(() => {});
+          void discardLocalImageDraft(draftPersistentUri, ownerId).catch(() => { });
           if (draftCurrentUriRef.current === draftPersistentUri) draftCurrentUriRef.current = null;
         }
         setPhotoPhase('background');
@@ -442,7 +442,7 @@ export default function CameraScreen() {
       applyPhotoJobResult(completed, activePointer, ownerId, accountGeneration);
       setSeIncarca(false);
 
-      if (draftPersistentUri) await discardLocalImageDraft(draftPersistentUri, ownerId).catch(() => {});
+      if (draftPersistentUri) await discardLocalImageDraft(draftPersistentUri, ownerId).catch(() => { });
       if (draftCurrentUriRef.current === draftPersistentUri) draftCurrentUriRef.current = null;
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -481,9 +481,13 @@ export default function CameraScreen() {
       );
       if (isNonFoodErrorCode) {
         if (ownerId) {
-          await clearActivePhotoJob(ownerId, activePointer?.jobId || currentPhotoJobIdRef.current || undefined).catch(() => {});
-          if (draftPersistentUri) await discardLocalImageDraft(draftPersistentUri, ownerId).catch(() => {});
+          await clearActivePhotoJob(ownerId, activePointer?.jobId || currentPhotoJobIdRef.current || undefined).catch(() => { });
+          if (draftPersistentUri) await discardLocalImageDraft(draftPersistentUri, ownerId).catch(() => { });
         }
+        currentPhotoJobIdRef.current = null;
+        draftCurrentUriRef.current = null;
+        imageKitUrlRef.current = null;
+        setPreviewPhotoUri(null);
         isTakingPhotoRef.current = false;
         setSeIncarca(false);
         setScanError(null);
@@ -543,7 +547,7 @@ export default function CameraScreen() {
 
     // Pre-warm ImageKit credentials on camera open to eliminate upload cold start
     if (typeof getImageKitAuthParams === 'function') {
-      void getImageKitAuthParams(controller.signal).catch(() => {});
+      void getImageKitAuthParams(controller.signal).catch(() => { });
     }
 
     const recover = async () => {
@@ -584,7 +588,7 @@ export default function CameraScreen() {
           if (controller.signal.aborted || isTakingPhotoRef.current || abortControllerRef.current !== null
             || !isPhotoOwnerCurrent(userId, accountGeneration)) return;
           if (reconciliation.tip === 'reluare_confirmata') {
-            await clearActivePhotoJob(userId, pointer.jobId).catch(() => {});
+            await clearActivePhotoJob(userId, pointer.jobId).catch(() => { });
             if (!isPhotoOwnerCurrent(userId, accountGeneration)) return;
             currentPhotoJobIdRef.current = null;
             idOperatieSalvareRef.current = null;
@@ -639,7 +643,7 @@ export default function CameraScreen() {
         }
         if (controller.signal.aborted || !isPhotoOwnerCurrent(userId, accountGeneration)) return;
         if (active.pointer.draftUri) {
-          await discardLocalImageDraft(active.pointer.draftUri, userId).catch(() => {});
+          await discardLocalImageDraft(active.pointer.draftUri, userId).catch(() => { });
         }
       } catch (error) {
         if (!controller.signal.aborted && !isTakingPhotoRef.current && abortControllerRef.current === null
@@ -701,7 +705,7 @@ export default function CameraScreen() {
       setPhotoPhase('idle');
       return;
     }
-    await clearActivePhotoJob(ownerId, failedPhotoJob.job.id).catch(() => {});
+    await clearActivePhotoJob(ownerId, failedPhotoJob.job.id).catch(() => { });
     if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
     setFailedPhotoJob(null);
     await analizeazaImaginea(retryUri, true);
@@ -740,7 +744,7 @@ export default function CameraScreen() {
               style: 'destructive',
               onPress: () => {
                 if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
-                purgeLocalImageDrafts(ownerId).catch(() => {});
+                purgeLocalImageDrafts(ownerId).catch(() => { });
               },
             },
             {
@@ -753,7 +757,7 @@ export default function CameraScreen() {
           ],
         );
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [
     isPhotoOwnerCurrent,
     session?.access_token,
@@ -775,7 +779,7 @@ export default function CameraScreen() {
     // pointer recoverable instead of allowing a rescan to overwrite the retry key.
     if (pendingPhotoSavePayloadRef.current) return;
     if (draftCurrentUriRef.current && session?.user.id) {
-      discardLocalImageDraft(draftCurrentUriRef.current, session.user.id).catch(() => {});
+      discardLocalImageDraft(draftCurrentUriRef.current, session.user.id).catch(() => { });
       draftCurrentUriRef.current = null;
     }
     abortControllerRef.current?.abort();
@@ -785,7 +789,7 @@ export default function CameraScreen() {
     imageKitUrlRef.current = null;
     imageKitFileIdRef.current = null;
     if (session?.user.id) {
-      clearActivePhotoJob(session.user.id, currentPhotoJobIdRef.current || undefined).catch(() => {});
+      clearActivePhotoJob(session.user.id, currentPhotoJobIdRef.current || undefined).catch(() => { });
     }
     currentPhotoJobIdRef.current = null;
     setRezultat([]);
@@ -944,15 +948,18 @@ export default function CameraScreen() {
     abortControllerRef.current = null;
     recoveryAbortRef.current?.abort();
     recoveryAbortRef.current = null;
+    currentPhotoJobIdRef.current = null;
+    imageKitUrlRef.current = null;
+    imageKitFileIdRef.current = null;
     if (session?.user.id) {
-      void clearActivePhotoJob(session.user.id).catch(() => {});
-      void purgeLocalImageDrafts(session.user.id).catch(() => {});
+      void clearActivePhotoJob(session.user.id).catch(() => { });
     }
     setFailedPhotoJob(null);
     setScanError(null);
     setRecoveryBlocked(false);
     setSeIncarca(false);
     setRezultat([]);
+    setPreviewPhotoUri(null);
     setPhotoPhase('idle');
     anuleazaScanarea();
   }, [anuleazaScanarea, session?.user.id]);
@@ -1129,7 +1136,7 @@ export default function CameraScreen() {
       pendingPhotoSavePayloadRef.current = null;
       setPendingPhotoSaveLocked(false);
       if (currentPhotoJobIdRef.current) {
-        await clearActivePhotoJob(ownerId, currentPhotoJobIdRef.current).catch(() => {});
+        await clearActivePhotoJob(ownerId, currentPhotoJobIdRef.current).catch(() => { });
         if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
         currentPhotoJobIdRef.current = null;
       }
@@ -1192,7 +1199,7 @@ export default function CameraScreen() {
           return;
         }
         if (currentPhotoJobIdRef.current) {
-          await clearActivePhotoJob(ownerId, currentPhotoJobIdRef.current).catch(() => {});
+          await clearActivePhotoJob(ownerId, currentPhotoJobIdRef.current).catch(() => { });
           if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
           currentPhotoJobIdRef.current = null;
         }
@@ -1242,7 +1249,7 @@ export default function CameraScreen() {
           </Animated.View>
           <Text maxFontSizeMultiplier={1.3} style={[styles.permissionTitle, { color: colors.textPrimary }]}>{t('camera.permissionTitle')}</Text>
           <Text maxFontSizeMultiplier={1.3} style={[styles.permissionSub, { color: colors.textSecondary }]}>{t('camera.permissionSubtitle')}</Text>
-          
+
           {/* BUG-059: când permisiunea e refuzată DEFINITIV (canAskAgain=false pe
               Android), butonul de cerere nu mai face nimic — dead-end. În loc de
               asta ghidăm utilizatorul către setările aplicației. */}
@@ -1334,7 +1341,7 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={StyleSheet.absoluteFillObject}
         facing="back"
-        active={rezultat.length === 0 && !isNonFood && !failedPhotoJob && !saveSuccessData}
+        active={rezultat.length === 0 && !saveSuccessData}
       />
 
       <LinearGradient

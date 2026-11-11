@@ -138,6 +138,22 @@ export function PhotoMealErrorView({
               </LinearGradient>
             </TouchableOpacity>
 
+            {/* 1b. Acțiune suplimentară „Refă fotografia” când onRetry este acțiunea primară */}
+            {onRetry && onRetake && (
+              <TouchableOpacity
+                testID="camera-failed-retake"
+                onPress={onRetake}
+                style={styles.secondaryBtn}
+                accessibilityRole="button"
+                accessibilityLabel={t('camera.retakePhoto', 'Refă fotografia')}
+              >
+                <Camera size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.secondaryBtnText}>
+                  {t('camera.retakePhoto', 'Refă fotografia')}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             {/* 2. Secondary: Gallery */}
             {content.hasGallery && (
               <TouchableOpacity

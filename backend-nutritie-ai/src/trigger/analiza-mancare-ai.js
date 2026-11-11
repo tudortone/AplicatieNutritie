@@ -254,16 +254,17 @@ function codEroareSigur(err) {
 async function finalizeStoredPhotoResult(payload, result) {
   const { userId, jobId, reservationId } = payload;
   const action = result.success === true ? 'commit' : 'release';
-  await settlePhotoCredit({
-    userId, reservationId, action,
-    reason: result.success === true ? 'VALID_PHOTO_RESULT' : 'CONFIRMED_PHOTO_FAILURE',
-  });
+  const errorCode = result.success === true ? null : (result.errorCode || 'NOT_FOOD');
   await updateAiJob(jobId, {
     status: result.success === true ? 'succeeded' : 'failed',
     result,
-    error_code: result.success === true ? null : (result.errorCode || 'NOT_FOOD'),
+    error_code: errorCode,
     completed_at: new Date().toISOString(),
   }, userId);
+  await settlePhotoCredit({
+    userId, reservationId, action,
+    reason: result.success === true ? 'VALID_PHOTO_RESULT' : (result.errorCode || 'NOT_FOOD'),
+  });
   return result;
 }
 
@@ -434,6 +435,7 @@ exports.analizaMancareTask = task({
         const rezultatNotFood = {
           success: false,
           isNotFood: true,
+          errorCode: 'NOT_FOOD',
           eroare: 'Imaginea încărcată nu pare să conțină alimente. Te rugăm să încerci cu o poză clară a unei mese.',
           processedAt: new Date().toISOString(),
         };
