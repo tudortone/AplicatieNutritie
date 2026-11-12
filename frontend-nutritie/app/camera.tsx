@@ -43,6 +43,7 @@ import {
   waitForPhotoJob,
   readPointer,
   savePreliminaryPhotoJobPointer,
+  clearPreliminaryPhotoJobPointer,
   getPhotoJob,
   PhotoApiError,
   type ActivePhotoJobPointer,
@@ -284,6 +285,7 @@ export default function CameraScreen() {
     knownDimensions?: { width?: number; height?: number },
   ) => {
     if (pendingPhotoSavePayloadRef.current) {
+      setSeIncarca(false);
       Alert.alert(
         t('alerts.titluri.eroareSalvare'),
         t('alerts.mesaje.problemaNecunoscutaConectare'),
@@ -291,6 +293,7 @@ export default function CameraScreen() {
       return;
     }
     if (!session?.access_token || !session.user.id) {
+      setSeIncarca(false);
       setScanError(t('alerts.mesaje.sesiuneExpirata'));
       return;
     }
@@ -308,6 +311,7 @@ export default function CameraScreen() {
       hasPendingSave = await hasPendingPhotoSave(ownerId);
     } catch {
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+      setSeIncarca(false);
       Alert.alert(
         t('alerts.titluri.eroareSalvare'),
         t('alerts.mesaje.problemaNecunoscutaConectare'),
@@ -316,6 +320,7 @@ export default function CameraScreen() {
     }
     if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
     if (hasPendingSave) {
+      setSeIncarca(false);
       Alert.alert(
         t('alerts.titluri.eroareSalvare'),
         t('alerts.mesaje.problemaNecunoscutaConectare'),
@@ -455,6 +460,11 @@ export default function CameraScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void refreshFlowCredits();
     } catch (error) {
+      // A preliminary pointer with no submitted job behind it must never outlive the attempt:
+      // it would keep the Home sphere "running" and shadow the real backend job on recovery.
+      if (!activePointer && abortControllerRef.current === controller) {
+        void clearPreliminaryPhotoJobPointer(ownerId).catch(() => { });
+      }
       if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void refreshFlowCredits();
       if (shouldGoHomeOnSubmitRef.current || (error instanceof DOMException && error.name === 'AbortError')) {
         return;
@@ -477,6 +487,8 @@ export default function CameraScreen() {
       if (error instanceof PhotoApiError && (error.code === 'PHOTO_IN_PROGRESS' || error.status === 409)) {
         if (__DEV__) console.log('[Camera] Job already in progress on server, reconnecting...');
         try {
+          // Our own preliminary pointer would otherwise be "recovered" as a fake running job.
+          await clearPreliminaryPhotoJobPointer(ownerId);
           const inProgress = await recoverPhotoJobForCamera({ token: session.access_token, userId: ownerId });
           if (inProgress && !inProgress.missingJob && inProgress.job) {
             currentPhotoJobIdRef.current = inProgress.job.id;

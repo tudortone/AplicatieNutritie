@@ -208,14 +208,28 @@ export async function savePreliminaryPhotoJobPointer({
   localImageUri?: string;
   draftUri?: string;
 }): Promise<void> {
+  // Never clobber a pointer that already references a real backend job (or a
+  // pending journal save): the real pointer is the only handle to the result.
+  const existing = await readPointer(userId).catch(() => null);
+  if (existing && !isInFlightPointer(existing)) return;
   const pointer: ActivePhotoJobPointer = {
     userId,
     jobId: `in_flight_${Date.now()}`,
-    localImageUri,
-    draftUri,
+    localImageUri: localImageUri ?? existing?.localImageUri,
+    draftUri: draftUri ?? existing?.draftUri,
     savedAt: Date.now(),
   };
   await savePointer(pointer);
+}
+
+export function isInFlightPointer(pointer: Pick<ActivePhotoJobPointer, 'jobId'> | null | undefined): boolean {
+  return Boolean(pointer?.jobId?.startsWith('in_flight'));
+}
+
+/** Removes only a preliminary (not yet submitted) pointer; a real job pointer is left untouched. */
+export async function clearPreliminaryPhotoJobPointer(userId: string): Promise<void> {
+  const existing = await readPointer(userId).catch(() => null);
+  if (existing && isInFlightPointer(existing)) await clearActivePhotoJob(userId, existing.jobId);
 }
 
 export async function clearActivePhotoJob(userId: string, jobId?: string): Promise<void> {
@@ -342,7 +356,8 @@ export async function recoverPhotoJobForCamera({
   let pointer = await readPointer(userId);
   if (pointer) {
     if (pointer.jobId && pointer.jobId.startsWith('in_flight')) {
-      const isStale = Date.now() - (pointer.savedAt || 0) > 60 * 1000;
+      // Must outlive the 75s upload/submit timeout in camera.tsx.
+      const isStale = Date.now() - (pointer.savedAt || 0) > 90 * 1000;
       if (isStale) {
         await clearActivePhotoJob(userId, pointer.jobId);
         pointer = null;

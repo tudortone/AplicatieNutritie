@@ -3,6 +3,8 @@ import {
   activePhotoJobKey,
   cleanupPhotoAsset,
   clearActivePhotoJob,
+  clearPreliminaryPhotoJobPointer,
+  savePreliminaryPhotoJobPointer,
   hasPendingPhotoSave,
   recoverPhotoJob,
   recoverPhotoJobForCamera,
@@ -301,6 +303,25 @@ describe('async Photo job client', () => {
     await clearActivePhotoJob(USER_A, 'job-old');
     expect(await AsyncStorage.getItem(activePhotoJobKey(USER_A))).not.toBeNull();
     await clearActivePhotoJob(USER_A, 'job-new');
+    expect(await AsyncStorage.getItem(activePhotoJobKey(USER_A))).toBeNull();
+  });
+
+  test('preliminary pointer never overwrites a real job pointer ("go home" after submit keeps the real job)', async () => {
+    await AsyncStorage.setItem(activePhotoJobKey(USER_A), JSON.stringify({
+      userId: USER_A, jobId: 'job-real', imageUrl: 'https://ik.test/a.jpg', savedAt: Date.now(),
+    }));
+    await savePreliminaryPhotoJobPointer({ userId: USER_A, localImageUri: 'file:///x.jpg' });
+    expect(JSON.parse((await AsyncStorage.getItem(activePhotoJobKey(USER_A)))!).jobId).toBe('job-real');
+    await clearPreliminaryPhotoJobPointer(USER_A);
+    expect(JSON.parse((await AsyncStorage.getItem(activePhotoJobKey(USER_A)))!).jobId).toBe('job-real');
+  });
+
+  test('preliminary pointer is recoverable as running until cleared, then falls back to backend', async () => {
+    await savePreliminaryPhotoJobPointer({ userId: USER_A, localImageUri: 'file:///x.jpg' });
+    const recovered = await recoverPhotoJobForCamera({ token: 'tok', userId: USER_A });
+    expect(recovered?.job?.id.startsWith('in_flight')).toBe(true);
+    expect(recovered?.job?.status).toBe('running');
+    await clearPreliminaryPhotoJobPointer(USER_A);
     expect(await AsyncStorage.getItem(activePhotoJobKey(USER_A))).toBeNull();
   });
 

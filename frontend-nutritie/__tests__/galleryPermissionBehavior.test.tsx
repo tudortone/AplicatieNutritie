@@ -235,6 +235,7 @@ jest.mock('../lib/photoJobs', () => {
   recoverPhotoJobForCamera: mockedRecovery,
   readPointer: jest.fn(async () => null),
   savePreliminaryPhotoJobPointer: jest.fn(async () => {}),
+  clearPreliminaryPhotoJobPointer: jest.fn(async () => {}),
   getPhotoJob: jest.fn(async () => ({ id: 'photo-job-1', status: 'running' })),
   submitPhotoJob: jest.fn(async () => ({
     id: 'photo-job-1',
