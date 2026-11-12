@@ -484,7 +484,7 @@ export default function CameraScreen() {
         ]);
         return;
       }
-      if (error instanceof PhotoApiError && (error.code === 'PHOTO_IN_PROGRESS' || error.status === 409)) {
+      if (error instanceof PhotoApiError && error.code === 'PHOTO_IN_PROGRESS') {
         if (__DEV__) console.log('[Camera] Job already in progress on server, reconnecting...');
         try {
           // Our own preliminary pointer would otherwise be "recovered" as a fake running job.
@@ -518,6 +518,7 @@ export default function CameraScreen() {
             }
           }
         } catch (reconnectErr) {
+          currentPhotoJobIdRef.current = null;
           if (__DEV__) console.warn('[Camera] Failed to reconnect to in-progress job:', reconnectErr);
         }
       }
@@ -536,8 +537,9 @@ export default function CameraScreen() {
         || error.code === 'PHOTO_ANALYSIS_FAILED'
       );
       if (isNonFoodErrorCode) {
+        const failedJobId = activePointer?.jobId || currentPhotoJobIdRef.current || 'unknown';
         if (ownerId) {
-          await clearActivePhotoJob(ownerId, activePointer?.jobId || currentPhotoJobIdRef.current || undefined).catch(() => { });
+          await clearActivePhotoJob(ownerId, failedJobId === 'unknown' ? undefined : failedJobId).catch(() => { });
           if (draftPersistentUri) await discardLocalImageDraft(draftPersistentUri, ownerId).catch(() => { });
         }
         currentPhotoJobIdRef.current = null;
@@ -550,7 +552,7 @@ export default function CameraScreen() {
         setPhotoPhase('failed');
         setFailedPhotoJob({
           job: {
-            id: activePointer?.jobId || currentPhotoJobIdRef.current || 'unknown',
+            id: failedJobId,
             status: 'failed',
             errorCode: 'NOT_FOOD',
             result: {
@@ -560,7 +562,7 @@ export default function CameraScreen() {
               ...(error instanceof PhotoApiError && error.data && typeof error.data === 'object' ? (error.data as Record<string, unknown>) : {}),
             },
           },
-          pointer: activePointer || { userId: ownerId, jobId: 'unknown', savedAt: Date.now() },
+          pointer: activePointer || { userId: ownerId, jobId: failedJobId, savedAt: Date.now() },
         });
         return;
       }
@@ -830,6 +832,7 @@ export default function CameraScreen() {
       if (draftCurrentUriRef.current === ultimulDraft) return;
 
       draftPromptAfisatRef.current = true;
+      // shortcut: retry suffixes amprentaBaza with :retry:<id> (can spend a second credit if app was killed between backend success and draft cleanup); backend dedup lives in photoJobService.validateExistingJobForReplay, revisit if double charges on orphan drafts occur.
       Alert.alert(
         t('camera.pendingDraftTitle'),
         t('camera.pendingDraftMessage'),
@@ -1055,6 +1058,7 @@ export default function CameraScreen() {
   const handleRetakePhoto = useCallback(() => {
     isTakingPhotoRef.current = false;
     shouldGoHomeOnSubmitRef.current = false;
+    abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     recoveryAbortRef.current?.abort();
     recoveryAbortRef.current = null;

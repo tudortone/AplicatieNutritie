@@ -400,6 +400,7 @@ import {
   hasPendingPhotoSave,
   savePhotoJobSaveAttempt,
   recoverPhotoJob,
+  recoverPhotoJobForCamera,
   submitPhotoJob,
   waitForPhotoJob,
   PhotoApiError,
@@ -1365,6 +1366,45 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
         expect(locale.camera.pendingPhotoSaveLocked).toEqual(expect.any(String));
         expect(locale.camera.pendingPhotoSaveLocked.trim().length).toBeGreaterThan(20);
       }
+    });
+
+    it('409 PHOTO_JOURNAL_SAVE_PENDING does NOT trigger in-progress job reconnection', async () => {
+      Platform.OS = 'android';
+      mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///meal.jpg' }] });
+      (submitPhotoJob as jest.Mock).mockRejectedValueOnce(new PhotoApiError(409, 'PHOTO_JOURNAL_SAVE_PENDING'));
+
+      const view = await render(<CameraScreen />);
+      await waitFor(() => expect(recoverPhotoJobForCamera).toHaveBeenCalledTimes(1));
+      (recoverPhotoJobForCamera as jest.Mock).mockClear();
+
+      await act(async () => fireEvent.press(view.getByTestId('gallery-button')));
+
+      await waitFor(() => expect(view.getByText('camera.genericScanError')).toBeTruthy());
+      expect(recoverPhotoJobForCamera).not.toHaveBeenCalled();
+      expect(view.getByTestId('gallery-button').props.accessibilityState.disabled).toBe(false);
+    });
+
+    it('409 PHOTO_IN_PROGRESS with failed reconnection unlocks the camera controls', async () => {
+      Platform.OS = 'android';
+      mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: false, assets: [{ uri: 'file:///meal.jpg' }] });
+      (submitPhotoJob as jest.Mock).mockRejectedValueOnce(new PhotoApiError(409, 'PHOTO_IN_PROGRESS'));
+      (recoverPhotoJobForCamera as jest.Mock)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          job: { id: 'active-job-409', status: 'running' },
+          pointer: { userId: mockUser.id, jobId: 'active-job-409', savedAt: Date.now() },
+        });
+      (waitForPhotoJob as jest.Mock).mockRejectedValueOnce(new Error('Network dropped during reconnect'));
+
+      const view = await render(<CameraScreen />);
+      await waitFor(() => expect(recoverPhotoJobForCamera).toHaveBeenCalledTimes(1));
+
+      await act(async () => fireEvent.press(view.getByTestId('gallery-button')));
+
+      await waitFor(() => expect(recoverPhotoJobForCamera).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(view.getByText('camera.genericScanError')).toBeTruthy());
+      expect(view.getByTestId('gallery-button').props.accessibilityState.disabled).toBe(false);
+      expect(view.getByTestId('shutter-button').props.accessibilityState.disabled).toBe(false);
     });
   });
 
