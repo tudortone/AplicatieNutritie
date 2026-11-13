@@ -20,7 +20,8 @@ import { useTheme } from '../context/ThemeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAppStore } from '../hooks/useAppStore';
 import { incarcaDateOnboarding, calculeazaPlan, type PlanNutritional } from '../lib/onboarding';
-import { oauthFlow, OAUTH_REDIRECT_URI } from '../lib/oauthFlow';
+import { oauthFlow } from '../lib/oauthFlow';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getLegalUrls } from '../lib/legalUrls';
 
 // Contul de admin se logheaza cu username-ul „admin" (nu email). Supabase cere
@@ -72,6 +73,7 @@ function AppleLogo({ size = 20, color }: { size?: number; color?: string }) {
 
 export default function AuthScreen() {
   const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
   const { t } = useTranslation();
   const { contentMaxWidth } = useResponsiveLayout();
   const router = useRouter();
@@ -179,30 +181,14 @@ export default function AuthScreen() {
     }
   };
 
-  const resetParola = async () => {
-    if (!email) {
-      Alert.alert(t('alerts.titluri.emailNecesar'), t('alerts.mesaje.emailNecesarResetare'));
-      return;
-    }
-    if (!isValidEmail(email)) {
-      Alert.alert(t('alerts.titluri.emailInvalid'), t('alerts.mesaje.emailInvalidDetalii'));
-      return;
-    }
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${OAUTH_REDIRECT_URI}?flow=recovery`,
-      });
-      if (error) {
-        Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.conexiuneServerEsueaza'));
-      } else {
-        Alert.alert(t('alerts.titluri.emailTrimis'), t('alerts.mesaje.emailTrimisResetare'));
-      }
-    } catch {
-      Alert.alert(t('alerts.titluri.eroareNeasteptata'), t('alerts.mesaje.conexiuneServerEsueaza'));
-    } finally {
-      setLoading(false);
-    }
+  const goToForgotPassword = () => {
+    const clean = email.trim();
+    const prefill = clean && clean.toLowerCase() !== ADMIN_USERNAME ? clean : undefined;
+    router.push(
+      (prefill
+        ? { pathname: '/auth/forgot-password', params: { email: prefill } }
+        : '/auth/forgot-password') as never,
+    );
   };
 
   const signInWithOAuth = async (provider: 'google' | 'apple') => {
@@ -246,7 +232,7 @@ export default function AuthScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Logo */}
-        <Animated.View entering={ZoomIn.duration(700).springify()} style={[styles.logoWrap, { shadowColor: colors.accent }]}>
+        <Animated.View entering={reduceMotion ? undefined : ZoomIn.duration(700).springify()} style={[styles.logoWrap, { shadowColor: colors.accent }]}>
           <LinearGradient colors={colors.accentGradient} style={styles.logoGrad}>
             <Scan size={42} color={colors.background} strokeWidth={2.5} />
           </LinearGradient>
@@ -320,7 +306,7 @@ export default function AuthScreen() {
         )}
 
         {/* Form card */}
-        <Animated.View entering={FadeInDown.duration(700).delay(400).springify()} style={[styles.formCard, { borderColor: colors.cardBorder, maxWidth: contentMaxWidth }]}>
+        <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(700).delay(400).springify()} style={[styles.formCard, { borderColor: colors.cardBorder, maxWidth: contentMaxWidth }]}>
           <BlurView intensity={25} tint="dark" style={styles.formBlur}>
             <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.formGrad}>
 
@@ -442,7 +428,8 @@ export default function AuthScreen() {
               {!isSignUp && (
                 <TouchableOpacity
                   style={styles.forgotBtn}
-                  onPress={resetParola}
+                  onPress={goToForgotPassword}
+                  disabled={loading || Boolean(loadingOAuth)}
                   accessibilityRole="button"
                   accessibilityLabel={t("auth.forgotPasswordA11y")}
                 >
@@ -640,7 +627,7 @@ const styles = StyleSheet.create({
   toggleBtn: { padding: 16, alignItems: 'center', marginTop: 8 },
   toggleText: { fontSize: 15, fontWeight: '500' },
   toggleAccent: { fontWeight: '700' },
-  forgotBtn: { alignSelf: 'flex-end', marginBottom: 14, paddingVertical: 8 },
+  forgotBtn: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center', marginBottom: 14, paddingHorizontal: 4 },
   forgotText: { fontSize: 13, fontWeight: '700' },
   dividerWrap: { flexDirection: 'row', alignItems: 'center', marginVertical: 18, gap: 12 },
   dividerLine: { flex: 1, height: 1 },

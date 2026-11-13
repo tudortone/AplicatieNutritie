@@ -11,6 +11,7 @@ import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
+import { useOptionalAuth } from '../../context/AuthContext';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { passwordRecoveryErrorKey } from '../../lib/passwordRecoveryErrors';
 
@@ -31,6 +32,11 @@ export default function NouaParolaScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const verificat = useRef(false);
+  const auth = useOptionalAuth();
+  const authLoading = auth?.loadingAuth ?? false;
+  const authSession = auth?.session ?? null;
+  const [updatedSuccess, setUpdatedSuccess] = useState(false);
+  const onAccentColor = colors.textOnAccent ?? colors.background;
 
   const isMinLength = parola.length >= 8;
   const hasUpperCase = /[A-Z]/.test(parola);
@@ -41,8 +47,9 @@ export default function NouaParolaScreen() {
 
   // Fără sesiune (link expirat / deschis direct) → înapoi la login.
   useEffect(() => {
-    if (verificat.current) return;
+    if (authLoading || verificat.current) return;
     verificat.current = true;
+    if (authSession) return;
     (async () => {
       try {
         const { data, error: sessionError } = await supabase.auth.getSession();
@@ -53,7 +60,7 @@ export default function NouaParolaScreen() {
       Alert.alert(t('alerts.titluri.eroareAutentificare'), t('alerts.mesaje.sesiuneExpirata'));
       router.replace('/auth');
     })();
-  }, [router, t]);
+  }, [authLoading, authSession, router, t]);
 
   const submit = async () => {
     setError(null);
@@ -76,11 +83,7 @@ export default function NouaParolaScreen() {
         return;
       }
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-      Alert.alert(
-        t('alerts.titluri.succes'),
-        t('authNewPassword.successChanged'),
-        [{ text: t('alerts.butoane.super'), onPress: () => router.replace('/(tabs)') }],
-      );
+      setUpdatedSuccess(true);
     } catch {
       setError(t(passwordRecoveryErrorKey(null)));
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
@@ -102,12 +105,43 @@ export default function NouaParolaScreen() {
       >
         <View style={[styles.logoWrap, { shadowColor: colors.accent }]}>
           <LinearGradient colors={colors.accentGradient} style={styles.logoGrad}>
-            <KeyRound size={42} color={colors.background} strokeWidth={2.5} />
+            <KeyRound size={42} color={onAccentColor} strokeWidth={2.5} />
           </LinearGradient>
         </View>
 
         <View style={[styles.formCard, { borderColor: colors.cardBorder, maxWidth: contentMaxWidth }]}>
           <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.formGrad}>
+            {updatedSuccess ? (
+              <View testID="new-password-success-card" style={styles.successCard}>
+                <View style={[styles.successIconWrap, { backgroundColor: colors.overlayLight, borderColor: colors.cardBorder }]}>
+                  <CheckCircle2 size={32} color={colors.success} />
+                </View>
+                <Text style={[styles.formTitle, styles.centeredText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+                  {t('authNewPassword.successTitle')}
+                </Text>
+                <Text style={[styles.formSubtitle, styles.centeredText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.35}>
+                  {t('authNewPassword.successChanged')}
+                </Text>
+                <TouchableOpacity
+                  testID="new-password-continue-btn"
+                  style={[styles.submitBtn, styles.fullWidth, { shadowColor: colors.accent }]}
+                  onPress={() => {
+                    auth?.clearPasswordRecovery?.();
+                    router.replace('/auth/complete');
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('authNewPassword.continueBtn')}
+                >
+                  <LinearGradient colors={colors.accentGradient} style={styles.submitGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                    <Text style={[styles.submitText, { color: onAccentColor }]} maxFontSizeMultiplier={1.3}>
+                      {t('authNewPassword.continueBtn')}
+                    </Text>
+                    <ArrowRight size={20} color={onAccentColor} strokeWidth={2.5} />
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
             <Text style={[styles.formTitle, { color: colors.textPrimary }]}>{t('authNewPassword.title')}</Text>
             <Text style={[styles.formSubtitle, { color: colors.textSecondary }]}>
               {t('authNewPassword.subtitle')}
@@ -214,11 +248,11 @@ export default function NouaParolaScreen() {
             >
               <LinearGradient colors={colors.accentGradient} style={styles.submitGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                 {loading ? (
-                  <ActivityIndicator color={colors.background} />
+                  <ActivityIndicator color={onAccentColor} />
                 ) : (
                   <>
-                    <Text style={[styles.submitText, { color: colors.background }]}>{t('authNewPassword.saveBtn')}</Text>
-                    <ArrowRight size={20} color={colors.background} strokeWidth={2.5} />
+                    <Text style={[styles.submitText, { color: onAccentColor }]} maxFontSizeMultiplier={1.3}>{t('authNewPassword.saveBtn')}</Text>
+                    <ArrowRight size={20} color={onAccentColor} strokeWidth={2.5} />
                   </>
                 )}
               </LinearGradient>
@@ -226,12 +260,18 @@ export default function NouaParolaScreen() {
 
             <TouchableOpacity
               style={styles.backBtn}
-              onPress={() => router.replace('/auth')}
+              onPress={async () => {
+                auth?.clearPasswordRecovery?.();
+                try { await supabase.auth.signOut?.(); } catch {}
+                router.replace('/auth');
+              }}
               accessibilityRole="button"
               accessibilityLabel={t('authNewPassword.backToLogin')}
             >
               <Text style={[styles.backText, { color: colors.textSecondary }]}>{t('authNewPassword.backToLogin')}</Text>
             </TouchableOpacity>
+              </>
+            )}
           </LinearGradient>
         </View>
       </ScrollView>
@@ -273,4 +313,8 @@ const styles = StyleSheet.create({
 
   backBtn: { padding: 16, alignItems: 'center', marginTop: 8 },
   backText: { fontSize: 15, fontWeight: '600' },
+  successCard: { alignItems: 'center', paddingVertical: 8 },
+  successIconWrap: { width: 64, height: 64, borderRadius: 20, borderWidth: 1, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  centeredText: { textAlign: 'center' },
+  fullWidth: { width: '100%' },
 });

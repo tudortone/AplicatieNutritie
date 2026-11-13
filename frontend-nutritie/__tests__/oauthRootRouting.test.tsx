@@ -8,6 +8,8 @@ let mockPath = '/auth/callback';
 let mockSession: { user: { id: string }; access_token: string } | null = null;
 let mockDone = false;
 let mockLoading = false;
+let mockPasswordRecovery = false;
+const mockClearPasswordRecovery = jest.fn();
 const mockSetDone = jest.fn(async () => { mockDone = true; });
 const mockSync = jest.fn();
 const mockRestore = jest.fn(async (_profile: unknown) => {});
@@ -19,7 +21,7 @@ jest.mock('expo-router', () => {
   Stack.Screen = function MockScreen() { return null; };
   return { Stack, useRouter: () => mockRouter, usePathname: () => mockPath, useSegments: () => mockPath.startsWith('/auth') ? ['auth'] : ['onboarding'] };
 });
-jest.mock('../context/AuthContext', () => ({ AuthProvider: (props: { children: React.ReactNode }) => mockPassthrough(props), useAuth: () => ({ session: mockSession, loadingAuth: mockLoading }) }));
+jest.mock('../context/AuthContext', () => ({ AuthProvider: (props: { children: React.ReactNode }) => mockPassthrough(props), useAuth: () => ({ session: mockSession, loadingAuth: mockLoading, isPasswordRecovery: mockPasswordRecovery, clearPasswordRecovery: mockClearPasswordRecovery }) }));
 jest.mock('../context/ThemeContext', () => ({ AppThemeProvider: (props: { children: React.ReactNode }) => mockPassthrough(props), useTheme: () => ({ colors: { background: '#000', accent: '#fff' } }) }));
 jest.mock('../hooks/useAppStore', () => ({ useAppStore: () => ({ isOnboardingDone: mockDone, syncFromAsyncStorage: mockSync, setOnboardingDone: mockSetDone }) }));
 jest.mock('../context/OnboardingContext', () => ({ OnboardingProvider: (props: { children: React.ReactNode }) => mockPassthrough(props) }));
@@ -82,7 +84,7 @@ describe('AUTH-OAUTH-001 real root routing gate', () => {
     jest.clearAllMocks();
     process.env.EXPO_PUBLIC_API_URL = 'https://api.invalid';
     global.fetch = mockFetch;
-    mockPath = '/auth/callback'; mockSession = null; mockDone = false; mockLoading = false;
+    mockPath = '/auth/callback'; mockSession = null; mockDone = false; mockLoading = false; mockPasswordRecovery = false;
   });
 
   it('does not evict a cold callback before exchange even with incomplete onboarding', async () => {
@@ -118,5 +120,21 @@ describe('AUTH-OAUTH-001 real root routing gate', () => {
     await render(<RootLayout />);
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/onboarding'));
     expect(mockReplace).not.toHaveBeenCalledWith('/(tabs)');
+  });
+
+  it('redirects active recovery sessions from forgot-password or tabs to /auth/noua-parola and holds once arrived', async () => {
+    mockPath = '/auth/forgot-password';
+    mockSession = { user: { id: 'recovering' }, access_token: 'tok-rec' };
+    mockDone = true;
+    mockPasswordRecovery = true;
+
+    const view = await render(<RootLayout />);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/noua-parola'));
+    expect(mockReplace).not.toHaveBeenCalledWith('/(tabs)');
+
+    mockReplace.mockClear();
+    mockPath = '/auth/noua-parola';
+    await view.rerender(<RootLayout />);
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 });

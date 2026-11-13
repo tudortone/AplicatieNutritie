@@ -9,7 +9,19 @@ import NouaParolaScreen from '../app/auth/noua-parola';
 const mockReplace = jest.fn();
 const mockGetSession = jest.fn();
 const mockUpdateUser = jest.fn();
+const mockSignOut = jest.fn(async () => ({ error: null }));
+const mockClearPasswordRecovery = jest.fn();
 const mockAlert = jest.spyOn(Alert, 'alert');
+
+jest.mock('../context/AuthContext', () => ({
+  useOptionalAuth: () => ({
+    session: null,
+    user: null,
+    loadingAuth: false,
+    isPasswordRecovery: true,
+    clearPasswordRecovery: mockClearPasswordRecovery,
+  }),
+}));
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockReplace }),
@@ -65,6 +77,7 @@ jest.mock('../supabase', () => ({
     auth: {
       getSession: () => mockGetSession(),
       updateUser: (attrs: object) => mockUpdateUser(attrs),
+      signOut: () => mockSignOut(),
     },
   },
 }));
@@ -120,14 +133,27 @@ describe('app/auth/noua-parola — resetare parolă (H1)', () => {
     expect(mockReplace).toHaveBeenCalledWith('/auth');
   });
 
-  it('cu parole valide și identice → updateUser cu parola nouă', async () => {
-    const { getByLabelText, getByText } = await render(<NouaParolaScreen />);
+  it('cu parole valide și identice → updateUser, afișează succes inline (fără Alert) și continuă spre /auth/complete', async () => {
+    const { getByLabelText, getByText, getByTestId } = await render(<NouaParolaScreen />);
 
     await fireEvent.changeText(getByLabelText('Parolă nouă'), 'Parola123');
     await fireEvent.changeText(getByLabelText('Confirmă parola'), 'Parola123');
     await fireEvent.press(getByText('Salvează parola nouă'));
 
     await waitFor(() => expect(mockUpdateUser).toHaveBeenCalledWith({ password: 'Parola123' }));
+    await waitFor(() => expect(getByTestId('new-password-success-card')).toBeTruthy());
+    expect(mockAlert).not.toHaveBeenCalled();
+
+    await fireEvent.press(getByTestId('new-password-continue-btn'));
+    expect(mockClearPasswordRecovery).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith('/auth/complete');
+  });
+
+  it('înapoi la autentificare curăță starea de recuperare înainte de /auth', async () => {
+    const { getByLabelText } = await render(<NouaParolaScreen />);
+    await fireEvent.press(getByLabelText('Înapoi la autentificare'));
+    await waitFor(() => expect(mockClearPasswordRecovery).toHaveBeenCalled());
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth'));
   });
 
   it('parole care nu coincid → NU apelează updateUser', async () => {

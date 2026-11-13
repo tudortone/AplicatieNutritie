@@ -167,7 +167,9 @@ export { GlobalErrorBoundary as ErrorBoundary };
 
 function RootNavigator() {
   const { colors } = useTheme();
-  const { session, loadingAuth } = useAuth();
+  const auth = useAuth() as ReturnType<typeof useAuth> & { isPasswordRecovery?: boolean };
+  const { session, loadingAuth } = auth;
+  const isPasswordRecovery = Boolean(auth.isPasswordRecovery);
   const { isOnboardingDone, syncFromAsyncStorage, setOnboardingDone } = useAppStore();
   const { isLocked, biometricType, unlockApp } = useBiometrics();
   useDailySync();
@@ -448,7 +450,11 @@ function RootNavigator() {
     // (lungime 1) pe checkout curat (fără .expo/types) — accesul `segments[1]`
     // pică la typecheck. Detectăm ruta prin `pathname` (string simplu), echivalent
     // semantic: singura rută cu segmentul 'noua-parola' e /auth/noua-parola.
-    const esteRecuperareParola = inAuth && pathname === '/auth/noua-parola';
+    if (isPasswordRecovery) {
+      if (pathname !== '/auth/noua-parola') router.replace('/auth/noua-parola');
+      return;
+    }
+    const esteRecuperareParola = inAuth && (pathname === '/auth/noua-parola' || pathname === '/auth/forgot-password');
     if (esteRecuperareParola) return;
     // Verificăm profilul contului curent înainte de a repeta chestionarul.
     if (session && !isOnboardingDone && profilVerificatPentru !== session.user.id) return;
@@ -485,7 +491,7 @@ function RootNavigator() {
       return;
     }
     if (inAuth || inOnboarding) router.replace('/(tabs)');
-  }, [session, loadingAuth, storageReady, profilVerificatPentru, isOnboardingDone, setOnboardingDone, profilServer, profilServerDate, segments, pathname, router]);
+  }, [session, loadingAuth, isPasswordRecovery, storageReady, profilVerificatPentru, isOnboardingDone, setOnboardingDone, profilServer, profilServerDate, segments, pathname, router]);
 
   if (loadingAuth && !storageReady && pathname !== '/auth/callback' && pathname !== '/auth/complete') return <AppSplashScreen isReady={false} />;
   const push = { animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, gestureEnabled: true } as const;
@@ -499,6 +505,8 @@ function RootNavigator() {
         <Stack screenOptions={{ headerShown: false, gestureEnabled: true, animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, fullScreenGestureEnabled: true, contentStyle: { backgroundColor: colors.background } }}>
           <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
           <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
+          <Stack.Screen name="auth/forgot-password" options={push} />
+          <Stack.Screen name="auth/noua-parola" options={{ ...push, gestureEnabled: false }} />
           <Stack.Screen name="onboarding" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
           <Stack.Screen name="camera" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
           <Stack.Screen name="scanner-barcode" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />

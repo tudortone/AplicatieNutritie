@@ -28,8 +28,8 @@ jest.mock('../lib/onboarding', () => ({
 jest.mock('../hooks/useAppStore', () => ({ useAppStore: { getState: () => ({ setOnboardingDone: async () => {} }) } }));
 const session = (id: string) => ({ user: { id }, access_token: `test-${id}` }) as Session;
 function Probe() {
-  const { session: current, loadingAuth } = useAuth();
-  return <Text>{loadingAuth ? 'loading' : current?.user.id ?? 'signed-out'}</Text>;
+  const { session: current, loadingAuth, isPasswordRecovery, clearPasswordRecovery } = useAuth();
+  return <Text testID="probe-state" onPress={clearPasswordRecovery}>{loadingAuth ? 'loading' : `${current?.user.id ?? 'signed-out'}:${isPasswordRecovery ? 'recovery' : 'normal'}`}</Text>;
 }
 
 describe('AUTH-OAUTH-001 AuthContext event ordering', () => {
@@ -44,7 +44,7 @@ describe('AUTH-OAUTH-001 AuthContext event ordering', () => {
     await waitFor(() => expect(mockHydrate).toHaveBeenCalledWith('returning'));
     expect(view.queryByText('returning')).toBeNull();
     await act(async () => release(true));
-    await waitFor(() => expect(view.getByText('returning')).toBeTruthy());
+    await waitFor(() => expect(view.getByText(/^returning:/)).toBeTruthy());
     await act(async () => mockListener('TOKEN_REFRESHED', session('returning')));
     expect(mockHydrate).toHaveBeenCalledTimes(1);
   });
@@ -54,9 +54,9 @@ describe('AUTH-OAUTH-001 AuthContext event ordering', () => {
     mockGetSession.mockImplementation(() => new Promise(resolve => { resolveInitial = resolve; }));
     const view = await render(<AuthProvider><Probe /></AuthProvider>);
     await act(async () => mockListener('SIGNED_IN', session('oauth-user')));
-    await waitFor(() => expect(view.getByText('oauth-user')).toBeTruthy());
+    await waitFor(() => expect(view.getByText(/^oauth-user:/)).toBeTruthy());
     await act(async () => resolveInitial({ data: { session: null }, error: null }));
-    expect(view.getByText('oauth-user')).toBeTruthy();
+    expect(view.getByText(/^oauth-user:/)).toBeTruthy();
   });
 
   it('serializes a newer account behind in-flight profile writes and never publishes the stale account', async () => {
@@ -69,8 +69,8 @@ describe('AUTH-OAUTH-001 AuthContext event ordering', () => {
     await act(async () => mockListener('SIGNED_IN', session('new')));
     expect(mockPrepare).not.toHaveBeenCalledWith('new');
     await act(async () => release(true));
-    await waitFor(() => expect(view.getByText('new')).toBeTruthy());
-    expect(view.queryByText('old')).toBeNull();
+    await waitFor(() => expect(view.getByText(/^new:/)).toBeTruthy());
+    expect(view.queryByText(/^old:/)).toBeNull();
     expect(mockHydrate.mock.calls.map(([id]) => id)).toEqual(['old', 'new']);
   });
 
@@ -82,9 +82,23 @@ describe('AUTH-OAUTH-001 AuthContext event ordering', () => {
     await act(async () => mockListener('SIGNED_IN', session('old')));
     await act(async () => mockListener('SIGNED_IN', session('new')));
     await act(async () => releaseOld(false));
-    await waitFor(() => expect(view.getByText('new')).toBeTruthy());
-    expect(view.queryByText('old')).toBeNull();
+    await waitFor(() => expect(view.getByText(/^new:/)).toBeTruthy());
+    expect(view.queryByText(/^old:/)).toBeNull();
     await act(async () => mockListener('TOKEN_REFRESHED', session('new')));
-    expect(view.getByText('new')).toBeTruthy();
+    expect(view.getByText(/^new:/)).toBeTruthy();
+  });
+
+  it('tracks PASSWORD_RECOVERY through token refreshes until clearPasswordRecovery or SIGNED_OUT', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
+    const view = await render(<AuthProvider><Probe /></AuthProvider>);
+
+    await act(async () => mockListener('PASSWORD_RECOVERY', session('rec-user')));
+    await waitFor(() => expect(view.getByText('rec-user:recovery')).toBeTruthy());
+
+    await act(async () => mockListener('TOKEN_REFRESHED', session('rec-user')));
+    await waitFor(() => expect(view.getByText('rec-user:recovery')).toBeTruthy());
+
+    await act(async () => mockListener('SIGNED_OUT', null));
+    await waitFor(() => expect(view.getByText('signed-out:normal')).toBeTruthy());
   });
 });

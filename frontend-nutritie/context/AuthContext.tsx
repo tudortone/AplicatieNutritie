@@ -13,6 +13,8 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   loadingAuth: boolean;
+  isPasswordRecovery: boolean;
+  clearPasswordRecovery: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -21,6 +23,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const clearPasswordRecovery = React.useCallback(() => setIsPasswordRecovery(false), []);
 
   useEffect(() => {
     let mounted = true;
@@ -28,7 +32,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let appliedUser: string | undefined;
     let pendingApplication = Promise.resolve();
 
-    const applySession = async (nextSession: Session | null, clearWhenEmpty: boolean, version: number) => {
+    const applySession = async (
+      nextSession: Session | null,
+      clearWhenEmpty: boolean,
+      version: number,
+      recoveryOverride?: boolean,
+    ) => {
       if (!mounted || version !== revision) return;
       try {
         if (nextSession?.user) {
@@ -65,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           appliedUser = undefined;
           setSession(null);
           setUser(null);
+          setIsPasswordRecovery(false);
           setLoadingAuth(false);
         }
         return;
@@ -73,15 +83,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       appliedUser = nextSession?.user.id;
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
+      if (recoveryOverride !== undefined) {
+        setIsPasswordRecovery(recoveryOverride);
+      }
       setLoadingAuth(false);
     };
 
-    const enqueueSession = (nextSession: Session | null, clearWhenEmpty: boolean) => {
+    const enqueueSession = (
+      nextSession: Session | null,
+      clearWhenEmpty: boolean,
+      recoveryOverride?: boolean,
+    ) => {
       const version = ++revision;
       if (mounted && appliedUser !== nextSession?.user.id) setLoadingAuth(true);
       // Supabase emite sub lock. Callback-ul rămâne sincron; operațiile de
       // profil rulează ulterior și serial, iar doar ultimul eveniment se publică.
-      pendingApplication = pendingApplication.then(() => applySession(nextSession, clearWhenEmpty, version));
+      pendingApplication = pendingApplication.then(() =>
+        applySession(nextSession, clearWhenEmpty, version, recoveryOverride),
+      );
     };
 
     // Lipsa unei sesiuni la cold start nu este logout. Curățarea aici ștergea
@@ -97,7 +116,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      enqueueSession(nextSession, event === 'SIGNED_OUT');
+      const recoveryOverride =
+        event === 'PASSWORD_RECOVERY'
+          ? true
+          : event === 'SIGNED_OUT' || event === 'SIGNED_IN' || !nextSession
+            ? false
+            : undefined;
+      enqueueSession(nextSession, event === 'SIGNED_OUT', recoveryOverride);
     });
 
     return () => {
@@ -106,10 +131,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const value = React.useMemo(() => ({ session, user, loadingAuth }), [session, user, loadingAuth]);
+  const value = React.useMemo(
+    () => ({ session, user, loadingAuth, isPasswordRecovery, clearPasswordRecovery }),
+    [session, user, loadingAuth, isPasswordRecovery, clearPasswordRecovery],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
+
+export const useOptionalAuth = () => useContext(AuthContext);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);

@@ -15,6 +15,7 @@ type AuthResult = { data: { session: Session | null }; error: unknown };
 type Dependencies = {
   auth: {
     exchangeCodeForSession: (code: string) => Promise<AuthResult>;
+    verifyOtp?: (params: { token_hash: string; type: 'recovery' }) => Promise<AuthResult>;
     getSession: () => Promise<AuthResult>;
     signInWithOAuth: (options: { provider: 'google' | 'apple'; options: { redirectTo: string; skipBrowserRedirect: true } }) => Promise<{ data: { url: string | null }; error: unknown }>;
   };
@@ -26,15 +27,19 @@ export function createOAuthFlow({ auth, openAuthSessionAsync, redirectTo }: Depe
   // Memorie exclusiv procesului, limitată: aceeași promisiune pentru browser și
   // Expo Router. O sesiune preexistentă NU este dovadă că acest cod a fost schimbat.
   const exchanges = new Map<string, Promise<Session>>();
+  const recoveryTokens = new Map<string, Promise<Session>>();
   let signingIn = false;
-  async function complete(params: CallbackParams): Promise<Session> {
-    const code = params.code;
-    if (params.error || params.error_description || typeof code !== 'string' || !code) throw new Error('oauth');
-    let pending = exchanges.get(code);
+
+  async function deduplicatedSession(
+    cache: Map<string, Promise<Session>>,
+    key: string,
+    exchange: () => Promise<AuthResult>,
+  ): Promise<Session> {
+    let pending = cache.get(key);
     if (!pending) {
       pending = Promise.resolve().then(async () => {
         try {
-          const { data, error } = await auth.exchangeCodeForSession(code);
+          const { data, error } = await exchange();
           if (error || !data.session) throw new Error('oauth');
           return data.session;
         } catch {
@@ -42,13 +47,27 @@ export function createOAuthFlow({ auth, openAuthSessionAsync, redirectTo }: Depe
           throw new Error('oauth');
         }
       });
-      exchanges.set(code, pending);
-      if (exchanges.size > 8) exchanges.delete(exchanges.keys().next().value!);
+      cache.set(key, pending);
+      if (cache.size > 8) cache.delete(cache.keys().next().value!);
     }
     const result = await pending;
     const { data, error } = await auth.getSession();
     if (error || data.session?.user.id !== result.user.id) throw new Error('oauth');
     return data.session;
+  }
+
+  async function complete(params: CallbackParams): Promise<Session> {
+    const code = params.code;
+    if (params.error || params.error_description || typeof code !== 'string' || !code) throw new Error('oauth');
+    return deduplicatedSession(exchanges, code, () => auth.exchangeCodeForSession(code));
+  }
+
+  async function completeRecoveryToken(tokenHash: string): Promise<Session> {
+    const normalized = tokenHash.trim();
+    if (!normalized || !auth.verifyOtp) throw new Error('oauth');
+    return deduplicatedSession(recoveryTokens, normalized, () =>
+      auth.verifyOtp!({ token_hash: normalized, type: 'recovery' }),
+    );
   }
 
   async function signIn(provider: 'google' | 'apple'): Promise<'success' | 'cancelled'> {
@@ -73,7 +92,7 @@ export function createOAuthFlow({ auth, openAuthSessionAsync, redirectTo }: Depe
       signingIn = false;
     }
   }
-  return { complete, signIn };
+  return { complete, completeRecoveryToken, signIn };
 }
 
 export const oauthFlow = createOAuthFlow({

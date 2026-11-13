@@ -8,7 +8,8 @@ const mockAuthorize = jest.fn();
 const mockExchange = jest.fn();
 const mockSignInWithPassword = jest.fn();
 let mockSession: any = null;
-const mockRouter = { replace: jest.fn() };
+const mockSessionPush = jest.fn();
+const mockRouter = { replace: jest.fn(), push: mockSessionPush };
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
 jest.mock('expo-web-browser', () => ({ maybeCompleteAuthSession: jest.fn(), openAuthSessionAsync: (url: string, redirect: string) => mockBrowser(url, redirect) }));
@@ -21,6 +22,7 @@ jest.mock('../supabase', () => ({ supabase: { auth: {
 jest.mock('../hooks/useAppStore', () => ({ useAppStore: () => ({ setOnboardingDone: jest.fn() }) }));
 jest.mock('../lib/onboarding', () => ({ incarcaDateOnboarding: async () => null }));
 jest.mock('../hooks/useResponsiveLayout', () => ({ useResponsiveLayout: () => ({ contentMaxWidth: 520 }) }));
+jest.mock('../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
 jest.mock('../context/ThemeContext', () => ({ useTheme: () => ({ colors: { accent: '#fff', accentGradient: ['#fff', '#fff'], background: '#000', surfaceBg: '#111', cardBorder: '#222', textPrimary: '#fff', textSecondary: '#888' } }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('../components/ui/PressableScale', () => ({ PressableScale: ({ children, onPress, ...props }: any) => { const { Pressable } = require('react-native'); return <Pressable onPress={onPress} {...props}>{children}</Pressable>; } }));
@@ -143,8 +145,8 @@ describe('AUTH-OAUTH-001 auth UI cancellation and retry', () => {
     mockSignInWithPassword.mockResolvedValue({ data: { user: { id: 'user-email' }, session: { user: { id: 'user-email' } } }, error: null });
     const view = await render(<AuthScreen />);
 
-    fireEvent.changeText(view.getByPlaceholderText('auth.emailPlaceholder'), 'tester@getflow.app');
-    fireEvent.changeText(view.getByPlaceholderText('auth.passwordPlaceholder'), 'SuperSecure123');
+    await fireEvent.changeText(view.getByPlaceholderText('auth.emailPlaceholder'), 'tester@getflow.app');
+    await fireEvent.changeText(view.getByPlaceholderText('auth.passwordPlaceholder'), 'SuperSecure123');
     await waitFor(() => {
       expect(view.getByPlaceholderText('auth.emailPlaceholder').props.value).toBe('tester@getflow.app');
       expect(view.getByPlaceholderText('auth.passwordPlaceholder').props.value).toBe('SuperSecure123');
@@ -164,5 +166,25 @@ describe('AUTH-OAUTH-001 auth UI cancellation and retry', () => {
     const view = await render(<AuthScreen />);
     expect(view.queryByLabelText('Continuă cu Apple')).toBeNull();
     expect(view.queryByText('Apple')).toBeNull();
+  });
+
+  it('routes "Forgot password?" cleanly to /auth/forgot-password without Alert.alert and omits admin alias', async () => {
+    Platform.OS = 'android';
+    const view = await render(<AuthScreen />);
+
+    await fireEvent.changeText(view.getByPlaceholderText('auth.emailPlaceholder'), 'user@getflow.app');
+    await fireEvent.press(view.getByLabelText('auth.forgotPasswordA11y'));
+
+    expect(mockRouter.push).toHaveBeenCalledWith({
+      pathname: '/auth/forgot-password',
+      params: { email: 'user@getflow.app' },
+    });
+    expect(Alert.alert).not.toHaveBeenCalled();
+
+    mockRouter.push.mockClear();
+    await fireEvent.changeText(view.getByPlaceholderText('auth.emailPlaceholder'), 'admin');
+    await fireEvent.press(view.getByLabelText('auth.forgotPasswordA11y'));
+    expect(mockRouter.push).toHaveBeenCalledWith('/auth/forgot-password');
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 });

@@ -14,33 +14,53 @@ export default function AuthCallbackScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const { session, loadingAuth } = useAuth();
-  const [completion, setCompletion] = useState<{ code: string | string[] | undefined; userId: string } | null>(null);
+  const [completion, setCompletion] = useState<{ key: string | string[] | undefined; userId: string } | null>(null);
   const code = params.code;
   const error = params.error;
   const errorDescription = params.error_description;
   const recovery = params.flow === 'recovery' || params.type === 'recovery';
+  const tokenHash = typeof params.token_hash === 'string' && params.token_hash.trim() ? params.token_hash.trim() : undefined;
+  const completionKey = recovery && tokenHash ? `recovery:${tokenHash}` : code;
 
   useEffect(() => {
     let active = true;
     setCompletion(null);
-    void oauthFlow.complete({ code, error, error_description: errorDescription }).then(result => {
-      if (active) setCompletion({ code, userId: result.user.id });
+    if (recovery && (error || errorDescription)) {
+      router.replace({
+        pathname: '/auth/forgot-password',
+        params: { reason: 'link_expired' },
+      } as never);
+      return () => { active = false; };
+    }
+    const task = recovery && tokenHash
+      ? oauthFlow.completeRecoveryToken(tokenHash)
+      : oauthFlow.complete({ code, error, error_description: errorDescription });
+
+    void task.then(result => {
+      if (active) setCompletion({ key: completionKey, userId: result.user.id });
     }).catch(() => {
       if (!active) return;
+      if (recovery) {
+        router.replace({
+          pathname: '/auth/forgot-password',
+          params: { reason: 'link_expired' },
+        } as never);
+        return;
+      }
       router.replace('/auth');
       Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.problemaConexiuneOAuth'));
     });
     return () => { active = false; };
-  }, [code, error, errorDescription, router, t]);
+  }, [code, completionKey, error, errorDescription, recovery, router, t, tokenHash]);
 
   useEffect(() => {
     // Schimbul salvează sesiunea înainte ca AuthContext să termine izolarea și
     // sincronizarea profilului. Nu navigăm folosind încă identitatea veche.
-    if (!completion || completion.code !== code || error || errorDescription || loadingAuth || session?.user.id !== completion.userId) return;
+    if (!completion || completion.key !== completionKey || error || errorDescription || loadingAuth || session?.user.id !== completion.userId) return;
     // Recovery trebuie să seteze parola chiar dacă exista deja alt cont activ.
     // OAuth continuă în gate-ul central, care decide onboarding/tabs.
     router.replace(recovery ? '/auth/noua-parola' : '/auth/complete');
-  }, [completion, code, error, errorDescription, loadingAuth, session, recovery, router]);
+  }, [completion, completionKey, error, errorDescription, loadingAuth, session, recovery, router]);
 
   // The completion route can navigate; mount it only after PKCE and identity convergence.
   return (

@@ -8,6 +8,7 @@ const mockReplace = jest.fn();
 const mockRouter = { replace: mockReplace };
 const mockT = (key: string) => key;
 const mockExchange = jest.fn();
+const mockVerifyOtp = jest.fn();
 let mockParams: Record<string, string> = {};
 let mockCurrent: Session | null = null;
 let mockObserved: Session | null = null;
@@ -31,6 +32,7 @@ jest.mock('../supabase', () => ({
   supabase: { auth: {
     getSession: async () => ({ data: { session: mockCurrent }, error: null }),
     exchangeCodeForSession: (code: string) => mockExchange(code),
+    verifyOtp: (params: unknown) => mockVerifyOtp(params),
   } },
 }));
 
@@ -42,6 +44,11 @@ describe('AUTH-OAUTH-001 callback and AuthContext convergence', () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     mockExchange.mockImplementation(async () => {
       mockCurrent = makeSession('new');
+      mockObserved = mockCurrent;
+      return { data: { session: mockCurrent }, error: null };
+    });
+    mockVerifyOtp.mockImplementation(async () => {
+      mockCurrent = makeSession('new-recovery');
       mockObserved = mockCurrent;
       return { data: { session: mockCurrent }, error: null };
     });
@@ -119,5 +126,27 @@ describe('AUTH-OAUTH-001 callback and AuthContext convergence', () => {
     expect(Alert.alert).toHaveBeenCalledWith('alerts.titluri.eroareOAuth', 'alerts.mesaje.problemaConexiuneOAuth');
     expect(mockReplace).not.toHaveBeenCalledWith('/auth/complete');
     expect(mockReplace).not.toHaveBeenCalledWith('/auth/noua-parola');
+  });
+
+  it('verifies recovery token_hash without PKCE code_verifier and navigates cleanly to /auth/noua-parola', async () => {
+    mockParams = { token_hash: 'hash-recovery-1', type: 'recovery' };
+    await render(<AuthCallbackScreen />);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/noua-parola'));
+    expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: 'hash-recovery-1', type: 'recovery' });
+    expect(mockExchange).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('routes failed or expired recovery callbacks to /auth/forgot-password without generic OAuth error alert', async () => {
+    mockParams = { flow: 'recovery', error: 'access_denied', error_description: 'otp_expired' };
+    await render(<AuthCallbackScreen />);
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith({
+        pathname: '/auth/forgot-password',
+        params: { reason: 'link_expired' },
+      }),
+    );
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalledWith('/auth');
   });
 });
