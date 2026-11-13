@@ -7,6 +7,14 @@ import { Radius, Spacing } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { anatomyMapSize, singleAnatomyMapWidth } from '../../lib/anatomyLayout';
+import { getLocalizedMuscleLabel } from '../../lib/sportI18n';
+
+const BACK_GROUP_REGEX =
+  /spate|dorsali|trapez|romboizi|fesieri|ischiogambieri|femurali|triceps|lombari|back|lats|latissimus|traps|rhomboid|glute|hamstring|erector|rear|dos|dorsaux|fessier|ischio|lombaire|rücken|rucken|rückenstrecker|gesäß|gesass|trizeps|hintere/i;
+const CHEST_GROUP_REGEX = /piept|pectorali|chest|pec|pectoral|poitrine|pectoraux|brust/i;
+const SHOULDERS_GROUP_REGEX = /umeri|deltoid|shoulder|delt|épaule|epaule|deltoïde|deltoide|schulter/i;
+const ARMS_GROUP_REGEX = /brațe|brate|biceps|triceps|brahial|arm|forearm|bras|avant-bras|bizeps|unterarm/i;
+const LEGS_GROUP_REGEX = /picioare|cvadriceps|fesieri|gambe|ischiogambieri|femurali|leg|quad|calf|calves|glute|hamstring|jambes|quadriceps|mollet|bein|wade|oberschenkel/i;
 
 export interface HumanBodyProps {
   activeGroups: string[];
@@ -44,14 +52,14 @@ export function Holographic3DAnatomyBody({
     anatomyMapSize('front', bodyWidth).height,
     anatomyMapSize('back', bodyWidth).height,
   );
-  const isSpate = activeGroups.some(g => /spate|dorsali|trapez|romboizi|fesieri|ischiogambieri|femurali|triceps|lombari/i.test(g));
-  const isPiept = activeGroups.some(g => /piept|pectorali/i.test(g));
-  const isUmeri = activeGroups.some(g => /umeri|deltoid/i.test(g));
-  const isBrate = activeGroups.some(g => /brațe|brate|biceps|triceps|brahial/i.test(g));
-  const isPicioare = activeGroups.some(g => /picioare|cvadriceps|fesieri|gambe|ischiogambieri|femurali/i.test(g));
+  const isSpate = activeGroups.some((g) => BACK_GROUP_REGEX.test(g));
+  const isPiept = activeGroups.some((g) => CHEST_GROUP_REGEX.test(g));
+  const isUmeri = activeGroups.some((g) => SHOULDERS_GROUP_REGEX.test(g));
+  const isBrate = activeGroups.some((g) => ARMS_GROUP_REGEX.test(g));
+  const isPicioare = activeGroups.some((g) => LEGS_GROUP_REGEX.test(g));
 
   const initialSide = useMemo(() => {
-    const isBackPrimary = activeGroups.length > 0 && /spate|dorsali|trapez|romboizi|fesieri|ischiogambieri|femurali|triceps|lombari/i.test(activeGroups[0]);
+    const isBackPrimary = activeGroups.length > 0 && BACK_GROUP_REGEX.test(activeGroups[0]);
     return isBackPrimary ? 'posterior' : 'anterior';
   }, [activeGroups]);
 
@@ -94,7 +102,7 @@ export function Holographic3DAnatomyBody({
   }, [muschiTinta, activeGroups]);
 
   return (
-    <View style={[bodyStyles.container, { borderColor: mainActiveColor + '55' }]}>
+    <View style={[bodyStyles.container, { backgroundColor: colors.surface, borderColor: mainActiveColor + '55' }]}>
       {/* Header Anatomic Pro */}
       <View style={bodyStyles.headerRow}>
         <View style={bodyStyles.titleBox}>
@@ -104,7 +112,10 @@ export function Holographic3DAnatomyBody({
           </View>
           <Text style={[bodyStyles.titleText, { color: textPrimary }]} maxFontSizeMultiplier={1.3}>{t('anatomy.detailTitle')}</Text>
           <Text style={[bodyStyles.subText, { color: mainActiveColor }]} maxFontSizeMultiplier={1.3}>
-            {t('anatomy.intensitySummary', { groups: activeGroups.join(' • '), score: intensityScore })}
+            {t('anatomy.intensitySummary', {
+              groups: activeGroups.map((g) => getLocalizedMuscleLabel(g, t)).join(' • '),
+              score: intensityScore,
+            })}
           </Text>
         </View>
 
@@ -175,7 +186,6 @@ const bodyStyles = StyleSheet.create({
     borderWidth: 1.5,
     padding: Spacing.md,
     marginBottom: Spacing.lg,
-    backgroundColor: 'rgba(5, 15, 28, 0.75)',
   },
   headerRow: {
     flexDirection: 'row',
@@ -197,7 +207,7 @@ const bodyStyles = StyleSheet.create({
     borderRadius: 3.5,
   },
   hudLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '900',
     letterSpacing: 1.1,
   },

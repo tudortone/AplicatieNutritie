@@ -20,6 +20,16 @@ import { useNotify } from '../../hooks/useNotify';
 import { classifyMeasurement, computeSessionLoad, type MeasurementSpec } from '../../lib/measurement';
 import { Holographic3DAnatomyBody } from '../../components/fitness/Holographic3DAnatomyBody';
 import { FlowIcon } from '../../components/ui/FlowIcon';
+import { useTranslation } from 'react-i18next';
+import {
+  getLocalizedCategoryName,
+  getLocalizedDifficulty,
+  getLocalizedExerciseDescription,
+  getLocalizedExerciseInstructions,
+  getLocalizedExerciseMistakes,
+  getLocalizedExerciseName,
+  getLocalizedMuscleLabel,
+} from '../../lib/sportI18n';
 
 export default function ExercitiuDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,6 +38,7 @@ export default function ExercitiuDetailScreen() {
   const notify = useNotify();
   const { adaugaAntrenament } = useAntrenamente();
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { exercitii } = useExercitii();
 
   const [greutateKg, setGreutateKg] = useState(75);
@@ -49,7 +60,7 @@ export default function ExercitiuDetailScreen() {
     defaultSets: 3,
     defaultReps: 12,
     defaultWeightKg: 20,
-    unitLabel: 'Repetări',
+    unitLabel: t('sport.measurement.units.reps'),
     bodyweightFactor: 1.0,
   };
   const spec: MeasurementSpec = exercitiu ? (exercitiu.masurare ?? classifyMeasurement(exercitiu)) : DEFAULT_MEASUREMENT_SPEC;
@@ -61,23 +72,24 @@ export default function ExercitiuDetailScreen() {
   if (!exercitiu) {
     return (
       <View style={[styles.container, { paddingTop: insets.top + Spacing.lg, backgroundColor: colors.background }]}>
-        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('sport.detail.backA11y')} hitSlop={8} style={styles.backBtn}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.notFoundWrap}>
-          <Text style={[styles.notFoundTitle, { color: colors.textPrimary }]}>Exercițiul nu a fost găsit</Text>
-          <Text style={[styles.notFoundText, { color: colors.textSecondary }]}>Alege un exercițiu din catalogul principal.</Text>
+          <Text style={[styles.notFoundTitle, { color: colors.textPrimary }]}>{t('sport.detail.notFoundTitle')}</Text>
+          <Text style={[styles.notFoundText, { color: colors.textSecondary }]}>{t('sport.detail.notFoundSub')}</Text>
         </View>
       </View>
     );
   }
 
+  const exName = getLocalizedExerciseName(exercitiu, t);
   const caloriiEst = calculeazaCaloriiEx(exercitiu, greutateKg);
 
-  const instructiuni = exercitiu.instructiuni && exercitiu.instructiuni.length > 0
-    ? exercitiu.instructiuni
-    : ['Execută mișcarea controlat, concentrându-te pe contracția musculară.'];
-  const descriere = exercitiu.descriere || 'Exercițiu eficient pentru planul tău de antrenament.';
+  const rawInstructiuni = getLocalizedExerciseInstructions(exercitiu, t);
+  const instructiuni = rawInstructiuni.length > 0 ? rawInstructiuni : [t('sport.detail.defaultInstruction')];
+  const descriere = getLocalizedExerciseDescription(exercitiu, t) || t('sport.detail.defaultDesc');
+  const greseli = getLocalizedExerciseMistakes(exercitiu, t);
 
   // FIT-003: seturile de încălzire nu intră în volumul de lucru / PR.
   const workingSets = sets.filter((s) => s.set_type !== 'warmup');
@@ -103,41 +115,41 @@ export default function ExercitiuDetailScreen() {
   const getExerciseRankInfo = () => {
     if (scorIntensitate >= 85) {
       return {
-        rank: 'RANK S+ • ELITE PRO',
+        rank: t('sport.detail.ranks.S.title'),
         badgeColor: '#FACC15',
         stele: 5,
-        eficienta: 'Recrutare 99% Fibre Musculare',
-        mesaj: 'Stimulare hipertrofică maximă — nivel competițional absolut.',
-        hintNext: 'Ai atins nivelul maxim de măiestrie pentru acest exercițiu!'
+        eficienta: t('sport.detail.ranks.S.efficiency'),
+        mesaj: t('sport.detail.ranks.S.msg'),
+        hintNext: t('sport.detail.ranks.S.hint'),
       };
     }
     if (scorIntensitate >= 65) {
       return {
-        rank: 'RANK A • ADVANCED HYPERTROPHY',
+        rank: t('sport.detail.ranks.A.title'),
         badgeColor: '#00F0FF',
         stele: 4,
-        eficienta: 'Recrutare 92% Fibre Musculare',
-        mesaj: 'Tensiune mecanică intensă & adaptare structurală profundă.',
-        hintNext: `Adaugă +${Math.max(2, Math.round((85 - scorIntensitate) / 2))} kg sau 1 serie pentru a debloca Rank S+`
+        eficienta: t('sport.detail.ranks.A.efficiency'),
+        mesaj: t('sport.detail.ranks.A.msg'),
+        hintNext: t('sport.detail.ranks.A.hint', { kg: Math.max(2, Math.round((85 - scorIntensitate) / 2)) }),
       };
     }
     if (scorIntensitate >= 45) {
       return {
-        rank: 'RANK B • INTERMEDIATE STRENGTH',
+        rank: t('sport.detail.ranks.B.title'),
         badgeColor: '#4ADE80',
         stele: 3,
-        eficienta: 'Recrutare 78% Fibre Musculare',
-        mesaj: 'Volum solid de lucru pentru creștere progresivă și tonifiere.',
-        hintNext: `Adaugă +${Math.max(2, Math.round((65 - scorIntensitate) / 2))} kg sau 2 repetări pentru Rank A`
+        eficienta: t('sport.detail.ranks.B.efficiency'),
+        mesaj: t('sport.detail.ranks.B.msg'),
+        hintNext: t('sport.detail.ranks.B.hint', { kg: Math.max(2, Math.round((65 - scorIntensitate) / 2)) }),
       };
     }
     return {
-      rank: 'RANK C • FOUNDATION & FORM',
+      rank: t('sport.detail.ranks.C.title'),
       badgeColor: '#38BDF8',
       stele: 2,
-      eficienta: 'Recrutare 60% Fibre Musculare',
-      mesaj: 'Execuție tehnică controlată și activare metabolică de bază.',
-      hintNext: `Crește greutatea sau adaugă repetări pentru a atinge Rank B`
+      eficienta: t('sport.detail.ranks.C.efficiency'),
+      mesaj: t('sport.detail.ranks.C.msg'),
+      hintNext: t('sport.detail.ranks.C.hint'),
     };
   };
 
@@ -157,7 +169,7 @@ export default function ExercitiuDetailScreen() {
       const kcalArse = Math.round(p * d);
 
       const result = await adaugaAntrenament({
-        nume: exercitiu.nume,
+        nume: exName,
         tip: exercitiu.categorie,
         durata_min: d,
         calorii_arse: kcalArse,
@@ -174,17 +186,17 @@ export default function ExercitiuDetailScreen() {
       });
 
       if (result === null) {
-        notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+        notify.error(t('sport.detail.saveErrorTitle'), t('sport.detail.saveErrorMsg'));
         return;
       }
 
       notify.success(
-        'Adăugat în antrenament',
-        `${exercitiu.nume} a fost înregistrat cu succes!`
+        t('sport.detail.savedTitle'),
+        t('sport.detail.savedMsg', { name: exName }),
       );
       router.back();
     } catch {
-      notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+      notify.error(t('sport.detail.saveErrorTitle'), t('sport.detail.saveErrorMsg'));
     } finally {
       salvareInCursRef.current = false;
       setSalveazaAntrenament(false);
@@ -208,13 +220,13 @@ export default function ExercitiuDetailScreen() {
     <View style={[styles.container, { paddingTop: Math.max(insets.top, Spacing.lg), backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" hitSlop={12} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('sport.detail.backA11y')} hitSlop={8} style={styles.backBtn}>
           <ArrowLeft size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-          {exercitiu.nume}
+          {exName}
         </Text>
-        <View style={{ width: 40 }} />
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -223,11 +235,13 @@ export default function ExercitiuDetailScreen() {
           <View style={styles.heroTopRow}>
             <View style={styles.badgesRow}>
               <View style={styles.badge}>
-                <Text style={[styles.badgeText, { color: colors.textSecondary }]}>{exercitiu.categorie.toUpperCase()}</Text>
+                <Text style={[styles.badgeText, { color: colors.textSecondary }]}>
+                  {getLocalizedCategoryName(exercitiu.categorie, exercitiu.categorie, t).toUpperCase()}
+                </Text>
               </View>
               <View style={[styles.badge, { backgroundColor: `${getDificultateColor()}22` }]}>
                 <Text style={[styles.badgeText, { color: getDificultateColor() }]}>
-                  {exercitiu.dificultate.toUpperCase()}
+                  {getLocalizedDifficulty(exercitiu.dificultate, t).toUpperCase()}
                 </Text>
               </View>
             </View>
@@ -242,23 +256,23 @@ export default function ExercitiuDetailScreen() {
               <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
                 ~{caloriiEst} kcal
               </Text>
-              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>/ sesiune (est.)</Text>
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{t('sport.detail.perSessionEst')}</Text>
             </View>
             <View style={styles.metricDivider} />
             <View style={styles.metricItem}>
               <Clock size={16} color={colors.accentSecondary} />
               <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
-                {sets.length > 0 ? `${sets.length} serii setate` : 'Configurare'}
+                {sets.length > 0 ? t('sport.detail.setsConfigured', { count: sets.length }) : t('sport.detail.configure')}
               </Text>
-              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>pentru astăzi</Text>
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{t('sport.detail.forToday')}</Text>
             </View>
           </View>
 
           <View style={styles.musclesRow}>
-            <Text style={[styles.musclesLabel, { color: colors.textSecondary }]}>Mușchi lucrați: </Text>
+            <Text style={[styles.musclesLabel, { color: colors.textSecondary }]}>{t('sport.detail.musclesWorked')} </Text>
             {exercitiu.grupe.map((g, idx) => (
               <View key={idx} style={[styles.musclePill, { backgroundColor: colors.accent + '1A', borderColor: colors.accent + '33' }]}>
-                <Text style={[styles.muscleText, { color: colors.accent }]}>{g}</Text>
+                <Text style={[styles.muscleText, { color: colors.accent }]}>{getLocalizedMuscleLabel(g, t)}</Text>
               </View>
             ))}
           </View>
@@ -266,7 +280,7 @@ export default function ExercitiuDetailScreen() {
 
         {/* CORP UMAN HOLOGRAFIC - COMIC BOOK STYLE ANATOMY & HEATMAP */}
         <Holographic3DAnatomyBody
-          activeGroups={exercitiu.target_muscles || exercitiu.grupe || ['Corp complet']}
+          activeGroups={exercitiu.target_muscles || exercitiu.grupe || [t('sport.commonControls.fullBodyFallback')]}
           muschiTinta={exercitiu.activation || exercitiu.muschiTinta}
           intensityScore={scorIntensitate}
           accentColor={colors.accent}
@@ -277,13 +291,13 @@ export default function ExercitiuDetailScreen() {
           volumTotalKg={volumTotal}
         />
 
-        {/* SISTEM SPECIFIC DE RANK (ÎNCADRARE TEXT REZOLVATĂ PERFECT) */}
+        {/* SISTEM SPECIFIC DE RANK */}
         <View style={[styles.rankCard, { backgroundColor: colors.surfaceBg, borderColor: rankInfo.badgeColor }]}>
           <View style={styles.rankTopRow}>
             <View style={styles.rankTitleRow}>
               <ShieldCheck size={24} color={rankInfo.badgeColor} />
               <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={[styles.rankCategoryTitle, { color: colors.textSecondary }]}>MASTERY RANK SYSTEM</Text>
+                <Text style={[styles.rankCategoryTitle, { color: colors.textSecondary }]}>{t('sport.detail.rankSectionTitle')}</Text>
                 <Text style={[styles.rankBadgeTitle, { color: rankInfo.badgeColor }]} numberOfLines={1}>
                   {rankInfo.rank}
                 </Text>
@@ -305,16 +319,16 @@ export default function ExercitiuDetailScreen() {
             />
           </View>
 
-          {/* Linie de statistici perfect spațiată pe 2 coloane clare */}
+          {/* Linie de statistici spațiată pe 2 coloane clare */}
           <View style={styles.rankStatsGrid}>
             <View style={styles.statsColLeft}>
-              <Text style={[styles.rankStatLabel, { color: colors.textSecondary }]}>Eficiență Anatomică</Text>
+              <Text style={[styles.rankStatLabel, { color: colors.textSecondary }]}>{t('sport.detail.anatomicalEfficiency')}</Text>
               <Text style={[styles.rankStatVal, { color: rankInfo.badgeColor }]}>{rankInfo.eficienta}</Text>
             </View>
             <View style={styles.statsColRight}>
-              <Text style={[styles.rankStatLabel, { color: colors.textSecondary, textAlign: 'right' }]}>Scor Efort</Text>
+              <Text style={[styles.rankStatLabel, { color: colors.textSecondary, textAlign: 'right' }]}>{t('sport.detail.effortScore')}</Text>
               <Text style={[styles.rankStatVal, { color: colors.textPrimary, textAlign: 'right' }]}>
-                {scorIntensitate} <Text style={{ fontSize: 12, color: colors.textSecondary }}>/ 100 PTS</Text>
+                {scorIntensitate} <Text style={{ fontSize: 12, color: colors.textSecondary }}>{t('sport.detail.ptsSuffix')}</Text>
               </Text>
             </View>
           </View>
@@ -328,14 +342,14 @@ export default function ExercitiuDetailScreen() {
         </View>
 
         {/* Jurnalizare Profesionala Set-by-Set */}
-        <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 16 }]}>LOG ANTRENAMENT</Text>
-        <SetLogger 
+        <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 16 }]}>{t('sport.detail.logWorkoutTitle')}</Text>
+        <SetLogger
           initialSets={sets}
           onChange={setSets}
         />
 
         {/* Instrucțiuni execuție */}
-        <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 8 }]}>CUM SE EXECUTĂ CORECT</Text>
+        <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 8 }]}>{t('sport.detail.howToTitle')}</Text>
         <View style={styles.stepsWrap}>
           {instructiuni.map((pas, idx) => (
             <View key={idx} style={[styles.stepCard, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
@@ -348,11 +362,11 @@ export default function ExercitiuDetailScreen() {
         </View>
 
         {/* Greșeli comune */}
-        {exercitiu.greseliComune && exercitiu.greseliComune.length > 0 && (
+        {greseli.length > 0 && (
           <>
-            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>GREȘELI DE EVITAT</Text>
+            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>{t('sport.detail.mistakesTitle')}</Text>
             <View style={styles.mistakesWrap}>
-              {exercitiu.greseliComune.map((gresala, idx) => (
+              {greseli.map((gresala, idx) => (
                 <View key={idx} style={[styles.mistakeCard, { backgroundColor: colors.danger + '14', borderColor: colors.danger + '33' }]}>
                   <AlertTriangle size={18} color={colors.danger} style={{ marginTop: 2 }} />
                   <Text style={[styles.mistakeText, { color: colors.textPrimary }]}>{gresala}</Text>
@@ -376,17 +390,17 @@ export default function ExercitiuDetailScreen() {
           <PlusCircle size={20} color={colors.textOnAccent} />
           <Text style={[styles.actionBtnText, { color: colors.textOnAccent }]}>
             {(() => {
-              const maxWeight = sets.length > 0 ? Math.max(...sets.map(s => s.greutate || 0)) : 0;
-              const hasWeight = spec.type === 'weight_reps' || spec.type === 'reps_weight' || spec.type === 'reps_assisted' || maxWeight > 0;
-              const totalReps = sets.reduce((sum, s) => sum + s.repetari, 0);
-              
+              const maxW = sets.length > 0 ? Math.max(...sets.map(s => s.greutate || 0)) : 0;
+              const hasWeight = spec.type === 'weight_reps' || spec.type === 'reps_weight' || spec.type === 'reps_assisted' || maxW > 0;
+              const totReps = sets.reduce((sum, s) => sum + s.repetari, 0);
+
               if (spec.type === 'reps' && !hasWeight) {
-                return `Adaugă (${totalReps} repetări)`;
+                return t('sport.detail.ctaReps', { count: totReps });
               }
-              if (spec.type === 'timed') {
-                return `Adaugă (${sets.length} serii)`;
+              if (spec.type === 'timed' || spec.type === 'timed_weight' || spec.type === 'distance_time') {
+                return t('sport.detail.ctaTimed', { count: sets.length });
               }
-              return `Adaugă (${volumTotal} kg • ${rankInfo.rank.split(' • ')[0]})`;
+              return t('sport.detail.ctaVolume', { kg: volumTotal, rank: rankInfo.rank.split(' • ')[0] });
             })()}
           </Text>
         </TouchableOpacity>
@@ -408,7 +422,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   backBtn: {
-    padding: Spacing.xs,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 17,

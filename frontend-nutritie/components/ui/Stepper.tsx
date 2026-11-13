@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 // BUG-027: folosim același set de iconițe ca restul aplicației (lucide),
 // nu un amestec de familii MaterialCommunityIcons + lucide.
 import { Minus, Plus } from 'lucide-react-native';
@@ -9,7 +10,7 @@ type Props = {
   value: string;
   onDec: () => void;
   onInc: () => void;
-  suffix: string;
+  suffix?: string;
   readOnly?: boolean;
   onTextChange?: (text: string) => void;
   colors: {
@@ -27,16 +28,28 @@ export function Stepper({
   value,
   onDec,
   onInc,
-  suffix,
+  suffix = '',
   readOnly = false,
   onTextChange,
   colors,
 }: Props) {
+  const { t } = useTranslation();
   const [text, setText] = useState(value);
   const [focused, setFocused] = useState(false);
+  const prevValueRef = useRef(value);
+  const lastEmittedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!focused) setText(value);
+    if (value !== prevValueRef.current) {
+      prevValueRef.current = value;
+      if (value !== lastEmittedRef.current) {
+        lastEmittedRef.current = null;
+        setText(value);
+      }
+    } else if (!focused) {
+      lastEmittedRef.current = null;
+      setText(value);
+    }
   }, [value, focused]);
 
   const handleChange = (raw: string) => {
@@ -46,6 +59,7 @@ export function Stepper({
     const cleaned = normalized
       .replace(/[^0-9.]/g, '')
       .replace(/(\..*)\./g, '$1');
+    lastEmittedRef.current = cleaned;
     setText(cleaned);
     onTextChange?.(cleaned);
   };
@@ -53,26 +67,55 @@ export function Stepper({
   const commitBlur = () => {
     setFocused(false);
     const numeric = Number.parseFloat(text);
-    if (text === '' || !Number.isFinite(numeric)) {
-      setText('0');
-      onTextChange?.('0');
-      return;
-    }
     // Elimină zerourile inutile, fără să schimbe valoarea introdusă.
-    const normalized = String(numeric);
-    setText(normalized);
-    onTextChange?.(normalized);
+    const next = text === '' || !Number.isFinite(numeric) ? '0' : String(numeric);
+    setText(next);
+    if (next !== value) {
+      lastEmittedRef.current = next;
+      onTextChange?.(next);
+    } else {
+      lastEmittedRef.current = null;
+    }
   };
+
+  const handleDec = () => {
+    lastEmittedRef.current = null;
+    onDec();
+  };
+
+  const handleInc = () => {
+    lastEmittedRef.current = null;
+    onInc();
+  };
+
+  const displayValue = text || '0';
+  const inputA11yLabel = suffix
+    ? t('sport.screen.stepperValueUnitA11y', {
+        label,
+        value: displayValue,
+        unit: suffix,
+        defaultValue: `${label}, ${displayValue} ${suffix}`,
+      })
+    : t('sport.screen.stepperValueA11y', {
+        label,
+        value: displayValue,
+        defaultValue: `${label}, ${displayValue}`,
+      });
 
   return (
     <View style={[styles.row, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-      <Text style={[styles.label, { color: colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]} numberOfLines={2}>
+        {label}
+      </Text>
       <View style={styles.controls}>
         <Pressable
-          onPress={onDec}
+          onPress={handleDec}
           disabled={readOnly}
           accessibilityRole="button"
-          accessibilityLabel={`Scade ${label.toLowerCase()}`}
+          accessibilityLabel={t('sport.screen.adjustDecA11y', {
+            label: label.toLowerCase(),
+            defaultValue: `Decrease ${label.toLowerCase()}`,
+          })}
           accessibilityState={{ disabled: readOnly }}
           hitSlop={6}
           style={({ pressed }) => [
@@ -94,18 +137,23 @@ export function Stepper({
             inputMode="decimal"
             returnKeyType="done"
             selectTextOnFocus
-            accessibilityLabel={`${label}, ${text || 0} ${suffix}`}
+            accessibilityLabel={inputA11yLabel}
             maxFontSizeMultiplier={1.3}
             style={[styles.value, { color: colors.textPrimary }]}
           />
-          <Text style={[styles.suffix, { color: colors.textTertiary }]}>{suffix}</Text>
+          {suffix ? (
+            <Text style={[styles.suffix, { color: colors.textTertiary }]}>{suffix}</Text>
+          ) : null}
         </View>
 
         <Pressable
-          onPress={onInc}
+          onPress={handleInc}
           disabled={readOnly}
           accessibilityRole="button"
-          accessibilityLabel={`Crește ${label.toLowerCase()}`}
+          accessibilityLabel={t('sport.screen.adjustIncA11y', {
+            label: label.toLowerCase(),
+            defaultValue: `Increase ${label.toLowerCase()}`,
+          })}
           accessibilityState={{ disabled: readOnly }}
           hitSlop={6}
           style={({ pressed }) => [

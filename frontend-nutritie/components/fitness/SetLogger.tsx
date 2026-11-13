@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Plus, Check, Trash2 } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import * as Haptics from 'expo-haptics';
 import type { SetExercitiu, SetType } from '../../hooks/useAntrenamente';
@@ -13,6 +14,7 @@ interface SetLoggerProps {
 
 export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLoggerProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   
   const [sets, setSets] = useState<SetExercitiu[]>(
     initialSets.length > 0 ? initialSets : [{ serie: 1, repetari: 10, greutate: 0, set_type: 'working', rpe: 8, completed: false }]
@@ -91,13 +93,23 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
     return hex + a;
   };
 
+  const setTypeLabel = (type?: SetType) => {
+    switch (type) {
+      case 'warmup': return t('sport.detail.logger.setTypes.warmup');
+      case 'dropset': return t('sport.detail.logger.setTypes.dropset');
+      case 'failure': return t('sport.detail.logger.setTypes.failure');
+      case 'working':
+      default: return t('sport.detail.logger.setTypes.working');
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={[styles.headerCol, styles.colSet, { color: colors.textSecondary }]}>SET</Text>
-        <Text style={[styles.headerCol, styles.colMain, { color: colors.textSecondary }]}>KG</Text>
-        <Text style={[styles.headerCol, styles.colMain, { color: colors.textSecondary }]}>REP</Text>
-        <Text style={[styles.headerCol, styles.colExtra, { color: colors.textSecondary }]}>RPE</Text>
+        <Text style={[styles.headerCol, styles.colSet, { color: colors.textSecondary }]}>{t('sport.detail.logger.colSet')}</Text>
+        <Text style={[styles.headerCol, styles.colMain, { color: colors.textSecondary }]}>{t('sport.detail.logger.colKg')}</Text>
+        <Text style={[styles.headerCol, styles.colMain, { color: colors.textSecondary }]}>{t('sport.detail.logger.colRep')}</Text>
+        <Text style={[styles.headerCol, styles.colExtra, { color: colors.textSecondary }]}>{t('sport.detail.logger.colRpe')}</Text>
         <Text style={[styles.headerCol, styles.colAction, { color: colors.textSecondary }]}></Text>
       </View>
 
@@ -107,7 +119,8 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
             style={[styles.colSet, styles.setBtn, { backgroundColor: withAlpha(getTypeColor(set.set_type), 0.13), borderColor: getTypeColor(set.set_type) }]}
             onPress={() => cycleSetType(idx)}
             accessibilityRole="button"
-            accessibilityLabel={`Tipul setului: ${set.set_type === 'warmup' ? 'încălzire' : set.set_type === 'dropset' ? 'drop set' : set.set_type === 'failure' ? 'la eșec' : 'lucrat'}. Apasă pentru a schimba`}
+            accessibilityLabel={t('sport.detail.logger.setTypeA11y', { type: setTypeLabel(set.set_type) })}
+            hitSlop={4}
           >
             <Text style={[styles.setBtnText, { color: getTypeColor(set.set_type) }]}>
               {set.set_type === 'warmup' ? 'W' : set.set_type === 'dropset' ? 'D' : set.set_type === 'failure' ? 'F' : set.serie}
@@ -115,55 +128,55 @@ export function SetLogger({ initialSets = [], onChange, onSetCompleted }: SetLog
           </TouchableOpacity>
 
           <View style={[styles.colMain, styles.stepperWrap, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
-            <TouchableOpacity onPress={() => updateSet(idx, 'greutate', Math.round(Math.max(0, (set.greutate || 0) - 2.5) * 10) / 10)} style={styles.stepBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Scade greutatea">
+            <TouchableOpacity onPress={() => updateSet(idx, 'greutate', Math.round(Math.max(0, (set.greutate || 0) - 2.5) * 10) / 10)} style={styles.stepBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel={t('sport.detail.logger.decWeightA11y')}>
               <Text style={[styles.stepBtnText, { color: colors.textSecondary }]}>-</Text>
             </TouchableOpacity>
             <Text style={[styles.stepVal, { color: colors.textPrimary }]}>{set.greutate}</Text>
-            <TouchableOpacity onPress={() => updateSet(idx, 'greutate', Math.round(((set.greutate || 0) + 2.5) * 10) / 10)} style={styles.stepBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Crește greutatea">
+            <TouchableOpacity onPress={() => updateSet(idx, 'greutate', Math.round(((set.greutate || 0) + 2.5) * 10) / 10)} style={styles.stepBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel={t('sport.detail.logger.incWeightA11y')}>
               <Text style={[styles.stepBtnText, { color: colors.textSecondary }]}>+</Text>
             </TouchableOpacity>
           </View>
 
           <View style={[styles.colMain, styles.stepperWrap, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
-            <TouchableOpacity onPress={() => updateSet(idx, 'repetari', Math.max(0, set.repetari - 1))} style={styles.stepBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Scade repetările">
+            <TouchableOpacity onPress={() => updateSet(idx, 'repetari', Math.max(0, set.repetari - 1))} style={styles.stepBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel={t('sport.detail.logger.decRepsA11y')}>
               <Text style={[styles.stepBtnText, { color: colors.textSecondary }]}>-</Text>
             </TouchableOpacity>
             <Text style={[styles.stepVal, { color: colors.textPrimary }]}>{set.repetari}</Text>
-            <TouchableOpacity onPress={() => updateSet(idx, 'repetari', Math.min(999, set.repetari + 1))} style={styles.stepBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Crește repetările">
+            <TouchableOpacity onPress={() => updateSet(idx, 'repetari', Math.min(999, set.repetari + 1))} style={styles.stepBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel={t('sport.detail.logger.incRepsA11y')}>
               <Text style={[styles.stepBtnText, { color: colors.textSecondary }]}>+</Text>
             </TouchableOpacity>
           </View>
 
           <View style={[styles.colExtra, styles.rpeWrap, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
-            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.min(10, (set.rpe || 8) + 1))} hitSlop={8} accessibilityRole="button" accessibilityLabel="Crește RPE">
+            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.min(10, (set.rpe || 8) + 1))} hitSlop={10} accessibilityRole="button" accessibilityLabel={t('sport.detail.logger.incRpeA11y')}>
               <Text style={[styles.rpeArrow, { color: colors.textTertiary }]}>▲</Text>
             </TouchableOpacity>
             <Text style={[styles.stepVal, { color: colors.warning }]}>{set.rpe || 8}</Text>
-            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.max(1, (set.rpe || 8) - 1))} hitSlop={8} accessibilityRole="button" accessibilityLabel="Scade RPE">
+            <TouchableOpacity onPress={() => updateSet(idx, 'rpe', Math.max(1, (set.rpe || 8) - 1))} hitSlop={10} accessibilityRole="button" accessibilityLabel={t('sport.detail.logger.decRpeA11y')}>
               <Text style={[styles.rpeArrow, { color: colors.textTertiary }]}>▼</Text>
             </TouchableOpacity>
           </View>
 
           <View style={[styles.colAction, styles.actionsWrap]}>
             {!set.completed ? (
-              <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: withAlpha(colors.accent, 0.13) }]} hitSlop={6} accessibilityRole="button" accessibilityLabel="Marchează setul complet">
+              <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: withAlpha(colors.accent, 0.13) }]} hitSlop={6} accessibilityRole="button" accessibilityLabel={t('sport.detail.logger.markCompleteA11y')}>
                 <Check size={18} color={colors.accent} />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: colors.success }]} hitSlop={6} accessibilityRole="button" accessibilityLabel="Marchează setul incomplet">
+              <TouchableOpacity onPress={() => toggleComplete(idx)} style={[styles.actionBtn, { backgroundColor: colors.success }]} hitSlop={6} accessibilityRole="button" accessibilityLabel={t('sport.detail.logger.markIncompleteA11y')}>
                 <Check size={18} color={colors.background} />
               </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={() => removeSet(idx)} style={styles.trashBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel="Șterge setul">
+            <TouchableOpacity onPress={() => removeSet(idx)} style={styles.trashBtn} hitSlop={8} accessibilityRole="button" accessibilityLabel={t('sport.detail.logger.deleteSetA11y')}>
               <Trash2 size={16} color={colors.danger} opacity={0.7} />
             </TouchableOpacity>
           </View>
         </View>
       ))}
 
-      <TouchableOpacity style={[styles.addSetBtn, { borderColor: colors.border }]} onPress={addSet} accessibilityRole="button" accessibilityLabel="Adaugă set">
+      <TouchableOpacity style={[styles.addSetBtn, { borderColor: colors.border }]} onPress={addSet} accessibilityRole="button" accessibilityLabel={t('sport.detail.logger.addSetA11y')}>
         <Plus size={18} color={colors.textSecondary} />
-        <Text style={[styles.addSetText, { color: colors.textSecondary }]}>Adaugă Set</Text>
+        <Text style={[styles.addSetText, { color: colors.textSecondary }]}>{t('sport.detail.logger.addSet')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -176,24 +189,24 @@ const styles = StyleSheet.create({
   colSet: { width: 36 },
   colMain: { flex: 1, marginHorizontal: 4 },
   colExtra: { width: 40, marginHorizontal: 4 },
-  colAction: { width: 60, alignItems: 'flex-end' },
+  colAction: { width: 68, alignItems: 'flex-end' },
   
   setRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingHorizontal: 4 },
-  setBtn: { height: 36, borderRadius: 8, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
+  setBtn: { minHeight: 40, borderRadius: 8, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
   setBtnText: { fontSize: 13, fontWeight: '900' },
   
-  stepperWrap: { flexDirection: 'row', height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
-  stepBtn: { width: 28, height: 28, justifyContent: 'center', alignItems: 'center' },
+  stepperWrap: { flexDirection: 'row', minHeight: 44, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
+  stepBtn: { minWidth: 32, minHeight: 36, justifyContent: 'center', alignItems: 'center' },
   stepBtnText: { fontSize: 18, fontWeight: '600' },
   stepVal: { fontSize: 15, fontWeight: '800' },
 
-  rpeWrap: { height: 36, borderRadius: 18, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
-  rpeArrow: { fontSize: 8, fontWeight: '700', lineHeight: 10 },
+  rpeWrap: { minHeight: 44, borderRadius: 18, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  rpeArrow: { fontSize: 11, fontWeight: '700', lineHeight: 12 },
 
   actionsWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'flex-end' },
-  actionBtn: { width: 32, height: 32, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  trashBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
+  actionBtn: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  trashBtn: { width: 32, height: 36, justifyContent: 'center', alignItems: 'center' },
   
-  addSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, borderWidth: 1, borderRadius: 18, borderStyle: 'dashed', marginTop: 10, gap: 6 },
+  addSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 48, padding: 12, borderWidth: 1, borderRadius: 18, borderStyle: 'dashed', marginTop: 10, gap: 6 },
   addSetText: { fontSize: 14, fontWeight: '700' },
 });

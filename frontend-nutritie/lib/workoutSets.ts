@@ -8,7 +8,10 @@
 
 import { classifyMeasurement, type MeasurementSpec } from './measurement';
 import type { Exercitiu } from '../constants/exercitii';
+import { sportI18n as i18n, type SportTranslateFn } from './sportI18n';
 import type { SetExercitiu } from '../hooks/useAntrenamente';
+
+const defaultT: SportTranslateFn = (key, opts) => i18n.t(key, opts);
 
 /** Un set logat. `time_seconds` este citit deja de fitnessEngine pentru exercițiile izometrice. */
 export type LoggedSet = SetExercitiu & { time_seconds?: number };
@@ -36,29 +39,37 @@ export function resolveMeasurement(ex?: Partial<Exercitiu> | null): MeasurementS
   });
 }
 
-export function getSetFields(ex?: Partial<Exercitiu> | null): SetFields {
+export function getSetFields(
+  ex?: Partial<Exercitiu> | null,
+  t: SportTranslateFn = defaultT,
+): SetFields {
   const spec = resolveMeasurement(ex);
   const usesTime = TIMED_TYPES.has(spec.type);
   const usesReps = !usesTime;
   const usesWeight = spec.allowsWeight && !NO_WEIGHT_TYPES.has(spec.type);
   const weightRequired = usesWeight && !spec.weightOptional;
 
-  let modeLabel = 'Greutate × repetări';
-  if (spec.type === 'timed') modeLabel = 'Doar timer';
-  else if (spec.type === 'timed_weight') modeLabel = 'Timer + greutate';
-  else if (spec.type === 'distance_time') modeLabel = 'Durată';
-  else if (spec.type === 'reps') modeLabel = 'Doar repetări';
-  else if (spec.type === 'reps_weight') modeLabel = 'Repetări + greutate opțională';
-  else if (spec.type === 'reps_assisted') modeLabel = 'Repetări asistate';
+  let modeLabel = t('sport.measurement.modes.weight_reps');
+  if (spec.type === 'timed') modeLabel = t('sport.measurement.modes.timed');
+  else if (spec.type === 'timed_weight') modeLabel = t('sport.measurement.modes.timed_weight');
+  else if (spec.type === 'distance_time') modeLabel = t('sport.measurement.modes.distance_time');
+  else if (spec.type === 'reps') modeLabel = t('sport.measurement.modes.reps');
+  else if (spec.type === 'reps_weight') modeLabel = t('sport.measurement.modes.reps_weight');
+  else if (spec.type === 'reps_assisted') modeLabel = t('sport.measurement.modes.reps_assisted');
 
   return { spec, usesReps, usesTime, usesWeight, weightRequired, modeLabel };
 }
 
-export function formatSeconds(totalSeconds: number): string {
+export function formatSeconds(
+  totalSeconds: number,
+  t: SportTranslateFn = defaultT,
+): string {
   const value = Math.max(0, Math.round(Number(totalSeconds) || 0));
   const minutes = Math.floor(value / 60);
   const seconds = value % 60;
-  return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, '0')} min` : `${seconds}s`;
+  return minutes > 0
+    ? `${minutes}:${String(seconds).padStart(2, '0')} ${t('sport.measurement.units.min')}`
+    : `${seconds}${t('sport.measurement.units.secShort')}`;
 }
 
 export function formatWeight(value?: number | null): string {
@@ -67,14 +78,20 @@ export function formatWeight(value?: number | null): string {
 }
 
 /** Text scurt pentru un set, adaptat tipului de măsurare. */
-export function describeSet(set: LoggedSet, fields: SetFields): string {
+export function describeSet(
+  set: LoggedSet,
+  fields: SetFields,
+  t: SportTranslateFn = defaultT,
+): string {
   if (fields.usesTime) {
-    const base = formatSeconds(set.time_seconds ?? 0);
-    return fields.usesWeight && (set.greutate ?? 0) > 0 ? `${base} · ${formatWeight(set.greutate)} kg` : base;
+    const base = formatSeconds(set.time_seconds ?? 0, t);
+    return fields.usesWeight && (set.greutate ?? 0) > 0
+      ? `${base} · ${formatWeight(set.greutate)} ${t('sport.measurement.units.kg')}`
+      : base;
   }
-  const reps = `${Math.max(0, Number(set.repetari) || 0)} rep`;
+  const reps = `${Math.max(0, Number(set.repetari) || 0)} ${t('sport.measurement.units.repShort')}`;
   if (!fields.usesWeight || (set.greutate ?? 0) <= 0) return reps;
-  return `${formatWeight(set.greutate)} kg × ${reps}`;
+  return `${formatWeight(set.greutate)} ${t('sport.measurement.units.kg')} × ${reps}`;
 }
 
 export type ExerciseSummary = {
@@ -104,22 +121,34 @@ export function summarizeSets(sets: LoggedSet[] | undefined, fields: SetFields):
 }
 
 /** Rezumat pentru lista "ce ai lucrat": "3 seturi · 450 kg" sau "3 seturi · 2:15 min". */
-export function summaryLabel(summary: ExerciseSummary, fields: SetFields): string {
-  const setsLabel = `${summary.sets} ${summary.sets === 1 ? 'set' : 'seturi'}`;
-  if (fields.usesTime) return `${setsLabel} · ${formatSeconds(summary.seconds)}`;
-  if (summary.volumeKg > 0) return `${setsLabel} · ${Math.round(summary.volumeKg)} kg volum`;
-  return `${setsLabel} · ${summary.reps} rep`;
+export function summaryLabel(
+  summary: ExerciseSummary,
+  fields: SetFields,
+  t: SportTranslateFn = defaultT,
+): string {
+  const setsLabel = `${summary.sets} ${
+    summary.sets === 1 ? t('sport.measurement.setSingular') : t('sport.measurement.setPlural')
+  }`;
+  if (fields.usesTime) return `${setsLabel} · ${formatSeconds(summary.seconds, t)}`;
+  if (summary.volumeKg > 0) {
+    return `${setsLabel} · ${t('sport.measurement.volumeKgLabel', { kg: Math.round(summary.volumeKg) })}`;
+  }
+  return `${setsLabel} · ${summary.reps} ${t('sport.measurement.units.repShort')}`;
 }
 
 /** Un set este valid doar dacă are valoarea cerută de tipul său de măsurare. */
-export function validateLoggedSet(set: LoggedSet, fields: SetFields): string | null {
+export function validateLoggedSet(
+  set: LoggedSet,
+  fields: SetFields,
+  t: SportTranslateFn = defaultT,
+): string | null {
   if (fields.usesTime) {
-    if ((set.time_seconds ?? 0) <= 0) return 'Pornește cronometrul sau introdu durata setului.';
+    if ((set.time_seconds ?? 0) <= 0) return t('sport.measurement.errors.startTimerOrDuration');
   } else if ((Number(set.repetari) || 0) <= 0) {
-    return 'Introdu un număr valid de repetări.';
+    return t('sport.measurement.errors.enterValidReps');
   }
   if (fields.weightRequired && (Number(set.greutate) || 0) <= 0) {
-    return 'Acest exercițiu are nevoie de o greutate.';
+    return t('sport.measurement.errors.enterWeightForEx');
   }
   return null;
 }

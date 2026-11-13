@@ -2,6 +2,7 @@ import React, { useCallback, useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Minus, Plus, AlertTriangle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 
 export interface SetData {
@@ -24,6 +25,7 @@ function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffi
   onChange: (v: number) => void; onLimitReached: () => void; suffix?: string;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
+  const { t } = useTranslation();
   const bump = useCallback((delta: number) => {
     const nextVal = Math.round((value + delta) * 100) / 100;
     if (nextVal > max) {
@@ -45,7 +47,7 @@ function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffi
           onPress={() => bump(-step)}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel={`Scade ${label.toLowerCase()} cu ${step}`}
+          accessibilityLabel={t('sport.commonControls.decreaseStepA11y', { label: label.toLowerCase(), step })}
         >
           <Minus size={16} color={colors.accent} strokeWidth={3} />
         </Pressable>
@@ -74,7 +76,7 @@ function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffi
           onPress={() => bump(step)}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel={`Crește ${label.toLowerCase()} cu ${step}`}
+          accessibilityLabel={t('sport.commonControls.increaseStepA11y', { label: label.toLowerCase(), step })}
         >
           <Plus size={16} color={colors.accent} strokeWidth={3} />
         </Pressable>
@@ -85,6 +87,7 @@ function Stepper({ label, value, step, min, max, onChange, onLimitReached, suffi
 
 export default function SetInputRow({ index, set, onChange, showWeight = true, showDuration = false, inputType }: Props) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [limitError, setLimitError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -95,8 +98,8 @@ export default function SetInputRow({ index, set, onChange, showWeight = true, s
   }, [limitError]);
 
   const triggerLimitError = useCallback(() => {
-    setLimitError('S-a atins limita maximă umană');
-  }, []);
+    setLimitError(t('sport.commonControls.maxHumanLimit'));
+  }, [t]);
 
   const isHold = inputType === 'hold' || showDuration;
   const isWeightVisible = (showWeight && inputType !== 'bodyweight_reps' && inputType !== 'hold');
@@ -111,7 +114,7 @@ export default function SetInputRow({ index, set, onChange, showWeight = true, s
 
         {isRepsVisible && (
           <Stepper
-            label="Repetări"
+            label={t('sport.commonControls.reps')}
             value={set.reps || 0}
             step={1}
             min={0}
@@ -124,12 +127,12 @@ export default function SetInputRow({ index, set, onChange, showWeight = true, s
 
         {isWeightVisible && (
           <Stepper
-            label="Greutate"
+            label={t('sport.measurement.fields.weight')}
             value={set.weight || 0}
             step={2.5}
             min={0}
             max={600}
-            suffix="kg"
+            suffix={t('sport.measurement.units.kg')}
             onLimitReached={triggerLimitError}
             onChange={weight => onChange(index, { ...set, weight })}
             colors={colors}
@@ -138,12 +141,12 @@ export default function SetInputRow({ index, set, onChange, showWeight = true, s
 
         {isHold && (
           <Stepper
-            label="Timp (Hold)"
+            label={t('sport.commonControls.holdTime')}
             value={set.duration || 0}
             step={5}
             min={0}
             max={7200}
-            suffix="sec"
+            suffix={t('sport.measurement.units.secShort')}
             onLimitReached={triggerLimitError}
             onChange={duration => onChange(index, { ...set, duration })}
             colors={colors}

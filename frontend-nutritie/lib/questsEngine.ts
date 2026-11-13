@@ -13,6 +13,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sportI18n as i18n } from './sportI18n';
 
 export const QUEST_STATE_KEY = 'nutriai_quests_v1';
 export const REWARD_STATE_KEY = 'nutriai_rewards_v1';
@@ -133,17 +134,39 @@ function seedFromDay(key: string): number {
 
 // ─── Catalogul de questuri ────────────────────────────────────────
 
+function makeQuestDef(
+  id: string,
+  metric: QuestMetric,
+  target: number,
+  xp: number,
+  icon: string,
+): QuestDef {
+  return {
+    id,
+    metric,
+    target,
+    xp,
+    icon,
+    get title() {
+      return i18n.t(`sport.quests.pool.${id}.title`);
+    },
+    get unit() {
+      return i18n.t(`sport.quests.pool.${id}.unit`);
+    },
+  };
+}
+
 export const QUEST_POOL: QuestDef[] = [
-  { id: 'sets_10', metric: 'sets', title: 'Zi de volum', target: 10, unit: 'seturi', xp: 40, icon: 'dumbbell' },
-  { id: 'sets_16', metric: 'sets', title: 'Sesiune serioasă', target: 16, unit: 'seturi', xp: 65, icon: 'flame' },
-  { id: 'vol_2000', metric: 'volumeKg', title: 'Două tone ridicate', target: 2000, unit: 'kg', xp: 60, icon: 'dumbbell' },
-  { id: 'vol_5000', metric: 'volumeKg', title: 'Cinci tone ridicate', target: 5000, unit: 'kg', xp: 110, icon: 'dumbbell' },
-  { id: 'musc_3', metric: 'muscles', title: 'Full body ușor', target: 3, unit: 'grupe', xp: 45, icon: 'brain' },
-  { id: 'musc_5', metric: 'muscles', title: 'Hartă aprinsă', target: 5, unit: 'grupe', xp: 80, icon: 'activity' },
-  { id: 'ex_4', metric: 'exercises', title: 'Varietate', target: 4, unit: 'exerciții', xp: 45, icon: 'target' },
-  { id: 'min_20', metric: 'minutes', title: 'Douăzeci de minute', target: 20, unit: 'min', xp: 35, icon: 'timer' },
-  { id: 'min_45', metric: 'minutes', title: 'Sesiune completă', target: 45, unit: 'min', xp: 75, icon: 'timer' },
-  { id: 'reps_100', metric: 'reps', title: 'O sută de repetări', target: 100, unit: 'rep', xp: 55, icon: 'activity' },
+  makeQuestDef('sets_10', 'sets', 10, 40, 'dumbbell'),
+  makeQuestDef('sets_16', 'sets', 16, 65, 'flame'),
+  makeQuestDef('vol_2000', 'volumeKg', 2000, 60, 'dumbbell'),
+  makeQuestDef('vol_5000', 'volumeKg', 5000, 110, 'dumbbell'),
+  makeQuestDef('musc_3', 'muscles', 3, 45, 'brain'),
+  makeQuestDef('musc_5', 'muscles', 5, 80, 'activity'),
+  makeQuestDef('ex_4', 'exercises', 4, 45, 'target'),
+  makeQuestDef('min_20', 'minutes', 20, 35, 'timer'),
+  makeQuestDef('min_45', 'minutes', 45, 75, 'timer'),
+  makeQuestDef('reps_100', 'reps', 100, 55, 'activity'),
 ];
 
 /** Alege determinist 3 questuri pentru o zi: unul ușor, unul mediu, unul greu. */
@@ -182,7 +205,16 @@ export function evaluateQuests(defs: QuestDef[], snapshot: DailySnapshot): Quest
   return defs.map((def) => {
     const progress = Math.max(0, metricValue(snapshot, def.metric));
     const ratio = def.target > 0 ? Math.min(1, progress / def.target) : 0;
-    return { ...def, progress, ratio, done: progress >= def.target };
+    const titleKey = `sport.quests.pool.${def.id}.title`;
+    const unitKey = `sport.quests.pool.${def.id}.unit`;
+    return {
+      ...def,
+      title: i18n.exists(titleKey) ? i18n.t(titleKey) : def.title,
+      unit: i18n.exists(unitKey) ? i18n.t(unitKey) : def.unit,
+      progress,
+      ratio,
+      done: progress >= def.target,
+    };
   });
 }
 

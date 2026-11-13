@@ -34,8 +34,15 @@ export function useWorkoutTemplates(
       setTemplates(rows);
       await AsyncStorage.setItem(templateCacheKey(ownerId), JSON.stringify(rows));
     } catch (reason) {
-      const cached = await AsyncStorage.getItem(templateCacheKey(ownerId));
-      if (cached) setTemplates(JSON.parse(cached) as WorkoutTemplate[]);
+      try {
+        const cached = await AsyncStorage.getItem(templateCacheKey(ownerId));
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) setTemplates(parsed as WorkoutTemplate[]);
+        }
+      } catch {
+        // Ignore malformed local cache so original repository error surfaces cleanly.
+      }
       setError(reason instanceof Error ? reason.message : 'TEMPLATE_LOAD_FAILED');
     } finally {
       setLoading(false);

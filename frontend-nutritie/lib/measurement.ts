@@ -3,6 +3,8 @@
  * Conform specificației NutriAI v6 (Secțiunea 6)
  */
 
+import { sportI18n as i18n } from './sportI18n';
+
 export type MeasurementType =
   | 'reps'            // bodyweight pur: flotări, abdomene, genuflexiuni fără greutate
   | 'reps_weight'     // permite și greutate opțională: tracțiuni, flotări cu disc
@@ -48,7 +50,7 @@ export function classifyMeasurement(ex: {
       weightOptional: true,
       defaultSets: 3,
       defaultDurationSec: 45,
-      unitLabel: 'Secunde',
+      unitLabel: i18n.t('sport.measurement.units.seconds'),
     };
   }
 
@@ -59,7 +61,7 @@ export function classifyMeasurement(ex: {
       weightOptional: true,
       defaultSets: 3,
       defaultReps: 15,
-      unitLabel: 'Repetări',
+      unitLabel: i18n.t('sport.measurement.units.reps'),
       bodyweightFactor: 0.65,
     };
   }
@@ -71,7 +73,7 @@ export function classifyMeasurement(ex: {
       weightOptional: true,
       defaultSets: 1,
       defaultDurationSec: 600,
-      unitLabel: 'Distanță / timp',
+      unitLabel: i18n.t('sport.measurement.modes.distance_time'),
     };
   }
 
@@ -83,7 +85,7 @@ export function classifyMeasurement(ex: {
       defaultSets: 3,
       defaultReps: 10,
       defaultWeightKg: 20,
-      unitLabel: 'Repetări',
+      unitLabel: i18n.t('sport.measurement.units.reps'),
       bodyweightFactor: 0.6,
     };
   }
@@ -96,7 +98,7 @@ export function classifyMeasurement(ex: {
       defaultSets: 3,
       defaultReps: 8,
       defaultWeightKg: 0,
-      unitLabel: 'Repetări',
+      unitLabel: i18n.t('sport.measurement.units.reps'),
       bodyweightFactor: 1.0,
     };
   }
@@ -108,7 +110,7 @@ export function classifyMeasurement(ex: {
       weightOptional: true,
       defaultSets: 3,
       defaultReps: 15,
-      unitLabel: 'Repetări',
+      unitLabel: i18n.t('sport.measurement.units.reps'),
       bodyweightFactor: 0.65,
     };
   }
@@ -120,7 +122,7 @@ export function classifyMeasurement(ex: {
     defaultSets: 3,
     defaultReps: 12,
     defaultWeightKg: 20,
-    unitLabel: 'Repetări',
+    unitLabel: i18n.t('sport.measurement.units.reps'),
   };
 }
 
@@ -201,11 +203,20 @@ export function validateSet(t: InputType | string, input: SetInput): { ok: boole
   const errors: string[] = [];
   const fields = getFieldsForType(t);
   for (const field of fields) {
+    const fieldKey =
+      field === 'time_seconds'
+        ? 'duration'
+        : field === 'weight_kg'
+          ? 'weight'
+          : field;
+    const fieldLabel = i18n.t(`sport.measurement.fields.${fieldKey}`, {
+      defaultValue: String(field),
+    });
     const v = input[field];
     if (v === undefined || v === null || Number.isNaN(v)) {
-      errors.push(`Câmpul "${field}" este obligatoriu.`);
+      errors.push(i18n.t('sport.measurement.errors.fieldRequired', { field: fieldLabel }));
     } else if (typeof v !== 'number' || v <= 0) {
-      errors.push(`Câmpul "${field}" trebuie să fie un număr pozitiv.`);
+      errors.push(i18n.t('sport.measurement.errors.fieldPositive', { field: fieldLabel }));
     }
   }
   return { ok: errors.length === 0, errors };

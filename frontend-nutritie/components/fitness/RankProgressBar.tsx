@@ -10,6 +10,7 @@ import Animated, {
 import { useTheme } from '../../context/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { MOTION_DURATIONS } from '../../constants/motion';
+import { useTranslation } from 'react-i18next';
 
 type Props = {
   currentKg: number;
@@ -38,6 +39,7 @@ export default function RankProgressBar({
   nextRankLabel,
 }: Props) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const reduceMotion = useReducedMotion();
   const progress = Math.max(0, Math.min(1, currentKg / nextRankKg));
   const progressValue = useSharedValue(0);
@@ -57,13 +59,25 @@ export default function RankProgressBar({
   }, [progress, progressValue, reduceMotion]);
 
   const gradient = gradientForRank(progress, colors);
+  const progressRaw = t('sport.commonControls.progressTo', {
+    rank: nextRankLabel,
+    defaultValue: `Progres spre ${nextRankLabel}`,
+  });
+  const progressText =
+    progressRaw === 'sport.commonControls.progressTo'
+      ? `Progres spre ${nextRankLabel}`
+      : progressRaw;
+  const kgUnitRaw = t('sport.measurement.units.kg', { defaultValue: 'kg' });
+  const kgUnitText = kgUnitRaw === 'sport.measurement.units.kg' ? 'kg' : kgUnitRaw;
 
   return (
     <View style={styles.wrapper}>
       <View style={styles.metaRow}>
-        <Text style={[styles.label, { color: colors.textTertiary }]}>Progres spre {nextRankLabel}</Text>
+        <Text style={[styles.label, { color: colors.textTertiary }]}>
+          {progressText}
+        </Text>
         <Text style={[styles.value, { color: colors.accentTertiary }]}>
-          {currentKg.toFixed(3)} / {nextRankKg.toFixed(3)} kg
+          {currentKg.toFixed(3)} / {nextRankKg.toFixed(3)} {kgUnitText}
         </Text>
       </View>
 

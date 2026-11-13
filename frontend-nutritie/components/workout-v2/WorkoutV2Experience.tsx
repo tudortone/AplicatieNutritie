@@ -45,16 +45,20 @@ import { TemplateBuilder } from './TemplateBuilder';
 type ExperienceView = 'browse' | 'build' | 'active' | 'summary' | 'strength';
 
 export function WorkoutV2Experience({ nowIso }: { nowIso?: string }) {
-  const effectiveNowIso = nowIso ?? new Date().toISOString();
+  const [fallbackNowIso] = useState(() => new Date().toISOString());
+  const effectiveNowIso = nowIso ?? fallbackNowIso;
   const { t } = useTranslation();
   const { colors } = useTheme();
   const sequence = useRef(0);
   const id = (prefix: string) => `${prefix}-${++sequence.current}`;
   const [view, setView] = useState<ExperienceView>('browse');
   const [draft, setDraft] = useState<WorkoutTemplate | null>(null);
+  const [draftPresetKey, setDraftPresetKey] = useState<string | null>(null);
   const [templates, setTemplates] = useState<readonly WorkoutTemplate[]>([]);
+  const [templatePresetKeys, setTemplatePresetKeys] = useState<Record<string, string>>({});
   const [active, setActive] = useState<ActiveWorkoutSession | null>(null);
   const [history, setHistory] = useState<readonly WorkoutV2Performance[]>([]);
+  const [summarySetsCount, setSummarySetsCount] = useState(0);
   const [profileId, setProfileId] = useState<WorkoutV2PreviewProfileId>('no-data');
   const [selectedMuscle, setSelectedMuscle] = useState<V2MuscleId | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,10 +68,16 @@ export function WorkoutV2Experience({ nowIso }: { nowIso?: string }) {
     Object.entries(strength.muscles).map(([muscleId, result]) => [muscleId, result.score ?? undefined]),
   ), [strength.muscles]);
 
+  const effectiveDraft = useMemo(
+    () => (draft && draftPresetKey ? { ...draft, name: t(draftPresetKey) } : draft),
+    [draft, draftPresetKey, t],
+  );
+
   const openPreset = (presetIndex: number) => {
     const preset = WORKOUT_V2_PRESETS[presetIndex];
     const next = instantiatePreset(preset, 'preview-user', id('template'), effectiveNowIso);
     setDraft({ ...next, name: t(preset.nameKey) });
+    setDraftPresetKey(preset.nameKey);
     setError(null);
     setView('build');
   };
@@ -77,20 +87,29 @@ export function WorkoutV2Experience({ nowIso }: { nowIso?: string }) {
   };
 
   const saveDraft = () => {
-    if (!draft || !draft.name.trim() || draft.blocks.length === 0) {
+    if (!effectiveDraft || !effectiveDraft.name.trim() || effectiveDraft.blocks.length === 0) {
       setError(t('workoutV2.experience.invalidTemplate'));
       return;
     }
-    setTemplates((current) => [...current.filter((item) => item.id !== draft.id), draft]);
+    setTemplates((current) => [...current.filter((item) => item.id !== effectiveDraft.id), effectiveDraft]);
+    setTemplatePresetKeys((current) => {
+      const next = { ...current };
+      if (draftPresetKey) {
+        next[effectiveDraft.id] = draftPresetKey;
+      } else {
+        delete next[effectiveDraft.id];
+      }
+      return next;
+    });
     setError(null);
   };
 
   const startDraft = () => {
-    if (!draft || draft.blocks.length === 0) {
+    if (!effectiveDraft || effectiveDraft.blocks.length === 0) {
       setError(t('workoutV2.experience.invalidTemplate'));
       return;
     }
-    setActive(startWorkoutFromTemplate(draft, id('session'), effectiveNowIso));
+    setActive(startWorkoutFromTemplate(effectiveDraft, id('session'), effectiveNowIso));
     setError(null);
     setView('active');
   };
@@ -117,6 +136,8 @@ export function WorkoutV2Experience({ nowIso }: { nowIso?: string }) {
           setType: 'working' as const,
         }))
       : []);
+    const completedCardioCount = active.blocks.filter((block) => block.kind === 'cardio' && block.completed).length;
+    setSummarySetsCount(completed.length + completedCardioCount);
     setHistory((current) => [...current, ...completed]);
     setActive(null);
     setError(null);
@@ -126,7 +147,7 @@ export function WorkoutV2Experience({ nowIso }: { nowIso?: string }) {
   if (view === 'active' && active) {
     return (
       <View style={styles.section}>
-        <BackButton onPress={() => setView('build')} label={t('common.back')} borderColor={colors.border} textColor={colors.textPrimary} />
+        <BackButton onPress={() => { setError(null); setView('build'); }} label={t('common.back')} borderColor={colors.border} textColor={colors.textPrimary} />
         {error ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
         <ActiveWorkout
           session={active}
@@ -139,14 +160,17 @@ export function WorkoutV2Experience({ nowIso }: { nowIso?: string }) {
     );
   }
 
-  if (view === 'build' && draft) {
+  if (view === 'build' && effectiveDraft) {
     return (
       <View style={styles.section}>
-        <BackButton onPress={() => setView('browse')} label={t('common.back')} borderColor={colors.border} textColor={colors.textPrimary} />
+        <BackButton onPress={() => { setError(null); setView('browse'); }} label={t('common.back')} borderColor={colors.border} textColor={colors.textPrimary} />
         <TemplateBuilder
-          template={draft}
+          template={effectiveDraft}
           error={error}
-          onNameChange={(name) => requireDraft((template) => ({ ...template, name }))}
+          onNameChange={(name) => {
+            setDraftPresetKey(null);
+            requireDraft((template) => ({ ...template, name }));
+          }}
           onAddExercise={(exerciseId: WorkoutV2ExerciseId) => requireDraft((template) => addTemplateExercise(template, exerciseId, id('block'), effectiveNowIso))}
           onRemoveBlock={(blockId) => requireDraft((template) => removeTemplateBlock(template, blockId, effectiveNowIso))}
           onDuplicateBlock={(blockId) => requireDraft((template) => duplicateTemplateBlock(template, blockId, id('block'), effectiveNowIso))}
@@ -167,7 +191,24 @@ export function WorkoutV2Experience({ nowIso }: { nowIso?: string }) {
     const muscle = selectedMuscle ? strength.muscles[selectedMuscle] : null;
     return (
       <View style={styles.section}>
-        <BackButton onPress={() => setView('browse')} label={t('common.back')} borderColor={colors.border} textColor={colors.textPrimary} />
+        <BackButton onPress={() => { setError(null); setView('browse'); }} label={t('common.back')} borderColor={colors.border} textColor={colors.textPrimary} />
+        {view === 'summary' ? (
+          <View testID="workout-v2-summary" style={[styles.summaryCard, { backgroundColor: colors.surfaceBg, borderColor: colors.accent }]}>
+            <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>{t('workoutV2.summary.title')}</Text>
+            <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>{t('workoutV2.summary.subtitle')}</Text>
+            <Text style={[styles.summaryStat, { color: colors.accent }]}>
+              {t('workoutV2.summary.setsCompleted', { count: summarySetsCount })}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('workoutV2.summary.done')}
+              onPress={() => { setError(null); setView('browse'); }}
+              style={[styles.primary, { backgroundColor: colors.accent }]}
+            >
+              <Text style={[styles.primaryText, { color: colors.textOnAccent }]}>{t('workoutV2.summary.done')}</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <View style={styles.profileRow}>
           {WORKOUT_V2_PREVIEW_PROFILES.map((item) => (
             <Pressable key={item.id} accessibilityRole="button" accessibilityState={{ selected: profileId === item.id }} onPress={() => setProfileId(item.id)} style={[styles.profileChip, { borderColor: profileId === item.id ? colors.accent : colors.border, backgroundColor: colors.surfaceBg }]}>
@@ -209,12 +250,26 @@ export function WorkoutV2Experience({ nowIso }: { nowIso?: string }) {
       {templates.length > 0 ? (
         <>
           <Text style={[styles.heading, { color: colors.textPrimary }]}>{t('workoutV2.experience.saved')}</Text>
-          {templates.map((template) => (
-            <Pressable key={template.id} accessibilityRole="button" onPress={() => { setDraft(template); setView('build'); }} style={[styles.saved, { borderColor: colors.border }]}>
-              <Save size={17} color={colors.accent} />
-              <Text style={[styles.savedText, { color: colors.textPrimary }]}>{template.name}</Text>
-            </Pressable>
-          ))}
+          {templates.map((template) => {
+            const presetKey = templatePresetKeys[template.id];
+            const displayName = presetKey ? t(presetKey) : template.name;
+            return (
+              <Pressable
+                key={template.id}
+                accessibilityRole="button"
+                onPress={() => {
+                  setDraft(template);
+                  setDraftPresetKey(presetKey ?? null);
+                  setError(null);
+                  setView('build');
+                }}
+                style={[styles.saved, { borderColor: colors.border }]}
+              >
+                <Save size={17} color={colors.accent} />
+                <Text style={[styles.savedText, { color: colors.textPrimary }]}>{displayName}</Text>
+              </Pressable>
+            );
+          })}
         </>
       ) : null}
     </View>
@@ -252,6 +307,10 @@ const styles = StyleSheet.create({
   savedText: { flex: 1, fontSize: 14, fontWeight: '800' }, back: { alignSelf: 'flex-start', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderRadius: 13, paddingHorizontal: 12 },
   backText: { fontSize: 13, fontWeight: '800' }, primary: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 15 },
   primaryText: { fontSize: 15, fontWeight: '900' }, error: { fontSize: 13, lineHeight: 18 },
-  profileRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, profileChip: { minHeight: 44, maxWidth: '48%', flexGrow: 1, justifyContent: 'center', borderWidth: 1, borderRadius: 13, paddingHorizontal: 10 },
+  profileRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, profileChip: { minHeight: 44, paddingVertical: 6, maxWidth: '48%', flexGrow: 1, justifyContent: 'center', borderWidth: 1, borderRadius: 13, paddingHorizontal: 10 },
   profileText: { fontSize: 11, lineHeight: 15, fontWeight: '700' }, anatomyCard: { width: '100%', alignItems: 'center', borderWidth: 1, borderRadius: 20, padding: 12, gap: 10 },
+  summaryCard: { borderWidth: 1.5, borderRadius: 20, padding: 16, gap: 8 },
+  summaryTitle: { fontSize: 18, lineHeight: 24, fontWeight: '900' },
+  summarySubtitle: { fontSize: 13, lineHeight: 18 },
+  summaryStat: { fontSize: 15, lineHeight: 20, fontWeight: '800', marginBottom: 4 },
 });

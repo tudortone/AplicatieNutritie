@@ -4,6 +4,12 @@
  */
 
 import EXERCISES_RAW from '../constants/exercises.json';
+import { sportI18n as i18n } from './sportI18n';
+import {
+  getLocalizedExerciseName,
+  getLocalizedMuscleLabel,
+  normalizeSearchText,
+} from './sportI18n';
 
 export type InputType = 'hold' | 'bodyweight_reps' | 'weighted_reps';
 
@@ -40,11 +46,20 @@ export function validateSet(t: InputType, input: SetInput): { ok: boolean; error
   const fields = getFieldsForType(t);
 
   for (const field of fields) {
+    const fieldKey =
+      field === 'time_seconds'
+        ? 'duration'
+        : field === 'weight_kg'
+          ? 'weight'
+          : field;
+    const fieldLabel = i18n.t(`sport.measurement.fields.${fieldKey}`, {
+      defaultValue: field,
+    });
     const v = input[field];
     if (v === undefined || v === null || Number.isNaN(v)) {
-      errors.push(`Câmpul "${field}" este obligatoriu.`);
+      errors.push(i18n.t('sport.measurement.errors.fieldRequired', { field: fieldLabel }));
     } else if (typeof v !== 'number' || v <= 0) {
-      errors.push(`Câmpul "${field}" trebuie să fie un număr pozitiv.`);
+      errors.push(i18n.t('sport.measurement.errors.fieldPositive', { field: fieldLabel }));
     }
   }
 
@@ -77,18 +92,23 @@ export const EXERCISE_INDEX: ExerciseIndexItem[] = EXERCISE_CATALOG_LIST.map((it
  * Căutare ultra-rapidă cu index minuscul
  */
 export function searchExercisesIndex(query: string, equipmentFilter?: string): ExerciseCatalogItem[] {
-  const q = query.trim().toLowerCase();
-  
+  const q = normalizeSearchText(query);
+
   return EXERCISE_CATALOG_LIST.filter((ex) => {
     if (equipmentFilter && equipmentFilter !== 'all' && ex.equipment !== equipmentFilter) {
       return false;
     }
     if (!q) return true;
-    
-    const lowerName = ex.name.toLowerCase();
-    const lowerRo = ex.name_ro?.toLowerCase() || '';
-    const lowerMuscles = ex.target_muscles.join(' ').toLowerCase();
-    
-    return lowerName.includes(q) || lowerRo.includes(q) || lowerMuscles.includes(q);
+
+    const localized = normalizeSearchText(
+      getLocalizedExerciseName({ id: ex.id, nume: ex.name_ro || ex.name }),
+    );
+    const lowerName = normalizeSearchText(ex.name);
+    const lowerRo = normalizeSearchText(ex.name_ro || '');
+    const lowerMuscles = normalizeSearchText(
+      ex.target_muscles.map((m) => `${m} ${getLocalizedMuscleLabel(m)}`).join(' '),
+    );
+
+    return localized.includes(q) || lowerName.includes(q) || lowerRo.includes(q) || lowerMuscles.includes(q);
   });
 }

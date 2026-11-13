@@ -1,4 +1,4 @@
-import i18n from '../i18n';
+import { sportI18n as i18n } from './sportI18n';
 
 export type CalorieStateKey = 'start' | 'on_track' | 'aproape' | 'atins' | 'depasit';
 

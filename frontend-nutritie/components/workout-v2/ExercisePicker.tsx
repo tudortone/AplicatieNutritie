@@ -10,7 +10,12 @@ export function ExercisePicker({ onSelect }: { onSelect: (exerciseId: WorkoutV2E
   const { colors } = useTheme();
   const exercises = useMemo(() => WORKOUT_V2_EXERCISES, []);
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.content}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.scroller}
+      contentContainerStyle={styles.content}
+    >
       {exercises.map((exercise) => (
         <Pressable
           key={exercise.id}
@@ -28,8 +33,9 @@ export function ExercisePicker({ onSelect }: { onSelect: (exerciseId: WorkoutV2E
 }
 
 const styles = StyleSheet.create({
-  content: { gap: 8, paddingVertical: 4, paddingRight: 16 },
-  chip: { minHeight: 44, maxWidth: 180, justifyContent: 'center', borderRadius: 14, borderWidth: 1, paddingHorizontal: 13 },
-  chipText: { fontSize: 13, fontWeight: '700' },
+  scroller: { flexGrow: 0, flexShrink: 0 },
+  content: { gap: 8, paddingVertical: 4, paddingRight: 16, alignItems: 'center' },
+  chip: { minHeight: 44, maxWidth: 180, flexShrink: 0, justifyContent: 'center', borderRadius: 14, borderWidth: 1, paddingHorizontal: 13 },
+  chipText: { fontSize: 13, lineHeight: 18, includeFontPadding: false, fontWeight: '700' },
 });
 

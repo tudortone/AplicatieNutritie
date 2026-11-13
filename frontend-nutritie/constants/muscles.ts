@@ -19,6 +19,7 @@
  */
 
 import { ALL_MUSCLE_IDS, type MuscleId } from '../components/fitness/heatColor';
+import { getLocalizedMuscleLabel } from '../lib/sportI18n';
 
 export type { MuscleId };
 export { ALL_MUSCLE_IDS };
@@ -104,7 +105,7 @@ export function slotsForView(view: BodyView): MuscleSlot[] {
 
 /** Eticheta afisabila pentru un muschi. */
 export function muscleLabel(id: MuscleId): string {
-  return MUSCLES[id]?.label ?? id;
+  return getLocalizedMuscleLabel(id);
 }
 
 /**

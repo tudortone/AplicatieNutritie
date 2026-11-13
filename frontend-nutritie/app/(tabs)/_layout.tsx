@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   tabBarBg: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' },
   tabBarItem: { minWidth: 0, paddingHorizontal: 0 },
   tabBarLabel: { fontSize: 11, fontWeight: '700', marginTop: 2 },
-  compactLabel: { fontSize: 9, lineHeight: 11 },
-  headerActions: { flexDirection: 'row', gap: 6, marginRight: 12 },
-  headerAction: { width: 38, height: 38, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  compactLabel: { fontSize: 11, lineHeight: 13 },
+  headerActions: { flexDirection: 'row', gap: 8, marginRight: 12 },
+  headerAction: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });

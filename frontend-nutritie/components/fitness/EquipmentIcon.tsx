@@ -6,6 +6,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Dumbbell, Activity, ShieldAlert, Zap, Layers, CircleDot } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
+import { getLocalizedEquipmentLabel, normalizeSearchText } from '../../lib/sportI18n';
 
 export type EquipmentType =
   | 'gantere'
@@ -33,56 +35,50 @@ export function EquipmentIcon({
   showLabel = true,
   accentColor = '#38BDF8',
 }: EquipmentIconProps) {
-  const norm = equipment.toLowerCase().trim();
+  const { t } = useTranslation();
+  const norm = normalizeSearchText(equipment);
 
-  let label = 'Altele';
+  let label = getLocalizedEquipmentLabel(equipment, t);
   let IconComp = Layers;
   let badgeBg = 'rgba(56, 189, 248, 0.12)';
   let badgeBorder = 'rgba(56, 189, 248, 0.3)';
   let color = accentColor;
 
-  if (norm.includes('gantere') || norm.includes('dumbbell')) {
-    label = 'Gantere';
+  if (norm.includes('gantere') || norm.includes('dumbbell') || norm.includes('haltere') || norm.includes('kurzhantel')) {
     IconComp = Dumbbell;
-    color = '#A855F7';
-    badgeBg = 'rgba(168, 85, 247, 0.12)';
-    badgeBorder = 'rgba(168, 85, 247, 0.3)';
-  } else if (norm.includes('haltera') || norm.includes('barbell')) {
-    label = 'Halteră';
+    color = '#C084FC';
+    badgeBg = 'rgba(192, 132, 252, 0.12)';
+    badgeBorder = 'rgba(192, 132, 252, 0.3)';
+  } else if (norm.includes('haltera') || norm.includes('barbell') || norm.includes('bara') || norm.includes('barre') || norm.includes('langhantel')) {
     IconComp = Dumbbell;
-    color = '#EC4899';
-    badgeBg = 'rgba(236, 72, 153, 0.12)';
-    badgeBorder = 'rgba(236, 72, 153, 0.3)';
-  } else if (norm.includes('bancuta') || norm.includes('bancă') || norm.includes('bench')) {
-    label = 'Băncuță';
+    color = '#F472B6';
+    badgeBg = 'rgba(244, 114, 182, 0.12)';
+    badgeBorder = 'rgba(244, 114, 182, 0.3)';
+  } else if (norm.includes('bancuta') || norm.includes('banca') || norm.includes('bench') || norm.includes('banc') || norm.includes('bank')) {
     IconComp = Layers;
-    color = '#3B82F6';
-    badgeBg = 'rgba(59, 130, 246, 0.12)';
-    badgeBorder = 'rgba(59, 130, 246, 0.3)';
-  } else if (norm.includes('cabluri') || norm.includes('cable')) {
-    label = 'Cabluri';
+    color = '#60A5FA';
+    badgeBg = 'rgba(96, 165, 250, 0.12)';
+    badgeBorder = 'rgba(96, 165, 250, 0.3)';
+  } else if (norm.includes('cabluri') || norm.includes('cable') || norm.includes('poulie') || norm.includes('kabel')) {
     IconComp = Zap;
-    color = '#EAB308';
-    badgeBg = 'rgba(234, 179, 8, 0.12)';
-    badgeBorder = 'rgba(234, 179, 8, 0.3)';
-  } else if (norm.includes('aparat') || norm.includes('machine')) {
-    label = 'Aparat';
+    color = '#FACC15';
+    badgeBg = 'rgba(250, 204, 21, 0.12)';
+    badgeBorder = 'rgba(250, 204, 21, 0.3)';
+  } else if (norm.includes('aparat') || norm.includes('machine') || norm.includes('maschine')) {
     IconComp = ShieldAlert;
-    color = '#14B8A6';
-    badgeBg = 'rgba(20, 184, 166, 0.12)';
-    badgeBorder = 'rgba(20, 184, 166, 0.3)';
-  } else if (norm.includes('greutate') || norm.includes('body') || norm.includes('calisthenics')) {
-    label = 'Corp';
+    color = '#2DD4BF';
+    badgeBg = 'rgba(45, 212, 191, 0.12)';
+    badgeBorder = 'rgba(45, 212, 191, 0.3)';
+  } else if (norm.includes('greutate') || norm.includes('body') || norm.includes('calisthenics') || norm.includes('eigen')) {
     IconComp = Activity;
-    color = '#10B981';
-    badgeBg = 'rgba(16, 185, 129, 0.12)';
-    badgeBorder = 'rgba(16, 185, 129, 0.3)';
+    color = '#34D399';
+    badgeBg = 'rgba(52, 211, 153, 0.12)';
+    badgeBorder = 'rgba(52, 211, 153, 0.3)';
   } else if (norm.includes('kettlebell')) {
-    label = 'Kettlebell';
     IconComp = CircleDot;
-    color = '#F97316';
-    badgeBg = 'rgba(249, 115, 22, 0.12)';
-    badgeBorder = 'rgba(249, 115, 22, 0.3)';
+    color = '#FB923C';
+    badgeBg = 'rgba(251, 146, 60, 0.12)';
+    badgeBorder = 'rgba(251, 146, 60, 0.3)';
   }
 
   return (

@@ -1,4 +1,5 @@
 
+import { filterExercisesByCategory } from '../lib/sportI18n';
 import { classifyMeasurement, type MeasurementSpec } from '../lib/measurement';
 import { NEW_EXERCISES } from './new_exercises';
 import { NEW_EXERCISES_V2 } from './new_exercises_v2';
@@ -63,7 +64,6 @@ export const CATEGORII: CategorieInfo[] = [
   { id: 'superior', nume: 'Partea Superioară', icon: 'moveUp', grupe: ['piept', 'spate', 'umeri', 'brate'] },
   { id: 'inferior', nume: 'Partea Inferioară', icon: 'moveDown', grupe: ['picioare', 'fesieri', 'gambe'] },
   { id: 'core', nume: 'Core', icon: 'target', grupe: ['abdomeni', 'oblici', 'lombari'] },
-  { id: 'corp_intreg', nume: 'Corp Întreg', icon: 'zap', grupe: ['full-body', 'core', 'picioare', 'umeri'] },
 ];
 
 export const calculeazaCaloriiArse = (met: number, greutateKg: number, minute: number): number =>
@@ -1264,4 +1264,4 @@ export const getExercitiuById = (id: string): Exercitiu | undefined =>
   EXERCITII_DB.find((e) => e.id === id);
 
 export const getExercitiiByCategorie = (categorie: Categorie): Exercitiu[] =>
-  EXERCITII_DB.filter((e) => e.categorie === categorie);
+  filterExercisesByCategory(EXERCITII_DB, categorie);

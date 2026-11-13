@@ -28,15 +28,23 @@ import { useNotify } from '../hooks/useNotify';
 import { EquipmentIcon } from './fitness/EquipmentIcon';
 import { Holographic3DAnatomyBody } from './fitness/Holographic3DAnatomyBody';
 import { FlowIcon } from './ui/FlowIcon';
+import { useTranslation } from 'react-i18next';
+import {
+  normalizeSearchText,
+  getLocalizedExerciseName,
+  getLocalizedCategoryName,
+  getLocalizedMuscleLabel,
+  filterExercisesByCategory,
+} from '../lib/sportI18n';
 
 const ECHIPAMENTE_OPTIONS = [
-  { id: 'all', nume: 'Toate' },
-  { id: 'bară', nume: 'Halteră / Bară' },
-  { id: 'gantere', nume: 'Gantere' },
-  { id: 'băncuță', nume: 'Băncuță' },
-  { id: 'cabluri', nume: 'Cabluri' },
-  { id: 'aparat', nume: 'Aparat' },
-  { id: 'greutate_corp', nume: 'Greutatea corpului' },
+  { id: 'all', labelKey: 'sport.commonControls.equipmentAll' },
+  { id: 'bară', labelKey: 'sport.commonControls.equipmentBarbell' },
+  { id: 'gantere', labelKey: 'sport.commonControls.equipmentDumbbell' },
+  { id: 'băncuță', labelKey: 'sport.commonControls.equipmentBench' },
+  { id: 'cabluri', labelKey: 'sport.commonControls.equipmentCable' },
+  { id: 'aparat', labelKey: 'sport.commonControls.equipmentMachine' },
+  { id: 'greutate_corp', labelKey: 'sport.commonControls.equipmentBodyweight' },
 ];
 
 export interface AddWorkoutBottomSheetRef {
@@ -52,6 +60,7 @@ interface AddWorkoutBottomSheetProps {
 export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWorkoutBottomSheetProps>(
   ({ onSuccess }, ref) => {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const { user } = useAuth();
     const notify = useNotify();
     const { adaugaProgres } = useGamificareActions();
@@ -168,14 +177,32 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
 
     // Filter exercises
     const filteredExercises = useMemo(() => {
-      return EXERCITII.filter(e => {
-        const matchesCat = !categorieSelectata || e.categorie === categorieSelectata;
-        const q = debouncedQuery.trim().toLowerCase();
-        const matchesSearch = !q || e.nume.toLowerCase().includes(q) || e.grupe.some(g => g.toLowerCase().includes(q));
-        const matchesEq = !echipamentSelectat || echipamentSelectat === 'all' || (e.echipament && e.echipament.toLowerCase().includes(echipamentSelectat.toLowerCase()));
+      const catFiltered = categorieSelectata
+        ? filterExercisesByCategory(EXERCITII, categorieSelectata)
+        : EXERCITII;
+      const q = normalizeSearchText(debouncedQuery.trim());
+      const eqNorm = echipamentSelectat && echipamentSelectat !== 'all'
+        ? normalizeSearchText(echipamentSelectat.replace('_', ' '))
+        : '';
+      return catFiltered.filter(e => {
+        const matchesCat = true;
+        const locName = normalizeSearchText(getLocalizedExerciseName(e, t));
+        const rawName = normalizeSearchText(e.nume);
+        const matchesSearch = !q
+          || locName.includes(q)
+          || rawName.includes(q)
+          || e.grupe.some(g =>
+            normalizeSearchText(g).includes(q)
+            || normalizeSearchText(getLocalizedMuscleLabel(g, t)).includes(q)
+          );
+        const matchesEq = !eqNorm
+          || Boolean(e.echipament && (
+            normalizeSearchText(e.echipament).includes(eqNorm)
+            || (echipamentSelectat === 'greutate_corp' && normalizeSearchText(e.echipament).includes('corp'))
+          ));
         return matchesCat && matchesSearch && matchesEq;
       });
-    }, [debouncedQuery, categorieSelectata, echipamentSelectat]);
+    }, [debouncedQuery, categorieSelectata, echipamentSelectat, t]);
 
     const recenteExercises = useMemo(() => {
       if (debouncedQuery || categorieSelectata) return [];
@@ -201,7 +228,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
 
         const result = await adaugaExercitiu({
           exercitiuId: ex.id,
-          nume: ex.nume,
+          nume: getLocalizedExerciseName(ex, t),
           calorii: kcal,
           durataMin: dur,
           seturi: seturiDefault,
@@ -209,7 +236,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         });
 
         if (result === null) {
-          notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+          notify.error(t('common.error'), t('sport.commonControls.saveWorkoutErrorMsg'));
           return;
         }
 
@@ -223,11 +250,14 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
           console.warn('[AddWorkout] Nu s-a putut acorda XP-ul pentru quick add.');
         }
 
-        notify.reward('Exercițiu salvat rapid!', `+50 XP • ${kcal} kcal arse`);
+        notify.reward(
+          t('sport.commonControls.quickAddSuccessTitle'),
+          t('sport.commonControls.quickAddSuccessMsg', { kcal })
+        );
         onSuccess?.();
         bottomSheetRef.current?.close();
       } catch {
-        notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+        notify.error(t('common.error'), t('sport.commonControls.saveWorkoutErrorMsg'));
       } finally {
         setLoading(false);
       }
@@ -276,7 +306,13 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         if (rounded > maxLimit) {
           rounded = maxLimit;
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          notify.warning('Limita maximă atinsă', `Limita umană maximă este de ${maxLimit} ${camp === 'greutate' ? 'kg' : 'repetări'}.`);
+          notify.warning(
+            t('sport.commonControls.maxLimitTitle'),
+            t('sport.commonControls.maxFieldLimit', {
+              max: maxLimit,
+              unit: camp === 'greutate' ? t('sport.measurement.units.kg') : t('sport.measurement.units.reps').toLowerCase(),
+            })
+          );
         }
         return {
           ...item,
@@ -294,7 +330,13 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         num = maxLimit;
         valStr = String(maxLimit);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        notify.warning('Limita maximă atinsă', `Limita umană maximă este de ${maxLimit} ${camp === 'greutate' ? 'kg' : 'repetări'}.`);
+        notify.warning(
+          t('sport.commonControls.maxLimitTitle'),
+          t('sport.commonControls.maxFieldLimit', {
+            max: maxLimit,
+            unit: camp === 'greutate' ? t('sport.measurement.units.kg') : t('sport.measurement.units.reps').toLowerCase(),
+          })
+        );
       }
       setSeturi(prev => prev.map((item, i) => {
         if (i !== idx) return item;
@@ -326,11 +368,11 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
 
     const rankInfoEditor = useMemo(() => {
       const scor = scorIntensitateEditor;
-      if (scor >= 85) return { rank: 'RANK S+ • ELITE PRO', badgeColor: '#FACC15', stele: 5 };
-      if (scor >= 65) return { rank: 'RANK A • ADVANCED HYPERTROPHY', badgeColor: '#00F0FF', stele: 4 };
-      if (scor >= 45) return { rank: 'RANK B • INTERMEDIATE STRENGTH', badgeColor: '#4ADE80', stele: 3 };
-      return { rank: 'RANK C • FOUNDATION & FORM', badgeColor: '#38BDF8', stele: 2 };
-    }, [scorIntensitateEditor]);
+      if (scor >= 85) return { rank: t('sport.detail.ranks.S.title'), badgeColor: '#FACC15', stele: 5 };
+      if (scor >= 65) return { rank: t('sport.detail.ranks.A.title'), badgeColor: '#00F0FF', stele: 4 };
+      if (scor >= 45) return { rank: t('sport.detail.ranks.B.title'), badgeColor: '#4ADE80', stele: 3 };
+      return { rank: t('sport.detail.ranks.C.title'), badgeColor: '#38BDF8', stele: 2 };
+    }, [scorIntensitateEditor, t]);
 
     const salveazaDinEditor = async () => {
       if (!exercitiuEditor) return;
@@ -339,7 +381,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
         const result = await adaugaAntrenament({
-          nume: exercitiuEditor.nume,
+          nume: getLocalizedExerciseName(exercitiuEditor, t),
           tip: exercitiuEditor.categorie,
           durata_min: durataMin,
           calorii_arse: kcalLive,
@@ -354,7 +396,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         });
 
         if (result === null) {
-          notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+          notify.error(t('common.error'), t('sport.commonControls.saveWorkoutErrorMsg'));
           return;
         }
 
@@ -368,12 +410,15 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
           console.warn('[AddWorkout] Nu s-a putut acorda XP-ul pentru editor.');
         }
 
-        notify.reward('Antrenament salvat!', `+100 XP • ${kcalLive} kcal`);
+        notify.reward(
+          t('sport.commonControls.workoutSavedXpTitle'),
+          t('sport.commonControls.workoutSavedXpMsg', { kcal: kcalLive })
+        );
         onSuccess?.();
         setExercitiuEditor(null);
         bottomSheetRef.current?.close();
       } catch {
-        notify.error('Eroare', 'Nu s-a putut salva antrenamentul.');
+        notify.error(t('common.error'), t('sport.commonControls.saveWorkoutErrorMsg'));
       } finally {
         setLoading(false);
       }
@@ -385,8 +430,9 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         setLoading(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+        const localizedEditorName = getLocalizedExerciseName(exercitiuEditor, t);
         const result = await adaugaAntrenament({
-          nume: `${exercitiuEditor.nume} (Copie)`,
+          nume: t('sport.commonControls.copySuffix', { name: localizedEditorName }),
           tip: exercitiuEditor.categorie,
           durata_min: durataMin,
           calorii_arse: kcalLive,
@@ -400,7 +446,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
             },
             {
               exercitiuId: exercitiuEditor.id,
-              nume: `${exercitiuEditor.nume} (Set duplicat)`,
+              nume: t('sport.commonControls.duplicateSetSuffix', { name: getLocalizedExerciseName(exercitiuEditor, t) }),
               seturi: seturi.map((s, i) => ({ ...s, serie: i + 1 })),
               durataMin,
               kcal: kcalLive,
@@ -410,16 +456,19 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
         });
 
         if (result === null) {
-          notify.error('Eroare', 'Nu s-a putut duplica exercițiul.');
+          notify.error(t('common.error'), t('sport.commonControls.duplicateErrorMsg'));
           return;
         }
 
-        notify.reward('Exercițiu duplicat!', `+150 XP • ${kcalLive * 2} kcal`);
+        notify.reward(
+          t('sport.commonControls.duplicateSuccessTitle'),
+          t('sport.commonControls.duplicateSuccessMsg', { kcal: kcalLive * 2 })
+        );
         onSuccess?.();
         setExercitiuEditor(null);
         bottomSheetRef.current?.close();
       } catch {
-        notify.error('Eroare', 'Nu s-a putut duplica exercițiul.');
+        notify.error(t('common.error'), t('sport.commonControls.duplicateErrorMsg'));
       } finally {
         setLoading(false);
       }
@@ -435,10 +484,14 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
             <Dumbbell size={20} color={colors.accent} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.exTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.nume}</Text>
+            <Text style={[styles.exTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+              {getLocalizedExerciseName(item, t)}
+            </Text>
             <View style={[styles.metaRow, { flexWrap: 'wrap' }]}>
               <EquipmentIcon equipment={item.echipament || 'gantere'} size={13} showLabel={true} accentColor={colors.accent} />
-              <Text style={[styles.metaText, { color: colors.textSecondary }]}>{item.categorie.toUpperCase()}</Text>
+              <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+                {getLocalizedCategoryName(item.categorie, item.categorie, t).toUpperCase()}
+              </Text>
               <Text style={[styles.metaDot, { color: colors.textSecondary }]}>•</Text>
               <Text style={[styles.metaText, { color: colors.accent }]}>~{calculeazaCaloriiArse(item.met, greutateUser, item.seriiDefault * 3)} kcal</Text>
             </View>
@@ -452,7 +505,8 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
             e.stopPropagation();
             handleQuickAdd(item);
           }}
-          accessibilityLabel="Adaugă rapid exercițiul"
+          accessibilityRole="button"
+          accessibilityLabel={t('sport.commonControls.quickAddA11y')}
         >
           <Plus size={18} color={colors.background} strokeWidth={3} />
         </TouchableOpacity>
@@ -475,10 +529,20 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
           <BottomSheetScrollView contentContainerStyle={styles.editorWrap}>
             <View style={styles.editorHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.editorTitle, { color: colors.textPrimary }]}>{exercitiuEditor.nume}</Text>
-                <Text style={[styles.editorSub, { color: colors.accent }]}>{kcalLive} kcal • {volumTotalCalc} kg volum total</Text>
+                <Text style={[styles.editorTitle, { color: colors.textPrimary }]}>
+                  {getLocalizedExerciseName(exercitiuEditor, t)}
+                </Text>
+                <Text style={[styles.editorSub, { color: colors.accent }]}>
+                  {t('sport.commonControls.totalVolumeCompact', { kcal: kcalLive, volume: volumTotalCalc })}
+                </Text>
               </View>
-              <TouchableOpacity onPress={() => setExercitiuEditor(null)} style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
+              <TouchableOpacity
+                onPress={() => setExercitiuEditor(null)}
+                style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]}
+                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.close')}
+              >
                 <X size={20} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
@@ -486,7 +550,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
             {/* 3D Holographic Anatomy Body & Dynamic Mastery Rank */}
             <View style={{ marginBottom: 14 }}>
               <Holographic3DAnatomyBody
-                activeGroups={exercitiuEditor.grupe || ['Corp complet']}
+                activeGroups={exercitiuEditor.grupe || [t('sport.commonControls.fullBodyFallback')]}
                 intensityScore={scorIntensitateEditor}
                 accentColor={colors.accent}
                 secondaryColor={colors.accentSecondary}
@@ -511,14 +575,14 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                   <View style={{ height: '100%', width: `${scorIntensitateEditor}%`, backgroundColor: rankInfoEditor.badgeColor }} />
                 </View>
                 <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                  Efort: <Text style={{ fontWeight: '800', color: rankInfoEditor.badgeColor }}>{scorIntensitateEditor}/100 PTS</Text> • Volum total: <Text style={{ fontWeight: '800', color: colors.textPrimary }}>{volumTotalCalc} kg</Text>
+                  {t('sport.commonControls.effortLabel')}: <Text style={{ fontWeight: '800', color: rankInfoEditor.badgeColor }}>{scorIntensitateEditor}{t('sport.commonControls.ptsUnit')}</Text> • {t('sport.commonControls.totalVolumeLabel')}: <Text style={{ fontWeight: '800', color: colors.textPrimary }}>{volumTotalCalc} {t('sport.measurement.units.kg')}</Text>
                 </Text>
               </View>
             </View>
 
             {exercitiuEditor.categorie === 'cardio' ? (
               <View style={[styles.cardioBox, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}>
-                <Text style={[styles.cardioLabel, { color: colors.textSecondary }]}>Durată (minute):</Text>
+                <Text style={[styles.cardioLabel, { color: colors.textSecondary }]}>{t('sport.commonControls.durationMinInput')}</Text>
                 <View style={styles.counterRow}>
                   <TouchableOpacity
                     style={[styles.counterBtn, { backgroundColor: colors.cardBorder }]}
@@ -535,7 +599,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                       if (num > 120) {
                         num = 120;
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                        notify.warning('Limita maximă atinsă', 'Durata maximă admisă este de 120 minute (7200s).');
+                        notify.warning(t('sport.commonControls.maxLimitTitle'), t('sport.commonControls.maxDuration120Min'));
                       }
                       setDurataMin(num);
                     }}
@@ -548,7 +612,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                       if (durataMin + 5 > 120) {
                         setDurataMin(120);
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                        notify.warning('Limita maximă atinsă', 'Durata maximă admisă este de 120 minute (7200s).');
+                        notify.warning(t('sport.commonControls.maxLimitTitle'), t('sport.commonControls.maxDuration120Min'));
                       } else {
                         setDurataMin(durataMin + 5);
                       }
@@ -561,9 +625,9 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
             ) : (
               <>
                 <View style={styles.seturiHeader}>
-                  <Text style={[styles.colLabel, { width: 32, color: colors.textSecondary }]}>SERIA</Text>
-                  <Text style={[styles.colLabel, { flex: 1, textAlign: 'center', color: colors.textSecondary }]}>REPETĂRI</Text>
-                  <Text style={[styles.colLabel, { flex: 1, textAlign: 'center', color: colors.textSecondary }]}>GREUTATE (KG)</Text>
+                  <Text style={[styles.colLabel, { width: 32, color: colors.textSecondary }]}>{t('sport.commonControls.setCol')}</Text>
+                  <Text style={[styles.colLabel, { flex: 1, textAlign: 'center', color: colors.textSecondary }]}>{t('sport.commonControls.repsCol')}</Text>
+                  <Text style={[styles.colLabel, { flex: 1, textAlign: 'center', color: colors.textSecondary }]}>{t('sport.commonControls.weightKgCol')}</Text>
                   <View style={{ width: 28 }} />
                 </View>
 
@@ -619,7 +683,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                     onPress={adaugaSerie}
                   >
                     <Plus size={16} color={colors.accent} />
-                    <Text style={[styles.addSerieText, { color: colors.accent }]}>+ Set nou</Text>
+                    <Text style={[styles.addSerieText, { color: colors.accent }]}>{t('sport.commonControls.addSetShort')}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -631,7 +695,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                     }}
                   >
                     <Plus size={16} color={colors.accentSecondary} />
-                    <Text style={[styles.addSerieText, { color: colors.accentSecondary }]}>+ Set similar</Text>
+                    <Text style={[styles.addSerieText, { color: colors.accentSecondary }]}>{t('sport.commonControls.addSimilarSetShort')}</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -648,7 +712,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                 ) : (
                   <>
                     <Check size={20} color={colors.background} strokeWidth={3} />
-                    <Text style={[styles.saveMainText, { color: colors.background }]}>SALVEAZĂ ANTRENAMENTUL</Text>
+                    <Text style={[styles.saveMainText, { color: colors.background }]}>{t('sport.commonControls.saveWorkoutUpper')}</Text>
                   </>
                 )}
               </LinearGradient>
@@ -661,7 +725,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <FlowIcon name="copy" size={16} color={colors.textSecondary} />
-                <Text style={[styles.addSerieText, { color: colors.textSecondary }]}>Duplică exercițiul</Text>
+                <Text style={[styles.addSerieText, { color: colors.textSecondary }]}>{t('sport.commonControls.duplicateExercise')}</Text>
               </View>
             </TouchableOpacity>
           </BottomSheetScrollView>
@@ -669,8 +733,8 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
           // CATALOG & FILTRE
           <View style={styles.catalogWrap}>
             <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Adaugă Exercițiu</Text>
-              <Text style={[styles.sheetSub, { color: colors.textSecondary }]}>Caută, filtrează sau folosește adăugare rapidă</Text>
+              <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>{t('sport.commonControls.addWorkoutTitle')}</Text>
+              <Text style={[styles.sheetSub, { color: colors.textSecondary }]}>{t('sport.commonControls.sheetSubtitle')}</Text>
             </View>
 
             {/* Căutare */}
@@ -678,7 +742,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
               <Search size={18} color={colors.textSecondary} />
               <BottomSheetTextInput
                 style={[styles.searchInput, { color: colors.textPrimary }]}
-                placeholder="Caută exercițiu (ex: Arnold, Biceps)..."
+                placeholder={t('sport.commonControls.searchPlaceholderShort')}
                 placeholderTextColor={colors.textSecondary}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -695,11 +759,12 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
               <FlatList
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                data={[{ id: null, nume: 'Toate' }, ...CATEGORII]}
+                data={[{ id: null, labelKey: 'sport.commonControls.equipmentAll', nume: 'Toate' }, ...CATEGORII]}
                 keyExtractor={(item) => String(item.id || 'all')}
                 contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}
                 renderItem={({ item }) => {
                   const active = categorieSelectata === item.id;
+                  const catLabel = item.id ? getLocalizedCategoryName(item.id, item.nume, t) : t('sport.commonControls.equipmentAll');
                   return (
                     <TouchableOpacity
                       style={[
@@ -713,10 +778,14 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                         setCategorieSelectata(item.id as string | null);
                       }}
                     >
-                      <Text style={[styles.catChipText, { color: active ? colors.background : colors.textPrimary }]}>
-                        {item.id && 'icon' in item && item.icon ? <FlowIcon name={String(item.icon)} size={14} color={active ? colors.background : colors.textSecondary} /> : null}
-                        {item.nume}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {item.id && 'icon' in item && item.icon ? (
+                          <FlowIcon name={String(item.icon)} size={14} color={active ? colors.textOnAccent : colors.textSecondary} />
+                        ) : null}
+                        <Text style={[styles.catChipText, { color: active ? colors.textOnAccent : colors.textPrimary }]}>
+                          {catLabel}
+                        </Text>
+                      </View>
                     </TouchableOpacity>
                   );
                 }}
@@ -737,7 +806,7 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                     <TouchableOpacity
                       style={[
                         styles.catChip,
-                        { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 10 },
+                        { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12 },
                         active
                           ? { backgroundColor: colors.accentSecondary, borderColor: colors.accentSecondary }
                           : { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }
@@ -747,8 +816,8 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
                         setEchipamentSelectat(item.id);
                       }}
                     >
-                      <Text style={[styles.catChipText, { fontSize: 11, color: active ? '#FFF' : colors.textSecondary }]}>
-                        {item.nume}
+                      <Text style={[styles.catChipText, { fontSize: 12, color: active ? colors.textOnAccentSecondary : colors.textSecondary }]}>
+                        {t(item.labelKey)}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -759,11 +828,11 @@ export const AddWorkoutBottomSheet = forwardRef<AddWorkoutBottomSheetRef, AddWor
             <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 160 }}>
               {recenteExercises.length > 0 && (
                 <View style={{ marginBottom: 16 }}>
-                  <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>EXERCIȚII RECENTE</Text>
+                  <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>{t('sport.commonControls.recentExercisesHeading')}</Text>
                   {recenteExercises.map((item) => (
                     <View key={item.id}>{renderCard({ item })}</View>
                   ))}
-                  <Text style={[styles.sectionHeading, { color: colors.textSecondary, marginTop: 12 }]}>TOATE EXERCIȚIILE</Text>
+                  <Text style={[styles.sectionHeading, { color: colors.textSecondary, marginTop: 12 }]}>{t('sport.commonControls.allExercisesHeading')}</Text>
                 </View>
               )}
 
@@ -790,8 +859,8 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15 },
 
   chipsRow: { marginBottom: 14 },
-  catChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1 },
-  catChipText: { fontSize: 13, fontWeight: '700' },
+  catChip: { paddingHorizontal: 14, paddingVertical: 8, minHeight: 44, justifyContent: 'center', borderRadius: 16, borderWidth: 1 },
+  catChipText: { fontSize: 13, fontWeight: '700', lineHeight: 18, includeFontPadding: false },
 
   sectionHeading: { fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginBottom: 10 },
 
@@ -801,16 +870,16 @@ const styles = StyleSheet.create({
   exTitle: { fontSize: 16, fontWeight: '700' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   metaText: { fontSize: 12, fontWeight: '600' },
-  metaDot: { fontSize: 10 },
+  metaDot: { fontSize: 11 },
 
-  quickAddBtn: { width: 38, height: 38, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  quickAddBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
 
   // Editor
   editorWrap: { paddingHorizontal: 20, paddingBottom: 160 },
   editorHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   editorTitle: { fontSize: 20, fontWeight: '800' },
   editorSub: { fontSize: 14, fontWeight: '700', marginTop: 4 },
-  closeBtn: { width: 38, height: 38, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  closeBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
 
   seturiHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingHorizontal: 10, gap: 8 },
   colLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
@@ -818,12 +887,12 @@ const styles = StyleSheet.create({
   serieRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1, marginBottom: 10, gap: 8 },
   serieNr: { width: 32, fontSize: 15, fontWeight: '800' },
   counterGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  miniBtn: { width: 32, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
+  miniBtn: { width: 40, height: 44, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
   miniBtnText: { fontSize: 18, fontWeight: '800' },
   serieVal: { minWidth: 32, textAlign: 'center', fontSize: 18, fontWeight: '800' },
   serieInputText: { flex: 1, minWidth: 44, height: 36, textAlign: 'center', fontSize: 15, fontWeight: '800', borderRadius: 10, borderWidth: 1, paddingHorizontal: 2, paddingVertical: 2 },
   durataInputText: { width: 80, height: 50, textAlign: 'center', fontSize: 20, fontWeight: '800', borderRadius: 14, borderWidth: 1 },
-  delBtn: { width: 28, height: 36, justifyContent: 'center', alignItems: 'center' },
+  delBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
 
   addSerieBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', marginTop: 6, marginBottom: 20 },
   addSerieText: { fontSize: 14, fontWeight: '700' },

@@ -8,6 +8,7 @@ import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { Play, Pause, RotateCcw } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { InputType, SetInput, getFieldsForType } from '../../lib/adaptiveInput';
 import { useHoldTimer } from '../../hooks/useHoldTimer';
@@ -24,6 +25,7 @@ interface NumberFieldProps {
 
 function NumberField({ label, min = 0, max = 999, step = 1, value = 0, unit = '', onChange }: NumberFieldProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
 
   const handleStep = (delta: number) => {
     try {
@@ -52,6 +54,8 @@ function NumberField({ label, min = 0, max = 999, step = 1, value = 0, unit = ''
           style={[styles.stepperBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => handleStep(-step)}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={t('sport.commonControls.decreaseStepA11y', { label: label.toLowerCase(), step })}
         >
           <Text style={[styles.stepperBtnText, { color: colors.textPrimary }]}>–</Text>
         </TouchableOpacity>
@@ -71,6 +75,8 @@ function NumberField({ label, min = 0, max = 999, step = 1, value = 0, unit = ''
           style={[styles.stepperBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={() => handleStep(step)}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={t('sport.commonControls.increaseStepA11y', { label: label.toLowerCase(), step })}
         >
           <Text style={[styles.stepperBtnText, { color: colors.textPrimary }]}>+</Text>
         </TouchableOpacity>
@@ -86,6 +92,7 @@ interface HoldTimerViewProps {
 
 function HoldTimerView({ value = 0, onStop }: HoldTimerViewProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const { elapsed, isRunning, start, pause, reset } = useHoldTimer(value);
 
   const toggleTimer = () => {
@@ -114,7 +121,7 @@ function HoldTimerView({ value = 0, onStop }: HoldTimerViewProps) {
 
   return (
     <View style={[styles.timerContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text style={[styles.timerLabel, { color: colors.textSecondary }]}>CRONOMETRU IZOMETRIE (HOLD)</Text>
+      <Text style={[styles.timerLabel, { color: colors.textSecondary }]}>{t('sport.commonControls.holdTimerTitle')}</Text>
       
       <Text style={[styles.timerDisplay, { color: isRunning ? colors.accent : colors.textPrimary }]}>
         {displayTime}
@@ -128,15 +135,21 @@ function HoldTimerView({ value = 0, onStop }: HoldTimerViewProps) {
           ]}
           onPress={toggleTimer}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={isRunning ? t('sport.commonControls.holdPauseBtn') : t('sport.commonControls.holdStartBtn')}
         >
           {isRunning ? <Pause size={24} color="#FFF" /> : <Play size={24} color={colors.textOnAccent} />}
-          <Text style={[styles.timerBtnText, { color: isRunning ? '#FFF' : colors.textOnAccent }]}>{isRunning ? 'PAUZĂ' : 'PORNEȘTE'}</Text>
+          <Text style={[styles.timerBtnText, { color: isRunning ? '#FFF' : colors.textOnAccent }]}>
+            {isRunning ? t('sport.commonControls.holdPauseBtn') : t('sport.commonControls.holdStartBtn')}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.timerResetBtn, { borderColor: colors.border }]}
           onPress={handleReset}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={t('sport.commonControls.addWorkoutResetTimer')}
         >
           <RotateCcw size={20} color={colors.textSecondary} />
         </TouchableOpacity>
@@ -152,17 +165,18 @@ export interface SetInputFormProps {
 }
 
 export function SetInputForm({ inputType, value, onChange }: SetInputFormProps) {
+  const { t } = useTranslation();
   const fields = getFieldsForType(inputType);
 
   return (
     <View style={styles.formContainer}>
       {fields.includes('weight_kg') && (
         <NumberField
-          label="Greutate (kg)"
+          label={t('sport.commonControls.weightKg')}
           min={0.5}
           max={500}
           step={2.5}
-          unit="kg"
+          unit={t('sport.measurement.units.kg')}
           value={value.weight_kg ?? 0}
           onChange={(n) => onChange({ ...value, weight_kg: n })}
         />
@@ -170,11 +184,11 @@ export function SetInputForm({ inputType, value, onChange }: SetInputFormProps) 
 
       {fields.includes('reps') && (
         <NumberField
-          label="Repetări"
+          label={t('sport.commonControls.reps')}
           min={1}
           max={100}
           step={1}
-          unit="reps"
+          unit={t('sport.measurement.units.repShort')}
           value={value.reps ?? 10}
           onChange={(n) => onChange({ ...value, reps: n })}
         />

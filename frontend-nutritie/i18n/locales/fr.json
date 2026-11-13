@@ -1613,6 +1613,13 @@
       "start": "Commencer l’entraînement",
       "invalidTemplate": "Ajoutez un nom et au moins un exercice.",
       "incompleteWorkout": "Terminez chaque série ou saisie cardio avant de finir."
+    },
+    "summary": {
+      "title": "Séance terminée",
+      "subtitle": "Votre séance a été enregistrée dans l’aperçu local.",
+      "setsCompleted": "{{count}} séries terminées",
+      "viewStrength": "Voir la carte de force",
+      "done": "Retour aux modèles"
     }
   },
   "nutrientFocus": {
@@ -1803,5 +1810,1516 @@
     "targetTab": "Cible ({{val}} kg)",
     "saveCurrent": "Enregistrer l'historique de pesée",
     "saveTarget": "Enregistrer le nouvel objectif"
+  },
+  "sport": {
+    "screen": {
+      "searchPlaceholder": "Rechercher un exercice...",
+      "searchA11y": "Rechercher un exercice par nom ou groupe musculaire",
+      "clearSearchA11y": "Effacer la recherche",
+      "exercisesHeading": "Exercices",
+      "emptySearchTitle": "Aucun exercice trouvé",
+      "emptySearchSub": "Essayez un autre terme ou réinitialisez la recherche.",
+      "emptySearchReset": "Réinitialiser",
+      "emptyCategory": "Aucun exercice disponible dans cette catégorie.",
+      "restLabel": "Repos",
+      "restAdd15A11y": "Prolonger le repos de 15 secondes",
+      "restSkip": "Passer",
+      "restSkipA11y": "Passer le repos",
+      "whatYouWorked": "Séance en cours",
+      "setsStat": "séries",
+      "exercisesStat": "exercices",
+      "volumeStat": "kg volume",
+      "logSetTitle": "Enregistrer une série",
+      "setWarmupTag": "échauff.",
+      "warmupToggle": "Série d’échauffement (hors volume)",
+      "addSetBtn": "Ajouter une série",
+      "saveWorkoutBtn": "Enregistrer la séance",
+      "openExerciseA11y": "Ouvrir {{name}}",
+      "closeExerciseA11y": "Fermer {{name}}",
+      "deleteSetA11y": "Supprimer la série {{number}}",
+      "startTimerA11y": "Démarrer le chronomètre",
+      "stopTimerA11y": "Arrêter le chronomètre",
+      "resetTimerA11y": "Réinitialiser le chronomètre",
+      "start": "Démarrer",
+      "stop": "Stop",
+      "noWeightHint": "Exercice au poids du corps — sans charge requise.",
+      "defaultExerciseName": "Exercice",
+      "workoutSessionTitle": "Séance {{date}}",
+      "incompleteSetTitle": "Série incomplète",
+      "nothingToSaveTitle": "Rien à enregistrer",
+      "nothingToSaveMsg": "Enregistrez au moins une série.",
+      "saveFailedTitle": "Séance non enregistrée",
+      "saveFailedMsg": "Votre séance est intacte. Réessayez.",
+      "savedTitle": "Séance enregistrée",
+      "savedSummary": "{{sets}} séries • {{volume}} kg volume",
+      "saveErrorTitle": "Erreur d’enregistrement",
+      "saveErrorMsg": "Votre séance est restée intacte.",
+      "localSaveFailedTitle": "Sauvegarde locale échouée",
+      "localSaveFailedMsg": "Cette série risque d’être perdue si vous fermez l’app.",
+      "setLoggedTitle": "Série {{number}} enregistrée",
+      "categoryA11y": "Catégorie {{name}}",
+      "adjustDecA11y": "Diminuer {{label}}",
+      "adjustIncA11y": "Augmenter {{label}}",
+      "stepperValueA11y": "{{label}}, {{value}}",
+      "stepperValueUnitA11y": "{{label}}, {{value}} {{unit}}"
+    },
+    "categories": {
+      "piept": "Pectoraux",
+      "spate": "Dos",
+      "picioare": "Jambes",
+      "umeri": "Épaules",
+      "brate": "Bras",
+      "abdomen": "Abdos",
+      "cardio": "Cardio",
+      "full-body": "Corps entier",
+      "mobilitate": "Mobilité",
+      "superior": "Haut du corps",
+      "inferior": "Bas du corps",
+      "core": "Gainage",
+      "corp_intreg": "Corps entier"
+    },
+    "difficulties": {
+      "usor": "facile",
+      "mediu": "moyen",
+      "greu": "difficile"
+    },
+    "measurement": {
+      "modes": {
+        "timed_weight": "Chrono + poids optionnel",
+        "timed": "Chrono (secondes)",
+        "distance_time": "Temps (cardio)",
+        "weight_reps": "Poids × répétitions",
+        "reps_weight": "Répétitions + poids optionnel",
+        "reps": "Répétitions (poids du corps)",
+        "reps_assisted": "Répétitions assistées"
+      },
+      "units": {
+        "reps": "Répétitions",
+        "seconds": "Secondes",
+        "kg": "kg",
+        "min": "min",
+        "repShort": "rép",
+        "secShort": "s"
+      },
+      "fields": {
+        "duration": "Durée de la série",
+        "reps": "Répétitions",
+        "weight": "Charge",
+        "weightOptional": "Charge (optionnel)"
+      },
+      "setsCount": "{{count}} séries",
+      "setsByReps": "{{sets}}×{{reps}} {{unit}}",
+      "errors": {
+        "enterDuration": "Entrez la durée en secondes (> 0).",
+        "enterWeight": "Entrez le poids en kg (> 0).",
+        "enterReps": "Entrez le nombre de répétitions (> 0).",
+        "fieldRequired": "Le champ « {{field}} » est obligatoire.",
+        "fieldPositive": "Le champ « {{field}} » doit être un nombre positif.",
+        "startTimerOrDuration": "Lancez le minuteur ou saisissez la durée.",
+        "enterValidReps": "Saisissez un nombre de répétitions valide.",
+        "enterWeightForEx": "Cet exercice nécessite une charge."
+      },
+      "setSingular": "série",
+      "setPlural": "séries",
+      "volumeKgLabel": "{{kg}} kg de volume"
+    },
+    "ranks": {
+      "BRONZE": "Bronze",
+      "SILVER": "Argent",
+      "GOLD": "Or",
+      "PLATINUM": "Platine",
+      "ELITE": "Elite GetFlow"
+    },
+    "quests": {
+      "title": "Quêtes quotidiennes",
+      "resetIn": "Réinit. dans {{time}}",
+      "streak": "Série : {{days}} jours",
+      "best": "Record : {{days}}",
+      "xpToday": "+{{xp}} XP aujourd’hui",
+      "xpTag": "+{{xp}} XP",
+      "completed": "Terminé",
+      "pool": {
+        "sets_10": {
+          "title": "Enregistrer 10 séries aujourd’hui",
+          "unit": "séries"
+        },
+        "sets_16": {
+          "title": "Gros volume : 16 séries aujourd’hui",
+          "unit": "séries"
+        },
+        "vol_2000": {
+          "title": "Soulever 2 000 kg de volume",
+          "unit": "kg"
+        },
+        "vol_5000": {
+          "title": "Soulever 5 000 kg de volume",
+          "unit": "kg"
+        },
+        "musc_3": {
+          "title": "Activer 3 groupes musculaires",
+          "unit": "muscles"
+        },
+        "musc_5": {
+          "title": "Séance complète : 5 groupes",
+          "unit": "muscles"
+        },
+        "ex_4": {
+          "title": "4 exercices différents aujourd’hui",
+          "unit": "exercices"
+        },
+        "min_20": {
+          "title": "20 minutes d’activité",
+          "unit": "min"
+        },
+        "min_45": {
+          "title": "45 minutes d’entraînement",
+          "unit": "min"
+        },
+        "reps_100": {
+          "title": "100 répétitions au total",
+          "unit": "rép"
+        }
+      }
+    },
+    "muscles": {
+      "chest": "Pectoraux",
+      "delts": "Épaules",
+      "traps": "Trapèzes",
+      "lats": "Dorsaux",
+      "infraspinatus": "Infra-épineux",
+      "lower_back": "Lombaires",
+      "neck": "Cou",
+      "biceps": "Biceps",
+      "triceps": "Triceps",
+      "forearms": "Avant-bras",
+      "abs": "Abdominaux",
+      "obliques": "Obliques",
+      "serratus": "Dentelé antérieur",
+      "glutes": "Fessiers",
+      "quads": "Quadriceps",
+      "hamstrings": "Ischio-jambiers",
+      "calves": "Mollets",
+      "adductors": "Adducteurs",
+      "hip_flexors": "Fléchisseurs de hanche",
+      "upper_chest": "Haut des pectoraux",
+      "lower_chest": "Bas des pectoraux",
+      "inner_chest": "Intérieur des pectoraux",
+      "front_delts": "Deltoïde antérieur",
+      "side_delts": "Deltoïde latéral",
+      "rear_delts": "Deltoïde postérieur",
+      "rhomboids": "Rhomboïdes",
+      "mid_traps": "Trapèzes moyens",
+      "brachialis": "Brachial",
+      "grip": "Prise",
+      "transverse_abs": "Transverse",
+      "lower_abs": "Bas des abdos",
+      "hips": "Hanches",
+      "abductors": "Abducteurs",
+      "legs": "Jambes",
+      "back": "Dos",
+      "shoulders": "Épaules",
+      "arms": "Bras",
+      "cardio": "Cardio",
+      "core": "Gainage",
+      "spine": "Colonne",
+      "full_body": "Corps entier",
+      "mobility": "Mobilité"
+    },
+    "equipment": {
+      "barbell": "Barre",
+      "dumbbell": "Haltères",
+      "bench": "Banc",
+      "cable": "Poulies",
+      "machine": "Machine",
+      "bodyweight": "Poids du corps",
+      "kettlebell": "Kettlebell",
+      "cardio": "Cardio",
+      "band": "Bande élastique",
+      "pullup_bar": "Barre de traction",
+      "parallel_bars": "Barres parallèles",
+      "ab_wheel": "Roue abdos",
+      "medicine_ball": "Medecine-ball",
+      "rope": "Corde",
+      "other": "Autres",
+      "ez_bar": "Barre EZ",
+      "weighted": "Poids du corps lesté",
+      "plate": "Disque / Poids",
+      "foam_roller": "Rouleau de massage",
+      "sled": "Traîneau de force",
+      "box": "Caisse pliométrique",
+      "gripper": "Pince de préhension",
+      "stick": "Bâton de mobilité"
+    },
+    "journal": {
+      "title": "Journal des séances",
+      "subtitle": "30 derniers jours",
+      "loading": "Chargement du journal...",
+      "workoutsCount": "Séances",
+      "kcalBurned": "kcal brûlées",
+      "kgVolume": "kg volume",
+      "emptyTitle": "Journal vide",
+      "emptySub": "Aucune séance enregistrée ces 30 derniers jours.",
+      "deleteConfirmTitle": "Supprimer la séance",
+      "deleteConfirmMsg": "Voulez-vous vraiment supprimer « {{name}} » ?",
+      "deleteConfirmBtn": "Supprimer",
+      "cancelBtn": "Annuler",
+      "deleteSuccessTitle": "Supprimé",
+      "deleteSuccessMsg": "La séance a été retirée du journal.",
+      "deleteErrorTitle": "Erreur",
+      "deleteErrorMsg": "Impossible de supprimer la séance.",
+      "deleteWorkoutA11y": "Supprimer la séance {{name}}",
+      "openWorkoutA11y": "Ouvrir {{name}}",
+      "closeWorkoutA11y": "Fermer {{name}}",
+      "durationMin": "{{count}} min",
+      "exercisesCount": "{{count}} exercices",
+      "warmupTag": "échauffement",
+      "backA11y": "Retour",
+      "today": "Aujourd'hui",
+      "yesterday": "Hier",
+      "noSetDetails": "Aucun détail de série enregistré.",
+      "exShort": "{{count}} ex.",
+      "rpeLabel": "@ {{rpe}} RPE"
+    },
+    "progress": {
+      "title": "Progrès sportif",
+      "subtitle": "Quêtes et séances du jour",
+      "openJournalA11y": "Ouvrir le journal complet",
+      "backA11y": "Retour",
+      "loading": "Chargement des progrès...",
+      "exercisesStat": "exercices",
+      "setsStat": "séries",
+      "volumeStat": "kg volume",
+      "todayWorkouts": "Séances d’aujourd’hui",
+      "emptyTitle": "Aucune séance aujourd’hui",
+      "emptyText": "Les séries enregistrées dans Sport apparaîtront ici.",
+      "localTag": "local",
+      "warmupTag": "échauff.",
+      "durationAndExercises": "{{min}} min • {{count}} exercices",
+      "openA11y": "Ouvrir {{name}}",
+      "closeA11y": "Fermer {{name}}"
+    },
+    "detail": {
+      "backA11y": "Retour",
+      "notFoundTitle": "Exercice introuvable",
+      "notFoundSub": "Choisissez un exercice dans le catalogue principal.",
+      "defaultDesc": "Exercice efficace pour votre programme d’entraînement.",
+      "defaultInstruction": "Exécutez le mouvement avec contrôle en ciblant la contraction.",
+      "perSessionEst": "/ séance (est.)",
+      "setsConfigured": "{{count}} séries configurées",
+      "configure": "Configurer",
+      "forToday": "pour aujourd’hui",
+      "musclesWorked": "Muscles ciblés :",
+      "rankSectionTitle": "SYSTÈME DE RANG",
+      "anatomicalEfficiency": "Efficacité Anatomique",
+      "effortScore": "Score d’effort",
+      "ptsSuffix": "/ 100 PTS",
+      "logWorkoutTitle": "JOURNALISER LA SÉANCE",
+      "howToTitle": "EXÉCUTION CORRECTE",
+      "mistakesTitle": "ERREURS À ÉVITER",
+      "saveErrorTitle": "Erreur",
+      "saveErrorMsg": "Impossible d’enregistrer la séance.",
+      "savedTitle": "Ajouté à la séance",
+      "savedMsg": "{{name}} enregistré avec succès !",
+      "ctaReps": "Ajouter ({{count}} rép.)",
+      "ctaTimed": "Ajouter ({{count}} séries)",
+      "ctaVolume": "Ajouter ({{kg}} kg • {{rank}})",
+      "ranks": {
+        "S": {
+          "title": "RANG S+ • ELITE PRO",
+          "efficiency": "99 % de recrutement musculaire",
+          "msg": "Stimulus hypertrophique maximal — niveau compétitif.",
+          "hint": "Vous avez atteint le niveau maximal pour cet exercice !"
+        },
+        "A": {
+          "title": "RANG A • HYPERTROPHIE AVANCÉE",
+          "efficiency": "92 % de recrutement musculaire",
+          "msg": "Tension mécanique élevée et adaptation profonde.",
+          "hint": "Ajoutez +{{kg}} kg ou 1 série pour débloquer le Rang S+"
+        },
+        "B": {
+          "title": "RANG B • FORCE INTERMÉDIAIRE",
+          "efficiency": "78 % de recrutement musculaire",
+          "msg": "Volume solide pour la surcharge progressive.",
+          "hint": "Ajoutez +{{kg}} kg ou 2 répétitions pour le Rang A"
+        },
+        "C": {
+          "title": "RANG C • BASES ET TECHNIQUE",
+          "efficiency": "60 % de recrutement musculaire",
+          "msg": "Exécution technique maîtrisée et activation de base.",
+          "hint": "Augmentez la charge ou les répétitions pour le Rang B"
+        }
+      },
+      "logger": {
+        "colSet": "SÉRIE",
+        "colKg": "KG",
+        "colRep": "RÉP",
+        "colRpe": "RPE",
+        "addSet": "Ajouter une série",
+        "addSetA11y": "Ajouter une série",
+        "markCompleteA11y": "Marquer la série terminée",
+        "markIncompleteA11y": "Marquer la série incomplète",
+        "deleteSetA11y": "Supprimer la série",
+        "decWeightA11y": "Diminuer le poids",
+        "incWeightA11y": "Augmenter le poids",
+        "decRepsA11y": "Diminuer les répétitions",
+        "incRepsA11y": "Augmenter les répétitions",
+        "incRpeA11y": "Augmenter le RPE",
+        "decRpeA11y": "Diminuer le RPE",
+        "setTypeA11y": "Type de série : {{type}}. Toucher pour changer",
+        "setTypes": {
+          "warmup": "échauffement",
+          "dropset": "drop set",
+          "failure": "à l’échec",
+          "working": "travail"
+        }
+      }
+    },
+    "commonControls": {
+      "maxLimitTitle": "Limite maximale atteinte",
+      "maxHumanLimit": "Limite maximale autorisée atteinte",
+      "maxSets": "Le nombre maximal de séries est de 50.",
+      "maxReps": "Le nombre maximal de répétitions est de 100.",
+      "maxDuration": "La durée maximale est de 7200 secondes (2 heures).",
+      "maxWeight": "La charge maximale autorisée est de 600 kg.",
+      "quickSeriesTitle": "CONFIGURATION RAPIDE",
+      "sets": "Séries",
+      "reps": "Répétitions",
+      "weightKg": "Poids (kg)",
+      "optionalSuffix": " • optionnel",
+      "secondsPerSet": "Secondes / série",
+      "holdTime": "Temps (Hold)",
+      "progressTo": "Progression vers {{rank}}",
+      "addWorkoutTitle": "Ajouter une séance",
+      "addWorkoutSave": "Enregistrer la séance",
+      "addWorkoutAll": "Tous",
+      "addWorkoutStartTimer": "Démarrer le chrono",
+      "addWorkoutPauseTimer": "Pause",
+      "addWorkoutResetTimer": "Réinitialiser",
+      "maxWeightWithLimit": "Le poids maximal autorisé est de {{max}} kg.",
+      "maxRepsWithLimit": "Le nombre maximal de répétitions est de {{max}}.",
+      "maxFieldLimit": "La limite humaine maximale est de {{max}} {{unit}}.",
+      "holdTimerTitle": "MINUTEUR ISOMÉTRIQUE (HOLD)",
+      "holdPauseBtn": "PAUSE",
+      "holdStartBtn": "DÉMARRER",
+      "totalVolumeLabel": "Volume total",
+      "totalVolumeCompact": "{{kcal}} kcal • {{volume}} kg volume total",
+      "effortLabel": "Effort",
+      "ptsUnit": "/100 PTS",
+      "durationMinInput": "Durée (minutes) :",
+      "maxDuration120Min": "La durée maximale autorisée est de 120 minutes (7200s).",
+      "setCol": "SÉRIE",
+      "repsCol": "RÉPS",
+      "weightKgCol": "POIDS (KG)",
+      "addSetShort": "+ Nouvelle série",
+      "addSimilarSetShort": "+ Série similaire",
+      "saveWorkoutUpper": "ENREGISTRER L'ENTRAÎNEMENT",
+      "duplicateExercise": "Dupliquer l'exercice",
+      "searchPlaceholderShort": "Rechercher un exercice (ex : Développé)...",
+      "recentExercisesHeading": "EXERCICES RÉCENTS",
+      "allExercisesHeading": "TOUS LES EXERCICES",
+      "sheetSubtitle": "Rechercher, filtrer ou ajouter rapidement",
+      "quickAddSuccessTitle": "Exercice enregistré !",
+      "quickAddSuccessMsg": "+50 XP • {{kcal}} kcal brûlées",
+      "workoutSavedXpTitle": "Entraînement enregistré !",
+      "workoutSavedXpMsg": "+100 XP • {{kcal}} kcal",
+      "duplicateSuccessTitle": "Exercice dupliqué !",
+      "duplicateSuccessMsg": "+150 XP • {{kcal}} kcal",
+      "duplicateErrorMsg": "Impossible de dupliquer l'exercice.",
+      "saveWorkoutErrorMsg": "Impossible d'enregistrer l'entraînement.",
+      "copySuffix": "{{name}} (Copie)",
+      "duplicateSetSuffix": "{{name}} (Série dupliquée)",
+      "fullBodyFallback": "Corps complet",
+      "equipmentAll": "Tous",
+      "equipmentBarbell": "Barre",
+      "equipmentDumbbell": "Haltères",
+      "equipmentBench": "Banc",
+      "equipmentCable": "Poulies",
+      "equipmentMachine": "Machine",
+      "equipmentBodyweight": "Poids du corps",
+      "decreaseStepA11y": "Diminuer {{label}} de {{step}}",
+      "increaseStepA11y": "Augmenter {{label}} de {{step}}",
+      "quickAddA11y": "Ajout rapide de l'exercice"
+    },
+    "anatomy": {
+      "front": "Face",
+      "back": "Dos",
+      "legend": "Légende",
+      "primary": "Principal",
+      "secondary": "Secondaire",
+      "volume": "Volume",
+      "effort": "Effort",
+      "noData": "Aucune donnée",
+      "frontViewA11y": "Afficher la vue de face",
+      "backViewA11y": "Afficher la vue de dos",
+      "activeMuscles": "{{count}} groupes actifs",
+      "tapForDetails": "Appuyer pour voir les détails"
+    },
+    "exercises": {
+      "90-90-hip-rotation": "Rotation des hanches 90/90",
+      "ab-wheel-rollout": "Roue abdominale (ab wheel)",
+      "ab-wheel-rollout-genunchi": "Roue abdos à genoux",
+      "ab-wheel-rollout-v3": "Roue abdominale (rollout)",
+      "ab_roller": "Roue abdominale",
+      "abdomene-clasice": "Crunchs abdominaux",
+      "abductii-de-coapsa-la-aparat": "Abductions des hanches machine",
+      "abductii-la-cablu-in-stand": "Abductions poulie debout",
+      "abductori-masina": "Abducteurs à la machine",
+      "adductii-de-coapsa-la-aparat": "Adductions des hanches machine",
+      "adductii-la-cablu": "Adductions à la poulie",
+      "adductori-masina": "Adducteurs à la machine",
+      "alergare": "Course à pied",
+      "arnold-press": "Développé Arnold",
+      "arnold-press-gantere": "Développé Arnold haltères",
+      "arnold_press_dumbbell": "Développé Arnold haltères",
+      "assault-bike": "Assault bike",
+      "assisted_pullup_machine": "Tractions assistées machine",
+      "back_extension": "Extensions lombaires au banc",
+      "back_squat_barbell": "Squat barre",
+      "band-pull-apart": "Écartement élastique (band pull-apart)",
+      "barbell_shrug": "Shrugs barre",
+      "battle-ropes": "Cordes ondulatoires (battle ropes)",
+      "battle-ropes-alternativ": "Cordes ondulatoires alternées",
+      "battle-ropes-v3": "Cordes ondulatoires",
+      "bear-crawl": "Marche de l’ours (bear crawl)",
+      "bear-crawl-v3": "Marche de l’ours",
+      "bench_dip": "Dips sur banc",
+      "bench_press_barbell": "Développé couché barre",
+      "bent_over_row_barbell": "Rowing barre buste penché",
+      "bicep_curl_barbell": "Curl biceps barre droite",
+      "bicep_curl_dumbbell": "Curl biceps debout haltères",
+      "bicicleta-eliptica": "Vélo elliptique",
+      "bicycle-crunch": "Crunch bicyclette",
+      "bicycle-crunch-v3": "Crunch bicyclette",
+      "bicycle_crunch": "Crunchs bicyclette",
+      "bird-dog": "Oiseau-chien (bird dog)",
+      "bird_dog": "Bird Dog extension dos et gainage",
+      "bodyweight_calf_raise": "Mollets au poids du corps sur marche",
+      "bodyweight_squat": "Squats au poids du corps",
+      "box-jump": "Box jumps",
+      "bulgarian_split_squat_dumbbell": "Squat bulgare haltères",
+      "burpees": "Burpees",
+      "burpees-greutate": "Burpees avec haltères",
+      "burpees-v3": "Burpees",
+      "cable-crunch": "Crunch à la poulie haute",
+      "cable-woodchop": "Bûcheron à la poulie (woodchop)",
+      "cable_crunch": "Crunch à la poulie haute à genoux (corde)",
+      "cable_curl": "Curl poulie basse",
+      "cable_kickback": "Kickback poulie",
+      "cable_lateral_raise": "Élévation latérale poulie unilatérale",
+      "cable_pull_through": "Pull-through poulie basse",
+      "cable_woodchop": "Bûcheron diagonal à la poulie pour obliques",
+      "calf-raise-sezand": "Mollets assis",
+      "calf_raise_machine": "Mollets assis machine",
+      "captain_chair_leg_raise": "Relevés de jambes à la chaise romaine",
+      "cat-cow": "Chat-vache (mobilité dorsale)",
+      "cat-cow-v3": "Chat-vache",
+      "chest-press-gantere": "Développé couché haltères",
+      "chest-press-masina": "Développé poitrine machine",
+      "chest_dip": "Dips pectoraux",
+      "chest_fly_cable": "Écarté poulie haute",
+      "chest_fly_dumbbell": "Écarté couché haltères",
+      "chest_press_machine": "Développé poitrine machine",
+      "chest_supported_dumbbell_row": "Rowing haltères sur banc incliné",
+      "chinup": "Tractions supination (chin-ups)",
+      "ciclism": "Cyclisme",
+      "clamshell-cu-banda": "Coquillage (clamshell) avec élastique",
+      "clean-and-press": "Épaulé-jeté (clean and press)",
+      "clean-and-press-cu-bara": "Épaulé-jeté barre",
+      "clean-gantera": "Épaulé haltère",
+      "close_grip_bench_press": "Développé couché prise serrée",
+      "close_grip_lat_pulldown": "Tirage vertical prise serrée en V",
+      "concentration_curl_dumbbell": "Curl concentré haltère",
+      "concetration-curl-avansat": "Curl concentré avec pause 3s",
+      "copenhagen-plank": "Planche de Copenhague",
+      "cossack-squat": "Squat cosaque",
+      "couch-stretch": "Étirement du canapé (couch stretch)",
+      "crossover-cablu": "Écarté poulie vis-à-vis",
+      "crunch": "Crunchs classiques",
+      "crunch-la-cablu-in-genunchi": "Crunch à genoux poulie haute",
+      "dead-bug": "Dead bug",
+      "dead-bug-avansat": "Dead bug lesté",
+      "dead-bug-v3": "Dead bug",
+      "dead_bug": "Dead Bug coordination abdominale",
+      "dead_hang": "Suspension passive à la barre",
+      "deadlift": "Soulevé de terre",
+      "deadlift_barbell": "Soulevé de terre classique barre",
+      "decline_bench_barbell": "Développé décliné barre",
+      "decline_bench_dumbbell": "Développé décliné haltères",
+      "decline_pushup": "Pompes déclinées",
+      "deep-squat-hold": "Maintien en squat profond",
+      "deschidere-de-sold-in-fandare-hip-flexor-stretch": "Étirement des fléchisseurs de hanche",
+      "diamond_pushup": "Pompes diamant",
+      "dips-banca-greutate": "Dips sur banc lestés",
+      "dips-piept": "Dips pectoraux aux barres parallèles",
+      "dips-triceps-banca": "Dips triceps sur banc",
+      "donkey-calf-raise": "Mollets de l’âne (donkey calf raise)",
+      "dragon-flag": "Dragon flag",
+      "dumbbell_calf_raise": "Mollets debout haltères",
+      "dumbbell_pullover": "Pullover haltère sur banc",
+      "dumbbell_row": "Rowing haltère sur banc",
+      "dumbbell_shoulder_press": "Développé épaules assis haltères",
+      "dumbbell_shrug": "Shrugs haltères",
+      "eliptic": "Vélo elliptique",
+      "extensii-cvadriceps": "Extensions de jambes (leg extension)",
+      "extensii-de-coapsa-la-aparat": "Extensions de jambes machine",
+      "extensii-de-incheietura-cu-bara": "Extensions des poignets barre",
+      "extensii-deasupra-capului-la-cablu": "Extensions poulie au-dessus de la tête",
+      "extensii-franceze-cu-bara-ez": "Extensions françaises barre EZ",
+      "extensii-jm-press": "JM press",
+      "extensii-la-cablu-cu-frenghie": "Extensions poulie avec corde",
+      "extensii-lombare-la-banca-romana": "Extensions lombaires banc romain",
+      "extensii-pumni-bara": "Extensions des poignets barre",
+      "extensii-triceps-cablu": "Extensions triceps poulie",
+      "extensii-triceps-deasupra": "Extensions triceps au-dessus de la tête",
+      "ez_bar_curl": "Curl biceps barre EZ",
+      "face-pull": "Face pull à la poulie",
+      "face-pull-cu-banda-elastica": "Face pull élastique",
+      "face-pull-la-cablu": "Face pull à la poulie",
+      "face_pull_cable": "Face pull corde à la poulie",
+      "fandari": "Fentes",
+      "fandari-inverse-cu-bara": "Fentes arrière barre",
+      "fandari-laterale": "Fentes latérales",
+      "fandari-laterale-greutate": "Fentes latérales haltère",
+      "fandari-mergand-cu-gantere": "Fentes marchées haltères",
+      "fandari-mers": "Fentes marchées",
+      "farmer-carry-mers-cu-greutati": "Marche du fermier lestée",
+      "farmer-walk": "Marche du fermier",
+      "farmers_walk_dumbbell": "Marche du fermier haltères",
+      "flat_bench_dumbbell": "Développé couché haltères",
+      "flexii-biceps-bara": "Curl biceps barre",
+      "flexii-biceps-gantere": "Curl biceps haltères",
+      "flexii-biceps-priza-inversa": "Curl prise pronation",
+      "flexii-cablu": "Curl biceps à la poulie",
+      "flexii-ciocan": "Curl marteau (hammer curl)",
+      "flexii-ciocan-gantera": "Curl marteau haltères",
+      "flexii-concentrate": "Curl concentré",
+      "flexii-concentrate-cu-gantera": "Curl concentré haltère",
+      "flexii-cu-bara-ez": "Curl biceps barre EZ",
+      "flexii-de-coapsa-culcat-la-aparat": "Leg curl allongé machine",
+      "flexii-de-coapsa-sezand-la-aparat": "Leg curl assis machine",
+      "flexii-de-incheietura-cu-bara": "Flexions des poignets barre",
+      "flexii-de-incheietura-cu-gantera-pe-banca": "Flexions des poignets haltère sur banc",
+      "flexii-femurali": "Flexions des ischio-jambiers",
+      "flexii-hammer-cu-gantere": "Curl marteau haltères",
+      "flexii-incline-cu-gantere": "Curl incliné haltères",
+      "flexii-inverse-cu-bara-reverse-curl": "Curl inversé barre",
+      "flexii-la-banca-scott-preacher-curl": "Curl pupitre (preacher curl)",
+      "flexii-la-cablu-de-jos": "Curl à la poulie basse",
+      "flexii-pumni-bara": "Flexions des poignets barre",
+      "flexii-spider": "Curl araignée (spider curl)",
+      "flexii-spider-v3": "Curl araignée (spider curl)",
+      "flotari": "Pompes",
+      "flotari-arceuate-archer-push-up": "Pompes archer",
+      "flotari-cu-banda-elastica": "Pompes avec élastique",
+      "flotari-cu-picioarele-ridicate": "Pompes pieds surélevés",
+      "flotari-cu-priza-larga": "Pompes prise large",
+      "flotari-decline": "Pompes déclinées",
+      "flotari-decline-greutate": "Pompes déclinées lestées",
+      "flotari-diamant": "Pompes diamant",
+      "flotari-diamant-v3": "Pompes diamant",
+      "flotari-inclinate": "Pompes inclinées",
+      "fluturari-gantere": "Écarté couché haltères",
+      "fluturari-inverse-cu-gantere-aplecat": "Oiseau haltères buste penché",
+      "fluturari-inverse-la-aparat-reverse-pec-deck": "Oiseau machine (reverse pec deck)",
+      "fluturari-inverse-la-cablu-incrucisat": "Oiseau poulies croisées",
+      "fluturari-la-cablu-de-jos-low-to-high": "Écarté poulie basse vers le haut",
+      "fluturari-la-cablu-de-sus-high-to-low": "Écarté poulie haute vers le bas",
+      "fluturari-la-pec-deck": "Écarté pec deck",
+      "fluturari-pec-deck-invers": "Pec deck inversé",
+      "fluturari-spate": "Oiseau haltères (deltoïdes postérieurs)",
+      "foam-rolling": "Automassage au rouleau",
+      "foam-rolling-cvadriceps": "Automassage quadriceps au rouleau",
+      "french-press": "Barre au front / French press",
+      "french-press-gantere-un-brat": "Extension triceps haltère (1 bras)",
+      "front_raise_barbell": "Élévations frontales barre",
+      "front_raise_cable": "Élévations frontales poulie",
+      "front_raise_dumbbell": "Élévations frontales haltères",
+      "front_squat_barbell": "Front squat barre",
+      "genuflexiuni-bara": "Squat barre",
+      "genuflexiuni-bulgare-cu-gantere": "Squat bulgare haltères",
+      "genuflexiuni-bulgaresti": "Squat bulgare",
+      "genuflexiuni-cu-goblet": "Goblet squat",
+      "genuflexiuni-cu-saritura": "Squats sautés",
+      "genuflexiuni-fata": "Squat avant (front squat)",
+      "genuflexiuni-frontale-cu-bara": "Squat avant barre",
+      "genuflexiuni-hack-squat": "Hack squat",
+      "genuflexiuni-la-perete-wall-sit": "Chaise contre le mur (wall sit)",
+      "genuflexiuni-pistol-assistate": "Pistol squat assisté",
+      "genuflexiuni-sissy": "Sissy squat",
+      "genuflexiuni-split-bulgaresti-greutate": "Squat bulgare haltères",
+      "genuflexiuni-sumo": "Squat sumo",
+      "genuflexiuni-sumo-cu-gantera": "Squat sumo haltère",
+      "glute-bridge-pe-un-picior": "Pont fessier sur une jambe",
+      "glute_bridge_bodyweight": "Pont fessier au sol",
+      "goblet_squat_dumbbell": "Goblet squat",
+      "good-morning-cu-bara": "Good morning barre",
+      "good_morning_barbell": "Good morning barre",
+      "hack-squat": "Hack squat machine",
+      "hack_squat_machine": "Hack squat machine",
+      "hammer_curl_dumbbell": "Curl marteau haltères",
+      "handstand-push-up-la-perete": "Pompes en équilibre contre le mur",
+      "handstand_pushup": "Pompes en équilibre",
+      "hanging-leg-raise": "Relevés de jambes tendues suspendu",
+      "hanging_knee_raise": "Relevés de genoux suspendu",
+      "hanging_leg_raise": "Relevés de jambes suspendu à la barre",
+      "heel-taps-laterale": "Touches talons latérales",
+      "high-knees": "Montées de genoux",
+      "hip-thrust": "Hip thrust",
+      "hip-thrust-cu-bara": "Hip thrust barre",
+      "hip_abduction_machine": "Abduction hanches machine",
+      "hip_adduction_machine": "Adduction hanches machine",
+      "hip_thrust_barbell": "Hip thrust barre",
+      "hip_thrust_machine": "Hip thrust machine",
+      "hiperextensii": "Hyperextensions lombaires",
+      "hollow-body-hold": "Hollow body hold (gainage creux)",
+      "hollow_hold": "Hollow hold",
+      "impins-arnold": "Développé Arnold",
+      "impins-banca-plat": "Développé couché barre",
+      "impins-banda-elastica": "Développé poitrine élastique",
+      "impins-cu-gantere-sezand": "Développé épaules assis haltères",
+      "impins-declinat": "Développé décliné barre",
+      "impins-in-priza-strimta-la-bara": "Développé couché prise serrée",
+      "impins-inclinat-gantere": "Développé incliné haltères",
+      "impins-inclinat-masina": "Développé incliné machine",
+      "impins-la-aparat-smith-inclinat": "Développé incliné machine Smith",
+      "impins-la-piept-cu-gantere-declinat": "Développé décliné haltères",
+      "impins-la-piept-cu-gantere-inclinat": "Développé incliné haltères",
+      "impins-landmine-cu-o-mana": "Développé landmine unilatéral",
+      "impins-militar-cu-bara-in-stand": "Développé militaire debout",
+      "impins-umeri-bara": "Développé militaire barre",
+      "impins-umeri-gantere": "Développé épaules haltères",
+      "inclinari-laterale-cu-gantera": "Inclinaisons latérales haltère",
+      "incline_bench_barbell": "Développé incliné barre",
+      "incline_bench_dumbbell": "Développé incliné haltères",
+      "incline_chest_fly_dumbbell": "Écarté incliné haltères",
+      "incline_dumbbell_curl": "Curl incliné haltères",
+      "incline_pushup": "Pompes inclinées",
+      "indreptari-cu-picioare-drepte-la-bara": "Soulevé de terre jambes tendues",
+      "indreptari-romanesti": "Soulevé de terre roumain",
+      "indreptari-romanesti-cu-gantere": "Soulevé de terre roumain haltères",
+      "inverted-row-greutate": "Rowing inversé lesté",
+      "inverted_row_bodyweight": "Rowing inversé poids du corps",
+      "jefferson-curl": "Jefferson curl",
+      "jump_squat": "Squats sautés",
+      "jumping-jacks": "Jumping jacks",
+      "kettlebell-snatch": "Arraché kettlebell (snatch)",
+      "kettlebell-swing": "Kettlebell swing",
+      "kettlebell-swing-v3": "Kettlebell swing",
+      "kickback-cu-gantera": "Kickback haltère",
+      "kickback-de-fesier-la-cablu": "Kickback fessier à la poulie",
+      "kickback-triceps": "Kickback triceps",
+      "kickback_dumbbell": "Kickback triceps haltère",
+      "kroc-rows": "Kroc rows (rowing lourd)",
+      "lat-pulldown": "Tirage vertical poulie haute",
+      "lat_pulldown_cable": "Tirage vertical poulie prise large",
+      "lateral_raise_dumbbell": "Élévations latérales debout haltères",
+      "leg-curl-sezand": "Leg curl assis",
+      "leg_curl_machine": "Leg curl allongé machine",
+      "leg_extension_machine": "Leg extension machine",
+      "leg_press_calf_raise": "Mollets à la presse",
+      "leg_press_machine": "Presse à cuisses 45°",
+      "low_cable_crossover": "Écarté poulie basse",
+      "mers-lateral-cu-banda-lateral-band-walk": "Marche latérale avec élastique",
+      "mers-rapid": "Marche rapide",
+      "mid_cable_crossover": "Écarté poulie moyenne",
+      "military-press": "Développé militaire debout",
+      "monster-walk-cu-banda": "Monster walk avec élastique",
+      "mountain-climbers": "Grimpeur (mountain climbers)",
+      "mountain-climbers-v3": "Mountain climbers",
+      "mountain_climber": "Mountain climbers",
+      "neutral_grip_pullup": "Tractions prise neutre",
+      "nordic-hamstring-curl": "Nordic hamstring curl",
+      "nordic_hamstring_curl": "Nordic hamstring curl au sol / sur machine",
+      "overhead_press_barbell": "Développé militaire barre",
+      "overhead_tricep_cable": "Extension triceps poulie au-dessus de la tête",
+      "overhead_tricep_dumbbell": "Extension triceps au-dessus de la tête haltère",
+      "pallof-press": "Pallof press à la poulie",
+      "pallof-press-la-cablu": "Pallof press à la poulie",
+      "paloane-la-banca-bench-dip": "Dips sur banc",
+      "paloane-la-paralele-aplecat-chest-dip": "Dips pectoraux buste penché",
+      "pancake-stretch": "Étirement crêpe (ouverture hanches)",
+      "pasire-pe-cutie-step-up": "Montées sur boîte (step-up)",
+      "pec-deck": "Écarté pec deck",
+      "pec_deck_machine": "Pec deck à la machine",
+      "pendlay_row_barbell": "Rowing Pendlay barre",
+      "pigeon-pose": "Posture du pigeon (fessiers)",
+      "pike-push-up": "Pompes piquées (pike push-ups)",
+      "pike_pushup": "Pompes piquées épaules",
+      "pistol_squat": "Pistol squat",
+      "plank": "Gainage planche",
+      "plank-frontal": "Planche frontale",
+      "plank-lateral": "Gainage latéral",
+      "plank-lateral-cu-ridicare-de-bazin": "Planche latérale avec élévation du bassin",
+      "plank-lateral-v3": "Planche latérale",
+      "plate-pinch-prindere-de-disc": "Pince de disque",
+      "pod-fesieri-un-picior": "Pont fessier unilatéral",
+      "preacher_curl_barbell": "Curl pupitre barre EZ",
+      "preacher_curl_machine": "Curl pupitre machine",
+      "presa-de-picioare": "Presse à cuisses",
+      "presa-picioare": "Presse à cuisses",
+      "presa-umeri-cu-bara-din-spate": "Développé nuque barre",
+      "presa-umeri-cu-gantere-asimetric": "Développé épaules alterné haltères",
+      "priza-placutelor": "Maintien de disques (plate pinch)",
+      "prone-snow-angel": "Ange des neiges au sol",
+      "pulldown-priza-ingusta": "Tirage vertical prise serrée",
+      "pullover-bara-dreapta": "Pullover poulie bras tendus",
+      "pullover-cu-gantera": "Pullover haltère",
+      "pullover-gantera": "Pullover haltère",
+      "pullup": "Tractions pronation",
+      "pullups-greutate": "Tractions lestées",
+      "pullups-greutate-gantera": "Tractions lestées (haltère)",
+      "push_press_barbell": "Push press barre",
+      "pushup": "Pompes classiques",
+      "ramat-bara": "Rowing barre buste penché",
+      "ramat-bara-inclinat": "Rowing Pendlay barre",
+      "ramat-cablu-jos": "Tirage horizontal poulie basse",
+      "ramat-cablu-un-brat": "Rowing poulie unilatéral",
+      "ramat-cu-banda-elastica-sezand": "Rowing assis avec élastique",
+      "ramat-cu-gantera-pe-banca": "Rowing haltère sur banc",
+      "ramat-cu-priza-larga-la-bara-rear-delt-row": "Rowing prise large arrière d’épaule",
+      "ramat-gantera-un-brat": "Rowing haltère unilatéral",
+      "ramat-la-aparat-cu-suport-pentru-piept": "Rowing machine avec appui thoracique",
+      "ramat-la-cablu-sezand-cu-priza-larga": "Rowing assis poulie prise large",
+      "ramat-masina": "Rowing machine",
+      "ramat-meadows": "Rowing Meadows",
+      "ramat-pendlay": "Rowing Pendlay",
+      "ramat-t-bar": "Rowing barre en T",
+      "ramat-t-bar-v3": "Rowing barre en T",
+      "ramat-vertical-la-bara-upright-row": "Tirage menton barre",
+      "rear_delt_fly_dumbbell": "Oiseau haltères buste penché",
+      "retractii-scapulare-la-bara-fixa": "Rétractions scapulaires à la barre",
+      "reverse-hyperextension": "Hyperextension inversée",
+      "reverse-pec-deck": "Oiseau à la machine pec deck",
+      "reverse_grip_lat_pulldown": "Tirage vertical supination",
+      "reverse_lunge_barbell": "Fentes arrière barre",
+      "reverse_pec_deck_machine": "Pec deck inversé machine",
+      "reverse_wrist_curl_barbell": "Extensions des poignets barre",
+      "ridicari-de-picioare-la-bara-fixa": "Relevés de jambes à la barre",
+      "ridicari-de-tibial-tibialis-raise": "Élévations du tibial antérieur",
+      "ridicari-de-umeri-cu-bara-shrug": "Shrugs barre",
+      "ridicari-de-umeri-cu-gantere": "Shrugs haltères",
+      "ridicari-frontale": "Élévations frontales",
+      "ridicari-frontale-bara": "Élévations frontales barre",
+      "ridicari-frontale-cu-disc": "Élévations frontales avec disque",
+      "ridicari-frontale-cu-gantere-alternativ": "Élévations frontales alternées haltères",
+      "ridicari-in-t-la-banca-inclinata": "Élévations en T sur banc incliné",
+      "ridicari-in-w-la-banca-inclinata": "Élévations en W sur banc incliné",
+      "ridicari-in-y-la-banca-inclinata": "Élévations en Y sur banc incliné",
+      "ridicari-laterale": "Élévations latérales",
+      "ridicari-laterale-cablu": "Élévations latérales poulie",
+      "ridicari-laterale-cablu-un-brat": "Élévation latérale poulie (1 bras)",
+      "ridicari-laterale-cu-gantere": "Élévations latérales haltères",
+      "ridicari-laterale-de-picior-culcat": "Élévations latérales de jambe allongé",
+      "ridicari-laterale-inclinat": "Oiseau buste penché haltères",
+      "ridicari-laterale-la-aparat": "Élévations latérales machine",
+      "ridicari-laterale-la-cablu": "Élévations latérales poulie",
+      "ridicari-pe-varfuri-in-stand-cu-bara": "Mollets debout barre",
+      "ridicari-pe-varfuri-la-aparat-sezand": "Mollets assis machine",
+      "ridicari-pe-varfuri-la-presa-de-picioare": "Mollets à la presse à cuisses",
+      "ridicari-pe-varfuri-pe-un-picior": "Mollets unilatéraux",
+      "ridicari-picioare-atarnat": "Relevés de jambes suspendu",
+      "ridicari-varfuri": "Élévations sur pointes (mollets)",
+      "ridicari-varfuri-pe-un-picior": "Mollets sur une jambe",
+      "romanian_deadlift_barbell": "Soulevé de terre roumain barre",
+      "romanian_deadlift_dumbbell": "Soulevé de terre roumain haltères",
+      "rope_hammer_curl_cable": "Curl marteau corde à la poulie",
+      "rope_tricep_pushdown": "Extensions triceps corde poulie",
+      "rotatii-de-umeri-cu-bastonul": "Rotations d’épaules au bâton",
+      "rotatii-solduri": "Rotations des hanches",
+      "rotiri-rusesti-cu-minge-medicinala": "Rotations russes médecine-ball",
+      "rulare-de-prosop-cu-greutate": "Enroulement serviette lestée",
+      "rulou-grip-bara": "Enroulement des doigts barre",
+      "russian-twist": "Rotation russe (Russian twist)",
+      "russian_twist": "Rotations russes lestées (haltère/disque)",
+      "sandbag-carry": "Porté de sac de sable",
+      "sarituri-coarda": "Corde à sauter",
+      "sarituri-cu-coarda": "Corde à sauter",
+      "sarituri-cutie": "Sauts sur boîte (box jumps)",
+      "sarituri-pe-varfuri-pogo-hops": "Sauts pogo sur pointes",
+      "scorpion-stretch": "Étirement du scorpion",
+      "seated_lateral_raise_dumbbell": "Élévations latérales assis haltères",
+      "seated_leg_curl_machine": "Leg curl assis machine",
+      "seated_row_cable": "Rowing assis à la poulie",
+      "seated_row_machine": "Rowing assis machine iso-latérale",
+      "shoulder_press_machine": "Développé épaules machine",
+      "shrugs": "Haussements d’épaules (shrugs)",
+      "side_plank": "Planche latérale",
+      "skater-jumps": "Sauts latéraux du patineur",
+      "skullcrusher_barbell": "Barre au front barre EZ",
+      "skullcrusher_dumbbell": "Barre au front haltères",
+      "skullcrushers": "Barre au front (skullcrushers)",
+      "sled-push": "Poussée de traîneau (sled push)",
+      "spider_curl_dumbbell": "Spider curl haltères",
+      "sprint-intervale": "Sprints fractionnés (HIIT)",
+      "sprint-pe-loc-cu-genunchii-sus": "Sprint sur place genoux hauts",
+      "stair-climber": "Simulateur d’escaliers",
+      "standing_calf_raise_machine": "Mollets debout machine",
+      "step-up": "Montées sur banc (step-up)",
+      "step_up_dumbbell": "Montées sur banc haltères",
+      "straight-arm-pulldown": "Tirage bras tendus à la poulie",
+      "straight_arm_pulldown": "Tirage poulie bras tendus",
+      "strangere-de-gripper": "Pince de musculation (gripper)",
+      "stretching-de-ischiogambieri-sezand": "Étirement des ischio-jambiers assis",
+      "stretching-de-pectorali-la-usa": "Étirement pectoraux à la porte",
+      "stretching-femurali": "Étirement des ischio-jambiers",
+      "stretching-piept": "Étirement des pectoraux au mur",
+      "suitcase-carry": "Porté valise unilatéral",
+      "sumo_deadlift_barbell": "Soulevé de terre sumo barre",
+      "superman": "Superman",
+      "superman_hold": "Maintien Superman",
+      "suspendare-pasiva-in-bara-dead-hang": "Suspension passive à la barre",
+      "svend-press": "Svend press",
+      "t_bar_row": "Rowing barre en T",
+      "thoracic-extension-pe-rola": "Extension thoracique sur rouleau",
+      "thread-the-needle": "Enfiler l’aiguille (mobilité thoracique)",
+      "thruster": "Thruster",
+      "thruster-cu-gantere": "Thrusters haltères",
+      "thruster-greutate": "Thruster avec haltères",
+      "toes-to-bar": "Orteils à la barre (toes to bar)",
+      "tractiuni": "Tractions pronation",
+      "tractiuni-cu-priza-inversa": "Tractions supination",
+      "tractiuni-cu-priza-larga": "Tractions prise large",
+      "tractiuni-neutre-la-maner-paralel": "Tractions prise neutre",
+      "tractiuni-priza-inversa": "Tractions supination (chin-ups)",
+      "tras-la-helcometru-cu-priza-inversa": "Tirage vertical supination",
+      "tricep_dip": "Dips triceps",
+      "tricep_pushdown_cable": "Extensions triceps poulie haute",
+      "triceps-pushdown-funie": "Extensions triceps à la corde",
+      "triceps-pushdown-funie-extensie": "Extensions poulie avec corde",
+      "turkish-get-up": "Relevé turc (Turkish get-up)",
+      "turkish-get-up-v3": "Relevé turc",
+      "upright_row_barbell": "Tirage menton barre",
+      "upright_row_cable": "Tirage menton à la poulie",
+      "urcat-scari": "Montée d’escaliers (StairMaster)",
+      "v-up": "V-ups",
+      "v-ups": "Relevés en V (V-ups)",
+      "v_ups": "Relevés en V (V-Ups)",
+      "vaslit": "Rameur",
+      "vaslit-la-ergometru": "Rameur ergomètre",
+      "walking_lunge_dumbbell": "Fentes marchées haltères",
+      "wall-balls": "Lancers de médecine-ball (wall balls)",
+      "wall_sit": "Chaise contre le mur",
+      "weighted_chest_dip": "Dips pectoraux lestés",
+      "wide_pushup": "Pompes prise large",
+      "windshield-wipers": "Essuie-glaces suspendu",
+      "woodchopper-de-jos-in-sus-la-cablu": "Bûcheron bas-en-haut poulie",
+      "woodchopper-de-sus-in-jos-la-cablu": "Bûcheron haut-en-bas poulie",
+      "world-s-greatest-stretch": "World’s greatest stretch",
+      "worlds-greatest-stretch": "World’s greatest stretch",
+      "wrist_curl_barbell": "Flexions des poignets barre"
+    },
+    "exerciseDetails": {
+      "ab-wheel-rollout-genunchi": {
+        "description": "À genoux, faites rouler la roue devant vous jusqu’à frôler le sol, puis revenez.",
+        "instructions": {
+          "0": "À genoux, saisissez fermement la roue à deux mains",
+          "1": "Roulez lentement vers l’avant avec les abdos verrouillés",
+          "2": "Arrêtez-vous avant de creuser les lombaires",
+          "3": "Revenez en tirant avec les abdominaux (pas les hanches)"
+        }
+      },
+      "alergare": {
+        "description": "Cardio classique pour l’endurance et la dépense calorique."
+      },
+      "arnold-press-gantere": {
+        "description": "Variante rotative du développé épaules : paumes vers vous en bas, rotation vers l’avant à la montée.",
+        "instructions": {
+          "0": "Assis sur un banc, haltères devant vous, paumes vers le buste",
+          "1": "Poussez vers le haut en pivotant les paumes vers l’extérieur",
+          "2": "Terminez en haut paumes vers l’avant",
+          "3": "Inversez la rotation en redescendant"
+        }
+      },
+      "battle-ropes-alternativ": {
+        "description": "Genoux fléchis, générez des vagues rapides et alternées avec les cordes ondulatoires.",
+        "instructions": {
+          "0": "Saisissez les cordes, genoux légèrement fléchis",
+          "1": "Créez des vagues rapides en alternant les bras",
+          "2": "Gardez les abdos gainés et le dos droit",
+          "3": "Maintenez la cadence 30 à 45 secondes"
+        }
+      },
+      "burpees": {
+        "mistakes": {
+          "0": "Négliger la technique avec la fatigue"
+        }
+      },
+      "burpees-greutate": {
+        "description": "Burpee classique avec haltères en main, terminé par un développé au-dessus de la tête.",
+        "instructions": {
+          "0": "Tenez une paire d’haltères légers",
+          "1": "Accroupissez-vous en posant les haltères au sol",
+          "2": "Sautez en planche puis faites une pompe",
+          "3": "Ramenez les pieds, relevez-vous et poussez au-dessus de la tête"
+        }
+      },
+      "cable-woodchop": {
+        "description": "Poignée en poulie haute : effectuez une rotation diagonale du buste vers le genou opposé.",
+        "instructions": {
+          "0": "Poulie haute, saisissez la poignée à deux mains",
+          "1": "Tournez le buste et les bras en diagonale vers le genou opposé",
+          "2": "Contrôlez le retour",
+          "3": "Exécutez des deux côtés"
+        }
+      },
+      "chest-press-gantere": {
+        "description": "Alternative à la barre offrant plus de liberté articulaire."
+      },
+      "clean-gantera": {
+        "description": "Épaulé aux haltères : amenez les charges du sol aux épaules en un mouvement explosif.",
+        "instructions": {
+          "0": "Haltères au sol de part et d’autre des pieds",
+          "1": "Saisissez-les en gardant le dos bien plat",
+          "2": "Tirez de façon explosive pour les réceptionner aux épaules",
+          "3": "Redescendez sous contrôle"
+        }
+      },
+      "concetration-curl-avansat": {
+        "description": "Curl concentré avec maintien isométrique de 3 s en haut pour un temps sous tension maximal.",
+        "instructions": {
+          "0": "Assis, coude calé contre l’intérieur de la cuisse",
+          "1": "Montez l’haltère en contractant fortement le biceps",
+          "2": "Maintenez 3 secondes en contraction maximale",
+          "3": "Descendez lentement sur 3 secondes"
+        }
+      },
+      "couch-stretch": {
+        "description": "À genoux dos à un banc/mur, pied arrière relevé, poussez la hanche en avant.",
+        "instructions": {
+          "0": "À genoux devant un canapé ou banc",
+          "1": "Posez la pointe du pied arrière sur le banc",
+          "2": "Poussez la hanche vers l’avant jusqu’à sentir l’étirement",
+          "3": "Maintenez 30-60 secondes puis changez"
+        }
+      },
+      "dead-bug-avansat": {
+        "description": "Allongé sur le dos, bras et jambes levés avec un haltère. Étendez bras et jambe opposés.",
+        "instructions": {
+          "0": "Allongez-vous, haltère au-dessus de la poitrine, genoux à 90°",
+          "1": "Étendez le bras droit et la jambe gauche simultanément",
+          "2": "Revenez au centre avec contrôle",
+          "3": "Alternez les côtés"
+        }
+      },
+      "deadlift": {
+        "description": "Exercice polyarticulaire complet pour toute la chaîne postérieure.",
+        "instructions": {
+          "0": "Barre proche des tibias.",
+          "1": "Dos neutre, poitrine haute.",
+          "2": "Poussez dans les jambes puis étendez les hanches."
+        },
+        "mistakes": {
+          "0": "Arrondir le bas du dos",
+          "1": "Tirer avec le dos au lieu de pousser avec les jambes"
+        }
+      },
+      "dips-banca-greutate": {
+        "description": "Dips lestés entre deux bancs avec un disque sur les cuisses.",
+        "instructions": {
+          "0": "Mains sur un banc, talons sur le banc en face",
+          "1": "Posez un disque sur vos cuisses",
+          "2": "Descendez jusqu’à un angle de 90° aux coudes",
+          "3": "Remontez en poussant fort sur les triceps"
+        }
+      },
+      "dragon-flag": {
+        "description": "AVANCÉ : Allongé sur un banc en tenant le bord derrière la tête, élevez le corps gainé sur les épaules.",
+        "instructions": {
+          "0": "Allongez-vous sur le banc, tenez les bords derrière la tête",
+          "1": "Levez jambes et bassin en gardant le corps rectiligne",
+          "2": "Descendez lentement sans poser les hanches sur le banc",
+          "3": "Maintenez un gainage maximal du début à la fin"
+        }
+      },
+      "extensii-pumni-bara": {
+        "description": "Avant-bras sur les cuisses, paumes vers le bas. Effectuez une extension des poignets.",
+        "instructions": {
+          "0": "Posez l’avant-bras sur la cuisse, paume vers le bas",
+          "1": "Descendez la charge sous contrôle",
+          "2": "Remontez uniquement le poignet sans bouger le bras"
+        }
+      },
+      "fandari": {
+        "instructions": {
+          "0": "Faites un grand pas en avant.",
+          "1": "Descendez jusqu’à ce que le genou arrière frôle le sol.",
+          "2": "Poussez pour revenir en position de départ."
+        }
+      },
+      "fandari-laterale-greutate": {
+        "description": "Haltère à la poitrine, grand pas latéral en fléchissant le genou d’appui, autre jambe tendue.",
+        "instructions": {
+          "0": "Debout, haltère contre la poitrine",
+          "1": "Grand pas latéral avec la jambe droite",
+          "2": "Fléchissez le genou droit en poussant la hanche en arrière",
+          "3": "Repoussez sur le talon droit pour revenir"
+        }
+      },
+      "flexii-biceps-bara": {
+        "mistakes": {
+          "0": "Balancer le buste"
+        }
+      },
+      "flexii-biceps-priza-inversa": {
+        "description": "Curl barre en prise pronation (paumes vers le bas) pour cibler le brachial et les avant-bras.",
+        "instructions": {
+          "0": "Saisissez la barre paumes vers le bas, largeur d’épaules",
+          "1": "Gardez les coudes collés au corps",
+          "2": "Montez la barre jusqu’en haut de la poitrine",
+          "3": "Redescendez sous contrôle"
+        }
+      },
+      "flexii-ciocan-gantera": {
+        "description": "Haltères en prise neutre (marteau), paumes face au corps. Fléchissez poignets fixes.",
+        "instructions": {
+          "0": "Debout, haltères en main, paumes vers les cuisses",
+          "1": "Gardez les coudes collés au buste",
+          "2": "Montez l’haltère vers l’épaule sans tourner le poignet",
+          "3": "Redescendez sous contrôle"
+        }
+      },
+      "flexii-pumni-bara": {
+        "description": "Assis sur un banc, avant-bras posés sur les cuisses, paumes vers le haut. Fléchissez uniquement les poignets.",
+        "instructions": {
+          "0": "Asseyez-vous sur le banc avec un haltère",
+          "1": "Posez l’avant-bras sur la cuisse, paume vers le haut",
+          "2": "Descendez l’haltère avec contrôle en ouvrant le poignet",
+          "3": "Remontez uniquement du poignet en contractant l’avant-bras",
+          "4": "Contrôlez le mouvement sur toute l’amplitude"
+        },
+        "mistakes": {
+          "0": "Bouger tout le bras au lieu du poignet",
+          "1": "Charge trop lourde nuisant à la technique"
+        }
+      },
+      "flotari": {
+        "description": "Le classique au poids du corps praticable partout.",
+        "instructions": {
+          "0": "Corps aligné, mains placées sous les épaules.",
+          "1": "Descendez jusqu’à ce que la poitrine frôle le sol.",
+          "2": "Repoussez-vous sans laisser tomber les hanches."
+        }
+      },
+      "flotari-decline-greutate": {
+        "description": "Pieds surélevés sur banc et disque sur le dos : pompes lestées pour le haut des pectoraux.",
+        "instructions": {
+          "0": "Placez les pieds sur un banc",
+          "1": "Posez un disque sur le haut du dos",
+          "2": "Descendez la poitrine près du sol",
+          "3": "Poussez fort vers le haut"
+        }
+      },
+      "fluturari-gantere": {
+        "mistakes": {
+          "0": "Trop plier les coudes (cela devient un développé)"
+        }
+      },
+      "fluturari-pec-deck-invers": {
+        "description": "Oiseau inversé sur machine pec deck (face au dossier) pour isoler l’arrière des épaules.",
+        "instructions": {
+          "0": "Réglez le siège à hauteur des épaules",
+          "1": "Asseyez-vous face au dossier",
+          "2": "Tirez les poignées vers l’arrière en serrant les omoplates",
+          "3": "Revenez sous contrôle"
+        }
+      },
+      "french-press-gantere-un-brat": {
+        "description": "Extension triceps unilatérale au-dessus de la tête avec haltère.",
+        "instructions": {
+          "0": "Haltère tendu au-dessus de la tête",
+          "1": "Descendez l’haltère derrière la tête, coude fixe vers le haut",
+          "2": "Tendez le bras vers le haut",
+          "3": "Gardez le coude stable durant toute la série"
+        }
+      },
+      "genuflexiuni-bara": {
+        "description": "Le roi des exercices pour les jambes.",
+        "instructions": {
+          "0": "Barre sur les trapèzes, pieds largeur d’épaules.",
+          "1": "Descendez jusqu’à avoir les cuisses parallèles au sol.",
+          "2": "Poussez fort dans les talons pour remonter."
+        },
+        "mistakes": {
+          "0": "Genoux qui rentrent vers l’intérieur",
+          "1": "Décoller les talons du sol"
+        }
+      },
+      "genuflexiuni-pistol-assistate": {
+        "description": "Squat sur une jambe avec appui léger : excellente progression vers le pistol squat libre.",
+        "instructions": {
+          "0": "En appui sur un pied, tenez légèrement un support",
+          "1": "Descendez avec contrôle sur la jambe d’appui",
+          "2": "Gardez l’autre jambe tendue devant vous",
+          "3": "Poussez dans le talon pour remonter"
+        }
+      },
+      "genuflexiuni-split-bulgaresti-greutate": {
+        "description": "Squat bulgare avec haltères, pied arrière sur un banc : travail intense des quadriceps et fessiers.",
+        "instructions": {
+          "0": "Posez le pied gauche sur un banc derrière vous",
+          "1": "Un haltère dans chaque main le long du corps",
+          "2": "Descendez jusqu’à frôler le sol avec le genou arrière",
+          "3": "Poussez dans le talon avant pour remonter"
+        }
+      },
+      "hanging-leg-raise": {
+        "description": "Suspendu à une barre fixe, levez les jambes tendues jusqu’à 90° ou plus.",
+        "instructions": {
+          "0": "Saisissez la barre paumes vers l’avant",
+          "1": "Gardez les jambes tendues et serrées",
+          "2": "Montez les jambes à hauteur des hanches ou plus haut",
+          "3": "Redescendez sans balancier"
+        },
+        "mistakes": {
+          "0": "Se balancer avec élan",
+          "1": "Fléchir les genoux involontairement"
+        }
+      },
+      "impins-banca-plat": {
+        "description": "L’exercice de base pour développer la masse des pectoraux.",
+        "instructions": {
+          "0": "Allongé sur le banc, prise légèrement plus large que les épaules.",
+          "1": "Descendez la barre avec contrôle jusqu’à la poitrine.",
+          "2": "Poussez de façon explosive sans verrouiller brutalement les coudes."
+        },
+        "mistakes": {
+          "0": "Décoller les fessiers du banc",
+          "1": "Descendre la barre trop vite"
+        }
+      },
+      "impins-banda-elastica": {
+        "description": "Élastique ancré derrière vous : poussez vers l’avant pour une résistance progressive.",
+        "instructions": {
+          "0": "Ancrez l’élastique derrière vous",
+          "1": "Prenez les poignées et avancez d’un pas pour tendre",
+          "2": "Poussez devant en contractant les pectoraux",
+          "3": "Revenez lentement"
+        }
+      },
+      "impins-declinat": {
+        "description": "Cible le bas des pectoraux."
+      },
+      "impins-inclinat-gantere": {
+        "description": "Met l’accent sur le haut des pectoraux.",
+        "instructions": {
+          "0": "Réglez le banc à 30-45 degrés.",
+          "1": "Poussez les haltères au-dessus de la poitrine.",
+          "2": "Descendez jusqu’à ressentir un bon étirement."
+        }
+      },
+      "impins-inclinat-masina": {
+        "description": "Presse poitrine inclinée guidée pour cibler efficacement le haut des pectoraux.",
+        "instructions": {
+          "0": "Réglez le siège à 30-45°",
+          "1": "Saisissez les poignées, dos plaqué au dossier",
+          "2": "Poussez de façon uniforme sans verrouiller les coudes",
+          "3": "Revenez avec contrôle"
+        }
+      },
+      "impins-umeri-bara": {
+        "instructions": {
+          "0": "Barre au niveau des clavicules.",
+          "1": "Poussez la barre au-dessus de la tête.",
+          "2": "Ne cambrez pas excessivement le dos."
+        }
+      },
+      "indreptari-romanesti": {
+        "mistakes": {
+          "0": "Trop fléchir les genoux",
+          "1": "Arrondir le dos"
+        }
+      },
+      "inverted-row-greutate": {
+        "description": "Rowing inversé sous barre basse avec un disque posé sur la poitrine.",
+        "instructions": {
+          "0": "Réglez la barre à hauteur de taille",
+          "1": "Posez un disque sur la poitrine",
+          "2": "Tirez la poitrine jusqu’à la barre",
+          "3": "Redescendez en gardant le corps gainé"
+        }
+      },
+      "kettlebell-snatch": {
+        "description": "Mouvement balistique fluide : du swing jusqu’au verrouillage du kettlebell au-dessus de la tête.",
+        "instructions": {
+          "0": "Démarrez depuis un swing à un bras",
+          "1": "Tirez verticalement quand la charge passe la poitrine",
+          "2": "Verrouillez le bras au-dessus de la tête en douceur",
+          "3": "Redescendez avec contrôle entre les jambes"
+        }
+      },
+      "kroc-rows": {
+        "description": "Rowing unilatéral avec haltère très lourd et léger élan contrôlé pour force brute et poigne.",
+        "instructions": {
+          "0": "Appuyez un genou et une main sur le banc",
+          "1": "Saisissez un haltère lourd de l’autre main",
+          "2": "Tirez de façon explosive vers la hanche",
+          "3": "Autorisez une légère rotation contrôlée du buste",
+          "4": "Poussez la série avec détermination"
+        }
+      },
+      "pallof-press": {
+        "description": "Poulie à hauteur de poitrine, poussez droit devant en résistant à la rotation pour un gainage profond.",
+        "instructions": {
+          "0": "Réglez la poulie à hauteur de poitrine, placez-vous de profil",
+          "1": "Tenez la poignée contre la poitrine à deux mains",
+          "2": "Tendez les bras droit devant sans tourner le buste",
+          "3": "Tenez 2-3 secondes puis revenez lentement"
+        }
+      },
+      "pancake-stretch": {
+        "description": "Assis jambes largement écartées, penchez le buste en avant en gardant le dos droit.",
+        "instructions": {
+          "0": "Asseyez-vous jambes écartées au maximum confortable",
+          "1": "Gardez le dos bien plat",
+          "2": "Penchez-vous doucement à partir des hanches",
+          "3": "Maintenez 30-60 secondes"
+        }
+      },
+      "pec-deck": {
+        "description": "Excellente isolation des pectoraux à la machine pec deck.",
+        "instructions": {
+          "0": "Gardez le dos plaqué contre le dossier.",
+          "1": "Rapprochez les bras devant vous en contractant la poitrine."
+        }
+      },
+      "pigeon-pose": {
+        "description": "Avancez un genou vers l’extérieur et allongez la jambe arrière : étirement profond des fessiers.",
+        "instructions": {
+          "0": "Avancez le genou droit près de la main droite",
+          "1": "Allongez la jambe gauche derrière vous",
+          "2": "Penchez le buste vers l’avant au-dessus du genou",
+          "3": "Tenez 30-60 s puis changez de jambe"
+        }
+      },
+      "plank": {
+        "instructions": {
+          "0": "Coudes sous les épaules, corps aligné.",
+          "1": "Contractez les abdominaux et les fessiers.",
+          "2": "Ne laissez pas les hanches s’affaisser."
+        }
+      },
+      "pod-fesieri-un-picior": {
+        "description": "Pont fessier unilatéral : poussez dans le talon au sol pour élever les hanches.",
+        "instructions": {
+          "0": "Allongé, genou droit fléchi, jambe gauche levée",
+          "1": "Poussez sur le talon droit pour monter le bassin",
+          "2": "Contractez 1-2 secondes en haut",
+          "3": "Redescendez sous contrôle"
+        }
+      },
+      "presa-umeri-cu-bara-din-spate": {
+        "description": "AVANCÉ : Développé nuque à la barre. Nécessite une excellente mobilité d’épaules.",
+        "instructions": {
+          "0": "Posez la barre sur les trapèzes (jamais sur la nuque)",
+          "1": "Saisissez la barre plus large que les épaules",
+          "2": "Poussez la barre verticalement au-dessus de la tête",
+          "3": "Redescendez avec contrôle jusqu’aux trapèzes",
+          "4": "Gardez le dos droit tout au long de la série"
+        },
+        "mistakes": {
+          "0": "Descendre trop bas et stresser l’épaule",
+          "1": "Cambrure excessive du bas du dos"
+        }
+      },
+      "presa-umeri-cu-gantere-asimetric": {
+        "description": "Alternez chaque bras en maintenant l’autre verrouillé en haut pour prolonger la tension.",
+        "instructions": {
+          "0": "Assis avec dossier, haltères aux épaules",
+          "1": "Poussez l’haltère droit et gardez-le en haut",
+          "2": "Redescendez le droit pendant que vous poussez le gauche",
+          "3": "Alternez en continu avec contrôle"
+        }
+      },
+      "priza-placutelor": {
+        "description": "Pincez deux disques entre vos doigts et maintenez le plus longtemps possible.",
+        "instructions": {
+          "0": "Choisissez deux disques de 5 à 10 kg",
+          "1": "Pincez-les fermement entre le pouce et les doigts",
+          "2": "Gardez le bras tendu le long du corps",
+          "3": "Tenez 30-60 secondes puis changez de main"
+        }
+      },
+      "pullover-bara-dreapta": {
+        "description": "Pullover poulie haute bras tendus : tirez la barre jusqu’aux cuisses sans plier les coudes.",
+        "instructions": {
+          "0": "Saisissez la barre droite à la poulie haute",
+          "1": "Bras tendus, buste légèrement incliné",
+          "2": "Tirez vers les cuisses sans plier les bras",
+          "3": "Revenez avec contrôle en position haute"
+        }
+      },
+      "pullups-greutate-gantera": {
+        "description": "Tractions strictes avec un haltère maintenu entre les jambes pour plus de résistance.",
+        "instructions": {
+          "0": "Bloquez l’haltère entre vos chevilles ou cuisses",
+          "1": "Effectuez une traction stricte menton au-dessus de la barre",
+          "2": "Descendez sous contrôle jusqu’à l’extension complète",
+          "3": "Gardez une prise ferme tout au long du mouvement"
+        },
+        "mistakes": {
+          "0": "Balancer le corps",
+          "1": "Tendre le cou en avant pour passer la barre"
+        }
+      },
+      "ramat-bara": {
+        "instructions": {
+          "0": "Hanches poussées vers l’arrière, dos bien droit.",
+          "1": "Tirez la barre vers le bas de l’abdomen.",
+          "2": "Serrez les omoplates en haut du mouvement."
+        }
+      },
+      "ramat-bara-inclinat": {
+        "description": "Rowing Pendlay penché à ~90°, tirage explosif depuis le sol vers la poitrine.",
+        "instructions": {
+          "0": "Buste penché presque parallèle au sol",
+          "1": "Prise plus large que les épaules",
+          "2": "Tirez de manière explosive vers le sternum",
+          "3": "Reposez la barre au sol avec contrôle"
+        }
+      },
+      "ridicari-frontale-bara": {
+        "description": "Barre en pronation, levez-la devant vous à hauteur des épaules.",
+        "instructions": {
+          "0": "Debout, barre reposant devant les cuisses",
+          "1": "Levez la barre devant vous, bras presque tendus",
+          "2": "Arrêtez-vous à hauteur des épaules",
+          "3": "Redescendez avec contrôle"
+        }
+      },
+      "ridicari-laterale": {
+        "mistakes": {
+          "0": "Utiliser de l’élan avec le buste",
+          "1": "Monter les bras trop haut"
+        }
+      },
+      "ridicari-laterale-cablu-un-brat": {
+        "description": "Poignée en poulie basse à un bras, élevez latéralement sous tension continue.",
+        "instructions": {
+          "0": "Réglez la poulie en position basse / taille",
+          "1": "Saisissez la poignée avec la main opposée",
+          "2": "Élevez le bras sur le côté jusqu’à l’épaule",
+          "3": "Redescendez lentement en gardant la tension"
+        }
+      },
+      "ridicari-laterale-inclinat": {
+        "description": "Buste penché à 45°, dos droit. Élevez les haltères sur les côtés pour l’arrière d’épaule.",
+        "instructions": {
+          "0": "Genoux légèrement fléchis, buste penché à 45°",
+          "1": "Haltères sous la poitrine, paumes face à face",
+          "2": "Élevez les bras sur les côtés à hauteur d’épaules",
+          "3": "Maintenez 1 seconde en haut puis redescendez lentement"
+        },
+        "mistakes": {
+          "0": "Arrondir le dos",
+          "1": "Utiliser de l’élan"
+        }
+      },
+      "ridicari-varfuri-pe-un-picior": {
+        "description": "Élévation unilatérale sur pointe de pied sur une marche pour amplitude maximale des mollets.",
+        "instructions": {
+          "0": "Placez l’avant du pied sur une marche",
+          "1": "Montez sur la pointe le plus haut possible",
+          "2": "Descendez le talon lentement sous la marche",
+          "3": "Ressentez l’étirement complet du mollet"
+        }
+      },
+      "rulou-grip-bara": {
+        "description": "Barre en main paumes vers le haut, laissez rouler jusqu’au bout des doigts puis refermez.",
+        "instructions": {
+          "0": "Debout, tenez la barre paumes vers le haut",
+          "1": "Ouvrez lentement les doigts pour laisser rouler la barre",
+          "2": "Refermez la main en remontant la barre avec les doigts",
+          "3": "Répétez de manière rythmée"
+        }
+      },
+      "sandbag-carry": {
+        "description": "Portez un sac de sable lourd contre la poitrine ou sur l’épaule sur 20-30 m, dos droit.",
+        "instructions": {
+          "0": "Soulevez le sac lourd avec le dos droit",
+          "1": "Maintenez-le contre le buste ou sur une épaule",
+          "2": "Marchez 20 à 30 mètres à pas maîtrisés",
+          "3": "Gardez les abdominaux serrés et le buste droit"
+        }
+      },
+      "sarituri-cutie": {
+        "description": "Sauts sur caisse (50-75 cm) avec réception souple genoux légèrement fléchis.",
+        "instructions": {
+          "0": "Placez-vous à 30 cm de la caisse, pieds largeur d’épaules",
+          "1": "Balancez les bras et sautez de manière explosive",
+          "2": "Atterrissez en souplesse genoux fléchis",
+          "3": "Redescendez prudemment puis répétez"
+        },
+        "mistakes": {
+          "0": "Atterrir jambes tendues sans amorti",
+          "1": "Caisse trop haute par rapport à votre niveau"
+        }
+      },
+      "scorpion-stretch": {
+        "description": "À plat ventre bras en croix, levez une jambe et croisez vers la main opposée.",
+        "instructions": {
+          "0": "Allongé sur le ventre, bras en croix",
+          "1": "Levez la jambe droite et fléchissez le genou",
+          "2": "Amenez le pied vers la main gauche",
+          "3": "Maintenez 15-20 s et alternez"
+        }
+      },
+      "skater-jumps": {
+        "description": "Sauts latéraux type patineur d’une jambe sur l’autre avec réception maîtrisée.",
+        "instructions": {
+          "0": "En appui sur la jambe droite légèrement fléchie",
+          "1": "Bondissez latéralement sur le pied gauche en douceur",
+          "2": "Les bras suivent naturellement pour l’équilibre",
+          "3": "Alternez sur un rythme soutenu"
+        }
+      },
+      "thread-the-needle": {
+        "description": "À quatre pattes, passez un bras sous le buste en rotation pour mobiliser la colonne thoracique.",
+        "instructions": {
+          "0": "Position à quatre pattes",
+          "1": "Glissez la main droite sous le bras gauche, paume vers le haut",
+          "2": "Tournez le buste, épaule droite vers le sol",
+          "3": "Maintenez 15-30 s puis changez de côté"
+        }
+      },
+      "thruster-greutate": {
+        "description": "Enchaînement fluide squat avant et développé épaules aux haltères.",
+        "instructions": {
+          "0": "Tenez les haltères posés aux épaules",
+          "1": "Descendez en squat complet",
+          "2": "Poussez fort vers le haut en développant les haltères",
+          "3": "Ramenez aux épaules et enchaînez avec fluidité"
+        }
+      },
+      "tractiuni": {
+        "description": "Le roi des exercices pour la largeur du dos.",
+        "instructions": {
+          "0": "Prise plus large que la largeur des épaules.",
+          "1": "Tirez jusqu’à passer le menton au-dessus de la barre.",
+          "2": "Redescendez avec contrôle jusqu’à l’extension complète."
+        },
+        "mistakes": {
+          "0": "Balancer le corps avec l’élan",
+          "1": "Ne pas descendre complètement"
+        }
+      },
+      "triceps-pushdown-funie-extensie": {
+        "description": "Extension triceps à la corde : poussez vers le bas et écartez les bouts en bas du mouvement.",
+        "instructions": {
+          "0": "Saisissez la corde en poulie haute",
+          "1": "Coudes fixes près du corps",
+          "2": "Poussez vers le bas et écartez légèrement la corde en bas",
+          "3": "Remontez sous contrôle coudes immobiles"
+        }
+      },
+      "worlds-greatest-stretch": {
+        "description": "Depuis la planche, avancez un pied près de la main et pivotez le buste : l’étirement dynamique complet.",
+        "instructions": {
+          "0": "Démarrez en position de pompe",
+          "1": "Amenez le pied droit à côté de la main droite",
+          "2": "Ouvrez le bras droit vers le plafond du regard",
+          "3": "Revenez et répétez à gauche"
+        }
+      }
+    }
   }
 }

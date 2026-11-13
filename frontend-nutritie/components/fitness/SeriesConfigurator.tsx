@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
 import { Minus, Plus, AlertTriangle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { useNotify } from '../../hooks/useNotify';
 import type { MeasurementSpec } from '../../lib/measurement';
@@ -42,6 +43,7 @@ function Stepper({
   isDecimal?: boolean;
 }) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   return (
     <View style={styles.field}>
       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
@@ -52,6 +54,8 @@ function Stepper({
           onPress={onDec}
           style={[styles.stepBtn, { borderColor: colors.border }]}
           hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={t('sport.commonControls.decreaseStepA11y', { label: label.toLowerCase(), step: isDecimal ? 2.5 : 1 })}
         >
           <Minus size={16} color={colors.textPrimary} />
         </Pressable>
@@ -77,6 +81,8 @@ function Stepper({
           onPress={onInc}
           style={[styles.stepBtn, { borderColor: colors.border }]}
           hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel={t('sport.commonControls.increaseStepA11y', { label: label.toLowerCase(), step: isDecimal ? 2.5 : 1 })}
         >
           <Plus size={16} color={colors.textPrimary} />
         </Pressable>
@@ -87,6 +93,7 @@ function Stepper({
 
 export function SeriesConfigurator({ spec, value, onChange }: Props) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const notify = useNotify();
   const [limitWarning, setLimitWarning] = useState<string | null>(null);
   const warningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -99,7 +106,7 @@ export function SeriesConfigurator({ spec, value, onChange }: Props) {
 
   const triggerWarning = (msg: string) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    notify.warning('Limita maximă atinsă', msg);
+    notify.warning(t('sport.commonControls.maxLimitTitle'), msg);
     setLimitWarning(msg);
     if (warningTimer.current) clearTimeout(warningTimer.current);
     warningTimer.current = setTimeout(() => setLimitWarning(null), 3500);
@@ -123,11 +130,11 @@ export function SeriesConfigurator({ spec, value, onChange }: Props) {
       ]}
     >
       <Text style={[styles.title, { color: colors.textPrimary }]}>
-        CONFIGURARE RAPIDĂ SERII
+        {t('sport.commonControls.quickSeriesTitle')}
       </Text>
       <View style={styles.row}>
         <Stepper
-          label="Serii"
+          label={t('sport.commonControls.sets')}
           value={value.sets}
           onChangeVal={(val) => set({ sets: Math.max(1, Math.min(50, val)) })}
           onDec={() => {
@@ -136,7 +143,7 @@ export function SeriesConfigurator({ spec, value, onChange }: Props) {
           }}
           onInc={() => {
             if (value.sets + 1 > 50) {
-              triggerWarning('Numărul maxim de serii este 50.');
+              triggerWarning(t('sport.commonControls.maxSets'));
             } else {
               Haptics.selectionAsync();
               set({ sets: value.sets + 1 });
@@ -154,7 +161,7 @@ export function SeriesConfigurator({ spec, value, onChange }: Props) {
             }}
             onInc={() => {
               if (value.reps + 1 > 100) {
-                triggerWarning('Numărul maxim de repetări este 100.');
+                triggerWarning(t('sport.commonControls.maxReps'));
               } else {
                 Haptics.selectionAsync();
                 set({ reps: value.reps + 1 });
@@ -164,16 +171,16 @@ export function SeriesConfigurator({ spec, value, onChange }: Props) {
         )}
         {showTimer && (
           <Stepper
-            label="Secunde / serie"
+            label={t('sport.commonControls.secondsPerSet')}
             value={value.durationSec}
-            suffix="s"
+            suffix={t('sport.measurement.units.secShort')}
             onDec={() => {
               Haptics.selectionAsync();
               set({ durationSec: Math.max(5, value.durationSec - 5) });
             }}
             onInc={() => {
               if (value.durationSec + 5 > 7200) {
-                triggerWarning('Durata maximă este de 7200 secunde (2 ore).');
+                triggerWarning(t('sport.commonControls.maxDuration'));
               } else {
                 Haptics.selectionAsync();
                 set({ durationSec: value.durationSec + 5 });
@@ -186,15 +193,15 @@ export function SeriesConfigurator({ spec, value, onChange }: Props) {
             <Text
               style={[styles.fieldLabel, { color: colors.textSecondary }]}
             >
-              Greutate (kg){spec.weightOptional ? ' • opțional' : ''}
+              {t('sport.commonControls.weightKg')}{spec.weightOptional ? t('sport.commonControls.optionalSuffix') : ''}
             </Text>
             <TextInput
               value={String(value.weightKg)}
-              onChangeText={(t) => {
-                let num = Number(t.replace(/[^0-9.]/g, '')) || 0;
+              onChangeText={(txt) => {
+                let num = Number(txt.replace(/[^0-9.]/g, '')) || 0;
                 if (num > 600) {
                   num = 600;
-                  triggerWarning('Greutatea maximă admisă este de 600 kg.');
+                  triggerWarning(t('sport.commonControls.maxWeight'));
                 }
                 set({ weightKg: num });
               }}
@@ -249,8 +256,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   stepBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',

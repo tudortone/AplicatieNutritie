@@ -1613,6 +1613,13 @@
       "start": "Start workout",
       "invalidTemplate": "Add a name and at least one exercise.",
       "incompleteWorkout": "Complete every set or cardio entry before finishing."
+    },
+    "summary": {
+      "title": "Workout completed",
+      "subtitle": "Your session has been recorded in local preview.",
+      "setsCompleted": "{{count}} sets completed",
+      "viewStrength": "View strength map",
+      "done": "Back to presets"
     }
   },
   "nutrientFocus": {
@@ -1803,5 +1810,1516 @@
     "targetTab": "Target ({{val}} kg)",
     "saveCurrent": "Save Weigh-in History",
     "saveTarget": "Save New Target"
+  },
+  "sport": {
+    "screen": {
+      "searchPlaceholder": "Search exercise...",
+      "searchA11y": "Search exercise by name or muscle group",
+      "clearSearchA11y": "Clear search",
+      "exercisesHeading": "Exercises",
+      "emptySearchTitle": "No exercises found",
+      "emptySearchSub": "Try another term or reset the search filter.",
+      "emptySearchReset": "Reset search",
+      "emptyCategory": "No exercises available in this category.",
+      "restLabel": "Rest",
+      "restAdd15A11y": "Extend rest by 15 seconds",
+      "restSkip": "Skip",
+      "restSkipA11y": "Skip rest",
+      "whatYouWorked": "What you worked",
+      "setsStat": "sets",
+      "exercisesStat": "exercises",
+      "volumeStat": "kg volume",
+      "logSetTitle": "Log set",
+      "setWarmupTag": "warm-up",
+      "warmupToggle": "Warm-up set (excluded from volume)",
+      "addSetBtn": "Add set",
+      "saveWorkoutBtn": "Save workout",
+      "openExerciseA11y": "Open {{name}}",
+      "closeExerciseA11y": "Close {{name}}",
+      "deleteSetA11y": "Delete set {{number}}",
+      "startTimerA11y": "Start timer",
+      "stopTimerA11y": "Stop timer",
+      "resetTimerA11y": "Reset timer",
+      "start": "Start",
+      "stop": "Stop",
+      "noWeightHint": "Bodyweight exercise — no weight field required.",
+      "defaultExerciseName": "Exercise",
+      "workoutSessionTitle": "Workout {{date}}",
+      "incompleteSetTitle": "Incomplete set",
+      "nothingToSaveTitle": "Nothing to save",
+      "nothingToSaveMsg": "Log at least one set first.",
+      "saveFailedTitle": "Workout not saved",
+      "saveFailedMsg": "Your session is still intact. Try again.",
+      "savedTitle": "Workout saved",
+      "savedSummary": "{{sets}} sets • {{volume}} kg volume",
+      "saveErrorTitle": "Save error",
+      "saveErrorMsg": "Your session is still intact.",
+      "localSaveFailedTitle": "Local save failed",
+      "localSaveFailedMsg": "This set may be lost if you close the app.",
+      "setLoggedTitle": "Set {{number}} logged",
+      "categoryA11y": "{{name}} category",
+      "adjustDecA11y": "Decrease {{label}}",
+      "adjustIncA11y": "Increase {{label}}",
+      "stepperValueA11y": "{{label}}, {{value}}",
+      "stepperValueUnitA11y": "{{label}}, {{value}} {{unit}}"
+    },
+    "categories": {
+      "piept": "Chest",
+      "spate": "Back",
+      "picioare": "Legs",
+      "umeri": "Shoulders",
+      "brate": "Arms",
+      "abdomen": "Abs",
+      "cardio": "Cardio",
+      "full-body": "Full Body",
+      "mobilitate": "Mobility",
+      "superior": "Upper Body",
+      "inferior": "Lower Body",
+      "core": "Core",
+      "corp_intreg": "Full Body"
+    },
+    "difficulties": {
+      "usor": "easy",
+      "mediu": "medium",
+      "greu": "hard"
+    },
+    "measurement": {
+      "modes": {
+        "timed_weight": "Timer + optional weight",
+        "timed": "Timer (seconds)",
+        "distance_time": "Time (cardio)",
+        "weight_reps": "Weight × reps",
+        "reps_weight": "Reps + optional weight",
+        "reps": "Reps (bodyweight)",
+        "reps_assisted": "Assisted reps"
+      },
+      "units": {
+        "reps": "Reps",
+        "seconds": "Seconds",
+        "kg": "kg",
+        "min": "min",
+        "repShort": "reps",
+        "secShort": "s"
+      },
+      "fields": {
+        "duration": "Set duration",
+        "reps": "Reps",
+        "weight": "Weight",
+        "weightOptional": "Weight (optional)"
+      },
+      "setsCount": "{{count}} sets",
+      "setsByReps": "{{sets}}×{{reps}} {{unit}}",
+      "errors": {
+        "enterDuration": "Enter duration in seconds (> 0).",
+        "enterWeight": "Enter weight in kg (> 0).",
+        "enterReps": "Enter reps (> 0).",
+        "fieldRequired": "Field \"{{field}}\" is required.",
+        "fieldPositive": "Field \"{{field}}\" must be a positive number.",
+        "startTimerOrDuration": "Start the timer or enter set duration.",
+        "enterValidReps": "Enter a valid number of reps.",
+        "enterWeightForEx": "This exercise requires weight."
+      },
+      "setSingular": "set",
+      "setPlural": "sets",
+      "volumeKgLabel": "{{kg}} kg volume"
+    },
+    "ranks": {
+      "BRONZE": "Bronze",
+      "SILVER": "Silver",
+      "GOLD": "Gold",
+      "PLATINUM": "Platinum",
+      "ELITE": "Elite GetFlow"
+    },
+    "quests": {
+      "title": "Daily Quests",
+      "resetIn": "Resets in {{time}}",
+      "streak": "Streak: {{days}} days",
+      "best": "Best: {{days}}",
+      "xpToday": "+{{xp}} XP today",
+      "xpTag": "+{{xp}} XP",
+      "completed": "Done",
+      "pool": {
+        "sets_10": {
+          "title": "Log 10 sets today",
+          "unit": "sets"
+        },
+        "sets_16": {
+          "title": "Solid volume: 16 sets today",
+          "unit": "sets"
+        },
+        "vol_2000": {
+          "title": "Lift 2,000 kg volume",
+          "unit": "kg"
+        },
+        "vol_5000": {
+          "title": "Lift 5,000 kg volume",
+          "unit": "kg"
+        },
+        "musc_3": {
+          "title": "Activate 3 muscle groups",
+          "unit": "muscles"
+        },
+        "musc_5": {
+          "title": "Full session: 5 muscle groups",
+          "unit": "muscles"
+        },
+        "ex_4": {
+          "title": "4 distinct exercises today",
+          "unit": "exercises"
+        },
+        "min_20": {
+          "title": "20 active workout minutes",
+          "unit": "min"
+        },
+        "min_45": {
+          "title": "45 minutes in training",
+          "unit": "min"
+        },
+        "reps_100": {
+          "title": "100 total reps today",
+          "unit": "reps"
+        }
+      }
+    },
+    "muscles": {
+      "chest": "Chest",
+      "delts": "Shoulders",
+      "traps": "Traps",
+      "lats": "Lats",
+      "infraspinatus": "Infraspinatus",
+      "lower_back": "Lower back",
+      "neck": "Neck",
+      "biceps": "Biceps",
+      "triceps": "Triceps",
+      "forearms": "Forearms",
+      "abs": "Abs",
+      "obliques": "Obliques",
+      "serratus": "Serratus anterior",
+      "glutes": "Glutes",
+      "quads": "Quadriceps",
+      "hamstrings": "Hamstrings",
+      "calves": "Calves",
+      "adductors": "Adductors",
+      "hip_flexors": "Hip flexors",
+      "upper_chest": "Upper chest",
+      "lower_chest": "Lower chest",
+      "inner_chest": "Inner chest",
+      "front_delts": "Front delts",
+      "side_delts": "Side delts",
+      "rear_delts": "Rear delts",
+      "rhomboids": "Rhomboids",
+      "mid_traps": "Mid traps",
+      "brachialis": "Brachialis",
+      "grip": "Grip",
+      "transverse_abs": "Transverse abs",
+      "lower_abs": "Lower abs",
+      "hips": "Hips",
+      "abductors": "Abductors",
+      "legs": "Legs",
+      "back": "Back",
+      "shoulders": "Shoulders",
+      "arms": "Arms",
+      "cardio": "Cardio",
+      "core": "Core",
+      "spine": "Spine",
+      "full_body": "Full body",
+      "mobility": "Mobility"
+    },
+    "equipment": {
+      "barbell": "Barbell",
+      "dumbbell": "Dumbbells",
+      "bench": "Bench",
+      "cable": "Cables",
+      "machine": "Machine",
+      "bodyweight": "Bodyweight",
+      "kettlebell": "Kettlebell",
+      "cardio": "Cardio",
+      "band": "Resistance band",
+      "pullup_bar": "Pull-up bar",
+      "parallel_bars": "Parallel bars",
+      "ab_wheel": "Ab wheel",
+      "medicine_ball": "Medicine ball",
+      "rope": "Rope / Jump rope",
+      "other": "Other",
+      "ez_bar": "EZ bar",
+      "weighted": "Weighted bodyweight",
+      "plate": "Weight plate",
+      "foam_roller": "Foam roller",
+      "sled": "Prowler sled",
+      "box": "Plyo box",
+      "gripper": "Hand gripper",
+      "stick": "Mobility stick"
+    },
+    "journal": {
+      "title": "Workout Journal",
+      "subtitle": "Last 30 days",
+      "loading": "Loading workout journal...",
+      "workoutsCount": "Workouts",
+      "kcalBurned": "kcal burned",
+      "kgVolume": "kg volume",
+      "emptyTitle": "Journal is empty",
+      "emptySub": "No workouts recorded in the last 30 days.",
+      "deleteConfirmTitle": "Delete workout",
+      "deleteConfirmMsg": "Are you sure you want to delete \"{{name}}\"?",
+      "deleteConfirmBtn": "Delete",
+      "cancelBtn": "Cancel",
+      "deleteSuccessTitle": "Deleted",
+      "deleteSuccessMsg": "Workout removed from your journal.",
+      "deleteErrorTitle": "Error",
+      "deleteErrorMsg": "Could not delete the workout.",
+      "deleteWorkoutA11y": "Delete workout {{name}}",
+      "openWorkoutA11y": "Open {{name}}",
+      "closeWorkoutA11y": "Close {{name}}",
+      "durationMin": "{{count}} min",
+      "exercisesCount": "{{count}} exercises",
+      "warmupTag": "warm-up",
+      "backA11y": "Back",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "noSetDetails": "No set details recorded.",
+      "exShort": "{{count}} ex",
+      "rpeLabel": "@ {{rpe}} RPE"
+    },
+    "progress": {
+      "title": "Workout Progress",
+      "subtitle": "Daily quests and today’s sessions",
+      "openJournalA11y": "Open full workout journal",
+      "backA11y": "Back",
+      "loading": "Loading progress...",
+      "exercisesStat": "exercises",
+      "setsStat": "sets",
+      "volumeStat": "kg volume",
+      "todayWorkouts": "Today’s workouts",
+      "emptyTitle": "No workouts today",
+      "emptyText": "Sets saved in Workouts will appear here and update your quests.",
+      "localTag": "local",
+      "warmupTag": "warm-up",
+      "durationAndExercises": "{{min}} min • {{count}} exercises",
+      "openA11y": "Open {{name}}",
+      "closeA11y": "Close {{name}}"
+    },
+    "detail": {
+      "backA11y": "Back",
+      "notFoundTitle": "Exercise not found",
+      "notFoundSub": "Choose an exercise from the main catalog.",
+      "defaultDesc": "Effective exercise for your training plan.",
+      "defaultInstruction": "Perform the movement with control, focusing on muscle contraction.",
+      "perSessionEst": "/ session (est.)",
+      "setsConfigured": "{{count}} sets configured",
+      "configure": "Configure",
+      "forToday": "for today",
+      "musclesWorked": "Target muscles:",
+      "rankSectionTitle": "MASTERY RANK SYSTEM",
+      "anatomicalEfficiency": "Anatomical Efficiency",
+      "effortScore": "Effort Score",
+      "ptsSuffix": "/ 100 PTS",
+      "logWorkoutTitle": "LOG WORKOUT",
+      "howToTitle": "HOW TO PERFORM",
+      "mistakesTitle": "COMMON MISTAKES",
+      "saveErrorTitle": "Error",
+      "saveErrorMsg": "Could not save the workout.",
+      "savedTitle": "Added to workout",
+      "savedMsg": "{{name}} has been logged successfully!",
+      "ctaReps": "Add ({{count}} reps)",
+      "ctaTimed": "Add ({{count}} sets)",
+      "ctaVolume": "Add ({{kg}} kg • {{rank}})",
+      "ranks": {
+        "S": {
+          "title": "RANK S+ • ELITE PRO",
+          "efficiency": "99% Muscle Fiber Recruitment",
+          "msg": "Maximum hypertrophic stimulus — competitive level.",
+          "hint": "You reached maximum mastery for this exercise!"
+        },
+        "A": {
+          "title": "RANK A • ADVANCED HYPERTROPHY",
+          "efficiency": "92% Muscle Fiber Recruitment",
+          "msg": "High mechanical tension and deep structural adaptation.",
+          "hint": "Add +{{kg}} kg or 1 more set to unlock Rank S+"
+        },
+        "B": {
+          "title": "RANK B • INTERMEDIATE STRENGTH",
+          "efficiency": "78% Muscle Fiber Recruitment",
+          "msg": "Solid working volume for progressive overload and tone.",
+          "hint": "Add +{{kg}} kg or 2 reps for Rank A"
+        },
+        "C": {
+          "title": "RANK C • FOUNDATION & FORM",
+          "efficiency": "60% Muscle Fiber Recruitment",
+          "msg": "Controlled technical execution and baseline activation.",
+          "hint": "Increase weight or add reps to reach Rank B"
+        }
+      },
+      "logger": {
+        "colSet": "SET",
+        "colKg": "KG",
+        "colRep": "REP",
+        "colRpe": "RPE",
+        "addSet": "Add Set",
+        "addSetA11y": "Add set",
+        "markCompleteA11y": "Mark set complete",
+        "markIncompleteA11y": "Mark set incomplete",
+        "deleteSetA11y": "Delete set",
+        "decWeightA11y": "Decrease weight",
+        "incWeightA11y": "Increase weight",
+        "decRepsA11y": "Decrease reps",
+        "incRepsA11y": "Increase reps",
+        "incRpeA11y": "Increase RPE",
+        "decRpeA11y": "Decrease RPE",
+        "setTypeA11y": "Set type: {{type}}. Tap to switch",
+        "setTypes": {
+          "warmup": "warm-up",
+          "dropset": "drop set",
+          "failure": "failure",
+          "working": "working"
+        }
+      }
+    },
+    "commonControls": {
+      "maxLimitTitle": "Maximum limit reached",
+      "maxHumanLimit": "Maximum allowed limit reached",
+      "maxSets": "Maximum number of sets is 50.",
+      "maxReps": "Maximum number of reps is 100.",
+      "maxDuration": "Maximum duration is 7200 seconds (2 hours).",
+      "maxWeight": "Maximum allowed weight is 600 kg.",
+      "quickSeriesTitle": "QUICK SERIES SETUP",
+      "sets": "Sets",
+      "reps": "Reps",
+      "weightKg": "Weight (kg)",
+      "optionalSuffix": " • optional",
+      "secondsPerSet": "Seconds / set",
+      "holdTime": "Time (Hold)",
+      "progressTo": "Progress to {{rank}}",
+      "addWorkoutTitle": "Add Workout",
+      "addWorkoutSave": "Save Workout",
+      "addWorkoutAll": "All",
+      "addWorkoutStartTimer": "Start timer",
+      "addWorkoutPauseTimer": "Pause",
+      "addWorkoutResetTimer": "Reset",
+      "maxWeightWithLimit": "Maximum allowed weight is {{max}} kg.",
+      "maxRepsWithLimit": "Maximum number of reps is {{max}}.",
+      "maxFieldLimit": "Maximum human limit is {{max}} {{unit}}.",
+      "holdTimerTitle": "ISOMETRIC HOLD TIMER",
+      "holdPauseBtn": "PAUSE",
+      "holdStartBtn": "START",
+      "totalVolumeLabel": "Total volume",
+      "totalVolumeCompact": "{{kcal}} kcal • {{volume}} kg total volume",
+      "effortLabel": "Effort",
+      "ptsUnit": "/100 PTS",
+      "durationMinInput": "Duration (minutes):",
+      "maxDuration120Min": "Maximum allowed duration is 120 minutes (7200s).",
+      "setCol": "SET",
+      "repsCol": "REPS",
+      "weightKgCol": "WEIGHT (KG)",
+      "addSetShort": "+ New set",
+      "addSimilarSetShort": "+ Similar set",
+      "saveWorkoutUpper": "SAVE WORKOUT",
+      "duplicateExercise": "Duplicate exercise",
+      "searchPlaceholderShort": "Search exercise (e.g. Bench, Biceps)...",
+      "recentExercisesHeading": "RECENT EXERCISES",
+      "allExercisesHeading": "ALL EXERCISES",
+      "sheetSubtitle": "Search, filter, or use quick add",
+      "quickAddSuccessTitle": "Exercise quick-saved!",
+      "quickAddSuccessMsg": "+50 XP • {{kcal}} kcal burned",
+      "workoutSavedXpTitle": "Workout saved!",
+      "workoutSavedXpMsg": "+100 XP • {{kcal}} kcal",
+      "duplicateSuccessTitle": "Exercise duplicated!",
+      "duplicateSuccessMsg": "+150 XP • {{kcal}} kcal",
+      "duplicateErrorMsg": "Could not duplicate the exercise.",
+      "saveWorkoutErrorMsg": "Could not save the workout.",
+      "copySuffix": "{{name}} (Copy)",
+      "duplicateSetSuffix": "{{name}} (Duplicate set)",
+      "fullBodyFallback": "Full body",
+      "equipmentAll": "All",
+      "equipmentBarbell": "Barbell",
+      "equipmentDumbbell": "Dumbbells",
+      "equipmentBench": "Bench",
+      "equipmentCable": "Cables",
+      "equipmentMachine": "Machine",
+      "equipmentBodyweight": "Bodyweight",
+      "decreaseStepA11y": "Decrease {{label}} by {{step}}",
+      "increaseStepA11y": "Increase {{label}} by {{step}}",
+      "quickAddA11y": "Quick add exercise"
+    },
+    "anatomy": {
+      "front": "Front",
+      "back": "Back",
+      "legend": "Legend",
+      "primary": "Primary",
+      "secondary": "Secondary",
+      "volume": "Volume",
+      "effort": "Effort",
+      "noData": "No data",
+      "frontViewA11y": "Show front view",
+      "backViewA11y": "Show back view",
+      "activeMuscles": "{{count}} active groups",
+      "tapForDetails": "Tap for details"
+    },
+    "exercises": {
+      "90-90-hip-rotation": "90/90 hip rotations",
+      "ab-wheel-rollout": "Ab wheel rollout",
+      "ab-wheel-rollout-genunchi": "Kneeling ab wheel rollout",
+      "ab-wheel-rollout-v3": "Ab wheel rollout",
+      "ab_roller": "Ab roller rollouts",
+      "abdomene-clasice": "Crunches",
+      "abductii-de-coapsa-la-aparat": "Machine hip abductions",
+      "abductii-la-cablu-in-stand": "Standing cable hip abduction",
+      "abductori-masina": "Seated hip abduction machine",
+      "adductii-de-coapsa-la-aparat": "Machine hip adductions",
+      "adductii-la-cablu": "Cable hip adduction",
+      "adductori-masina": "Seated hip adduction machine",
+      "alergare": "Running",
+      "arnold-press": "Arnold press",
+      "arnold-press-gantere": "Dumbbell Arnold press",
+      "arnold_press_dumbbell": "Dumbbell Arnold press",
+      "assault-bike": "Assault bike",
+      "assisted_pullup_machine": "Assisted pull-up machine",
+      "back_extension": "Back extensions",
+      "back_squat_barbell": "Barbell back squat",
+      "band-pull-apart": "Band pull-aparts",
+      "barbell_shrug": "Barbell shrugs",
+      "battle-ropes": "Battle ropes",
+      "battle-ropes-alternativ": "Alternating battle ropes",
+      "battle-ropes-v3": "Battle ropes",
+      "bear-crawl": "Bear crawl",
+      "bear-crawl-v3": "Bear crawl",
+      "bench_dip": "Bench triceps dips",
+      "bench_press_barbell": "Barbell bench press",
+      "bent_over_row_barbell": "Barbell bent-over row",
+      "bicep_curl_barbell": "Straight-bar biceps curl",
+      "bicep_curl_dumbbell": "Standing dumbbell biceps curl",
+      "bicicleta-eliptica": "Elliptical trainer",
+      "bicycle-crunch": "Bicycle crunches",
+      "bicycle-crunch-v3": "Bicycle crunches",
+      "bicycle_crunch": "Bicycle crunches",
+      "bird-dog": "Bird dog",
+      "bird_dog": "Bird Dog back & core extension",
+      "bodyweight_calf_raise": "Bodyweight step calf raises",
+      "bodyweight_squat": "Bodyweight squats",
+      "box-jump": "Box jumps",
+      "bulgarian_split_squat_dumbbell": "Dumbbell Bulgarian split squat",
+      "burpees": "Burpees",
+      "burpees-greutate": "Dumbbell burpees",
+      "burpees-v3": "Burpees",
+      "cable-crunch": "Kneeling cable crunch",
+      "cable-woodchop": "Cable woodchop",
+      "cable_crunch": "Kneeling rope cable crunch",
+      "cable_curl": "Low cable biceps curl",
+      "cable_kickback": "Cable glute kickback",
+      "cable_lateral_raise": "Single-arm cable lateral raise",
+      "cable_pull_through": "Cable pull-through",
+      "cable_woodchop": "Diagonal cable woodchop for obliques",
+      "calf-raise-sezand": "Seated calf raises",
+      "calf_raise_machine": "Seated calf raise machine",
+      "captain_chair_leg_raise": "Captain’s chair leg raises",
+      "cat-cow": "Cat-cow spine mobility",
+      "cat-cow-v3": "Cat-cow stretch",
+      "chest-press-gantere": "Flat dumbbell chest press",
+      "chest-press-masina": "Machine chest press",
+      "chest_dip": "Chest dips",
+      "chest_fly_cable": "High cable chest flyes",
+      "chest_fly_dumbbell": "Flat dumbbell chest flyes",
+      "chest_press_machine": "Machine chest press",
+      "chest_supported_dumbbell_row": "Chest-supported dumbbell row",
+      "chinup": "Chin-ups",
+      "ciclism": "Cycling",
+      "clamshell-cu-banda": "Banded clamshells",
+      "clean-and-press": "Clean and press",
+      "clean-and-press-cu-bara": "Barbell clean and press",
+      "clean-gantera": "Dumbbell clean",
+      "close_grip_bench_press": "Close-grip barbell bench press",
+      "close_grip_lat_pulldown": "Close-grip V-bar lat pulldown",
+      "concentration_curl_dumbbell": "Dumbbell concentration curl",
+      "concetration-curl-avansat": "Paused concentration curl (3s)",
+      "copenhagen-plank": "Copenhagen plank",
+      "cossack-squat": "Cossack squat",
+      "couch-stretch": "Couch stretch (quad & hip flexor)",
+      "crossover-cablu": "Cable crossover",
+      "crunch": "Crunches",
+      "crunch-la-cablu-in-genunchi": "Kneeling cable crunch",
+      "dead-bug": "Dead bug",
+      "dead-bug-avansat": "Weighted dead bug",
+      "dead-bug-v3": "Dead bug",
+      "dead_bug": "Dead Bug core coordination",
+      "dead_hang": "Bar dead hang",
+      "deadlift": "Conventional deadlift",
+      "deadlift_barbell": "Conventional barbell deadlift",
+      "decline_bench_barbell": "Decline barbell bench press",
+      "decline_bench_dumbbell": "Decline dumbbell press",
+      "decline_pushup": "Decline push-ups",
+      "deep-squat-hold": "Deep squat hold",
+      "deschidere-de-sold-in-fandare-hip-flexor-stretch": "Kneeling hip flexor stretch",
+      "diamond_pushup": "Diamond push-ups",
+      "dips-banca-greutate": "Weighted bench dips",
+      "dips-piept": "Chest parallel-bar dips",
+      "dips-triceps-banca": "Bench triceps dips",
+      "donkey-calf-raise": "Donkey calf raises",
+      "dragon-flag": "Dragon flag",
+      "dumbbell_calf_raise": "Standing dumbbell calf raises",
+      "dumbbell_pullover": "Dumbbell bench pullover",
+      "dumbbell_row": "Single-arm dumbbell bench row",
+      "dumbbell_shoulder_press": "Seated dumbbell shoulder press",
+      "dumbbell_shrug": "Dumbbell shrugs",
+      "eliptic": "Elliptical trainer",
+      "extensii-cvadriceps": "Leg extension",
+      "extensii-de-coapsa-la-aparat": "Machine leg extensions",
+      "extensii-de-incheietura-cu-bara": "Barbell reverse wrist curls",
+      "extensii-deasupra-capului-la-cablu": "Overhead cable triceps extensions",
+      "extensii-franceze-cu-bara-ez": "EZ-bar French press",
+      "extensii-jm-press": "JM press",
+      "extensii-la-cablu-cu-frenghie": "Cable rope triceps pushdowns",
+      "extensii-lombare-la-banca-romana": "Roman chair back extensions",
+      "extensii-pumni-bara": "Reverse barbell wrist curls",
+      "extensii-triceps-cablu": "Cable triceps pushdown",
+      "extensii-triceps-deasupra": "Overhead triceps extension",
+      "ez_bar_curl": "EZ-bar biceps curl",
+      "face-pull": "Face pull",
+      "face-pull-cu-banda-elastica": "Resistance band face pull",
+      "face-pull-la-cablu": "Cable face pull",
+      "face_pull_cable": "Rope cable face pull",
+      "fandari": "Lunges",
+      "fandari-inverse-cu-bara": "Barbell reverse lunges",
+      "fandari-laterale": "Side lunges",
+      "fandari-laterale-greutate": "Dumbbell lateral lunges",
+      "fandari-mergand-cu-gantere": "Dumbbell walking lunges",
+      "fandari-mers": "Walking lunges",
+      "farmer-carry-mers-cu-greutati": "Farmer’s carry",
+      "farmer-walk": "Farmer’s walk",
+      "farmers_walk_dumbbell": "Dumbbell farmer’s walk",
+      "flat_bench_dumbbell": "Flat dumbbell bench press",
+      "flexii-biceps-bara": "Barbell biceps curl",
+      "flexii-biceps-gantere": "Dumbbell biceps curl",
+      "flexii-biceps-priza-inversa": "Reverse-grip barbell curls",
+      "flexii-cablu": "Cable biceps curl",
+      "flexii-ciocan": "Hammer curls",
+      "flexii-ciocan-gantera": "Dumbbell hammer curls",
+      "flexii-concentrate": "Concentration curl",
+      "flexii-concentrate-cu-gantera": "Dumbbell concentration curls",
+      "flexii-cu-bara-ez": "EZ-bar curls",
+      "flexii-de-coapsa-culcat-la-aparat": "Lying leg curls",
+      "flexii-de-coapsa-sezand-la-aparat": "Seated leg curls",
+      "flexii-de-incheietura-cu-bara": "Barbell wrist curls",
+      "flexii-de-incheietura-cu-gantera-pe-banca": "Bench dumbbell wrist curls",
+      "flexii-femurali": "Leg curl",
+      "flexii-hammer-cu-gantere": "Dumbbell hammer curls",
+      "flexii-incline-cu-gantere": "Incline dumbbell curls",
+      "flexii-inverse-cu-bara-reverse-curl": "Barbell reverse curl",
+      "flexii-la-banca-scott-preacher-curl": "Preacher curls",
+      "flexii-la-cablu-de-jos": "Low cable biceps curls",
+      "flexii-pumni-bara": "Barbell wrist curls",
+      "flexii-spider": "Spider curls",
+      "flexii-spider-v3": "Spider curls",
+      "flotari": "Push-ups",
+      "flotari-arceuate-archer-push-up": "Archer push-ups",
+      "flotari-cu-banda-elastica": "Banded push-ups",
+      "flotari-cu-picioarele-ridicate": "Feet-elevated push-ups",
+      "flotari-cu-priza-larga": "Wide-grip push-ups",
+      "flotari-decline": "Decline push-ups",
+      "flotari-decline-greutate": "Weighted decline push-ups",
+      "flotari-diamant": "Diamond push-ups",
+      "flotari-diamant-v3": "Diamond push-ups",
+      "flotari-inclinate": "Incline push-ups",
+      "fluturari-gantere": "Dumbbell chest flyes",
+      "fluturari-inverse-cu-gantere-aplecat": "Bent-over dumbbell reverse fly",
+      "fluturari-inverse-la-aparat-reverse-pec-deck": "Machine reverse pec deck",
+      "fluturari-inverse-la-cablu-incrucisat": "Cross-cable rear delt fly",
+      "fluturari-la-cablu-de-jos-low-to-high": "Low-to-high cable flyes",
+      "fluturari-la-cablu-de-sus-high-to-low": "High-to-low cable flyes",
+      "fluturari-la-pec-deck": "Pec deck chest flyes",
+      "fluturari-pec-deck-invers": "Reverse pec deck",
+      "fluturari-spate": "Rear delt reverse flyes",
+      "foam-rolling": "Foam rolling",
+      "foam-rolling-cvadriceps": "Quadriceps foam rolling",
+      "french-press": "French press (overhead extension)",
+      "french-press-gantere-un-brat": "Single-arm dumbbell French press",
+      "front_raise_barbell": "Barbell front raises",
+      "front_raise_cable": "Cable front raises",
+      "front_raise_dumbbell": "Dumbbell front raises",
+      "front_squat_barbell": "Barbell front squat",
+      "genuflexiuni-bara": "Barbell back squat",
+      "genuflexiuni-bulgare-cu-gantere": "Dumbbell Bulgarian split squats",
+      "genuflexiuni-bulgaresti": "Bulgarian split squat",
+      "genuflexiuni-cu-goblet": "Goblet squats",
+      "genuflexiuni-cu-saritura": "Jump squats",
+      "genuflexiuni-fata": "Barbell front squat",
+      "genuflexiuni-frontale-cu-bara": "Barbell front squats",
+      "genuflexiuni-hack-squat": "Hack squat",
+      "genuflexiuni-la-perete-wall-sit": "Wall sit",
+      "genuflexiuni-pistol-assistate": "Assisted pistol squats",
+      "genuflexiuni-sissy": "Sissy squats",
+      "genuflexiuni-split-bulgaresti-greutate": "Dumbbell Bulgarian split squats",
+      "genuflexiuni-sumo": "Sumo squat",
+      "genuflexiuni-sumo-cu-gantera": "Dumbbell sumo squat",
+      "glute-bridge-pe-un-picior": "Single-leg glute bridge",
+      "glute_bridge_bodyweight": "Bodyweight glute bridge",
+      "goblet_squat_dumbbell": "Goblet squat",
+      "good-morning-cu-bara": "Barbell good morning",
+      "good_morning_barbell": "Barbell good morning",
+      "hack-squat": "Hack squat machine",
+      "hack_squat_machine": "Hack squat machine",
+      "hammer_curl_dumbbell": "Dumbbell hammer curls",
+      "handstand-push-up-la-perete": "Wall handstand push-ups",
+      "handstand_pushup": "Handstand push-ups",
+      "hanging-leg-raise": "Hanging straight-leg raises",
+      "hanging_knee_raise": "Hanging knee raises",
+      "hanging_leg_raise": "Hanging bar leg raises",
+      "heel-taps-laterale": "Alternating heel taps",
+      "high-knees": "High knees",
+      "hip-thrust": "Barbell hip thrust",
+      "hip-thrust-cu-bara": "Barbell hip thrust",
+      "hip_abduction_machine": "Seated hip abduction machine",
+      "hip_adduction_machine": "Seated hip adduction machine",
+      "hip_thrust_barbell": "Barbell hip thrust",
+      "hip_thrust_machine": "Machine hip thrust",
+      "hiperextensii": "Back hyperextensions",
+      "hollow-body-hold": "Hollow body hold",
+      "hollow_hold": "Hollow hold",
+      "impins-arnold": "Arnold press",
+      "impins-banca-plat": "Flat barbell bench press",
+      "impins-banda-elastica": "Resistance band chest press",
+      "impins-cu-gantere-sezand": "Seated dumbbell shoulder press",
+      "impins-declinat": "Decline barbell bench press",
+      "impins-in-priza-strimta-la-bara": "Close-grip barbell bench press",
+      "impins-inclinat-gantere": "Incline dumbbell press",
+      "impins-inclinat-masina": "Incline machine chest press",
+      "impins-la-aparat-smith-inclinat": "Incline Smith machine press",
+      "impins-la-piept-cu-gantere-declinat": "Decline dumbbell chest press",
+      "impins-la-piept-cu-gantere-inclinat": "Incline dumbbell chest press",
+      "impins-landmine-cu-o-mana": "Single-arm landmine press",
+      "impins-militar-cu-bara-in-stand": "Standing barbell military press",
+      "impins-umeri-bara": "Barbell overhead press (OHP)",
+      "impins-umeri-gantere": "Dumbbell shoulder press",
+      "inclinari-laterale-cu-gantera": "Dumbbell side bends",
+      "incline_bench_barbell": "Incline barbell bench press",
+      "incline_bench_dumbbell": "Incline dumbbell press",
+      "incline_chest_fly_dumbbell": "Incline dumbbell chest flyes",
+      "incline_dumbbell_curl": "Incline dumbbell curls",
+      "incline_pushup": "Incline push-ups",
+      "indreptari-cu-picioare-drepte-la-bara": "Stiff-leg barbell deadlift",
+      "indreptari-romanesti": "Romanian deadlift (RDL)",
+      "indreptari-romanesti-cu-gantere": "Dumbbell Romanian deadlift",
+      "inverted-row-greutate": "Weighted inverted rows",
+      "inverted_row_bodyweight": "Bodyweight inverted row",
+      "jefferson-curl": "Jefferson curl",
+      "jump_squat": "Jump squats",
+      "jumping-jacks": "Jumping jacks",
+      "kettlebell-snatch": "Kettlebell snatch",
+      "kettlebell-swing": "Kettlebell swing",
+      "kettlebell-swing-v3": "Kettlebell swing",
+      "kickback-cu-gantera": "Dumbbell triceps kickback",
+      "kickback-de-fesier-la-cablu": "Cable glute kickback",
+      "kickback-triceps": "Triceps kickback",
+      "kickback_dumbbell": "Dumbbell triceps kickbacks",
+      "kroc-rows": "Kroc rows (heavy dumbbell row)",
+      "lat-pulldown": "Lat pulldown",
+      "lat_pulldown_cable": "Wide-grip cable lat pulldown",
+      "lateral_raise_dumbbell": "Standing dumbbell lateral raises",
+      "leg-curl-sezand": "Seated leg curl",
+      "leg_curl_machine": "Lying leg curl machine",
+      "leg_extension_machine": "Leg extension machine",
+      "leg_press_calf_raise": "Leg press calf raises",
+      "leg_press_machine": "45-degree leg press",
+      "low_cable_crossover": "Low cable crossover",
+      "mers-lateral-cu-banda-lateral-band-walk": "Lateral resistance band walk",
+      "mers-rapid": "Brisk walking",
+      "mid_cable_crossover": "Mid cable crossover",
+      "military-press": "Standing barbell military press",
+      "monster-walk-cu-banda": "Banded monster walks",
+      "mountain-climbers": "Mountain climbers",
+      "mountain-climbers-v3": "Mountain climbers",
+      "mountain_climber": "Mountain climbers",
+      "neutral_grip_pullup": "Neutral-grip pull-ups",
+      "nordic-hamstring-curl": "Nordic hamstring curls",
+      "nordic_hamstring_curl": "Nordic hamstring curl (floor/machine)",
+      "overhead_press_barbell": "Barbell overhead press",
+      "overhead_tricep_cable": "Overhead cable triceps extension",
+      "overhead_tricep_dumbbell": "Overhead dumbbell triceps extension",
+      "pallof-press": "Cable Pallof press",
+      "pallof-press-la-cablu": "Cable Pallof press",
+      "paloane-la-banca-bench-dip": "Bench dips",
+      "paloane-la-paralele-aplecat-chest-dip": "Forward-lean chest dips",
+      "pancake-stretch": "Pancake stretch",
+      "pasire-pe-cutie-step-up": "Box step-ups",
+      "pec-deck": "Pec deck machine flyes",
+      "pec_deck_machine": "Pec deck fly machine",
+      "pendlay_row_barbell": "Barbell Pendlay row",
+      "pigeon-pose": "Pigeon pose (glute stretch)",
+      "pike-push-up": "Pike push-ups",
+      "pike_pushup": "Pike push-ups",
+      "pistol_squat": "Pistol squats",
+      "plank": "Plank",
+      "plank-frontal": "Front plank",
+      "plank-lateral": "Side plank",
+      "plank-lateral-cu-ridicare-de-bazin": "Side plank hip dips",
+      "plank-lateral-v3": "Side plank",
+      "plate-pinch-prindere-de-disc": "Plate pinch grip",
+      "pod-fesieri-un-picior": "Single-leg glute bridge",
+      "preacher_curl_barbell": "EZ-bar preacher curls",
+      "preacher_curl_machine": "Machine preacher curl",
+      "presa-de-picioare": "Leg press",
+      "presa-picioare": "Leg press",
+      "presa-umeri-cu-bara-din-spate": "Behind-the-neck barbell press",
+      "presa-umeri-cu-gantere-asimetric": "Alternating dumbbell shoulder press",
+      "priza-placutelor": "Plate pinch hold",
+      "prone-snow-angel": "Prone snow angels",
+      "pulldown-priza-ingusta": "Close-grip lat pulldown",
+      "pullover-bara-dreapta": "Straight-arm cable pulldown",
+      "pullover-cu-gantera": "Dumbbell pullover",
+      "pullover-gantera": "Dumbbell pullover",
+      "pullup": "Pull-ups",
+      "pullups-greutate": "Weighted pull-ups",
+      "pullups-greutate-gantera": "Weighted pull-ups (dumbbell)",
+      "push_press_barbell": "Barbell push press",
+      "pushup": "Push-ups",
+      "ramat-bara": "Barbell bent-over row",
+      "ramat-bara-inclinat": "Pendlay barbell rows",
+      "ramat-cablu-jos": "Seated cable row",
+      "ramat-cablu-un-brat": "Single-arm cable row",
+      "ramat-cu-banda-elastica-sezand": "Seated band row",
+      "ramat-cu-gantera-pe-banca": "Bench-supported dumbbell row",
+      "ramat-cu-priza-larga-la-bara-rear-delt-row": "Wide-grip barbell rear delt row",
+      "ramat-gantera-un-brat": "One-arm dumbbell row",
+      "ramat-la-aparat-cu-suport-pentru-piept": "Chest-supported machine row",
+      "ramat-la-cablu-sezand-cu-priza-larga": "Wide-grip seated cable row",
+      "ramat-masina": "Machine row",
+      "ramat-meadows": "Meadows row",
+      "ramat-pendlay": "Pendlay row",
+      "ramat-t-bar": "T-bar row",
+      "ramat-t-bar-v3": "T-bar row",
+      "ramat-vertical-la-bara-upright-row": "Barbell upright row",
+      "rear_delt_fly_dumbbell": "Dumbbell rear delt flyes",
+      "retractii-scapulare-la-bara-fixa": "Scapular pull-ups",
+      "reverse-hyperextension": "Reverse hyperextension",
+      "reverse-pec-deck": "Reverse pec deck flyes",
+      "reverse_grip_lat_pulldown": "Reverse-grip lat pulldown",
+      "reverse_lunge_barbell": "Barbell reverse lunges",
+      "reverse_pec_deck_machine": "Reverse pec deck machine",
+      "reverse_wrist_curl_barbell": "Barbell reverse wrist curls",
+      "ridicari-de-picioare-la-bara-fixa": "Hanging leg raises",
+      "ridicari-de-tibial-tibialis-raise": "Tibialis raises",
+      "ridicari-de-umeri-cu-bara-shrug": "Barbell shrugs",
+      "ridicari-de-umeri-cu-gantere": "Dumbbell shrugs",
+      "ridicari-frontale": "Front raises",
+      "ridicari-frontale-bara": "Barbell front raises",
+      "ridicari-frontale-cu-disc": "Plate front raises",
+      "ridicari-frontale-cu-gantere-alternativ": "Alternating dumbbell front raises",
+      "ridicari-in-t-la-banca-inclinata": "Incline bench T-raises",
+      "ridicari-in-w-la-banca-inclinata": "Incline bench W-raises",
+      "ridicari-in-y-la-banca-inclinata": "Incline bench Y-raises",
+      "ridicari-laterale": "Dumbbell lateral raises",
+      "ridicari-laterale-cablu": "Cable lateral raises",
+      "ridicari-laterale-cablu-un-brat": "Single-arm cable lateral raise",
+      "ridicari-laterale-cu-gantere": "Dumbbell lateral raises",
+      "ridicari-laterale-de-picior-culcat": "Side-lying leg raises",
+      "ridicari-laterale-inclinat": "Bent-over rear delt raises",
+      "ridicari-laterale-la-aparat": "Machine lateral raises",
+      "ridicari-laterale-la-cablu": "Cable lateral raises",
+      "ridicari-pe-varfuri-in-stand-cu-bara": "Standing barbell calf raises",
+      "ridicari-pe-varfuri-la-aparat-sezand": "Seated machine calf raises",
+      "ridicari-pe-varfuri-la-presa-de-picioare": "Leg press calf raises",
+      "ridicari-pe-varfuri-pe-un-picior": "Single-leg calf raises",
+      "ridicari-picioare-atarnat": "Hanging leg raises",
+      "ridicari-varfuri": "Standing calf raises",
+      "ridicari-varfuri-pe-un-picior": "Single-leg calf raises",
+      "romanian_deadlift_barbell": "Barbell Romanian deadlift",
+      "romanian_deadlift_dumbbell": "Dumbbell Romanian deadlift",
+      "rope_hammer_curl_cable": "Cable rope hammer curl",
+      "rope_tricep_pushdown": "Rope cable triceps pushdown",
+      "rotatii-de-umeri-cu-bastonul": "Shoulder dislocates with stick",
+      "rotatii-solduri": "Hip circles",
+      "rotiri-rusesti-cu-minge-medicinala": "Medicine ball Russian twists",
+      "rulare-de-prosop-cu-greutate": "Weighted towel wrist roller",
+      "rulou-grip-bara": "Barbell finger rolls",
+      "russian-twist": "Russian twist",
+      "russian_twist": "Weighted Russian twists (dumbbell/plate)",
+      "sandbag-carry": "Sandbag carry",
+      "sarituri-coarda": "Jump rope",
+      "sarituri-cu-coarda": "Jump rope",
+      "sarituri-cutie": "Box jumps",
+      "sarituri-pe-varfuri-pogo-hops": "Pogo hops",
+      "scorpion-stretch": "Scorpion stretch",
+      "seated_lateral_raise_dumbbell": "Seated dumbbell lateral raises",
+      "seated_leg_curl_machine": "Seated leg curl machine",
+      "seated_row_cable": "Seated cable row",
+      "seated_row_machine": "Iso-lateral seated row machine",
+      "shoulder_press_machine": "Machine shoulder press",
+      "shrugs": "Shoulder shrugs",
+      "side_plank": "Side plank",
+      "skater-jumps": "Skater jumps",
+      "skullcrusher_barbell": "EZ-bar skullcrushers",
+      "skullcrusher_dumbbell": "Dumbbell skullcrushers",
+      "skullcrushers": "Skullcrushers (lying triceps extension)",
+      "sled-push": "Sled push",
+      "spider_curl_dumbbell": "Dumbbell spider curls",
+      "sprint-intervale": "HIIT interval sprints",
+      "sprint-pe-loc-cu-genunchii-sus": "High knees sprint",
+      "stair-climber": "Stair climber",
+      "standing_calf_raise_machine": "Standing calf raise machine",
+      "step-up": "Bench step-ups",
+      "step_up_dumbbell": "Dumbbell step-ups",
+      "straight-arm-pulldown": "Straight-arm pulldown",
+      "straight_arm_pulldown": "Straight-arm cable pulldown",
+      "strangere-de-gripper": "Hand gripper squeeze",
+      "stretching-de-ischiogambieri-sezand": "Seated hamstring stretch",
+      "stretching-de-pectorali-la-usa": "Doorway chest stretch",
+      "stretching-femurali": "Hamstring stretch",
+      "stretching-piept": "Wall chest stretch",
+      "suitcase-carry": "Suitcase carry",
+      "sumo_deadlift_barbell": "Barbell sumo deadlift",
+      "superman": "Superman hold",
+      "superman_hold": "Superman hold",
+      "suspendare-pasiva-in-bara-dead-hang": "Dead hang",
+      "svend-press": "Svend press",
+      "t_bar_row": "T-bar row",
+      "thoracic-extension-pe-rola": "Foam roller thoracic extension",
+      "thread-the-needle": "Thread the needle (thoracic rotation)",
+      "thruster": "Thruster",
+      "thruster-cu-gantere": "Dumbbell thrusters",
+      "thruster-greutate": "Dumbbell thrusters",
+      "toes-to-bar": "Toes to bar",
+      "tractiuni": "Pull-ups",
+      "tractiuni-cu-priza-inversa": "Underhand chin-ups",
+      "tractiuni-cu-priza-larga": "Wide-grip pull-ups",
+      "tractiuni-neutre-la-maner-paralel": "Neutral-grip pull-ups",
+      "tractiuni-priza-inversa": "Chin-ups (underhand grip)",
+      "tras-la-helcometru-cu-priza-inversa": "Reverse-grip lat pulldown",
+      "tricep_dip": "Triceps parallel-bar dips",
+      "tricep_pushdown_cable": "Cable triceps pushdown",
+      "triceps-pushdown-funie": "Rope triceps pushdown",
+      "triceps-pushdown-funie-extensie": "Cable rope triceps extension",
+      "turkish-get-up": "Turkish get-up",
+      "turkish-get-up-v3": "Turkish get-up",
+      "upright_row_barbell": "Barbell upright row",
+      "upright_row_cable": "Cable upright row",
+      "urcat-scari": "Stair climber",
+      "v-up": "V-ups",
+      "v-ups": "V-ups",
+      "v_ups": "V-Ups",
+      "vaslit": "Rowing machine",
+      "vaslit-la-ergometru": "Ergometer rowing",
+      "walking_lunge_dumbbell": "Dumbbell walking lunges",
+      "wall-balls": "Wall balls",
+      "wall_sit": "Wall sit",
+      "weighted_chest_dip": "Weighted chest dips",
+      "wide_pushup": "Wide push-ups",
+      "windshield-wipers": "Windshield wipers",
+      "woodchopper-de-jos-in-sus-la-cablu": "Low-to-high cable woodchopper",
+      "woodchopper-de-sus-in-jos-la-cablu": "High-to-low cable woodchopper",
+      "world-s-greatest-stretch": "World’s greatest stretch",
+      "worlds-greatest-stretch": "World’s greatest stretch",
+      "wrist_curl_barbell": "Barbell wrist curls"
+    },
+    "exerciseDetails": {
+      "ab-wheel-rollout-genunchi": {
+        "description": "From your knees, roll the ab wheel forward until nearly parallel to the floor, then pull back.",
+        "instructions": {
+          "0": "Kneel on a mat gripping the wheel handles firmly",
+          "1": "Roll forward slowly with a braced hollow core",
+          "2": "Stop before your lower back dips into an arch",
+          "3": "Pull back using your abs rather than sitting hips back"
+        }
+      },
+      "alergare": {
+        "description": "Classic cardio for endurance and calorie burn."
+      },
+      "arnold-press-gantere": {
+        "description": "Rotational shoulder press starting palms-in and rotating outward as you press overhead.",
+        "instructions": {
+          "0": "Sit on a bench with dumbbells at upper chest, palms facing you",
+          "1": "Press upward while rotating your palms forward",
+          "2": "Finish overhead with palms facing forward",
+          "3": "Reverse the rotation smoothly on the way down"
+        }
+      },
+      "battle-ropes-alternativ": {
+        "description": "Athletic quarter-squat stance generating rapid alternating waves along battle ropes.",
+        "instructions": {
+          "0": "Grip rope ends in an athletic half-squat stance",
+          "1": "Whip arms rapidly up and down in alternating waves",
+          "2": "Keep core braced and back neutral",
+          "3": "Keep crisp cadence for 30-45 seconds"
+        }
+      },
+      "burpees": {
+        "mistakes": {
+          "0": "Letting form collapse when fatigued"
+        }
+      },
+      "burpees-greutate": {
+        "description": "Classic burpee holding light dumbbells finished with an overhead press on the stand-up.",
+        "instructions": {
+          "0": "Hold a light pair of dumbbells firmly",
+          "1": "Squat down placing the dumbbells squarely on the floor",
+          "2": "Jump back into plank and perform one push-up",
+          "3": "Hop forward, stand up and press weights overhead"
+        }
+      },
+      "cable-woodchop": {
+        "description": "Grab a high cable handle and rotate your torso diagonally down across your body.",
+        "instructions": {
+          "0": "Set cable pulley high and grip the handle with both hands",
+          "1": "Rotate torso and arms diagonally toward the opposite knee",
+          "2": "Control the return phase",
+          "3": "Repeat evenly on both sides"
+        }
+      },
+      "chest-press-gantere": {
+        "description": "Barbell alternative offering greater shoulder freedom of movement."
+      },
+      "clean-gantera": {
+        "description": "Explosive dumbbell clean driving weights from floor to shoulder rack position.",
+        "instructions": {
+          "0": "Set dumbbells on the floor beside feet",
+          "1": "Grip dumbbells firmly with a flat back",
+          "2": "Extend hips explosively and catch weights at shoulders",
+          "3": "Lower with control and reset"
+        }
+      },
+      "concetration-curl-avansat": {
+        "description": "Concentration curl with a 3-second isometric peak squeeze and 3-second eccentric.",
+        "instructions": {
+          "0": "Sit upright bracing back of upper arm against inner thigh",
+          "1": "Curl dumbbell upward squeezing biceps hard",
+          "2": "Hold peak contraction for 3 seconds",
+          "3": "Lower smoothly over a slow 3-second count"
+        }
+      },
+      "couch-stretch": {
+        "description": "Kneel facing away from a bench or couch with back foot propped up, opening hips and hip flexors deeply.",
+        "instructions": {
+          "0": "Kneel with your shin backed against a bench or couch",
+          "1": "Place the top of your rear foot up onto the seat/cushion",
+          "2": "Tuck glutes and press hip forward until you feel a deep quad stretch",
+          "3": "Hold 30-60 seconds per leg"
+        }
+      },
+      "dead-bug-avansat": {
+        "description": "Supine with arms and knees raised holding a dumbbell. Extend opposite arm and leg alternately.",
+        "instructions": {
+          "0": "Lie down holding dumbbell over chest, knees bent at 90°",
+          "1": "Extend right arm and left leg smoothly together",
+          "2": "Return under control to center",
+          "3": "Alternate sides cleanly"
+        }
+      },
+      "deadlift": {
+        "description": "Full posterior-chain compound strength lift.",
+        "instructions": {
+          "0": "Keep the barbell close against your shins.",
+          "1": "Maintain a neutral spine with chest proud.",
+          "2": "Drive through your legs and extend your hips."
+        },
+        "mistakes": {
+          "0": "Rounding the lower back",
+          "1": "Pulling with your back instead of driving with legs"
+        }
+      },
+      "dips-banca-greutate": {
+        "description": "Weighted bench dips between two benches with a plate placed securely across your thighs.",
+        "instructions": {
+          "0": "Hands behind you on one bench, heels propped on a parallel bench",
+          "1": "Place a weight plate across your upper thighs",
+          "2": "Lower hips down until elbows reach 90°",
+          "3": "Press strongly back up to top"
+        }
+      },
+      "dragon-flag": {
+        "description": "ADVANCED: Lie on a bench holding behind your head and raise your rigid body supported only on your shoulders.",
+        "instructions": {
+          "0": "Lie back on a bench and firmly grip the edge behind your head",
+          "1": "Raise legs and hips while locking your entire body straight",
+          "2": "Lower slowly without touching the bench with your hips",
+          "3": "Maintain maximal core bracing throughout"
+        }
+      },
+      "extensii-pumni-bara": {
+        "description": "Forearms supported on thighs, palms down. Extend the wrists smoothly.",
+        "instructions": {
+          "0": "Rest forearm on thigh with palm facing down",
+          "1": "Lower the dumbbell with control",
+          "2": "Extend the wrist upward without lifting the arm"
+        }
+      },
+      "fandari": {
+        "instructions": {
+          "0": "Take a long controlled step forward.",
+          "1": "Lower until your back knee nearly touches the floor.",
+          "2": "Push through the front foot back to start."
+        }
+      },
+      "fandari-laterale-greutate": {
+        "description": "Hold a dumbbell goblet-style at chest and step wide laterally while keeping trailing leg straight.",
+        "instructions": {
+          "0": "Stand tall holding dumbbell close at chest",
+          "1": "Step wide out to the right side",
+          "2": "Sit hips back bending the right knee",
+          "3": "Drive back off your right heel to center"
+        }
+      },
+      "flexii-biceps-bara": {
+        "mistakes": {
+          "0": "Swinging your torso"
+        }
+      },
+      "flexii-biceps-priza-inversa": {
+        "description": "Pronated (overhand) barbell curls emphasizing the brachialis and forearms.",
+        "instructions": {
+          "0": "Grip barbell palms down at shoulder width",
+          "1": "Keep elbows pinned at your sides",
+          "2": "Curl bar up toward upper chest",
+          "3": "Lower smoothly under control"
+        }
+      },
+      "flexii-ciocan-gantera": {
+        "description": "Hold dumbbells with neutral palms facing in (hammer grip). Curl with locked wrists.",
+        "instructions": {
+          "0": "Stand upright with dumbbells at your sides, palms facing inward",
+          "1": "Keep your elbows pinned close to your torso",
+          "2": "Curl up toward your shoulder without rotating the wrist",
+          "3": "Lower slowly with control"
+        }
+      },
+      "flexii-pumni-bara": {
+        "description": "Sit on a bench with forearms resting on thighs, palms up. Curl solely at the wrists without moving your arms.",
+        "instructions": {
+          "0": "Sit on a bench holding a dumbbell",
+          "1": "Rest your forearm on your thigh, palm facing up",
+          "2": "Lower the dumbbell smoothly, extending the wrist",
+          "3": "Curl upward using only the wrist, squeezing the forearm",
+          "4": "Control the entire range of motion"
+        },
+        "mistakes": {
+          "0": "Moving the whole arm instead of just the wrist",
+          "1": "Weight too heavy leading to sloppy form"
+        }
+      },
+      "flotari": {
+        "description": "The bodyweight classic that works anywhere.",
+        "instructions": {
+          "0": "Keep a straight body line with hands under your shoulders.",
+          "1": "Lower until your chest nearly touches the floor.",
+          "2": "Push back up without letting your hips sag."
+        }
+      },
+      "flotari-decline-greutate": {
+        "description": "Feet elevated on a bench with a plate on your upper back for weighted upper-chest push-ups.",
+        "instructions": {
+          "0": "Elevate your feet securely on a bench",
+          "1": "Position a plate on upper back (use partner if needed)",
+          "2": "Lower your chest near the floor",
+          "3": "Push powerfully back to top"
+        }
+      },
+      "fluturari-gantere": {
+        "mistakes": {
+          "0": "Bending elbows too much (turning it into a press)"
+        }
+      },
+      "fluturari-pec-deck-invers": {
+        "description": "Reverse pec-deck flyes facing the pad to isolate rear delts and upper back.",
+        "instructions": {
+          "0": "Adjust seat so handles align with shoulder height",
+          "1": "Sit facing toward the chest pad",
+          "2": "Sweep arms backward while squeezing rear delts",
+          "3": "Return slowly to starting stretch"
+        }
+      },
+      "french-press-gantere-un-brat": {
+        "description": "Single-arm overhead dumbbell triceps extension lowering cleanly behind the head.",
+        "instructions": {
+          "0": "Hold dumbbell overhead with working arm vertical",
+          "1": "Lower dumbbell behind head keeping elbow pointed up",
+          "2": "Extend forearm back up cleanly",
+          "3": "Keep upper arm steady throughout"
+        }
+      },
+      "genuflexiuni-bara": {
+        "description": "The king of lower-body strength exercises.",
+        "instructions": {
+          "0": "Rest the bar across your traps, feet shoulder-width apart.",
+          "1": "Descend until your thighs are at least parallel to the floor.",
+          "2": "Drive back up through your heels and mid-foot."
+        },
+        "mistakes": {
+          "0": "Knees caving inward (valgus)",
+          "1": "Lifting heels off the floor"
+        }
+      },
+      "genuflexiuni-pistol-assistate": {
+        "description": "Single-leg squat using light support for balance — ideal progression toward unassisted pistol squats.",
+        "instructions": {
+          "0": "Balance on one leg while lightly holding a rack or post",
+          "1": "Lower smoothly on your standing leg",
+          "2": "Keep the opposite leg extended straight out front",
+          "3": "Drive through the heel to stand back up"
+        }
+      },
+      "genuflexiuni-split-bulgaresti-greutate": {
+        "description": "Rear-foot-elevated Bulgarian split squat holding dumbbells for intense quad & glute growth.",
+        "instructions": {
+          "0": "Rest your left foot behind you on a bench",
+          "1": "Hold a dumbbell in each hand at your sides",
+          "2": "Lower until your rear knee nearly grazes the floor",
+          "3": "Push firmly through your front heel to rise"
+        }
+      },
+      "hanging-leg-raise": {
+        "description": "Hang from a pull-up bar and raise straight legs up to 90° or higher.",
+        "instructions": {
+          "0": "Grip the bar overhand with arms straight",
+          "1": "Keep legs straight and pressed together",
+          "2": "Lift legs up to hip height or higher",
+          "3": "Lower smoothly without swinging"
+        },
+        "mistakes": {
+          "0": "Swinging with momentum",
+          "1": "Bending the knees unnecessarily"
+        }
+      },
+      "impins-banca-plat": {
+        "description": "Foundational compound exercise for building pectoral mass.",
+        "instructions": {
+          "0": "Lie on the bench with a grip slightly wider than shoulder-width.",
+          "1": "Lower the barbell with control down to your chest.",
+          "2": "Press explosively upward without snapping your elbows shut."
+        },
+        "mistakes": {
+          "0": "Lifting your glutes off the bench",
+          "1": "Lowering the bar too fast (bouncing)"
+        }
+      },
+      "impins-banda-elastica": {
+        "description": "Anchor a resistance band behind you and press forward for accommodating chest tension.",
+        "instructions": {
+          "0": "Anchor the band securely behind you at chest height",
+          "1": "Hold handles and step forward to create tension",
+          "2": "Press forward forcefully and squeeze chest",
+          "3": "Control the return phase"
+        }
+      },
+      "impins-declinat": {
+        "description": "Targets the lower chest fibers."
+      },
+      "impins-inclinat-gantere": {
+        "description": "Emphasizes the upper portion of the chest.",
+        "instructions": {
+          "0": "Set the bench to a 30-45 degree incline.",
+          "1": "Press the dumbbells up above your chest.",
+          "2": "Lower until you feel a deep stretch in your chest."
+        }
+      },
+      "impins-inclinat-masina": {
+        "description": "Incline chest press machine focusing steady tension onto the upper pectorals.",
+        "instructions": {
+          "0": "Adjust seat height for upper chest alignment",
+          "1": "Grip handles with back pressed flat against pad",
+          "2": "Press evenly forward without snapping elbows",
+          "3": "Lower slowly under tension"
+        }
+      },
+      "impins-umeri-bara": {
+        "instructions": {
+          "0": "Start with the bar at collarbone height.",
+          "1": "Press the bar straight overhead.",
+          "2": "Avoid excessively arching your lower back."
+        }
+      },
+      "indreptari-romanesti": {
+        "mistakes": {
+          "0": "Bending the knees too much",
+          "1": "Rounding the spine"
+        }
+      },
+      "inverted-row-greutate": {
+        "description": "Bodyweight inverted row beneath a waist-high bar with a weight plate across your chest.",
+        "instructions": {
+          "0": "Set bar at waist height in a rack or Smith machine",
+          "1": "Place a weight plate safely across your chest",
+          "2": "Pull chest up to touch the bar",
+          "3": "Lower slowly keeping body rigid"
+        }
+      },
+      "kettlebell-snatch": {
+        "description": "Explosive ballistic kettlebell snatch from hip hinge smoothly to overhead lockout.",
+        "instructions": {
+          "0": "Initiate from a crisp single-arm kettlebell swing",
+          "1": "Pull upward aggressively as bell rises past chest",
+          "2": "Punch straight through and lock out overhead cleanly",
+          "3": "Hike bell back down smoothly into next swing"
+        }
+      },
+      "kroc-rows": {
+        "description": "High-rep heavy single-arm dumbbell rows with controlled body English for raw back & grip power.",
+        "instructions": {
+          "0": "Brace one knee and free hand firmly on a bench",
+          "1": "Grip a heavy dumbbell with the working hand",
+          "2": "Pull explosively up toward your hip",
+          "3": "Allow slight controlled upper-torso rotation",
+          "4": "Push the set for high controlled reps"
+        }
+      },
+      "pallof-press": {
+        "description": "Hold a chest-height cable handle sideways and press straight out, resisting rotation for deep core stability.",
+        "instructions": {
+          "0": "Set pulley at chest height and stand sideways to it",
+          "1": "Hold the handle centered against your chest with both hands",
+          "2": "Press both arms straight out without twisting",
+          "3": "Hold 2-3 seconds, then return slowly"
+        }
+      },
+      "pancake-stretch": {
+        "description": "Seated straddle stretch folding forward from the hips with a flat back.",
+        "instructions": {
+          "0": "Sit upright on the floor in a wide straddle",
+          "1": "Keep your chest lifted and spine long",
+          "2": "Hinge slowly forward from your hips",
+          "3": "Hold 30-60 seconds breathing deeply"
+        }
+      },
+      "pec-deck": {
+        "description": "Excellent chest isolation using the pec-deck machine.",
+        "instructions": {
+          "0": "Keep your back flat against the pad.",
+          "1": "Bring your arms together in front while squeezing your chest."
+        }
+      },
+      "pigeon-pose": {
+        "description": "Bring one shin forward rotated outward while extending the back leg straight for deep glute/hip stretch.",
+        "instructions": {
+          "0": "From all fours bring right knee forward behind right wrist",
+          "1": "Extend your left leg straight behind you",
+          "2": "Fold torso slowly forward over your front leg",
+          "3": "Hold 30-60 seconds, then switch sides"
+        }
+      },
+      "plank": {
+        "instructions": {
+          "0": "Elbows directly under shoulders, straight body line.",
+          "1": "Brace your abs and squeeze your glutes.",
+          "2": "Do not let your hips sag toward the floor."
+        }
+      },
+      "pod-fesieri-un-picior": {
+        "description": "Supine single-leg glute bridge driving through one heel to lift hips squarely.",
+        "instructions": {
+          "0": "Lie on back, right knee bent, left leg lifted",
+          "1": "Drive through your right heel to lift hips high",
+          "2": "Squeeze glutes 1-2 seconds at top",
+          "3": "Lower smoothly under control"
+        }
+      },
+      "presa-umeri-cu-bara-din-spate": {
+        "description": "ADVANCED: Behind-the-neck overhead barbell press. Requires strong shoulder mobility.",
+        "instructions": {
+          "0": "Rest the bar lightly on your upper traps (not your neck)",
+          "1": "Take a grip wider than shoulder width",
+          "2": "Press the barbell straight overhead",
+          "3": "Lower smoothly back behind the head to upper traps",
+          "4": "Keep your spine upright throughout"
+        },
+        "mistakes": {
+          "0": "Lowering too far causing shoulder joint strain",
+          "1": "Excessive lower-back arching"
+        }
+      },
+      "presa-umeri-cu-gantere-asimetric": {
+        "description": "Press one dumbbell while holding the other locked overhead to maximize time under tension.",
+        "instructions": {
+          "0": "Sit upright on a supported bench with dumbbells at shoulder level",
+          "1": "Press the right dumbbell up and hold it overhead",
+          "2": "Lower the right while pressing the left overhead",
+          "3": "Alternate continuously under control"
+        }
+      },
+      "priza-placutelor": {
+        "description": "Pinch two smooth weight plates together and hold as long as possible for pinch grip strength.",
+        "instructions": {
+          "0": "Select two 5-10 kg plates placed smooth-sides out",
+          "1": "Pinch them firmly between thumb and fingers",
+          "2": "Keep your arm hanging straight beside your body",
+          "3": "Hold 30-60 seconds, then switch sides"
+        }
+      },
+      "pullover-bara-dreapta": {
+        "description": "Straight-arm cable lat pulldown pressing the bar in an arc to your thighs.",
+        "instructions": {
+          "0": "Hold straight bar attachment at a high cable",
+          "1": "Slight forward hip hinge with arms straight",
+          "2": "Sweep bar down to your thighs keeping elbows locked",
+          "3": "Return smoothly to overhead stretch"
+        }
+      },
+      "pullups-greutate-gantera": {
+        "description": "Strict pull-ups gripping a dumbbell between your ankles or thighs for extra overload.",
+        "instructions": {
+          "0": "Secure the dumbbell firmly between ankles or thighs",
+          "1": "Pull strictly until chin clears the bar",
+          "2": "Lower smoothly to full arm extension",
+          "3": "Keep grip steady throughout"
+        },
+        "mistakes": {
+          "0": "Swinging with momentum",
+          "1": "Straining neck forward to clear the bar"
+        }
+      },
+      "ramat-bara": {
+        "instructions": {
+          "0": "Hinge at the hips and keep your back flat.",
+          "1": "Pull the barbell toward your lower abdomen.",
+          "2": "Squeeze your shoulder blades together at the top."
+        }
+      },
+      "ramat-bara-inclinat": {
+        "description": "Pendlay-style bent row at ~90° pulling explosively from the floor to lower chest each rep.",
+        "instructions": {
+          "0": "Hinge torso roughly parallel to the floor",
+          "1": "Grip barbell wider than shoulder width",
+          "2": "Row explosively up to your lower chest/sternum",
+          "3": "Return the bar under control to the floor"
+        }
+      },
+      "ridicari-frontale-bara": {
+        "description": "Hold a barbell overhand and raise it straight in front up to shoulder height.",
+        "instructions": {
+          "0": "Stand upright with the bar resting across your thighs",
+          "1": "Lift the bar straight forward with nearly straight arms",
+          "2": "Stop at shoulder height",
+          "3": "Lower smoothly back down"
+        }
+      },
+      "ridicari-laterale": {
+        "mistakes": {
+          "0": "Using body momentum to swing weights",
+          "1": "Raising arms higher than shoulder level"
+        }
+      },
+      "ridicari-laterale-cablu-un-brat": {
+        "description": "Grab a low-pulley handle single-arm and raise out to the side under continuous cable tension.",
+        "instructions": {
+          "0": "Set the cable pulley low (or waist height)",
+          "1": "Hold the handle with your outside hand across the body",
+          "2": "Raise your arm out to shoulder height",
+          "3": "Lower slowly without dropping cable tension"
+        }
+      },
+      "ridicari-laterale-inclinat": {
+        "description": "Hinged at 45° with a flat back. Raise dumbbells out to the sides targeting rear delts.",
+        "instructions": {
+          "0": "Stand with soft knees, hinged forward about 45 degrees",
+          "1": "Hold dumbbells beneath your chest, palms facing each other",
+          "2": "Raise your arms out wide up to shoulder height",
+          "3": "Pause 1 second at the top, then lower slowly"
+        },
+        "mistakes": {
+          "0": "Rounding your lower back",
+          "1": "Using torso swing/momentum"
+        }
+      },
+      "ridicari-varfuri-pe-un-picior": {
+        "description": "Single-leg standing calf raise on a step for full stretch and maximum contraction.",
+        "instructions": {
+          "0": "Stand on one foot at the edge of a raised step",
+          "1": "Rise up onto your toes as high as possible",
+          "2": "Lower your heel slowly below the step level",
+          "3": "Pause briefly at bottom stretch"
+        }
+      },
+      "rulou-grip-bara": {
+        "description": "Hold a barbell palms up, let fingers open down to the fingertips, then curl closed.",
+        "instructions": {
+          "0": "Stand tall holding the barbell with palms facing up",
+          "1": "Slowly open your fingers letting the bar roll down",
+          "2": "Close your grip and curl the bar back using your fingers",
+          "3": "Repeat rhythmically"
+        }
+      },
+      "sandbag-carry": {
+        "description": "Bear-hug or shoulder-carry a heavy sandbag 20-30 m while keeping tall upright posture.",
+        "instructions": {
+          "0": "Lift the heavy sandbag safely off the ground",
+          "1": "Hug tightly against chest or hoist onto one shoulder",
+          "2": "Walk 20-30 meters with steady, controlled steps",
+          "3": "Keep core braced and torso tall throughout"
+        }
+      },
+      "sarituri-cutie": {
+        "description": "Explosive box jumps onto a 50-75 cm plyo box, landing softly with athletic knees.",
+        "instructions": {
+          "0": "Stand about 30 cm back, feet shoulder-width",
+          "1": "Swing arms back then jump explosively onto the box",
+          "2": "Land softly in an athletic half-squat",
+          "3": "Step down safely and reset between reps"
+        },
+        "mistakes": {
+          "0": "Landing stiff-legged without absorbing shock",
+          "1": "Choosing a box too tall to land solidly"
+        }
+      },
+      "scorpion-stretch": {
+        "description": "Lie face-down with arms in a T, lift one leg and reach across toward your opposite hand.",
+        "instructions": {
+          "0": "Lie prone with arms spread straight out to the sides",
+          "1": "Lift your right leg and bend the knee",
+          "2": "Sweep your foot across toward your left hand",
+          "3": "Hold 15-20 seconds, then alternate sides"
+        }
+      },
+      "skater-jumps": {
+        "description": "Lateral single-leg speed-skater bounds focusing on balanced, soft landings.",
+        "instructions": {
+          "0": "Load onto your right leg with knee slightly bent",
+          "1": "Bound laterally onto your left foot and stick softly",
+          "2": "Swing arms naturally across body for balance",
+          "3": "Alternate briskly side to side"
+        }
+      },
+      "thread-the-needle": {
+        "description": "From all fours, thread one arm underneath your torso to rotate and mobilize the thoracic spine.",
+        "instructions": {
+          "0": "Start on hands and knees",
+          "1": "Thread right arm beneath left arm, palm up",
+          "2": "Rotate gently resting right shoulder toward floor",
+          "3": "Hold 15-30 seconds and switch sides"
+        }
+      },
+      "thruster-greutate": {
+        "description": "Seamless dumbbell front squat transitioning powerfully into an overhead shoulder press.",
+        "instructions": {
+          "0": "Hold dumbbells racked at shoulder height",
+          "1": "Descend smoothly into a full squat",
+          "2": "Drive violently out of the squat right into an overhead press",
+          "3": "Return weights to shoulders and flow into next rep"
+        }
+      },
+      "tractiuni": {
+        "description": "The king of upper-back width exercises.",
+        "instructions": {
+          "0": "Grip the bar wider than shoulder-width.",
+          "1": "Pull yourself up until your chin clears the bar.",
+          "2": "Lower with control to a full arm extension."
+        },
+        "mistakes": {
+          "0": "Swinging or kipping the body",
+          "1": "Not lowering all the way down"
+        }
+      },
+      "triceps-pushdown-funie-extensie": {
+        "description": "High-cable rope triceps pushdown flaring ends outward at full extension for peak contraction.",
+        "instructions": {
+          "0": "Hold rope attachment on high pulley",
+          "1": "Pin elbows steadily beside torso",
+          "2": "Press down and flare rope apart at bottom",
+          "3": "Return smoothly keeping upper arms still"
+        }
+      },
+      "worlds-greatest-stretch": {
+        "description": "Step one foot beside your hand from plank and rotate torso skyward — the ultimate full-body dynamic stretch.",
+        "instructions": {
+          "0": "Start in a high plank push-up position",
+          "1": "Step your right foot outside your right hand",
+          "2": "Reach your right arm toward the ceiling following with your eyes",
+          "3": "Return and repeat on the left side"
+        }
+      }
+    }
   }
 }

@@ -1613,6 +1613,13 @@
       "start": "Training starten",
       "invalidTemplate": "Füge einen Namen und mindestens eine Übung hinzu.",
       "incompleteWorkout": "Schließe alle Sätze oder Cardio-Einträge vor dem Beenden ab."
+    },
+    "summary": {
+      "title": "Training abgeschlossen",
+      "subtitle": "Deine Einheit wurde in der lokalen Vorschau gespeichert.",
+      "setsCompleted": "{{count}} Sätze abgeschlossen",
+      "viewStrength": "Kraftkarte ansehen",
+      "done": "Zurück zu den Vorlagen"
     }
   },
   "nutrientFocus": {
@@ -1803,5 +1810,1516 @@
     "targetTab": "Ziel ({{val}} kg)",
     "saveCurrent": "Wiegeverlauf speichern",
     "saveTarget": "Neues Ziel speichern"
+  },
+  "sport": {
+    "screen": {
+      "searchPlaceholder": "Übung suchen...",
+      "searchA11y": "Übung nach Name oder Muskelgruppe suchen",
+      "clearSearchA11y": "Suche löschen",
+      "exercisesHeading": "Übungen",
+      "emptySearchTitle": "Keine Übungen gefunden",
+      "emptySearchSub": "Versuche einen anderen Begriff oder setze die Suche zurück.",
+      "emptySearchReset": "Suche zurücksetzen",
+      "emptyCategory": "In dieser Kategorie sind keine Übungen verfügbar.",
+      "restLabel": "Pause",
+      "restAdd15A11y": "Pause um 15 Sekunden verlängern",
+      "restSkip": "Überspr.",
+      "restSkipA11y": "Pause überspringen",
+      "whatYouWorked": "Was du trainiert hast",
+      "setsStat": "Sätze",
+      "exercisesStat": "Übungen",
+      "volumeStat": "kg Volumen",
+      "logSetTitle": "Satz erfassen",
+      "setWarmupTag": "Aufwärm.",
+      "warmupToggle": "Aufwärmsatz (nicht im Volumen gezählt)",
+      "addSetBtn": "Satz hinzufügen",
+      "saveWorkoutBtn": "Training speichern",
+      "openExerciseA11y": "{{name}} öffnen",
+      "closeExerciseA11y": "{{name}} schließen",
+      "deleteSetA11y": "Satz {{number}} löschen",
+      "startTimerA11y": "Timer starten",
+      "stopTimerA11y": "Timer stoppen",
+      "resetTimerA11y": "Timer zurücksetzen",
+      "start": "Start",
+      "stop": "Stopp",
+      "noWeightHint": "Körpergewichtsübung — kein Gewicht erforderlich.",
+      "defaultExerciseName": "Übung",
+      "workoutSessionTitle": "Training {{date}}",
+      "incompleteSetTitle": "Unvollständiger Satz",
+      "nothingToSaveTitle": "Nichts zu speichern",
+      "nothingToSaveMsg": "Erfasse mindestens einen Satz.",
+      "saveFailedTitle": "Training nicht gespeichert",
+      "saveFailedMsg": "Deine Einheit bleibt erhalten. Erneut versuchen.",
+      "savedTitle": "Training gespeichert",
+      "savedSummary": "{{sets}} Sätze • {{volume}} kg Volumen",
+      "saveErrorTitle": "Speicherfehler",
+      "saveErrorMsg": "Deine Einheit ist erhalten geblieben.",
+      "localSaveFailedTitle": "Lokales Speichern fehlgeschlagen",
+      "localSaveFailedMsg": "Dieser Satz geht evtl. verloren, wenn du die App schließt.",
+      "setLoggedTitle": "Satz {{number}} erfasst",
+      "categoryA11y": "Kategorie {{name}}",
+      "adjustDecA11y": "{{label}} verringern",
+      "adjustIncA11y": "{{label}} erhöhen",
+      "stepperValueA11y": "{{label}}, {{value}}",
+      "stepperValueUnitA11y": "{{label}}, {{value}} {{unit}}"
+    },
+    "categories": {
+      "piept": "Brust",
+      "spate": "Rücken",
+      "picioare": "Beine",
+      "umeri": "Schultern",
+      "brate": "Arme",
+      "abdomen": "Bauch",
+      "cardio": "Cardio",
+      "full-body": "Ganzkörper",
+      "mobilitate": "Mobilität",
+      "superior": "Oberkörper",
+      "inferior": "Unterkörper",
+      "core": "Rumpf",
+      "corp_intreg": "Ganzkörper"
+    },
+    "difficulties": {
+      "usor": "leicht",
+      "mediu": "mittel",
+      "greu": "schwer"
+    },
+    "measurement": {
+      "modes": {
+        "timed_weight": "Timer + optionales Gewicht",
+        "timed": "Timer (Sekunden)",
+        "distance_time": "Zeit (Cardio)",
+        "weight_reps": "Gewicht × Wdh.",
+        "reps_weight": "Wdh. + optionales Gewicht",
+        "reps": "Wiederholungen (Körpergewicht)",
+        "reps_assisted": "Unterstützte Wdh."
+      },
+      "units": {
+        "reps": "Wdh.",
+        "seconds": "Sekunden",
+        "kg": "kg",
+        "min": "Min",
+        "repShort": "Wdh",
+        "secShort": "s"
+      },
+      "fields": {
+        "duration": "Satzdauer",
+        "reps": "Wiederholungen",
+        "weight": "Gewicht",
+        "weightOptional": "Gewicht (optional)"
+      },
+      "setsCount": "{{count}} Sätze",
+      "setsByReps": "{{sets}}×{{reps}} {{unit}}",
+      "errors": {
+        "enterDuration": "Dauer in Sekunden eingeben (> 0).",
+        "enterWeight": "Gewicht in kg eingeben (> 0).",
+        "enterReps": "Wiederholungen eingeben (> 0).",
+        "fieldRequired": "Feld „{{field}}“ ist erforderlich.",
+        "fieldPositive": "Feld „{{field}}“ muss positiv sein.",
+        "startTimerOrDuration": "Starte den Timer oder gib die Satzdauer ein.",
+        "enterValidReps": "Gib eine gültige Wiederholungszahl ein.",
+        "enterWeightForEx": "Diese Übung erfordert ein Gewicht."
+      },
+      "setSingular": "Satz",
+      "setPlural": "Sätze",
+      "volumeKgLabel": "{{kg}} kg Volumen"
+    },
+    "ranks": {
+      "BRONZE": "Bronze",
+      "SILVER": "Silber",
+      "GOLD": "Gold",
+      "PLATINUM": "Platin",
+      "ELITE": "Elite GetFlow"
+    },
+    "quests": {
+      "title": "Tagesquests",
+      "resetIn": "Reset in {{time}}",
+      "streak": "Serie: {{days}} Tage",
+      "best": "Rekord: {{days}}",
+      "xpToday": "+{{xp}} XP heute",
+      "xpTag": "+{{xp}} XP",
+      "completed": "Erledigt",
+      "pool": {
+        "sets_10": {
+          "title": "Heute 10 Sätze erfassen",
+          "unit": "Sätze"
+        },
+        "sets_16": {
+          "title": "Starkes Volumen: 16 Sätze heute",
+          "unit": "Sätze"
+        },
+        "vol_2000": {
+          "title": "2.000 kg Volumen bewegen",
+          "unit": "kg"
+        },
+        "vol_5000": {
+          "title": "5.000 kg Volumen bewegen",
+          "unit": "kg"
+        },
+        "musc_3": {
+          "title": "3 Muskelgruppen aktivieren",
+          "unit": "Gruppen"
+        },
+        "musc_5": {
+          "title": "Ganzkörper: 5 Muskelgruppen",
+          "unit": "Gruppen"
+        },
+        "ex_4": {
+          "title": "4 verschiedene Übungen heute",
+          "unit": "Übungen"
+        },
+        "min_20": {
+          "title": "20 Minuten Aktivität",
+          "unit": "Min"
+        },
+        "min_45": {
+          "title": "45 Minuten Training",
+          "unit": "Min"
+        },
+        "reps_100": {
+          "title": "100 Wiederholungen heute",
+          "unit": "Wdh"
+        }
+      }
+    },
+    "muscles": {
+      "chest": "Brust",
+      "delts": "Schultern",
+      "traps": "Trapez",
+      "lats": "Latissimus",
+      "infraspinatus": "Untergrätenmuskel",
+      "lower_back": "Unterer Rücken",
+      "neck": "Nacken",
+      "biceps": "Bizeps",
+      "triceps": "Trizeps",
+      "forearms": "Unterarme",
+      "abs": "Bauch",
+      "obliques": "Seitliche Bauchmuskeln",
+      "serratus": "Vorderer Sägemuskel",
+      "glutes": "Gesäß",
+      "quads": "Quadrizeps",
+      "hamstrings": "Beinbeuger",
+      "calves": "Waden",
+      "adductors": "Adduktoren",
+      "hip_flexors": "Hüftbeuger",
+      "upper_chest": "Obere Brust",
+      "lower_chest": "Untere Brust",
+      "inner_chest": "Innere Brust",
+      "front_delts": "Vordere Schulter",
+      "side_delts": "Seitliche Schulter",
+      "rear_delts": "Hintere Schulter",
+      "rhomboids": "Rhomboiden",
+      "mid_traps": "Mittlerer Trapez",
+      "brachialis": "Brachialis",
+      "grip": "Griffkraft",
+      "transverse_abs": "Tiefer Bauchmuskel",
+      "lower_abs": "Unterer Bauch",
+      "hips": "Hüften",
+      "abductors": "Abduktoren",
+      "legs": "Beine",
+      "back": "Rücken",
+      "shoulders": "Schultern",
+      "arms": "Arme",
+      "cardio": "Cardio",
+      "core": "Rumpf",
+      "spine": "Wirbelsäule",
+      "full_body": "Ganzkörper",
+      "mobility": "Mobilität"
+    },
+    "equipment": {
+      "barbell": "Langhantel",
+      "dumbbell": "Kurzhanteln",
+      "bench": "Bank",
+      "cable": "Kabelzug",
+      "machine": "Gerät",
+      "bodyweight": "Körpergewicht",
+      "kettlebell": "Kettlebell",
+      "cardio": "Cardio",
+      "band": "Widerstandsband",
+      "pullup_bar": "Klimmzugstange",
+      "parallel_bars": "Barren",
+      "ab_wheel": "Ab-Wheel",
+      "medicine_ball": "Medizinball",
+      "rope": "Seil",
+      "other": "Sonstige",
+      "ez_bar": "SZ-Stange",
+      "weighted": "Eigengewicht + Zusatzlast",
+      "plate": "Hantelscheibe",
+      "foam_roller": "Faszienrolle",
+      "sled": "Gewichtsschlitten",
+      "box": "Plyo-Box",
+      "gripper": "Handtrainer",
+      "stick": "Mobilitätsstab"
+    },
+    "journal": {
+      "title": "Trainingsjournal",
+      "subtitle": "Letzte 30 Tage",
+      "loading": "Journal wird geladen...",
+      "workoutsCount": "Trainings",
+      "kcalBurned": "kcal verbrannt",
+      "kgVolume": "kg Volumen",
+      "emptyTitle": "Journal ist leer",
+      "emptySub": "Keine Trainings in den letzten 30 Tagen erfasst.",
+      "deleteConfirmTitle": "Training löschen",
+      "deleteConfirmMsg": "Möchtest du „{{name}}“ wirklich löschen?",
+      "deleteConfirmBtn": "Löschen",
+      "cancelBtn": "Abbrechen",
+      "deleteSuccessTitle": "Gelöscht",
+      "deleteSuccessMsg": "Training wurde aus dem Journal entfernt.",
+      "deleteErrorTitle": "Fehler",
+      "deleteErrorMsg": "Training konnte nicht gelöscht werden.",
+      "deleteWorkoutA11y": "Training {{name}} löschen",
+      "openWorkoutA11y": "{{name}} öffnen",
+      "closeWorkoutA11y": "{{name}} schließen",
+      "durationMin": "{{count}} Min",
+      "exercisesCount": "{{count}} Übungen",
+      "warmupTag": "Aufwärmsatz",
+      "backA11y": "Zurück",
+      "today": "Heute",
+      "yesterday": "Gestern",
+      "noSetDetails": "Keine Satzdetails aufgezeichnet.",
+      "exShort": "{{count}} Üb.",
+      "rpeLabel": "@ {{rpe}} RPE"
+    },
+    "progress": {
+      "title": "Trainingsfortschritt",
+      "subtitle": "Quests und heutige Einheiten",
+      "openJournalA11y": "Vollständiges Trainingsjournal öffnen",
+      "backA11y": "Zurück",
+      "loading": "Fortschritt wird geladen...",
+      "exercisesStat": "Übungen",
+      "setsStat": "Sätze",
+      "volumeStat": "kg Volumen",
+      "todayWorkouts": "Heutige Trainings",
+      "emptyTitle": "Heute noch kein Training",
+      "emptyText": "In Training gespeicherte Sätze erscheinen hier und aktualisieren deine Quests.",
+      "localTag": "lokal",
+      "warmupTag": "Aufwärm.",
+      "durationAndExercises": "{{min}} Min • {{count}} Übungen",
+      "openA11y": "{{name}} öffnen",
+      "closeA11y": "{{name}} schließen"
+    },
+    "detail": {
+      "backA11y": "Zurück",
+      "notFoundTitle": "Übung nicht gefunden",
+      "notFoundSub": "Wähle eine Übung aus dem Hauptkatalog.",
+      "defaultDesc": "Effektive Übung für deinen Trainingsplan.",
+      "defaultInstruction": "Führe die Bewegung kontrolliert aus und konzentriere dich auf die Muskelspannung.",
+      "perSessionEst": "/ Einheit (gesch.)",
+      "setsConfigured": "{{count}} Sätze eingestellt",
+      "configure": "Einrichten",
+      "forToday": "für heute",
+      "musclesWorked": "Zielmuskeln:",
+      "rankSectionTitle": "MEISTERSCHAFTS-RANGSYSTEM",
+      "anatomicalEfficiency": "Anatomische Effizienz",
+      "effortScore": "Leistungswert",
+      "ptsSuffix": "/ 100 PKT",
+      "logWorkoutTitle": "TRAINING LOGGEN",
+      "howToTitle": "RICHTIGE AUSFÜHRUNG",
+      "mistakesTitle": "HÄUFIGE FEHLER",
+      "saveErrorTitle": "Fehler",
+      "saveErrorMsg": "Training konnte nicht gespeichert werden.",
+      "savedTitle": "Zum Training hinzugefügt",
+      "savedMsg": "{{name}} wurde erfolgreich erfasst!",
+      "ctaReps": "Hinzufügen ({{count}} Wdh.)",
+      "ctaTimed": "Hinzufügen ({{count}} Sätze)",
+      "ctaVolume": "Hinzufügen ({{kg}} kg • {{rank}})",
+      "ranks": {
+        "S": {
+          "title": "RANG S+ • ELITE PRO",
+          "efficiency": "99 % Muskelfaser-Rekrutierung",
+          "msg": "Maximaler Hypertrophie-Reiz — Wettkampfniveau.",
+          "hint": "Du hast den höchsten Rang für diese Übung erreicht!"
+        },
+        "A": {
+          "title": "RANG A • FORTGESCHRITTENE HYPERTROPHIE",
+          "efficiency": "92 % Muskelfaser-Rekrutierung",
+          "msg": "Hohe mechanische Spannung und tiefe Anpassung.",
+          "hint": "Füge +{{kg}} kg oder 1 Satz für Rang S+ hinzu"
+        },
+        "B": {
+          "title": "RANG B • MITTLERE KRAFT",
+          "efficiency": "78 % Muskelfaser-Rekrutierung",
+          "msg": "Solides Arbeitsvolumen für stetige Progression.",
+          "hint": "Füge +{{kg}} kg oder 2 Wdh. für Rang A hinzu"
+        },
+        "C": {
+          "title": "RANG C • BASIS & TECHNIK",
+          "efficiency": "60 % Muskelfaser-Rekrutierung",
+          "msg": "Kontrollierte Technik und solide Grundaktivierung.",
+          "hint": "Erhöhe das Gewicht oder die Wdh. für Rang B"
+        }
+      },
+      "logger": {
+        "colSet": "SATZ",
+        "colKg": "KG",
+        "colRep": "WDH",
+        "colRpe": "RPE",
+        "addSet": "Satz hinzufügen",
+        "addSetA11y": "Satz hinzufügen",
+        "markCompleteA11y": "Satz als erledigt markieren",
+        "markIncompleteA11y": "Satz als offen markieren",
+        "deleteSetA11y": "Satz löschen",
+        "decWeightA11y": "Gewicht verringern",
+        "incWeightA11y": "Gewicht erhöhen",
+        "decRepsA11y": "Wiederholungen verringern",
+        "incRepsA11y": "Wiederholungen erhöhen",
+        "incRpeA11y": "RPE erhöhen",
+        "decRpeA11y": "RPE verringern",
+        "setTypeA11y": "Satztyp: {{type}}. Tippen zum Wechseln",
+        "setTypes": {
+          "warmup": "Aufwärmsatz",
+          "dropset": "Drop-Satz",
+          "failure": "Muskelversagen",
+          "working": "Arbeitssatz"
+        }
+      }
+    },
+    "commonControls": {
+      "maxLimitTitle": "Maximalgrenze erreicht",
+      "maxHumanLimit": "Maximal zulässiger Wert erreicht",
+      "maxSets": "Die maximale Satzanzahl beträgt 50.",
+      "maxReps": "Die maximale Wiederholungszahl beträgt 100.",
+      "maxDuration": "Die maximale Dauer beträgt 7200 Sekunden (2 Stunden).",
+      "maxWeight": "Das maximal zulässige Gewicht beträgt 600 kg.",
+      "quickSeriesTitle": "SCHNELL-SETUP SÄTZE",
+      "sets": "Sätze",
+      "reps": "Wiederholungen",
+      "weightKg": "Gewicht (kg)",
+      "optionalSuffix": " • optional",
+      "secondsPerSet": "Sekunden / Satz",
+      "holdTime": "Haltezeit",
+      "progressTo": "Fortschritt zu {{rank}}",
+      "addWorkoutTitle": "Training hinzufügen",
+      "addWorkoutSave": "Training speichern",
+      "addWorkoutAll": "Alle",
+      "addWorkoutStartTimer": "Timer starten",
+      "addWorkoutPauseTimer": "Pause",
+      "addWorkoutResetTimer": "Zurücksetzen",
+      "maxWeightWithLimit": "Das maximal zulässige Gewicht beträgt {{max}} kg.",
+      "maxRepsWithLimit": "Die maximale Wiederholungszahl beträgt {{max}}.",
+      "maxFieldLimit": "Das maximale Limit liegt bei {{max}} {{unit}}.",
+      "holdTimerTitle": "ISOMETRISCHER HALTE-TIMER",
+      "holdPauseBtn": "PAUSE",
+      "holdStartBtn": "STARTEN",
+      "totalVolumeLabel": "Gesamtvolumen",
+      "totalVolumeCompact": "{{kcal}} kcal • {{volume}} kg Gesamtvolumen",
+      "effortLabel": "Belastung",
+      "ptsUnit": "/100 PKT",
+      "durationMinInput": "Dauer (Minuten):",
+      "maxDuration120Min": "Die maximal zulässige Dauer beträgt 120 Minuten (7200s).",
+      "setCol": "SATZ",
+      "repsCol": "WDH.",
+      "weightKgCol": "GEWICHT (KG)",
+      "addSetShort": "+ Neuer Satz",
+      "addSimilarSetShort": "+ Ähnlicher Satz",
+      "saveWorkoutUpper": "TRAINING SPEICHERN",
+      "duplicateExercise": "Übung duplizieren",
+      "searchPlaceholderShort": "Übung suchen (z. B. Bankdrücken)...",
+      "recentExercisesHeading": "KÜRZLICHE ÜBUNGEN",
+      "allExercisesHeading": "ALLE ÜBUNGEN",
+      "sheetSubtitle": "Suchen, filtern oder Schnell-Hinzufügen nutzen",
+      "quickAddSuccessTitle": "Übung schnell gespeichert!",
+      "quickAddSuccessMsg": "+50 XP • {{kcal}} kcal verbrannt",
+      "workoutSavedXpTitle": "Training gespeichert!",
+      "workoutSavedXpMsg": "+100 XP • {{kcal}} kcal",
+      "duplicateSuccessTitle": "Übung dupliziert!",
+      "duplicateSuccessMsg": "+150 XP • {{kcal}} kcal",
+      "duplicateErrorMsg": "Die Übung konnte nicht dupliziert werden.",
+      "saveWorkoutErrorMsg": "Das Training konnte nicht gespeichert werden.",
+      "copySuffix": "{{name}} (Kopie)",
+      "duplicateSetSuffix": "{{name}} (Duplizierter Satz)",
+      "fullBodyFallback": "Ganzkörper",
+      "equipmentAll": "Alle",
+      "equipmentBarbell": "Langhantel",
+      "equipmentDumbbell": "Kurzhanteln",
+      "equipmentBench": "Trainingsbank",
+      "equipmentCable": "Kabelzug",
+      "equipmentMachine": "Gerät",
+      "equipmentBodyweight": "Körpergewicht",
+      "decreaseStepA11y": "{{label}} um {{step}} verringern",
+      "increaseStepA11y": "{{label}} um {{step}} erhöhen",
+      "quickAddA11y": "Übung schnell hinzufügen"
+    },
+    "anatomy": {
+      "front": "Vorne",
+      "back": "Hinten",
+      "legend": "Legende",
+      "primary": "Primär",
+      "secondary": "Sekundär",
+      "volume": "Volumen",
+      "effort": "Belastung",
+      "noData": "Keine Daten",
+      "frontViewA11y": "Vorderansicht zeigen",
+      "backViewA11y": "Rückansicht zeigen",
+      "activeMuscles": "{{count}} aktive Gruppen",
+      "tapForDetails": "Tippen für Details"
+    },
+    "exercises": {
+      "90-90-hip-rotation": "90/90-Hüftrotation",
+      "ab-wheel-rollout": "Ab-Wheel-Rollout",
+      "ab-wheel-rollout-genunchi": "Ab-Wheel auf den Knien",
+      "ab-wheel-rollout-v3": "Ab-Wheel-Rollout",
+      "ab_roller": "Ab-Roller",
+      "abdomene-clasice": "Crunches",
+      "abductii-de-coapsa-la-aparat": "Hüftabduktion am Gerät",
+      "abductii-la-cablu-in-stand": "Stehende Kabel-Hüftabduktion",
+      "abductori-masina": "Abduktorenmaschine",
+      "adductii-de-coapsa-la-aparat": "Hüftadduktion am Gerät",
+      "adductii-la-cablu": "Kabel-Hüftadduktion",
+      "adductori-masina": "Adduktorenmaschine",
+      "alergare": "Laufen",
+      "arnold-press": "Arnold Press",
+      "arnold-press-gantere": "Kurzhantel-Arnold-Press",
+      "arnold_press_dumbbell": "Kurzhantel-Arnold-Press",
+      "assault-bike": "Assault Bike",
+      "assisted_pullup_machine": "Unterstützte Klimmzugmaschine",
+      "back_extension": "Rückenstrecken",
+      "back_squat_barbell": "Langhantel-Kniebeugen",
+      "band-pull-apart": "Band Pull-Apart",
+      "barbell_shrug": "Langhantel-Shrugs",
+      "battle-ropes": "Battle Ropes",
+      "battle-ropes-alternativ": "Abwechselnde Battle Ropes",
+      "battle-ropes-v3": "Battle Ropes",
+      "bear-crawl": "Bear Crawl",
+      "bear-crawl-v3": "Bear Crawl",
+      "bench_dip": "Bank-Dips",
+      "bench_press_barbell": "Langhantel-Bankdrücken",
+      "bent_over_row_barbell": "Vorgebeugtes Langhantelrudern",
+      "bicep_curl_barbell": "Langhantel-Bizepscurls",
+      "bicep_curl_dumbbell": "Stehende Kurzhantel-Bizepscurls",
+      "bicicleta-eliptica": "Crosstrainer",
+      "bicycle-crunch": "Bicycle Crunches",
+      "bicycle-crunch-v3": "Bicycle Crunch",
+      "bicycle_crunch": "Bicycle Crunches (Käfer)",
+      "bird-dog": "Bird Dog",
+      "bird_dog": "Bird Dog Rücken- & Rumpfstreckung",
+      "bodyweight_calf_raise": "Wadenheben auf der Stufe",
+      "bodyweight_squat": "Körpergewicht-Kniebeugen",
+      "box-jump": "Box-Jumps",
+      "bulgarian_split_squat_dumbbell": "Bulgarische Kniebeugen mit Kurzhanteln",
+      "burpees": "Burpees",
+      "burpees-greutate": "Burpees mit Kurzhanteln",
+      "burpees-v3": "Burpees",
+      "cable-crunch": "Kniende Kabel-Crunches",
+      "cable-woodchop": "Kabelzug-Holzhacker (Woodchop)",
+      "cable_crunch": "Kniendes Kabel-Crunch mit Seil",
+      "cable_curl": "Unterer Kabel-Bizepscurl",
+      "cable_kickback": "Kabelzug-Kickbacks",
+      "cable_lateral_raise": "Einarmiges Kabel-Seitheben",
+      "cable_pull_through": "Kabel-Pull-Through",
+      "cable_woodchop": "Diagonaler Kabel-Woodchop für schräge Bauchmuskeln",
+      "calf-raise-sezand": "Sitzendes Wadenheben",
+      "calf_raise_machine": "Sitzendes Wadenheben am Gerät",
+      "captain_chair_leg_raise": "Beinheben am Dip-Ständer",
+      "cat-cow": "Katze-Kuh (Wirbelsäulenmobilität)",
+      "cat-cow-v3": "Katze-Kuh",
+      "chest-press-gantere": "Flachbankdrücken mit Kurzhanteln",
+      "chest-press-masina": "Brustpresse am Gerät",
+      "chest_dip": "Brust-Dips",
+      "chest_fly_cable": "Kabel-Fliegende von oben",
+      "chest_fly_dumbbell": "Kurzhantel-Fliegende flach",
+      "chest_press_machine": "Brustpresse am Gerät",
+      "chest_supported_dumbbell_row": "Brustgestütztes Kurzhantelrudern",
+      "chinup": "Klimmzüge im Untergriff (Chin-ups)",
+      "ciclism": "Radfahren",
+      "clamshell-cu-banda": "Clamshells mit Widerstandsband",
+      "clean-and-press": "Clean and Press",
+      "clean-and-press-cu-bara": "Langhantel Clean & Press",
+      "clean-gantera": "Kurzhantel-Umsetzen (Clean)",
+      "close_grip_bench_press": "Enges Langhantel-Bankdrücken",
+      "close_grip_lat_pulldown": "Enger V-Griff-Latzug",
+      "concentration_curl_dumbbell": "Kurzhantel-Konzentrationscurls",
+      "concetration-curl-avansat": "Konzentrationscurl mit 3s Pause",
+      "copenhagen-plank": "Kopenhagen-Plank",
+      "cossack-squat": "Kosaken-Kniebeuge (Cossack Squat)",
+      "couch-stretch": "Couch-Stretch (Hüftbeuger & Quadrizeps)",
+      "crossover-cablu": "Kabelzug-Crossover",
+      "crunch": "Klassische Crunches",
+      "crunch-la-cablu-in-genunchi": "Kniende Kabelzug-Crunches",
+      "dead-bug": "Dead Bug",
+      "dead-bug-avansat": "Dead Bug mit Zusatzgewicht",
+      "dead-bug-v3": "Dead Bug",
+      "dead_bug": "Dead Bug Rumpfkoordination",
+      "dead_hang": "Aushängen an der Klimmzugstange",
+      "deadlift": "Kreuzheben",
+      "deadlift_barbell": "Klassisches Langhantel-Kreuzheben",
+      "decline_bench_barbell": "Langhantel-Negativbankdrücken",
+      "decline_bench_dumbbell": "Kurzhantel-Negativbankdrücken",
+      "decline_pushup": "Negative Liegestütze",
+      "deep-squat-hold": "Tiefe Hocke halten (Deep Squat Hold)",
+      "deschidere-de-sold-in-fandare-hip-flexor-stretch": "Hüftbeuger-Dehnung im Ausfallschritt",
+      "diamond_pushup": "Diamant-Liegestütze",
+      "dips-banca-greutate": "Bank-Dips mit Zusatzgewicht",
+      "dips-piept": "Brust-Dips am Barren",
+      "dips-triceps-banca": "Trizeps-Dips an der Bank",
+      "donkey-calf-raise": "Donkey-Wadenheben",
+      "dragon-flag": "Dragon Flag",
+      "dumbbell_calf_raise": "Stehendes Kurzhantel-Wadenheben",
+      "dumbbell_pullover": "Kurzhantel-Überzüge auf der Bank",
+      "dumbbell_row": "Kurzhantelrudern auf der Bank",
+      "dumbbell_shoulder_press": "Sitzendes Kurzhantel-Schulterdrücken",
+      "dumbbell_shrug": "Kurzhantel-Shrugs",
+      "eliptic": "Crosstrainer",
+      "extensii-cvadriceps": "Beinstrecker am Gerät",
+      "extensii-de-coapsa-la-aparat": "Beinstrecker am Gerät",
+      "extensii-de-incheietura-cu-bara": "Umgekehrte Langhantel-Handgelenkcurls",
+      "extensii-deasupra-capului-la-cablu": "Überkopf-Trizepsstrecken am Kabel",
+      "extensii-franceze-cu-bara-ez": "SZ-French-Press",
+      "extensii-jm-press": "JM Press",
+      "extensii-la-cablu-cu-frenghie": "Kabel-Trizepsdrücken am Tau",
+      "extensii-lombare-la-banca-romana": "Rückenstrecken auf der Römerbank",
+      "extensii-pumni-bara": "Umgekehrte Handgelenkcurls",
+      "extensii-triceps-cablu": "Trizepsdrücken am Kabel",
+      "extensii-triceps-deasupra": "Überkopf-Trizepsstrecken",
+      "ez_bar_curl": "SZ-Stangen-Bizepscurls",
+      "face-pull": "Face Pull",
+      "face-pull-cu-banda-elastica": "Face Pull mit Widerstandsband",
+      "face-pull-la-cablu": "Kabel-Face-Pull",
+      "face_pull_cable": "Kabel-Face-Pull mit Tau",
+      "fandari": "Ausfallschritte",
+      "fandari-inverse-cu-bara": "Rückwärtige Ausfallschritte mit Langhantel",
+      "fandari-laterale": "Seitliche Ausfallschritte",
+      "fandari-laterale-greutate": "Seitliche Ausfallschritte mit Kurzhantel",
+      "fandari-mergand-cu-gantere": "Gehende Ausfallschritte mit Kurzhanteln",
+      "fandari-mers": "Gehende Ausfallschritte",
+      "farmer-carry-mers-cu-greutati": "Farmer’s Carry",
+      "farmer-walk": "Farmer’s Walk",
+      "farmers_walk_dumbbell": "Farmer’s Walk mit Kurzhanteln",
+      "flat_bench_dumbbell": "Kurzhantel-Flachbankdrücken",
+      "flexii-biceps-bara": "Bizeps-Curls mit Langhantel",
+      "flexii-biceps-gantere": "Bizeps-Curls mit Kurzhanteln",
+      "flexii-biceps-priza-inversa": "Bizepscurls im Obergriff",
+      "flexii-cablu": "Kabelzug-Bizeps-Curls",
+      "flexii-ciocan": "Hammer-Curls",
+      "flexii-ciocan-gantera": "Kurzhantel-Hammercurls",
+      "flexii-concentrate": "Konzentrations-Curls",
+      "flexii-concentrate-cu-gantera": "Kurzhantel-Konzentrationscurls",
+      "flexii-cu-bara-ez": "SZ-Stangen-Curls",
+      "flexii-de-coapsa-culcat-la-aparat": "Liegender Beinbeuger",
+      "flexii-de-coapsa-sezand-la-aparat": "Sitzender Beinbeuger",
+      "flexii-de-incheietura-cu-bara": "Handgelenkcurls mit Langhantel",
+      "flexii-de-incheietura-cu-gantera-pe-banca": "Kurzhantel-Handgelenkcurls auf der Bank",
+      "flexii-femurali": "Beinbeuger am Gerät",
+      "flexii-hammer-cu-gantere": "Kurzhantel-Hammer-Curls",
+      "flexii-incline-cu-gantere": "Schrägbank-Bizepscurls",
+      "flexii-inverse-cu-bara-reverse-curl": "Langhantel-Reverse-Curls",
+      "flexii-la-banca-scott-preacher-curl": "Scott-Bank-Curls (Preacher Curls)",
+      "flexii-la-cablu-de-jos": "Kabel-Bizepscurls von unten",
+      "flexii-pumni-bara": "Handgelenkcurls mit Langhantel",
+      "flexii-spider": "Spider-Curls",
+      "flexii-spider-v3": "Spider-Curls",
+      "flotari": "Liegestütze",
+      "flotari-arceuate-archer-push-up": "Bogenschützen-Liegestütze (Archer)",
+      "flotari-cu-banda-elastica": "Liegestütze mit Widerstandsband",
+      "flotari-cu-picioarele-ridicate": "Liegestütze mit erhöhten Füßen",
+      "flotari-cu-priza-larga": "Breite Liegestütze",
+      "flotari-decline": "Negative Liegestütze",
+      "flotari-decline-greutate": "Negative Liegestütze mit Zusatzgewicht",
+      "flotari-diamant": "Diamant-Liegestütze",
+      "flotari-diamant-v3": "Diamant-Liegestütze",
+      "flotari-inclinate": "Erhöhte Liegestütze",
+      "fluturari-gantere": "Fliegende mit Kurzhanteln",
+      "fluturari-inverse-cu-gantere-aplecat": "Vorgebeugte Kurzhantel-Reverse-Flys",
+      "fluturari-inverse-la-aparat-reverse-pec-deck": "Reverse Butterfly am Gerät",
+      "fluturari-inverse-la-cablu-incrucisat": "Überkreuzte Kabel-Reverse-Flys",
+      "fluturari-la-cablu-de-jos-low-to-high": "Kabel-Flys von unten nach oben",
+      "fluturari-la-cablu-de-sus-high-to-low": "Kabel-Flys von oben nach unten",
+      "fluturari-la-pec-deck": "Butterfly am Pec-Deck-Gerät",
+      "fluturari-pec-deck-invers": "Reverse Pec Deck",
+      "fluturari-spate": "Reverse Flys (hintere Schulter)",
+      "foam-rolling": "Faszientraining (Foam Rolling)",
+      "foam-rolling-cvadriceps": "Quadrizeps-Faszienrollen",
+      "french-press": "French Press",
+      "french-press-gantere-un-brat": "Einarmige French Press",
+      "front_raise_barbell": "Langhantel-Frontheben",
+      "front_raise_cable": "Kabel-Frontheben",
+      "front_raise_dumbbell": "Kurzhantel-Frontheben",
+      "front_squat_barbell": "Langhantel-Frontkniebeugen",
+      "genuflexiuni-bara": "Kniebeugen mit Langhantel",
+      "genuflexiuni-bulgare-cu-gantere": "Bulgarische Kniebeugen mit Kurzhanteln",
+      "genuflexiuni-bulgaresti": "Bulgarische Kniebeugen",
+      "genuflexiuni-cu-goblet": "Goblet-Kniebeugen",
+      "genuflexiuni-cu-saritura": "Sprungkniebeugen (Jump Squats)",
+      "genuflexiuni-fata": "Frontkniebeugen",
+      "genuflexiuni-frontale-cu-bara": "Langhantel-Frontkniebeugen",
+      "genuflexiuni-hack-squat": "Hackenschmidt-Kniebeuge",
+      "genuflexiuni-la-perete-wall-sit": "Wandsitzen (Wall Sit)",
+      "genuflexiuni-pistol-assistate": "Unterstützte Pistol-Squats",
+      "genuflexiuni-sissy": "Sissy-Kniebeugen",
+      "genuflexiuni-split-bulgaresti-greutate": "Bulgarische Kniebeugen mit Kurzhanteln",
+      "genuflexiuni-sumo": "Sumo-Kniebeugen",
+      "genuflexiuni-sumo-cu-gantera": "Sumo-Kniebeuge mit Kurzhantel",
+      "glute-bridge-pe-un-picior": "Einbeinige Gesäßbrücke",
+      "glute_bridge_bodyweight": "Gesäßbrücke am Boden",
+      "goblet_squat_dumbbell": "Goblet-Kniebeuge",
+      "good-morning-cu-bara": "Good Mornings mit Langhantel",
+      "good_morning_barbell": "Langhantel-Good-Mornings",
+      "hack-squat": "Hackenschmidt-Kniebeuge",
+      "hack_squat_machine": "Hackenschmidt-Maschine",
+      "hammer_curl_dumbbell": "Kurzhantel-Hammercurls",
+      "handstand-push-up-la-perete": "Handstand-Liegestütze an der Wand",
+      "handstand_pushup": "Handstand-Liegestütze",
+      "hanging-leg-raise": "Hängendes Beinheben gestreckt",
+      "hanging_knee_raise": "Hängendes Knieheben",
+      "hanging_leg_raise": "Hängendes Beinheben an der Stange",
+      "heel-taps-laterale": "Seitliches Fersen-Tippen",
+      "high-knees": "Kniehebelauf (High Knees)",
+      "hip-thrust": "Hip Thrust",
+      "hip-thrust-cu-bara": "Langhantel-Hip-Thrust",
+      "hip_abduction_machine": "Sitzende Hüftabduktion am Gerät",
+      "hip_adduction_machine": "Sitzende Hüftadduktion am Gerät",
+      "hip_thrust_barbell": "Langhantel-Hip-Thrust",
+      "hip_thrust_machine": "Hip-Thrust-Maschine",
+      "hiperextensii": "Rückenstrecken (Hyperextensions)",
+      "hollow-body-hold": "Hollow Body Hold",
+      "hollow_hold": "Hollow Hold",
+      "impins-arnold": "Arnold Press",
+      "impins-banca-plat": "Flachbankdrücken mit Langhantel",
+      "impins-banda-elastica": "Brustpresse mit Widerstandsband",
+      "impins-cu-gantere-sezand": "Sitzendes Kurzhantel-Schulterdrücken",
+      "impins-declinat": "Negativ-Bankdrücken mit Langhantel",
+      "impins-in-priza-strimta-la-bara": "Enges Langhantel-Bankdrücken",
+      "impins-inclinat-gantere": "Schrägbankdrücken mit Kurzhanteln",
+      "impins-inclinat-masina": "Schrägbank-Brustpresse am Gerät",
+      "impins-la-aparat-smith-inclinat": "Schrägbankdrücken an der Multipresse",
+      "impins-la-piept-cu-gantere-declinat": "Negativ-Bankdrücken mit Kurzhanteln",
+      "impins-la-piept-cu-gantere-inclinat": "Schrägbankdrücken mit Kurzhanteln",
+      "impins-landmine-cu-o-mana": "Einarmiges Landmine-Drücken",
+      "impins-militar-cu-bara-in-stand": "Stehendes Langhantel-Schulterdrücken",
+      "impins-umeri-bara": "Schulterdrücken mit Langhantel (OHP)",
+      "impins-umeri-gantere": "Schulterdrücken mit Kurzhanteln",
+      "inclinari-laterale-cu-gantera": "Seitbeugen mit Kurzhantel",
+      "incline_bench_barbell": "Langhantel-Schrägbankdrücken",
+      "incline_bench_dumbbell": "Kurzhantel-Schrägbankdrücken",
+      "incline_chest_fly_dumbbell": "Schräge Kurzhantel-Fliegende",
+      "incline_dumbbell_curl": "Schrägbank-Kurzhantelcurls",
+      "incline_pushup": "Schräge Liegestütze",
+      "indreptari-cu-picioare-drepte-la-bara": "Kreuzheben mit gestreckten Beinen",
+      "indreptari-romanesti": "Rumänisches Kreuzheben (RDL)",
+      "indreptari-romanesti-cu-gantere": "Rumänisches Kreuzheben mit Kurzhanteln",
+      "inverted-row-greutate": "Umgekehrtes Rudern mit Gewicht",
+      "inverted_row_bodyweight": "Körpergewicht-Umgedrehtes Rudern",
+      "jefferson-curl": "Jefferson Curl",
+      "jump_squat": "Sprungkniebeugen",
+      "jumping-jacks": "Hampelmann (Jumping Jacks)",
+      "kettlebell-snatch": "Kettlebell Snatch",
+      "kettlebell-swing": "Kettlebell Swing",
+      "kettlebell-swing-v3": "Kettlebell Swing",
+      "kickback-cu-gantera": "Kurzhantel-Trizeps-Kickbacks",
+      "kickback-de-fesier-la-cablu": "Kabel-Kickbacks für das Gesäß",
+      "kickback-triceps": "Trizeps-Kickbacks",
+      "kickback_dumbbell": "Kurzhantel-Trizeps-Kickbacks",
+      "kroc-rows": "Kroc Rows (schweres Kurzhantelrudern)",
+      "lat-pulldown": "Latzug am Kabelturm",
+      "lat_pulldown_cable": "Breiter Kabel-Latzug",
+      "lateral_raise_dumbbell": "Stehendes Kurzhantel-Seitheben",
+      "leg-curl-sezand": "Sitzender Beinbeuger",
+      "leg_curl_machine": "Liegender Beinbeuger am Gerät",
+      "leg_extension_machine": "Beinstrecker-Maschine",
+      "leg_press_calf_raise": "Wadenheben an der Beinpresse",
+      "leg_press_machine": "45°-Beinpresse",
+      "low_cable_crossover": "Kabel-Crossover von unten",
+      "mers-lateral-cu-banda-lateral-band-walk": "Seitliches Gehen mit Band",
+      "mers-rapid": "Zügiges Gehen",
+      "mid_cable_crossover": "Mittlerer Kabel-Crossover",
+      "military-press": "Stehendes Langhantel-Schulterdrücken",
+      "monster-walk-cu-banda": "Monster Walk mit Band",
+      "mountain-climbers": "Mountain Climbers",
+      "mountain-climbers-v3": "Mountain Climbers",
+      "mountain_climber": "Mountain Climbers",
+      "neutral_grip_pullup": "Klimmzüge im Neutralgriff",
+      "nordic-hamstring-curl": "Nordic Hamstring Curl",
+      "nordic_hamstring_curl": "Nordic Hamstring Curl (Boden/Gerät)",
+      "overhead_press_barbell": "Langhantel-Schulterdrücken",
+      "overhead_tricep_cable": "Überkopf-Kabel-Trizepsstrecken",
+      "overhead_tricep_dumbbell": "Überkopf-Kurzhantel-Trizepsstrecken",
+      "pallof-press": "Pallof Press am Kabelzug",
+      "pallof-press-la-cablu": "Kabel-Pallof-Press",
+      "paloane-la-banca-bench-dip": "Bank-Dips",
+      "paloane-la-paralele-aplecat-chest-dip": "Vorgebeugte Brust-Dips am Barren",
+      "pancake-stretch": "Pancake-Stretch (Hüftöffnung)",
+      "pasire-pe-cutie-step-up": "Box Step-Ups",
+      "pec-deck": "Butterfly-Maschine (Pec Deck)",
+      "pec_deck_machine": "Butterfly-Maschine (Pec Deck)",
+      "pendlay_row_barbell": "Langhantel-Pendlay-Rudern",
+      "pigeon-pose": "Taube (Gesäßdehnung)",
+      "pike-push-up": "Pike-Liegestütze",
+      "pike_pushup": "Pike-Liegestütze",
+      "pistol_squat": "Einbeinige Kniebeugen (Pistol Squat)",
+      "plank": "Plank (Unterarmstütz)",
+      "plank-frontal": "Unterarmstütz (Front Plank)",
+      "plank-lateral": "Seitstütz (Side Plank)",
+      "plank-lateral-cu-ridicare-de-bazin": "Seitstütz mit Hüftheben",
+      "plank-lateral-v3": "Seitstütz",
+      "plate-pinch-prindere-de-disc": "Scheibengriff (Plate Pinch)",
+      "pod-fesieri-un-picior": "Einbeinige Gesäßbrücke",
+      "preacher_curl_barbell": "SZ-Scott-Bank-Curls",
+      "preacher_curl_machine": "Scott-Curl-Maschine",
+      "presa-de-picioare": "Beinpresse",
+      "presa-picioare": "Beinpresse",
+      "presa-umeri-cu-bara-din-spate": "Nackendrücken mit Langhantel",
+      "presa-umeri-cu-gantere-asimetric": "Wechselseitiges Schulterdrücken",
+      "priza-placutelor": "Scheiben-Halteübung (Plate Pinch)",
+      "prone-snow-angel": "Prone Snow Angel",
+      "pulldown-priza-ingusta": "Enges Latziehen",
+      "pullover-bara-dreapta": "Überzüge am Kabel mit gerader Stange",
+      "pullover-cu-gantera": "Überzüge mit Kurzhantel",
+      "pullover-gantera": "Überzüge mit Kurzhantel",
+      "pullup": "Klimmzüge im Obergriff",
+      "pullups-greutate": "Klimmzüge mit Zusatzgewicht",
+      "pullups-greutate-gantera": "Klimmzüge mit Kurzhantel",
+      "push_press_barbell": "Langhantel-Push-Press",
+      "pushup": "Klassische Liegestütze",
+      "ramat-bara": "Langhantelrudern vorgebeugt",
+      "ramat-bara-inclinat": "Pendlay-Rudern",
+      "ramat-cablu-jos": "Sitzendes Kabelrudern",
+      "ramat-cablu-un-brat": "Einarmiges Kabelrudern",
+      "ramat-cu-banda-elastica-sezand": "Sitzendes Rudern mit Widerstandsband",
+      "ramat-cu-gantera-pe-banca": "Kurzhantelrudern auf der Bank",
+      "ramat-cu-priza-larga-la-bara-rear-delt-row": "Breites Langhantelrudern für hintere Schulter",
+      "ramat-gantera-un-brat": "Einarmiges Kurzhantelrudern",
+      "ramat-la-aparat-cu-suport-pentru-piept": "Brustgestütztes Maschinenrudern",
+      "ramat-la-cablu-sezand-cu-priza-larga": "Breites sitzendes Kabelrudern",
+      "ramat-masina": "Rudern am Gerät",
+      "ramat-meadows": "Meadows-Rudern",
+      "ramat-pendlay": "Pendlay-Rudern",
+      "ramat-t-bar": "T-Bar-Rudern",
+      "ramat-t-bar-v3": "T-Bar-Rudern",
+      "ramat-vertical-la-bara-upright-row": "Aufrechtes Langhantelrudern",
+      "rear_delt_fly_dumbbell": "Kurzhantel-Reverse-Flys",
+      "retractii-scapulare-la-bara-fixa": "Skapula-Klimmzüge",
+      "reverse-hyperextension": "Reverse Hyperextension",
+      "reverse-pec-deck": "Reverse Butterfly am Gerät",
+      "reverse_grip_lat_pulldown": "Latzug im Untergriff",
+      "reverse_lunge_barbell": "Rückwärtige Langhantel-Ausfallschritte",
+      "reverse_pec_deck_machine": "Reverse Butterfly am Gerät",
+      "reverse_wrist_curl_barbell": "Umgekehrte Langhantel-Handgelenkcurls",
+      "ridicari-de-picioare-la-bara-fixa": "Hängendes Beinheben",
+      "ridicari-de-tibial-tibialis-raise": "Tibialis-Heben",
+      "ridicari-de-umeri-cu-bara-shrug": "Langhantel-Shrugs",
+      "ridicari-de-umeri-cu-gantere": "Kurzhantel-Shrugs",
+      "ridicari-frontale": "Frontheben",
+      "ridicari-frontale-bara": "Langhantel-Frontheben",
+      "ridicari-frontale-cu-disc": "Frontheben mit Gewichtsscheibe",
+      "ridicari-frontale-cu-gantere-alternativ": "Wechselseitiges Kurzhantel-Frontheben",
+      "ridicari-in-t-la-banca-inclinata": "T-Heben auf der Schrägbank",
+      "ridicari-in-w-la-banca-inclinata": "W-Heben auf der Schrägbank",
+      "ridicari-in-y-la-banca-inclinata": "Y-Heben auf der Schrägbank",
+      "ridicari-laterale": "Seitheben",
+      "ridicari-laterale-cablu": "Seitheben am Kabelzug",
+      "ridicari-laterale-cablu-un-brat": "Einarmiges Seitheben am Kabel",
+      "ridicari-laterale-cu-gantere": "Kurzhantel-Seitheben",
+      "ridicari-laterale-de-picior-culcat": "Seitliches Beinheben im Liegen",
+      "ridicari-laterale-inclinat": "Vorgebeugtes Seitheben",
+      "ridicari-laterale-la-aparat": "Seitheben am Gerät",
+      "ridicari-laterale-la-cablu": "Kabel-Seitheben",
+      "ridicari-pe-varfuri-in-stand-cu-bara": "Stehendes Wadenheben mit Langhantel",
+      "ridicari-pe-varfuri-la-aparat-sezand": "Sitzendes Wadenheben am Gerät",
+      "ridicari-pe-varfuri-la-presa-de-picioare": "Wadenheben an der Beinpresse",
+      "ridicari-pe-varfuri-pe-un-picior": "Einbeiniges Wadenheben",
+      "ridicari-picioare-atarnat": "Hängendes Beinheben",
+      "ridicari-varfuri": "Wadenheben",
+      "ridicari-varfuri-pe-un-picior": "Einbeiniges Wadenheben",
+      "romanian_deadlift_barbell": "Rumänisches Langhantel-Kreuzheben",
+      "romanian_deadlift_dumbbell": "Rumänisches Kurzhantel-Kreuzheben",
+      "rope_hammer_curl_cable": "Hammercurls mit Tau am Kabelzug",
+      "rope_tricep_pushdown": "Kabel-Trizepsdrücken am Tau",
+      "rotatii-de-umeri-cu-bastonul": "Schulterkreisen mit Stab",
+      "rotatii-solduri": "Hüftkreisen",
+      "rotiri-rusesti-cu-minge-medicinala": "Russian Twists mit Medizinball",
+      "rulare-de-prosop-cu-greutate": "Handtuch-Wickeln mit Gewicht",
+      "rulou-grip-bara": "Langhantel-Fingerrollen",
+      "russian-twist": "Russian Twist",
+      "russian_twist": "Russian Twist mit Kurzhantel/Scheibe",
+      "sandbag-carry": "Sandsack-Tragen (Sandbag Carry)",
+      "sarituri-coarda": "Seilspringen",
+      "sarituri-cu-coarda": "Seilspringen",
+      "sarituri-cutie": "Box-Jumps",
+      "sarituri-pe-varfuri-pogo-hops": "Pogo-Sprünge",
+      "scorpion-stretch": "Skorpion-Dehnung",
+      "seated_lateral_raise_dumbbell": "Sitzendes Kurzhantel-Seitheben",
+      "seated_leg_curl_machine": "Sitzender Beinbeuger am Gerät",
+      "seated_row_cable": "Sitzendes Kabelrudern",
+      "seated_row_machine": "Iso-laterales Sitzrudern",
+      "shoulder_press_machine": "Schulterpresse am Gerät",
+      "shrugs": "Schulterheben (Shrugs)",
+      "side_plank": "Seitstütz (Side Plank)",
+      "skater-jumps": "Skater-Sprünge",
+      "skullcrusher_barbell": "SZ-Skullcrushers",
+      "skullcrusher_dumbbell": "Kurzhantel-Skullcrushers",
+      "skullcrushers": "Stirndrücken (Skullcrushers)",
+      "sled-push": "Schlitten schieben (Sled Push)",
+      "spider_curl_dumbbell": "Kurzhantel-Spider-Curls",
+      "sprint-intervale": "HIIT-Intervallsprints",
+      "sprint-pe-loc-cu-genunchii-sus": "High-Knees-Sprint auf der Stelle",
+      "stair-climber": "Stair Climber",
+      "standing_calf_raise_machine": "Stehendes Wadenheben am Gerät",
+      "step-up": "Step-ups auf die Bank",
+      "step_up_dumbbell": "Step-ups mit Kurzhanteln",
+      "straight-arm-pulldown": "Überzüge mit gestreckten Armen am Kabel",
+      "straight_arm_pulldown": "Kabelzug-Überzüge gestreckt",
+      "strangere-de-gripper": "Handtrainer-Grifftraining (Gripper)",
+      "stretching-de-ischiogambieri-sezand": "Sitzende Beinbeuger-Dehnung",
+      "stretching-de-pectorali-la-usa": "Brustdehnung am Türrahmen",
+      "stretching-femurali": "Dehnung der Beinbeuger",
+      "stretching-piept": "Brustdehnung an der Wand",
+      "suitcase-carry": "Suitcase Carry",
+      "sumo_deadlift_barbell": "Langhantel-Sumo-Kreuzheben",
+      "superman": "Superman",
+      "superman_hold": "Superman Hold",
+      "suspendare-pasiva-in-bara-dead-hang": "Aushängen an der Stange (Dead Hang)",
+      "svend-press": "Svend Press",
+      "t_bar_row": "T-Bar-Rudern",
+      "thoracic-extension-pe-rola": "Brustwirbel-Streckung auf der Rolle",
+      "thread-the-needle": "Nadelöhr (Brustwirbelmobilität)",
+      "thruster": "Thruster",
+      "thruster-cu-gantere": "Kurzhantel-Thruster",
+      "thruster-greutate": "Kurzhantel-Thruster",
+      "toes-to-bar": "Toes-to-Bar",
+      "tractiuni": "Klimmzüge",
+      "tractiuni-cu-priza-inversa": "Klimmzüge im Untergriff",
+      "tractiuni-cu-priza-larga": "Breite Klimmzüge",
+      "tractiuni-neutre-la-maner-paralel": "Klimmzüge im Neutralgriff",
+      "tractiuni-priza-inversa": "Klimmzüge im Untergriff (Chin-ups)",
+      "tras-la-helcometru-cu-priza-inversa": "Latzug im Untergriff",
+      "tricep_dip": "Trizeps-Dips",
+      "tricep_pushdown_cable": "Kabel-Trizepsdrücken",
+      "triceps-pushdown-funie": "Trizepsdrücken am Tau",
+      "triceps-pushdown-funie-extensie": "Kabel-Trizepsstrecken mit Tau",
+      "turkish-get-up": "Turkish Get-Up",
+      "turkish-get-up-v3": "Turkish Get-Up",
+      "upright_row_barbell": "Aufrechtes Langhantelrudern",
+      "upright_row_cable": "Aufrechtes Kabelrudern",
+      "urcat-scari": "Treppensteiger (StairMaster)",
+      "v-up": "V-Ups",
+      "v-ups": "V-Ups",
+      "v_ups": "V-Ups (Klappmesser)",
+      "vaslit": "Rudergerät",
+      "vaslit-la-ergometru": "Rudern am Ergometer",
+      "walking_lunge_dumbbell": "Gehende Kurzhantel-Ausfallschritte",
+      "wall-balls": "Wall Balls",
+      "wall_sit": "Wandsitzen",
+      "weighted_chest_dip": "Brust-Dips mit Zusatzgewicht",
+      "wide_pushup": "Breite Liegestütze",
+      "windshield-wipers": "Scheibenwischer (Windshield Wipers)",
+      "woodchopper-de-jos-in-sus-la-cablu": "Kabel-Holzhacker von unten",
+      "woodchopper-de-sus-in-jos-la-cablu": "Kabel-Holzhacker von oben",
+      "world-s-greatest-stretch": "World’s Greatest Stretch",
+      "worlds-greatest-stretch": "World’s Greatest Stretch",
+      "wrist_curl_barbell": "Langhantel-Handgelenkcurls"
+    },
+    "exerciseDetails": {
+      "ab-wheel-rollout-genunchi": {
+        "description": "Kniend das Bauchrad nach vorn rollen, bis der Körper fast parallel zum Boden ist.",
+        "instructions": {
+          "0": "Auf einer Matte knien, Griff fest halten",
+          "1": "Langsam vorrollen, Rumpf fest angespannt halten",
+          "2": "Stoppen, bevor der untere Rücken durchhängt",
+          "3": "Aus dem Bauch zurückziehen (nicht aus der Hüfte)"
+        }
+      },
+      "alergare": {
+        "description": "Klassisches Ausdauertraining für Kondition und Kalorienverbrauch."
+      },
+      "arnold-press-gantere": {
+        "description": "Rotierendes Schulterdrücken: Start mit Handflächen zum Körper, während des Drückens nach vorn drehen.",
+        "instructions": {
+          "0": "Auf der Bank sitzen, Hanteln vor der Brust, Handflächen zu dir",
+          "1": "Nach oben drücken und Handflächen nach außen rotieren",
+          "2": "Oben mit nach vorn gerichteten Handflächen beenden",
+          "3": "Beim Absenken entgegengesetzt zurückdrehen"
+        }
+      },
+      "battle-ropes-alternativ": {
+        "description": "Leicht gebeugte Knie, schnelle abwechselnde Wellen mit den Battle Ropes erzeugen.",
+        "instructions": {
+          "0": "Seilenden greifen, leicht in die Knie gehen",
+          "1": "Schnelle abwechselnde Wellen schlagen",
+          "2": "Rumpf fest, Rücken gerade halten",
+          "3": "30-45 Sekunden lang hohes Tempo halten"
+        }
+      },
+      "burpees": {
+        "mistakes": {
+          "0": "Saubere Technik bei Ermüdung verlieren"
+        }
+      },
+      "burpees-greutate": {
+        "description": "Klassischer Burpee mit Kurzhanteln in den Händen und abschließendem Überkopfdrücken.",
+        "instructions": {
+          "0": "Leichtes Kurzhantelpaar fest greifen",
+          "1": "In die Hocke gehen und Hanteln auf dem Boden absetzen",
+          "2": "Zurück in den Plank springen und einen Liegestütz machen",
+          "3": "Nach vorn springen, aufstehen und Hanteln hochdrücken"
+        }
+      },
+      "cable-woodchop": {
+        "description": "Griff am oberen Kabelzug fassen und Rumpf diagonal nach unten rotieren.",
+        "instructions": {
+          "0": "Kabelzug hoch einstellen, Griff beidhändig fassen",
+          "1": "Rumpf und Arme diagonal zum gegenüberliegenden Knie drehen",
+          "2": "Rückkehr kontrollieren",
+          "3": "Auf beiden Seiten ausführen"
+        }
+      },
+      "chest-press-gantere": {
+        "description": "Alternative zur Langhantel für mehr Bewegungsfreiheit."
+      },
+      "clean-gantera": {
+        "description": "Explosives Umsetzen mit Kurzhanteln vom Boden bis auf Schulterhöhe.",
+        "instructions": {
+          "0": "Kurzhanteln seitlich neben den Füßen platzieren",
+          "1": "Hanteln greifen, Rücken gerade halten",
+          "2": "Explosiv strecken und Hanteln an den Schultern abfangen",
+          "3": "Kontrolliert absenken und wiederholen"
+        }
+      },
+      "concetration-curl-avansat": {
+        "description": "Konzentrations-Curl mit 3 Sekunden Spitzenkontraktion und langsamer Exzentrik.",
+        "instructions": {
+          "0": "Sitzen, Ellbogen an der Innenseite des Oberschenkels abstützen",
+          "1": "Hantel hochcurlen und Bizeps fest anspannen",
+          "2": "3 Sekunden in der Endposition halten",
+          "3": "Langsam über 3 Sekunden absenken"
+        }
+      },
+      "couch-stretch": {
+        "description": "Mit dem Rücken zu Bank oder Wand knien, Fußrücken ablegen und Hüfte nach vorn schieben.",
+        "instructions": {
+          "0": "Vor einer Bank oder Couch knien",
+          "1": "Spann des hinteren Fußes auf dem Polster ablegen",
+          "2": "Hüfte nach vorn schieben, bis eine tiefe Dehnung spürbar ist",
+          "3": "30-60 Sekunden halten, dann Bein wechseln"
+        }
+      },
+      "dead-bug-avansat": {
+        "description": "Rückenlage mit Hantel über der Brust. Abwechselnd gegenüberliegenden Arm und Bein strecken.",
+        "instructions": {
+          "0": "Hinlegen, Kurzhantel über der Brust halten, Knie im 90°-Winkel",
+          "1": "Rechten Arm und linkes Bein gleichzeitig strecken",
+          "2": "Kontrolliert zur Mitte zurückkehren",
+          "3": "Seiten sauber abwechseln"
+        }
+      },
+      "deadlift": {
+        "description": "Ganzkörper-Grundübung für die gesamte hintere Muskelkette.",
+        "instructions": {
+          "0": "Langhantel nah an den Schienbeinen halten.",
+          "1": "Neutraler Rücken, Brust stolz anheben.",
+          "2": "Aus den Beinen drücken und Hüfte strecken."
+        },
+        "mistakes": {
+          "0": "Den unteren Rücken einrunden",
+          "1": "Mit dem Rücken statt mit den Beinen heben"
+        }
+      },
+      "dips-banca-greutate": {
+        "description": "Schwere Bank-Dips zwischen zwei Bänken mit Hantelscheibe auf den Oberschenkeln.",
+        "instructions": {
+          "0": "Hände auf einer Bank, Fersen auf der gegenüberliegenden Bank",
+          "1": "Gewichtsscheibe auf den Oberschenkeln platzieren",
+          "2": "Absenken, bis die Arme etwa 90° gebeugt sind",
+          "3": "Kräftig wieder nach oben drücken"
+        }
+      },
+      "dragon-flag": {
+        "description": "FORTGESCHRITTEN: Auf einer Bank liegend hinter dem Kopf festhalten und den steifen Körper nur auf den Schultern heben.",
+        "instructions": {
+          "0": "Auf die Bank legen, Rand hinter dem Kopf greifen",
+          "1": "Beine und Hüfte heben, Körper völlig gerade halten",
+          "2": "Langsam absenken, ohne die Bank zu berühren",
+          "3": "Maximale Rumpfspannung dauerhaft halten"
+        }
+      },
+      "extensii-pumni-bara": {
+        "description": "Unterarme auf den Oberschenkeln, Handflächen unten. Aus dem Handgelenk strecken.",
+        "instructions": {
+          "0": "Unterarm auf Oberschenkel ablegen, Handfläche unten",
+          "1": "Hantel kontrolliert absenken",
+          "2": "Handgelenk heben, ohne den Arm anzuheben"
+        }
+      },
+      "fandari": {
+        "instructions": {
+          "0": "Einen großen Schritt nach vorne machen.",
+          "1": "Absenken, bis das hintere Knie fast den Boden berührt.",
+          "2": "Über den vorderen Fuß in die Ausgangsposition zurückdrücken."
+        }
+      },
+      "fandari-laterale-greutate": {
+        "description": "Kurzhantel vor der Brust halten, weiten Ausfallschritt zur Seite machen, anderes Bein gestreckt.",
+        "instructions": {
+          "0": "Aufrecht stehen, Hantel vor der Brust",
+          "1": "Weiten Schritt nach rechts zur Seite machen",
+          "2": "Rechtes Knie beugen, Hüfte nach hinten setzen",
+          "3": "Über die rechte Ferse zurückdrücken"
+        }
+      },
+      "flexii-biceps-bara": {
+        "mistakes": {
+          "0": "Den Oberkörper schwingen"
+        }
+      },
+      "flexii-biceps-priza-inversa": {
+        "description": "Langhantel-Curls im Obergriff (Handflächen unten) für Brachialis und Unterarme.",
+        "instructions": {
+          "0": "Stange schulterbreit im Obergriff greifen",
+          "1": "Ellbogen nah am Körper halten",
+          "2": "Stange bis zur oberen Brust heben",
+          "3": "Kontrolliert absenken"
+        }
+      },
+      "flexii-ciocan-gantera": {
+        "description": "Kurzhanteln im neutralen Hammergriff halten. Mit stabilen Handgelenken curlen.",
+        "instructions": {
+          "0": "Aufrecht stehen, Handflächen zeigen zum Körper",
+          "1": "Ellbogen eng am Oberkörper fixieren",
+          "2": "Zur Schulter curlen, ohne das Handgelenk zu drehen",
+          "3": "Kontrolliert absenken"
+        }
+      },
+      "flexii-pumni-bara": {
+        "description": "Auf der Bank sitzen, Unterarme auf den Oberschenkeln, Handflächen oben. Nur aus dem Handgelenk beugen.",
+        "instructions": {
+          "0": "Auf eine Bank setzen und Kurzhantel halten",
+          "1": "Unterarm auf dem Oberschenkel ablegen, Handfläche oben",
+          "2": "Hantel kontrolliert absenken und Handgelenk strecken",
+          "3": "Nur aus dem Handgelenk heben und Unterarm anspannen",
+          "4": "Bewegung über den gesamten Bereich kontrollieren"
+        },
+        "mistakes": {
+          "0": "Den ganzen Arm statt nur das Handgelenk bewegen",
+          "1": "Zu hohes Gewicht führt zu unsauberer Ausführung"
+        }
+      },
+      "flotari": {
+        "description": "Der Eigengewichts-Klassiker, der überall funktioniert.",
+        "instructions": {
+          "0": "Körper gerade, Hände unter den Schultern platzieren.",
+          "1": "Absenken, bis die Brust fast den Boden berührt.",
+          "2": "Zurückdrücken, ohne die Hüften durchhängen zu lassen."
+        }
+      },
+      "flotari-decline-greutate": {
+        "description": "Füße auf einer Bank, Scheibe auf dem Rücken — schwere Liegestütze für die obere Brust.",
+        "instructions": {
+          "0": "Füße sicher auf einer Bank absetzen",
+          "1": "Scheibe auf dem oberen Rücken platzieren",
+          "2": "Brust fast bis zum Boden absenken",
+          "3": "Kraftvoll nach oben drücken"
+        }
+      },
+      "fluturari-gantere": {
+        "mistakes": {
+          "0": "Ellbogen zu stark beugen (wird zum Bankdrücken)"
+        }
+      },
+      "fluturari-pec-deck-invers": {
+        "description": "Reverse Butterfly (Brust am Polster) zur gezielten Isolation der hinteren Schulter.",
+        "instructions": {
+          "0": "Sitz auf Schulterhöhe einstellen",
+          "1": "Mit der Brust zum Polster sitzen",
+          "2": "Arme nach hinten ziehen und Schulterblätter zusammenpressen",
+          "3": "Kontrolliert zurückführen"
+        }
+      },
+      "french-press-gantere-un-brat": {
+        "description": "Einarmiges Überkopf-Trizepsstrecken mit der Kurzhantel hinter dem Kopf.",
+        "instructions": {
+          "0": "Hantel mit gestrecktem Arm über dem Kopf halten",
+          "1": "Hantel hinter dem Kopf absenken, Ellbogen zeigt hoch",
+          "2": "Arm sauber wieder nach oben strecken",
+          "3": "Oberarm durchgehend ruhig halten"
+        }
+      },
+      "genuflexiuni-bara": {
+        "description": "Der König der Beinübungen.",
+        "instructions": {
+          "0": "Hantel auf dem Trapez ablegen, Füße schulterbreit.",
+          "1": "Absenken, bis die Oberschenkel parallel zum Boden sind.",
+          "2": "Durch die Fersen kräftig nach oben drücken."
+        },
+        "mistakes": {
+          "0": "Knie fallen nach innen",
+          "1": "Fersen vom Boden abheben"
+        }
+      },
+      "genuflexiuni-pistol-assistate": {
+        "description": "Einbeinige Kniebeuge mit leichter Unterstützung — perfekte Vorstufe zum freien Pistol Squat.",
+        "instructions": {
+          "0": "Auf einem Bein stehen und leicht festhalten",
+          "1": "Kontrolliert auf dem Standbein absenken",
+          "2": "Das freie Bein gerade nach vorn gestreckt halten",
+          "3": "Über die Ferse wieder hochdrücken"
+        }
+      },
+      "genuflexiuni-split-bulgaresti-greutate": {
+        "description": "Bulgarische Kniebeugen mit Kurzhanteln, hinterer Fuß erhöht — intensiv für Quadrizeps und Gesäß.",
+        "instructions": {
+          "0": "Linken Fußrücken hinten auf einer Bank ablegen",
+          "1": "Je eine Kurzhantel seitlich in der Hand halten",
+          "2": "Absenken, bis das hintere Knie fast den Boden berührt",
+          "3": "Kräftig über die vordere Ferse hochdrücken"
+        }
+      },
+      "hanging-leg-raise": {
+        "description": "An der Klimmzugstange hängen und gestreckte Beine bis mindestens 90° anheben.",
+        "instructions": {
+          "0": "Stange im Obergriff fassen",
+          "1": "Beine gestreckt und geschlossen halten",
+          "2": "Beine bis auf Hüfthöhe oder höher heben",
+          "3": "Ohne Schwung kontrolliert absenken"
+        },
+        "mistakes": {
+          "0": "Mit Schwung schaukeln",
+          "1": "Knie beugen statt strecken"
+        }
+      },
+      "impins-banca-plat": {
+        "description": "Die Grundübung für Masse und Kraft der Brustmuskulatur.",
+        "instructions": {
+          "0": "Auf der Bank liegend, Griff etwas breiter als schulterbreit.",
+          "1": "Die Langhantel kontrolliert bis zur Brust absenken.",
+          "2": "Explosiv nach oben drücken, ohne die Ellbogen hart einzurasten."
+        },
+        "mistakes": {
+          "0": "Gesäß von der Bank abheben",
+          "1": "Die Stange zu schnell absenken"
+        }
+      },
+      "impins-banda-elastica": {
+        "description": "Widerstandsband hinter dem Rücken verankern und für progressive Spannung nach vorn drücken.",
+        "instructions": {
+          "0": "Band sicher hinter dem Körper verankern",
+          "1": "Griffe fassen und einen Schritt vorgehen",
+          "2": "Arme nach vorn drücken und Brust anspannen",
+          "3": "Kontrolliert zurückführen"
+        }
+      },
+      "impins-declinat": {
+        "description": "Zielt auf den unteren Bereich der Brustmuskulatur."
+      },
+      "impins-inclinat-gantere": {
+        "description": "Betont den oberen Anteil der Brustmuskulatur.",
+        "instructions": {
+          "0": "Stelle die Bank auf 30-45 Grad Neigung ein.",
+          "1": "Drücke die Kurzhanteln über der Brust nach oben.",
+          "2": "Senke ab, bis du eine Dehnung in der Brust spürst."
+        }
+      },
+      "impins-inclinat-masina": {
+        "description": "Geführte Schrägbank-Brustpresse bei 30-45° für gezielte Belastung der oberen Brust.",
+        "instructions": {
+          "0": "Sitzhöhe für Schrägbankwinkel einstellen",
+          "1": "Griffe fassen, Rücken fest am Polster",
+          "2": "Gleichmäßig drücken, ohne Ellbogen durchzustrecken",
+          "3": "Kontrolliert absenken"
+        }
+      },
+      "impins-umeri-bara": {
+        "instructions": {
+          "0": "Hantel auf Höhe des Schlüsselbeins halten.",
+          "1": "Hantel gerade über den Kopf drücken.",
+          "2": "Hohlkreuz im unteren Rücken vermeiden."
+        }
+      },
+      "indreptari-romanesti": {
+        "mistakes": {
+          "0": "Knie zu stark beugen",
+          "1": "Den Rücken einrunden"
+        }
+      },
+      "inverted-row-greutate": {
+        "description": "Umgekehrtes Rudern unter einer hüfthohen Stange mit Zusatzscheibe auf der Brust.",
+        "instructions": {
+          "0": "Stange im Rack oder Smith-Gerät auf Hüfthöhe einstellen",
+          "1": "Hantelscheibe sicher auf der Brust ablegen",
+          "2": "Brust zur Stange hochziehen",
+          "3": "Mit geradem Körper kontrolliert absenken"
+        }
+      },
+      "kettlebell-snatch": {
+        "description": "Ballistische Ganzkörperbewegung: aus dem Schwung in einem Zug über den Kopf umsetzen.",
+        "instructions": {
+          "0": "Aus einem einarmigen Kettlebell Swing starten",
+          "1": "Auf Brusthöhe kräftig vertikal nachziehen",
+          "2": "Arm über dem Kopf sauber durchstrecken und fixieren",
+          "3": "Kontrolliert nach unten schwingen und wiederholen"
+        }
+      },
+      "kroc-rows": {
+        "description": "Schweres einarmiges Kurzhantelrudern mit kontrolliertem Schwung für rohe Kraft und Griffstärke.",
+        "instructions": {
+          "0": "Knie und Hand stabil auf der Bank abstützen",
+          "1": "Schwere Kurzhantel mit der anderen Hand greifen",
+          "2": "Explosiv Richtung Hüfte ziehen",
+          "3": "Leichte kontrollierte Rumpfrotation zulassen",
+          "4": "Hohe Wiederholungszahl sauber durchziehen"
+        }
+      },
+      "pallof-press": {
+        "description": "Kabelgriff auf Brusthöhe seitlich halten und nach vorn drücken, dabei der Rotation widerstehen.",
+        "instructions": {
+          "0": "Kabel auf Brusthöhe einstellen, seitlich stehen",
+          "1": "Griff mit beiden Händen vor der Brust halten",
+          "2": "Arme gerade nach vorn strecken ohne zu drehen",
+          "3": "2-3 Sekunden halten, kontrolliert zurückführen"
+        }
+      },
+      "pancake-stretch": {
+        "description": "Im breiten Grätschsitz mit geradem Rücken aus der Hüfte nach vorn neigen.",
+        "instructions": {
+          "0": "Auf dem Boden sitzen, Beine weit grätschen",
+          "1": "Rücken lang und gerade halten",
+          "2": "Langsam aus den Hüften nach vorn lehnen",
+          "3": "30-60 Sekunden halten"
+        }
+      },
+      "pec-deck": {
+        "description": "Hervorragende Brust-Isolation an der Butterfly-Maschine.",
+        "instructions": {
+          "0": "Rücken fest an das Rückenpolster drücken.",
+          "1": "Arme vor der Brust zusammenführen und Brust anspannen."
+        }
+      },
+      "pigeon-pose": {
+        "description": "Ein Knie nach vorn außen anwinkeln, hinteres Bein lang nach hinten strecken — tiefe Gesäßdehnung.",
+        "instructions": {
+          "0": "Aus dem Vierfüßler rechtes Knie zur rechten Hand holen",
+          "1": "Linkes Bein gerade nach hinten ausstrecken",
+          "2": "Oberkörper sanft über das vordere Bein beugen",
+          "3": "30-60 Sek. halten, dann Seite wechseln"
+        }
+      },
+      "plank": {
+        "instructions": {
+          "0": "Ellbogen unter den Schultern, Körper in gerader Linie.",
+          "1": "Bauch und Gesäß fest anspannen.",
+          "2": "Hüften nicht nach unten durchhängen lassen."
+        }
+      },
+      "pod-fesieri-un-picior": {
+        "description": "Einbeinige Gesäßbrücke in Rückenlage — kräftig aus einer Ferse nach oben drücken.",
+        "instructions": {
+          "0": "Auf dem Rücken liegen, rechtes Knie gebeugt, linkes Bein oben",
+          "1": "Über die rechte Ferse Hüfte hochdrücken",
+          "2": "Oben 1-2 Sekunden anspannen",
+          "3": "Kontrolliert absenken"
+        }
+      },
+      "presa-umeri-cu-bara-din-spate": {
+        "description": "FORTGESCHRITTEN: Nackendrücken mit der Langhantel. Erfordert gute Schultermobilität.",
+        "instructions": {
+          "0": "Hantel auf dem Trapez ablegen (nicht auf dem Nacken!)",
+          "1": "Stange weiter als schulterbreit greifen",
+          "2": "Hantel senkrecht über den Kopf drücken",
+          "3": "Kontrolliert bis zum Trapez absenken",
+          "4": "Rücken während des gesamten Satzes gerade halten"
+        },
+        "mistakes": {
+          "0": "Zu tiefes Absenken belastet das Schultergelenk",
+          "1": "Starkes Hohlkreuz"
+        }
+      },
+      "presa-umeri-cu-gantere-asimetric": {
+        "description": "Drücke abwechselnd eine Kurzhantel, während die andere oben gehalten wird — für maximale Spannungszeit.",
+        "instructions": {
+          "0": "Mit Rückenlehne sitzen, Kurzhanteln auf Schulterhöhe",
+          "1": "Rechte Hantel nach oben drücken und halten",
+          "2": "Rechts absenken, während links nach oben drückt",
+          "3": "Gleichmäßig im Wechsel fortfahren"
+        }
+      },
+      "priza-placutelor": {
+        "description": "Zwei Hantelscheiben zwischen den Fingern einklemmen und halten für maximale Griffkraft.",
+        "instructions": {
+          "0": "Zwei 5-10 kg Scheiben wählen",
+          "1": "Zwischen Daumen und Fingern fest zusammenklemmen",
+          "2": "Arm gestreckt seitlich am Körper halten",
+          "3": "30-60 Sekunden halten, dann Seite wechseln"
+        }
+      },
+      "pullover-bara-dreapta": {
+        "description": "Überzüge am oberen Kabelzug mit gestreckten Armen bis zu den Oberschenkeln ziehen.",
+        "instructions": {
+          "0": "Gerade Stange am oberen Kabelzug greifen",
+          "1": "Arme gestreckt, leicht nach vorn lehnen",
+          "2": "Stange gestreckt bis an die Oberschenkel ziehen",
+          "3": "Kontrolliert nach oben zurückführen"
+        }
+      },
+      "pullups-greutate-gantera": {
+        "description": "Klassische Klimmzüge mit Kurzhantel zwischen den Beinen für zusätzlichen Widerstand.",
+        "instructions": {
+          "0": "Kurzhantel fest zwischen Knöcheln oder Oberschenkeln klemmen",
+          "1": "Sauberen Klimmzug bis Kinn über der Stange ausführen",
+          "2": "Kontrolliert bis zur vollen Streckung absenken",
+          "3": "Griff während der gesamten Übung fest halten"
+        },
+        "mistakes": {
+          "0": "Mit dem Körper schwingen",
+          "1": "Kopf übermäßig nach vorn recken"
+        }
+      },
+      "ramat-bara": {
+        "instructions": {
+          "0": "Hüfte nach hinten schieben, Rücken gerade halten.",
+          "1": "Langhantel zum unteren Bauch ziehen.",
+          "2": "Schulterblätter oben fest zusammenziehen."
+        }
+      },
+      "ramat-bara-inclinat": {
+        "description": "Vorgebeugtes Langhantelrudern bei ~90° (Pendlay-Stil), explosiv vom Boden zur Brust ziehen.",
+        "instructions": {
+          "0": "Oberkörper fast parallel zum Boden vorbeugen",
+          "1": "Stange breiter als schulterbreit greifen",
+          "2": "Explosiv zum Brustbein hochziehen",
+          "3": "Kontrolliert zum Boden zurückführen"
+        }
+      },
+      "ridicari-frontale-bara": {
+        "description": "Langhantel im Obergriff bis auf Schulterhöhe nach vorne anheben.",
+        "instructions": {
+          "0": "Aufrecht stehen, Stange vor den Oberschenkeln",
+          "1": "Stange mit fast gestreckten Armen nach vorne heben",
+          "2": "Auf Schulterhöhe stoppen",
+          "3": "Kontrolliert absenken"
+        }
+      },
+      "ridicari-laterale": {
+        "mistakes": {
+          "0": "Mit dem Oberkörper Schwung holen",
+          "1": "Die Arme zu hoch anheben"
+        }
+      },
+      "ridicari-laterale-cablu-un-brat": {
+        "description": "Griff am tiefen Kabelzug einarmig fassen und unter Dauerspannung seitlich anheben.",
+        "instructions": {
+          "0": "Kabelzug tief bzw. auf Hüfthöhe einstellen",
+          "1": "Griff mit dem äußeren Arm überkreuzen",
+          "2": "Arm seitlich bis auf Schulterhöhe heben",
+          "3": "Langsam absenken und Spannung halten"
+        }
+      },
+      "ridicari-laterale-inclinat": {
+        "description": "45° vorgebeugt mit geradem Rücken. Kurzhanteln seitlich für die hintere Schulter anheben.",
+        "instructions": {
+          "0": "Leicht gebeugte Knie, Oberkörper 45° vorbeugen",
+          "1": "Kurzhanteln unter der Brust halten, Handflächen zueinander",
+          "2": "Arme seitlich bis auf Schulterhöhe anheben",
+          "3": "Oben 1 Sekunde halten, dann kontrolliert absenken"
+        },
+        "mistakes": {
+          "0": "Einrunden des Rückens",
+          "1": "Schwung aus dem Oberkörper"
+        }
+      },
+      "ridicari-varfuri-pe-un-picior": {
+        "description": "Einbeiniges Wadenheben an einer Kante für volle Dehnung und maximale Kontraktion.",
+        "instructions": {
+          "0": "Mit dem Fußballen eines Fußes auf einer Stufe stehen",
+          "1": "So hoch wie möglich auf die Zehenspitze drücken",
+          "2": "Ferse langsam unter die Stufenkante absenken",
+          "3": "Tiefe Dehnung in der Wade spüren"
+        }
+      },
+      "rulou-grip-bara": {
+        "description": "Langhantel mit Handflächen oben halten, zu den Fingerspitzen rollen lassen und schließen.",
+        "instructions": {
+          "0": "Aufrecht stehen, Langhantel mit Handflächen oben halten",
+          "1": "Finger langsam öffnen und Stange abrollen lassen",
+          "2": "Finger schließen und Stange aus den Fingern hochrollen",
+          "3": "Rhythmisch wiederholen"
+        }
+      },
+      "sandbag-carry": {
+        "description": "Schweren Sandsack vor der Brust oder auf der Schulter 20-30 m tragen, Haltung stabil halten.",
+        "instructions": {
+          "0": "Sandsack oder schwere Last sicher vom Boden heben",
+          "1": "Fest vor die Brust drücken oder schultern",
+          "2": "20-30 Meter mit kontrollierten Schritten gehen",
+          "3": "Bauch fest anspannen, aufrecht bleiben"
+        }
+      },
+      "sarituri-cutie": {
+        "description": "Explosive Box Jumps (50-75 cm) mit weicher Landung und leicht gebeugten Knien.",
+        "instructions": {
+          "0": "Ca. 30 cm vor der Box stehen, Füße schulterbreit",
+          "1": "Arme schwingen und explosiv auf die Box springen",
+          "2": "Weich mit leicht gebeugten Knien landen",
+          "3": "Kontrolliert herabsteigen und wiederholen"
+        },
+        "mistakes": {
+          "0": "Mit gestreckten Beinen hart landen",
+          "1": "Zu hohe Box für das eigene Niveau"
+        }
+      },
+      "scorpion-stretch": {
+        "description": "In Bauchlage mit ausgestreckten Armen ein Bein heben und überkreuz zur Gegenseite führen.",
+        "instructions": {
+          "0": "Auf den Bauch legen, Arme seitlich ausbreiten",
+          "1": "Rechtes Bein anheben und Knie beugen",
+          "2": "Fuß über den Körper Richtung linke Hand führen",
+          "3": "15-20 Sek. halten, dann wechseln"
+        }
+      },
+      "skater-jumps": {
+        "description": "Seitliche Skater-Sprünge von einem Bein auf das andere mit stabiler Landung.",
+        "instructions": {
+          "0": "Auf dem leicht gebeugten rechten Bein starten",
+          "1": "Seitlich auf den linken Fuß springen und weich landen",
+          "2": "Arme natürlich zur Balance mitschwingen",
+          "3": "Zügig und gleichmäßig abwechseln"
+        }
+      },
+      "thread-the-needle": {
+        "description": "Im Vierfüßlerstand einen Arm unter dem Rumpf hindurchführen für bessere Brustwirbelsäulen-Mobilität.",
+        "instructions": {
+          "0": "Im Vierfüßlerstand starten",
+          "1": "Rechten Arm unter dem linken hindurchführen, Handfläche oben",
+          "2": "Oberkörper drehen, rechte Schulter Richtung Boden",
+          "3": "15-30 Sek. halten, andere Seite wiederholen"
+        }
+      },
+      "thruster-greutate": {
+        "description": "Fließende Kombination aus Kniebeuge und Schulterdrücken mit Kurzhanteln.",
+        "instructions": {
+          "0": "Kurzhanteln auf Schulterhöhe halten",
+          "1": "In die Kniebeuge absenken",
+          "2": "Explosiv hochdrücken und Hanteln über den Kopf stoßen",
+          "3": "Zurück auf die Schultern führen und flüssig wiederholen"
+        }
+      },
+      "tractiuni": {
+        "description": "Der König der Rückenübungen.",
+        "instructions": {
+          "0": "Stange breiter als schulterbreit greifen.",
+          "1": "Kinn kontrolliert über die Stange ziehen.",
+          "2": "Kontrolliert in die volle Streckung absenken."
+        },
+        "mistakes": {
+          "0": "Mit dem Körper Schwung holen",
+          "1": "Nicht vollständig absenken"
+        }
+      },
+      "triceps-pushdown-funie-extensie": {
+        "description": "Trizepsdrücken mit dem Seil am Kabelzug — Seilenden unten für maximale Kontraktion spreizen.",
+        "instructions": {
+          "0": "Seil am oberen Kabelzug greifen",
+          "1": "Ellbogen stabil am Körper fixieren",
+          "2": "Nach unten drücken und Seil unten auseinanderziehen",
+          "3": "Kontrolliert mit fixierten Ellbogen hochführen"
+        }
+      },
+      "worlds-greatest-stretch": {
+        "description": "Aus dem Plank einen Fuß neben die Hand setzen und Oberkörper aufdrehen — das kompletteste dynamische Dehnen.",
+        "instructions": {
+          "0": "In der Liegestützposition starten",
+          "1": "Rechten Fuß neben die rechte Hand setzen",
+          "2": "Rechten Arm zur Decke öffnen und hinterherschauen",
+          "3": "Zurückkehren und links wiederholen"
+        }
+      }
+    }
   }
 }

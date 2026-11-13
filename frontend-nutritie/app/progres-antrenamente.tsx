@@ -5,8 +5,12 @@ import { router } from 'expo-router';
 import { ArrowLeft, ChevronDown, ChevronUp, Clock, Dumbbell, History } from 'lucide-react-native';
 import DailyQuestsCard from '../components/gamification/DailyQuestsCard';
 import { useAntrenamente, type Antrenament } from '../hooks/useAntrenamente';
+import { useExercitii } from '../hooks/useExercitii';
 import { useTheme } from '../context/ThemeContext';
 import type { DailySnapshot } from '../lib/questsEngine';
+import { useTranslation } from 'react-i18next';
+import { describeSet, getSetFields } from '../lib/workoutSets';
+import { getLocalizedExerciseName } from '../lib/sportI18n';
 
 function snapshotFrom(workouts: Antrenament[]): DailySnapshot {
   const exerciseIds = new Set<string>();
@@ -35,28 +39,39 @@ function snapshotFrom(workouts: Antrenament[]): DailySnapshot {
 
 export default function ProgresAntrenamenteScreen() {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { antrenamente, loading, refresh } = useAntrenamente();
+  const { exercitii } = useExercitii();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const snapshot = useMemo(() => snapshotFrom(antrenamente), [antrenamente]);
+
+  const exercitiiMap = useMemo(() => {
+    const map = new Map<string, (typeof exercitii)[number]>();
+    for (const ex of exercitii) {
+      map.set(ex.id, ex);
+      map.set(ex.nume.toLowerCase(), ex);
+    }
+    return map;
+  }, [exercitii]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Înapoi" style={[styles.iconButton, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
+        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('sport.progress.backA11y')} style={[styles.iconButton, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
           <ArrowLeft size={20} color={colors.textPrimary} />
         </Pressable>
         <View style={styles.headerCopy}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Progres sport</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Questuri și exercițiile de azi</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{t('sport.progress.title')}</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{t('sport.progress.subtitle')}</Text>
         </View>
-        <Pressable onPress={() => router.push('/jurnal-antrenamente')} accessibilityRole="button" accessibilityLabel="Deschide jurnalul complet" style={[styles.iconButton, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
+        <Pressable onPress={() => router.push('/jurnal-antrenamente')} accessibilityRole="button" accessibilityLabel={t('sport.progress.openJournalA11y')} style={[styles.iconButton, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
           <History size={20} color={colors.accent} />
         </Pressable>
       </View>
 
       {loading ? (
-        <View style={styles.loading}><ActivityIndicator size="large" color={colors.accent} /><Text style={{ color: colors.textSecondary }}>Se încarcă progresul…</Text></View>
+        <View style={styles.loading}><ActivityIndicator size="large" color={colors.accent} /><Text style={{ color: colors.textSecondary }}>{t('sport.progress.loading')}</Text></View>
       ) : (
         <FlatList
           data={antrenamente}
@@ -69,9 +84,9 @@ export default function ProgresAntrenamenteScreen() {
               <DailyQuestsCard snapshot={snapshot} />
               <View style={styles.summaryRow}>
                 {[
-                  [snapshot.exercises, 'exerciții', colors.accent],
-                  [snapshot.sets, 'seturi', colors.accentSecondary],
-                  [Math.round(snapshot.volumeKg), 'kg volum', colors.warning],
+                  [snapshot.exercises, t('sport.progress.exercisesStat'), colors.accent],
+                  [snapshot.sets, t('sport.progress.setsStat'), colors.accentSecondary],
+                  [Math.round(snapshot.volumeKg), t('sport.progress.volumeStat'), colors.warning],
                 ].map(([value, label, color]) => (
                   <View key={String(label)} style={[styles.summary, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
                     <Text style={[styles.summaryValue, { color: String(color) }]}>{String(value)}</Text>
@@ -79,44 +94,75 @@ export default function ProgresAntrenamenteScreen() {
                   </View>
                 ))}
               </View>
-              <View style={styles.sectionHeader}><Dumbbell size={18} color={colors.accent} /><Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Antrenamentele de azi</Text></View>
+              <View style={styles.sectionHeader}><Dumbbell size={18} color={colors.accent} /><Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('sport.progress.todayWorkouts')}</Text></View>
             </View>
           }
           ListEmptyComponent={
             <View style={[styles.empty, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
               <Dumbbell size={34} color={colors.textTertiary} />
-              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Niciun antrenament azi</Text>
-              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Seturile salvate în Sport vor apărea aici și vor actualiza questurile.</Text>
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{t('sport.progress.emptyTitle')}</Text>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('sport.progress.emptyText')}</Text>
             </View>
           }
           renderItem={({ item }) => {
             const isOpen = Boolean(expanded[item.id]);
             return (
               <View style={[styles.workoutCard, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
-                <Pressable onPress={() => setExpanded((prev) => ({ ...prev, [item.id]: !prev[item.id] }))} accessibilityRole="button" accessibilityLabel={`${isOpen ? 'Închide' : 'Deschide'} ${item.nume}`} style={styles.workoutHeader}>
+                <Pressable
+                  onPress={() => setExpanded((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                  accessibilityRole="button"
+                  accessibilityLabel={isOpen ? t('sport.progress.closeA11y', { name: item.nume }) : t('sport.progress.openA11y', { name: item.nume })}
+                  style={styles.workoutHeader}
+                >
                   <View style={styles.workoutCopy}>
                     <Text style={[styles.workoutName, { color: colors.textPrimary }]}>{item.nume}</Text>
-                    <View style={styles.metaRow}><Clock size={13} color={colors.textTertiary} /><Text style={[styles.meta, { color: colors.textSecondary }]}>{item.durata_min} min • {item.exercitii?.length || 0} exerciții</Text>{item.is_local ? <Text style={[styles.localTag, { color: colors.warning }]}>local</Text> : null}</View>
+                    <View style={styles.metaRow}>
+                      <Clock size={13} color={colors.textTertiary} />
+                      <Text style={[styles.meta, { color: colors.textSecondary }]}>
+                        {t('sport.progress.durationAndExercises', { min: item.durata_min, count: item.exercitii?.length || 0 })}
+                      </Text>
+                      {item.is_local ? <Text style={[styles.localTag, { color: colors.warning }]}>{t('sport.progress.localTag')}</Text> : null}
+                    </View>
                   </View>
                   {isOpen ? <ChevronUp size={20} color={colors.textSecondary} /> : <ChevronDown size={20} color={colors.textSecondary} />}
                 </Pressable>
                 {isOpen ? (
                   <View style={[styles.exerciseList, { borderTopColor: colors.border }]}>
-                    {(item.exercitii || []).map((exercise, exerciseIndex) => (
-                      <View key={`${exercise.exercitiuId}-${exerciseIndex}`} style={styles.exercise}>
-                        <Text style={[styles.exerciseName, { color: colors.textPrimary }]}>{exercise.nume}</Text>
-                        <View style={styles.setList}>
-                          {(exercise.seturi || []).map((set, setIndex) => (
-                            <View key={setIndex} style={[styles.setPill, { backgroundColor: colors.background }]}>
-                              <Text style={[styles.setText, { color: colors.textSecondary }]}>#{set.serie || setIndex + 1}</Text>
-                              <Text style={[styles.setValue, { color: colors.accent }]}>{set.repetari} rep</Text>
-                              <Text style={[styles.setValue, { color: colors.textPrimary }]}>× {set.greutate || 0} kg</Text>
-                              {set.set_type === 'warmup' ? <Text style={[styles.warmup, { color: colors.warning }]}>încălzire</Text> : null}
-                            </View>
-                          ))}
+                    {(item.exercitii || []).map((exercise, exerciseIndex) => {
+                      const exMeta = exercitiiMap.get(exercise.exercitiuId) ?? exercitiiMap.get((exercise.nume || '').toLowerCase());
+                      const displayExName = exMeta ? getLocalizedExerciseName(exMeta, t) : exercise.nume;
+                      return (
+                        <View key={`${exercise.exercitiuId}-${exerciseIndex}`} style={styles.exercise}>
+                          <Text style={[styles.exerciseName, { color: colors.textPrimary }]}>{displayExName}</Text>
+                          <View style={styles.setList}>
+                            {(exercise.seturi || []).map((set, setIndex) => {
+                              const fields = getSetFields(
+                                exMeta ?? ((set.time_seconds ?? 0) > 0
+                                  ? {
+                                      nume: exercise.nume,
+                                      masurare: {
+                                        type: 'timed',
+                                        allowsWeight: false,
+                                        weightOptional: false,
+                                        defaultSets: 1,
+                                        unitLabel: t('sport.measurement.units.secShort'),
+                                      },
+                                    }
+                                  : { nume: exercise.nume }),
+                                t,
+                              );
+                              return (
+                                <View key={setIndex} style={[styles.setPill, { backgroundColor: colors.background }]}>
+                                  <Text style={[styles.setText, { color: colors.textSecondary }]}>#{set.serie || setIndex + 1}</Text>
+                                  <Text style={[styles.setValue, { color: colors.accent }]}>{describeSet(set, fields, t)}</Text>
+                                  {set.set_type === 'warmup' ? <Text style={[styles.warmup, { color: colors.warning }]}>{t('sport.progress.warmupTag')}</Text> : null}
+                                </View>
+                              );
+                            })}
+                          </View>
                         </View>
-                      </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 ) : null}
               </View>
@@ -140,7 +186,7 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }, sectionTitle: { fontSize: 17, fontWeight: '900' },
   empty: { marginTop: 12, padding: 28, borderRadius: 20, borderWidth: 1, alignItems: 'center' }, emptyTitle: { fontSize: 16, fontWeight: '800', marginTop: 12 }, emptyText: { fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 5 },
   workoutCard: { borderRadius: 18, borderWidth: 1, marginTop: 12, overflow: 'hidden' }, workoutHeader: { minHeight: 68, flexDirection: 'row', alignItems: 'center', padding: 15 }, workoutCopy: { flex: 1 }, workoutName: { fontSize: 15, fontWeight: '800' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginTop: 5 }, meta: { fontSize: 12, fontWeight: '600' }, localTag: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginTop: 5 }, meta: { fontSize: 12, fontWeight: '600' }, localTag: { fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
   exerciseList: { borderTopWidth: 1, padding: 15 }, exercise: { marginBottom: 14 }, exerciseName: { fontSize: 14, fontWeight: '800', marginBottom: 7 }, setList: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  setPill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 7 }, setText: { fontSize: 11, fontWeight: '700' }, setValue: { fontSize: 12, fontWeight: '800' }, warmup: { fontSize: 9, fontWeight: '900' },
+  setPill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 7 }, setText: { fontSize: 11, fontWeight: '700' }, setValue: { fontSize: 12, fontWeight: '800' }, warmup: { fontSize: 11, fontWeight: '900' },
 });

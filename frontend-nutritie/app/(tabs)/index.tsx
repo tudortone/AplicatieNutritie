@@ -965,23 +965,20 @@ export default function HomeScreen() {
 
         {/* HARTĂ MUSCULARĂ LIVE Card pe ecranul Acasă (Secțiunea 4.4) */}
         <Animated.View style={{ width: '100%', maxWidth: 680, alignSelf: 'center' }}>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => router.push('/(tabs)/antrenamente' as any)}
-            accessibilityRole="button"
-            accessibilityLabel={t('home.liveMuscleMapA11y')}
-            style={[s.liveHeatmapCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
-          >
+          <View style={[s.liveHeatmapCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
             <View style={s.liveHeatmapHeader}>
-              <View style={s.liveHeatmapTitleRow}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => router.push('/(tabs)/antrenamente' as any)}
+                accessibilityRole="button"
+                accessibilityLabel={t('home.liveMuscleMapA11y')}
+                style={s.liveHeatmapTitleRow}
+              >
                 <View style={[s.liveHeatmapDot, { backgroundColor: colors.danger }]} />
                 <Text style={[s.liveHeatmapTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{t('home.liveMuscleMap')}</Text>
-              </View>
+              </TouchableOpacity>
               <TouchableOpacity
-                onPress={(event) => {
-                  event.stopPropagation();
-                  setViewSideHome(v => v === 'front' ? 'back' : 'front');
-                }}
+                onPress={() => setViewSideHome(v => v === 'front' ? 'back' : 'front')}
                 style={[s.liveHeatmapToggle, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                 activeOpacity={0.8}
                 accessibilityRole="button"
@@ -994,23 +991,30 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={[s.liveHeatmapBodyWrap, { height: homeBodyHeight + 16 }]}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => router.push('/(tabs)/antrenamente' as any)}
+              accessibilityRole="button"
+              accessibilityLabel={t('home.liveMuscleMapA11y')}
+            >
+              <View style={[s.liveHeatmapBodyWrap, { height: homeBodyHeight + 16 }]}>
                 <BodyMap
                   view={viewSideHome}
                   intensity={dailyIntensityHome}
                   width={homeBodyWidth}
                 />
-            </View>
+              </View>
 
-            <View style={s.liveHeatmapFooter}>
-              <Dumbbell size={14} color={colors.accentSecondary} />
-              <Text style={[s.liveHeatmapFooterText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
-                {antrenamente && antrenamente.length > 0
-                  ? t('home.workoutsToday', { count: antrenamente.length })
-                  : t('home.noWorkoutsToday')}
-              </Text>
-            </View>
-          </TouchableOpacity>
+              <View style={s.liveHeatmapFooter}>
+                <Dumbbell size={14} color={colors.accentSecondary} />
+                <Text style={[s.liveHeatmapFooterText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
+                  {antrenamente && antrenamente.length > 0
+                    ? t('home.workoutsToday', { count: antrenamente.length })
+                    : t('home.noWorkoutsToday')}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
         </Animated.View>
 
         {/* Tips card */}

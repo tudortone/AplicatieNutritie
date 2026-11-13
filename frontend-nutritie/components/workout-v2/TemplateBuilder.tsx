@@ -28,12 +28,79 @@ function numeric(text: string): number | undefined {
   return Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
+function BlockNumericInput({
+  label,
+  value,
+  keyboardType,
+  allowUndefined = false,
+  onCommit,
+}: {
+  label: string;
+  value: number | undefined;
+  keyboardType: 'number-pad' | 'decimal-pad';
+  allowUndefined?: boolean;
+  onCommit: (next: number | undefined) => void;
+}) {
+  const { colors } = useTheme();
+  const [text, setText] = React.useState(value === undefined ? '' : String(value));
+  const [focused, setFocused] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!focused) {
+      setText(value === undefined ? '' : String(value));
+    }
+  }, [value, focused]);
+
+  return (
+    <View style={styles.fieldGroup}>
+      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]} numberOfLines={1}>
+        {label}
+      </Text>
+      <TextInput
+        accessibilityLabel={label}
+        keyboardType={keyboardType}
+        value={text}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          const parsed = numeric(text);
+          if (parsed === undefined) {
+            if (allowUndefined) {
+              setText('');
+              onCommit(undefined);
+            } else {
+              setText(value === undefined ? '' : String(value));
+            }
+          } else {
+            setText(String(parsed));
+            onCommit(parsed);
+          }
+        }}
+        onChangeText={(nextText) => {
+          setText(nextText);
+          if (!nextText.trim()) {
+            if (allowUndefined) onCommit(undefined);
+            return;
+          }
+          const parsed = numeric(nextText);
+          if (parsed !== undefined) {
+            onCommit(parsed);
+          }
+        }}
+        style={[styles.field, { color: colors.textPrimary, borderColor: colors.border }]}
+      />
+    </View>
+  );
+}
+
 export function TemplateBuilder({
   template, saving = false, error, onNameChange, onAddExercise, onRemoveBlock,
   onDuplicateBlock, onMoveBlock, onChangeStrengthBlock, onChangeCardioBlock, onSave,
 }: TemplateBuilderProps) {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const isTemplateValid = template.name.trim().length > 0 && template.blocks.length > 0;
+  const isSaveDisabledVisual = saving || !isTemplateValid;
   return (
     <View style={styles.root}>
       <Text style={[styles.label, { color: colors.textSecondary }]}>{t('workoutV2.builder.name')}</Text>
@@ -59,15 +126,15 @@ export function TemplateBuilder({
             </View>
             {block.kind === 'strength' ? (
               <View style={styles.fields}>
-                <TextInput accessibilityLabel={t('workoutV2.builder.sets')} keyboardType="number-pad" value={String(block.sets)} onChangeText={(value) => onChangeStrengthBlock(block.id, { sets: numeric(value) ?? block.sets })} style={[styles.field, { color: colors.textPrimary, borderColor: colors.border }]} />
-                <TextInput accessibilityLabel={t('workoutV2.builder.reps')} keyboardType="number-pad" value={String(block.reps)} onChangeText={(value) => onChangeStrengthBlock(block.id, { reps: numeric(value) ?? block.reps })} style={[styles.field, { color: colors.textPrimary, borderColor: colors.border }]} />
-                <TextInput accessibilityLabel={t('workoutV2.builder.weight')} keyboardType="decimal-pad" value={block.weightKg === undefined ? '' : String(block.weightKg)} onChangeText={(value) => onChangeStrengthBlock(block.id, { weightKg: numeric(value) })} style={[styles.field, { color: colors.textPrimary, borderColor: colors.border }]} />
-                <TextInput accessibilityLabel={t('workoutV2.builder.rest')} keyboardType="number-pad" value={String(block.restSeconds)} onChangeText={(value) => onChangeStrengthBlock(block.id, { restSeconds: numeric(value) ?? block.restSeconds })} style={[styles.field, { color: colors.textPrimary, borderColor: colors.border }]} />
+                <BlockNumericInput label={t('workoutV2.builder.sets')} keyboardType="number-pad" value={block.sets} onCommit={(next) => { if (next !== undefined) onChangeStrengthBlock(block.id, { sets: Math.max(1, Math.round(next)) }); }} />
+                <BlockNumericInput label={t('workoutV2.builder.reps')} keyboardType="number-pad" value={block.reps} onCommit={(next) => { if (next !== undefined) onChangeStrengthBlock(block.id, { reps: Math.max(1, Math.round(next)) }); }} />
+                <BlockNumericInput label={t('workoutV2.builder.weight')} keyboardType="decimal-pad" allowUndefined value={block.weightKg} onCommit={(next) => onChangeStrengthBlock(block.id, { weightKg: next })} />
+                <BlockNumericInput label={t('workoutV2.builder.rest')} keyboardType="number-pad" value={block.restSeconds} onCommit={(next) => { if (next !== undefined) onChangeStrengthBlock(block.id, { restSeconds: Math.round(next) }); }} />
               </View>
             ) : (
               <View style={styles.fields}>
-                <TextInput accessibilityLabel={t('workoutV2.builder.duration')} keyboardType="number-pad" value={block.durationSeconds === undefined ? '' : String(block.durationSeconds)} onChangeText={(value) => onChangeCardioBlock(block.id, { durationSeconds: numeric(value) })} style={[styles.field, { color: colors.textPrimary, borderColor: colors.border }]} />
-                <TextInput accessibilityLabel={t('workoutV2.builder.distance')} keyboardType="decimal-pad" value={block.distanceKm === undefined ? '' : String(block.distanceKm)} onChangeText={(value) => onChangeCardioBlock(block.id, { distanceKm: numeric(value) })} style={[styles.field, { color: colors.textPrimary, borderColor: colors.border }]} />
+                <BlockNumericInput label={t('workoutV2.builder.duration')} keyboardType="number-pad" allowUndefined value={block.durationSeconds} onCommit={(next) => onChangeCardioBlock(block.id, { durationSeconds: next })} />
+                <BlockNumericInput label={t('workoutV2.builder.distance')} keyboardType="decimal-pad" allowUndefined value={block.distanceKm} onCommit={(next) => onChangeCardioBlock(block.id, { distanceKm: next })} />
               </View>
             )}
           </View>
@@ -76,8 +143,17 @@ export function TemplateBuilder({
       <Text style={[styles.label, { color: colors.textSecondary }]}>{t('workoutV2.builder.addExercise')}</Text>
       <ExercisePicker onSelect={onAddExercise} />
       {error ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel={t('workoutV2.builder.save')} disabled={saving} onPress={onSave} style={[styles.save, { backgroundColor: saving ? colors.disabledBg : colors.accent }]}>
-        <Text style={[styles.saveText, { color: colors.textOnAccent }]}>{saving ? t('common.loading') : t('workoutV2.builder.save')}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('workoutV2.builder.save')}
+        accessibilityState={{ disabled: saving }}
+        disabled={saving}
+        onPress={onSave}
+        style={[styles.save, { backgroundColor: isSaveDisabledVisual ? colors.disabledBg : colors.accent }]}
+      >
+        <Text style={[styles.saveText, { color: isSaveDisabledVisual ? colors.disabledText : colors.textOnAccent }]}>
+          {saving ? t('common.loading') : t('workoutV2.builder.save')}
+        </Text>
       </Pressable>
     </View>
   );
@@ -89,9 +165,11 @@ const styles = StyleSheet.create({
   block: { borderWidth: 1, borderRadius: 18, padding: 12, gap: 10 },
   blockHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8 },
   blockTitle: { flex: 1, minWidth: 0, fontSize: 14, lineHeight: 18, fontWeight: '800' },
-  actions: { flexDirection: 'row' }, iconButton: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  actions: { flexDirection: 'row', gap: 2 }, iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   fields: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  field: { minWidth: 68, minHeight: 44, flexGrow: 1, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, textAlign: 'center' },
+  fieldGroup: { minWidth: 68, flexGrow: 1, gap: 4 },
+  fieldLabel: { fontSize: 11, lineHeight: 14, fontWeight: '700' },
+  field: { minWidth: 68, minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, textAlign: 'center' },
   error: { fontSize: 13, lineHeight: 18 },
   save: { minHeight: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
   saveText: { fontSize: 15, fontWeight: '800' },

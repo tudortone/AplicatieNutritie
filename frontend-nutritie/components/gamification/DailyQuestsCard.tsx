@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import {
   EMPTY_REWARD_STATE,
   syncProgress,
@@ -15,8 +16,8 @@ export type DailyQuestsCardProps = {
   compact?: boolean;
 };
 
-function formatValue(value: number, unit: string): string {
-  if (unit === 'kg' && value >= 1000) return `${(value / 1000).toFixed(1)}t`;
+function formatValue(value: number, unit: string, rawUnit: string): string {
+  if ((rawUnit === 'kg' || unit === 'kg') && value >= 1000) return `${(value / 1000).toFixed(1)}t`;
   return String(Math.round(value));
 }
 
@@ -43,6 +44,7 @@ function formatCountdown(milliseconds: number): string {
 // la fiecare secundă, doar această etichetă mică.
 function CountdownLabel() {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [remainingMs, setRemainingMs] = useState(() => msUntilMidnight());
 
   useEffect(() => {
@@ -58,12 +60,15 @@ function CountdownLabel() {
   }, []);
 
   return (
-    <Text style={[styles.resetText, { color: colors.textTertiary }]}>Reset în {formatCountdown(remainingMs)}</Text>
+    <Text style={[styles.resetText, { color: colors.textTertiary }]}>
+      {t('sport.quests.resetIn', { time: formatCountdown(remainingMs) })}
+    </Text>
   );
 }
 
 export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardProps) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [quests, setQuests] = useState<Quest[]>([]);
   const [reward, setReward] = useState<RewardState>(EMPTY_REWARD_STATE);
   const [xpToday, setXpToday] = useState(0);
@@ -111,7 +116,7 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
     <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Questuri zilnice</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{t('sport.quests.title')}</Text>
           <CountdownLabel />
         </View>
         <Text style={[styles.counter, { color: colors.accent }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
@@ -120,42 +125,50 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
       </View>
 
       {quests.length === 0 ? (
-        <Text style={[styles.loading, { color: colors.textSecondary }]}>Se generează questurile zilei…</Text>
-      ) : quests.map((q) => (
-        <View key={q.id} style={styles.quest}>
-          <View style={styles.questIcon}>
-            <FlowIcon name={q.icon} size={18} color={colors.accent} />
-          </View>
-          <View style={styles.questBody}>
-            <View style={styles.questTop}>
-              <Text style={[styles.questTitle, { color: q.done ? colors.success : colors.textPrimary }]} numberOfLines={1}>
-                {q.done ? '✓ ' : ''}{q.title}
-              </Text>
-              <Text style={[styles.questProgress, { color: colors.textTertiary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-                {formatValue(q.progress, q.unit)}/{formatValue(q.target, q.unit)} {q.unit}
-              </Text>
+        <Text style={[styles.loading, { color: colors.textSecondary }]}>{t('common.loading')}</Text>
+      ) : quests.map((q) => {
+        const questTitle = t(`sport.quests.pool.${q.id}.title`, { defaultValue: q.title });
+        const questUnit = t(`sport.quests.pool.${q.id}.unit`, { defaultValue: q.unit });
+        return (
+          <View key={q.id} style={styles.quest}>
+            <View style={styles.questIcon}>
+              <FlowIcon name={q.icon} size={18} color={colors.accent} />
             </View>
-            <View style={[styles.track, { backgroundColor: colors.surfaceBg }]}>
-              <View
-                style={[
-                  styles.fill,
-                  { width: `${Math.round(q.ratio * 100)}%`, backgroundColor: q.done ? colors.success : colors.accent },
-                ]}
-              />
+            <View style={styles.questBody}>
+              <View style={styles.questTop}>
+                <Text style={[styles.questTitle, { color: q.done ? colors.success : colors.textPrimary }]} numberOfLines={1}>
+                  {q.done ? '✓ ' : ''}{questTitle}
+                </Text>
+                <Text style={[styles.questProgress, { color: colors.textTertiary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                  {formatValue(q.progress, questUnit, q.unit)}/{formatValue(q.target, questUnit, q.unit)} {questUnit}
+                </Text>
+              </View>
+              <View style={[styles.track, { backgroundColor: colors.surfaceBg }]}>
+                <View
+                  style={[
+                    styles.fill,
+                    { width: `${Math.round(q.ratio * 100)}%`, backgroundColor: q.done ? colors.success : colors.accent },
+                  ]}
+                />
+              </View>
             </View>
+            <Text style={[styles.xp, { color: colors.textTertiary }]}>+{q.xp}</Text>
           </View>
-          <Text style={[styles.xp, { color: colors.textTertiary }]}>+{q.xp}</Text>
-        </View>
-      ))}
+        );
+      })}
 
       {!compact ? (
         <View style={[styles.streakBox, { borderColor: colors.cardBorder }]}>
           <View style={styles.streakRow}>
             <View style={styles.streakValue}>
               <FlowIcon name="flame" size={15} color={colors.accent} />
-              <Text style={[styles.streakLabel, { color: colors.textSecondary }]}>Serie: {reward.streak} zile</Text>
+              <Text style={[styles.streakLabel, { color: colors.textSecondary }]}>
+                {t('sport.quests.streak', { days: reward.streak })}
+              </Text>
             </View>
-            <Text style={[styles.streakLabel, { color: colors.textTertiary }]}>Record: {reward.bestStreak}</Text>
+            <Text style={[styles.streakLabel, { color: colors.textTertiary }]}>
+              {t('sport.quests.best', { days: reward.bestStreak })}
+            </Text>
           </View>
         </View>
       ) : null}

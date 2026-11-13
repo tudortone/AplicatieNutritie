@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
+import { getLocalizedMuscleLabel, normalizeSearchText } from '../../lib/sportI18n';
 
 export type Equipment = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'kettlebell' | 'bench' | 'cardio' | string;
 export type MuscleGroup =
@@ -16,29 +18,29 @@ interface Props {
   label?: string;
 }
 
-const MUSCLE_THEME: Record<string, { color?: string; label: string }> = {
-  chest: { color: '#3B82F6', label: 'Piept' },
-  piept: { color: '#3B82F6', label: 'Piept' },
-  back: { color: '#EF4444', label: 'Spate' },
-  spate: { color: '#EF4444', label: 'Spate' },
-  shoulders: { color: '#F59E0B', label: 'Umeri' },
-  umeri: { color: '#F59E0B', label: 'Umeri' },
-  biceps: { color: '#8B5CF6', label: 'Biceps' },
-  triceps: { color: '#A855F7', label: 'Triceps' },
-  quads: { color: '#10B981', label: 'Cvadriceps' },
-  cvadriceps: { color: '#10B981', label: 'Cvadriceps' },
-  hamstrings: { color: '#059669', label: 'Femurali' },
-  femurali: { color: '#059669', label: 'Femurali' },
-  glutes: { color: '#EC4899', label: 'Fesieri' },
-  fesieri: { color: '#EC4899', label: 'Fesieri' },
-  calves: { color: '#14B8A6', label: 'Gambe' },
-  gambe: { color: '#14B8A6', label: 'Gambe' },
-  core: { color: '#EAB308', label: 'Abdomen' },
-  abdomen: { color: '#EAB308', label: 'Abdomen' },
-  forearms: { color: '#6366F1', label: 'Antebrațe' },
-  antebrațe: { color: '#6366F1', label: 'Antebrațe' },
-  // cardio: culoarea se setează din tema activă (colors.danger) în componentă.
-  cardio: { label: 'Cardio' },
+const MUSCLE_THEME: Record<string, { color?: string; labelKey: string }> = {
+  chest: { color: '#38BDF8', labelKey: 'piept' },
+  piept: { color: '#38BDF8', labelKey: 'piept' },
+  back: { color: '#F87171', labelKey: 'spate' },
+  spate: { color: '#F87171', labelKey: 'spate' },
+  shoulders: { color: '#FBBF24', labelKey: 'umeri' },
+  umeri: { color: '#FBBF24', labelKey: 'umeri' },
+  biceps: { color: '#C084FC', labelKey: 'biceps' },
+  triceps: { color: '#C084FC', labelKey: 'triceps' },
+  quads: { color: '#34D399', labelKey: 'cvadriceps' },
+  cvadriceps: { color: '#34D399', labelKey: 'cvadriceps' },
+  hamstrings: { color: '#34D399', labelKey: 'femurali' },
+  femurali: { color: '#34D399', labelKey: 'femurali' },
+  glutes: { color: '#F472B6', labelKey: 'fesieri' },
+  fesieri: { color: '#F472B6', labelKey: 'fesieri' },
+  calves: { color: '#2DD4BF', labelKey: 'gambe' },
+  gambe: { color: '#2DD4BF', labelKey: 'gambe' },
+  core: { color: '#FACC15', labelKey: 'abdomen' },
+  abdomen: { color: '#FACC15', labelKey: 'abdomen' },
+  forearms: { color: '#A5B4FC', labelKey: 'antebrate' },
+  antebrațe: { color: '#A5B4FC', labelKey: 'antebrate' },
+  // cardio: roșul se ia din tema activă (colors.danger), nu e fix în hartă.
+  cardio: { labelKey: 'cardio' },
 };
 
 function EquipmentPath({ equipment = 'bodyweight', strokeColor }: { equipment: Equipment; strokeColor: string }) {
@@ -50,9 +52,9 @@ function EquipmentPath({ equipment = 'bodyweight', strokeColor }: { equipment: E
     fill: 'none',
   };
 
-  const norm = equipment.toLowerCase().trim();
+  const norm = normalizeSearchText(equipment);
 
-  if (norm.includes('haltera') || norm.includes('barbell') || norm.includes('bară')) {
+  if (norm.includes('haltera') || norm.includes('barbell') || norm.includes('bara') || norm.includes('langhantel') || norm.includes('barre')) {
     return (
       <>
         <Path d="M2 12h20" {...common} />
@@ -62,7 +64,7 @@ function EquipmentPath({ equipment = 'bodyweight', strokeColor }: { equipment: E
       </>
     );
   }
-  if (norm.includes('gantere') || norm.includes('dumbbell')) {
+  if (norm.includes('gantere') || norm.includes('dumbbell') || norm.includes('haltere') || norm.includes('kurzhantel')) {
     return (
       <>
         <Path d="M6 12h12" {...common} />
@@ -71,7 +73,7 @@ function EquipmentPath({ equipment = 'bodyweight', strokeColor }: { equipment: E
       </>
     );
   }
-  if (norm.includes('cabluri') || norm.includes('cable')) {
+  if (norm.includes('cabluri') || norm.includes('cable') || norm.includes('poulie') || norm.includes('kabel')) {
     return (
       <>
         <Circle cx="12" cy="4.5" r="2.5" {...common} />
@@ -81,7 +83,7 @@ function EquipmentPath({ equipment = 'bodyweight', strokeColor }: { equipment: E
       </>
     );
   }
-  if (norm.includes('aparat') || norm.includes('machine')) {
+  if (norm.includes('aparat') || norm.includes('machine') || norm.includes('maschine')) {
     return (
       <>
         <Rect x="5" y="4" width="14" height="16" rx="3" {...common} />
@@ -97,7 +99,7 @@ function EquipmentPath({ equipment = 'bodyweight', strokeColor }: { equipment: E
       </>
     );
   }
-  if (norm.includes('bancuta') || norm.includes('bancă') || norm.includes('bench')) {
+  if (norm.includes('bancuta') || norm.includes('banca') || norm.includes('bench') || norm.includes('banc') || norm.includes('bank')) {
     return (
       <>
         <Path d="M4 14l16-6" {...common} strokeWidth={2} />
@@ -130,12 +132,13 @@ export default function CategoryIcon({
   label,
 }: Props) {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const normMuscle = (muscleGroup || 'core').toLowerCase().trim();
   const baseTheme = MUSCLE_THEME[normMuscle] ?? MUSCLE_THEME.core;
   // Cardio: roșul se ia din tema activă (colors.danger), nu e fix în hartă.
   const isCardio = normMuscle === 'cardio';
   const strokeColor = isCardio ? colors.danger : (baseTheme.color ?? colors.danger);
-  const displayLabel = label || baseTheme.label;
+  const displayLabel = label || getLocalizedMuscleLabel(baseTheme.labelKey, t);
 
   if (showLabel) {
     return (

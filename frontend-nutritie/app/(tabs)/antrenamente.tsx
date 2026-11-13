@@ -8,7 +8,7 @@ import {
 // BUG-027: un singur set de iconițe (lucide) în tot ecranul — fără amestec
 // cu MaterialCommunityIcons. `HeartPulse` pentru cardio, `Save` pentru salvare.
 import {
-  Play, Pause, RotateCcw, ChevronUp, Search, Dumbbell, PersonStanding, Activity,
+  Play, Pause, RotateCcw, ChevronUp, Search, X, Dumbbell, PersonStanding, Activity,
   MoveUp, Timer, Trash2, Plus, HeartPulse, Save, Flame,
 } from 'lucide-react-native';
 import type { ComponentType } from 'react';
@@ -32,6 +32,15 @@ import {
   describeSet, getSetFields, summarizeSets, summaryLabel,
   validateLoggedSet, type LoggedSet, type SetFields,
 } from '../../lib/workoutSets';
+import {
+  filterExercisesByCategory,
+  getLocalizedCategoryName,
+  getLocalizedDifficulty,
+  getLocalizedExerciseName,
+  getLocalizedMuscleLabel,
+  getSportLocaleTag,
+  normalizeSearchText,
+} from '../../lib/sportI18n';
 
 const MAP_HEIGHT = 380;
 const SESSION_KEY = 'current_workout_session';
@@ -122,12 +131,13 @@ function unionInto(target: IntensityMap, source: IntensityMap, scale = 1) {
 
 export default function AntrenamenteScreen() {
   const { width: SCREEN_WIDTH } = useWindowDimensions();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const contentBottomPadding = useContentBottomPadding();
-  const { adaugaAntrenament } = useAntrenamente();
+  const { adaugaAntrenament, refresh: refreshWorkouts, loading: workoutsLoading } = useAntrenamente();
   const notify = useNotify();
   const { exercitii, loading, refresh } = useExercitii();
+  const localeTag = getSportLocaleTag(i18n.language);
 
   const [selectedCategory, setSelectedCategory] = useState<Categorie>('piept');
   const [searchQuery, setSearchQuery] = useState('');
@@ -151,7 +161,7 @@ export default function AntrenamenteScreen() {
 
   useEffect(() => {
     if (!selectedExerciseId && exercitii.length > 0) {
-      const first = exercitii.find((e) => e.categorie === selectedCategory) ?? exercitii[0];
+      const first = filterExercisesByCategory(exercitii, selectedCategory)[0] ?? exercitii[0];
       if (first) setSelectedExerciseId(first.id);
     }
   }, [exercitii, selectedCategory, selectedExerciseId]);
@@ -226,15 +236,32 @@ export default function AntrenamenteScreen() {
 
   const persistSession = useCallback((next: Record<string, LoggedSet[]>) => {
     AsyncStorage.setItem(SESSION_KEY, JSON.stringify(next)).catch(() => {
-      notify.warning('Salvare locală eșuată', 'Setul poate dispărea dacă închizi aplicația.');
+      notify.warning(t('sport.screen.localSaveFailedTitle'), t('sport.screen.localSaveFailedMsg'));
     });
-  }, [notify]);
+  }, [notify, t]);
 
   const exercisesInCategory = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const pool = q.length > 0 ? exercitii : exercitii.filter((e) => e.categorie === selectedCategory);
-    return q.length > 0 ? pool.filter((e) => e.nume.toLowerCase().includes(q)) : pool;
-  }, [selectedCategory, exercitii, searchQuery]);
+    const q = normalizeSearchText(searchQuery.trim());
+    if (q.length > 0) {
+      return exercitii.filter((e) => {
+        const localizedName = normalizeSearchText(getLocalizedExerciseName(e, t));
+        const rawName = normalizeSearchText(e.nume);
+        const categoryName = normalizeSearchText(getLocalizedCategoryName(e.categorie, undefined, t));
+        const musclesMatch = (e.grupe ?? []).some(
+          (g) =>
+            normalizeSearchText(g).includes(q) ||
+            normalizeSearchText(getLocalizedMuscleLabel(g, t)).includes(q),
+        );
+        return (
+          localizedName.includes(q) ||
+          rawName.includes(q) ||
+          categoryName.includes(q) ||
+          musclesMatch
+        );
+      });
+    }
+    return filterExercisesByCategory(exercitii, selectedCategory);
+  }, [selectedCategory, exercitii, searchQuery, t]);
 
   const selectedExercise: Exercitiu | undefined = useMemo(
     () => exercitii.find((e) => e.id === selectedExerciseId) ?? exercitii[0],
@@ -284,10 +311,16 @@ export default function AntrenamenteScreen() {
       .filter(([, sets]) => sets && sets.length > 0)
       .map(([exId, sets]) => {
         const ex = exercitii.find((e) => e.id === exId);
-        const fields = getSetFields(ex);
-        return { exId, nume: ex?.nume ?? 'Exercițiu', sets, fields, summary: summarizeSets(sets, fields) };
+        const fields = getSetFields(ex, t);
+        return {
+          exId,
+          nume: ex ? getLocalizedExerciseName(ex, t) : t('sport.screen.defaultExerciseName'),
+          sets,
+          fields,
+          summary: summarizeSets(sets, fields),
+        };
       });
-  }, [session, exercitii]);
+  }, [session, exercitii, t]);
 
   if (!selectedExercise || exercitii.length === 0) {
     return (
@@ -322,9 +355,18 @@ export default function AntrenamenteScreen() {
 
   const onSelectCategory = (cat: Categorie) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (timerExerciseId && timerStartRef.current) {
+      const elapsed = Math.round((Date.now() - timerStartRef.current) / 1000);
+      const timerEx = exercitii.find((e) => e.id === timerExerciseId);
+      if (elapsed > 0 && timerEx) setInputFor(timerEx, { time: String(elapsed) });
+      timerStartRef.current = null;
+      setTimerExerciseId('');
+    }
     setSelectedCategory(cat);
     setSearchQuery('');
-    const first = exercitii.find((e) => e.categorie === cat);
+    setExpandedExerciseId('');
+    setWarmupFor('');
+    const first = filterExercisesByCategory(exercitii, cat)[0];
     if (first) setSelectedExerciseId(first.id);
   };
 
@@ -357,13 +399,14 @@ export default function AntrenamenteScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   };
 
-  const resetTimer = () => {
+  const resetTimer = (ex?: Exercitiu) => {
     timerStartRef.current = null;
     setTimerExerciseId('');
+    if (ex) setInputFor(ex, { time: '0' });
   };
 
   const handleRecordSet = (ex: Exercitiu) => {
-    const fields = getSetFields(ex);
+    const fields = getSetFields(ex, t);
     const current = inputFor(ex);
     const existing = session[ex.id] ?? [];
     const isWarmup = warmupFor === ex.id;
@@ -377,8 +420,8 @@ export default function AntrenamenteScreen() {
       completed: true,
     };
 
-    const error = validateLoggedSet(newSet, fields);
-    if (error) { notify.warning('Set incomplet', error); return; }
+    const error = validateLoggedSet(newSet, fields, t);
+    if (error) { notify.warning(t('sport.screen.incompleteSetTitle'), error); return; }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     setSession((prev) => {
@@ -396,7 +439,7 @@ export default function AntrenamenteScreen() {
 
     setRestEndsAt(Date.now() + REST_DEFAULT_SEC * 1000);
     setWarmupFor('');
-    notify.success(`Set ${newSet.serie} înregistrat`, describeSet(newSet, fields));
+    notify.success(t('sport.screen.setLoggedTitle', { number: newSet.serie }), describeSet(newSet, fields, t));
   };
 
   const removeSet = (exId: string, index: number) => {
@@ -416,7 +459,7 @@ export default function AntrenamenteScreen() {
     if (saving) return;
     const entries = Object.entries(session).filter(([, sets]) => sets.length > 0);
     if (entries.length === 0) {
-      notify.warning('Nimic de salvat', 'Înregistrează cel puțin un set.');
+      notify.warning(t('sport.screen.nothingToSaveTitle'), t('sport.screen.nothingToSaveMsg'));
       return;
     }
 
@@ -429,11 +472,19 @@ export default function AntrenamenteScreen() {
       const durataMin = Math.max(1, Math.round(elapsedMin > 0 ? elapsedMin : totalSets * 1.5));
       const perExerciseMin = Math.max(1, Math.round(durataMin / entries.length));
 
+      const loggedMetaExercises = entries
+        .map(([id]) => exercitii.find((e) => e.id === id))
+        .filter((e): e is Exercitiu => Boolean(e));
+      const resolvedTip = loggedMetaExercises[0]?.categorie ?? selectedCategory;
+      const resolvedMet = loggedMetaExercises.length > 0
+        ? Math.round((loggedMetaExercises.reduce((s, e) => s + (e.met || 0), 0) / loggedMetaExercises.length) * 10) / 10
+        : selectedExercise.met;
+
       const exercitiiInAntrenament = entries
         .map(([exId, sets]) => {
           const ex = exercitii.find((e) => e.id === exId);
           if (!ex) return null;
-          const fields = getSetFields(ex);
+          const fields = getSetFields(ex, t);
           const summary = summarizeSets(sets, fields);
           const minutes = fields.usesTime && summary.seconds > 0
             ? Math.max(1, Math.round(summary.seconds / 60))
@@ -448,24 +499,32 @@ export default function AntrenamenteScreen() {
         })
         .filter((v): v is NonNullable<typeof v> => v !== null);
 
+      const dateLabel = new Date().toLocaleDateString(localeTag, {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+      });
       const result = await adaugaAntrenament({
-        nume: `Antrenament ${new Date().toLocaleDateString('ro-RO', { weekday: 'long', month: 'short', day: 'numeric' })}`,
-        tip: selectedCategory,
+        nume: t('sport.screen.workoutSessionTitle', { date: dateLabel }),
+        tip: resolvedTip,
         durata_min: durataMin,
         calorii_arse: exercitiiInAntrenament.reduce((s, e) => s + e.kcal, 0),
-        met: selectedExercise.met,
+        met: resolvedMet,
         exercitii: exercitiiInAntrenament,
         volum_total: Math.round(sessionStats.volume),
       });
 
       // Sesiunea se șterge DOAR dacă salvarea a reușit.
       if (!result) {
-        notify.error('Antrenamentul nu a fost salvat', 'Sesiunea a rămas intactă. Încearcă din nou.');
+        notify.error(t('sport.screen.saveFailedTitle'), t('sport.screen.saveFailedMsg'));
         return;
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      notify.success('Antrenament salvat', `${totalSets} seturi • ${Math.round(sessionStats.volume)} kg volum`);
+      notify.success(
+        t('sport.screen.savedTitle'),
+        t('sport.screen.savedSummary', { sets: totalSets, volume: Math.round(sessionStats.volume) }),
+      );
       setSession({});
       setInputs({});
       acumulatMsRef.current = 0;
@@ -476,7 +535,7 @@ export default function AntrenamenteScreen() {
       resetTimer();
       AsyncStorage.multiRemove([SESSION_KEY, SESSION_META_KEY]).catch(() => {});
     } catch {
-      notify.error('Eroare la salvare', 'Sesiunea a rămas intactă.');
+      notify.error(t('sport.screen.saveErrorTitle'), t('sport.screen.saveErrorMsg'));
     } finally {
       setSaving(false);
     }
@@ -493,18 +552,25 @@ export default function AntrenamenteScreen() {
     return (
       <View style={[styles.trackerCardExpanded, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
         <View style={styles.trackerHeader}>
-          <Text style={[styles.trackerTitle, { color: colors.textPrimary }]}>Loghează set</Text>
+          <Text style={[styles.trackerTitle, { color: colors.textPrimary }]}>{t('sport.screen.logSetTitle')}</Text>
           <Text maxFontSizeMultiplier={1.3} style={[styles.modeBadge, { color: colors.accent, borderColor: colors.accent }]}>{fields.modeLabel}</Text>
         </View>
 
         {exSets.map((s, idx) => (
           <View key={`${ex.id}-${idx}`} style={[styles.setRow, { borderColor: colors.cardBorder }]}>
             <Text maxFontSizeMultiplier={1.3} style={[styles.setIndex, { color: colors.textTertiary }]}>#{idx + 1}</Text>
-            <Text maxFontSizeMultiplier={1.3} style={[styles.setValue, { color: colors.textPrimary }]}>{describeSet(s, fields)}</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.setValue, { color: colors.textPrimary }]}>{describeSet(s, fields, t)}</Text>
             {s.set_type === 'warmup' && (
-              <Text maxFontSizeMultiplier={1.3} style={[styles.warmupTag, { color: colors.textTertiary, borderColor: colors.cardBorder }]}>încălzire</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.warmupTag, { color: colors.textTertiary, borderColor: colors.cardBorder }]}>
+                {t('sport.screen.setWarmupTag')}
+              </Text>
             )}
-            <Pressable onPress={() => removeSet(ex.id, idx)} accessibilityRole='button' accessibilityLabel={`Șterge setul ${idx + 1}`} hitSlop={14}>
+            <Pressable
+              onPress={() => removeSet(ex.id, idx)}
+              accessibilityRole='button'
+              accessibilityLabel={t('sport.screen.deleteSetA11y', { number: idx + 1 })}
+              style={styles.deleteSetBtn}
+            >
               <Trash2 size={16} color={colors.textTertiary} />
             </Pressable>
           </View>
@@ -513,25 +579,25 @@ export default function AntrenamenteScreen() {
         {fields.usesTime ? (
           <View style={[styles.timerBox, { borderColor: timerRunning ? colors.accent : colors.cardBorder }]}>
             {timerRunning ? (
-              <TimerValue startedAt={timerStartRef.current} style={[styles.timerValue, { color: colors.accent }]} />
+              <TimerValue startedAt={timerStartRef.current} style={[styles.timerValue, styles.tabularNums, { color: colors.accent }]} />
             ) : (
-              <Text style={[styles.timerValue, { color: colors.textPrimary }]}>
+              <Text style={[styles.timerValue, styles.tabularNums, { color: colors.textPrimary }]}>
                 {formatClock(parseInt(current.time, 10) || 0)}
               </Text>
             )}
             <View style={styles.timerActions}>
               {timerRunning ? (
-                <Pressable onPress={() => stopTimer(ex)} style={[styles.timerBtn, { backgroundColor: colors.accent }]} accessibilityRole='button' accessibilityLabel='Oprește cronometrul'>
+                <Pressable onPress={() => stopTimer(ex)} style={[styles.timerBtn, { backgroundColor: colors.accent }]} accessibilityRole='button' accessibilityLabel={t('sport.screen.stopTimerA11y')}>
                   <Pause size={16} color={colors.background} />
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.timerBtnText, { color: colors.background }]}>Stop</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.timerBtnText, { color: colors.background }]}>{t('sport.screen.stop')}</Text>
                 </Pressable>
               ) : (
-                <Pressable onPress={() => startTimer(ex)} style={[styles.timerBtn, { backgroundColor: colors.accent }]} accessibilityRole='button' accessibilityLabel='Pornește cronometrul'>
+                <Pressable onPress={() => startTimer(ex)} style={[styles.timerBtn, { backgroundColor: colors.accent }]} accessibilityRole='button' accessibilityLabel={t('sport.screen.startTimerA11y')}>
                   <Play size={16} color={colors.background} />
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.timerBtnText, { color: colors.background }]}>Start</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.timerBtnText, { color: colors.background }]}>{t('sport.screen.start')}</Text>
                 </Pressable>
               )}
-              <Pressable onPress={resetTimer} style={[styles.timerGhost, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Resetează cronometrul'>
+              <Pressable onPress={() => resetTimer(ex)} style={[styles.timerGhost, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel={t('sport.screen.resetTimerA11y')}>
                 <RotateCcw size={15} color={colors.textSecondary} />
               </Pressable>
             </View>
@@ -541,22 +607,22 @@ export default function AntrenamenteScreen() {
         {fields.usesTime ? (
           <Stepper
             key={`t-${ex.id}`}
-            label='Durată set'
+            label={t('sport.measurement.fields.duration')}
             value={current.time}
             onDec={() => adjust(ex, 'time', -5, 0, 3600)}
             onInc={() => adjust(ex, 'time', 5, 0, 3600)}
-            suffix='sec'
+            suffix={t('sport.measurement.units.secShort')}
             onTextChange={(v: string) => setInputFor(ex, { time: v })}
             colors={colors}
           />
         ) : (
           <Stepper
             key={`r-${ex.id}`}
-            label='Repetări'
+            label={t('sport.measurement.fields.reps')}
             value={current.reps}
             onDec={() => adjust(ex, 'reps', -1, 0, 500)}
             onInc={() => adjust(ex, 'reps', 1, 0, 500)}
-            suffix='rep'
+            suffix={t('sport.measurement.units.repShort')}
             onTextChange={(v: string) => setInputFor(ex, { reps: v })}
             colors={colors}
           />
@@ -565,17 +631,17 @@ export default function AntrenamenteScreen() {
         {fields.usesWeight ? (
           <Stepper
             key={`w-${ex.id}`}
-            label={fields.weightRequired ? 'Greutate' : 'Greutate (opțional)'}
+            label={fields.weightRequired ? t('sport.measurement.fields.weight') : t('sport.measurement.fields.weightOptional')}
             value={current.weight}
             onDec={() => adjust(ex, 'weight', -2.5, 0, 1000)}
             onInc={() => adjust(ex, 'weight', 2.5, 0, 1000)}
-            suffix='kg'
+            suffix={t('sport.measurement.units.kg')}
             onTextChange={(v: string) => setInputFor(ex, { weight: v })}
             colors={colors}
           />
         ) : (
           <Text maxFontSizeMultiplier={1.3} style={[styles.noWeightHint, { color: colors.textTertiary }]}>
-            Exercițiu cu greutatea corpului — nu are câmp de kilograme.
+            {t('sport.screen.noWeightHint')}
           </Text>
         )}
 
@@ -586,17 +652,18 @@ export default function AntrenamenteScreen() {
           style={[styles.warmupToggle, { borderColor: isWarmup ? colors.accent : colors.cardBorder, backgroundColor: isWarmup ? colors.accent + '22' : 'transparent' }]}
         >
           <Text maxFontSizeMultiplier={1.3} style={[styles.warmupToggleText, { color: isWarmup ? colors.accent : colors.textSecondary }]}>
-            Set de încălzire (nu intră în volum)
+            {t('sport.screen.warmupToggle')}
           </Text>
         </Pressable>
 
         <Pressable
+          testID="sport-add-set-btn"
           onPress={() => handleRecordSet(ex)}
           style={({ pressed }) => [styles.ctaButton, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}
           accessibilityRole='button'
         >
           <Plus size={20} color={colors.background} />
-          <Text style={[styles.ctaText, { color: colors.background }]}>Adaugă set</Text>
+          <Text style={[styles.ctaText, { color: colors.background }]}>{t('sport.screen.addSetBtn')}</Text>
         </Pressable>
       </View>
     );
@@ -609,7 +676,15 @@ export default function AntrenamenteScreen() {
         keyboardShouldPersistTaps='handled'
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} />
+          <RefreshControl
+            refreshing={loading || Boolean(workoutsLoading)}
+            onRefresh={() => {
+              refresh?.();
+              refreshWorkouts?.();
+            }}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+          />
         }
       >
         <View style={styles.header}>
@@ -626,8 +701,11 @@ export default function AntrenamenteScreen() {
             <BodyMap view="front" intensity={displayIntensity} width={bodyWidth} maxHeight={300} />
             <BodyMap view="back" intensity={displayIntensity} width={bodyWidth} maxHeight={300} />
           </View>
-          <View style={styles.mapLegend}>
-            <View style={[styles.legendDot, { backgroundColor: colors.accent }]} />
+          <View style={[styles.mapLegend, { backgroundColor: colors.surfaceElevated }]}>
+            <View style={styles.legendGradient}>
+              <View style={[styles.legendDot, { backgroundColor: '#0284C7' }]} />
+              <View style={[styles.legendDot, { backgroundColor: colors.accent }]} />
+            </View>
             <Text maxFontSizeMultiplier={1.3} style={[styles.legendText, { color: colors.textSecondary }]}>
               {activeMuscleCount > 0
                 ? t('anatomy.activeMuscles', { count: activeMuscleCount })
@@ -639,16 +717,16 @@ export default function AntrenamenteScreen() {
         {sessionStats.sets > 0 && (
           <View style={[styles.sessionBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.cardBorder }]}>
             <View style={styles.sessionItem}>
-              <Text style={[styles.sessionValue, { color: colors.textPrimary }]}>{sessionStats.sets}</Text>
-              <Text maxFontSizeMultiplier={1.3} style={[styles.sessionLabel, { color: colors.textTertiary }]}>seturi</Text>
+              <Text style={[styles.sessionValue, styles.tabularNums, { color: colors.textPrimary }]}>{sessionStats.sets}</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.sessionLabel, { color: colors.textTertiary }]}>{t('sport.screen.setsStat')}</Text>
             </View>
             <View style={styles.sessionItem}>
-              <Text style={[styles.sessionValue, { color: colors.textPrimary }]}>{sessionStats.exercises}</Text>
-              <Text maxFontSizeMultiplier={1.3} style={[styles.sessionLabel, { color: colors.textTertiary }]}>exerciții</Text>
+              <Text style={[styles.sessionValue, styles.tabularNums, { color: colors.textPrimary }]}>{sessionStats.exercises}</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.sessionLabel, { color: colors.textTertiary }]}>{t('sport.screen.exercisesStat')}</Text>
             </View>
             <View style={styles.sessionItem}>
-              <Text style={[styles.sessionValue, { color: colors.textPrimary }]}>{Math.round(sessionStats.volume)}</Text>
-              <Text maxFontSizeMultiplier={1.3} style={[styles.sessionLabel, { color: colors.textTertiary }]}>kg volum</Text>
+              <Text style={[styles.sessionValue, styles.tabularNums, { color: colors.textPrimary }]}>{Math.round(sessionStats.volume)}</Text>
+              <Text maxFontSizeMultiplier={1.3} style={[styles.sessionLabel, { color: colors.textTertiary }]}>{t('sport.screen.volumeStat')}</Text>
             </View>
           </View>
         )}
@@ -656,12 +734,12 @@ export default function AntrenamenteScreen() {
         {/* CE AI LUCRAT — exercițiile din sesiunea curentă, cu seturile lor. */}
         {workedExercises.length > 0 && (
           <View style={[styles.workedCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-            <Text maxFontSizeMultiplier={1.3} style={[styles.workedTitle, { color: colors.textPrimary }]}>Ce ai lucrat</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.workedTitle, { color: colors.textPrimary }]}>{t('sport.screen.whatYouWorked')}</Text>
             {workedExercises.map((entry) => (
               <View key={entry.exId} style={styles.workedItem}>
                 <View style={styles.workedRow}>
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.workedName, { color: colors.textPrimary }]} numberOfLines={1}>{entry.nume}</Text>
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.workedSummary, { color: colors.accent }]}>{summaryLabel(entry.summary, entry.fields)}</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.workedName, { color: colors.textPrimary }]} numberOfLines={2}>{entry.nume}</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.workedSummary, { color: colors.accent }]}>{summaryLabel(entry.summary, entry.fields, t)}</Text>
                 </View>
                 <View style={styles.workedSets}>
                   {entry.sets.map((s, idx) => (
@@ -670,10 +748,10 @@ export default function AntrenamenteScreen() {
                       maxFontSizeMultiplier={1.3}
                       style={[styles.setChip, {
                         color: s.set_type === 'warmup' ? colors.textTertiary : colors.textSecondary,
-                        borderColor: colors.cardBorder,
+                        backgroundColor: colors.surfaceElevated,
                       }]}
                     >
-                      {idx + 1}. {describeSet(s, entry.fields)}
+                      {idx + 1}. {describeSet(s, entry.fields, t)}
                     </Text>
                   ))}
                 </View>
@@ -685,15 +763,25 @@ export default function AntrenamenteScreen() {
         {restEndsAt != null && (
           <View style={[styles.restBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.accent }]}>
             <Timer size={18} color={colors.accent} />
-            <Text maxFontSizeMultiplier={1.3} style={[styles.restText, { color: colors.textPrimary }]}>
-              Pauză{' '}
+            <Text maxFontSizeMultiplier={1.3} style={[styles.restText, styles.tabularNums, { color: colors.textPrimary }]}>
+              {t('sport.screen.restLabel')}{' '}
               <RestCountdown endsAt={restEndsAt} onDone={() => setRestEndsAt(null)} />
             </Text>
-            <Pressable onPress={() => setRestEndsAt((s) => (s ?? Date.now()) + 15000)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Prelungește pauza cu 15 secunde'>
+            <Pressable
+              onPress={() => setRestEndsAt((s) => Math.max(Date.now(), s ?? Date.now()) + 15000)}
+              style={[styles.restBtn, { borderColor: colors.cardBorder }]}
+              accessibilityRole='button'
+              accessibilityLabel={t('sport.screen.restAdd15A11y')}
+            >
               <Text maxFontSizeMultiplier={1.3} style={[styles.restBtnText, { color: colors.textSecondary }]}>+15s</Text>
             </Pressable>
-            <Pressable onPress={() => setRestEndsAt(null)} style={[styles.restBtn, { borderColor: colors.cardBorder }]} accessibilityRole='button' accessibilityLabel='Sari peste pauză'>
-              <Text maxFontSizeMultiplier={1.3} style={[styles.restBtnText, { color: colors.textSecondary }]}>Skip</Text>
+            <Pressable
+              onPress={() => setRestEndsAt(null)}
+              style={[styles.restBtn, { borderColor: colors.cardBorder }]}
+              accessibilityRole='button'
+              accessibilityLabel={t('sport.screen.restSkipA11y')}
+            >
+              <Text maxFontSizeMultiplier={1.3} style={[styles.restBtnText, { color: colors.textSecondary }]}>{t('sport.screen.restSkip')}</Text>
             </Pressable>
           </View>
         )}
@@ -701,47 +789,103 @@ export default function AntrenamenteScreen() {
         <View style={[styles.searchContainer, { backgroundColor: colors.surfaceElevated }]}>
           <Search color={colors.textSecondary} size={20} style={{ marginRight: 10 }} />
           <TextInput
-            placeholder='Caută exercițiu...'
+            placeholder={t('sport.screen.searchPlaceholder')}
             placeholderTextColor={colors.textSecondary}
+            accessibilityLabel={t('sport.screen.searchA11y')}
             style={[styles.searchInput, { color: colors.textPrimary }]}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {searchQuery.length > 0 && (
+            <Pressable
+              testID="sport-search-clear"
+              onPress={() => setSearchQuery('')}
+              accessibilityRole='button'
+              accessibilityLabel={t('sport.screen.clearSearchA11y')}
+              style={styles.searchClearBtn}
+            >
+              <X size={18} color={colors.textSecondary} />
+            </Pressable>
+          )}
         </View>
 
-        <Text maxFontSizeMultiplier={1.3} style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: 10 }]}>Exerciții</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+        <Text maxFontSizeMultiplier={1.3} style={[styles.sectionTitle, { color: colors.textPrimary, marginTop: 10 }]}>
+          {t('sport.screen.exercisesHeading')}
+        </Text>
+        <ScrollView testID="sport-category-scroll" horizontal showsHorizontalScrollIndicator={false} style={styles.hScrollOuter} contentContainerStyle={styles.hScroll}>
           {CATEGORII.map((cat) => {
             const active = selectedCategory === cat.id && searchQuery.trim().length === 0;
             const CatIcon = CATEGORY_ICON[cat.id];
+            const catLabel = getLocalizedCategoryName(cat.id, cat.nume, t);
             return (
               <Pressable
                 key={cat.id}
+                testID={`sport-category-${cat.id}`}
                 onPress={() => onSelectCategory(cat.id)}
                 accessibilityRole='button'
-                accessibilityLabel={`Categoria ${cat.nume}`}
+                accessibilityLabel={t('sport.screen.categoryA11y', { name: catLabel })}
                 style={[styles.pill, { backgroundColor: active ? colors.accent : colors.surfaceElevated, borderColor: active ? colors.accent : colors.cardBorder }]}
               >
                 <CatIcon size={18} color={active ? colors.background : colors.textSecondary} />
-                <Text maxFontSizeMultiplier={1.3} style={[styles.pillText, { color: active ? colors.background : colors.textPrimary }]}>{cat.nume}</Text>
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  numberOfLines={1}
+                  style={[styles.pillText, { color: active ? colors.background : colors.textPrimary }]}
+                >
+                  {catLabel}
+                </Text>
               </Pressable>
             );
           })}
         </ScrollView>
 
         <View style={styles.vScroll}>
-          {exercisesInCategory.map((ex) => {
+          {exercisesInCategory.length === 0 ? (
+            searchQuery.trim().length > 0 ? (
+              <View
+                testID="sport-empty-search"
+                style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}
+              >
+                <Text maxFontSizeMultiplier={1.3} style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+                  {t('sport.screen.emptySearchTitle')}
+                </Text>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.emptySub, { color: colors.textSecondary }]}>
+                  {t('sport.screen.emptySearchSub')}
+                </Text>
+                <Pressable
+                  onPress={() => setSearchQuery('')}
+                  accessibilityRole='button'
+                  style={[styles.emptyResetBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.cardBorder }]}
+                >
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.emptyResetText, { color: colors.accent }]}>
+                    {t('sport.screen.emptySearchReset')}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.emptySub, { color: colors.textSecondary }]}>
+                  {t('sport.screen.emptyCategory')}
+                </Text>
+              </View>
+            )
+          ) : exercisesInCategory.map((ex) => {
             const expanded = expandedExerciseId === ex.id;
-            const fields = getSetFields(ex);
+            const fields = getSetFields(ex, t);
             const exSets = session[ex.id] ?? [];
             const summary = summarizeSets(exSets, fields);
+            const exName = getLocalizedExerciseName(ex, t);
 
             return (
               <View key={ex.id} style={{ marginBottom: Spacing.md }}>
                 <Pressable
                   onPress={() => onSelectExercise(ex)}
                   accessibilityRole='button'
-                  accessibilityLabel={expanded ? `Închide ${ex.nume}` : `Deschide ${ex.nume}`}
+                  accessibilityLabel={
+                    expanded
+                      ? t('sport.screen.closeExerciseA11y', { name: exName })
+                      : t('sport.screen.openExerciseA11y', { name: exName })
+                  }
                   style={[styles.verticalCard, {
                     backgroundColor: expanded ? colors.surfaceElevated : colors.surface,
                     borderColor: expanded ? colors.accent : colors.cardBorder,
@@ -769,9 +913,11 @@ export default function AntrenamenteScreen() {
                   </View>
 
                   <View style={styles.verticalTextWrap}>
-                    <Text style={[styles.verticalName, { color: colors.textPrimary }]} numberOfLines={1}>{ex.nume}</Text>
-                    <Text maxFontSizeMultiplier={1.3} style={[styles.verticalSub, { color: colors.textTertiary }]} numberOfLines={1}>
-                      {exSets.length > 0 ? summaryLabel(summary, fields) : `${fields.modeLabel} • ${ex.dificultate || 'mediu'}`}
+                    <Text style={[styles.verticalName, { color: colors.textPrimary }]} numberOfLines={2}>{exName}</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.verticalSub, { color: colors.textTertiary }]} numberOfLines={2}>
+                      {exSets.length > 0
+                        ? summaryLabel(summary, fields, t)
+                        : `${fields.modeLabel} • ${getLocalizedDifficulty(ex.dificultate || 'mediu', t)}`}
                     </Text>
                   </View>
 
@@ -794,6 +940,7 @@ export default function AntrenamenteScreen() {
 
         {sessionStats.sets > 0 && (
           <Pressable
+            testID="sport-save-workout-btn"
             onPress={handleSaveWorkout}
             disabled={saving}
             accessibilityRole='button'
@@ -805,7 +952,7 @@ export default function AntrenamenteScreen() {
             ) : (
               <>
                 <Save size={20} color={colors.background} />
-                <Text maxFontSizeMultiplier={1.3} style={[styles.saveText, { color: colors.background }]}>Salvează antrenamentul</Text>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.saveText, { color: colors.background }]}>{t('sport.screen.saveWorkoutBtn')}</Text>
               </>
             )}
           </Pressable>
@@ -820,8 +967,9 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md } as ViewStyle,
   title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 } as TextStyle,
   subtitle: { fontSize: 13, marginTop: 2 } as TextStyle,
-  mapContainer: { height: MAP_HEIGHT, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: Spacing.md, paddingTop: 10, paddingBottom: 20 } as ViewStyle,
-  mapRow: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', width: '100%', height: MAP_HEIGHT - 40, paddingVertical: 10 } as ViewStyle,
+  tabularNums: { fontVariant: ['tabular-nums'] } as TextStyle,
+  mapContainer: { minHeight: MAP_HEIGHT, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: Spacing.md, paddingTop: 10, paddingBottom: 14 } as ViewStyle,
+  mapRow: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', width: '100%', minHeight: MAP_HEIGHT - 44, paddingVertical: 8 } as ViewStyle,
   sessionBar: { flexDirection: 'row', borderRadius: Radius.md, borderWidth: 1, paddingVertical: Spacing.sm, marginBottom: Spacing.md } as ViewStyle,
   sessionItem: { flex: 1, alignItems: 'center' } as ViewStyle,
   sessionValue: { fontSize: 18, fontWeight: '800' } as TextStyle,
@@ -830,30 +978,38 @@ const styles = StyleSheet.create({
   workedTitle: { fontSize: 15, fontWeight: '800', marginBottom: Spacing.sm } as TextStyle,
   workedItem: { marginBottom: Spacing.sm } as ViewStyle,
   workedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm } as ViewStyle,
-  workedName: { flex: 1, fontSize: 14, fontWeight: '700' } as TextStyle,
+  workedName: { flex: 1, minWidth: 0, fontSize: 14, fontWeight: '700' } as TextStyle,
   workedSummary: { fontSize: 12, fontWeight: '800' } as TextStyle,
   workedSets: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 } as ViewStyle,
-  setChip: { fontSize: 11, fontWeight: '600', borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 } as TextStyle,
-  restBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderRadius: Radius.pill, borderWidth: 1, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginBottom: Spacing.md } as ViewStyle,
-  restText: { flex: 1, fontSize: 14, fontWeight: '700' } as TextStyle,
+  setChip: { fontSize: 11, fontWeight: '600', borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 } as TextStyle,
+  restBar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Spacing.sm, borderRadius: Radius.lg, borderWidth: 1, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginBottom: Spacing.md } as ViewStyle,
+  restText: { flex: 1, minWidth: 100, fontSize: 14, fontWeight: '700' } as TextStyle,
   restBtn: { borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 14, minHeight: 44, justifyContent: 'center' } as ViewStyle,
   restBtnText: { fontSize: 12, fontWeight: '700' } as TextStyle,
-  searchContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, borderRadius: Radius.md, marginBottom: Spacing.md } as ViewStyle,
+  searchContainer: { flexDirection: 'row', alignItems: 'center', minHeight: 48, paddingHorizontal: 15, paddingVertical: 8, borderRadius: Radius.md, marginBottom: Spacing.md } as ViewStyle,
   searchInput: { flex: 1, fontSize: 16, padding: 0 } as TextStyle,
-  mapLegend: { position: 'absolute', bottom: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.pill } as ViewStyle,
-  legendDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 } as ViewStyle,
+  searchClearBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 } as ViewStyle,
+  mapLegend: { flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.pill } as ViewStyle,
+  legendGradient: { flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 8 } as ViewStyle,
+  legendDot: { width: 8, height: 8, borderRadius: 4 } as ViewStyle,
   legendText: { fontSize: 12, fontWeight: '600' } as TextStyle,
   sectionTitle: { fontSize: 17, fontWeight: '700', marginBottom: Spacing.md, marginTop: Spacing.sm } as TextStyle,
-  hScroll: { paddingBottom: Spacing.lg, gap: Spacing.md } as ViewStyle,
+  hScrollOuter: { flexGrow: 0, flexShrink: 0 } as ViewStyle,
+  hScroll: { paddingVertical: Spacing.xs, paddingBottom: Spacing.sm, gap: Spacing.sm, alignItems: 'center' } as ViewStyle,
   vScroll: { marginTop: Spacing.sm, paddingBottom: Spacing.xl } as ViewStyle,
-  pill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radius.pill, borderWidth: 1, gap: 6 } as ViewStyle,
-  pillText: { fontSize: 13, fontWeight: '700' } as TextStyle,
+  pill: { flexDirection: 'row', alignItems: 'center', minHeight: 44, flexShrink: 0, paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.pill, borderWidth: 1, gap: 6 } as ViewStyle,
+  pillText: { fontSize: 13, lineHeight: 18, fontWeight: '700', includeFontPadding: false, flexShrink: 0 } as TextStyle,
+  emptyCard: { borderRadius: Radius.md, borderWidth: 1, padding: Spacing.lg, alignItems: 'center', gap: Spacing.sm } as ViewStyle,
+  emptyTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center' } as TextStyle,
+  emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 18 } as TextStyle,
+  emptyResetBtn: { minHeight: 44, paddingHorizontal: 18, borderRadius: Radius.pill, borderWidth: 1, justifyContent: 'center', alignItems: 'center', marginTop: Spacing.xs } as ViewStyle,
+  emptyResetText: { fontSize: 13, fontWeight: '700' } as TextStyle,
   verticalCard: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, borderRadius: Radius.md, borderWidth: 1 } as ViewStyle,
   verticalIcon: { width: 44, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', marginRight: Spacing.md } as ViewStyle,
-  verticalTextWrap: { flex: 1, justifyContent: 'center' } as ViewStyle,
+  verticalTextWrap: { flex: 1, minWidth: 0, justifyContent: 'center' } as ViewStyle,
   verticalName: { fontSize: 16, fontWeight: '700', lineHeight: 22 } as TextStyle,
   verticalSub: { fontSize: 12, marginTop: 2 } as TextStyle,
-  setsBadge: { minWidth: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 } as ViewStyle,
+  setsBadge: { minWidth: 24, minHeight: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 } as ViewStyle,
   // setsBadgeText: culoarea (colors.background) e setată inline în render, pe accent.
   setsBadgeText: { fontSize: 12, fontWeight: '900' } as TextStyle,
   verticalAction: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginLeft: Spacing.md } as ViewStyle,
@@ -861,10 +1017,11 @@ const styles = StyleSheet.create({
   trackerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md, gap: Spacing.sm } as ViewStyle,
   trackerTitle: { fontSize: 16, fontWeight: '700' } as TextStyle,
   modeBadge: { fontSize: 11, fontWeight: '800', borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 3 } as TextStyle,
-  setRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderBottomWidth: 1, paddingVertical: Spacing.sm } as ViewStyle,
+  setRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderBottomWidth: 1, paddingVertical: Spacing.xs } as ViewStyle,
   setIndex: { fontSize: 12, fontWeight: '700', width: 28 } as TextStyle,
   setValue: { flex: 1, fontSize: 14, fontWeight: '600' } as TextStyle,
-  warmupTag: { fontSize: 10, fontWeight: '700', borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 2 } as TextStyle,
+  warmupTag: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 2 } as TextStyle,
+  deleteSetBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -8 } as ViewStyle,
   timerBox: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.md, alignItems: 'center', marginTop: Spacing.md, gap: Spacing.sm } as ViewStyle,
   timerValue: { fontSize: 40, fontWeight: '900', letterSpacing: 1 } as TextStyle,
   timerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm } as ViewStyle,
@@ -873,10 +1030,10 @@ const styles = StyleSheet.create({
   timerBtnText: { fontSize: 14, fontWeight: '900' } as TextStyle,
   timerGhost: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center' } as ViewStyle,
   noWeightHint: { fontSize: 12, marginTop: Spacing.sm, lineHeight: 16 } as TextStyle,
-  warmupToggle: { borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, minHeight: 48, marginTop: Spacing.sm } as ViewStyle,
+  warmupToggle: { borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, minHeight: 48, justifyContent: 'center', marginTop: Spacing.sm } as ViewStyle,
   warmupToggleText: { fontSize: 12, fontWeight: '700' } as TextStyle,
-  ctaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: Radius.pill, gap: Spacing.sm, marginTop: Spacing.md } as ViewStyle,
+  ctaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 52, paddingVertical: 12, borderRadius: Radius.pill, gap: Spacing.sm, marginTop: Spacing.md } as ViewStyle,
   ctaText: { fontSize: 15, fontWeight: '800' } as TextStyle,
-  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: Radius.pill, gap: Spacing.sm, marginTop: Spacing.lg } as ViewStyle,
+  saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 56, paddingVertical: 14, borderRadius: Radius.pill, gap: Spacing.sm, marginTop: Spacing.lg } as ViewStyle,
   saveText: { fontSize: 16, fontWeight: '800' } as TextStyle,
 });

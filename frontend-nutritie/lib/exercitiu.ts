@@ -1,4 +1,10 @@
 import { EXERCITII, Exercitiu, Categorie, GrupaMusculara, Dificultate } from '../constants/exercitii';
+import {
+  filterExercisesByCategory,
+  getLocalizedExerciseName,
+  getLocalizedMuscleLabel,
+  normalizeSearchText,
+} from './sportI18n';
 
 export function calculeazaCaloriiArse(met: number, greutateKg: number, durataMin: number): number {
   if (!met || !greutateKg || !durataMin) return 0;
@@ -33,15 +39,22 @@ export function cautaExercitii(filtre: {
   grupaMusculara?: GrupaMusculara;
   dificultate?: Dificultate;
 }): Exercitiu[] {
-  return EXERCITII.filter((ex) => {
+  const base =
+    filtre.categorie && filtre.categorie !== 'toate'
+      ? filterExercisesByCategory(EXERCITII, filtre.categorie)
+      : EXERCITII;
+  return base.filter((ex) => {
     if (filtre.query && filtre.query.trim() !== '') {
-      const q = filtre.query.toLowerCase().trim();
-      const matchNume = ex.nume.toLowerCase().includes(q);
-      const matchGrupe = ex.grupe.some((g) => g.toLowerCase().includes(q));
+      const q = normalizeSearchText(filtre.query);
+      const matchNume =
+        normalizeSearchText(ex.nume).includes(q) ||
+        normalizeSearchText(getLocalizedExerciseName(ex)).includes(q);
+      const matchGrupe = ex.grupe.some(
+        (g) =>
+          normalizeSearchText(g).includes(q) ||
+          normalizeSearchText(getLocalizedMuscleLabel(g)).includes(q),
+      );
       if (!matchNume && !matchGrupe) return false;
-    }
-    if (filtre.categorie && filtre.categorie !== 'toate') {
-      if (ex.categorie !== filtre.categorie) return false;
     }
     if (filtre.grupaMusculara && !ex.grupe.includes(filtre.grupaMusculara)) {
       return false;

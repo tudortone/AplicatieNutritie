@@ -1,3 +1,4 @@
+import { sportI18n as i18n } from './sportI18n';
 import { EXERCITII_DB, type Exercitiu, type MuscleActivation } from '../constants/exercitii';
 import type { ExercitiuInAntrenament } from '../hooks/useAntrenamente';
 import type { MuscleId } from '../components/fitness/heatColor';
@@ -160,19 +161,28 @@ export function computeWorkoutMetrics(
       if (set.set_type === 'warmup') continue;
 
       let baseLoad = 0;
-      if (inputType === 'weighted_reps' && weight > 0) {
+      if (inputType === 'weighted_reps' && weight > 0 && reps > 0) {
         baseLoad = weight * reps;
         externalVolumeKg += baseLoad;
         if (weight >= 50 || (weight >= 20 && reps >= 10)) heavySetsCount += 1;
-      } else if (inputType === 'bodyweight_reps') {
+      } else if (inputType === 'bodyweight_reps' && reps > 0) {
         baseLoad = reps * bodyWeight * bwRatio;
         equivalentVolumeKg += baseLoad;
-      } else if (inputType === 'hold') {
+        if (weight > 0) {
+          const addedLoad = weight * reps;
+          baseLoad += addedLoad;
+          externalVolumeKg += addedLoad;
+        }
+      } else if (inputType === 'hold' && timeSec > 0) {
         baseLoad = timeSec * bodyWeight * bwRatio * ISO_FACTOR;
         equivalentVolumeKg += baseLoad;
-      } else {
-        // Exercițiu necatalogat / fără greutate: păstrăm un proxy modest, astfel
-        // încât sesiunea să nu dispară complet din heatmap.
+        if (weight > 0) {
+          const addedLoad = timeSec * weight * ISO_FACTOR;
+          baseLoad += addedLoad;
+          externalVolumeKg += addedLoad;
+        }
+      } else if (reps > 0 || weight > 0) {
+        // Exercițiu necatalogat / fără greutate: păstrăm un proxy modest doar pentru seturi cu valori nenule.
         baseLoad = Math.max(1, reps) * (weight > 0 ? weight : 10);
         if (weight > 0) externalVolumeKg += baseLoad;
         else equivalentVolumeKg += baseLoad;
@@ -205,11 +215,11 @@ export function computeWorkoutMetrics(
   );
 
   let rank: WorkoutRankInfo;
-  if (sessionScore < 150) rank = { key: 'BRONZE', label: 'Începător', color: '#CD7F32', score: sessionScore };
-  else if (sessionScore < 350) rank = { key: 'SILVER', label: 'Activ', color: '#C0C0C0', score: sessionScore };
-  else if (sessionScore < 650) rank = { key: 'GOLD', label: 'Atlet', color: '#FFD700', score: sessionScore };
-  else if (sessionScore < 1000) rank = { key: 'PLATINUM', label: 'Avansat', color: '#00F0FF', score: sessionScore };
-  else rank = { key: 'ELITE', label: 'Elite GetFlow', color: '#CCFF00', score: sessionScore };
+  if (sessionScore < 150) rank = { key: 'BRONZE', label: i18n.t('sport.ranks.BRONZE'), color: '#CD7F32', score: sessionScore };
+  else if (sessionScore < 350) rank = { key: 'SILVER', label: i18n.t('sport.ranks.SILVER'), color: '#C0C0C0', score: sessionScore };
+  else if (sessionScore < 650) rank = { key: 'GOLD', label: i18n.t('sport.ranks.GOLD'), color: '#FFD700', score: sessionScore };
+  else if (sessionScore < 1000) rank = { key: 'PLATINUM', label: i18n.t('sport.ranks.PLATINUM'), color: '#00F0FF', score: sessionScore };
+  else rank = { key: 'ELITE', label: i18n.t('sport.ranks.ELITE'), color: '#CCFF00', score: sessionScore };
 
   const maxLoad = Math.max(0, ...Object.values(muscleLoad));
   const heatLevels: Record<string, 0 | 1 | 2 | 3 | 4> = {};

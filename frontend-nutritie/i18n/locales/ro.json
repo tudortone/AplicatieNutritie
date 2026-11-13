@@ -1613,6 +1613,13 @@
       "start": "Începe antrenamentul",
       "invalidTemplate": "Adaugă un nume și cel puțin un exercițiu.",
       "incompleteWorkout": "Finalizează toate seturile sau valorile cardio înainte de încheiere."
+    },
+    "summary": {
+      "title": "Antrenament finalizat",
+      "subtitle": "Sesiunea ta a fost înregistrată în previzualizarea locală.",
+      "setsCompleted": "{{count}} seturi completate",
+      "viewStrength": "Vezi harta de forță",
+      "done": "Înapoi la presetări"
     }
   },
   "nutrientFocus": {
@@ -1803,5 +1810,1516 @@
     "targetTab": "Țintă ({{val}} kg)",
     "saveCurrent": "Salvează Istoric Cântărire",
     "saveTarget": "Salvează Noua Țintă"
+  },
+  "sport": {
+    "screen": {
+      "searchPlaceholder": "Caută exercițiu...",
+      "searchA11y": "Caută un exercițiu după nume sau grupă musculară",
+      "clearSearchA11y": "Șterge căutarea",
+      "exercisesHeading": "Exerciții",
+      "emptySearchTitle": "Niciun exercițiu găsit",
+      "emptySearchSub": "Încearcă un alt termen sau resetează căutarea.",
+      "emptySearchReset": "Resetează căutarea",
+      "emptyCategory": "Nu există exerciții disponibile în această categorie.",
+      "restLabel": "Pauză",
+      "restAdd15A11y": "Prelungește pauza cu 15 secunde",
+      "restSkip": "Sari peste",
+      "restSkipA11y": "Sari peste pauză",
+      "whatYouWorked": "Ce ai lucrat",
+      "setsStat": "seturi",
+      "exercisesStat": "exerciții",
+      "volumeStat": "kg volum",
+      "logSetTitle": "Loghează set",
+      "setWarmupTag": "încălzire",
+      "warmupToggle": "Set de încălzire (nu intră în volum)",
+      "addSetBtn": "Adaugă set",
+      "saveWorkoutBtn": "Salvează antrenamentul",
+      "openExerciseA11y": "Deschide {{name}}",
+      "closeExerciseA11y": "Închide {{name}}",
+      "deleteSetA11y": "Șterge setul {{number}}",
+      "startTimerA11y": "Pornește cronometrul",
+      "stopTimerA11y": "Oprește cronometrul",
+      "resetTimerA11y": "Resetează cronometrul",
+      "start": "Start",
+      "stop": "Stop",
+      "noWeightHint": "Exercițiu cu greutatea corpului — fără câmp de kilograme.",
+      "defaultExerciseName": "Exercițiu",
+      "workoutSessionTitle": "Antrenament {{date}}",
+      "incompleteSetTitle": "Set incomplet",
+      "nothingToSaveTitle": "Nimic de salvat",
+      "nothingToSaveMsg": "Înregistrează cel puțin un set.",
+      "saveFailedTitle": "Antrenamentul nu a fost salvat",
+      "saveFailedMsg": "Sesiunea a rămas intactă. Încearcă din nou.",
+      "savedTitle": "Antrenament salvat",
+      "savedSummary": "{{sets}} seturi • {{volume}} kg volum",
+      "saveErrorTitle": "Eroare la salvare",
+      "saveErrorMsg": "Sesiunea a rămas intactă.",
+      "localSaveFailedTitle": "Salvare locală eșuată",
+      "localSaveFailedMsg": "Setul poate dispărea dacă închizi aplicația.",
+      "setLoggedTitle": "Set {{number}} înregistrat",
+      "categoryA11y": "Categoria {{name}}",
+      "adjustDecA11y": "Scade {{label}}",
+      "adjustIncA11y": "Crește {{label}}",
+      "stepperValueA11y": "{{label}}, {{value}}",
+      "stepperValueUnitA11y": "{{label}}, {{value}} {{unit}}"
+    },
+    "categories": {
+      "piept": "Piept",
+      "spate": "Spate",
+      "picioare": "Picioare",
+      "umeri": "Umeri",
+      "brate": "Brațe",
+      "abdomen": "Abdomen",
+      "cardio": "Cardio",
+      "full-body": "Corp întreg",
+      "mobilitate": "Mobilitate",
+      "superior": "Partea superioară",
+      "inferior": "Partea inferioară",
+      "core": "Core",
+      "corp_intreg": "Corp întreg"
+    },
+    "difficulties": {
+      "usor": "ușor",
+      "mediu": "mediu",
+      "greu": "greu"
+    },
+    "measurement": {
+      "modes": {
+        "timed_weight": "Cronometru + greutate opțională",
+        "timed": "Cronometru (secunde)",
+        "distance_time": "Timp (cardio)",
+        "weight_reps": "Greutate × repetări",
+        "reps_weight": "Repetări + greutate opțională",
+        "reps": "Repetări (greutatea corpului)",
+        "reps_assisted": "Repetări asistate"
+      },
+      "units": {
+        "reps": "Repetări",
+        "seconds": "Secunde",
+        "kg": "kg",
+        "min": "min",
+        "repShort": "rep",
+        "secShort": "s"
+      },
+      "fields": {
+        "duration": "Durată set",
+        "reps": "Repetări",
+        "weight": "Greutate",
+        "weightOptional": "Greutate (opțional)"
+      },
+      "setsCount": "{{count}} serii",
+      "setsByReps": "{{sets}}×{{reps}} {{unit}}",
+      "errors": {
+        "enterDuration": "Introdu durata în secunde (> 0).",
+        "enterWeight": "Introdu greutatea în kg (> 0).",
+        "enterReps": "Introdu numărul de repetări (> 0).",
+        "fieldRequired": "Câmpul „{{field}}” este obligatoriu.",
+        "fieldPositive": "Câmpul „{{field}}” trebuie să fie un număr pozitiv.",
+        "startTimerOrDuration": "Pornește cronometrul sau introdu durata setului.",
+        "enterValidReps": "Introdu un număr valid de repetări.",
+        "enterWeightForEx": "Acest exercițiu are nevoie de o greutate."
+      },
+      "setSingular": "set",
+      "setPlural": "seturi",
+      "volumeKgLabel": "{{kg}} kg volum"
+    },
+    "ranks": {
+      "BRONZE": "Bronz",
+      "SILVER": "Argint",
+      "GOLD": "Aur",
+      "PLATINUM": "Platină",
+      "ELITE": "Elite GetFlow"
+    },
+    "quests": {
+      "title": "Questuri zilnice",
+      "resetIn": "Reset în {{time}}",
+      "streak": "Serie: {{days}} zile",
+      "best": "Record: {{days}}",
+      "xpToday": "+{{xp}} XP azi",
+      "xpTag": "+{{xp}} XP",
+      "completed": "Completat",
+      "pool": {
+        "sets_10": {
+          "title": "Loghează 10 seturi azi",
+          "unit": "seturi"
+        },
+        "sets_16": {
+          "title": "Volum serios: 16 seturi azi",
+          "unit": "seturi"
+        },
+        "vol_2000": {
+          "title": "Ridică 2.000 kg volum",
+          "unit": "kg"
+        },
+        "vol_5000": {
+          "title": "Ridică 5.000 kg volum",
+          "unit": "kg"
+        },
+        "musc_3": {
+          "title": "Activează 3 grupe musculare",
+          "unit": "grupe"
+        },
+        "musc_5": {
+          "title": "Antrenament complet: 5 grupe",
+          "unit": "grupe"
+        },
+        "ex_4": {
+          "title": "4 exerciții diferite azi",
+          "unit": "exerciții"
+        },
+        "min_20": {
+          "title": "20 de minute de mișcare",
+          "unit": "min"
+        },
+        "min_45": {
+          "title": "45 de minute în sală",
+          "unit": "min"
+        },
+        "reps_100": {
+          "title": "100 repetări totale azi",
+          "unit": "rep"
+        }
+      }
+    },
+    "muscles": {
+      "chest": "Pectorali",
+      "delts": "Deltoizi",
+      "traps": "Trapez",
+      "lats": "Dorsali",
+      "infraspinatus": "Infraspinos",
+      "lower_back": "Lombari",
+      "neck": "Gât",
+      "biceps": "Biceps",
+      "triceps": "Triceps",
+      "forearms": "Antebrațe",
+      "abs": "Abdomen",
+      "obliques": "Oblici",
+      "serratus": "Seratus anterior",
+      "glutes": "Fesieri",
+      "quads": "Cvadriceps",
+      "hamstrings": "Ischiogambieri",
+      "calves": "Gambe",
+      "adductors": "Adductori",
+      "hip_flexors": "Flexori de șold",
+      "upper_chest": "Piept superior",
+      "lower_chest": "Piept inferior",
+      "inner_chest": "Piept interior",
+      "front_delts": "Deltoid anterior",
+      "side_delts": "Deltoid lateral",
+      "rear_delts": "Deltoid posterior",
+      "rhomboids": "Romboizi",
+      "mid_traps": "Trapez mijlociu",
+      "brachialis": "Brahial",
+      "grip": "Prindere",
+      "transverse_abs": "Transvers abdominal",
+      "lower_abs": "Abdomen inferior",
+      "hips": "Șolduri",
+      "abductors": "Abductori",
+      "legs": "Picioare",
+      "back": "Spate",
+      "shoulders": "Umeri",
+      "arms": "Brațe",
+      "cardio": "Cardio",
+      "core": "Core",
+      "spine": "Coloană",
+      "full_body": "Corp întreg",
+      "mobility": "Mobilitate"
+    },
+    "equipment": {
+      "barbell": "Halteră",
+      "dumbbell": "Gantere",
+      "bench": "Băncuță",
+      "cable": "Cabluri",
+      "machine": "Aparat",
+      "bodyweight": "Greutatea corpului",
+      "kettlebell": "Kettlebell",
+      "cardio": "Cardio",
+      "band": "Bandă elastică",
+      "pullup_bar": "Bară fixă",
+      "parallel_bars": "Paralele",
+      "ab_wheel": "Roată abdomen",
+      "medicine_ball": "Minge medicinală",
+      "rope": "Coardă / Frânghie",
+      "other": "Altele",
+      "ez_bar": "Bară EZ",
+      "weighted": "Corp + greutate",
+      "plate": "Disc / Greutăți",
+      "foam_roller": "Foam roller",
+      "sled": "Sanie",
+      "box": "Cutie pliometrică",
+      "gripper": "Gripper",
+      "stick": "Baston mobilitate"
+    },
+    "journal": {
+      "title": "Jurnal Antrenamente",
+      "subtitle": "Ultimele 30 de zile",
+      "loading": "Se încarcă jurnalul...",
+      "workoutsCount": "Antrenamente",
+      "kcalBurned": "kcal arse",
+      "kgVolume": "kg volum",
+      "emptyTitle": "Jurnalul este gol",
+      "emptySub": "Niciun antrenament înregistrat în ultimele 30 de zile.",
+      "deleteConfirmTitle": "Șterge antrenamentul",
+      "deleteConfirmMsg": "Ești sigur că vrei să ștergi „{{name}}”?",
+      "deleteConfirmBtn": "Șterge",
+      "cancelBtn": "Anulează",
+      "deleteSuccessTitle": "Șters",
+      "deleteSuccessMsg": "Antrenamentul a fost șters din jurnal.",
+      "deleteErrorTitle": "Eroare",
+      "deleteErrorMsg": "Nu s-a putut șterge antrenamentul.",
+      "deleteWorkoutA11y": "Șterge antrenamentul {{name}}",
+      "openWorkoutA11y": "Deschide {{name}}",
+      "closeWorkoutA11y": "Închide {{name}}",
+      "durationMin": "{{count}} min",
+      "exercisesCount": "{{count}} exerciții",
+      "warmupTag": "încălzire",
+      "backA11y": "Înapoi",
+      "today": "Azi",
+      "yesterday": "Ieri",
+      "noSetDetails": "Sesiune fără detalii despre seturi.",
+      "exShort": "{{count}} ex",
+      "rpeLabel": "@ {{rpe}} RPE"
+    },
+    "progress": {
+      "title": "Progres sport",
+      "subtitle": "Questuri și exercițiile de azi",
+      "openJournalA11y": "Deschide jurnalul complet",
+      "backA11y": "Înapoi",
+      "loading": "Se încarcă progresul...",
+      "exercisesStat": "exerciții",
+      "setsStat": "seturi",
+      "volumeStat": "kg volum",
+      "todayWorkouts": "Antrenamentele de azi",
+      "emptyTitle": "Niciun antrenament azi",
+      "emptyText": "Seturile salvate în Sport vor apărea aici și vor actualiza questurile.",
+      "localTag": "local",
+      "warmupTag": "încălzire",
+      "durationAndExercises": "{{min}} min • {{count}} exerciții",
+      "openA11y": "Deschide {{name}}",
+      "closeA11y": "Închide {{name}}"
+    },
+    "detail": {
+      "backA11y": "Înapoi",
+      "notFoundTitle": "Exercițiul nu a fost găsit",
+      "notFoundSub": "Alege un exercițiu din catalogul principal.",
+      "defaultDesc": "Exercițiu eficient pentru planul tău de antrenament.",
+      "defaultInstruction": "Execută mișcarea controlat, concentrându-te pe contracția musculară.",
+      "perSessionEst": "/ sesiune (est.)",
+      "setsConfigured": "{{count}} serii setate",
+      "configure": "Configurare",
+      "forToday": "pentru astăzi",
+      "musclesWorked": "Mușchi lucrați:",
+      "rankSectionTitle": "SISTEM RANG DE MĂIESTRIE",
+      "anatomicalEfficiency": "Eficiență Anatomică",
+      "effortScore": "Scor Efort",
+      "ptsSuffix": "/ 100 PCT",
+      "logWorkoutTitle": "LOG ANTRENAMENT",
+      "howToTitle": "CUM SE EXECUTĂ CORECT",
+      "mistakesTitle": "GREȘELI DE EVITAT",
+      "saveErrorTitle": "Eroare",
+      "saveErrorMsg": "Nu s-a putut salva antrenamentul.",
+      "savedTitle": "Adăugat în antrenament",
+      "savedMsg": "{{name}} a fost înregistrat cu succes!",
+      "ctaReps": "Adaugă ({{count}} repetări)",
+      "ctaTimed": "Adaugă ({{count}} serii)",
+      "ctaVolume": "Adaugă ({{kg}} kg • {{rank}})",
+      "ranks": {
+        "S": {
+          "title": "RANG S+ • ELITE PRO",
+          "efficiency": "Recrutare 99% Fibre Musculare",
+          "msg": "Stimulare hipertrofică maximă — nivel competițional.",
+          "hint": "Ai atins nivelul maxim de măiestrie pentru acest exercițiu!"
+        },
+        "A": {
+          "title": "RANG A • HIPERTROFIE AVANSATĂ",
+          "efficiency": "Recrutare 92% Fibre Musculare",
+          "msg": "Tensiune mecanică intensă și adaptare structurală profundă.",
+          "hint": "Adaugă +{{kg}} kg sau 1 serie pentru a debloca Rang S+"
+        },
+        "B": {
+          "title": "RANG B • FORȚĂ INTERMEDIARĂ",
+          "efficiency": "Recrutare 78% Fibre Musculare",
+          "msg": "Volum solid de lucru pentru creștere progresivă și tonifiere.",
+          "hint": "Adaugă +{{kg}} kg sau 2 repetări pentru Rang A"
+        },
+        "C": {
+          "title": "RANG C • BAZĂ ȘI TEHNICĂ",
+          "efficiency": "Recrutare 60% Fibre Musculare",
+          "msg": "Execuție tehnică controlată și activare metabolică de bază.",
+          "hint": "Crește greutatea sau adaugă repetări pentru a atinge Rang B"
+        }
+      },
+      "logger": {
+        "colSet": "SET",
+        "colKg": "KG",
+        "colRep": "REP",
+        "colRpe": "RPE",
+        "addSet": "Adaugă set",
+        "addSetA11y": "Adaugă set",
+        "markCompleteA11y": "Marchează setul complet",
+        "markIncompleteA11y": "Marchează setul incomplet",
+        "deleteSetA11y": "Șterge setul",
+        "decWeightA11y": "Scade greutatea",
+        "incWeightA11y": "Crește greutatea",
+        "decRepsA11y": "Scade repetările",
+        "incRepsA11y": "Crește repetările",
+        "incRpeA11y": "Crește RPE",
+        "decRpeA11y": "Scade RPE",
+        "setTypeA11y": "Tipul setului: {{type}}. Apasă pentru a schimba",
+        "setTypes": {
+          "warmup": "încălzire",
+          "dropset": "drop set",
+          "failure": "la eșec",
+          "working": "lucrat"
+        }
+      }
+    },
+    "commonControls": {
+      "maxLimitTitle": "Limita maximă atinsă",
+      "maxHumanLimit": "S-a atins limita maximă admisă",
+      "maxSets": "Numărul maxim de serii este 50.",
+      "maxReps": "Numărul maxim de repetări este 100.",
+      "maxDuration": "Durata maximă este de 7200 secunde (2 ore).",
+      "maxWeight": "Greutatea maximă admisă este de 600 kg.",
+      "quickSeriesTitle": "CONFIGURARE RAPIDĂ SERII",
+      "sets": "Serii",
+      "reps": "Repetări",
+      "weightKg": "Greutate (kg)",
+      "optionalSuffix": " • opțional",
+      "secondsPerSet": "Secunde / serie",
+      "holdTime": "Timp (Hold)",
+      "progressTo": "Progres spre {{rank}}",
+      "addWorkoutTitle": "Adaugă Antrenament",
+      "addWorkoutSave": "Salvează Antrenamentul",
+      "addWorkoutAll": "Toate",
+      "addWorkoutStartTimer": "Pornește cronometrul",
+      "addWorkoutPauseTimer": "Pauză",
+      "addWorkoutResetTimer": "Resetează",
+      "maxWeightWithLimit": "Greutatea maximă admisă este de {{max}} kg.",
+      "maxRepsWithLimit": "Numărul maxim de repetări este de {{max}}.",
+      "maxFieldLimit": "Limita umană maximă este de {{max}} {{unit}}.",
+      "holdTimerTitle": "CRONOMETRU IZOMETRIE (HOLD)",
+      "holdPauseBtn": "PAUZĂ",
+      "holdStartBtn": "PORNEȘTE",
+      "totalVolumeLabel": "Volum total",
+      "totalVolumeCompact": "{{kcal}} kcal • {{volume}} kg volum total",
+      "effortLabel": "Efort",
+      "ptsUnit": "/100 PTS",
+      "durationMinInput": "Durată (minute):",
+      "maxDuration120Min": "Durata maximă admisă este de 120 minute (7200s).",
+      "setCol": "SERIA",
+      "repsCol": "REPETĂRI",
+      "weightKgCol": "GREUTATE (KG)",
+      "addSetShort": "+ Set nou",
+      "addSimilarSetShort": "+ Set similar",
+      "saveWorkoutUpper": "SALVEAZĂ ANTRENAMENTUL",
+      "duplicateExercise": "Duplică exercițiul",
+      "searchPlaceholderShort": "Caută exercițiu (ex: Arnold, Biceps)...",
+      "recentExercisesHeading": "EXERCIȚII RECENTE",
+      "allExercisesHeading": "TOATE EXERCIȚIILE",
+      "sheetSubtitle": "Caută, filtrează sau folosește adăugare rapidă",
+      "quickAddSuccessTitle": "Exercițiu salvat rapid!",
+      "quickAddSuccessMsg": "+50 XP • {{kcal}} kcal arse",
+      "workoutSavedXpTitle": "Antrenament salvat!",
+      "workoutSavedXpMsg": "+100 XP • {{kcal}} kcal",
+      "duplicateSuccessTitle": "Exercițiu duplicat!",
+      "duplicateSuccessMsg": "+150 XP • {{kcal}} kcal",
+      "duplicateErrorMsg": "Nu s-a putut duplica exercițiul.",
+      "saveWorkoutErrorMsg": "Nu s-a putut salva antrenamentul.",
+      "copySuffix": "{{name}} (Copie)",
+      "duplicateSetSuffix": "{{name}} (Set duplicat)",
+      "fullBodyFallback": "Corp complet",
+      "equipmentAll": "Toate",
+      "equipmentBarbell": "Halteră / Bară",
+      "equipmentDumbbell": "Gantere",
+      "equipmentBench": "Băncuță",
+      "equipmentCable": "Cabluri",
+      "equipmentMachine": "Aparat",
+      "equipmentBodyweight": "Greutatea corpului",
+      "decreaseStepA11y": "Scade {{label}} cu {{step}}",
+      "increaseStepA11y": "Crește {{label}} cu {{step}}",
+      "quickAddA11y": "Adaugă rapid exercițiul"
+    },
+    "anatomy": {
+      "front": "Față",
+      "back": "Spate",
+      "legend": "Legendă",
+      "primary": "Principal",
+      "secondary": "Secundar",
+      "volume": "Volum",
+      "effort": "Efort",
+      "noData": "Fără date",
+      "frontViewA11y": "Arată vedere frontală",
+      "backViewA11y": "Arată vedere dorsală",
+      "activeMuscles": "{{count}} grupe active",
+      "tapForDetails": "Atinge pentru detalii"
+    },
+    "exercises": {
+      "90-90-hip-rotation": "Rotații 90/90 pentru șolduri",
+      "ab-wheel-rollout": "Roata pentru abdomen (Ab Wheel)",
+      "ab-wheel-rollout-genunchi": "Ab Wheel Rollout din genunchi",
+      "ab-wheel-rollout-v3": "Ab wheel rollout",
+      "ab_roller": "Rulări cu roata pentru abdomen",
+      "abdomene-clasice": "Abdomene clasice (crunches)",
+      "abductii-de-coapsa-la-aparat": "Abducții de coapsă la aparat",
+      "abductii-la-cablu-in-stand": "Abducții la cablu din picioare",
+      "abductori-masina": "Abductori la aparat (coapse exterior)",
+      "adductii-de-coapsa-la-aparat": "Adducții de coapsă la aparat",
+      "adductii-la-cablu": "Adducții la cablu",
+      "adductori-masina": "Adductori la aparat (coapse interior)",
+      "alergare": "Alergare",
+      "arnold-press": "Arnold Press",
+      "arnold-press-gantere": "Arnold Press cu gantere",
+      "arnold_press_dumbbell": "Împins Arnold cu gantere",
+      "assault-bike": "Assault bike",
+      "assisted_pullup_machine": "Tracțiuni asistate la aparat",
+      "back_extension": "Extensii lombare la bancă",
+      "back_squat_barbell": "Genuflexiuni clasice cu bara pe spate",
+      "band-pull-apart": "Band pull-apart",
+      "barbell_shrug": "Ridicări de umeri cu bara (Shrugs)",
+      "battle-ropes": "Battle ropes",
+      "battle-ropes-alternativ": "Battle Ropes alternativ",
+      "battle-ropes-v3": "Battle ropes",
+      "bear-crawl": "Bear crawl",
+      "bear-crawl-v3": "Bear crawl",
+      "bench_dip": "Dips la băncuță",
+      "bench_press_barbell": "Împins la piept cu bara",
+      "bent_over_row_barbell": "Ramat aplecat cu bara",
+      "bicep_curl_barbell": "Flexii pentru biceps cu bara dreaptă",
+      "bicep_curl_dumbbell": "Flexii cu gantere din picioare",
+      "bicicleta-eliptica": "Bicicletă eliptică",
+      "bicycle-crunch": "Bicycle crunch",
+      "bicycle-crunch-v3": "Bicycle crunch",
+      "bicycle_crunch": "Abdomene bicicletă",
+      "bird-dog": "Bird dog",
+      "bird_dog": "Bird Dog extensie spate și core",
+      "bodyweight_calf_raise": "Ridicări pe vârfuri pe treaptă",
+      "bodyweight_squat": "Genuflexiuni libere (greutatea corpului)",
+      "box-jump": "Sărituri pe cutie (Box Jump)",
+      "bulgarian_split_squat_dumbbell": "Genuflexiuni bulgărești cu gantere",
+      "burpees": "Burpees",
+      "burpees-greutate": "Burpees cu gantere",
+      "burpees-v3": "Burpees",
+      "cable-crunch": "Aplecări la cablu (Cable Crunch)",
+      "cable-woodchop": "Woodchop la cablu",
+      "cable_crunch": "Abdomene din genunchi la cablu cu sfoara",
+      "cable_curl": "Flexii biceps la cablu inferior",
+      "cable_kickback": "Extensii ale piciorului înapoi la cablu",
+      "cable_lateral_raise": "Ridicări laterale la cablu cu o mână",
+      "cable_pull_through": "Pull-through la cablu inferior",
+      "cable_woodchop": "Woodchop diagonal la cablu pentru oblici",
+      "calf-raise-sezand": "Ridicări pe vârfuri din șezut",
+      "calf_raise_machine": "Ridicări pe vârfuri din șezând la aparat",
+      "captain_chair_leg_raise": "Ridicări de picioare la scaunul roman",
+      "cat-cow": "Cat-cow (mobilitate coloană)",
+      "cat-cow-v3": "Cat-cow",
+      "chest-press-gantere": "Împins cu gantere pe plan drept",
+      "chest-press-masina": "Împins la piept la mașină",
+      "chest_dip": "Flotări la paralele pentru piept",
+      "chest_fly_cable": "Fluturări la cablu de sus în jos",
+      "chest_fly_dumbbell": "Fluturări cu gantere pe plan drept",
+      "chest_press_machine": "Împins la piept la aparat",
+      "chest_supported_dumbbell_row": "Ramat cu gantere pe plan înclinat",
+      "chinup": "Tracțiuni la bară priză supinație (Chin-up)",
+      "ciclism": "Ciclism",
+      "clamshell-cu-banda": "Clamshell cu bandă elastică",
+      "clean-and-press": "Clean and press",
+      "clean-and-press-cu-bara": "Clean and press cu bara",
+      "clean-gantera": "Clean cu gantera",
+      "close_grip_bench_press": "Împins la piept cu priză apropiată cu bara",
+      "close_grip_lat_pulldown": "Tracțiuni la helcometru priză apropiată V",
+      "concentration_curl_dumbbell": "Flexii concentrate pe coapsă cu gantera",
+      "concetration-curl-avansat": "Concentration Curl cu pauză 3s",
+      "copenhagen-plank": "Copenhagen plank",
+      "cossack-squat": "Cossack squat",
+      "couch-stretch": "Couch Stretch (întindere cvadriceps)",
+      "crossover-cablu": "Crossover la cablu",
+      "crunch": "Abdomene clasice (Crunches)",
+      "crunch-la-cablu-in-genunchi": "Crunch la cablu din genunchi",
+      "dead-bug": "Dead bug",
+      "dead-bug-avansat": "Dead Bug cu ganteră",
+      "dead-bug-v3": "Dead bug",
+      "dead_bug": "Dead Bug coordonare abdomen",
+      "dead_hang": "Atârnat izometric la bară (Dead Hang)",
+      "deadlift": "Îndreptări (deadlift)",
+      "deadlift_barbell": "Îndreptări clasice cu bara",
+      "decline_bench_barbell": "Împins declinat cu bara",
+      "decline_bench_dumbbell": "Împins declinat cu gantere",
+      "decline_pushup": "Flotări declinate (picioarele sus)",
+      "deep-squat-hold": "Menținere în genuflexiune adâncă",
+      "deschidere-de-sold-in-fandare-hip-flexor-stretch": "Întindere flexori de șold în fandare",
+      "diamond_pushup": "Flotări diamant",
+      "dips-banca-greutate": "Dips pe bancă cu greutate",
+      "dips-piept": "Dips la paralele (piept)",
+      "dips-triceps-banca": "Dips triceps la bancă",
+      "donkey-calf-raise": "Donkey calf raise",
+      "dragon-flag": "Dragon Flag",
+      "dumbbell_calf_raise": "Ridicări pe vârfuri din picioare cu gantere",
+      "dumbbell_pullover": "Pullover cu gantera pe băncuță",
+      "dumbbell_row": "Ramat cu gantera pe băncuță",
+      "dumbbell_shoulder_press": "Împins pentru umeri cu gantere din șezut",
+      "dumbbell_shrug": "Ridicări de umeri cu gantere",
+      "eliptic": "Eliptic",
+      "extensii-cvadriceps": "Extensii cvadriceps (leg extension)",
+      "extensii-de-coapsa-la-aparat": "Extensii de coapsă la aparat",
+      "extensii-de-incheietura-cu-bara": "Extensii de încheietură cu bara",
+      "extensii-deasupra-capului-la-cablu": "Extensii triceps deasupra capului la cablu",
+      "extensii-franceze-cu-bara-ez": "Extensii franceze cu bara EZ",
+      "extensii-jm-press": "JM Press",
+      "extensii-la-cablu-cu-frenghie": "Extensii la cablu cu frânghie",
+      "extensii-lombare-la-banca-romana": "Extensii lombare la banca romană",
+      "extensii-pumni-bara": "Extensii pumni cu bara (Reverse Wrist Curls)",
+      "extensii-triceps-cablu": "Extensii triceps la cablu",
+      "extensii-triceps-deasupra": "Extensii triceps deasupra capului",
+      "ez_bar_curl": "Flexii pentru biceps cu bara EZ",
+      "face-pull": "Face pull",
+      "face-pull-cu-banda-elastica": "Face pull cu bandă elastică",
+      "face-pull-la-cablu": "Face pull la cablu",
+      "face_pull_cable": "Face pull la cablu cu sfoară",
+      "fandari": "Fandări",
+      "fandari-inverse-cu-bara": "Fandări inverse cu bara",
+      "fandari-laterale": "Fandări laterale",
+      "fandari-laterale-greutate": "Fandări laterale cu gantera",
+      "fandari-mergand-cu-gantere": "Fandări în mers cu gantere",
+      "fandari-mers": "Fandări în mers",
+      "farmer-carry-mers-cu-greutati": "Farmer carry (mers cu greutăți)",
+      "farmer-walk": "Farmer walk",
+      "farmers_walk_dumbbell": "Mersul fermierului cu gantere grele",
+      "flat_bench_dumbbell": "Împins la piept cu gantere pe plan drept",
+      "flexii-biceps-bara": "Flexii biceps cu bara",
+      "flexii-biceps-gantere": "Flexii biceps cu gantere",
+      "flexii-biceps-priza-inversa": "Flexii biceps cu priză inversă",
+      "flexii-cablu": "Flexii biceps la cablu",
+      "flexii-ciocan": "Flexii ciocan (hammer curl)",
+      "flexii-ciocan-gantera": "Flexii ciocan cu gantera",
+      "flexii-concentrate": "Flexii concentrate",
+      "flexii-concentrate-cu-gantera": "Flexii concentrate cu gantera",
+      "flexii-cu-bara-ez": "Flexii cu bara EZ",
+      "flexii-de-coapsa-culcat-la-aparat": "Flexii femurale din culcat la aparat",
+      "flexii-de-coapsa-sezand-la-aparat": "Flexii femurale din șezând la aparat",
+      "flexii-de-incheietura-cu-bara": "Flexii de încheietură cu bara",
+      "flexii-de-incheietura-cu-gantera-pe-banca": "Flexii de încheietură cu gantera pe bancă",
+      "flexii-femurali": "Flexii femurali (leg curl)",
+      "flexii-hammer-cu-gantere": "Flexii Hammer cu gantere",
+      "flexii-incline-cu-gantere": "Flexii înclinate cu gantere",
+      "flexii-inverse-cu-bara-reverse-curl": "Flexii inverse cu bara (Reverse Curl)",
+      "flexii-la-banca-scott-preacher-curl": "Flexii la banca Scott (Preacher Curl)",
+      "flexii-la-cablu-de-jos": "Flexii la cablu de jos",
+      "flexii-pumni-bara": "Flexii pumni cu bara (Wrist Curls)",
+      "flexii-spider": "Flexii Spider",
+      "flexii-spider-v3": "Flexii Spider",
+      "flotari": "Flotări",
+      "flotari-arceuate-archer-push-up": "Flotări arcuite (Archer Push-Up)",
+      "flotari-cu-banda-elastica": "Flotări cu bandă elastică",
+      "flotari-cu-picioarele-ridicate": "Flotări cu picioarele ridicate",
+      "flotari-cu-priza-larga": "Flotări cu priză largă",
+      "flotari-decline": "Flotări declinate (picioare sus)",
+      "flotari-decline-greutate": "Flotări declinate cu disc pe spate",
+      "flotari-diamant": "Flotări diamant",
+      "flotari-diamant-v3": "Flotări diamant",
+      "flotari-inclinate": "Flotări înclinate",
+      "fluturari-gantere": "Fluturări cu gantere",
+      "fluturari-inverse-cu-gantere-aplecat": "Fluturări inverse cu gantere din aplecat",
+      "fluturari-inverse-la-aparat-reverse-pec-deck": "Fluturări inverse la aparat (Reverse Pec Deck)",
+      "fluturari-inverse-la-cablu-incrucisat": "Fluturări inverse la cablu încrucișat",
+      "fluturari-la-cablu-de-jos-low-to-high": "Fluturări la cablu de jos în sus",
+      "fluturari-la-cablu-de-sus-high-to-low": "Fluturări la cablu de sus în jos",
+      "fluturari-la-pec-deck": "Fluturări la pec deck",
+      "fluturari-pec-deck-invers": "Pec Deck invers (Reverse Pec Deck)",
+      "fluturari-spate": "Fluturări deltoid posterior (reverse fly)",
+      "foam-rolling": "Foam rolling",
+      "foam-rolling-cvadriceps": "Foam rolling pentru cvadriceps",
+      "french-press": "Presă Franceză (French press)",
+      "french-press-gantere-un-brat": "French Press cu ganteră (un braț)",
+      "front_raise_barbell": "Ridicări frontale cu bara",
+      "front_raise_cable": "Ridicări frontale la cablu",
+      "front_raise_dumbbell": "Ridicări frontale cu gantere",
+      "front_squat_barbell": "Genuflexiuni frontale cu bara",
+      "genuflexiuni-bara": "Genuflexiuni cu bara (squat)",
+      "genuflexiuni-bulgare-cu-gantere": "Genuflexiuni bulgărești cu gantere",
+      "genuflexiuni-bulgaresti": "Genuflexiuni bulgărești",
+      "genuflexiuni-cu-goblet": "Genuflexiuni Goblet",
+      "genuflexiuni-cu-saritura": "Genuflexiuni cu săritură (jump squats)",
+      "genuflexiuni-fata": "Genuflexiuni frontale (front squat)",
+      "genuflexiuni-frontale-cu-bara": "Genuflexiuni frontale cu bara",
+      "genuflexiuni-hack-squat": "Genuflexiuni Hack squat",
+      "genuflexiuni-la-perete-wall-sit": "Stând izometric la perete (Wall Sit)",
+      "genuflexiuni-pistol-assistate": "Pistol Squats asistate",
+      "genuflexiuni-sissy": "Genuflexiuni Sissy",
+      "genuflexiuni-split-bulgaresti-greutate": "Bulgarian Split Squats cu gantere",
+      "genuflexiuni-sumo": "Genuflexiuni sumo",
+      "genuflexiuni-sumo-cu-gantera": "Genuflexiuni sumo cu gantera",
+      "glute-bridge-pe-un-picior": "Glute bridge pe un picior",
+      "glute_bridge_bodyweight": "Podul fesierilor la sol (Glute Bridge)",
+      "goblet_squat_dumbbell": "Genuflexiuni Goblet cu ganteră/kettlebell",
+      "good-morning-cu-bara": "Good morning cu bara",
+      "good_morning_barbell": "Aplecări Good Morning cu bara",
+      "hack-squat": "Hack Squat la aparat",
+      "hack_squat_machine": "Genuflexiuni la aparatul Hack Squat",
+      "hammer_curl_dumbbell": "Flexii tip ciocan cu gantere",
+      "handstand-push-up-la-perete": "Flotări în stând pe mâini la perete",
+      "handstand_pushup": "Flotări în stând pe mâini",
+      "hanging-leg-raise": "Ridicări picioare la bară fixă",
+      "hanging_knee_raise": "Ridicări de genunchi din atârnat",
+      "hanging_leg_raise": "Ridicări de picioare din atârnat la bară",
+      "heel-taps-laterale": "Atingeri laterale de călcâie (Heel Taps)",
+      "high-knees": "Genunchi sus (high knees)",
+      "hip-thrust": "Hip thrust",
+      "hip-thrust-cu-bara": "Hip thrust cu bara",
+      "hip_abduction_machine": "Abducția coapselor din șezând la aparat",
+      "hip_adduction_machine": "Adducția coapselor din șezând la aparat",
+      "hip_thrust_barbell": "Hip thrust cu bara pe șolduri",
+      "hip_thrust_machine": "Hip thrust la aparat",
+      "hiperextensii": "Hiperextensii lombare",
+      "hollow-body-hold": "Hollow body hold",
+      "hollow_hold": "Hollow Hold (izometric abdomen)",
+      "impins-arnold": "Împins Arnold",
+      "impins-banca-plat": "Împins la piept cu bara (plat)",
+      "impins-banda-elastica": "Împins cu bandă elastică",
+      "impins-cu-gantere-sezand": "Împins cu gantere din șezând",
+      "impins-declinat": "Împins declinat cu bara",
+      "impins-in-priza-strimta-la-bara": "Împins cu priză strâmtă cu bara",
+      "impins-inclinat-gantere": "Împins înclinat cu gantere",
+      "impins-inclinat-masina": "Împins înclinat la mașină",
+      "impins-la-aparat-smith-inclinat": "Împins înclinat la aparatul Smith",
+      "impins-la-piept-cu-gantere-declinat": "Împins la piept cu gantere declinat",
+      "impins-la-piept-cu-gantere-inclinat": "Împins la piept cu gantere înclinat",
+      "impins-landmine-cu-o-mana": "Împins landmine cu o mână",
+      "impins-militar-cu-bara-in-stand": "Împins militar cu bara din picioare",
+      "impins-umeri-bara": "Împins deasupra capului cu bara (OHP)",
+      "impins-umeri-gantere": "Împins cu gantere pentru umeri",
+      "inclinari-laterale-cu-gantera": "Înclinări laterale cu gantera",
+      "incline_bench_barbell": "Împins înclinat cu bara",
+      "incline_bench_dumbbell": "Împins înclinat cu gantere",
+      "incline_chest_fly_dumbbell": "Fluturări înclinate cu gantere",
+      "incline_dumbbell_curl": "Flexii cu gantere pe băncuță înclinată",
+      "incline_pushup": "Flotări înclinate (mâinile sus)",
+      "indreptari-cu-picioare-drepte-la-bara": "Îndreptări cu picioare drepte cu bara",
+      "indreptari-romanesti": "Îndreptări românești (RDL)",
+      "indreptari-romanesti-cu-gantere": "Îndreptări românești cu gantere",
+      "inverted-row-greutate": "Ramat invers cu greutate pe piept",
+      "inverted_row_bodyweight": "Ramat invers sub bară/inele",
+      "jefferson-curl": "Jefferson curl",
+      "jump_squat": "Genuflexiuni cu săritură",
+      "jumping-jacks": "Jumping jacks",
+      "kettlebell-snatch": "Kettlebell Snatch (smuls)",
+      "kettlebell-swing": "Kettlebell swing",
+      "kettlebell-swing-v3": "Kettlebell swing",
+      "kickback-cu-gantera": "Kickback cu gantera",
+      "kickback-de-fesier-la-cablu": "Kickback de fesier la cablu",
+      "kickback-triceps": "Kickback triceps",
+      "kickback_dumbbell": "Extensii triceps înapoi din aplecat (Kickbacks)",
+      "kroc-rows": "Kroc Rows (ramat greu cu ganteră)",
+      "lat-pulldown": "Tras la helcometru (lat pulldown)",
+      "lat_pulldown_cable": "Tracțiuni la helcometru priză largă",
+      "lateral_raise_dumbbell": "Ridicări laterale cu gantere din picioare",
+      "leg-curl-sezand": "Flexii femurali șezând",
+      "leg_curl_machine": "Flexii femurale din culcat la aparat",
+      "leg_extension_machine": "Extensii pentru cvadriceps la aparat",
+      "leg_press_calf_raise": "Ridicări pe vârfuri la presa de picioare",
+      "leg_press_machine": "Presă pentru picioare la 45°",
+      "low_cable_crossover": "Fluturări la cablu de jos în sus",
+      "mers-lateral-cu-banda-lateral-band-walk": "Mers lateral cu bandă elastică",
+      "mers-rapid": "Mers alert",
+      "mid_cable_crossover": "Fluturări la cablu de la mijloc",
+      "military-press": "Military Press cu bara din picioare",
+      "monster-walk-cu-banda": "Monster walk cu bandă",
+      "mountain-climbers": "Mountain climbers",
+      "mountain-climbers-v3": "Mountain climbers",
+      "mountain_climber": "Alpinistul (Mountain Climbers)",
+      "neutral_grip_pullup": "Tracțiuni la bară priză neutră",
+      "nordic-hamstring-curl": "Nordic hamstring curl",
+      "nordic_hamstring_curl": "Nordic Hamstring Curl la sol/aparat",
+      "overhead_press_barbell": "Împins deasupra capului cu bara (Military Press)",
+      "overhead_tricep_cable": "Extensii triceps deasupra capului la cablu",
+      "overhead_tricep_dumbbell": "Extensii triceps deasupra capului cu o ganteră",
+      "pallof-press": "Pallof Press la cablu",
+      "pallof-press-la-cablu": "Pallof press la cablu",
+      "paloane-la-banca-bench-dip": "Dips la bancă (Bench Dip)",
+      "paloane-la-paralele-aplecat-chest-dip": "Flotări la paralele aplecat (Chest Dip)",
+      "pancake-stretch": "Pancake Stretch (deschidere șolduri)",
+      "pasire-pe-cutie-step-up": "Urcare pe cutie (Step-up)",
+      "pec-deck": "Pec Deck (fluturări la aparat)",
+      "pec_deck_machine": "Fluturări la aparat (Pec Deck)",
+      "pendlay_row_barbell": "Ramat Pendlay cu bara de la sol",
+      "pigeon-pose": "Pigeon Pose (întindere fesieri)",
+      "pike-push-up": "Flotări pike (Pike Push-Up)",
+      "pike_pushup": "Flotări pike pentru umeri",
+      "pistol_squat": "Genuflexiuni pe un singur picior (Pistol Squat)",
+      "plank": "Planșă (plank)",
+      "plank-frontal": "Planșă frontală",
+      "plank-lateral": "Planșă laterală",
+      "plank-lateral-cu-ridicare-de-bazin": "Planșă laterală cu ridicare de bazin",
+      "plank-lateral-v3": "Planșă laterală",
+      "plate-pinch-prindere-de-disc": "Plate pinch (prindere de disc)",
+      "pod-fesieri-un-picior": "Pod fesieri pe un picior",
+      "preacher_curl_barbell": "Flexii la banca Scott cu bara EZ",
+      "preacher_curl_machine": "Flexii biceps la aparatul Scott",
+      "presa-de-picioare": "Presa de picioare",
+      "presa-picioare": "Presa de picioare",
+      "presa-umeri-cu-bara-din-spate": "Presă umeri la ceafă (Behind-Neck Press)",
+      "presa-umeri-cu-gantere-asimetric": "Presă umeri alternativă cu gantere",
+      "priza-placutelor": "Menținere discuri (Plate Pinch Hold)",
+      "prone-snow-angel": "Prone Snow Angel",
+      "pulldown-priza-ingusta": "Tracțiuni la helcometru priză îngustă",
+      "pullover-bara-dreapta": "Pullover la cablu cu bară dreaptă",
+      "pullover-cu-gantera": "Pullover cu gantera",
+      "pullover-gantera": "Pullover cu gantera",
+      "pullup": "Tracțiuni la bară priză pronație",
+      "pullups-greutate": "Tracțiuni cu greutate",
+      "pullups-greutate-gantera": "Tracțiuni cu gantera între picioare",
+      "push_press_barbell": "Push Press cu bara din picioare",
+      "pushup": "Flotări clasice",
+      "ramat-bara": "Ramat cu bara",
+      "ramat-bara-inclinat": "Ramat Pendlay cu bara la 45°",
+      "ramat-cablu-jos": "Ramat la cablu jos",
+      "ramat-cablu-un-brat": "Ramat la cablu cu un singur braț",
+      "ramat-cu-banda-elastica-sezand": "Ramat cu bandă elastică din șezând",
+      "ramat-cu-gantera-pe-banca": "Ramat cu gantera pe bancă",
+      "ramat-cu-priza-larga-la-bara-rear-delt-row": "Ramat priză largă la bară (Rear Delt Row)",
+      "ramat-gantera-un-brat": "Ramat cu gantera (un braț)",
+      "ramat-la-aparat-cu-suport-pentru-piept": "Ramat la aparat cu suport pentru piept",
+      "ramat-la-cablu-sezand-cu-priza-larga": "Ramat la cablu șezând cu priză largă",
+      "ramat-masina": "Ramat la mașină",
+      "ramat-meadows": "Ramat Meadows",
+      "ramat-pendlay": "Ramat Pendlay",
+      "ramat-t-bar": "Ramat T-Bar",
+      "ramat-t-bar-v3": "Ramat T-bar",
+      "ramat-vertical-la-bara-upright-row": "Ramat vertical cu bara (Upright Row)",
+      "rear_delt_fly_dumbbell": "Fluturări pentru umeri posteriori cu gantere",
+      "retractii-scapulare-la-bara-fixa": "Retracții scapulare la bară fixă",
+      "reverse-hyperextension": "Reverse hyperextension",
+      "reverse-pec-deck": "Fluturări inverse la aparat (deltoid post.)",
+      "reverse_grip_lat_pulldown": "Tracțiuni la helcometru priză inversă",
+      "reverse_lunge_barbell": "Fandări înapoi cu bara pe umeri",
+      "reverse_pec_deck_machine": "Fluturări posterioare la aparat (Reverse Pec Deck)",
+      "reverse_wrist_curl_barbell": "Extensii ale încheieturilor cu bara",
+      "ridicari-de-picioare-la-bara-fixa": "Ridicări de picioare la bară fixă",
+      "ridicari-de-tibial-tibialis-raise": "Ridicări de tibial (Tibialis Raise)",
+      "ridicari-de-umeri-cu-bara-shrug": "Ridicări de umeri cu bara (Shrug)",
+      "ridicari-de-umeri-cu-gantere": "Ridicări de umeri cu gantere",
+      "ridicari-frontale": "Ridicări frontale",
+      "ridicari-frontale-bara": "Ridicări frontale cu bara",
+      "ridicari-frontale-cu-disc": "Ridicări frontale cu disc",
+      "ridicari-frontale-cu-gantere-alternativ": "Ridicări frontale alternative cu gantere",
+      "ridicari-in-t-la-banca-inclinata": "Ridicări în T pe bancă înclinată",
+      "ridicari-in-w-la-banca-inclinata": "Ridicări în W pe bancă înclinată",
+      "ridicari-in-y-la-banca-inclinata": "Ridicări în Y pe bancă înclinată",
+      "ridicari-laterale": "Ridicări laterale",
+      "ridicari-laterale-cablu": "Ridicări laterale la cablu",
+      "ridicari-laterale-cablu-un-brat": "Ridicări laterale la cablu (un braț)",
+      "ridicari-laterale-cu-gantere": "Ridicări laterale cu gantere",
+      "ridicari-laterale-de-picior-culcat": "Ridicări laterale de picior din culcat",
+      "ridicari-laterale-inclinat": "Ridicări laterale din aplecat",
+      "ridicari-laterale-la-aparat": "Ridicări laterale la aparat",
+      "ridicari-laterale-la-cablu": "Ridicări laterale la cablu",
+      "ridicari-pe-varfuri-in-stand-cu-bara": "Ridicări pe vârfuri din picioare cu bara",
+      "ridicari-pe-varfuri-la-aparat-sezand": "Ridicări pe vârfuri din șezând la aparat",
+      "ridicari-pe-varfuri-la-presa-de-picioare": "Ridicări pe vârfuri la presa de picioare",
+      "ridicari-pe-varfuri-pe-un-picior": "Ridicări pe vârfuri pe un picior",
+      "ridicari-picioare-atarnat": "Ridicări de picioare atârnat",
+      "ridicari-varfuri": "Ridicări pe vârfuri (calf raises)",
+      "ridicari-varfuri-pe-un-picior": "Ridicări pe vârfuri pe un picior",
+      "romanian_deadlift_barbell": "Îndreptări românești cu bara (RDL)",
+      "romanian_deadlift_dumbbell": "Îndreptări românești cu gantere",
+      "rope_hammer_curl_cable": "Flexii ciocan cu sfoara la cablu",
+      "rope_tricep_pushdown": "Extensii triceps la cablu cu sfoară",
+      "rotatii-de-umeri-cu-bastonul": "Rotații de umeri cu bastonul (Dislocates)",
+      "rotatii-solduri": "Rotații de șolduri",
+      "rotiri-rusesti-cu-minge-medicinala": "Răsuciri rusești cu minge medicinală",
+      "rulare-de-prosop-cu-greutate": "Rulare cu prosopul și greutate",
+      "rulou-grip-bara": "Rulou grip cu bara (Finger Rolls)",
+      "russian-twist": "Russian twist",
+      "russian_twist": "Răsuciri rusești cu ganteră/disc",
+      "sandbag-carry": "Sandbag Carry (cărat sac)",
+      "sarituri-coarda": "Sărituri cu coarda",
+      "sarituri-cu-coarda": "Sărituri cu coarda",
+      "sarituri-cutie": "Sărituri pe cutie (Box Jumps)",
+      "sarituri-pe-varfuri-pogo-hops": "Sărituri pe vârfuri (Pogo Hops)",
+      "scorpion-stretch": "Scorpion Stretch (mobilitate lombară)",
+      "seated_lateral_raise_dumbbell": "Ridicări laterale din șezut",
+      "seated_leg_curl_machine": "Flexii femurale din șezând la aparat",
+      "seated_row_cable": "Ramat din șezut la cablu",
+      "seated_row_machine": "Ramat la aparat iso-lateral",
+      "shoulder_press_machine": "Împins umeri la aparat",
+      "shrugs": "Ridicări de umeri (shrugs)",
+      "side_plank": "Planșă laterală (Side Plank)",
+      "skater-jumps": "Skater Jumps (sărituri patinator)",
+      "skullcrusher_barbell": "Extensii triceps culcat cu bara EZ (Skullcrushers)",
+      "skullcrusher_dumbbell": "Extensii triceps culcat cu gantere",
+      "skullcrushers": "Extensii triceps la frunte (skullcrushers)",
+      "sled-push": "Împins sanie (Sled Push)",
+      "spider_curl_dumbbell": "Spider Curls cu gantere pe bancă înclinată",
+      "sprint-intervale": "Sprinturi pe intervale (HIIT)",
+      "sprint-pe-loc-cu-genunchii-sus": "Sprint pe loc cu genunchii sus",
+      "stair-climber": "Stair climber",
+      "standing_calf_raise_machine": "Ridicări pe vârfuri din picioare la aparat",
+      "step-up": "Step-up pe bancă",
+      "step_up_dumbbell": "Urcări pe cutie/bancă cu gantere (Step-up)",
+      "straight-arm-pulldown": "Pulldown cu brațe drepte",
+      "straight_arm_pulldown": "Pulldown cu brațele drepte la cablu",
+      "strangere-de-gripper": "Strângere de gripper",
+      "stretching-de-ischiogambieri-sezand": "Stretching de ischiogambieri din șezând",
+      "stretching-de-pectorali-la-usa": "Stretching pectorali la cadrul ușii",
+      "stretching-femurali": "Stretching femurali",
+      "stretching-piept": "Stretching piept la perete",
+      "suitcase-carry": "Suitcase carry",
+      "sumo_deadlift_barbell": "Îndreptări Sumo cu bara",
+      "superman": "Superman",
+      "superman_hold": "Superman Hold",
+      "suspendare-pasiva-in-bara-dead-hang": "Suspendare pasivă la bară (Dead Hang)",
+      "svend-press": "Svend press",
+      "t_bar_row": "Ramat la bara T",
+      "thoracic-extension-pe-rola": "Extensie toracică pe rolă",
+      "thread-the-needle": "Thread the Needle (mobilitate toracică)",
+      "thruster": "Thruster",
+      "thruster-cu-gantere": "Thruster cu gantere",
+      "thruster-greutate": "Thruster cu gantere",
+      "toes-to-bar": "Vârfurile la bară (Toes to Bar)",
+      "tractiuni": "Tracțiuni",
+      "tractiuni-cu-priza-inversa": "Tracțiuni cu priză inversă",
+      "tractiuni-cu-priza-larga": "Tracțiuni cu priză largă",
+      "tractiuni-neutre-la-maner-paralel": "Tracțiuni neutre la mânere paralele",
+      "tractiuni-priza-inversa": "Tracțiuni priză inversă (chin-ups)",
+      "tras-la-helcometru-cu-priza-inversa": "Tras la helcometru cu priză inversă",
+      "tricep_dip": "Dips la paralele pentru triceps",
+      "tricep_pushdown_cable": "Extensii triceps la cablu superior",
+      "triceps-pushdown-funie": "Extensii triceps cu funie",
+      "triceps-pushdown-funie-extensie": "Extensii triceps la cablu cu funia",
+      "turkish-get-up": "Turkish get-up",
+      "turkish-get-up-v3": "Turkish get-up",
+      "upright_row_barbell": "Ramat vertical cu bara spre bărbie",
+      "upright_row_cable": "Ramat vertical la cablu",
+      "urcat-scari": "Urcat scări (stairmaster)",
+      "v-up": "V-up",
+      "v-ups": "V-ups",
+      "v_ups": "Abdomene în V (V-Ups)",
+      "vaslit": "Vâslit (rowing)",
+      "vaslit-la-ergometru": "Vâslit la ergometru",
+      "walking_lunge_dumbbell": "Fandări în mers cu gantere",
+      "wall-balls": "Wall balls",
+      "wall_sit": "Stând izometric la perete (Wall Sit)",
+      "weighted_chest_dip": "Dips la paralele cu greutate adițională",
+      "wide_pushup": "Flotări cu brațele depărtate",
+      "windshield-wipers": "Windshield wipers (ștergătoare)",
+      "woodchopper-de-jos-in-sus-la-cablu": "Woodchopper de jos în sus la cablu",
+      "woodchopper-de-sus-in-jos-la-cablu": "Woodchopper de sus în jos la cablu",
+      "world-s-greatest-stretch": "World’s greatest stretch",
+      "worlds-greatest-stretch": "World’s Greatest Stretch",
+      "wrist_curl_barbell": "Flexii ale încheieturilor cu bara"
+    },
+    "exerciseDetails": {
+      "ab-wheel-rollout-genunchi": {
+        "description": "Din genunchi, rulează roata în față până când corpul e aproape paralel cu solul, apoi revino.",
+        "instructions": {
+          "0": "Îngenunchează, apucă roata cu ambele mâini",
+          "1": "Rulează încet în față, menținând spatele ușor arcuit",
+          "2": "Oprește-te înainte de a pierde tensiunea lombară",
+          "3": "Trage înapoi folosind abdomenul (nu șoldurile)"
+        }
+      },
+      "alergare": {
+        "description": "Cardio clasic pentru rezistență și ardere."
+      },
+      "arnold-press-gantere": {
+        "description": "Varianta rotativă a împinsului de umeri. Pornești cu palmele spre tine și le rotești spre exterior pe măsură ce împingi.",
+        "instructions": {
+          "0": "Stai pe bancă, ganterele la nivelul pieptului, palmele spre tine",
+          "1": "Împinge ganterele în sus, rotind palmele spre exterior",
+          "2": "Blochează sus cu palmele în față",
+          "3": "Inversează mișcarea la coborâre"
+        }
+      },
+      "battle-ropes-alternativ": {
+        "description": "Prinde funiile, genunchii ușor flexați. Creează valuri alternante rapide, menținând ritmul constant.",
+        "instructions": {
+          "0": "Prinde capetele funiilor, stai cu genunchii ușor flexați",
+          "1": "Generează valuri rapide, alternând brațele",
+          "2": "Menține abdomenul încordat, spatele drept",
+          "3": "Ritm alert pentru 30-45 secunde"
+        }
+      },
+      "burpees": {
+        "mistakes": {
+          "0": "Formă neglijentă când obosești"
+        }
+      },
+      "burpees-greutate": {
+        "description": "Burpee clasic ținând gantere în mâini. La săritură, împingi ganterele deasupra capului.",
+        "instructions": {
+          "0": "Ține gantere ușoare în mâini",
+          "1": "Ghemuiește, pune ganterele pe sol",
+          "2": "Sari înapoi în plank, fă o flotare",
+          "3": "Sari înapoi, ridică-te și împinge ganterele deasupra capului"
+        }
+      },
+      "cable-woodchop": {
+        "description": "Prinde mânerul cablului superior. Rotește trunchiul în jos și lateral, simulând tăierea lemnului.",
+        "instructions": {
+          "0": "Reglează cablul sus, prinde mânerul cu ambele mâini",
+          "1": "Rotește trunchiul și brațele în jos spre genunchiul opus",
+          "2": "Controlează întoarcerea",
+          "3": "Execută ambele părți"
+        }
+      },
+      "chest-press-gantere": {
+        "description": "Alternativa la bară pentru libertate mai mare de mișcare."
+      },
+      "clean-gantera": {
+        "description": "Ridică ganterele de la sol până la umeri într-o mișcare explozivă, menținând spatele drept.",
+        "instructions": {
+          "0": "Ganterele pe sol între picioare",
+          "1": "Apucă-le, spatele drept",
+          "2": "Trage exploziv, ducând ganterele la umeri",
+          "3": "Coboară controlat și repetă"
+        }
+      },
+      "concetration-curl-avansat": {
+        "description": "Concentration curl cu pauză de 3 secunde în poziția de vârf. Maximizează timpul sub tensiune.",
+        "instructions": {
+          "0": "Așază-te, cotul sprijinit pe coapsă",
+          "1": "Ridică gantera, contractând bicepsul",
+          "2": "Menține 3 secunde în poziția de vârf",
+          "3": "Coboară lent (3 secunde)"
+        }
+      },
+      "couch-stretch": {
+        "description": "Îngenunchează cu spatele la o canapea/perete. Sprijină vârful piciorului pe canapea și împinge șoldul în față.",
+        "instructions": {
+          "0": "Îngenunchează în fața unei canapele",
+          "1": "Așază vârful piciorului pe canapea",
+          "2": "Împinge șoldul în față până simți întinderea",
+          "3": "Menține 30-60 secunde, schimbă piciorul"
+        }
+      },
+      "dead-bug-avansat": {
+        "description": "Culcat pe spate, brațele și picioarele ridicate. Ține o ganteră în mâini. Extinde alternativ brațul și piciorul opus.",
+        "instructions": {
+          "0": "Culcă-te, ține gantera deasupra pieptului, genunchii la 90°",
+          "1": "Extinde brațul drept și piciorul stâng simultan",
+          "2": "Revino la poziția inițială",
+          "3": "Alternează părțile"
+        }
+      },
+      "deadlift": {
+        "description": "Exercițiu compus full posterior.",
+        "instructions": {
+          "0": "Bara aproape de tibii.",
+          "1": "Spate neutru, piept sus.",
+          "2": "Împinge cu picioarele, extinde șoldul."
+        },
+        "mistakes": {
+          "0": "Rotunjești spatele",
+          "1": "Ridici cu spatele nu cu picioarele"
+        }
+      },
+      "dips-banca-greutate": {
+        "description": "Dips pe două bănci, cu o plăcuță pe coapse. Coboară până simți întinderea în piept.",
+        "instructions": {
+          "0": "Două bănci paralele, mâinile pe una, călcâiele pe cealaltă",
+          "1": "Așază o plăcuță pe coapse",
+          "2": "Coboară până brațele sunt la 90°",
+          "3": "Împinge în sus"
+        }
+      },
+      "dragon-flag": {
+        "description": "AVANSAT: Culcat pe bancă, ții de margine deasupra capului. Ridici corpul drept, sprijinit doar pe umeri.",
+        "instructions": {
+          "0": "Culcă-te pe bancă, apucă marginea deasupra capului",
+          "1": "Ridică picioarele și bazinul, menținând corpul drept",
+          "2": "Coboară lent, fără a atinge banca",
+          "3": "Menține tensiunea abdominală maximă"
+        }
+      },
+      "extensii-pumni-bara": {
+        "description": "Antebrațele sprijinite pe coapse, palmele în jos. Extinde gantera din încheietură.",
+        "instructions": {
+          "0": "Sprijină antebrațul pe coapsă, palma în jos",
+          "1": "Coboară gantera controlat",
+          "2": "Ridică doar din încheietură, fără a mișca brațul"
+        }
+      },
+      "fandari": {
+        "instructions": {
+          "0": "Pas mare în față.",
+          "1": "Coboară până genunchiul din spate aproape atinge solul.",
+          "2": "Împinge înapoi în poziția inițială."
+        }
+      },
+      "fandari-laterale-greutate": {
+        "description": "Ține o ganteră la piept. Fă un pas lateral larg, îndoaie genunchiul, menținând celălalt picior drept.",
+        "instructions": {
+          "0": "Stai drept, gantera la piept",
+          "1": "Pas larg lateral cu piciorul drept",
+          "2": "Îndoaie genunchiul drept, șoldul în spate",
+          "3": "Împinge în călcâiul drept pentru a reveni"
+        }
+      },
+      "flexii-biceps-bara": {
+        "mistakes": {
+          "0": "Balansezi corpul"
+        }
+      },
+      "flexii-biceps-priza-inversa": {
+        "description": "Ține bara cu palmele în jos (priză pronată). Ridică bara, menținând coatele fixe. Accent pe brahial.",
+        "instructions": {
+          "0": "Apucă bara cu palmele în jos, la lățimea umerilor",
+          "1": "Menține coatele lipite de corp",
+          "2": "Ridică bara până la nivelul pieptului superior",
+          "3": "Coboară controlat"
+        }
+      },
+      "flexii-ciocan-gantera": {
+        "description": "Ține ganterele cu palmele orientate spre corp (priză ciocan). Ridică alternativ, menținând încheieturile fixe.",
+        "instructions": {
+          "0": "Stai drept cu gantera în fiecare mână, palmele spre corp",
+          "1": "Menține coatele fixe lângă corp",
+          "2": "Ridică gantera până la umăr, fără a roti încheietura",
+          "3": "Coboară controlat"
+        }
+      },
+      "flexii-pumni-bara": {
+        "description": "Stai pe bancă, antebrațele sprijinite pe coapse, palmele în sus. Rulează gantera doar din încheietură, fără a mișca brațul.",
+        "instructions": {
+          "0": "Așază-te pe bancă cu gantera în mână",
+          "1": "Sprijină antebrațul pe coapsă, cu palma în sus",
+          "2": "Coboară gantera controlat, întinzând încheietura",
+          "3": "Ridică doar din încheietură, contractând antebrațul",
+          "4": "Controlează mișcarea pe tot parcursul"
+        },
+        "mistakes": {
+          "0": "Mișcarea brațului în loc de încheietură",
+          "1": "Greutate prea mare → formă incorectă"
+        }
+      },
+      "flotari": {
+        "description": "Clasicul care merge oriunde.",
+        "instructions": {
+          "0": "Corp drept, mâinile sub umeri.",
+          "1": "Coboară până pieptul aproape atinge solul.",
+          "2": "Împinge înapoi, fără să lași șoldurile jos."
+        }
+      },
+      "flotari-decline-greutate": {
+        "description": "Picioarele ridicate pe o bancă, o plăcuță pe spate. Flotări cu accent pe partea superioară a pieptului.",
+        "instructions": {
+          "0": "Așază picioarele pe o bancă",
+          "1": "Pune o plăcuță pe spate (cere ajutor dacă e nevoie)",
+          "2": "Coboară pieptul aproape de sol",
+          "3": "Împinge exploziv în sus"
+        }
+      },
+      "fluturari-gantere": {
+        "mistakes": {
+          "0": "Îndoi prea mult coatele (devine împins)"
+        }
+      },
+      "fluturari-pec-deck-invers": {
+        "description": "La mașina pec deck, stai invers (cu pieptul spre spătar). Trage mânerele în spate, lucrând deltoizii posteriori.",
+        "instructions": {
+          "0": "Reglează scaunul la înălțimea umerilor",
+          "1": "Stai cu pieptul spre spătar",
+          "2": "Trage mânerele în spate, strângând omoplații",
+          "3": "Revino controlat"
+        }
+      },
+      "french-press-gantere-un-brat": {
+        "description": "Stând sau pe bancă, ține o ganteră deasupra capului. Coboară gantera în spatele capului, apoi extinde.",
+        "instructions": {
+          "0": "Ține gantera deasupra capului, brațul drept",
+          "1": "Coboară gantera în spatele capului, cotul sus",
+          "2": "Extinde brațul înapoi sus",
+          "3": "Menține cotul fix pe tot parcursul"
+        }
+      },
+      "genuflexiuni-bara": {
+        "description": "Regele exercițiilor pentru picioare.",
+        "instructions": {
+          "0": "Bara pe trapez, picioarele la lățimea umerilor.",
+          "1": "Coboară până coapsele sunt paralele cu solul.",
+          "2": "Împinge prin călcâie."
+        },
+        "mistakes": {
+          "0": "Genunchii cad spre interior",
+          "1": "Ridici călcâiele"
+        }
+      },
+      "genuflexiuni-pistol-assistate": {
+        "description": "Genuflexiune pe un picior, ținându-te ușor de un suport. Progresie spre pistol squat liber.",
+        "instructions": {
+          "0": "Stai pe un picior, ține de un suport cu o mână",
+          "1": "Coboară controlat pe piciorul de sprijin",
+          "2": "Menține celălalt picior întins în față",
+          "3": "Împinge în călcâi pentru a reveni"
+        }
+      },
+      "genuflexiuni-split-bulgaresti-greutate": {
+        "description": "Piciorul din spate pe o bancă. Ține gantere în mâini. Coboară până genunchiul din spate aproape atinge solul.",
+        "instructions": {
+          "0": "Așază vârful piciorului stâng pe o bancă în spate",
+          "1": "Ține gantere în fiecare mână",
+          "2": "Coboară până genunchiul stâng aproape atinge solul",
+          "3": "Împinge în călcâiul drept pentru a reveni"
+        }
+      },
+      "hanging-leg-raise": {
+        "description": "Atârnă de bara fixă. Ridică picioarele drepte până la 90° (sau mai sus pentru avansați).",
+        "instructions": {
+          "0": "Prinde bara cu palmele orientate în față",
+          "1": "Menține picioarele drepte, apropiate",
+          "2": "Ridică picioarele până la nivelul șoldurilor (sau mai sus)",
+          "3": "Coboară controlat, fără balans"
+        },
+        "mistakes": {
+          "0": "Balansarea corpului",
+          "1": "Picioarele îndoite în loc de drepte"
+        }
+      },
+      "impins-banca-plat": {
+        "description": "Exercițiul de bază pentru masa pectoralilor.",
+        "instructions": {
+          "0": "Întins pe bancă, priza puțin mai lată decât umerii.",
+          "1": "Coboară bara controlat până la piept.",
+          "2": "Împinge exploziv, fără să blochezi brusc coatele."
+        },
+        "mistakes": {
+          "0": "Ridici fundul de pe bancă",
+          "1": "Cobori bara prea repede"
+        }
+      },
+      "impins-banda-elastica": {
+        "description": "Ancorează banda elastică în spate, apucă mânerele și împinge în față. Rezistență variabilă.",
+        "instructions": {
+          "0": "Ancorează banda în spate (ușă, rack)",
+          "1": "Apucă mânerele, un pas în față pentru tensiune",
+          "2": "Împinge brațele în față, contractând pieptul",
+          "3": "Revino controlat"
+        }
+      },
+      "impins-declinat": {
+        "description": "Țintește partea inferioară a pieptului."
+      },
+      "impins-inclinat-gantere": {
+        "description": "Accent pe partea superioară a pieptului.",
+        "instructions": {
+          "0": "Bancă la 30-45 grade.",
+          "1": "Împinge ganterele deasupra pieptului.",
+          "2": "Coboară până simți întindere."
+        }
+      },
+      "impins-inclinat-masina": {
+        "description": "Mașină cu scaun reglabil la 30-45°. Împinge mânerele uniform, focalizând pe pieptul superior.",
+        "instructions": {
+          "0": "Reglează scaunul la 30-45°",
+          "1": "Apucă mânerele, spatele lipit de spătar",
+          "2": "Împinge uniform, fără a bloca coatele",
+          "3": "Coboară controlat"
+        }
+      },
+      "impins-umeri-bara": {
+        "instructions": {
+          "0": "Bara la nivelul claviculei.",
+          "1": "Împinge deasupra capului.",
+          "2": "Nu arcui spatele excesiv."
+        }
+      },
+      "indreptari-romanesti": {
+        "mistakes": {
+          "0": "Îndoi genunchii prea mult",
+          "1": "Rotunjești spatele"
+        }
+      },
+      "inverted-row-greutate": {
+        "description": "Sub o bară la nivelul taliei, trage pieptul spre bară cu o plăcuță pe piept.",
+        "instructions": {
+          "0": "Reglează bara la nivelul taliei (rack sau Smith)",
+          "1": "Așază o plăcuță pe piept",
+          "2": "Trage pieptul până la bară",
+          "3": "Coboară controlat"
+        }
+      },
+      "kettlebell-snatch": {
+        "description": "Mișcare balistică: dintr-un swing, trage kettlebell-ul deasupra capului într-o singură mișcare fluidă.",
+        "instructions": {
+          "0": "Pornește dintr-un swing cu un braț",
+          "1": "Când kettlebell-ul ajunge la nivelul pieptului, trage-l vertical",
+          "2": "Prinde kettlebell-ul deasupra capului cu brațul blocat",
+          "3": "Coboară controlat și repetă"
+        }
+      },
+      "kroc-rows": {
+        "description": "Ramat cu o ganteră grea, cu balans controlat. Dezvoltă forță brută și priză.",
+        "instructions": {
+          "0": "Sprijină genunchiul și mâna pe bancă",
+          "1": "Apucă o ganteră grea cu cealaltă mână",
+          "2": "Trage exploziv până la șold",
+          "3": "Permite un ușor balans controlat al trunchiului",
+          "4": "Fă mai multe repetări decât crezi că poți"
+        }
+      },
+      "pallof-press": {
+        "description": "Prinde mânerul cablului la nivelul pieptului. Împinge brațele în față, rezistând rotației. Excelent pentru stabilitatea core-ului.",
+        "instructions": {
+          "0": "Reglează cablul la nivelul pieptului, stai lateral",
+          "1": "Prinde mânerul cu ambele mâini, ține-l la piept",
+          "2": "Împinge brațele drept în față",
+          "3": "Menține 2-3 secunde, revino controlat"
+        }
+      },
+      "pancake-stretch": {
+        "description": "Așezat cu picioarele desfăcute larg. Apleacă trunchiul în față, menținând spatele drept.",
+        "instructions": {
+          "0": "Așază-te pe sol, desfă picioarele cât de larg poți",
+          "1": "Menține spatele drept",
+          "2": "Apleacă-te încet în față din șolduri",
+          "3": "Ține 30-60 secunde"
+        }
+      },
+      "pec-deck": {
+        "description": "Izolare excelentă pentru piept folosind aparatul pec deck.",
+        "instructions": {
+          "0": "Ține spatele lipit de bancă.",
+          "1": "Adu brațele în față contractând pieptul."
+        }
+      },
+      "pigeon-pose": {
+        "description": "Adu un genunchi în față, rotit extern, și întinde celălalt picior în spate. Apleacă-te în față pentru o întindere profundă a fesierilor.",
+        "instructions": {
+          "0": "Din 4 labe, adu genunchiul drept în față lângă mâna dreaptă",
+          "1": "Întinde piciorul stâng în spate",
+          "2": "Apleacă trunchiul în față peste genunchiul drept",
+          "3": "Menține 30-60 sec, schimbă piciorul"
+        }
+      },
+      "plank": {
+        "instructions": {
+          "0": "Cot sub umăr, corp drept.",
+          "1": "Strânge abdomenul și fesierii.",
+          "2": "Nu lăsa șoldurile jos."
+        }
+      },
+      "pod-fesieri-un-picior": {
+        "description": "Culcat pe spate, un picior ridicat. Împinge din călcâiul piciorului de pe sol pentru a ridica șoldurile.",
+        "instructions": {
+          "0": "Culcă-te, genunchiul drept flectat, piciorul stâng ridicat",
+          "1": "Împinge din călcâiul drept, ridică șoldurile",
+          "2": "Menține 1-2 secunde sus",
+          "3": "Coboară controlat"
+        }
+      },
+      "presa-umeri-cu-bara-din-spate": {
+        "description": "AVANSAT: Bara pe trapez, împinge vertical. Necesită mobilitate bună a umerilor.",
+        "instructions": {
+          "0": "Așază bara pe trapez (nu pe gât!)",
+          "1": "Apucă bara mai larg decât umerii",
+          "2": "Împinge bara vertical deasupra capului",
+          "3": "Coboară controlat până la trapez",
+          "4": "Menține spatele drept pe toată durata"
+        },
+        "mistakes": {
+          "0": "Coborârea prea jos → stres pe articulația umărului",
+          "1": "Arcuirea spatelui"
+        }
+      },
+      "presa-umeri-cu-gantere-asimetric": {
+        "description": "Împinge câte o ganteră pe rând, menținând cealaltă ganteră blocată sus. Crește timpul sub tensiune.",
+        "instructions": {
+          "0": "Stai pe bancă cu spătar, ganterele la nivelul umerilor",
+          "1": "Împinge gantera dreaptă, mențin-o sus",
+          "2": "Coboară gantera dreaptă în timp ce o împingi pe stânga",
+          "3": "Alternează continuu"
+        }
+      },
+      "priza-placutelor": {
+        "description": "Prinde 2 plăcuțe de greutate între degete și menține cât mai mult. Excelent pentru forța de priză.",
+        "instructions": {
+          "0": "Alege 2 plăcuțe de 5-10kg",
+          "1": "Prinde-le între degete și police",
+          "2": "Menține brațul drept pe lângă corp",
+          "3": "Ține 30-60 secunde, apoi schimbă mâna"
+        }
+      },
+      "pullover-bara-dreapta": {
+        "description": "La cablu superior, brațele drepte. Trage bara în jos până la coapse, menținând brațele întinse.",
+        "instructions": {
+          "0": "Prinde bara dreaptă la cablul superior",
+          "1": "Brațele întinse, aplecat ușor în față",
+          "2": "Trage bara în jos până la coapse, fără a îndoi brațele",
+          "3": "Revino controlat"
+        }
+      },
+      "pullups-greutate-gantera": {
+        "description": "Tracțiuni clasice cu o ganteră prinsă între picioare pentru rezistență adițională.",
+        "instructions": {
+          "0": "Prinde gantera între coapse sau glezne",
+          "1": "Execută tracțiunea normală, bărbia peste bară",
+          "2": "Coboară controlat până la întinderea completă",
+          "3": "Menține priza fermă"
+        },
+        "mistakes": {
+          "0": "Balansarea corpului",
+          "1": "Gâtul întins în față"
+        }
+      },
+      "ramat-bara": {
+        "instructions": {
+          "0": "Șold împins în spate, spate drept.",
+          "1": "Trage bara spre abdomenul inferior.",
+          "2": "Strânge omoplații."
+        }
+      },
+      "ramat-bara-inclinat": {
+        "description": "Aplecat la ~90°, trage bara de la sol până la piept, apoi las-o să cadă controlat. Exploziv la urcare.",
+        "instructions": {
+          "0": "Poziție aplecată, spatele paralel cu solul",
+          "1": "Apucă bara mai lat decât umerii",
+          "2": "Trage exploziv până la stern",
+          "3": "Coboară controlat până la sol"
+        }
+      },
+      "ridicari-frontale-bara": {
+        "description": "Ține bara cu priză pronată. Ridică bara drept în față până la nivelul umerilor.",
+        "instructions": {
+          "0": "Stai drept, bara sprijinită pe coapse",
+          "1": "Ridică bara drept în față, brațele aproape întinse",
+          "2": "Oprește la nivelul umerilor",
+          "3": "Coboară controlat"
+        }
+      },
+      "ridicari-laterale": {
+        "mistakes": {
+          "0": "Folosești avânt",
+          "1": "Ridici prea sus"
+        }
+      },
+      "ridicari-laterale-cablu-un-brat": {
+        "description": "Prinde mânerul cablului inferior cu o mână. Ridică brațul lateral, menținând tensiune constantă.",
+        "instructions": {
+          "0": "Reglează cablul la nivelul taliei",
+          "1": "Prinde mânerul cu mâna opusă",
+          "2": "Ridică brațul lateral până la nivelul umărului",
+          "3": "Coboară lent, menținând tensiunea"
+        }
+      },
+      "ridicari-laterale-inclinat": {
+        "description": "Aplecat la 45°, cu spatele drept. Ridică ganterele lateral, contractând deltoizii posteriori.",
+        "instructions": {
+          "0": "Stai cu genunchii ușor flexați, aplecat la 45°",
+          "1": "Ține ganterele sub piept, palmele orientate spre interior",
+          "2": "Ridică brațele lateral până la nivelul umerilor",
+          "3": "Menține 1 secundă sus, apoi coboară controlat"
+        },
+        "mistakes": {
+          "0": "Rotunjirea spatelui",
+          "1": "Folosirea impulsului"
+        }
+      },
+      "ridicari-varfuri-pe-un-picior": {
+        "description": "Stai pe un picior pe o margine ridicată. Ridică-te pe vârf, apoi coboară sub nivelul marginii pentru întindere maximă.",
+        "instructions": {
+          "0": "Stai pe o treaptă/margine pe un picior",
+          "1": "Ridică-te pe vârf cât de sus poți",
+          "2": "Coboară lent sub nivelul treptei",
+          "3": "Simte întinderea gambei"
+        }
+      },
+      "rulou-grip-bara": {
+        "description": "Ține bara cu palmele în sus, desfă degetele până bara ajunge la vârfuri, apoi strânge pumnii.",
+        "instructions": {
+          "0": "Stai drept, ține bara cu palmele în sus",
+          "1": "Desfă degetele lent, lăsând bara să coboare",
+          "2": "Strânge pumnii, ridicând bara doar din degete",
+          "3": "Repetă ritmic"
+        }
+      },
+      "sandbag-carry": {
+        "description": "Ține un sac de nisip (sau o ganteră grea) pe piept sau pe un umăr. Mergi 20-30m, menținând postura.",
+        "instructions": {
+          "0": "Ridică sacul/gantera grea",
+          "1": "Ține-l pe piept sau pe umăr",
+          "2": "Mergi 20-30 metri cu pași controlați",
+          "3": "Menține abdomenul încordat, spatele drept"
+        }
+      },
+      "sarituri-cutie": {
+        "description": "Sari pe o cutie/platformă de 50-75cm. Aterizează moale, cu genunchii ușor flexați.",
+        "instructions": {
+          "0": "Stai la 30cm de cutie, picioarele la lățimea umerilor",
+          "1": "Balancează brațele și sari exploziv",
+          "2": "Aterizează cu genunchii ușor flexați",
+          "3": "Coboară de pe cutie și repetă"
+        },
+        "mistakes": {
+          "0": "Aterizarea cu picioarele drepte",
+          "1": "Cutia prea înaltă pentru nivelul tău"
+        }
+      },
+      "scorpion-stretch": {
+        "description": "Culcat pe burtă, brațele în cruce. Ridică un picior și du-l peste corp spre mâna opusă.",
+        "instructions": {
+          "0": "Culcă-te pe burtă, brațele întinse lateral",
+          "1": "Ridică piciorul drept, îndoaie genunchiul",
+          "2": "Du piciorul peste corp spre mâna stângă",
+          "3": "Menține 15-20 sec, alternează"
+        }
+      },
+      "skater-jumps": {
+        "description": "Sari lateral de pe un picior pe altul, aterizând controlat. Imită mișcarea unui patinator.",
+        "instructions": {
+          "0": "Stai pe piciorul drept, ușor flexat",
+          "1": "Sari lateral pe piciorul stâng, aterizând moale",
+          "2": "Brațele se mișcă natural pentru echilibru",
+          "3": "Alternează continuu, ritm alert"
+        }
+      },
+      "thread-the-needle": {
+        "description": "Din 4 labe, treci o mână pe sub corp, rotind trunchiul. Îmbunătățește mobilitatea coloanei toracice.",
+        "instructions": {
+          "0": "Poziție 4 labe",
+          "1": "Treci mâna dreaptă pe sub brațul stâng, palma în sus",
+          "2": "Rotește trunchiul, umărul drept spre sol",
+          "3": "Menține 15-30 sec, repetă pe cealaltă parte"
+        }
+      },
+      "thruster-greutate": {
+        "description": "O genuflexiune urmată de o presă de umeri într-o singură mișcare. Genuflexiunea oferă impuls pentru presă.",
+        "instructions": {
+          "0": "Ține ganterele la nivelul umerilor",
+          "1": "Coboară în genuflexiune",
+          "2": "Explodează în sus, împingând ganterele deasupra capului",
+          "3": "Coboară ganterele și repetă fluid"
+        }
+      },
+      "tractiuni": {
+        "description": "Regele exercițiilor de spate.",
+        "instructions": {
+          "0": "Priză mai lată decât umerii.",
+          "1": "Trage bărbia peste bară.",
+          "2": "Coboară controlat, complet."
+        },
+        "mistakes": {
+          "0": "Balansezi corpul",
+          "1": "Nu cobori complet"
+        }
+      },
+      "triceps-pushdown-funie-extensie": {
+        "description": "La cablu superior, prinde funia. Împinge în jos și desfă brațele lateral la final pentru contracție maximă.",
+        "instructions": {
+          "0": "Prinde funia la cablul superior",
+          "1": "Coatele lipite de corp",
+          "2": "Împinge în jos, la final desfă ușor brațele",
+          "3": "Revino controlat, menținând coatele fixe"
+        }
+      },
+      "worlds-greatest-stretch": {
+        "description": "Din plank, adu un picior lângă mână, rotește trunchiul spre genunchiul ridicat. Cel mai complet stretch dinamic.",
+        "instructions": {
+          "0": "Începe din poziția de flotare",
+          "1": "Adu piciorul drept lângă mâna dreaptă",
+          "2": "Rotește brațul drept spre tavan, urmărindu-l cu privirea",
+          "3": "Revino și repetă cu stângul"
+        }
+      }
+    }
   }
 }
