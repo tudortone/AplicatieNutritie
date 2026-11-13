@@ -38,6 +38,9 @@ export interface ConfirmSheetProps {
   loading?: boolean;
   /** Dispunerea butoanelor: vertical (standard) sau horizontal (side-by-side [Cancel] [Confirm]). */
   buttonLayout?: 'horizontal' | 'vertical';
+  onDismiss?: () => void;
+  confirmTestID?: string;
+  cancelTestID?: string;
 }
 
 export function ConfirmSheet({
@@ -55,6 +58,9 @@ export function ConfirmSheet({
   iconBg,
   loading = false,
   buttonLayout = 'vertical',
+  onDismiss,
+  confirmTestID,
+  cancelTestID,
 }: ConfirmSheetProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -64,6 +70,7 @@ export function ConfirmSheet({
   const confirmText = confirmLabel ?? t('chat.confirmSheet.confirmDefault');
   const cancelText = cancelLabel ?? t('chat.confirmSheet.cancelDefault');
   const isHorizontal = buttonLayout === 'horizontal';
+  const handleDismiss = onDismiss ?? onCancel;
 
   return (
     <Modal
@@ -71,7 +78,7 @@ export function ConfirmSheet({
       transparent
       animationType="none"
       onRequestClose={() => {
-        if (!loading) onCancel();
+        if (!loading) handleDismiss();
       }}
       statusBarTranslucent
       navigationBarTranslucent
@@ -86,7 +93,7 @@ export function ConfirmSheet({
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={() => {
-            if (!loading) onCancel();
+            if (!loading) handleDismiss();
           }}
           accessibilityRole="button"
           accessibilityLabel={t('chat.confirmSheet.a11yClose')}
@@ -124,6 +131,7 @@ export function ConfirmSheet({
             ) : null}
 
             <Text
+              maxFontSizeMultiplier={1.3}
               style={[
                 styles.title,
                 { color: colors.textPrimary, textAlign: icon ? 'center' : 'left' },
@@ -147,6 +155,7 @@ export function ConfirmSheet({
             {isHorizontal ? (
               <View style={styles.horizontalRow}>
                 <Pressable
+                  testID={cancelTestID}
                   onPress={onCancel}
                   disabled={loading}
                   accessibilityRole="button"
@@ -163,6 +172,7 @@ export function ConfirmSheet({
                 </Pressable>
 
                 <Pressable
+                  testID={confirmTestID}
                   onPress={onConfirm}
                   disabled={confirmDisabled || loading}
                   accessibilityRole="button"
@@ -201,6 +211,7 @@ export function ConfirmSheet({
             ) : (
               <>
                 <Pressable
+                  testID={confirmTestID}
                   onPress={onConfirm}
                   disabled={confirmDisabled || loading}
                   accessibilityRole="button"
@@ -234,6 +245,7 @@ export function ConfirmSheet({
                 </Pressable>
 
                 <Pressable
+                  testID={cancelTestID}
                   onPress={onCancel}
                   disabled={loading}
                   accessibilityRole="button"

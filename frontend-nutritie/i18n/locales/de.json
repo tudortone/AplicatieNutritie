@@ -244,7 +244,7 @@
       "serverCorectieInaccesibil": "Der KI-Server ist vorübergehend nicht erreichbar.",
       "permisiuneGaleriePoze": "Bitte erlauben Sie den Zugriff auf Fotos, um Bilder auszuwählen.",
       "galerieInaccesibila": "Zugriff auf die Fotogalerie fehlgeschlagen.",
-      "completeazaGramajul": "Bitte tragen Sie das Gewicht ein.",
+      "completeazaGramajul": "Bitte tragen Sie das Gewicht ein für: {{lista}}",
       "masaAdaugataJurnal": "Mahlzeit erfolgreich zum Tagebuch hinzugefügt!",
       "eroareNecunoscutaSalvareMasa": "Fehler beim Speichern der Mahlzeit.",
       "verificaEmailConfirmare": "Bitte prüfen Sie Ihren Posteingang, um Ihr Konto zu bestätigen.",
@@ -393,7 +393,13 @@
     "saveOfflineSafe": "Sicher offline speichern",
     "changeIngredient": "Ändern",
     "changeIngredientA11y": "Zutat {{name}} ändern",
-    "deleteIngredientA11y": "{{name}} löschen"
+    "deleteIngredientA11y": "{{name}} löschen",
+    "networkErrorTitle": "Verbindung unterbrochen",
+    "providerErrorTitle": "KI-Modell ist vorübergehend ausgelastet",
+    "malformedResultTitle": "Ergebnis konnte nicht strukturiert werden",
+    "malformedResultMessage": "Das Bild konnte nicht in zuverlässige Nährwerte umgewandelt werden. Es wurde kein Flow-Guthaben verbraucht.",
+    "retrySafe": "Sicher erneut versuchen",
+    "scanAgain": "Erneut scannen"
   },
   "photoJob": {
     "backgroundTitle": "Die Analyse läuft im Hintergrund weiter",

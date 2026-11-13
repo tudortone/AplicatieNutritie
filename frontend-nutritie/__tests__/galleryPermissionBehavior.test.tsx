@@ -109,12 +109,19 @@ const mockColors = {
   accentTertiary: '#15803d',
   accentGradient: ['#22c55e', '#16a34a'] as [string, string],
   background: '#090C0E',
+  surface: '#12161A',
   surfaceBg: '#12181F',
   cardBg: '#1A232E',
   cardBorder: '#23303E',
+  border: 'rgba(255,255,255,0.08)',
   textPrimary: '#F1F5F9',
   textSecondary: '#94A3B8',
+  textTertiary: '#64748B',
   textOnAccent: '#090C0E',
+  danger: '#F87171',
+  textOnDanger: '#000000',
+  disabledBg: '#2A323D',
+  disabledText: '#64748B',
   warning: '#F59E0B',
   error: '#EF4444',
   surfaceElevated: '#1E293B',
@@ -216,6 +223,7 @@ jest.mock('../lib/imagekit', () => ({
     expire: 1234567890,
     signature: 'mock-signature',
   }),
+  prewarmImageKitAuth: jest.fn().mockResolvedValue(undefined),
   clearImageKitAuthCache: jest.fn(),
 }));
 
@@ -393,10 +401,12 @@ jest.mock('../lib/userDataCleanup', () => ({
 import CameraScreen from '../app/camera';
 import ProfilScreen from '../app/(tabs)/profil';
 import { aboneazaLaModificariMese } from '../lib/freshnessMese';
-import { discardLocalImageDraft, listPendingDrafts } from '../lib/imageOptimizer';
+import { discardLocalImageDraft, listPendingDrafts, purgeLocalImageDrafts, saveLocalImageDraft } from '../lib/imageOptimizer';
 import { construiestePayloadMasaCamera } from '../lib/payloadMese';
+import { uploadImageToImageKit, prewarmImageKitAuth } from '../lib/imagekit';
 import {
   clearActivePhotoJob,
+  clearPreliminaryPhotoJobPointer,
   hasPendingPhotoSave,
   savePhotoJobSaveAttempt,
   recoverPhotoJob,
@@ -415,21 +425,61 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
   const originalPlatform = Platform.OS;
 
   beforeEach(() => {
+    jest.useRealTimers();
     jest.clearAllMocks();
     mockAuthReturn.session = mockSession;
     mockAuthReturn.user = mockUser;
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    mockRequestPermissions.mockResolvedValue({ granted: true });
+    mockRequestPermissions.mockReset().mockResolvedValue({ granted: true });
+    mockLaunchImageLibrary.mockReset();
+    mockTakePictureAsync.mockReset().mockResolvedValue({ uri: 'file:///mock-camera-capture.jpg' });
     mockInsertMeal.mockResolvedValue({ data: null, error: null });
     mockMaybeSingleMeal.mockResolvedValue({ data: null, error: null });
-    (savePhotoJobSaveAttempt as jest.Mock).mockResolvedValue(true);
+    (uploadImageToImageKit as jest.Mock).mockReset().mockResolvedValue({
+      url: 'https://cdn.example.test/meal.jpg',
+      fileId: 'meal-file-id',
+    });
+    (prewarmImageKitAuth as jest.Mock).mockReset().mockResolvedValue(undefined);
+    (readPointer as jest.Mock).mockReset().mockResolvedValue(null);
+    (recoverPhotoJobForCamera as jest.Mock).mockReset().mockResolvedValue(null);
+    (submitPhotoJob as jest.Mock).mockReset().mockResolvedValue({
+      id: 'photo-job-1',
+      status: 'succeeded',
+      result: {
+        success: true,
+        items: [{
+          nume: 'Chicken', estimare_grame: 100, calorii_per_100g: 165,
+          proteine_per_100g: 31, carbohidrati_per_100g: 0, grasimi_per_100g: 3.6,
+        }],
+      },
+    });
+    (waitForPhotoJob as jest.Mock).mockReset().mockResolvedValue({
+      id: 'photo-job-1',
+      status: 'succeeded',
+      result: {
+        success: true,
+        tipMasa: 'cina',
+        items: [{
+          nume: 'Chicken', estimare_grame: 100, calorii_per_100g: 165,
+          proteine_per_100g: 31, carbohidrati_per_100g: 0, grasimi_per_100g: 3.6,
+          fibre_per_100g: 0,
+        }],
+      },
+    });
+    (hasPendingPhotoSave as jest.Mock).mockReset().mockResolvedValue(false);
+    (savePhotoJobSaveAttempt as jest.Mock).mockReset().mockResolvedValue(true);
+    (clearActivePhotoJob as jest.Mock).mockReset().mockResolvedValue(undefined);
+    (clearPreliminaryPhotoJobPointer as jest.Mock).mockReset().mockResolvedValue(undefined);
+    (saveLocalImageDraft as jest.Mock).mockReset().mockResolvedValue('draft-1');
     (listPendingDrafts as jest.Mock).mockReset().mockResolvedValue([]);
     (discardLocalImageDraft as jest.Mock).mockReset().mockResolvedValue(true);
+    (purgeLocalImageDrafts as jest.Mock).mockReset().mockResolvedValue(true);
     mockPushOfflineMealVerificat.mockResolvedValue({ persistat: true, lungime: 1 });
     Platform.OS = originalPlatform;
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     Platform.OS = originalPlatform;
     global.fetch = originalFetch;
   });
@@ -836,6 +886,7 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
 
       await act(async () => resolveUserADrafts(['file:///user-a-private-draft.jpg']));
       expect(Alert.alert).not.toHaveBeenCalled();
+      expect(view.queryByTestId('draft-recovery-resume-btn')).toBeNull();
     });
 
     it('PHOTO DRAFT ACCOUNT ISOLATION: stale Resume and Discard callbacks cannot act for user A after switching to B', async () => {
@@ -843,20 +894,24 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       (listPendingDrafts as jest.Mock).mockResolvedValueOnce(['file:///user-a-private-draft.jpg']);
 
       const view = await render(<CameraScreen />);
-      await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
-      const buttons = (Alert.alert as jest.Mock).mock.calls[0][2] as Array<{ onPress?: () => void }>;
-      expect(buttons).toHaveLength(2);
+      const resumeBtn = await waitFor(() => view.getByTestId('draft-recovery-resume-btn'));
+      const discardBtn = view.getByTestId('draft-recovery-discard-btn');
+      const staleResumePress = resumeBtn.props.onPress as (() => void) | undefined;
+      const staleDiscardPress = discardBtn.props.onPress as (() => void) | undefined;
+      expect(Alert.alert).not.toHaveBeenCalled();
 
       const userB = { id: 'test-user-b', email: 'b@example.test', user_metadata: {} };
       mockAuthReturn.user = userB;
       mockAuthReturn.session = { access_token: 'user-b-token', user: userB } as typeof mockSession;
       view.rerender(<CameraScreen />);
       await waitFor(() => expect(recoverPhotoJob).toHaveBeenCalledWith(expect.objectContaining({ userId: userB.id })));
+      expect(view.queryByTestId('draft-recovery-resume-btn')).toBeNull();
 
       await act(async () => {
-        buttons[0].onPress?.();
-        buttons[1].onPress?.();
+        staleDiscardPress?.();
+        staleResumePress?.();
       });
+      expect(purgeLocalImageDrafts).not.toHaveBeenCalled();
       expect(discardLocalImageDraft).not.toHaveBeenCalled();
       expect(submitPhotoJob).not.toHaveBeenCalled();
     });
@@ -1405,6 +1460,239 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       await waitFor(() => expect(view.getByText('camera.genericScanError')).toBeTruthy());
       expect(view.getByTestId('gallery-button').props.accessibilityState.disabled).toBe(false);
       expect(view.getByTestId('shutter-button').props.accessibilityState.disabled).toBe(false);
+    });
+
+    describe('Camera Draft Recovery & Retake Lifecycle Remediation', () => {
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      it('NOT_FOOD -> Retake clears local draft, shows NO "Unanalyzed Image" prompt, and allows immediate second capture', async () => {
+        Platform.OS = 'android';
+        (saveLocalImageDraft as jest.Mock).mockResolvedValueOnce('file:///drafts/test-user-id/nonfood.jpg');
+        (submitPhotoJob as jest.Mock).mockRejectedValueOnce(new PhotoApiError(422, 'NOT_FOOD'));
+        mockTakePictureAsync
+          .mockResolvedValueOnce({ uri: 'file:///nonfood.jpg' })
+          .mockResolvedValueOnce({ uri: 'file:///real-food.jpg' });
+
+        const view = await render(<CameraScreen />);
+        await act(async () => fireEvent.press(view.getByTestId('shutter-button')));
+
+        await waitFor(() => expect(view.getByTestId('camera-not-food-card')).toBeTruthy());
+        expect(discardLocalImageDraft).toHaveBeenCalledWith('file:///drafts/test-user-id/nonfood.jpg', mockUser.id);
+        expect(Alert.alert).not.toHaveBeenCalled();
+
+        await act(async () => fireEvent.press(view.getByTestId('not-food-retake-btn')));
+        expect(view.queryByTestId('draft-recovery-resume-btn')).toBeNull();
+        expect(view.queryByText('camera.pendingDraftTitle')).toBeNull();
+        expect(Alert.alert).not.toHaveBeenCalled();
+
+        await act(async () => fireEvent.press(view.getByTestId('shutter-button')));
+        await waitFor(() => expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy());
+        expect(mockTakePictureAsync).toHaveBeenCalledTimes(2);
+      });
+
+      it('Pre-submit network error cleans up local draft so dismissing error never pops up "Unanalyzed Image" mid-session', async () => {
+        Platform.OS = 'android';
+        (saveLocalImageDraft as jest.Mock).mockResolvedValueOnce('file:///drafts/test-user-id/netfail.jpg');
+        (submitPhotoJob as jest.Mock).mockRejectedValueOnce(new TypeError('Network request failed'));
+        mockTakePictureAsync
+          .mockResolvedValueOnce({ uri: 'file:///netfail.jpg' })
+          .mockResolvedValueOnce({ uri: 'file:///next-food.jpg' });
+
+        const view = await render(<CameraScreen />);
+        await act(async () => fireEvent.press(view.getByTestId('shutter-button')));
+
+        await waitFor(() => expect(view.getByText('camera.networkErrorMessage')).toBeTruthy());
+        expect(discardLocalImageDraft).toHaveBeenCalledWith('file:///drafts/test-user-id/netfail.jpg', mockUser.id);
+
+        await act(async () => fireEvent.press(view.getByLabelText('camera.closeErrorA11y')));
+        expect(view.queryByTestId('draft-recovery-resume-btn')).toBeNull();
+        expect(Alert.alert).not.toHaveBeenCalled();
+
+        await act(async () => fireEvent.press(view.getByTestId('shutter-button')));
+        await waitFor(() => expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy());
+      });
+
+      it('75s waitForPhotoJob timeout unlocks shutter & transitions cleanly to background card without deadlock', async () => {
+        jest.useFakeTimers();
+        Platform.OS = 'android';
+        (submitPhotoJob as jest.Mock).mockResolvedValueOnce({ id: 'slow-job-75s', status: 'running' });
+        (waitForPhotoJob as jest.Mock).mockImplementationOnce(({ signal }: { signal?: AbortSignal }) => (
+          new Promise((_, reject) => {
+            signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+          })
+        ));
+        mockTakePictureAsync.mockResolvedValueOnce({ uri: 'file:///slow-plate.jpg' });
+
+        const view = await render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(view.getByTestId('shutter-button'));
+        });
+        for (let i = 0; i < 12; i++) {
+          await act(async () => {
+            await Promise.resolve();
+          });
+        }
+
+        await act(async () => {
+          jest.advanceTimersByTime(76000);
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        jest.useRealTimers();
+
+        await waitFor(() => expect(view.getByTestId('camera-background-job')).toBeTruthy());
+        expect(view.getByTestId('shutter-button').props.accessibilityState.disabled).toBe(false);
+        expect(view.getByTestId('gallery-button').props.accessibilityState.disabled).toBe(false);
+        await view.unmount();
+      });
+
+      it('Android takePictureAsync silent hang times out cleanly and keeps shutter functional for next photo', async () => {
+        jest.useFakeTimers();
+        Platform.OS = 'android';
+        mockTakePictureAsync
+          .mockImplementationOnce(() => new Promise(() => { }))
+          .mockResolvedValueOnce({ uri: 'file:///recovered-capture.jpg' });
+
+        const view = await render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(view.getByTestId('shutter-button'));
+        });
+        await act(async () => {
+          await Promise.resolve();
+        });
+
+        await act(async () => {
+          jest.advanceTimersByTime(10500);
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        jest.useRealTimers();
+
+        await waitFor(() => expect(view.getByText('camera.captureFailed')).toBeTruthy());
+        expect(view.getByTestId('shutter-button').props.accessibilityState.disabled).toBe(false);
+
+        await act(async () => {
+          fireEvent.press(view.getByTestId('shutter-button'));
+        });
+        await waitFor(() => expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy());
+        expect(mockTakePictureAsync).toHaveBeenCalledTimes(2);
+        await view.unmount();
+      });
+
+      it('U-03 Draft Recovery renders styled GetFlow ConfirmSheet (no OS Alert), Resume discards resumed draft, Dismiss leaves shutter enabled', async () => {
+        Platform.OS = 'android';
+        (listPendingDrafts as jest.Mock).mockResolvedValueOnce(['file:///drafts/test-user-id/prev-orphan.jpg']);
+
+        const view = await render(<CameraScreen />);
+        const resumeBtn = await waitFor(() => view.getByTestId('draft-recovery-resume-btn'));
+        expect(Alert.alert).not.toHaveBeenCalled();
+
+        await act(async () => fireEvent.press(resumeBtn));
+        await waitFor(() => expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy());
+        expect(discardLocalImageDraft).toHaveBeenCalledWith('file:///drafts/test-user-id/prev-orphan.jpg', mockUser.id);
+      });
+
+      it('U-03 Draft Recovery backdrop dismiss hides sheet without deleting drafts and keeps shutter responsive', async () => {
+        Platform.OS = 'android';
+        (listPendingDrafts as jest.Mock).mockResolvedValueOnce(['file:///drafts/test-user-id/deferred.jpg']);
+
+        const view = await render(<CameraScreen />);
+        await waitFor(() => expect(view.getByTestId('draft-recovery-resume-btn')).toBeTruthy());
+
+        await act(async () => fireEvent.press(view.getByLabelText('chat.confirmSheet.a11yClose')));
+        expect(view.queryByTestId('draft-recovery-resume-btn')).toBeNull();
+        expect(purgeLocalImageDrafts).not.toHaveBeenCalled();
+
+        await act(async () => fireEvent.press(view.getByTestId('shutter-button')));
+        await waitFor(() => expect(view.getByTestId('camera-add-journal-btn')).toBeTruthy());
+      });
+
+      it('X close button on recovered failed job clears active pointer and local draft instead of leaving dead background job', async () => {
+        Platform.OS = 'android';
+        (recoverPhotoJobForCamera as jest.Mock).mockResolvedValueOnce({
+          job: { id: 'failed-x-job', status: 'failed', errorCode: 'PROVIDER_FAILED' },
+          pointer: {
+            userId: mockUser.id,
+            jobId: 'failed-x-job',
+            draftUri: 'file:///drafts/test-user-id/failed-x.jpg',
+            savedAt: 1,
+          },
+        });
+
+        const view = await render(<CameraScreen />);
+        await waitFor(() => expect(view.getByTestId('camera-failed-job')).toBeTruthy());
+
+        await act(async () => fireEvent.press(view.getByLabelText('common.close')));
+        expect(clearActivePhotoJob).toHaveBeenCalledWith(mockUser.id, 'failed-x-job');
+        expect(discardLocalImageDraft).toHaveBeenCalledWith('file:///drafts/test-user-id/failed-x.jpg', mockUser.id);
+      });
+
+      it('PHOTO_ANALYSIS_FAILED shows retryable failed card instead of NOT_FOOD, and retry without local URI clears dead pointer', async () => {
+        Platform.OS = 'android';
+        (submitPhotoJob as jest.Mock).mockResolvedValueOnce({ id: 'job-paf-1', status: 'running' });
+        (waitForPhotoJob as jest.Mock).mockRejectedValueOnce(new PhotoApiError(500, 'PHOTO_ANALYSIS_FAILED'));
+        mockTakePictureAsync.mockResolvedValueOnce({ uri: 'file:///paf.jpg' });
+
+        const view = await render(<CameraScreen />);
+        await act(async () => fireEvent.press(view.getByTestId('shutter-button')));
+
+        await waitFor(() => expect(view.getByTestId('camera-failed-job')).toBeTruthy());
+        expect(view.queryByTestId('camera-not-food-card')).toBeNull();
+        await view.unmount();
+
+        // Recovered failed job with no local URI still clears pointer on Retry
+        (recoverPhotoJobForCamera as jest.Mock).mockResolvedValueOnce({
+          job: { id: 'failed-no-uri', status: 'failed', errorCode: 'PROVIDER_FAILED' },
+          pointer: { userId: mockUser.id, jobId: 'failed-no-uri', savedAt: 1 },
+        });
+        const view2 = await render(<CameraScreen />);
+        const retryBtn = await waitFor(() => view2.getByTestId('camera-failed-retry'));
+        await act(async () => fireEvent.press(retryBtn));
+        expect(clearActivePhotoJob).toHaveBeenCalledWith(mockUser.id, 'failed-no-uri');
+        await view2.unmount();
+      });
+
+      it('Recovered stale in_flight pointer clears preliminary pointer after 10s without permanent hang', async () => {
+        jest.useFakeTimers();
+        Platform.OS = 'android';
+        (recoverPhotoJobForCamera as jest.Mock).mockResolvedValueOnce({
+          job: { id: 'in_flight_stale', status: 'running' },
+          pointer: { userId: mockUser.id, jobId: 'in_flight_stale', savedAt: 1 },
+        });
+        (readPointer as jest.Mock).mockResolvedValue({
+          userId: mockUser.id,
+          jobId: 'in_flight_stale',
+          savedAt: 1,
+        });
+
+        let view: Awaited<ReturnType<typeof render>> | undefined;
+        try {
+          view = await render(<CameraScreen />);
+          for (let i = 0; i < 8; i++) {
+            await act(async () => {
+              await Promise.resolve();
+            });
+          }
+
+          for (let i = 0; i < 25; i++) {
+            await act(async () => {
+              jest.advanceTimersByTime(500);
+              for (let m = 0; m < 8; m++) {
+                await Promise.resolve();
+              }
+            });
+          }
+          jest.useRealTimers();
+
+          await waitFor(() => expect(clearPreliminaryPhotoJobPointer).toHaveBeenCalledWith(mockUser.id));
+          expect(view.getByTestId('shutter-button').props.accessibilityState.disabled).toBe(false);
+        } finally {
+          jest.useRealTimers();
+          await view?.unmount();
+        }
+      });
     });
   });
 

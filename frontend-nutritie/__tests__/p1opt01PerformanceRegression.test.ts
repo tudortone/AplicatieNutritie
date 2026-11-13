@@ -2,7 +2,7 @@ import React from 'react';
 import { Image, Keyboard } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { optimizeImageBeforeUpload } from '../lib/imageOptimizer';
-import { uploadImageToImageKit } from '../lib/imagekit';
+import { uploadImageToImageKit, clearImageKitAuthCache } from '../lib/imagekit';
 
 // Mocks for Image and Expo modules
 jest.mock('../supabase', () => ({
@@ -182,6 +182,56 @@ describe('P1-OPT-01 — Performance & Optimization Regression Suite', () => {
       );
       expect(result.url).toBe('https://ik.imagekit.io/nutritie/mancare/user1/fallback.jpg');
       getSizeSpy.mockRestore();
+    });
+
+    test('consecutive uploadImageToImageKit calls never reuse a consumed single-use nonce', async () => {
+      process.env.EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY = 'mock_public_key';
+      clearImageKitAuthCache();
+
+      let tokenSeq = 0;
+      const usedUploadTokens: string[] = [];
+      const readTokenFromBody = (body: any): string | undefined => {
+        if (typeof body?.get === 'function') return body.get('token');
+        const part = Array.isArray(body?._parts)
+          ? body._parts.find(([k]: [string, unknown]) => k === 'token')
+          : undefined;
+        return typeof part?.[1] === 'string' ? part[1] : undefined;
+      };
+
+      global.fetch = jest.fn().mockImplementation((url: string, init?: any) => {
+        if (url.includes('/imagekit-auth')) {
+          tokenSeq += 1;
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              token: `nonce-${tokenSeq}`,
+              signature: `sig-${tokenSeq}`,
+              expire: Math.floor(Date.now() / 1000) + 300,
+              urlEndpoint: 'https://ik.imagekit.io/nutritie',
+            }),
+          });
+        }
+        if (url.includes('upload.imagekit.io')) {
+          const submittedToken = readTokenFromBody(init?.body);
+          if (submittedToken) usedUploadTokens.push(submittedToken);
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              url: `https://ik.imagekit.io/nutritie/mancare/user1/photo_${usedUploadTokens.length}.jpg`,
+              fileId: `ik_${usedUploadTokens.length}`,
+              name: `photo_${usedUploadTokens.length}.jpg`,
+            }),
+          });
+        }
+        return Promise.reject(new Error('Unknown URL: ' + url));
+      });
+
+      await uploadImageToImageKit('file:///meal-1.jpg', 'mancare.jpg', undefined, { skipOptimization: true });
+      await new Promise((r) => setTimeout(r, 0));
+      await uploadImageToImageKit('file:///meal-2.jpg', 'mancare.jpg', undefined, { skipOptimization: true });
+
+      expect(usedUploadTokens).toHaveLength(2);
+      expect(usedUploadTokens[0]).not.toBe(usedUploadTokens[1]);
     });
   });
 

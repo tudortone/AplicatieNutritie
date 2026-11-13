@@ -244,7 +244,7 @@
       "serverCorectieInaccesibil": "Le serveur IA est temporairement inaccessible.",
       "permisiuneGaleriePoze": "Autorisez l'accès à la galerie pour sélectionner des photos de repas.",
       "galerieInaccesibila": "Impossible d'accéder à la galerie d'images.",
-      "completeazaGramajul": "Veuillez compléter le grammage.",
+      "completeazaGramajul": "Veuillez compléter le grammage pour : {{lista}}",
       "masaAdaugataJurnal": "Le repas a été ajouté avec succès à votre journal !",
       "eroareNecunoscutaSalvareMasa": "Une erreur est survenue lors de l'enregistrement du repas.",
       "verificaEmailConfirmare": "Veuillez vérifier votre boîte de réception pour confirmer votre compte.",
@@ -393,7 +393,13 @@
     "saveOfflineSafe": "Enregistrer hors ligne en toute sécurité",
     "changeIngredient": "Modifier",
     "changeIngredientA11y": "Modifier l'ingrédient {{name}}",
-    "deleteIngredientA11y": "Supprimer {{name}}"
+    "deleteIngredientA11y": "Supprimer {{name}}",
+    "networkErrorTitle": "Connexion interrompue",
+    "providerErrorTitle": "Le modèle d'IA est temporairement occupé",
+    "malformedResultTitle": "Impossible de structurer les données",
+    "malformedResultMessage": "L'image n'a pas pu être convertie en valeurs nutritionnelles fiables. Aucun crédit Flow n'a été consommé.",
+    "retrySafe": "Réessayer en toute sécurité",
+    "scanAgain": "Scanner à nouveau"
   },
   "photoJob": {
     "backgroundTitle": "L’analyse continue en arrière-plan",

@@ -393,7 +393,13 @@
     "saveOfflineSafe": "Save offline safely",
     "changeIngredient": "Change",
     "changeIngredientA11y": "Change ingredient {{name}}",
-    "deleteIngredientA11y": "Delete {{name}}"
+    "deleteIngredientA11y": "Delete {{name}}",
+    "networkErrorTitle": "Connection interrupted",
+    "providerErrorTitle": "AI model is temporarily busy",
+    "malformedResultTitle": "Could not structure the nutrition data",
+    "malformedResultMessage": "The image could not be processed into reliable nutrition values. No Flow Credits were consumed.",
+    "retrySafe": "Retry safely",
+    "scanAgain": "Scan again"
   },
   "photoJob": {
     "backgroundTitle": "Analysis continues in the background",

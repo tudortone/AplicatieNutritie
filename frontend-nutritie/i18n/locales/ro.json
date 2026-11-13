@@ -388,7 +388,13 @@
     "saveOfflineSafe": "Salvează offline în siguranță",
     "changeIngredient": "Schimbă",
     "changeIngredientA11y": "Schimbă ingredientul {{name}}",
-    "deleteIngredientA11y": "Șterge {{name}}"
+    "deleteIngredientA11y": "Șterge {{name}}",
+    "networkErrorTitle": "Conexiunea a fost întreruptă",
+    "providerErrorTitle": "Modelul AI este temporar ocupat",
+    "malformedResultTitle": "Nu am putut structura datele",
+    "malformedResultMessage": "Imaginea nu a putut fi procesată în valori nutriționale sigure. Creditul tău nu a fost consumat.",
+    "retrySafe": "Reîncearcă în siguranță",
+    "scanAgain": "Scanează din nou"
   },
   "photoJob": {
     "backgroundTitle": "Analiza continuă în fundal",

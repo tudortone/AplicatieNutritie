@@ -154,6 +154,14 @@ export async function amprentaOperatieFoto(
  * U-03: Salvează o copie a imaginii în documentDirectory/drafts/ persistentă
  * care supraviețuiește curățării de cache de către sistemul de operare.
  */
+let draftIndexQueue: Promise<unknown> = Promise.resolve();
+
+function withDraftIndexLock<T>(task: () => Promise<T>): Promise<T> {
+  const next = draftIndexQueue.then(task, task);
+  draftIndexQueue = next.catch(() => {});
+  return next;
+}
+
 export async function saveLocalImageDraft(uri: string, userId: string): Promise<string> {
   verificaDraftDir();
 
@@ -165,10 +173,14 @@ export async function saveLocalImageDraft(uri: string, userId: string): Promise<
   const dest = `${ownerDir}${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
   await FileSystem.copyAsync({ from: uri, to: dest });
 
-  const raw = await AsyncStorage.getItem(INDEX_KEY);
-  const index: string[] = raw ? JSON.parse(raw) : [];
-  index.push(dest);
-  await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(index));
+  await withDraftIndexLock(async () => {
+    const raw = await AsyncStorage.getItem(INDEX_KEY);
+    const index: string[] = raw ? JSON.parse(raw) : [];
+    if (!index.includes(dest)) {
+      index.push(dest);
+      await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(index));
+    }
+  });
   return dest;
 }
 
@@ -177,66 +189,83 @@ export async function discardLocalImageDraft(path: string, userId: string): Prom
   if (isOwnedDraft(path, userId)) {
     await FileSystem.deleteAsync(path, { idempotent: true });
   }
-  const raw = await AsyncStorage.getItem(INDEX_KEY);
-  const index: string[] = raw ? JSON.parse(raw) : [];
-  await AsyncStorage.setItem(
-    INDEX_KEY,
-    JSON.stringify(index.filter((p) => p !== path)),
-  );
+  await withDraftIndexLock(async () => {
+    const raw = await AsyncStorage.getItem(INDEX_KEY);
+    const index: string[] = raw ? JSON.parse(raw) : [];
+    await AsyncStorage.setItem(
+      INDEX_KEY,
+      JSON.stringify(index.filter((p) => p !== path)),
+    );
+  });
 }
 
 export async function listPendingDrafts(userId: string): Promise<string[]> {
-  const raw = await AsyncStorage.getItem(INDEX_KEY);
-  let parsed: unknown = [];
-  try {
-    parsed = raw ? JSON.parse(raw) : [];
-  } catch {
-    parsed = [];
-  }
-  const rawPaths = Array.isArray(parsed)
-    ? parsed.filter((path): path is string => typeof path === 'string')
-    : [];
-  const index = Array.isArray(parsed)
-    ? parsed.filter((path): path is string => typeof path === 'string' && isOwnedDraft(path, userId))
-    : [];
-
-  // Pre-P0-02 drafts lived directly in /drafts with no owner metadata. They
-  // cannot be attributed safely, so delete those files instead of assigning
-  // them to whichever account happens to sign in next.
-  const ambiguousLegacy = rawPaths.filter((path) => {
-    if (!path.startsWith(DRAFT_DIR)) return false;
-    const relative = path.slice(DRAFT_DIR.length);
-    return relative.length > 0 && !relative.includes('/');
-  });
-  for (const path of ambiguousLegacy) {
-    await FileSystem.deleteAsync(path, { idempotent: true }).catch(() => {});
-  }
-
-  // Remove ambiguous/foreign metadata from this active workspace. Foreign
-  // files are not deleted: they may still belong to another user's namespace.
-  if (!Array.isArray(parsed) || parsed.length !== index.length) {
-    await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(index));
-  }
-
-  if (index.length > 10) {
-    const deSters = index.slice(0, index.length - 10);
-    for (const p of deSters) {
-      await FileSystem.deleteAsync(p, { idempotent: true }).catch(() => {});
+  return withDraftIndexLock(async () => {
+    const raw = await AsyncStorage.getItem(INDEX_KEY);
+    let parsed: unknown = [];
+    try {
+      parsed = raw ? JSON.parse(raw) : [];
+    } catch {
+      parsed = [];
     }
-    const ramas = index.slice(-10);
-    await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(ramas));
-    return ramas;
-  }
-  return index;
+    const rawPaths = Array.isArray(parsed)
+      ? parsed.filter((path): path is string => typeof path === 'string')
+      : [];
+    const index = Array.isArray(parsed)
+      ? parsed.filter((path): path is string => typeof path === 'string' && isOwnedDraft(path, userId))
+      : [];
+
+    // Pre-P0-02 drafts lived directly in /drafts with no owner metadata. They
+    // cannot be attributed safely, so delete those files instead of assigning
+    // them to whichever account happens to sign in next.
+    const ambiguousLegacy = rawPaths.filter((path) => {
+      if (!path.startsWith(DRAFT_DIR)) return false;
+      const relative = path.slice(DRAFT_DIR.length);
+      return relative.length > 0 && !relative.includes('/');
+    });
+    for (const path of ambiguousLegacy) {
+      await FileSystem.deleteAsync(path, { idempotent: true }).catch(() => {});
+    }
+
+    // Remove ambiguous/foreign metadata from this active workspace. Foreign
+    // files are not deleted: they may still belong to another user's namespace.
+    if (!Array.isArray(parsed) || parsed.length !== index.length) {
+      await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(index));
+    }
+
+    if (index.length > 10) {
+      const deSters = index.slice(0, index.length - 10);
+      for (const p of deSters) {
+        await FileSystem.deleteAsync(p, { idempotent: true }).catch(() => {});
+      }
+      const ramas = index.slice(-10);
+      await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(ramas));
+      return ramas;
+    }
+    return index;
+  });
 }
 
 /** Remove every photo owned by an account after confirmed remote deletion. */
 export async function purgeLocalImageDrafts(userId: string): Promise<void> {
-  const owned = await listPendingDrafts(userId);
-  for (const path of owned) {
-    // Spre deosebire de pruning-ul cache-ului, ștergerea GDPR trebuie să fie
-    // fail-loud: indexul rămâne intact și jurnalul de purjare poate relua.
-    await FileSystem.deleteAsync(path, { idempotent: true });
-  }
-  await AsyncStorage.setItem(INDEX_KEY, JSON.stringify([]));
+  await withDraftIndexLock(async () => {
+    const raw = await AsyncStorage.getItem(INDEX_KEY);
+    let parsed: unknown = [];
+    try {
+      parsed = raw ? JSON.parse(raw) : [];
+    } catch {
+      parsed = [];
+    }
+    const rawPaths = Array.isArray(parsed)
+      ? parsed.filter((path): path is string => typeof path === 'string')
+      : [];
+    const owned = rawPaths.filter((path) => isOwnedDraft(path, userId));
+    for (const path of owned) {
+      // Spre deosebire de pruning-ul cache-ului, ștergerea GDPR trebuie să fie
+      // fail-loud: indexul rămâne intact și jurnalul de purjare poate relua.
+      await FileSystem.deleteAsync(path, { idempotent: true });
+    }
+    const remaining = rawPaths.filter((path) => !isOwnedDraft(path, userId));
+    await AsyncStorage.setItem(INDEX_KEY, JSON.stringify(remaining));
+  });
 }

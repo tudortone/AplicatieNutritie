@@ -132,4 +132,42 @@ describe('U-03 — Storage local persistent imagini (drafts) & Optimizing', () =
       JSON.stringify([]),
     );
   });
+
+  test('operațiile concurente saveLocalImageDraft și discardLocalImageDraft își serializează accesul la index', async () => {
+    let store: string | null = JSON.stringify([]);
+    (FileSystem.getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
+    (FileSystem.copyAsync as jest.Mock).mockResolvedValue(undefined);
+    (AsyncStorage.getItem as jest.Mock).mockImplementation(async () => {
+      await Promise.resolve();
+      return store;
+    });
+    (AsyncStorage.setItem as jest.Mock).mockImplementation(async (_k: string, value: string) => {
+      await Promise.resolve();
+      store = value;
+    });
+
+    const first = await saveLocalImageDraft('file:///tmp/first.jpg', 'user-1');
+    const [, second] = await Promise.all([
+      discardLocalImageDraft(first, 'user-1'),
+      saveLocalImageDraft('file:///tmp/second.jpg', 'user-1'),
+    ]);
+
+    expect(JSON.parse(store || '[]')).toEqual([second]);
+  });
+
+  test('purgeLocalImageDrafts nu șterge din index drafturile altui cont', async () => {
+    const draftA = 'file:///data/user/0/com.app/files/drafts/user-1/a.jpg';
+    const draftB = 'file:///data/user/0/com.app/files/drafts/user-2/b.jpg';
+    let store: string | null = JSON.stringify([draftA, draftB]);
+    (AsyncStorage.getItem as jest.Mock).mockImplementation(async () => store);
+    (AsyncStorage.setItem as jest.Mock).mockImplementation(async (_k: string, value: string) => {
+      store = value;
+    });
+
+    await purgeLocalImageDrafts('user-1');
+
+    expect(FileSystem.deleteAsync).toHaveBeenCalledWith(draftA, { idempotent: true });
+    expect(FileSystem.deleteAsync).not.toHaveBeenCalledWith(draftB, expect.anything());
+    expect(JSON.parse(store || '[]')).toEqual([draftB]);
+  });
 });

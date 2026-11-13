@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { AlertTriangle, RefreshCw, Image as ImageIcon, Home, WifiOff, Lock, Camera, ShieldCheck } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -42,9 +42,9 @@ export function PhotoMealErrorView({
       case 'not_food':
         return {
           icon: <AlertTriangle size={36} color="#CCFF00" />,
-          title: customTitle || t('camera.notFoodTitle', 'Nu am identificat alimente în fotografie.'),
-          body: customMessage || t('camera.notFoodMessage', 'Încearcă o fotografie cu mâncarea bine încadrată sau alege o imagine din galerie. Creditul tău este păstrat.'),
-          primaryLabel: t('camera.retakePhoto', 'Refă fotografia'),
+          title: customTitle || t('camera.notFoodTitle'),
+          body: customMessage || t('camera.notFoodMessage'),
+          primaryLabel: t('camera.retakePhoto'),
           primaryAction: onRetake,
           primaryIcon: <RefreshCw size={18} color="#000000" />,
           hasGallery: true,
@@ -52,9 +52,9 @@ export function PhotoMealErrorView({
       case 'network_error':
         return {
           icon: <WifiOff size={36} color="#FB923C" />,
-          title: customTitle || 'Conexiunea a fost întreruptă',
-          body: customMessage || 'Nu am putut comunica cu serverul de analiză. Verifică conexiunea la internet.',
-          primaryLabel: onRetry ? t('photoJob.retry', 'Reîncearcă') : 'Reîncearcă analiza',
+          title: customTitle || t('camera.networkErrorTitle'),
+          body: customMessage || t('camera.networkErrorMessage'),
+          primaryLabel: onRetry ? t('photoJob.retry') : t('camera.retrySafe'),
           primaryAction: onRetry || onRetake,
           primaryIcon: <RefreshCw size={18} color="#000000" />,
           hasGallery: true,
@@ -62,9 +62,9 @@ export function PhotoMealErrorView({
       case 'provider_error':
         return {
           icon: <AlertTriangle size={36} color="#FB923C" />,
-          title: customTitle || (testID === 'camera-failed-job' ? t('photoJob.failedTitle', 'Analiza nu a reușit') : 'Modelul AI este temporar ocupat'),
-          body: customMessage || (testID === 'camera-failed-job' ? t('photoJob.failedBody', 'Atinge pentru a reîncerca') : 'Analiza foto a durat prea mult sau modelul AI este suprasolicitat. Creditul tău Flow a fost restituit integral.'),
-          primaryLabel: onRetry ? t('photoJob.retry', 'Reîncearcă') : 'Reîncearcă în siguranță',
+          title: customTitle || (testID === 'camera-failed-job' ? t('photoJob.failedTitle') : t('camera.providerErrorTitle')),
+          body: customMessage || (testID === 'camera-failed-job' ? t('photoJob.failedBody') : t('camera.aiProviderErrorMessage')),
+          primaryLabel: onRetry ? t('photoJob.retry') : t('camera.retrySafe'),
           primaryAction: onRetry || onRetake,
           primaryIcon: <RefreshCw size={18} color="#000000" />,
           hasGallery: true,
@@ -72,9 +72,9 @@ export function PhotoMealErrorView({
       case 'permission_denied':
         return {
           icon: <Lock size={36} color="#CCFF00" />,
-          title: customTitle || t('camera.permissionTitle', 'Permisiune Cameră Necesară'),
-          body: customMessage || t('camera.permissionSubtitle', 'GetFlow are nevoie de acces la cameră pentru a analiza mâncarea din farfurie.'),
-          primaryLabel: t('camera.openSettings', 'Deschide Setări'),
+          title: customTitle || t('camera.permissionTitle'),
+          body: customMessage || t('camera.permissionSubtitle'),
+          primaryLabel: t('camera.openSettings'),
           primaryAction: onOpenSettings || onRetake,
           primaryIcon: <Camera size={18} color="#000000" />,
           hasGallery: true,
@@ -83,9 +83,9 @@ export function PhotoMealErrorView({
       default:
         return {
           icon: <AlertTriangle size={36} color="#EF4444" />,
-          title: customTitle || (testID === 'camera-failed-job' ? t('photoJob.failedTitle', 'Analiza nu a reușit') : 'Nu am putut structura datele'),
-          body: customMessage || (testID === 'camera-failed-job' ? t('photoJob.failedBody', 'Atinge pentru a reîncerca') : 'Imaginea nu a putut fi procesată în valori nutriționale sigure. Creditul tău nu a fost consumat.'),
-          primaryLabel: onRetry ? t('photoJob.retry', 'Reîncearcă') : 'Scanează din nou',
+          title: customTitle || (testID === 'camera-failed-job' ? t('photoJob.failedTitle') : t('camera.malformedResultTitle')),
+          body: customMessage || (testID === 'camera-failed-job' ? t('photoJob.failedBody') : t('camera.malformedResultMessage')),
+          primaryLabel: onRetry ? t('photoJob.retry') : t('camera.scanAgain'),
           primaryAction: onRetry || onRetake,
           primaryIcon: <RefreshCw size={18} color="#000000" />,
           hasGallery: true,
@@ -96,9 +96,17 @@ export function PhotoMealErrorView({
   const content = getErrorContent();
 
   return (
-    <View style={styles.container} testID={testID || (errorType === 'not_food' ? 'camera-not-food-card' : 'photo-meal-error-view')}>
+    <View
+      style={styles.container}
+      testID={testID || (errorType === 'not_food' ? 'camera-not-food-card' : 'photo-meal-error-view')}
+    >
       <BlurView intensity={75} tint="dark" style={styles.blurCard}>
-        <View style={styles.contentWrap}>
+        <ScrollView
+          style={styles.cardScroll}
+          contentContainerStyle={styles.contentWrap}
+          bounces={false}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.iconCircle}>{content.icon}</View>
 
           <Text maxFontSizeMultiplier={1.3} style={styles.titleText}>
@@ -112,8 +120,8 @@ export function PhotoMealErrorView({
           {errorType !== 'permission_denied' && (
             <View style={styles.refundBadge} testID="credit-refund-reassurance-badge">
               <ShieldCheck size={14} color="#CCFF00" />
-              <Text style={styles.refundBadgeText}>
-                {t('camera.creditProtectedNotice', 'Niciun Flow Credit nu a fost consumat')}
+              <Text maxFontSizeMultiplier={1.3} style={styles.refundBadgeText}>
+                {t('camera.creditProtectedNotice')}
               </Text>
             </View>
           )}
@@ -134,7 +142,7 @@ export function PhotoMealErrorView({
                 style={styles.primaryGrad}
               >
                 {content.primaryIcon}
-                <Text style={styles.primaryBtnText}>{content.primaryLabel}</Text>
+                <Text maxFontSizeMultiplier={1.3} style={styles.primaryBtnText}>{content.primaryLabel}</Text>
               </LinearGradient>
             </TouchableOpacity>
 
@@ -145,11 +153,11 @@ export function PhotoMealErrorView({
                 onPress={onRetake}
                 style={styles.secondaryBtn}
                 accessibilityRole="button"
-                accessibilityLabel={t('camera.retakePhoto', 'Refă fotografia')}
+                accessibilityLabel={t('camera.retakePhoto')}
               >
                 <Camera size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.secondaryBtnText}>
-                  {t('camera.retakePhoto', 'Refă fotografia')}
+                <Text maxFontSizeMultiplier={1.3} style={styles.secondaryBtnText}>
+                  {t('camera.retakePhoto')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -161,11 +169,11 @@ export function PhotoMealErrorView({
                 onPress={onGallery}
                 style={styles.secondaryBtn}
                 accessibilityRole="button"
-                accessibilityLabel={t('camera.chooseFromGallery', 'Alege din galerie')}
+                accessibilityLabel={t('camera.chooseFromGallery')}
               >
                 <ImageIcon size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.secondaryBtnText}>
-                  {t('camera.chooseFromGallery', 'Alege din galerie')}
+                <Text maxFontSizeMultiplier={1.3} style={styles.secondaryBtnText}>
+                  {t('camera.chooseFromGallery')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -176,15 +184,15 @@ export function PhotoMealErrorView({
               onPress={onHome}
               style={styles.ghostBtn}
               accessibilityRole="button"
-              accessibilityLabel={t('camera.goToHome', 'Mergi la Acasă')}
+              accessibilityLabel={t('camera.goToHome')}
             >
               <Home size={16} color="#CCFF00" style={{ marginRight: 6 }} />
-              <Text style={styles.ghostBtnText}>
-                {t('camera.goToHome', 'Mergi la Acasă')}
+              <Text maxFontSizeMultiplier={1.3} style={styles.ghostBtnText}>
+                {t('camera.goToHome')}
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </BlurView>
     </View>
   );
@@ -201,11 +209,15 @@ const styles = StyleSheet.create({
   },
   blurCard: {
     width: '100%',
+    maxHeight: '88%',
     borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.10)',
     overflow: 'hidden',
     backgroundColor: 'rgba(18, 22, 26, 0.92)',
+  },
+  cardScroll: {
+    width: '100%',
   },
   contentWrap: {
     padding: 24,
@@ -244,12 +256,15 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     width: '100%',
-    height: 50,
+    minHeight: 50,
     borderRadius: 14,
     overflow: 'hidden',
   },
   primaryGrad: {
     flex: 1,
+    minHeight: 50,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -262,7 +277,9 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     width: '100%',
-    height: 48,
+    minHeight: 48,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -277,10 +294,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   ghostBtn: {
+    minHeight: 44,
+    minWidth: 120,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
+    paddingHorizontal: 16,
     marginTop: 4,
   },
   ghostBtnText: {

@@ -35,7 +35,11 @@ export function clearImageKitAuthCache(): void {
 }
 
 /** Preia parametrii temporari de upload și îi validează înainte de utilizare (cu TTL caching în memorie). */
-export async function getImageKitAuthParams(signal?: AbortSignal, forceRefresh = false): Promise<ImageKitAuthParams> {
+export async function getImageKitAuthParams(
+  signal?: AbortSignal,
+  forceRefresh = false,
+  consumeForImmediateUse = false,
+): Promise<ImageKitAuthParams> {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token || !data.session.user?.id) {
     throw new Error('Sesiunea a expirat. Autentifică-te din nou.');
@@ -90,7 +94,11 @@ export async function getImageKitAuthParams(signal?: AbortSignal, forceRefresh =
     userId: currentUserId,
   };
 
-  cachedAuthParams = { params: validated, userId: currentUserId };
+  if (consumeForImmediateUse) {
+    cachedAuthParams = null;
+  } else {
+    cachedAuthParams = { params: validated, userId: currentUserId };
+  }
   return validated;
 }
 
@@ -109,7 +117,7 @@ export async function uploadImageToImageKit(
   if (!publicKey) throw new Error('ImageKit nu este configurat în această versiune a aplicației.');
 
   const [authParams, optimizedUri] = await Promise.all([
-    getImageKitAuthParams(signal),
+    getImageKitAuthParams(signal, false, true),
     options?.skipOptimization
       ? Promise.resolve(fileUri)
       : optimizeImageBeforeUpload(fileUri).then((opt) => opt.uri),
@@ -143,7 +151,7 @@ export async function uploadImageToImageKit(
   if (!uploadRes.ok && uploadRes.status === 400 && !signal?.aborted) {
     cachedAuthParams = null;
     try {
-      const freshAuth = await getImageKitAuthParams(signal, true);
+      const freshAuth = await getImageKitAuthParams(signal, true, true);
       uploadRes = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
         method: 'POST',
         body: creazaFormData(freshAuth),
@@ -184,47 +192,55 @@ export async function uploadImageToImageKit(
   };
 }
 
+let inFlightPrewarm: Promise<void> | null = null;
+
 /** Pre-warm silențios al credențialelor ImageKit pentru a elimina latența la următoarea poză. */
 export async function prewarmImageKitAuth(): Promise<void> {
-  try {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session?.access_token || !data.session.user?.id) return;
-    const currentUserId = data.session.user.id;
-    const nowSec = Math.floor(Date.now() / 1000);
-    if (
-      cachedAuthParams &&
-      cachedAuthParams.userId === currentUserId &&
-      cachedAuthParams.params.expire > nowSec + 60
-    ) {
-      return;
-    }
-    const res = await fetch(`${API_URL}${API_PREFIX}/imagekit-auth`, {
-      headers: { Authorization: `Bearer ${data.session.access_token}` },
-    });
-    if (!res.ok) return;
-    const payload: unknown = await res.json();
-    if (
-      esteObiect(payload) &&
-      textNenul(payload.token) &&
-      textNenul(payload.signature) &&
-      textNenul(payload.urlEndpoint) &&
-      Number.isFinite(Number(payload.expire))
-    ) {
-      const expire = Number(payload.expire);
-      if (expire > nowSec + 15) {
-        cachedAuthParams = {
-          params: {
-            token: payload.token,
-            signature: payload.signature,
-            urlEndpoint: payload.urlEndpoint,
-            expire,
-            userId: currentUserId,
-          },
-          userId: currentUserId,
-        };
+  if (inFlightPrewarm) return inFlightPrewarm;
+  inFlightPrewarm = (async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session?.access_token || !data.session.user?.id) return;
+      const currentUserId = data.session.user.id;
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (
+        cachedAuthParams &&
+        cachedAuthParams.userId === currentUserId &&
+        cachedAuthParams.params.expire > nowSec + 60
+      ) {
+        return;
       }
+      const res = await fetch(`${API_URL}${API_PREFIX}/imagekit-auth`, {
+        headers: { Authorization: `Bearer ${data.session.access_token}` },
+      });
+      if (!res.ok) return;
+      const payload: unknown = await res.json();
+      if (
+        esteObiect(payload) &&
+        textNenul(payload.token) &&
+        textNenul(payload.signature) &&
+        textNenul(payload.urlEndpoint) &&
+        Number.isFinite(Number(payload.expire))
+      ) {
+        const expire = Number(payload.expire);
+        if (expire > nowSec + 15) {
+          cachedAuthParams = {
+            params: {
+              token: payload.token,
+              signature: payload.signature,
+              urlEndpoint: payload.urlEndpoint,
+              expire,
+              userId: currentUserId,
+            },
+            userId: currentUserId,
+          };
+        }
+      }
+    } catch {
+      // Non-blocking prewarm
+    } finally {
+      inFlightPrewarm = null;
     }
-  } catch {
-    // Non-blocking prewarm
-  }
+  })();
+  return inFlightPrewarm;
 }
