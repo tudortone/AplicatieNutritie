@@ -5,7 +5,7 @@ import { StyleSheet } from 'react-native';
 import { WORKOUT_V2_PRESETS } from '../constants/workout-v2/presets';
 import { ActiveWorkout } from '../components/workout-v2/ActiveWorkout';
 import { WorkoutV2Experience } from '../components/workout-v2/WorkoutV2Experience';
-import { startWorkoutFromTemplate } from '../lib/workout-v2/sessionModel';
+import { startWorkoutFromTemplate, uncompleteSet } from '../lib/workout-v2/sessionModel';
 import { instantiatePreset } from '../lib/workout-v2/templateModel';
 
 jest.mock('../context/ThemeContext', () => ({
@@ -44,6 +44,54 @@ it('renders dedicated session summary screen after finishing an active workout',
   }
   const cardioBtn = view.queryByLabelText('workoutV2.active.completeCardio');
   if (cardioBtn) await fireEvent.press(cardioBtn);
+  await fireEvent.press(view.getByLabelText('workoutV2.active.finish'));
+  expect(view.getByTestId('workout-v2-summary')).toBeTruthy();
+});
+
+it('allows unchecking a completed set and blocks finish until re-checked', async () => {
+  const template = instantiatePreset(WORKOUT_V2_PRESETS[6], 'user-a', 'template-a', '2026-09-26T10:00:00Z');
+  const session = startWorkoutFromTemplate(template, 'session-a', '2026-09-26T10:01:00Z');
+  const strength = session.blocks.find((block) => block.kind === 'strength');
+  if (!strength || strength.kind !== 'strength') throw new Error('missing strength block');
+
+  // Unit check on sessionModel.uncompleteSet
+  const completedSession = {
+    ...session,
+    blocks: session.blocks.map((block) => (block.id === strength.id && block.kind === 'strength'
+      ? { ...block, sets: block.sets.map((s, idx) => (idx === 0 ? { ...s, actualReps: 12, actualWeightKg: 40, completed: true } : s)) }
+      : block)),
+  };
+  const reverted = uncompleteSet(completedSession, strength.id, strength.sets[0].id);
+  const revertedBlock = reverted.blocks.find((block) => block.id === strength.id);
+  if (!revertedBlock || revertedBlock.kind !== 'strength') throw new Error('missing strength block');
+  expect(revertedBlock.sets[0].completed).toBe(false);
+  expect(revertedBlock.sets[0].actualReps).toBe(12);
+  expect(revertedBlock.sets[0].actualWeightKg).toBe(40);
+
+  // UI toggle check in WorkoutV2Experience
+  const view = await render(<WorkoutV2Experience />);
+  await fireEvent.press(view.getByTestId('workout-v2-preset-beginner'));
+  await fireEvent.press(view.getByTestId('workout-v2-start'));
+  const firstId = view.getAllByRole('checkbox')[0].props.testID;
+
+  await fireEvent.press(view.getByTestId(firstId));
+  expect(view.getByTestId(firstId).props.accessibilityState).toEqual({ checked: true, disabled: false });
+
+  await fireEvent.press(view.getByTestId(firstId));
+  expect(view.getByTestId(firstId).props.accessibilityState).toEqual({ checked: false, disabled: false });
+
+  // Finish while unchecked fails; re-check allows summary
+  const restCheckboxes = view.getAllByRole('checkbox').slice(1);
+  for (const box of restCheckboxes) {
+    await fireEvent.press(view.getByTestId(box.props.testID));
+  }
+  const cardioBtn = view.queryByLabelText('workoutV2.active.completeCardio');
+  if (cardioBtn) await fireEvent.press(cardioBtn);
+  await fireEvent.press(view.getByLabelText('workoutV2.active.finish'));
+  expect(view.queryByTestId('workout-v2-summary')).toBeNull();
+  expect(view.getByText('workoutV2.experience.incompleteWorkout')).toBeTruthy();
+
+  await fireEvent.press(view.getByTestId(firstId));
   await fireEvent.press(view.getByLabelText('workoutV2.active.finish'));
   expect(view.getByTestId('workout-v2-summary')).toBeTruthy();
 });

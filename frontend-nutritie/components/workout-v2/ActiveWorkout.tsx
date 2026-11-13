@@ -8,9 +8,10 @@ import { useTheme } from '../../context/ThemeContext';
 import type { ActiveWorkoutSession } from '../../lib/workout-v2/sessionModel';
 import { WorkoutSetRow } from './WorkoutSetRow';
 
-export function ActiveWorkout({ session, onCompleteSet, onAddSet, onCompleteCardio, onFinish }: {
+export function ActiveWorkout({ session, onCompleteSet, onUncompleteSet, onAddSet, onCompleteCardio, onFinish }: {
   session: ActiveWorkoutSession;
   onCompleteSet: (blockId: string, setId: string, actual: { reps: number; weightKg?: number }) => void;
+  onUncompleteSet?: (blockId: string, setId: string) => void;
   onAddSet: (blockId: string) => void;
   onCompleteCardio: (blockId: string, actual: { durationSeconds?: number; distanceKm?: number }) => void;
   onFinish: () => void;
@@ -28,7 +29,13 @@ export function ActiveWorkout({ session, onCompleteSet, onAddSet, onCompleteCard
             {block.kind === 'strength' ? (
               <>
                 {block.sets.map((set, index) => (
-                  <WorkoutSetRow key={set.id} set={set} index={index} onComplete={(actual) => onCompleteSet(block.id, set.id, actual)} />
+                  <WorkoutSetRow
+                    key={set.id}
+                    set={set}
+                    index={index}
+                    onComplete={(actual) => onCompleteSet(block.id, set.id, actual)}
+                    onUncomplete={onUncompleteSet ? () => onUncompleteSet(block.id, set.id) : undefined}
+                  />
                 ))}
                 <Pressable accessibilityRole="button" accessibilityLabel={t('workoutV2.active.addSet')} onPress={() => onAddSet(block.id)} style={styles.addSet}>
                   <Plus size={17} color={colors.accentTertiary} />

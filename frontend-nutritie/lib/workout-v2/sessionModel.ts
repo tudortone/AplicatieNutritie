@@ -100,13 +100,12 @@ export function addActualSet(
   return { ...session, blocks };
 }
 
-export function completeSet(
+function updateStrengthSet(
   session: ActiveWorkoutSession,
   blockId: string,
   setId: string,
-  actual: { reps: number; weightKg?: number; assistanceWeightKg?: number },
+  transform: (set: ActualWorkoutSet) => ActualWorkoutSet,
 ): ActiveWorkoutSession {
-  if (!Number.isFinite(actual.reps) || actual.reps <= 0) throw new Error('INVALID_REPS');
   let found = false;
   const blocks = session.blocks.map((block) => {
     if (block.id !== blockId) return block;
@@ -114,18 +113,40 @@ export function completeSet(
     const sets = block.sets.map((set) => {
       if (set.id !== setId) return set;
       found = true;
-      return {
-        ...set,
-        actualReps: actual.reps,
-        actualWeightKg: actual.weightKg,
-        assistanceWeightKg: actual.assistanceWeightKg,
-        completed: true,
-      };
+      return transform(set);
     });
     return { ...block, sets };
   });
   if (!found) throw new Error('SET_NOT_FOUND');
   return { ...session, blocks };
+}
+
+export function completeSet(
+  session: ActiveWorkoutSession,
+  blockId: string,
+  setId: string,
+  actual: { reps: number; weightKg?: number; assistanceWeightKg?: number },
+): ActiveWorkoutSession {
+  if (!Number.isFinite(actual.reps) || actual.reps <= 0) throw new Error('INVALID_REPS');
+  return updateStrengthSet(session, blockId, setId, (set) => ({
+    ...set,
+    actualReps: actual.reps,
+    actualWeightKg: actual.weightKg,
+    assistanceWeightKg: actual.assistanceWeightKg,
+    completed: true,
+  }));
+}
+
+/** Reverts a completed set so users can fix or uncheck a mis-tapped set before finishing. */
+export function uncompleteSet(
+  session: ActiveWorkoutSession,
+  blockId: string,
+  setId: string,
+): ActiveWorkoutSession {
+  return updateStrengthSet(session, blockId, setId, (set) => ({
+    ...set,
+    completed: false,
+  }));
 }
 
 export function completeCardioBlock(

@@ -16,6 +16,7 @@ import {
   completeCardioBlock,
   completeSet,
   startWorkoutFromTemplate,
+  uncompleteSet,
   validateSessionForFinish,
   type ActiveWorkoutSession,
 } from '../../lib/workout-v2/sessionModel';
@@ -152,6 +153,7 @@ export function WorkoutV2Experience({ nowIso }: { nowIso?: string }) {
         <ActiveWorkout
           session={active}
           onCompleteSet={(blockId, setId, actual) => setActive((current) => current ? completeSet(current, blockId, setId, actual) : current)}
+          onUncompleteSet={(blockId, setId) => setActive((current) => current ? uncompleteSet(current, blockId, setId) : current)}
           onAddSet={(blockId) => setActive((current) => current ? addActualSet(current, blockId, id('set')) : current)}
           onCompleteCardio={(blockId, actual) => setActive((current) => current ? completeCardioBlock(current, blockId, actual) : current)}
           onFinish={finishActive}

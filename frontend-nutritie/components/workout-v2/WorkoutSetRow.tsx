@@ -6,10 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import type { ActualWorkoutSet } from '../../lib/workout-v2/sessionModel';
 
-export function WorkoutSetRow({ set, index, onComplete }: {
+export function WorkoutSetRow({ set, index, onComplete, onUncomplete }: {
   set: ActualWorkoutSet;
   index: number;
   onComplete: (actual: { reps: number; weightKg?: number; assistanceWeightKg?: number }) => void;
+  onUncomplete?: () => void;
 }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -18,7 +19,7 @@ export function WorkoutSetRow({ set, index, onComplete }: {
   const parsedReps = Number(reps.replace(',', '.'));
   const validReps = Number.isFinite(parsedReps) ? Math.max(0, Math.round(parsedReps)) : 0;
   const validWeight = weight.trim() ? Math.max(0, Number(weight.replace(',', '.')) || 0) : undefined;
-  const isDisabled = set.completed || validReps <= 0;
+  const isDisabled = set.completed ? !onUncomplete : validReps <= 0;
   return (
     <View style={[styles.row, { borderColor: colors.border }]}>
       <Text style={[styles.index, { color: colors.textSecondary }]}>{index + 1}</Text>
@@ -36,7 +37,13 @@ export function WorkoutSetRow({ set, index, onComplete }: {
         accessibilityLabel={t('workoutV2.active.completeSet', { number: index + 1 })}
         accessibilityState={{ checked: set.completed, disabled: isDisabled }}
         disabled={isDisabled}
-        onPress={() => onComplete({ reps: validReps, weightKg: validWeight })}
+        onPress={() => {
+          if (set.completed) {
+            onUncomplete?.();
+            return;
+          }
+          onComplete({ reps: validReps, weightKg: validWeight });
+        }}
         style={[
           styles.complete,
           {
