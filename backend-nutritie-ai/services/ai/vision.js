@@ -41,6 +41,7 @@ function obtinePromptAnalizaFoto(limba = 'ro') {
 Considera o farfurie standard de ~25cm diametru ca referinta de scara (E1). Foloseste baze de date nutritionale recunoscute (cum ar fi USDA) pentru o precizie cat mai mare.
 Identifica TOATE alimentele de pe farfurie separat. Pentru fiecare aliment, estimeaza cantitatea vizuala in grame, ofera valorile nutritionale PENTRU SUTA DE GRAME (100g) si adauga nivelul tau de incredere in estimare (E4).
 ${directivaLimba}
+Daca imaginea NU contine alimente, bauturi sau mese comestibile (ex: peisaj, obiect, selfie, ecran, animale), returneaza STRICT [].
 RETURNEAZA DOAR UN ARRAY JSON in urmatorul format (fara text inainte sau dupa):
 [
   {

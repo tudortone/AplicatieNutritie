@@ -180,6 +180,7 @@ describe('P1-16: Chat & Vision Locale Contract & Meal Proposal Verification', ()
     it('provides Romanian directive by default', () => {
       const promptRo = obtinePromptAnalizaFoto('ro');
       expect(promptRo).toContain('IMPORTANT: Numele alimentelor din campul "nume" trebuie sa fie in limba romana.');
+      expect(promptRo).toContain('STRICT []');
     });
   });
 });
