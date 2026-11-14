@@ -1902,7 +1902,15 @@
       "adjustDecA11y": "{{label}} verringern",
       "adjustIncA11y": "{{label}} erhöhen",
       "stepperValueA11y": "{{label}}, {{value}}",
-      "stepperValueUnitA11y": "{{label}}, {{value}} {{unit}}"
+      "stepperValueUnitA11y": "{{label}}, {{value}} {{unit}}",
+      "editSetA11y": "Satz {{number}} bearbeiten",
+      "updateSetBtn": "Satz #{{number}} speichern",
+      "setUpdatedTitle": "Satz {{number}} aktualisiert",
+      "editExerciseA11y": "{{name}} zum Bearbeiten öffnen",
+      "deleteExerciseA11y": "{{name}} aus der Einheit entfernen",
+      "deleteExerciseConfirmTitle": "Übung entfernen",
+      "deleteExerciseConfirmMsg": "„{{name}}“ ({{count}} Sätze) aus der aktuellen Einheit entfernen?",
+      "savedTodayLink": "Heute gespeicherte Trainings ({{count}}) • Im Journal bearbeiten"
     },
     "categories": {
       "piept": "Brust",
@@ -2137,7 +2145,27 @@
       "warmupTag": "Aufwärm.",
       "durationAndExercises": "{{min}} Min • {{count}} Übungen",
       "openA11y": "{{name}} öffnen",
-      "closeA11y": "{{name}} schließen"
+      "closeA11y": "{{name}} schließen",
+      "deleteWorkoutA11y": "Training {{name}} löschen"
+    },
+    "edit": {
+      "title": "Satz #{{number}} bearbeiten",
+      "cancelBtn": "Abbrechen",
+      "saveBtn": "Speichern",
+      "deleteSetBtn": "Diesen Satz löschen",
+      "lastSetRemovesWorkoutHint": "Dies ist der letzte Satz — das Löschen entfernt das Training.",
+      "editSetA11y": "Satz {{number}} bearbeiten, {{value}}",
+      "setUpdatedTitle": "Satz aktualisiert",
+      "setDeletedTitle": "Satz gelöscht",
+      "setDeletedMsg": "Die Trainingswerte wurden neu berechnet.",
+      "workoutDeletedMsg": "Keine Sätze mehr vorhanden, das Training wurde entfernt.",
+      "updateErrorTitle": "Aktualisierung fehlgeschlagen",
+      "updateErrorMsg": "Änderungen konnten nicht gespeichert werden.",
+      "deleteExerciseA11y": "Übung {{name}} löschen",
+      "deleteExerciseConfirmTitle": "Übung löschen",
+      "deleteExerciseConfirmMsg": "Möchtest du „{{name}}“ wirklich aus diesem Training entfernen?",
+      "deleteLastExerciseConfirmMsg": "„{{name}}“ ist die letzte Übung. Durch das Entfernen wird das ganze Training gelöscht.",
+      "exerciseDeletedTitle": "Übung gelöscht"
     },
     "detail": {
       "backA11y": "Zurück",

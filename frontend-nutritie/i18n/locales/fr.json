@@ -1902,7 +1902,15 @@
       "adjustDecA11y": "Diminuer {{label}}",
       "adjustIncA11y": "Augmenter {{label}}",
       "stepperValueA11y": "{{label}}, {{value}}",
-      "stepperValueUnitA11y": "{{label}}, {{value}} {{unit}}"
+      "stepperValueUnitA11y": "{{label}}, {{value}} {{unit}}",
+      "editSetA11y": "Modifier la série {{number}}",
+      "updateSetBtn": "Enregistrer la série #{{number}}",
+      "setUpdatedTitle": "Série {{number}} mise à jour",
+      "editExerciseA11y": "Ouvrir {{name}} pour modifier",
+      "deleteExerciseA11y": "Supprimer {{name}} de la séance",
+      "deleteExerciseConfirmTitle": "Supprimer l’exercice",
+      "deleteExerciseConfirmMsg": "Supprimer « {{name}} » ({{count}} séries) de votre séance en cours ?",
+      "savedTodayLink": "Séances enregistrées aujourd’hui ({{count}}) • Modifier"
     },
     "categories": {
       "piept": "Pectoraux",
@@ -2137,7 +2145,27 @@
       "warmupTag": "échauff.",
       "durationAndExercises": "{{min}} min • {{count}} exercices",
       "openA11y": "Ouvrir {{name}}",
-      "closeA11y": "Fermer {{name}}"
+      "closeA11y": "Fermer {{name}}",
+      "deleteWorkoutA11y": "Supprimer la séance {{name}}"
+    },
+    "edit": {
+      "title": "Modifier la série #{{number}}",
+      "cancelBtn": "Annuler",
+      "saveBtn": "Enregistrer",
+      "deleteSetBtn": "Supprimer cette série",
+      "lastSetRemovesWorkoutHint": "C’est la dernière série — sa suppression retirera la séance.",
+      "editSetA11y": "Modifier la série {{number}}, {{value}}",
+      "setUpdatedTitle": "Série mise à jour",
+      "setDeletedTitle": "Série supprimée",
+      "setDeletedMsg": "Les totaux de la séance ont été recalculés.",
+      "workoutDeletedMsg": "Aucune série restante, la séance a été supprimée.",
+      "updateErrorTitle": "Échec de la mise à jour",
+      "updateErrorMsg": "Impossible d’enregistrer vos modifications.",
+      "deleteExerciseA11y": "Supprimer l’exercice {{name}}",
+      "deleteExerciseConfirmTitle": "Supprimer l’exercice",
+      "deleteExerciseConfirmMsg": "Voulez-vous vraiment retirer « {{name}} » de cette séance ?",
+      "deleteLastExerciseConfirmMsg": "« {{name}} » est le dernier exercice. Le retirer supprimera toute la séance.",
+      "exerciseDeletedTitle": "Exercice supprimé"
     },
     "detail": {
       "backA11y": "Retour",

@@ -87,6 +87,116 @@ function toInsertPayload(row: Antrenament, userId: string) {
   };
 }
 
+export function replaceSetInWorkout(
+  workout: Antrenament,
+  exIndex: number,
+  setIndex: number,
+  updatedSet: SetExercitiu,
+): ExercitiuInAntrenament[] {
+  return (workout.exercitii ?? []).map((ex, i) => {
+    if (i !== exIndex) return ex;
+    const nextSets = (ex.seturi ?? []).map((s, j) =>
+      j === setIndex ? { ...updatedSet, serie: j + 1 } : { ...s, serie: j + 1 },
+    );
+    return { ...ex, seturi: nextSets };
+  });
+}
+
+export function removeSetFromWorkout(
+  workout: Antrenament,
+  exIndex: number,
+  setIndex: number,
+): ExercitiuInAntrenament[] {
+  return (workout.exercitii ?? [])
+    .map((ex, i) => {
+      if (i !== exIndex) return ex;
+      const nextSets = (ex.seturi ?? [])
+        .filter((_, j) => j !== setIndex)
+        .map((s, j) => ({ ...s, serie: j + 1 }));
+      return { ...ex, seturi: nextSets };
+    })
+    .filter((ex) => ex.seturi.length > 0);
+}
+
+export function removeExerciseFromWorkout(
+  workout: Antrenament,
+  exIndex: number,
+): ExercitiuInAntrenament[] {
+  return (workout.exercitii ?? []).filter((_, i) => i !== exIndex);
+}
+
+export function recalculateEditedWorkout(
+  workout: Antrenament,
+  updatedExercitii: ExercitiuInAntrenament[],
+): Antrenament {
+  const origList = workout.exercitii ?? [];
+  const cleanedExercitii: ExercitiuInAntrenament[] = updatedExercitii
+    .map((ex, idx) => {
+      const cleanedSets = (ex.seturi ?? []).map((s, sIdx) => ({ ...s, serie: sIdx + 1 }));
+      if (cleanedSets.length === 0) return null;
+      const origEx = origList[idx]?.exercitiuId === ex.exercitiuId
+        ? origList[idx]
+        : origList.find((o) => o.exercitiuId === ex.exercitiuId);
+      const oldSets = origEx?.seturi ?? [];
+      const oldSec = oldSets.reduce((acc, s) => acc + Math.max(0, Number(s.time_seconds) || 0), 0);
+      const newSec = cleanedSets.reduce((acc, s) => acc + Math.max(0, Number(s.time_seconds) || 0), 0);
+
+      let durataMin = ex.durataMin;
+      let kcal = ex.kcal;
+      if (oldSec > 0 || newSec > 0) {
+        if (oldSec !== newSec) {
+          durataMin = Math.max(1, Math.round(newSec / 60));
+          if (origEx) {
+            kcal = oldSec > 0 && origEx.kcal > 0
+              ? Math.max(1, Math.round(origEx.kcal * (newSec / oldSec)))
+              : Math.max(1, durataMin * 5);
+          }
+        }
+      } else if (origEx && oldSets.length > 0 && cleanedSets.length !== oldSets.length) {
+        const ratio = cleanedSets.length / oldSets.length;
+        durataMin = Math.max(1, Math.round((origEx.durataMin || 1) * ratio));
+        kcal = origEx.kcal > 0 ? Math.max(1, Math.round(origEx.kcal * ratio)) : 0;
+      }
+
+      return { ...ex, seturi: cleanedSets, durataMin, kcal };
+    })
+    .filter((ex): ex is NonNullable<typeof ex> => ex !== null);
+
+  const oldSumDur = origList.reduce((acc, e) => acc + Math.max(0, Number(e.durataMin) || 0), 0);
+  const newSumDur = cleanedExercitii.reduce((acc, e) => acc + Math.max(0, Number(e.durataMin) || 0), 0);
+  const oldSumKcal = origList.reduce((acc, e) => acc + Math.max(0, Number(e.kcal) || 0), 0);
+  const newSumKcal = cleanedExercitii.reduce((acc, e) => acc + Math.max(0, Number(e.kcal) || 0), 0);
+
+  let nextDurataMin = workout.durata_min;
+  if (oldSumDur > 0 && newSumDur !== oldSumDur) {
+    nextDurataMin = Math.max(1, Math.round((workout.durata_min || oldSumDur) * (newSumDur / oldSumDur)));
+  } else if (oldSumDur === 0 && origList.length > 0 && cleanedExercitii.length !== origList.length && cleanedExercitii.length > 0) {
+    nextDurataMin = Math.max(1, Math.round((workout.durata_min || 1) * (cleanedExercitii.length / origList.length)));
+  }
+
+  let nextCalorii = workout.calorii_arse;
+  if (oldSumKcal > 0 && newSumKcal !== oldSumKcal) {
+    nextCalorii = Math.max(0, Math.round((workout.calorii_arse || oldSumKcal) * (newSumKcal / oldSumKcal)));
+  } else if (oldSumKcal === 0 && origList.length > 0 && cleanedExercitii.length !== origList.length && cleanedExercitii.length > 0) {
+    nextCalorii = Math.max(0, Math.round((workout.calorii_arse || 0) * (cleanedExercitii.length / origList.length)));
+  }
+
+  const computed = computeWorkoutMetrics(cleanedExercitii);
+  return {
+    ...workout,
+    durata_min: nextDurataMin,
+    calorii_arse: nextCalorii,
+    exercitii: cleanedExercitii,
+    volum_total: computed.externalVolumeKg,
+    muscle_load: computed.muscleLoad,
+    external_volume_kg: computed.externalVolumeKg,
+    equivalent_volume_kg: computed.equivalentVolumeKg,
+    session_score: computed.sessionScore,
+    rank_key: computed.rank.key,
+    rank_label: computed.rank.label,
+  };
+}
+
 export function normalizeAntrenament(row: Antrenament): Antrenament {
   const computed = computeWorkoutMetrics(row.exercitii || []);
   const hasStoredLoad = Boolean(row.muscle_load && Object.keys(row.muscle_load).length > 0);
@@ -384,9 +494,78 @@ export function useAntrenamente(dataSelectata?: Date) {
     await fetchAntrenamente();
   };
 
+  const actualizeazaAntrenament = async (
+    workoutOrId: Antrenament | string,
+    exercitiiActualizate: ExercitiuInAntrenament[],
+  ): Promise<Antrenament | null> => {
+    const targetId = typeof workoutOrId === 'string' ? workoutOrId : workoutOrId.id;
+    const validExercitii = (exercitiiActualizate ?? []).filter(
+      (ex) => Array.isArray(ex.seturi) && ex.seturi.length > 0,
+    );
+    if (validExercitii.length === 0) {
+      await stergeAntrenament(targetId);
+      return null;
+    }
+
+    const localAll = await getLocalWorkouts();
+    const baseWorkout: Antrenament = typeof workoutOrId !== 'string'
+      ? workoutOrId
+      : antrenamente.find((w) => w.id === targetId) ??
+        localAll.find((w) => w.id === targetId) ?? {
+          id: targetId,
+          user_id: LOCAL_USER_ID,
+          nume: '',
+          tip: 'forta',
+          durata_min: 15,
+          calorii_arse: 0,
+          exercitii: validExercitii,
+          created_at: new Date().toISOString(),
+        };
+
+    const updatedRow = recalculateEditedWorkout(baseWorkout, validExercitii);
+    const storedMatch = localAll.find((w) => w.id === updatedRow.id);
+    const effectiveIsLocal = storedMatch ? Boolean(storedMatch.is_local) : Boolean(updatedRow.is_local);
+    let currentUser: User | null = null;
+    if (supabase?.auth && typeof supabase.auth.getUser === 'function') {
+      const { data: authData } = await supabase.auth.getUser();
+      currentUser = authData?.user ?? null;
+    }
+
+    if (currentUser && isUuid(updatedRow.id) && !effectiveIsLocal) {
+      const { error } = await supabase
+        .from('antrenamente')
+        .update({
+          durata_min: updatedRow.durata_min,
+          calorii_arse: updatedRow.calorii_arse,
+          exercitii: updatedRow.exercitii,
+          volum_total: updatedRow.volum_total,
+          muscle_load: updatedRow.muscle_load,
+          external_volume_kg: updatedRow.external_volume_kg,
+          equivalent_volume_kg: updatedRow.equivalent_volume_kg,
+          session_score: updatedRow.session_score,
+          rank_key: updatedRow.rank_key,
+          rank_label: updatedRow.rank_label,
+        })
+        .eq('id', updatedRow.id)
+        .eq('user_id', currentUser.id);
+      if (error) throw error;
+    }
+
+    if (localAll.some((w) => w.id === updatedRow.id)) {
+      await saveLocalWorkouts(
+        localAll.map((w) => (w.id === updatedRow.id ? { ...updatedRow, is_local: w.is_local } : w)),
+      );
+    } else if (updatedRow.is_local) {
+      await saveLocalWorkouts([updatedRow, ...localAll]);
+    }
+
+    await fetchAntrenamente();
+    return updatedRow;
+  };
+
   return {
     user, antrenamente, totalCaloriiArse, numarAntrenamente,
-    adaugaAntrenament, adaugaExercitiu, stergeAntrenament,
+    adaugaAntrenament, adaugaExercitiu, actualizeazaAntrenament, stergeAntrenament,
     fetchIstoric, loading, refresh: fetchAntrenamente,
   };
 }

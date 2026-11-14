@@ -1902,7 +1902,15 @@
       "adjustDecA11y": "Scade {{label}}",
       "adjustIncA11y": "Crește {{label}}",
       "stepperValueA11y": "{{label}}, {{value}}",
-      "stepperValueUnitA11y": "{{label}}, {{value}} {{unit}}"
+      "stepperValueUnitA11y": "{{label}}, {{value}} {{unit}}",
+      "editSetA11y": "Editează setul {{number}}",
+      "updateSetBtn": "Salvează setul #{{number}}",
+      "setUpdatedTitle": "Set {{number}} actualizat",
+      "editExerciseA11y": "Deschide {{name}} pentru editare",
+      "deleteExerciseA11y": "Șterge exercițiul {{name}} din sesiune",
+      "deleteExerciseConfirmTitle": "Șterge exercițiul",
+      "deleteExerciseConfirmMsg": "Ești sigur că vrei să elimini „{{name}}” ({{count}} seturi) din sesiunea curentă?",
+      "savedTodayLink": "Antrenamente salvate azi ({{count}}) • Editează în jurnal"
     },
     "categories": {
       "piept": "Piept",
@@ -2137,7 +2145,27 @@
       "warmupTag": "încălzire",
       "durationAndExercises": "{{min}} min • {{count}} exerciții",
       "openA11y": "Deschide {{name}}",
-      "closeA11y": "Închide {{name}}"
+      "closeA11y": "Închide {{name}}",
+      "deleteWorkoutA11y": "Șterge antrenamentul {{name}}"
+    },
+    "edit": {
+      "title": "Editează setul #{{number}}",
+      "cancelBtn": "Anulează",
+      "saveBtn": "Salvează",
+      "deleteSetBtn": "Șterge acest set",
+      "lastSetRemovesWorkoutHint": "Acesta este ultimul set — ștergerea lui va elimina antrenamentul.",
+      "editSetA11y": "Editează setul {{number}}, {{value}}",
+      "setUpdatedTitle": "Set actualizat",
+      "setDeletedTitle": "Set șters",
+      "setDeletedMsg": "Valorile antrenamentului au fost recalculate.",
+      "workoutDeletedMsg": "Nu mai erau seturi rămase, deci antrenamentul a fost șters.",
+      "updateErrorTitle": "Eroare la actualizare",
+      "updateErrorMsg": "Nu s-au putut salva modificările.",
+      "deleteExerciseA11y": "Șterge exercițiul {{name}}",
+      "deleteExerciseConfirmTitle": "Șterge exercițiul",
+      "deleteExerciseConfirmMsg": "Ești sigur că vrei să ștergi „{{name}}” din acest antrenament?",
+      "deleteLastExerciseConfirmMsg": "„{{name}}” este singurul exercițiu rămas. Ștergerea lui va elimina întregul antrenament.",
+      "exerciseDeletedTitle": "Exercițiu șters"
     },
     "detail": {
       "backA11y": "Înapoi",

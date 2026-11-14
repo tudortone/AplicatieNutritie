@@ -152,3 +152,29 @@ export function validateLoggedSet(
   }
   return null;
 }
+
+/** Rezolvă câmpurile de măsurare ale unui set salvat în istoric/jurnal, cu fallback cronometrat. */
+export function resolveHistorySetFields(
+  exMeta: Partial<Exercitiu> | undefined | null,
+  exerciseName: string,
+  set: LoggedSet | undefined | null,
+  t: SportTranslateFn = defaultT,
+): SetFields {
+  if (exMeta) return getSetFields(exMeta, t);
+  if ((set?.time_seconds ?? 0) > 0) {
+    return getSetFields(
+      {
+        nume: exerciseName,
+        masurare: {
+          type: 'timed',
+          allowsWeight: false,
+          weightOptional: false,
+          defaultSets: 1,
+          unitLabel: t('sport.measurement.units.secShort'),
+        },
+      },
+      t,
+    );
+  }
+  return getSetFields({ nume: exerciseName }, t);
+}

@@ -13,15 +13,27 @@ import { ArrowLeft, Dumbbell, Flame, Clock, Calendar, Trash2, ChevronDown, Chevr
 import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '../context/ThemeContext';
-import { useAntrenamente, Antrenament } from '../hooks/useAntrenamente';
+import {
+  useAntrenamente,
+  type Antrenament,
+  replaceSetInWorkout,
+  removeSetFromWorkout,
+  removeExerciseFromWorkout,
+} from '../hooks/useAntrenamente';
 import { useExercitii } from '../hooks/useExercitii';
 import { useNotify } from '../hooks/useNotify';
 import { ConfirmSheet } from '../components/ui/ConfirmSheet';
+import {
+  SavedWorkoutExercisesList,
+  type ExerciseDeleteSelection,
+  type SetEditSelection,
+} from '../components/fitness/SavedWorkoutExercisesList';
+import { WorkoutSetEditSheet } from '../components/fitness/WorkoutSetEditSheet';
 import KeyboardAwareScreen, { useContentBottomPadding } from '@/components/ui/KeyboardAwareScreen';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { describeSet, getSetFields } from '../lib/workoutSets';
-import { getLocalizedExerciseName, getSportLocaleTag } from '../lib/sportI18n';
+import { describeSet, type LoggedSet } from '../lib/workoutSets';
+import { getSportLocaleTag } from '../lib/sportI18n';
 
 interface ZiGrupata {
   titlu: string;
@@ -37,7 +49,7 @@ export default function JurnalAntrenamenteScreen() {
   const localeTag = getSportLocaleTag(i18n.language);
   const notify = useNotify();
   const contentBottomPadding = useContentBottomPadding();
-  const { fetchIstoric, stergeAntrenament } = useAntrenamente();
+  const { fetchIstoric, actualizeazaAntrenament, stergeAntrenament } = useAntrenamente();
   const { exercitii } = useExercitii();
 
   const exercitiiMap = useMemo(() => {
@@ -53,6 +65,61 @@ export default function JurnalAntrenamenteScreen() {
   const [loading, setLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   const [toDelete, setToDelete] = useState<Antrenament | null>(null);
+  const [editingTarget, setEditingTarget] = useState<SetEditSelection | null>(null);
+  const [exerciseToDelete, setExerciseToDelete] = useState<ExerciseDeleteSelection | null>(null);
+  const [mutating, setMutating] = useState(false);
+
+  const applyIstoricMutation = useCallback((updated: Antrenament | null, workoutId: string) => {
+    setIstoric((prev) =>
+      updated
+        ? prev.map((w) => (w.id === workoutId ? updated : w))
+        : prev.filter((w) => w.id !== workoutId),
+    );
+  }, []);
+
+  const handleSaveEditedSet = useCallback(async (updatedSet: LoggedSet) => {
+    if (!editingTarget) return;
+    setMutating(true);
+    try {
+      const nextExercitii = replaceSetInWorkout(
+        editingTarget.workout,
+        editingTarget.exIndex,
+        editingTarget.setIndex,
+        updatedSet,
+      );
+      const updated = await actualizeazaAntrenament(editingTarget.workout, nextExercitii);
+      applyIstoricMutation(updated, editingTarget.workout.id);
+      notify.success(t('sport.edit.setUpdatedTitle'), describeSet(updatedSet, editingTarget.fields, t));
+      setEditingTarget(null);
+    } catch {
+      notify.error(t('sport.edit.updateErrorTitle'), t('sport.edit.updateErrorMsg'));
+    } finally {
+      setMutating(false);
+    }
+  }, [actualizeazaAntrenament, applyIstoricMutation, editingTarget, notify, t]);
+
+  const handleDeleteEditedSet = useCallback(async () => {
+    if (!editingTarget) return;
+    setMutating(true);
+    try {
+      const nextExercitii = removeSetFromWorkout(
+        editingTarget.workout,
+        editingTarget.exIndex,
+        editingTarget.setIndex,
+      );
+      const updated = await actualizeazaAntrenament(editingTarget.workout, nextExercitii);
+      applyIstoricMutation(updated, editingTarget.workout.id);
+      notify.info(
+        t('sport.edit.setDeletedTitle'),
+        updated ? t('sport.edit.setDeletedMsg') : t('sport.edit.workoutDeletedMsg'),
+      );
+      setEditingTarget(null);
+    } catch {
+      notify.error(t('sport.edit.updateErrorTitle'), t('sport.edit.updateErrorMsg'));
+    } finally {
+      setMutating(false);
+    }
+  }, [actualizeazaAntrenament, applyIstoricMutation, editingTarget, notify, t]);
 
   const incarcaJurnal = useCallback(async () => {
     setLoading(true);
@@ -251,51 +318,16 @@ export default function JurnalAntrenamenteScreen() {
                         {(!ant.exercitii || ant.exercitii.length === 0) ? (
                           <Text style={[styles.noExText, { color: colors.textSecondary }]}>{t('sport.journal.noSetDetails')}</Text>
                         ) : (
-                          ant.exercitii.map((ex, i) => {
-                            const exMeta = exercitiiMap.get(ex.exercitiuId) ?? exercitiiMap.get((ex.nume || '').toLowerCase());
-                            const displayExName = exMeta ? getLocalizedExerciseName(exMeta, t) : ex.nume;
-                            return (
-                              <View key={i} style={styles.exItem}>
-                                <Text style={[styles.exName, { color: colors.textPrimary }]}>{displayExName}</Text>
-                                <View style={styles.seturiWrap}>
-                                  {ex.seturi?.map((s, j) => {
-                                    const isWarmup = s.set_type === 'warmup';
-                                    const isDropset = s.set_type === 'dropset';
-                                    const isFailure = s.set_type === 'failure';
-                                    const typeLabel = isWarmup ? 'W' : isDropset ? 'D' : isFailure ? 'F' : `#${s.serie}`;
-                                    const typeColor = isWarmup ? '#F59E0B' : isDropset ? '#C084FC' : isFailure ? '#F87171' : colors.textSecondary;
-                                    const fields = getSetFields(
-                                      exMeta ?? ((s.time_seconds ?? 0) > 0
-                                        ? {
-                                            nume: ex.nume,
-                                            masurare: {
-                                              type: 'timed',
-                                              allowsWeight: false,
-                                              weightOptional: false,
-                                              defaultSets: 1,
-                                              unitLabel: t('sport.measurement.units.secShort'),
-                                            },
-                                          }
-                                        : { nume: ex.nume }),
-                                      t,
-                                    );
-
-                                    return (
-                                      <View key={j} style={[styles.setPill, { backgroundColor: colors.background, borderColor: typeColor, borderWidth: s.set_type && s.set_type !== 'working' ? 1 : 0 }]}>
-                                        <Text style={[styles.setPillText, { color: typeColor }]}>{typeLabel}: </Text>
-                                        <Text style={[styles.setPillVal, { color: colors.accent }]}>{describeSet(s, fields, t)}</Text>
-                                        {s.rpe ? (
-                                          <Text style={[styles.setPillVal, { color: colors.warning, marginLeft: 4, fontSize: 11 }]}>
-                                            {t('sport.journal.rpeLabel', { rpe: s.rpe })}
-                                          </Text>
-                                        ) : null}
-                                      </View>
-                                    );
-                                  })}
-                                </View>
-                              </View>
-                            );
-                          })
+                          <SavedWorkoutExercisesList
+                            workout={ant}
+                            exercitiiMap={exercitiiMap}
+                            onSelectSet={setEditingTarget}
+                            onRequestDeleteExercise={(sel) => {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                              setExerciseToDelete(sel);
+                            }}
+                            testIdPrefix="journal"
+                          />
                         )}
                       </View>
                     )}
@@ -327,6 +359,59 @@ export default function JurnalAntrenamenteScreen() {
           } catch {
             notify.error(t('sport.journal.deleteErrorTitle'), t('sport.journal.deleteErrorMsg'));
           }
+        }}
+      />
+
+      <ConfirmSheet
+        visible={!!exerciseToDelete}
+        title={t('sport.edit.deleteExerciseConfirmTitle')}
+        message={
+          exerciseToDelete
+            ? ((exerciseToDelete.workout.exercitii?.length ?? 0) <= 1
+                ? t('sport.edit.deleteLastExerciseConfirmMsg', { name: exerciseToDelete.exerciseName })
+                : t('sport.edit.deleteExerciseConfirmMsg', { name: exerciseToDelete.exerciseName }))
+            : ''
+        }
+        confirmLabel={t('sport.journal.deleteConfirmBtn')}
+        cancelLabel={t('sport.journal.cancelBtn')}
+        destructive={true}
+        loading={mutating}
+        onCancel={() => setExerciseToDelete(null)}
+        onConfirm={async () => {
+          if (!exerciseToDelete) return;
+          const target = exerciseToDelete;
+          setMutating(true);
+          try {
+            const nextExercitii = removeExerciseFromWorkout(target.workout, target.exIndex);
+            const updated = await actualizeazaAntrenament(target.workout, nextExercitii);
+            applyIstoricMutation(updated, target.workout.id);
+            notify.info(
+              t('sport.edit.exerciseDeletedTitle'),
+              updated ? t('sport.edit.setDeletedMsg') : t('sport.edit.workoutDeletedMsg'),
+            );
+            setExerciseToDelete(null);
+          } catch {
+            notify.error(t('sport.edit.updateErrorTitle'), t('sport.edit.updateErrorMsg'));
+          } finally {
+            setMutating(false);
+          }
+        }}
+      />
+
+      <WorkoutSetEditSheet
+        visible={!!editingTarget}
+        exerciseName={editingTarget?.exerciseName ?? ''}
+        setIndex={editingTarget?.setIndex ?? 0}
+        initialSet={editingTarget?.set ?? null}
+        fields={editingTarget?.fields ?? null}
+        isLastSetInWorkout={
+          ((editingTarget?.workout.exercitii ?? []).reduce((s, ex) => s + (ex.seturi?.length ?? 0), 0)) <= 1
+        }
+        saving={mutating}
+        onSave={handleSaveEditedSet}
+        onDeleteSet={handleDeleteEditedSet}
+        onClose={() => {
+          if (!mutating) setEditingTarget(null);
         }}
       />
     </KeyboardAwareScreen>

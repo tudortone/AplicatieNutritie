@@ -1902,7 +1902,15 @@
       "adjustDecA11y": "Decrease {{label}}",
       "adjustIncA11y": "Increase {{label}}",
       "stepperValueA11y": "{{label}}, {{value}}",
-      "stepperValueUnitA11y": "{{label}}, {{value}} {{unit}}"
+      "stepperValueUnitA11y": "{{label}}, {{value}} {{unit}}",
+      "editSetA11y": "Edit set {{number}}",
+      "updateSetBtn": "Save set #{{number}}",
+      "setUpdatedTitle": "Set {{number}} updated",
+      "editExerciseA11y": "Open {{name}} to edit",
+      "deleteExerciseA11y": "Remove {{name}} from session",
+      "deleteExerciseConfirmTitle": "Remove exercise",
+      "deleteExerciseConfirmMsg": "Remove \"{{name}}\" ({{count}} sets) from your current session?",
+      "savedTodayLink": "Workouts saved today ({{count}}) • Edit in journal"
     },
     "categories": {
       "piept": "Chest",
@@ -2137,7 +2145,27 @@
       "warmupTag": "warm-up",
       "durationAndExercises": "{{min}} min • {{count}} exercises",
       "openA11y": "Open {{name}}",
-      "closeA11y": "Close {{name}}"
+      "closeA11y": "Close {{name}}",
+      "deleteWorkoutA11y": "Delete workout {{name}}"
+    },
+    "edit": {
+      "title": "Edit set #{{number}}",
+      "cancelBtn": "Cancel",
+      "saveBtn": "Save",
+      "deleteSetBtn": "Delete this set",
+      "lastSetRemovesWorkoutHint": "This is the last set — deleting it will remove this workout.",
+      "editSetA11y": "Edit set {{number}}, {{value}}",
+      "setUpdatedTitle": "Set updated",
+      "setDeletedTitle": "Set deleted",
+      "setDeletedMsg": "Workout totals have been recalculated.",
+      "workoutDeletedMsg": "No sets remained, so the workout was removed.",
+      "updateErrorTitle": "Update failed",
+      "updateErrorMsg": "Could not save your changes.",
+      "deleteExerciseA11y": "Delete exercise {{name}}",
+      "deleteExerciseConfirmTitle": "Delete exercise",
+      "deleteExerciseConfirmMsg": "Are you sure you want to remove \"{{name}}\" from this workout?",
+      "deleteLastExerciseConfirmMsg": "\"{{name}}\" is the only exercise left. Removing it will delete the entire workout.",
+      "exerciseDeletedTitle": "Exercise deleted"
     },
     "detail": {
       "backA11y": "Back",

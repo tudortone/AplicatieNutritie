@@ -132,6 +132,7 @@ jest.mock('../components/ui/ConfirmSheet', () => ({
 const mockRefreshExercises = jest.fn(async () => undefined);
 const mockRefreshWorkouts = jest.fn(async () => undefined);
 const mockAdaugaAntrenament = jest.fn(async (payload: any) => ({ id: 'w-new', ...payload }));
+const mockActualizeazaAntrenament = jest.fn(async () => null);
 const mockStergeAntrenament = jest.fn(async () => true);
 
 const SAMPLE_TIMED_WORKOUT = {
@@ -176,6 +177,7 @@ jest.mock('../hooks/useAntrenamente', () => ({
     antrenamente: mockAntrenamenteList,
     loading: false,
     adaugaAntrenament: mockAdaugaAntrenament,
+    actualizeazaAntrenament: mockActualizeazaAntrenament,
     fetchIstoric: mockFetchIstoric,
     stergeAntrenament: mockStergeAntrenament,
     refresh: mockRefreshWorkouts,

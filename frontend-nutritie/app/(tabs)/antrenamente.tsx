@@ -8,13 +8,15 @@ import {
 // BUG-027: un singur set de iconițe (lucide) în tot ecranul — fără amestec
 // cu MaterialCommunityIcons. `HeartPulse` pentru cardio, `Save` pentru salvare.
 import {
-  Play, Pause, RotateCcw, ChevronUp, Search, X, Dumbbell, PersonStanding, Activity,
-  MoveUp, Timer, Trash2, Plus, HeartPulse, Save, Flame,
+  Play, Pause, RotateCcw, ChevronUp, ChevronRight, Search, X, Dumbbell, PersonStanding, Activity,
+  MoveUp, Timer, Trash2, Plus, HeartPulse, Save, Flame, Pencil, Check,
 } from 'lucide-react-native';
 import type { ComponentType } from 'react';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import KeyboardAwareScreen, { useContentBottomPadding } from '../../components/ui/KeyboardAwareScreen';
+import { ConfirmSheet } from '../../components/ui/ConfirmSheet';
 import { BodyMap } from '../../components/fitness/BodyMap';
 import { mapToCanonicalMuscleIds } from '../../lib/fitnessEngine';
 import type { MuscleId } from '../../components/fitness/heatColor';
@@ -28,6 +30,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAntrenamente } from '../../hooks/useAntrenamente';
 import { useNotify } from '../../hooks/useNotify';
 import { useExercitii } from '../../hooks/useExercitii';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import {
   describeSet, getSetFields, summarizeSets, summaryLabel,
   validateLoggedSet, type LoggedSet, type SetFields,
@@ -131,10 +134,12 @@ function unionInto(target: IntensityMap, source: IntensityMap, scale = 1) {
 
 export default function AntrenamenteScreen() {
   const { width: SCREEN_WIDTH } = useWindowDimensions();
+  const router = useRouter();
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
   const contentBottomPadding = useContentBottomPadding();
-  const { adaugaAntrenament, refresh: refreshWorkouts, loading: workoutsLoading } = useAntrenamente();
+  const { antrenamente, adaugaAntrenament, refresh: refreshWorkouts, loading: workoutsLoading } = useAntrenamente();
   const notify = useNotify();
   const { exercitii, loading, refresh } = useExercitii();
   const localeTag = getSportLocaleTag(i18n.language);
@@ -146,6 +151,8 @@ export default function AntrenamenteScreen() {
   const [inputs, setInputs] = useState<Record<string, InputState>>({});
   const [warmupFor, setWarmupFor] = useState<string>('');
   const [session, setSession] = useState<Record<string, LoggedSet[]>>({});
+  const [editingSet, setEditingSet] = useState<{ exId: string; index: number } | null>(null);
+  const [exerciseToDelete, setExerciseToDelete] = useState<{ exId: string; nume: string; count: number } | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   // FIT-004: timpul ACTIV acumulat (fără background/ecran blocat). `startedAt`
   // e ancorele rulării curente sau null când sesiunea e pauzată.
@@ -153,6 +160,9 @@ export default function AntrenamenteScreen() {
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [timerExerciseId, setTimerExerciseId] = useState<string>('');
+  const scrollViewRef = useRef<ScrollView>(null);
+  const listContainerYRef = useRef(0);
+  const exerciseOffsetsRef = useRef<Record<string, number>>({});
   const timerStartRef = useRef<number | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const acumulatMsRef = useRef(0);
@@ -366,17 +376,81 @@ export default function AntrenamenteScreen() {
     setSearchQuery('');
     setExpandedExerciseId('');
     setWarmupFor('');
+    setEditingSet(null);
     const first = filterExercisesByCategory(exercitii, cat)[0];
     if (first) setSelectedExerciseId(first.id);
   };
 
   const onSelectExercise = (ex: Exercitiu) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEditingSet(null);
     if (expandedExerciseId === ex.id) { setExpandedExerciseId(''); return; }
     setExpandedExerciseId(ex.id);
     setSelectedExerciseId(ex.id);
     setWarmupFor('');
     if (!inputs[ex.id]) setInputs((prev) => ({ ...prev, [ex.id]: defaultsFor(ex) }));
+  };
+
+  const startEditSet = (ex: Exercitiu, index: number) => {
+    const target = session[ex.id]?.[index];
+    if (!target) return;
+    Haptics.selectionAsync();
+    timerStartRef.current = null;
+    setTimerExerciseId('');
+    setEditingSet({ exId: ex.id, index });
+    setWarmupFor(target.set_type === 'warmup' ? ex.id : '');
+    setInputs((prev) => ({
+      ...prev,
+      [ex.id]: {
+        weight: formatNumber(Number(target.greutate) || 0),
+        reps: String(target.repetari ?? 0),
+        time: String(target.time_seconds ?? 0),
+      },
+    }));
+  };
+
+  const cancelEditSet = (ex?: Exercitiu) => {
+    setEditingSet(null);
+    setWarmupFor('');
+    if (ex) setInputs((prev) => ({ ...prev, [ex.id]: defaultsFor(ex) }));
+  };
+
+  const openWorkedExercise = (exId: string, setIndex?: number) => {
+    const ex = exercitii.find((e) => e.id === exId);
+    if (!ex) return;
+    Haptics.selectionAsync();
+    setSelectedCategory(ex.categorie);
+    setSearchQuery('');
+    setSelectedExerciseId(ex.id);
+    setExpandedExerciseId(ex.id);
+    if (typeof setIndex === 'number') {
+      startEditSet(ex, setIndex);
+    } else {
+      setEditingSet(null);
+      setWarmupFor('');
+      if (!inputs[ex.id]) setInputs((prev) => ({ ...prev, [ex.id]: defaultsFor(ex) }));
+    }
+    requestAnimationFrame(() => {
+      const cardY = exerciseOffsetsRef.current[ex.id];
+      if (cardY != null) {
+        scrollViewRef.current?.scrollTo({
+          y: Math.max(0, listContainerYRef.current + cardY - 12),
+          animated: !reduceMotion,
+        });
+      }
+    });
+  };
+
+  const removeExerciseFromSession = (exId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSession((prev) => {
+      const next = { ...prev };
+      delete next[exId];
+      persistSession(next);
+      return next;
+    });
+    if (editingSet?.exId === exId) setEditingSet(null);
+    if (warmupFor === exId) setWarmupFor('');
   };
 
   const adjust = (ex: Exercitiu, key: keyof InputState, step: number, min: number, max: number) => {
@@ -409,10 +483,13 @@ export default function AntrenamenteScreen() {
     const fields = getSetFields(ex, t);
     const current = inputFor(ex);
     const existing = session[ex.id] ?? [];
+    const editingIdx = editingSet?.exId === ex.id ? editingSet.index : null;
     const isWarmup = warmupFor === ex.id;
+    const prevSet = editingIdx !== null ? existing[editingIdx] : undefined;
 
     const newSet: LoggedSet = {
-      serie: existing.length + 1,
+      ...prevSet,
+      serie: editingIdx !== null ? editingIdx + 1 : existing.length + 1,
       repetari: fields.usesTime ? 1 : parseInt(current.reps, 10) || 0,
       greutate: fields.usesWeight ? parseFloat(current.weight.replace(',', '.')) || 0 : 0,
       time_seconds: fields.usesTime ? parseInt(current.time, 10) || 0 : undefined,
@@ -424,6 +501,22 @@ export default function AntrenamenteScreen() {
     if (error) { notify.warning(t('sport.screen.incompleteSetTitle'), error); return; }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
+    if (editingIdx !== null) {
+      setSession((prev) => {
+        const list = (prev[ex.id] ?? []).map((item, idx) =>
+          idx === editingIdx ? { ...newSet, serie: idx + 1 } : { ...item, serie: idx + 1 },
+        );
+        const next = { ...prev, [ex.id]: list };
+        persistSession(next);
+        return next;
+      });
+      setEditingSet(null);
+      setWarmupFor('');
+      notify.success(t('sport.screen.setUpdatedTitle', { number: editingIdx + 1 }), describeSet(newSet, fields, t));
+      return;
+    }
+
     setSession((prev) => {
       const next = { ...prev, [ex.id]: [...(prev[ex.id] ?? []), newSet] };
       persistSession(next);
@@ -444,6 +537,15 @@ export default function AntrenamenteScreen() {
 
   const removeSet = (exId: string, index: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setEditingSet((prev) => {
+      if (!prev || prev.exId !== exId) return prev;
+      if (prev.index === index) {
+        setWarmupFor('');
+        return null;
+      }
+      if (prev.index > index) return { exId, index: prev.index - 1 };
+      return prev;
+    });
     setSession((prev) => {
       const list = [...(prev[exId] ?? [])];
       list.splice(index, 1);
@@ -527,6 +629,7 @@ export default function AntrenamenteScreen() {
       );
       setSession({});
       setInputs({});
+      setEditingSet(null);
       acumulatMsRef.current = 0;
       startedAtRef.current = null;
       setAcumulatMs(0);
@@ -556,25 +659,45 @@ export default function AntrenamenteScreen() {
           <Text maxFontSizeMultiplier={1.3} style={[styles.modeBadge, { color: colors.accent, borderColor: colors.accent }]}>{fields.modeLabel}</Text>
         </View>
 
-        {exSets.map((s, idx) => (
-          <View key={`${ex.id}-${idx}`} style={[styles.setRow, { borderColor: colors.cardBorder }]}>
-            <Text maxFontSizeMultiplier={1.3} style={[styles.setIndex, { color: colors.textTertiary }]}>#{idx + 1}</Text>
-            <Text maxFontSizeMultiplier={1.3} style={[styles.setValue, { color: colors.textPrimary }]}>{describeSet(s, fields, t)}</Text>
-            {s.set_type === 'warmup' && (
-              <Text maxFontSizeMultiplier={1.3} style={[styles.warmupTag, { color: colors.textTertiary, borderColor: colors.cardBorder }]}>
-                {t('sport.screen.setWarmupTag')}
-              </Text>
-            )}
-            <Pressable
-              onPress={() => removeSet(ex.id, idx)}
-              accessibilityRole='button'
-              accessibilityLabel={t('sport.screen.deleteSetA11y', { number: idx + 1 })}
-              style={styles.deleteSetBtn}
+        {exSets.map((s, idx) => {
+          const isEditingThisRow = editingSet?.exId === ex.id && editingSet.index === idx;
+          return (
+            <View
+              key={`${ex.id}-${idx}`}
+              style={[
+                styles.setRow,
+                { borderColor: isEditingThisRow ? colors.accent : colors.cardBorder },
+                isEditingThisRow && { backgroundColor: `${colors.accent}14`, borderRadius: Radius.sm, paddingHorizontal: Spacing.xs },
+              ]}
             >
-              <Trash2 size={16} color={colors.textTertiary} />
-            </Pressable>
-          </View>
-        ))}
+              <Pressable
+                testID={`sport-edit-set-${ex.id}-${idx}`}
+                onPress={() => startEditSet(ex, idx)}
+                accessibilityRole='button'
+                accessibilityLabel={t('sport.screen.editSetA11y', { number: idx + 1 })}
+                style={styles.editSetBtn}
+              >
+                <Text maxFontSizeMultiplier={1.3} style={[styles.setIndex, { color: isEditingThisRow ? colors.accent : colors.textTertiary }]}>#{idx + 1}</Text>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.setValue, { color: colors.textPrimary }]}>{describeSet(s, fields, t)}</Text>
+                {s.set_type === 'warmup' && (
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.warmupTag, { color: colors.textTertiary, borderColor: colors.cardBorder }]}>
+                    {t('sport.screen.setWarmupTag')}
+                  </Text>
+                )}
+                <Pencil size={14} color={isEditingThisRow ? colors.accent : colors.textTertiary} />
+              </Pressable>
+              <Pressable
+                testID={`sport-delete-set-${ex.id}-${idx}`}
+                onPress={() => removeSet(ex.id, idx)}
+                accessibilityRole='button'
+                accessibilityLabel={t('sport.screen.deleteSetA11y', { number: idx + 1 })}
+                style={styles.deleteSetBtn}
+              >
+                <Trash2 size={16} color={colors.textTertiary} />
+              </Pressable>
+            </View>
+          );
+        })}
 
         {fields.usesTime ? (
           <View style={[styles.timerBox, { borderColor: timerRunning ? colors.accent : colors.cardBorder }]}>
@@ -656,15 +779,44 @@ export default function AntrenamenteScreen() {
           </Text>
         </Pressable>
 
-        <Pressable
-          testID="sport-add-set-btn"
-          onPress={() => handleRecordSet(ex)}
-          style={({ pressed }) => [styles.ctaButton, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}
-          accessibilityRole='button'
-        >
-          <Plus size={20} color={colors.background} />
-          <Text style={[styles.ctaText, { color: colors.background }]}>{t('sport.screen.addSetBtn')}</Text>
-        </Pressable>
+        {editingSet?.exId === ex.id ? (
+          <View style={styles.editActionRow}>
+            <Pressable
+              testID="sport-cancel-edit-set-btn"
+              onPress={() => cancelEditSet(ex)}
+              accessibilityRole='button'
+              style={({ pressed }) => [
+                styles.cancelEditBtn,
+                { borderColor: colors.cardBorder, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Text maxFontSizeMultiplier={1.3} style={[styles.cancelEditText, { color: colors.textPrimary }]}>
+                {t('sport.edit.cancelBtn')}
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="sport-save-set-btn"
+              onPress={() => handleRecordSet(ex)}
+              style={({ pressed }) => [styles.ctaButton, styles.saveEditBtn, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}
+              accessibilityRole='button'
+            >
+              <Check size={18} color={colors.background} />
+              <Text maxFontSizeMultiplier={1.3} style={[styles.ctaText, { color: colors.background }]}>
+                {t('sport.screen.updateSetBtn', { number: editingSet.index + 1 })}
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            testID="sport-add-set-btn"
+            onPress={() => handleRecordSet(ex)}
+            style={({ pressed }) => [styles.ctaButton, { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 }]}
+            accessibilityRole='button'
+          >
+            <Plus size={20} color={colors.background} />
+            <Text style={[styles.ctaText, { color: colors.background }]}>{t('sport.screen.addSetBtn')}</Text>
+          </Pressable>
+        )}
       </View>
     );
   };
@@ -672,6 +824,7 @@ export default function AntrenamenteScreen() {
   return (
     <KeyboardAwareScreen style={{ backgroundColor: colors.background }}>
       <ScrollView
+        ref={scrollViewRef}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding, width: '100%', maxWidth: 680, alignSelf: 'center' }]}
         keyboardShouldPersistTaps='handled'
         showsVerticalScrollIndicator={false}
@@ -731,33 +884,96 @@ export default function AntrenamenteScreen() {
           </View>
         )}
 
-        {/* CE AI LUCRAT — exercițiile din sesiunea curentă, cu seturile lor. */}
+        {/* CE AI LUCRAT — exercițiile din sesiunea curentă, interactive pentru editare/ștergere. */}
         {workedExercises.length > 0 && (
           <View style={[styles.workedCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
             <Text maxFontSizeMultiplier={1.3} style={[styles.workedTitle, { color: colors.textPrimary }]}>{t('sport.screen.whatYouWorked')}</Text>
             {workedExercises.map((entry) => (
               <View key={entry.exId} style={styles.workedItem}>
                 <View style={styles.workedRow}>
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.workedName, { color: colors.textPrimary }]} numberOfLines={2}>{entry.nume}</Text>
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.workedSummary, { color: colors.accent }]}>{summaryLabel(entry.summary, entry.fields, t)}</Text>
+                  <Pressable
+                    onPress={() => openWorkedExercise(entry.exId)}
+                    accessibilityRole='button'
+                    accessibilityLabel={t('sport.screen.editExerciseA11y', { name: entry.nume })}
+                    style={({ pressed }) => [styles.workedNameBtn, { opacity: pressed ? 0.72 : 1 }]}
+                  >
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.workedName, { color: colors.textPrimary }]} numberOfLines={2}>{entry.nume}</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={[styles.workedSummary, { color: colors.accent }]}>{summaryLabel(entry.summary, entry.fields, t)}</Text>
+                  </Pressable>
+                  <Pressable
+                    testID={`sport-worked-delete-${entry.exId}`}
+                    onPress={() => {
+                      if (entry.sets.length > 1) {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setExerciseToDelete({ exId: entry.exId, nume: entry.nume, count: entry.sets.length });
+                      } else {
+                        removeExerciseFromSession(entry.exId);
+                      }
+                    }}
+                    accessibilityRole='button'
+                    accessibilityLabel={t('sport.screen.deleteExerciseA11y', { name: entry.nume })}
+                    style={styles.workedDeleteBtn}
+                  >
+                    <Trash2 size={16} color={colors.danger} />
+                  </Pressable>
                 </View>
                 <View style={styles.workedSets}>
                   {entry.sets.map((s, idx) => (
-                    <Text
+                    <Pressable
                       key={`${entry.exId}-chip-${idx}`}
-                      maxFontSizeMultiplier={1.3}
-                      style={[styles.setChip, {
-                        color: s.set_type === 'warmup' ? colors.textTertiary : colors.textSecondary,
-                        backgroundColor: colors.surfaceElevated,
-                      }]}
+                      testID={`sport-worked-chip-${entry.exId}-${idx}`}
+                      onPress={() => openWorkedExercise(entry.exId, idx)}
+                      accessibilityRole='button'
+                      accessibilityLabel={t('sport.screen.editSetA11y', { number: idx + 1 })}
+                      hitSlop={4}
+                      style={({ pressed }) => [
+                        styles.setChipBtn,
+                        {
+                          backgroundColor: colors.surfaceElevated,
+                          borderColor: colors.cardBorder,
+                          opacity: pressed ? 0.72 : 1,
+                        },
+                      ]}
                     >
-                      {idx + 1}. {describeSet(s, entry.fields, t)}
-                    </Text>
+                      <Text
+                        maxFontSizeMultiplier={1.3}
+                        style={[
+                          styles.setChip,
+                          { color: s.set_type === 'warmup' ? colors.textTertiary : colors.textSecondary },
+                        ]}
+                      >
+                        {idx + 1}. {describeSet(s, entry.fields, t)}
+                      </Text>
+                      <Pencil size={11} color={colors.textTertiary} />
+                    </Pressable>
                   ))}
                 </View>
               </View>
             ))}
           </View>
+        )}
+
+        {antrenamente.length > 0 && (
+          <Pressable
+            testID="sport-saved-today-link"
+            onPress={() => router.push('/jurnal-antrenamente')}
+            accessibilityRole='button'
+            accessibilityLabel={t('sport.screen.savedTodayLink', { count: antrenamente.length })}
+            style={({ pressed }) => [
+              styles.savedTodayLink,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.cardBorder,
+                opacity: pressed ? 0.78 : 1,
+              },
+            ]}
+          >
+            <Dumbbell size={16} color={colors.accent} />
+            <Text maxFontSizeMultiplier={1.3} style={[styles.savedTodayText, { color: colors.textPrimary }]} numberOfLines={1}>
+              {t('sport.screen.savedTodayLink', { count: antrenamente.length })}
+            </Text>
+            <ChevronRight size={16} color={colors.textSecondary} />
+          </Pressable>
         )}
 
         {restEndsAt != null && (
@@ -839,7 +1055,12 @@ export default function AntrenamenteScreen() {
           })}
         </ScrollView>
 
-        <View style={styles.vScroll}>
+        <View
+          style={styles.vScroll}
+          onLayout={(e) => {
+            listContainerYRef.current = e.nativeEvent.layout.y;
+          }}
+        >
           {exercisesInCategory.length === 0 ? (
             searchQuery.trim().length > 0 ? (
               <View
@@ -877,7 +1098,13 @@ export default function AntrenamenteScreen() {
             const exName = getLocalizedExerciseName(ex, t);
 
             return (
-              <View key={ex.id} style={{ marginBottom: Spacing.md }}>
+              <View
+                key={ex.id}
+                style={{ marginBottom: Spacing.md }}
+                onLayout={(e) => {
+                  exerciseOffsetsRef.current[ex.id] = e.nativeEvent.layout.y;
+                }}
+              >
                 <Pressable
                   onPress={() => onSelectExercise(ex)}
                   accessibilityRole='button'
@@ -958,6 +1185,29 @@ export default function AntrenamenteScreen() {
           </Pressable>
         )}
       </ScrollView>
+
+      <ConfirmSheet
+        visible={!!exerciseToDelete}
+        title={t('sport.screen.deleteExerciseConfirmTitle')}
+        message={
+          exerciseToDelete
+            ? t('sport.screen.deleteExerciseConfirmMsg', {
+                name: exerciseToDelete.nume,
+                count: exerciseToDelete.count,
+              })
+            : ''
+        }
+        confirmLabel={t('sport.journal.deleteConfirmBtn')}
+        cancelLabel={t('sport.edit.cancelBtn')}
+        destructive={true}
+        onCancel={() => setExerciseToDelete(null)}
+        onConfirm={() => {
+          if (!exerciseToDelete) return;
+          const targetId = exerciseToDelete.exId;
+          setExerciseToDelete(null);
+          removeExerciseFromSession(targetId);
+        }}
+      />
     </KeyboardAwareScreen>
   );
 }
@@ -977,11 +1227,16 @@ const styles = StyleSheet.create({
   workedCard: { borderRadius: Radius.md, borderWidth: 1, padding: Spacing.md, marginBottom: Spacing.md } as ViewStyle,
   workedTitle: { fontSize: 15, fontWeight: '800', marginBottom: Spacing.sm } as TextStyle,
   workedItem: { marginBottom: Spacing.sm } as ViewStyle,
-  workedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm } as ViewStyle,
+  workedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.xs } as ViewStyle,
+  workedNameBtn: { flex: 1, minWidth: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm } as ViewStyle,
   workedName: { flex: 1, minWidth: 0, fontSize: 14, fontWeight: '700' } as TextStyle,
   workedSummary: { fontSize: 12, fontWeight: '800' } as TextStyle,
+  workedDeleteBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 } as ViewStyle,
   workedSets: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 } as ViewStyle,
-  setChip: { fontSize: 11, fontWeight: '600', borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 } as TextStyle,
+  setChipBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: Radius.pill, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, minHeight: 34 } as ViewStyle,
+  setChip: { fontSize: 11, fontWeight: '600' } as TextStyle,
+  savedTodayLink: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, minHeight: 48, borderRadius: Radius.md, borderWidth: 1, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginBottom: Spacing.md } as ViewStyle,
+  savedTodayText: { flex: 1, fontSize: 13, fontWeight: '700' } as TextStyle,
   restBar: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Spacing.sm, borderRadius: Radius.lg, borderWidth: 1, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, marginBottom: Spacing.md } as ViewStyle,
   restText: { flex: 1, minWidth: 100, fontSize: 14, fontWeight: '700' } as TextStyle,
   restBtn: { borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 14, minHeight: 44, justifyContent: 'center' } as ViewStyle,
@@ -1017,7 +1272,8 @@ const styles = StyleSheet.create({
   trackerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md, gap: Spacing.sm } as ViewStyle,
   trackerTitle: { fontSize: 16, fontWeight: '700' } as TextStyle,
   modeBadge: { fontSize: 11, fontWeight: '800', borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 3 } as TextStyle,
-  setRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderBottomWidth: 1, paddingVertical: Spacing.xs } as ViewStyle,
+  setRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, borderBottomWidth: 1, paddingVertical: 2 } as ViewStyle,
+  editSetBtn: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm } as ViewStyle,
   setIndex: { fontSize: 12, fontWeight: '700', width: 28 } as TextStyle,
   setValue: { flex: 1, fontSize: 14, fontWeight: '600' } as TextStyle,
   warmupTag: { fontSize: 11, fontWeight: '700', borderWidth: 1, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 2 } as TextStyle,
@@ -1034,6 +1290,10 @@ const styles = StyleSheet.create({
   warmupToggleText: { fontSize: 12, fontWeight: '700' } as TextStyle,
   ctaButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 52, paddingVertical: 12, borderRadius: Radius.pill, gap: Spacing.sm, marginTop: Spacing.md } as ViewStyle,
   ctaText: { fontSize: 15, fontWeight: '800' } as TextStyle,
+  editActionRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.md } as ViewStyle,
+  cancelEditBtn: { minHeight: 52, borderRadius: Radius.pill, borderWidth: 1, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' } as ViewStyle,
+  cancelEditText: { fontSize: 14, fontWeight: '700' } as TextStyle,
+  saveEditBtn: { flex: 1, marginTop: 0 } as ViewStyle,
   saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 56, paddingVertical: 14, borderRadius: Radius.pill, gap: Spacing.sm, marginTop: Spacing.lg } as ViewStyle,
   saveText: { fontSize: 16, fontWeight: '800' } as TextStyle,
 });
