@@ -3,6 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <script>
+    (function () {
+      var search = window.location.search || '';
+      var hash = window.location.hash || '';
+      if (!search && !hash) return;
+      var sp = new URLSearchParams(search);
+      var hp = new URLSearchParams(hash.charAt(0) === '#' ? hash.slice(1) : hash);
+      var hasAuthParam = function (p) {
+        return p.has('code') || p.has('token_hash') || p.has('otp') || p.has('error') || p.has('error_description') || p.get('type') === 'recovery' || p.get('flow') === 'recovery';
+      };
+      if (hasAuthParam(sp) || hasAuthParam(hp)) {
+        window.location.replace('/reset-password' + search + hash);
+      }
+    })();
+  </script>
   <title>GetFlow — Nutriție Inteligentă, Scanare Foto AI & Companion 3D</title>
   <meta name="description" content="Scanează mâncarea în 2 secunde cu AI de ultimă generație. Monitorizează caloriile, macronutrienții, evoluția greutății și antrenamentele anatomice cu GetFlow.">
   <meta name="theme-color" content="#090C0E">

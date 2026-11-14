@@ -4,6 +4,8 @@
   "rewrites": [
     { "source": "/", "destination": "/public/index.html" },
     { "source": "/index", "destination": "/public/index.html" },
+    { "source": "/reset-password", "destination": "/public/reset-password.html" },
+    { "source": "/auth/callback", "destination": "/public/reset-password.html" },
     { "source": "/app-ads.txt", "destination": "/public/app-ads.txt" },
     { "source": "/politica-de-confidentialitate", "destination": "/public/politica-de-confidentialitate.html" },
     { "source": "/privacy", "destination": "/public/politica-de-confidentialitate.html" },
