@@ -5,7 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
-import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Footprints, Dumbbell, Bell, RotateCcw, X, AlertCircle } from 'lucide-react-native';
+import { Scan, Flame, Activity, Camera, Zap, PlusCircle, Scale, Footprints, Dumbbell, Bell, RotateCcw, X, AlertCircle, HelpCircle, ChevronRight, Sparkles } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useNotificationBannerData } from '../../context/NotificationBannerContext';
@@ -42,6 +42,13 @@ import { useFlowCredits } from '../../context/FlowCreditsContext';
 import { calculateDailyWaterTargetMl } from '../../lib/hydration';
 import { aboneazaLaMeseSalvateVerificat, marcheazaMeseModificate } from '../../lib/freshnessMese';
 import { decideCalorieRingUpdate } from '../../lib/mealRingAnimation';
+import { SpotlightTourOverlay, type SpotlightRect, type SpotlightStep } from '../../components/ui/SpotlightTourOverlay';
+import {
+  consumePendingHomeTourReplay,
+  markHomeTourPromptHandled,
+  shouldShowHomeTourPrompt,
+  subscribeHomeTourReplay,
+} from '../../lib/homeTour';
 
 
 const AnimatedRingCircle = Animated.createAnimatedComponent(Circle);
@@ -146,6 +153,18 @@ export default function HomeScreen() {
   const [completedStepsInput, setCompletedStepsInput] = useState('');
   const [verifiedMealSaveRevision, setVerifiedMealSaveRevision] = useState(0);
 
+  // Tutorial interactiv Spotlight (stil Google Feature Discovery)
+  const calorieCardTargetRef = useRef<View>(null);
+  const scanCtaTargetRef = useRef<View>(null);
+  const hydrationTargetRef = useRef<View>(null);
+  const tourMeasureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tourSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevViewportRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  const [showTourInvite, setShowTourInvite] = useState(false);
+  const [tourVisible, setTourVisible] = useState(false);
+  const [tourStepIndex, setTourStepIndex] = useState(0);
+  const [tourRects, setTourRects] = useState<Record<string, SpotlightRect | null>>({});
+
   // Refresh flow credits whenever Home receives focus
   const refreshCredits = flowCredits.refresh;
   useFocusEffect(
@@ -235,7 +254,7 @@ export default function HomeScreen() {
   const { exercitii } = useExercitii();
   const [viewSideHome, setViewSideHome] = useState<'front' | 'back'>('front');
   const [isTipVisible, setIsTipVisible] = useState(true);
-  const { topInset, scrollPaddingBottom, scrollPaddingTop, screenWidth, horizontalPadding, contentMaxWidth, isCompact, isTablet } = useResponsiveLayout();
+  const { topInset, scrollPaddingBottom, scrollPaddingTop, screenWidth, screenHeight, tabBarHeight, horizontalPadding, contentMaxWidth, isCompact, isTablet } = useResponsiveLayout();
   const ringRadius = isCompact ? 44 : isTablet ? 60 : 52;
   const ringStroke = isCompact ? 10 : isTablet ? 13 : 11;
   const homeBodyWidth = singleAnatomyMapWidth(screenWidth, 184);
@@ -261,6 +280,197 @@ export default function HomeScreen() {
       await AsyncStorage.setItem('nutriai_tip_closed_date', todayStr);
     } catch {}
   };
+
+  const effectiveTabBarHeight = tabBarHeight || 72;
+  const effectiveScreenHeight = screenHeight || 800;
+
+  const clearTourMeasureTimers = useCallback(() => {
+    if (tourMeasureTimerRef.current) {
+      clearTimeout(tourMeasureTimerRef.current);
+      tourMeasureTimerRef.current = null;
+    }
+    if (tourSettleTimerRef.current) {
+      clearTimeout(tourSettleTimerRef.current);
+      tourSettleTimerRef.current = null;
+    }
+  }, []);
+
+  const measureTourStep = useCallback((index: number, shouldScroll = true) => {
+    clearTourMeasureTimers();
+
+    const keys = ['calorie', 'scan', 'hydration', 'tabs'] as const;
+    const stepKey = keys[index] ?? 'calorie';
+
+    if (stepKey === 'tabs') {
+      if (shouldScroll) {
+        homeScrollRef.current?.scrollTo?.({ y: 0, animated: !reduceMotion });
+      }
+      const safeWidth = screenWidth > 0 ? screenWidth : 390;
+      const tabSpotlight: SpotlightRect = {
+        x: 8,
+        y: Math.max(0, effectiveScreenHeight - effectiveTabBarHeight),
+        width: Math.max(200, safeWidth - 16),
+        height: Math.max(52, effectiveTabBarHeight - 2),
+      };
+      setTourRects((prev) => ({ ...prev, tabs: tabSpotlight }));
+      return;
+    }
+
+    const scrollTargetY = stepKey === 'hydration' ? 280 : 0;
+    if (shouldScroll) {
+      homeScrollRef.current?.scrollTo?.({ y: scrollTargetY, animated: !reduceMotion });
+    }
+
+    const targetRef =
+      stepKey === 'calorie'
+        ? calorieCardTargetRef
+        : stepKey === 'scan'
+          ? scanCtaTargetRef
+          : hydrationTargetRef;
+
+    const runMeasure = () => {
+      const node = targetRef.current;
+      if (!node || typeof node.measureInWindow !== 'function') return;
+      node.measureInWindow((x, y, width, height) => {
+        if (!Number.isFinite(x) || !Number.isFinite(y) || width <= 0 || height <= 0) return;
+        setTourRects((prev) => {
+          const cur = prev[stepKey];
+          if (
+            cur &&
+            Math.abs(cur.x - x) < 1.5 &&
+            Math.abs(cur.y - y) < 1.5 &&
+            Math.abs(cur.width - width) < 1.5 &&
+            Math.abs(cur.height - height) < 1.5
+          ) {
+            return prev;
+          }
+          return { ...prev, [stepKey]: { x, y, width, height } };
+        });
+      });
+    };
+
+    tourMeasureTimerRef.current = setTimeout(() => {
+      tourMeasureTimerRef.current = null;
+      runMeasure();
+    }, 70);
+
+    // Re-measure after smooth scroll and layout transitions finish settling.
+    tourSettleTimerRef.current = setTimeout(() => {
+      tourSettleTimerRef.current = null;
+      runMeasure();
+    }, 430);
+  }, [clearTourMeasureTimers, effectiveScreenHeight, effectiveTabBarHeight, reduceMotion, screenWidth]);
+
+  const startHomeTour = useCallback(() => {
+    setShowTourInvite(false);
+    void markHomeTourPromptHandled(effectiveUserId, 'completed');
+    setTourStepIndex(0);
+    setTourVisible(true);
+    measureTourStep(0);
+  }, [effectiveUserId, measureTourStep]);
+
+  const dismissTourInvite = useCallback(() => {
+    try { void Haptics.selectionAsync(); } catch {}
+    setShowTourInvite(false);
+    void markHomeTourPromptHandled(effectiveUserId, 'dismissed');
+  }, [effectiveUserId]);
+
+  const closeTour = useCallback((reason: 'skipped' | 'completed') => {
+    clearTourMeasureTimers();
+    setTourVisible(false);
+    void markHomeTourPromptHandled(effectiveUserId, reason);
+  }, [clearTourMeasureTimers, effectiveUserId]);
+
+  const goToTourStep = useCallback((nextIndex: number) => {
+    const clamped = Math.min(Math.max(nextIndex, 0), 3);
+    setTourStepIndex(clamped);
+    measureTourStep(clamped);
+  }, [measureTourStep]);
+
+  useEffect(() => {
+    const prev = prevViewportRef.current;
+    const changed = prev.w !== screenWidth || prev.h !== screenHeight;
+    prevViewportRef.current = { w: screenWidth, h: screenHeight };
+    if (changed && tourVisible) {
+      measureTourStep(tourStepIndex, false);
+    }
+  }, [measureTourStep, screenHeight, screenWidth, tourStepIndex, tourVisible]);
+
+  useEffect(() => {
+    if (loading) return;
+    let active = true;
+    void shouldShowHomeTourPrompt(effectiveUserId).then((shouldShow) => {
+      if (active && shouldShow) setShowTourInvite(true);
+    });
+    return () => { active = false; };
+  }, [effectiveUserId, loading]);
+
+  useEffect(() => {
+    if (consumePendingHomeTourReplay()) {
+      startHomeTour();
+    }
+    return subscribeHomeTourReplay(() => {
+      if (consumePendingHomeTourReplay()) {
+        startHomeTour();
+      }
+    });
+  }, [startHomeTour]);
+
+  useFocusEffect(useCallback(() => {
+    if (consumePendingHomeTourReplay()) {
+      startHomeTour();
+    }
+  }, [startHomeTour]));
+
+  useEffect(() => () => {
+    clearTourMeasureTimers();
+  }, [clearTourMeasureTimers]);
+
+  const tourSteps: SpotlightStep[] = React.useMemo(() => [
+    {
+      key: 'calorie',
+      title: t('homeTour.steps.calorieTitle'),
+      body: t('homeTour.steps.calorieBody'),
+      actionHint: t('homeTour.steps.calorieHint'),
+      targetRect: tourRects.calorie ?? null,
+      borderRadius: 32,
+      canTapTarget: true,
+      onTargetPress: () => goToTourStep(1),
+    },
+    {
+      key: 'scan',
+      title: t('homeTour.steps.scanTitle'),
+      body: t('homeTour.steps.scanBody'),
+      actionHint: t('homeTour.steps.scanHint'),
+      targetRect: tourRects.scan ?? null,
+      borderRadius: 24,
+      canTapTarget: true,
+      onTargetPress: () => {
+        closeTour('completed');
+        router.push('/camera');
+      },
+    },
+    {
+      key: 'hydration',
+      title: t('homeTour.steps.hydrationTitle'),
+      body: t('homeTour.steps.hydrationBody'),
+      actionHint: t('homeTour.steps.hydrationHint'),
+      targetRect: tourRects.hydration ?? null,
+      borderRadius: 24,
+      canTapTarget: true,
+      onTargetPress: () => goToTourStep(3),
+    },
+    {
+      key: 'tabs',
+      title: t('homeTour.steps.tabsTitle'),
+      body: t('homeTour.steps.tabsBody'),
+      actionHint: t('homeTour.steps.tabsHint'),
+      targetRect: tourRects.tabs ?? null,
+      borderRadius: 22,
+      canTapTarget: false,
+      onTargetPress: () => closeTour('completed'),
+    },
+  ], [closeTour, goToTourStep, router, t, tourRects]);
 
   // BUG-004: greutatea țintă se citește local + metadata (fără a naviga la Profil).
   useEffect(() => {
@@ -585,8 +795,77 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
+        {showTourInvite && (
+          <View
+            testID="home-tour-invite-card"
+            style={[
+              s.tourInviteCard,
+              {
+                maxWidth: contentMaxWidth,
+                backgroundColor: colors.cardBg,
+                borderColor: colors.accent + '40',
+              },
+            ]}
+          >
+            <View style={s.tourInviteHeader}>
+              <View style={[s.tourInviteBadge, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '38' }]}>
+                <Sparkles size={12} color={colors.accent} />
+                <Text style={[s.tourInviteBadgeText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
+                  {t('home.tourInviteBadge')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                testID="home-tour-invite-dismiss"
+                accessibilityRole="button"
+                accessibilityLabel={t('home.tourInviteDismissA11y')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                onPress={dismissTourInvite}
+                style={s.tourInviteDismiss}
+              >
+                <X size={16} color={colors.textTertiary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[s.tourInviteTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+              {t('home.tourInviteTitle')}
+            </Text>
+            <Text style={[s.tourInviteDesc, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
+              {t('home.tourInviteDesc')}
+            </Text>
+
+            <View style={s.tourInviteActions}>
+              <TouchableOpacity
+                testID="home-tour-invite-later"
+                accessibilityRole="button"
+                accessibilityLabel={t('home.tourInviteLater')}
+                onPress={dismissTourInvite}
+                style={[s.tourInviteLaterBtn, { borderColor: colors.cardBorder }]}
+              >
+                <Text style={[s.tourInviteLaterText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
+                  {t('home.tourInviteLater')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                testID="home-tour-invite-start"
+                accessibilityRole="button"
+                accessibilityLabel={t('home.tourInviteStartA11y')}
+                onPress={startHomeTour}
+                activeOpacity={0.85}
+                style={[s.tourInviteStartBtn, { backgroundColor: colors.accent }]}
+              >
+                <Sparkles size={14} color={colors.background} />
+                <Text style={[s.tourInviteStartText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>
+                  {t('home.tourInviteStart')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Main calorie ring card */}
         <Animated.View style={[s.ringCard, { maxWidth: contentMaxWidth, borderColor: colors.cardBorder }]}>
+          <View ref={calorieCardTargetRef} collapsable={false}>
           <CardBackdrop style={s.ringCardBlur}>
             <LinearGradient colors={[colors.accent + '10', 'rgba(0,0,0,0)']} style={[s.ringCardGrad, { padding: isCompact ? 16 : 24 }]}>
               <View
@@ -721,14 +1000,16 @@ export default function HomeScreen() {
               </View>
             </LinearGradient>
           </CardBackdrop>
+          </View>
         </Animated.View>
 
         {/* Camera scan CTA (Principal) */}
         <Animated.View>
+          <View ref={scanCtaTargetRef} collapsable={false} style={{ width: '100%', maxWidth: 680, alignSelf: 'center', marginBottom: 20 }}>
           <PressableScale
             accessibilityRole="button"
             accessibilityLabel={t('home.scanAiA11y')}
-            style={[s.scanCTA, { shadowColor: colors.accent }]}
+            style={[s.scanCTA, { marginBottom: 0, shadowColor: colors.accent }]}
             onPress={() => router.push('/camera')}
             haptic
             hapticStyle="medium"
@@ -746,6 +1027,7 @@ export default function HomeScreen() {
               </View>
             </LinearGradient>
           </PressableScale>
+          </View>
         </Animated.View>
 
         {/* Rând acțiuni secundare (B1) - Cod de Bare + Manual */}
@@ -792,15 +1074,17 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Animated.View>
 
-        <WaterIntakeCard
-          consumedMl={waterConsumedMl}
-          targetMl={waterTargetMl}
-          loading={waterLoading}
-          onAddGlass={adaugaPahar}
-          onRemoveGlass={scadePahar}
-          onSetConsumedMl={(ml) => { void setConsumedMl(ml); }}
-          onAddWeight={() => setWeightModalVisible(true)}
-        />
+        <View ref={hydrationTargetRef} collapsable={false} style={{ width: '100%', maxWidth: contentMaxWidth, alignSelf: 'center' }}>
+          <WaterIntakeCard
+            consumedMl={waterConsumedMl}
+            targetMl={waterTargetMl}
+            loading={waterLoading}
+            onAddGlass={adaugaPahar}
+            onRemoveGlass={scadePahar}
+            onSetConsumedMl={(ml) => { void setConsumedMl(ml); }}
+            onAddWeight={() => setWeightModalVisible(true)}
+          />
+        </View>
 
         {/* Pași Card — BUG-005: copy corect despre sursă (doar senzorul telefonului,
             fără integrare Garmin/Fitbit), obiectiv editabil prin setNewStepGoal,
@@ -1040,6 +1324,41 @@ export default function HomeScreen() {
           </Animated.View>
         )}
 
+        <TouchableOpacity
+          testID="home-tour-bottom-trigger"
+          accessibilityRole="button"
+          accessibilityLabel={t('home.tourBottomA11y')}
+          onPress={startHomeTour}
+          activeOpacity={0.82}
+          style={[
+            s.tourBottomCard,
+            {
+              maxWidth: contentMaxWidth,
+              backgroundColor: colors.cardBg,
+              borderColor: colors.cardBorder,
+              marginTop: isTipVisible ? 20 : 0,
+            },
+          ]}
+        >
+          <View style={[s.tourBottomIcon, { backgroundColor: colors.accent + '18', borderColor: colors.accent + '35' }]}>
+            <HelpCircle size={18} color={colors.accent} />
+          </View>
+          <View style={s.tourBottomCopy}>
+            <Text style={[s.tourBottomTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+              {t('home.tourBottomTitle')}
+            </Text>
+            <Text style={[s.tourBottomSub, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
+              {t('home.tourBottomSub')}
+            </Text>
+          </View>
+          <View style={[s.tourBottomCtaPill, { backgroundColor: colors.accent + '16', borderColor: colors.accent + '40' }]}>
+            <Text style={[s.tourBottomCtaText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
+              {t('home.tourBottomCta')}
+            </Text>
+            <ChevronRight size={14} color={colors.accent} />
+          </View>
+        </TouchableOpacity>
+
       </ScrollView>
 
       {/* Reusable Gorhom Bottom Sheet for adding meals - lazy mounted (REMED-029/HOME-TOUCH-001) */}
@@ -1064,6 +1383,15 @@ export default function HomeScreen() {
         caloriiTinta={bugetCaloricNet}
         userId={effectiveUserId}
         onCompanionNameChange={setCompanionName}
+      />
+      <SpotlightTourOverlay
+        visible={tourVisible}
+        steps={tourSteps}
+        stepIndex={tourStepIndex}
+        onNext={() => goToTourStep(tourStepIndex + 1)}
+        onBack={() => goToTourStep(tourStepIndex - 1)}
+        onSkip={() => closeTour('skipped')}
+        onFinish={() => closeTour('completed')}
       />
     </Animated.View>
   );
@@ -1199,4 +1527,25 @@ const s = StyleSheet.create({
   liveHeatmapBodyWrap: { height: 245, alignItems: 'center', justifyContent: 'center' },
   liveHeatmapFooter: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' },
   liveHeatmapFooterText: { fontSize: 12, fontWeight: '600' },
+
+  // Interactive Spotlight Home Tour
+  tourInviteCard: { width: '100%', maxWidth: 680, alignSelf: 'center', borderRadius: 24, borderWidth: 1, padding: 18, marginBottom: 20 },
+  tourInviteHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  tourInviteBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1 },
+  tourInviteBadgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4, textTransform: 'uppercase' },
+  tourInviteDismiss: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  tourInviteTitle: { fontSize: 17, fontWeight: '900', letterSpacing: -0.3, marginBottom: 4 },
+  tourInviteDesc: { fontSize: 13, lineHeight: 19, fontWeight: '500', marginBottom: 16 },
+  tourInviteActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10 },
+  tourInviteLaterBtn: { minHeight: 44, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  tourInviteLaterText: { fontSize: 13, fontWeight: '700' },
+  tourInviteStartBtn: { minHeight: 44, paddingHorizontal: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  tourInviteStartText: { fontSize: 13, fontWeight: '900' },
+  tourBottomCard: { width: '100%', maxWidth: 680, alignSelf: 'center', minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 20, borderWidth: 1, marginBottom: 8 },
+  tourBottomIcon: { width: 42, height: 42, borderRadius: 13, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  tourBottomCopy: { flex: 1, minWidth: 0 },
+  tourBottomTitle: { fontSize: 14, fontWeight: '800' },
+  tourBottomSub: { fontSize: 12, fontWeight: '500', marginTop: 2 },
+  tourBottomCtaPill: { minHeight: 36, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tourBottomCtaText: { fontSize: 12, fontWeight: '800' },
 });

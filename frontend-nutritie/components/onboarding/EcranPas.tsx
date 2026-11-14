@@ -38,6 +38,7 @@ export type EcranPasProps = {
 	laContinuare?: () => Promise<boolean | void> | boolean | void
 	seIncarca?: boolean
 	faraAntet?: boolean
+	subsolSecundar?: React.ReactNode
 }
 
 /**
@@ -54,6 +55,7 @@ export default function EcranPas({
 	laContinuare,
 	seIncarca = false,
 	faraAntet = false,
+	subsolSecundar,
 }: EcranPasProps) {
 	const { t, i18n } = useTranslation()
 	const { colors } = useTheme()
@@ -276,6 +278,7 @@ export default function EcranPas({
 						)}
 					</LinearGradient>
 				</TouchableOpacity>
+				{subsolSecundar}
 			</View>
 		</SafeAreaView>
 	)

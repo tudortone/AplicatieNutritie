@@ -190,7 +190,10 @@
     "flowCreditsA11y": "Ouvrir le solde et la boutique Flow Credits",
     "manageSubscription": "Gérer l'abonnement",
     "manageSubscriptionDesc": "Consultez, modifiez ou résiliez votre abonnement dans Google Play",
-    "manageSubscriptionA11y": "Ouvrir les abonnements Google Play pour gérer ou résilier"
+    "manageSubscriptionA11y": "Ouvrir les abonnements Google Play pour gérer ou résilier",
+    "interactiveGuideTitle": "Guide interactif de l'application",
+    "interactiveGuideDesc": "Relancer la visite guidée sur l'écran d'accueil",
+    "interactiveGuideA11y": "Relancer la visite interactive sur l'écran d'accueil"
   },
   "nutrition": {
     "protein": "Protéines",
@@ -1046,7 +1049,10 @@
     "planLimitWarning": "Nous avons limité le déficit pour rester au-dessus du seuil sécuritaire de calories. L'objectif sera atteint un peu plus lentement, mais plus sainement.",
     "planDisclaimer": "Ce sont des estimations indicatives et non un avis médical. Consultez un spécialiste si vous avez un problème de santé.",
     "birthdateUnderageTitle": "Réservé aux adultes (18+)",
-    "birthdateUnderageMsg": "GetFlow est exclusivement destiné aux personnes majeures âgées de 18 ans et plus."
+    "birthdateUnderageMsg": "GetFlow est exclusivement destiné aux personnes majeures âgées de 18 ans et plus.",
+    "alreadyHaveAccountPrefix": "Déjà un compte ?",
+    "alreadyHaveAccountAction": "Se connecter",
+    "alreadyHaveAccountA11y": "Passer la configuration et se connecter à votre compte existant"
   },
   "months": {
     "m1": "Janvier",
@@ -1148,7 +1154,41 @@
     "dailyTip7": "Ne stressez pas si vous dépassez légèrement vos calories un jour. La régularité prime sur la perfection.",
     "dailyTip8": "Consommez des aliments riches en magnésium et zinc pour une récupération musculaire optimale.",
     "dailyTip9": "Mangez lentement et mastiquez bien — le cerveau met 20 minutes à enregistrer la satiété.",
-    "dailyTip10": "Planifiez vos repas principaux à l’avance pour éviter les choix impulsifs face à la faim."
+    "dailyTip10": "Planifiez vos repas principaux à l’avance pour éviter les choix impulsifs face à la faim.",
+    "tourInviteBadge": "Optionnel · Première ouverture",
+    "tourInviteTitle": "Envie d’une visite rapide ?",
+    "tourInviteDesc": "4 étapes courtes avec zones lumineuses pour voir où scanner vos repas, suivre l’eau et ouvrir Journal/Garde-manger.",
+    "tourInviteLater": "Pas maintenant",
+    "tourInviteStart": "Démarrer",
+    "tourInviteDismissA11y": "Fermer l’invitation à la visite guidée",
+    "tourInviteStartA11y": "Démarrer la visite interactive",
+    "tourBottomTitle": "Oublié le rôle d’un bouton ?",
+    "tourBottomSub": "Lancer le guide interactif · 4 étapes",
+    "tourBottomCta": "Afficher",
+    "tourBottomA11y": "Lancer le guide interactif sur l’écran d’accueil"
+  },
+  "homeTour": {
+    "stepCounter": "Étape {{current}} sur {{total}}",
+    "skip": "Passer",
+    "skipA11y": "Fermer le tutoriel interactif",
+    "back": "Retour",
+    "next": "Suivant",
+    "finish": "Compris",
+    "tapTargetBadge": "Appuyez ici",
+    "steps": {
+      "calorieTitle": "Votre objectif du jour",
+      "calorieBody": "Suivez en temps réel vos calories restantes, votre apport du jour et l’équilibre protéines, glucides et lipides.",
+      "calorieHint": "Touchez la carte éclairée ou appuyez sur Suivant pour continuer.",
+      "scanTitle": "Enregistrez un repas en 3 secondes",
+      "scanBody": "Photographiez votre plat, scannez un code-barres ou ajoutez manuellement. GetFlow met à jour les calories et déduit du Garde-manger.",
+      "scanHint": "Touchez directement le bouton lumineux pour ouvrir la caméra, ou appuyez sur Suivant.",
+      "hydrationTitle": "Eau, poids et pas",
+      "hydrationBody": "Ajoutez des verres d’eau (+250 ml) en un geste et mettez à jour votre poids directement depuis l’accueil.",
+      "hydrationHint": "Touchez la zone lumineuse ou appuyez sur Suivant.",
+      "tabsTitle": "Navigation rapide en bas",
+      "tabsBody": "Accédez instantanément à Journal & Garde-manger, Sport (carte musculaire), Statistiques, Coach IA et Profil.",
+      "tabsHint": "Vous pouvez relancer ce guide à tout moment depuis le bouton en bas ou Profil."
+    }
   },
   "postSave": {
     "mealAdded": "Repas ajouté !",

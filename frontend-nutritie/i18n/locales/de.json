@@ -190,7 +190,10 @@
     "flowCreditsA11y": "Flow Credits-Guthaben und Shop öffnen",
     "manageSubscription": "Abonnement verwalten",
     "manageSubscriptionDesc": "Abonnement in Google Play anzeigen, anpassen oder kündigen",
-    "manageSubscriptionA11y": "Google Play-Abonnements zum Verwalten oder Kündigen öffnen"
+    "manageSubscriptionA11y": "Google Play-Abonnements zum Verwalten oder Kündigen öffnen",
+    "interactiveGuideTitle": "Interaktiver App-Leitfaden",
+    "interactiveGuideDesc": "Geführte Tour auf dem Startbildschirm erneut starten",
+    "interactiveGuideA11y": "Interaktiven Leitfaden auf dem Startbildschirm erneut starten"
   },
   "nutrition": {
     "protein": "Protein",
@@ -1046,7 +1049,10 @@
     "planLimitWarning": "Wir haben das Defizit begrenzt, um über dem sicheren Kalorienschwellenwert zu bleiben. Das Ziel wird etwas langsamer, aber gesünder erreicht.",
     "planDisclaimer": "Dies sind Richtwerte, keine medizinische Beratung. Konsultieren Sie einen Spezialisten bei gesundheitlichen Beschwerden.",
     "birthdateUnderageTitle": "Nur für Erwachsene (18+)",
-    "birthdateUnderageMsg": "GetFlow ist ausschließlich für Erwachsene ab 18 Jahren bestimmt."
+    "birthdateUnderageMsg": "GetFlow ist ausschließlich für Erwachsene ab 18 Jahren bestimmt.",
+    "alreadyHaveAccountPrefix": "Bereits ein Konto?",
+    "alreadyHaveAccountAction": "Anmelden",
+    "alreadyHaveAccountA11y": "Einrichtung überspringen und bei bestehendem Konto anmelden"
   },
   "months": {
     "m1": "Januar",
@@ -1148,7 +1154,41 @@
     "dailyTip7": "Kein Stress bei leichten Überschreitungen. Langfristige Konstanz ist wichtiger als Perfektion.",
     "dailyTip8": "Iss magnesium- und zinkreiche Lebensmittel für optimale Muskelregeneration nach dem Training.",
     "dailyTip9": "Iss langsam und kaue gründlich — das Gehirn braucht 20 Minuten, um Sättigung zu signalisieren.",
-    "dailyTip10": "Plane deine Hauptmahlzeiten im Voraus, um impulsive Entscheidungen bei Heißhunger zu vermeiden."
+    "dailyTip10": "Plane deine Hauptmahlzeiten im Voraus, um impulsive Entscheidungen bei Heißhunger zu vermeiden.",
+    "tourInviteBadge": "Optional · Erster Start",
+    "tourInviteTitle": "Möchtest du eine kurze Führung?",
+    "tourInviteDesc": "4 kurze Schritte mit leuchtenden Bereichen für KI-Scan, Wasser und Tagebuch/Vorrat.",
+    "tourInviteLater": "Später",
+    "tourInviteStart": "Tour starten",
+    "tourInviteDismissA11y": "Einladung zur App-Tour schließen",
+    "tourInviteStartA11y": "Interaktive App-Tour starten",
+    "tourBottomTitle": "Funktion einer Taste vergessen?",
+    "tourBottomSub": "Interaktiven Leitfaden starten · 4 Schritte",
+    "tourBottomCta": "Zeigen",
+    "tourBottomA11y": "Interaktiven Leitfaden auf dem Startbildschirm starten"
+  },
+  "homeTour": {
+    "stepCounter": "Schritt {{current}} von {{total}}",
+    "skip": "Überspringen",
+    "skipA11y": "Interaktives Tutorial überspringen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "finish": "Verstanden",
+    "tapTargetBadge": "Antippen",
+    "steps": {
+      "calorieTitle": "Dein Tagesziel",
+      "calorieBody": "Sieh in Echtzeit deine verbleibenden Kalorien sowie Proteine, Kohlenhydrate und Fette im Gleichgewicht.",
+      "calorieHint": "Tippe auf die beleuchtete Karte oder auf Weiter.",
+      "scanTitle": "Mahlzeiten in 3 Sekunden erfassen",
+      "scanBody": "Mach ein Foto, scanne einen Barcode oder trage manuell ein. Kalorien und Vorratsbestand aktualisieren sich automatisch.",
+      "scanHint": "Tippe direkt auf die leuchtende Schaltfläche oder auf Weiter.",
+      "hydrationTitle": "Wasser, Gewicht & Schritte",
+      "hydrationBody": "Füge Wassergläser (+250 ml) mit einem Tipp hinzu und aktualisiere dein Gewicht direkt auf der Startseite.",
+      "hydrationHint": "Tippe auf den beleuchteten Bereich oder auf Weiter.",
+      "tabsTitle": "Schnellnavigation unten",
+      "tabsBody": "Wechsle direkt zwischen Tagebuch & Vorrat, Training (Muskelkarte), Statistik, KI-Coach und Profil.",
+      "tabsHint": "Du kannst diesen Leitfaden jederzeit unten oder im Profil erneut starten."
+    }
   },
   "postSave": {
     "mealAdded": "Mahlzeit hinzugefügt!",

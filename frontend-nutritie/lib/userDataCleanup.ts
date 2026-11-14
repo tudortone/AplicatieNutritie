@@ -81,6 +81,7 @@ export const ALREADY_USER_SCOPED_PREFIXES = [
   'favorite_foods_',
   '@getflow/photo-job/v1/',
   '@getflow/chat_daily_',
+  '@getflow:home_tour_',
 ] as const;
 
 // Pre-auth onboarding may set this before the first login, so it is not part of
@@ -263,7 +264,8 @@ async function purgeDeletedUserData(owner: string): Promise<void> {
     key === `favorite_foods_${owner}` ||
     key.startsWith(`favorite_foods_${owner}_`) ||
     key === `@getflow/photo-job/v1/${owner}` ||
-    key.startsWith(chatDailyPrefix),
+    key.startsWith(chatDailyPrefix) ||
+    key.startsWith(`@getflow:home_tour_${owner}_`),
   );
   const scoped = [
     ...registry.map((key) => userStorageKey(owner, key)),

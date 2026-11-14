@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Save, LogOut, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Camera, CheckCircle2, User, Pencil, Crown, FileText, Watch, Globe, Download, Award } from 'lucide-react-native';
+import { Save, LogOut, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Camera, CheckCircle2, User, Pencil, Crown, FileText, Watch, Globe, Download, Award, HelpCircle } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
@@ -50,6 +50,7 @@ import { finalizeConfirmedAccountDeletion } from '../../lib/accountDeletion';
 import { buildCompleteUserExport, fetchServerGdprExport } from '../../lib/gdprExport';
 import { SupportEmailFooter } from '../../components/ui/SupportEmailFooter';
 import { marcheazaMeseModificate } from '../../lib/freshnessMese';
+import { requestHomeTourReplay } from '../../lib/homeTour';
 
 
 const MEAL_REMINDER_LABEL_KEYS: Record<string, string> = {
@@ -966,6 +967,30 @@ export default function ProfilScreen() {
                 <View style={[styles.inputContent, { flex: 1 }]}>
                   <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>{t('profile.sendFeedback')}</Text>
                   <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{t('profile.sendFeedbackDesc')}</Text>
+                </View>
+                <ChevronRight size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <View style={styles.separator} />
+
+              <TouchableOpacity
+                testID="profile-interactive-guide"
+                style={[styles.inputRow, { alignItems: 'center' }]}
+                onPress={() => {
+                  try { void Haptics.selectionAsync(); } catch {}
+                  requestHomeTourReplay();
+                  router.push('/(tabs)' as never);
+                }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.interactiveGuideA11y')}
+              >
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <HelpCircle size={18} color={colors.accent} />
+                </View>
+                <View style={[styles.inputContent, { flex: 1 }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 16, marginBottom: 2 }]}>{t('profile.interactiveGuideTitle')}</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{t('profile.interactiveGuideDesc')}</Text>
                 </View>
                 <ChevronRight size={18} color={colors.textSecondary} />
               </TouchableOpacity>

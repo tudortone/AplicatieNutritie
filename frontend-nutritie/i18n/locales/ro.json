@@ -185,7 +185,10 @@
     "flowCreditsA11y": "Deschide soldul și magazinul Flow Credits",
     "manageSubscription": "Gestionează abonamentul",
     "manageSubscriptionDesc": "Vezi, modifică sau anulează abonamentul în Google Play",
-    "manageSubscriptionA11y": "Deschide abonamentele Google Play pentru gestionare sau anulare"
+    "manageSubscriptionA11y": "Deschide abonamentele Google Play pentru gestionare sau anulare",
+    "interactiveGuideTitle": "Ghid interactiv aplicație",
+    "interactiveGuideDesc": "Reia turul cu butoane luminate pe ecranul Acasă",
+    "interactiveGuideA11y": "Reia ghidul interactiv al aplicației pe ecranul Acasă"
   },
   "nutrition": {
     "protein": "Proteine",
@@ -1046,7 +1049,10 @@
     "planLimitWarning": "Am limitat deficitul ca să nu cobori sub pragul sigur de calorii. Obiectivul va fi atins puțin mai lent, dar mai sănătos.",
     "planDisclaimer": "Sunt estimări orientative, nu sfat medical. Consultă un specialist dacă ai o afecțiune sau urmezi un tratament.",
     "birthdateUnderageTitle": "Exclusiv pentru adulți (18+)",
-    "birthdateUnderageMsg": "GetFlow este destinat exclusiv persoanelor care au împlinit vârsta de 18 ani."
+    "birthdateUnderageMsg": "GetFlow este destinat exclusiv persoanelor care au împlinit vârsta de 18 ani.",
+    "alreadyHaveAccountPrefix": "Ai deja cont?",
+    "alreadyHaveAccountAction": "Conectează-te",
+    "alreadyHaveAccountA11y": "Sari peste configurare și conectează-te la contul existent"
   },
   "months": {
     "m1": "Ianuarie",
@@ -1148,7 +1154,41 @@
     "dailyTip7": "Nu te stresa dacă într-o zi depășești ușor ținta. Consecvența pe termen lung este mult mai importantă decât perfecțiunea zilnică.",
     "dailyTip8": "Consumă alimente bogate în magneziu și zinc pentru o recuperare musculară optimă după antrenamente.",
     "dailyTip9": "Mănâncă încet și mestecă bine mâncarea — creierul are nevoie de aproximativ 20 de minute pentru a înregistra sațietatea.",
-    "dailyTip10": "Planifică-ți mesele principale în avans pentru a evita deciziile impulsive când apare senzația de foame."
+    "dailyTip10": "Planifică-ți mesele principale în avans pentru a evita deciziile impulsive când apare senzația de foame.",
+    "tourInviteBadge": "Opțional · Prima deschidere",
+    "tourInviteTitle": "Vrei un tur rapid al aplicației?",
+    "tourInviteDesc": "4 pași scurți cu butoane luminate ca să vezi unde scanezi mese, urmărești apa și intri în Jurnal/Cămară.",
+    "tourInviteLater": "Nu acum",
+    "tourInviteStart": "Începe turul",
+    "tourInviteDismissA11y": "Închide invitația pentru turul aplicației",
+    "tourInviteStartA11y": "Începe turul interactiv al aplicației",
+    "tourBottomTitle": "Ai uitat ce face un buton?",
+    "tourBottomSub": "Pornește ghidul interactiv · 4 pași",
+    "tourBottomCta": "Arată",
+    "tourBottomA11y": "Pornește ghidul interactiv de pe ecranul Acasă"
+  },
+  "homeTour": {
+    "stepCounter": "Pasul {{current}} din {{total}}",
+    "skip": "Sari peste",
+    "skipA11y": "Închide tutorialul interactiv",
+    "back": "Înapoi",
+    "next": "Următorul",
+    "finish": "Am înțeles",
+    "tapTargetBadge": "Apasă elementul",
+    "steps": {
+      "calorieTitle": "Obiectivul tău zilnic",
+      "calorieBody": "Aici vezi în timp real caloriile rămase, ce ai consumat și echilibrul dintre proteine, carbohidrați și grăsimi.",
+      "calorieHint": "Atinge cardul luminat sau apasă Următorul ca să continui.",
+      "scanTitle": "Scanează mesele în 3 secunde",
+      "scanBody": "Fă o poză farfuriei, folosește codul de bare sau adaugă manual. GetFlow actualizează caloriile și scade automat din Cămară.",
+      "scanHint": "Poți atinge direct butonul luminat pentru a deschide camera, sau apasă Următorul.",
+      "hydrationTitle": "Apă, greutate și pași",
+      "hydrationBody": "Adaugi pahare de apă (+250 ml) cu o atingere și îți actualizezi greutatea fără să schimbi ecranul.",
+      "hydrationHint": "Atinge zona luminată sau apasă Următorul.",
+      "tabsTitle": "Navigare rapidă jos",
+      "tabsBody": "Ai acces instant la Jurnal & Cămară, Sport (hartă musculară), Statistici, Coach AI și Profil.",
+      "tabsHint": "Poți relua acest ghid oricând din butonul de jos sau din Profil."
+    }
   },
   "postSave": {
     "mealAdded": "Masă adăugată!",

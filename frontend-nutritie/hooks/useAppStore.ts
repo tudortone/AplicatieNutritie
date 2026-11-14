@@ -38,16 +38,20 @@ export const storage: UniversalStorage = {
 
 export interface AppState {
   isOnboardingDone: boolean;
+  skipOnboardingToAuth: boolean;
   setOnboardingDone: (val: boolean) => Promise<void>;
+  setSkipOnboardingToAuth: (val: boolean) => void;
   syncFromAsyncStorage: () => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set) => ({
   isOnboardingDone: storage.getBoolean('onboarding_done') ?? false,
+  skipOnboardingToAuth: false,
   setOnboardingDone: async (val: boolean) => {
     await storage.set('onboarding_done', val);
-    set({ isOnboardingDone: val });
+    set({ isOnboardingDone: val, ...(val ? { skipOnboardingToAuth: false } : {}) });
   },
+  setSkipOnboardingToAuth: (val: boolean) => set({ skipOnboardingToAuth: val }),
   syncFromAsyncStorage: async () => {
     try {
       const val = await AsyncStorage.getItem('nutriai-onboarding_done');

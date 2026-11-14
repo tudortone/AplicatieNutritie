@@ -77,7 +77,8 @@ export default function AuthScreen() {
   const { t } = useTranslation();
   const { contentMaxWidth } = useResponsiveLayout();
   const router = useRouter();
-  const { setOnboardingDone } = useAppStore();
+  const appStore = useAppStore();
+  const { setOnboardingDone, setSkipOnboardingToAuth } = appStore;
   const [planCalculat, setPlanCalculat] = useState<PlanNutritional | null>(null);
   const [email, setEmail] = useState('');
   const [parola, setParola] = useState('');
@@ -271,6 +272,7 @@ export default function AuthScreen() {
             <TouchableOpacity
               style={[styles.noPlanCard, { borderColor: colors.accent + '44', backgroundColor: colors.cardBg }]}
               onPress={() => {
+                setSkipOnboardingToAuth?.(false);
                 setOnboardingDone(false);
                 router.replace('/onboarding');
               }}
@@ -291,6 +293,7 @@ export default function AuthScreen() {
             <TouchableOpacity
               style={[styles.noPlanCard, { borderColor: colors.accent + '44', backgroundColor: colors.cardBg }]}
               onPress={() => {
+                setSkipOnboardingToAuth?.(false);
                 setOnboardingDone(false);
                 router.replace('/onboarding');
               }}

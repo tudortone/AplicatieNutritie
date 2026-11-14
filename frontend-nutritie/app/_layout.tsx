@@ -170,7 +170,13 @@ function RootNavigator() {
   const auth = useAuth() as ReturnType<typeof useAuth> & { isPasswordRecovery?: boolean };
   const { session, loadingAuth } = auth;
   const isPasswordRecovery = Boolean(auth.isPasswordRecovery);
-  const { isOnboardingDone, syncFromAsyncStorage, setOnboardingDone } = useAppStore();
+  const {
+    isOnboardingDone,
+    syncFromAsyncStorage,
+    setOnboardingDone,
+    skipOnboardingToAuth = false,
+    setSkipOnboardingToAuth,
+  } = useAppStore();
   const { isLocked, biometricType, unlockApp } = useBiometrics();
   useDailySync();
   // BUG-043: monitorizăm starea de conectivitate ca să descărcăm coada de mese
@@ -472,6 +478,7 @@ function RootNavigator() {
             try {
               await restaureazaProfilLocal(profilServerDate);
               await setOnboardingDone(true);
+              setSkipOnboardingToAuth?.(false);
               if (inOnboarding || inAuth) router.replace('/(tabs)');
             } catch (eroare) {
               console.warn('[Onboarding] Restaurarea profilului local a eșuat:', eroare);
@@ -480,6 +487,15 @@ function RootNavigator() {
             }
           })();
         }
+        return;
+      }
+      if (session) {
+        // Sesiunea a ajuns fara profil complet pe server (de ex. cont nou creat
+        // dupa skip): anulam intentia de skip si continuam configurarea normala.
+        setSkipOnboardingToAuth?.(false);
+      } else if (inAuth && skipOnboardingToAuth) {
+        // Utilizatorul care reinstaleaza a ales "Ai deja cont? Conecteaza-te" pe
+        // primul pas de onboarding: il lasam pe /auth fara sa marcam onboardingDone.
         return;
       }
       // Fara profil complet in DB (sau verificare in curs / offline): onboarding.
@@ -491,7 +507,7 @@ function RootNavigator() {
       return;
     }
     if (inAuth || inOnboarding) router.replace('/(tabs)');
-  }, [session, loadingAuth, isPasswordRecovery, storageReady, profilVerificatPentru, isOnboardingDone, setOnboardingDone, profilServer, profilServerDate, segments, pathname, router]);
+  }, [session, loadingAuth, isPasswordRecovery, storageReady, profilVerificatPentru, isOnboardingDone, setOnboardingDone, skipOnboardingToAuth, setSkipOnboardingToAuth, profilServer, profilServerDate, segments, pathname, router]);
 
   if (loadingAuth && !storageReady && pathname !== '/auth/callback' && pathname !== '/auth/complete') return <AppSplashScreen isReady={false} />;
   const push = { animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, gestureEnabled: true } as const;
