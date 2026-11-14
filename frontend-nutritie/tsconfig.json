@@ -17,8 +17,6 @@
   ],
   "exclude": [
     "node_modules",
-    "getflow-prebuild-*",
-    "frontend-nutritie",
-    "context/PhotoActivityContext.tsx"
+    "getflow-prebuild-*"
   ]
 }
