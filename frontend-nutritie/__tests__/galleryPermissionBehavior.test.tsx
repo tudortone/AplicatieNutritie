@@ -169,14 +169,17 @@ jest.mock('@/context/AdsContext', () => ({
 
 const mockFlowCreditsReturn = {
   balance: {
-    dailyRemaining: 0,
+    dailyRemaining: 3,
     rewarded: 0,
     purchased: 0,
-    total: 0,
-    rewardedGrantsRemaining: 0,
-    serverDay: null,
+    total: 3,
+    rewardedGrantsRemaining: 5,
+    serverDay: null as string | null,
   },
+  balanceReady: true,
+  loading: false,
   unlimited: false,
+  visible: false,
   consumeOptimisticCredit: jest.fn(() => 'daily'),
   refresh: jest.fn(async () => null),
   open: jest.fn(),
@@ -407,6 +410,7 @@ import { uploadImageToImageKit, prewarmImageKitAuth } from '../lib/imagekit';
 import {
   clearActivePhotoJob,
   clearPreliminaryPhotoJobPointer,
+  cleanupPhotoAsset,
   hasPendingPhotoSave,
   savePhotoJobSaveAttempt,
   recoverPhotoJob,
@@ -429,6 +433,18 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
     jest.clearAllMocks();
     mockAuthReturn.session = mockSession;
     mockAuthReturn.user = mockUser;
+    mockFlowCreditsReturn.balance = {
+      dailyRemaining: 3,
+      rewarded: 0,
+      purchased: 0,
+      total: 3,
+      rewardedGrantsRemaining: 5,
+      serverDay: null,
+    };
+    mockFlowCreditsReturn.balanceReady = true;
+    mockFlowCreditsReturn.loading = false;
+    mockFlowCreditsReturn.unlimited = false;
+    mockFlowCreditsReturn.visible = false;
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     mockRequestPermissions.mockReset().mockResolvedValue({ granted: true });
     mockLaunchImageLibrary.mockReset();
@@ -469,6 +485,7 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
     (hasPendingPhotoSave as jest.Mock).mockReset().mockResolvedValue(false);
     (savePhotoJobSaveAttempt as jest.Mock).mockReset().mockResolvedValue(true);
     (clearActivePhotoJob as jest.Mock).mockReset().mockResolvedValue(undefined);
+    (cleanupPhotoAsset as jest.Mock).mockReset().mockResolvedValue(undefined);
     (clearPreliminaryPhotoJobPointer as jest.Mock).mockReset().mockResolvedValue(undefined);
     (saveLocalImageDraft as jest.Mock).mockReset().mockResolvedValue('draft-1');
     (listPendingDrafts as jest.Mock).mockReset().mockResolvedValue([]);
@@ -543,7 +560,7 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       expect(mockRequestPermissions).not.toHaveBeenCalled();
     });
 
-    it('ANDROID: error recovers and second attempt remains possible', async () => {
+    it('ANDROID: error recovers via styled error card and second attempt remains possible without raw Alert', async () => {
       Platform.OS = 'android';
       mockLaunchImageLibrary.mockRejectedValueOnce(new Error('Picker crashed'));
 
@@ -555,18 +572,22 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
         fireEvent.press(galleryBtn);
       });
       expect(mockLaunchImageLibrary).toHaveBeenCalledTimes(1);
-      expect(Alert.alert).toHaveBeenCalled();
+      expect(Alert.alert).not.toHaveBeenCalled();
+      expect(view.getByTestId('camera-gallery-error-card')).toBeTruthy();
+      expect(view.queryByTestId('credit-refund-reassurance-badge')).toBeNull();
+      expect(view.getByTestId('error-camera-btn')).toBeTruthy();
 
-      // Second attempt executes
+      // Second attempt via styled card's Retry Gallery action executes cleanly
       mockLaunchImageLibrary.mockResolvedValueOnce({
         canceled: true,
         assets: [],
       });
       await act(async () => {
-        fireEvent.press(galleryBtn);
+        fireEvent.press(view.getByTestId('error-primary-btn'));
       });
 
       expect(mockLaunchImageLibrary).toHaveBeenCalledTimes(2);
+      expect(view.queryByTestId('camera-gallery-error-card')).toBeNull();
     });
 
     it('IOS: preserves requestMediaLibraryPermissionsAsync check', async () => {
@@ -1692,6 +1713,201 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
           jest.useRealTimers();
           await view?.unmount();
         }
+      });
+    });
+
+    describe('Flow Credits pre-checks and gallery error isolation (app/camera.tsx)', () => {
+      it('opens Flow Credits sheet instead of capturing when Shutter is pressed with confirmed 0 credits', async () => {
+        mockFlowCreditsReturn.balanceReady = true;
+        mockFlowCreditsReturn.balance = {
+          dailyRemaining: 0,
+          rewarded: 0,
+          purchased: 0,
+          total: 0,
+          rewardedGrantsRemaining: 5,
+          serverDay: '2026-11-14',
+        };
+
+        const view = await render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(view.getByTestId('shutter-button'));
+        });
+
+        expect(mockFlowCreditsReturn.open).toHaveBeenCalledTimes(1);
+        expect(mockTakePictureAsync).not.toHaveBeenCalled();
+        expect(submitPhotoJob).not.toHaveBeenCalled();
+        expect(Alert.alert).not.toHaveBeenCalled();
+      });
+
+      it('opens Flow Credits sheet instead of opening gallery when Gallery is pressed with confirmed 0 credits', async () => {
+        Platform.OS = 'android';
+        mockFlowCreditsReturn.balanceReady = true;
+        mockFlowCreditsReturn.balance = {
+          dailyRemaining: 0,
+          rewarded: 0,
+          purchased: 0,
+          total: 0,
+          rewardedGrantsRemaining: 5,
+          serverDay: '2026-11-14',
+        };
+
+        const view = await render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(view.getByTestId('gallery-button'));
+        });
+
+        expect(mockFlowCreditsReturn.open).toHaveBeenCalledTimes(1);
+        expect(mockLaunchImageLibrary).not.toHaveBeenCalled();
+        expect(Alert.alert).not.toHaveBeenCalled();
+      });
+
+      it('gates Not-Food Gallery button when credits drop to 0 without calling ImagePicker again', async () => {
+        Platform.OS = 'android';
+        mockFlowCreditsReturn.balance = {
+          dailyRemaining: 1,
+          rewarded: 0,
+          purchased: 0,
+          total: 1,
+          rewardedGrantsRemaining: 5,
+          serverDay: '2026-11-14',
+        };
+        mockLaunchImageLibrary.mockResolvedValueOnce({
+          canceled: false,
+          assets: [{ uri: 'file:///not-food.jpg', width: 800, height: 600 }],
+        });
+        (submitPhotoJob as jest.Mock).mockRejectedValueOnce(new PhotoApiError(422, 'NOT_FOOD'));
+
+        const view = await render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(view.getByTestId('gallery-button'));
+        });
+        await waitFor(() => expect(view.getByTestId('camera-not-food-card')).toBeTruthy());
+
+        mockFlowCreditsReturn.balance.total = 0;
+        mockFlowCreditsReturn.open.mockClear();
+        await act(async () => {
+          fireEvent.press(view.getByTestId('not-food-gallery-btn'));
+        });
+
+        expect(mockFlowCreditsReturn.open).toHaveBeenCalledTimes(1);
+        expect(mockLaunchImageLibrary).toHaveBeenCalledTimes(1);
+        expect(Alert.alert).not.toHaveBeenCalled();
+      });
+
+      it('gates Failed-Job Retry when credits are 0 without clearing active job pointer', async () => {
+        Platform.OS = 'android';
+        mockLaunchImageLibrary.mockResolvedValueOnce({
+          canceled: false,
+          assets: [{ uri: 'file:///failed-job.jpg', width: 800, height: 600 }],
+        });
+        (waitForPhotoJob as jest.Mock).mockRejectedValueOnce(new PhotoApiError(422, 'PHOTO_ANALYSIS_FAILED'));
+
+        const view = await render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(view.getByTestId('gallery-button'));
+        });
+        await waitFor(() => expect(view.getByTestId('camera-failed-retry')).toBeTruthy());
+
+        mockFlowCreditsReturn.balance.total = 0;
+        mockFlowCreditsReturn.open.mockClear();
+        (clearActivePhotoJob as jest.Mock).mockClear();
+
+        await act(async () => {
+          fireEvent.press(view.getByTestId('camera-failed-retry'));
+        });
+
+        expect(mockFlowCreditsReturn.open).toHaveBeenCalledTimes(1);
+        expect(clearActivePhotoJob).not.toHaveBeenCalled();
+        expect(submitPhotoJob).toHaveBeenCalledTimes(1);
+      });
+
+      it('gates Draft Recovery Resume when credits are confirmed 0', async () => {
+        mockFlowCreditsReturn.balance = {
+          dailyRemaining: 0,
+          rewarded: 0,
+          purchased: 0,
+          total: 0,
+          rewardedGrantsRemaining: 5,
+          serverDay: '2026-11-14',
+        };
+        (listPendingDrafts as jest.Mock).mockResolvedValueOnce(['file:///pending-draft.jpg']);
+
+        const view = await render(<CameraScreen />);
+        await waitFor(() => expect(view.getByTestId('draft-recovery-resume-btn')).toBeTruthy());
+
+        await act(async () => {
+          fireEvent.press(view.getByTestId('draft-recovery-resume-btn'));
+        });
+
+        expect(mockFlowCreditsReturn.open).toHaveBeenCalledTimes(1);
+        expect(uploadImageToImageKit).not.toHaveBeenCalled();
+        expect(submitPhotoJob).not.toHaveBeenCalled();
+      });
+
+      it('does NOT block Gallery when balanceReady is false even if cached balance is 0', async () => {
+        Platform.OS = 'android';
+        mockFlowCreditsReturn.balanceReady = false;
+        mockFlowCreditsReturn.balance = {
+          dailyRemaining: 0,
+          rewarded: 0,
+          purchased: 0,
+          total: 0,
+          rewardedGrantsRemaining: 0,
+          serverDay: null,
+        };
+        mockLaunchImageLibrary.mockResolvedValueOnce({ canceled: true, assets: [] });
+
+        const view = await render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(view.getByTestId('gallery-button'));
+        });
+
+        expect(mockLaunchImageLibrary).toHaveBeenCalledTimes(1);
+        expect(mockFlowCreditsReturn.open).not.toHaveBeenCalled();
+      });
+
+      it('handles backend 402 FLOW_CREDITS_EXHAUSTED by cleaning up uploaded ImageKit asset and opening Flow Credits sheet without Alert', async () => {
+        Platform.OS = 'android';
+        mockLaunchImageLibrary.mockResolvedValueOnce({
+          canceled: false,
+          assets: [{ uri: 'file:///meal.jpg', width: 800, height: 600 }],
+        });
+        (submitPhotoJob as jest.Mock).mockRejectedValueOnce(new PhotoApiError(402, 'FLOW_CREDITS_EXHAUSTED'));
+
+        const view = await render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(view.getByTestId('gallery-button'));
+        });
+
+        await waitFor(() => {
+          expect(mockFlowCreditsReturn.open).toHaveBeenCalledTimes(1);
+        });
+        expect(cleanupPhotoAsset).toHaveBeenCalledWith({
+          token: mockSession.access_token,
+          fileId: 'meal-file-id',
+        });
+        expect(Alert.alert).not.toHaveBeenCalled();
+        expect(view.queryByTestId('camera-gallery-error-card')).toBeNull();
+      });
+
+      it('does NOT misreport post-picker upload or network failures as a gallery error', async () => {
+        Platform.OS = 'android';
+        mockLaunchImageLibrary.mockResolvedValueOnce({
+          canceled: false,
+          assets: [{ uri: 'file:///meal.jpg', width: 800, height: 600 }],
+        });
+        (uploadImageToImageKit as jest.Mock).mockRejectedValueOnce(new TypeError('Network request failed'));
+
+        const view = await render(<CameraScreen />);
+        await act(async () => {
+          fireEvent.press(view.getByTestId('gallery-button'));
+        });
+
+        await waitFor(() => {
+          expect(view.getByText('camera.networkErrorMessage')).toBeTruthy();
+        });
+        expect(Alert.alert).not.toHaveBeenCalled();
+        expect(view.queryByTestId('camera-gallery-error-card')).toBeNull();
       });
     });
   });

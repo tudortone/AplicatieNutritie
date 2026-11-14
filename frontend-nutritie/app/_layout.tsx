@@ -514,7 +514,7 @@ function RootNavigator() {
           <Stack.Screen name="legal" options={push} />
           <Stack.Screen name="jurnal-antrenamente" options={push} />
           <Stack.Screen name="notificari" options={push} />
-          <Stack.Screen name="paywall" options={push} />
+          <Stack.Screen name="paywall" options={{ ...push, presentation: 'fullScreenModal' }} />
           <Stack.Screen name="progres-antrenamente" options={push} />
           <Stack.Screen name="workout-v2-preview" options={push} />
         </Stack>

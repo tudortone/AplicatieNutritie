@@ -399,7 +399,14 @@
     "malformedResultTitle": "Impossible de structurer les données",
     "malformedResultMessage": "L'image n'a pas pu être convertie en valeurs nutritionnelles fiables. Aucun crédit Flow n'a été consommé.",
     "retrySafe": "Réessayer en toute sécurité",
-    "scanAgain": "Scanner à nouveau"
+    "scanAgain": "Scanner à nouveau",
+    "galleryErrorTitle": "Impossible d'ouvrir la galerie",
+    "galleryErrorMessage": "Le sélecteur d'images n'a pas répondu ou a été interrompu. Aucun crédit Flow n'a été consommé.",
+    "retryGallery": "Rouvrir la galerie",
+    "useCameraInstead": "Utiliser l'appareil photo",
+    "creditsUnavailableTitle": "Vérification des crédits indisponible",
+    "creditsUnavailableMessage": "Le service de crédits n'a pas pu vérifier votre solde pour le moment. Réessayez dans un instant.",
+    "fairUseReachedMessage": "Vous avez atteint la limite temporaire d'utilisation équitable pour les analyses photo. Veuillez réessayer plus tard."
   },
   "photoJob": {
     "backgroundTitle": "L’analyse continue en arrière-plan",
@@ -1444,7 +1451,11 @@
     "upgradePremium": "Passer à GetFlow Premium",
     "serverAuthority": "Les crédits et achats sont confirmés de manière sécurisée par les serveurs GetFlow. Les crédits achetés n'expirent jamais.",
     "photoAnalyses": "analyses photo",
-    "freeBadge": "GetFlow Free"
+    "freeBadge": "GetFlow Free",
+    "continueScanning": "Continuer vers le scan",
+    "purchaseProcessing": "Traitement de l'achat…",
+    "purchasePending": "L'achat est en attente de confirmation Google Play.",
+    "purchaseError": "L'achat n'a pas pu être finalisé. Veuillez réessayer."
   },
   "calculatorAi": {
     "badge": "Algorithme de nutrition basé sur l'IA. Entrez vos informations pour des objectifs nutritionnels précis.",

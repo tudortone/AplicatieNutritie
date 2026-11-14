@@ -26,10 +26,10 @@ import { type AlimentScanat } from '@/components/food/FoodScanSuccessModal';
 import type { TipMasa } from '../types';
 import { FontSize } from '../constants/theme';
 import { PhotoMealResultView } from '@/components/food/PhotoMealResultView';
-import { PhotoMealErrorView } from '@/components/food/PhotoMealErrorView';
+import { PhotoMealErrorView, type PhotoErrorType } from '@/components/food/PhotoMealErrorView';
 import { ConfirmSheet } from '../components/ui/ConfirmSheet';
 import { uploadImageToImageKit, getImageKitAuthParams, prewarmImageKitAuth } from '@/lib/imagekit';
-import { useFlowCredits } from '../context/FlowCreditsContext';
+import { useFlowCredits, hasConfirmedZeroFlowCredits } from '../context/FlowCreditsContext';
 import { FlowCreditsPill } from '@/components/FlowCreditsPill';
 import { optimizeImageBeforeUpload, saveLocalImageDraft, discardLocalImageDraft, listPendingDrafts, amprentaOperatieFoto, purgeLocalImageDrafts } from '@/lib/imageOptimizer';
 import { pushOfflineMealVerificat, processOfflineQueue, MasaOfflinePayload } from '@/lib/offlineQueue';
@@ -38,6 +38,7 @@ import { MealSaveSuccessModal, type MealSuccessData } from '../components/ui/Mea
 import {
   clearActivePhotoJob,
   clearPreliminaryPhotoJobPointer,
+  cleanupPhotoAsset,
   hasPendingPhotoSave,
   recoverPhotoJobForCamera,
   savePhotoJobSaveAttempt,
@@ -111,6 +112,18 @@ function photoMealDraftMatches(
 }
 
 
+function isConfirmedZeroFlowCredits(
+  flow: ReturnType<typeof useFlowCredits> | null | undefined,
+): boolean {
+  if (typeof hasConfirmedZeroFlowCredits === 'function') {
+    return hasConfirmedZeroFlowCredits(flow);
+  }
+  if (!flow || flow.balanceReady !== true || flow.loading || flow.unlimited) {
+    return false;
+  }
+  return (flow.balance?.total ?? 0) <= 0;
+}
+
 export default function CameraScreen() {
   const { colors } = useTheme();
   const router = useRouter();
@@ -122,6 +135,8 @@ export default function CameraScreen() {
   const reduceMotion = useReducedMotion();
   const flowCredits = useFlowCredits();
   const refreshFlowCredits = flowCredits.refresh;
+  const refreshFlowCreditsRef = useRef(refreshFlowCredits);
+  refreshFlowCreditsRef.current = refreshFlowCredits;
   const openFlowCredits = flowCredits.open;
   const consumeOptimisticCredit = flowCredits.consumeOptimisticCredit;
 
@@ -134,6 +149,11 @@ export default function CameraScreen() {
   const [previewPhotoUri, setPreviewPhotoUri] = useState<string | null>(null);
   const [isSavingDiary, setIsSavingDiary] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [uiErrorOverlay, setUiErrorOverlay] = useState<{
+    kind: Extract<PhotoErrorType, 'gallery_unavailable' | 'credits_unavailable' | 'fair_use_reached'>;
+    message?: string | null;
+  } | null>(null);
+  const [isPickingGallery, setIsPickingGallery] = useState(false);
 
   const [seIncarca, setSeIncarca] = useState(false);
   const [recoveryChecked, setRecoveryChecked] = useState(false);
@@ -216,6 +236,19 @@ export default function CameraScreen() {
     }
   }, []);
 
+  const openCreditsSheetFromCamera = useCallback(() => {
+    captureTokenRef.current += 1;
+    if (captureTimeoutRef.current) {
+      clearTimeout(captureTimeoutRef.current);
+      captureTimeoutRef.current = null;
+    }
+    isTakingPhotoRef.current = false;
+    setIsPickingGallery(false);
+    setUiErrorOverlay(null);
+    setScanError(null);
+    openFlowCredits?.();
+  }, [openFlowCredits]);
+
   const handleCameraReady = useCallback(() => {
     cameraReadyRef.current = true;
   }, []);
@@ -278,6 +311,8 @@ export default function CameraScreen() {
     shouldGoHomeOnSubmitRef.current = false;
     isTakingPhotoRef.current = false;
     isPickingGalleryRef.current = false;
+    setIsPickingGallery(false);
+    setUiErrorOverlay(null);
     cameraReadyRef.current = false;
     activeSaveAttemptRef.current = null;
     imageKitUrlRef.current = null;
@@ -303,6 +338,12 @@ export default function CameraScreen() {
     setPendingPhotoSaveLocked(false);
     setRecoveryChecked(false);
     setSeIncarca(false);
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    if (sessionUserId) {
+      void refreshFlowCreditsRef.current?.();
+    }
   }, [sessionUserId]);
 
   useEffect(() => {
@@ -559,7 +600,7 @@ export default function CameraScreen() {
         draftUri: draftPersistentUri,
         savedAt: Date.now(),
       };
-      consumeOptimisticCredit();
+      consumeOptimisticCredit?.();
       if (shouldGoHomeOnSubmitRef.current) {
         if (__DEV__) console.log('[Camera] Job pornit pe backend, utilizatorul a mers la Acasă:', submitted.id);
         setPhotoPhase('background');
@@ -586,7 +627,7 @@ export default function CameraScreen() {
       await cleanupAttemptDrafts();
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void refreshFlowCredits();
+      if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void refreshFlowCredits?.();
     } catch (error) {
       let resolvedError: unknown = error;
       // A preliminary pointer with no submitted job behind it must never outlive the attempt:
@@ -594,7 +635,7 @@ export default function CameraScreen() {
       if (!activePointer && abortControllerRef.current === controller) {
         void clearPreliminaryPhotoJobPointer(ownerId).catch(() => { });
       }
-      if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void refreshFlowCredits();
+      if (isPhotoOwnerCurrent(ownerId, accountGeneration)) void refreshFlowCredits?.();
 
       if (
         abortControllerRef.current === controller
@@ -692,14 +733,25 @@ export default function CameraScreen() {
         || resolvedError.code === 'FLOW_CREDITS_UNAVAILABLE'
         || resolvedError.code === 'PREMIUM_FAIR_USE_REACHED'
       )) {
+        const uploadedFileId = imageKitFileIdRef.current;
+        imageKitUrlRef.current = null;
+        imageKitFileIdRef.current = null;
+        setPreviewPhotoUri(null);
         await cleanupAttemptDrafts();
-        const quotaMsg = t('camera.quotaExceededMessage');
-        setScanError(quotaMsg);
+        if (uploadedFileId && session?.access_token && typeof cleanupPhotoAsset === 'function') {
+          void cleanupPhotoAsset({ token: session.access_token, fileId: uploadedFileId }).catch(() => { });
+        }
+        setPhotoPhase('idle');
+        setScanError(null);
         setSeIncarca(false);
-        Alert.alert(t('camera.quotaExceededTitle'), quotaMsg, [
-          { text: t('common.cancel'), style: 'cancel' },
-          { text: t('camera.openCredits'), onPress: () => openFlowCredits() },
-        ]);
+        if (resolvedError.code === 'FLOW_CREDITS_EXHAUSTED') {
+          void refreshFlowCredits?.();
+          openCreditsSheetFromCamera();
+        } else if (resolvedError.code === 'PREMIUM_FAIR_USE_REACHED') {
+          setUiErrorOverlay({ kind: 'fair_use_reached' });
+        } else {
+          setUiErrorOverlay({ kind: 'credits_unavailable' });
+        }
         return;
       }
 
@@ -780,7 +832,7 @@ export default function CameraScreen() {
         }
       }
     }
-  }, [applyPhotoJobResult, consumeOptimisticCredit, i18n.language, isPhotoOwnerCurrent, openFlowCredits, refreshFlowCredits, session?.access_token, session?.user?.id, t]);
+  }, [applyPhotoJobResult, consumeOptimisticCredit, i18n.language, isPhotoOwnerCurrent, openCreditsSheetFromCamera, refreshFlowCredits, session?.access_token, session?.user?.id, t]);
 
   // Un job Photo AI este recuperabil după închiderea aplicației. Analiza rămâne
   // în Trigger; acest ecran doar reia polling-ul și reconstruiește review-ul.
@@ -926,7 +978,7 @@ export default function CameraScreen() {
         if (!controller.signal.aborted && !isTakingPhotoRef.current && abortControllerRef.current === null
           && isPhotoOwnerCurrent(userId, accountGeneration)) {
           applyPhotoJobResult(completed, active.pointer, userId, accountGeneration);
-          void refreshFlowCredits();
+          void refreshFlowCredits?.();
         }
         if (controller.signal.aborted || !isPhotoOwnerCurrent(userId, accountGeneration)) return;
         if (active.pointer.draftUri) {
@@ -991,6 +1043,10 @@ export default function CameraScreen() {
     const accountGeneration = accountGenerationRef.current;
     if (!isPhotoOwnerCurrent(ownerId, accountGeneration)
       || failedPhotoJob.pointer.userId !== ownerId) return;
+    if (isConfirmedZeroFlowCredits(flowCredits)) {
+      openCreditsSheetFromCamera();
+      return;
+    }
     const jobIdToClear = failedPhotoJob.job.id;
     const retryUri = failedPhotoJob.pointer.draftUri || failedPhotoJob.pointer.localImageUri;
     await clearActivePhotoJob(ownerId, jobIdToClear).catch(() => { });
@@ -1003,7 +1059,7 @@ export default function CameraScreen() {
       return;
     }
     await analizeazaImaginea(retryUri, true, undefined, failedPhotoJob.pointer.draftUri);
-  }, [analizeazaImaginea, failedPhotoJob, isPhotoOwnerCurrent, resumeCameraPreviewSafely, session?.user.id]);
+  }, [analizeazaImaginea, failedPhotoJob, flowCredits, isPhotoOwnerCurrent, openCreditsSheetFromCamera, resumeCameraPreviewSafely, session?.user.id]);
 
   // U-03: recuperarea draft-urilor neanalizate.
   //
@@ -1098,10 +1154,13 @@ export default function CameraScreen() {
       }
     }
     currentPhotoJobIdRef.current = null;
+    isPickingGalleryRef.current = false;
+    setIsPickingGallery(false);
     setPendingDraftSheet(null);
     setRezultat([]);
     setPreviewPhotoUri(null);
     setScanError(null);
+    setUiErrorOverlay(null);
     setSeIncarca(false);
     setPhotoPhase('idle');
     setFailedPhotoJob(null);
@@ -1222,6 +1281,11 @@ export default function CameraScreen() {
     const ownerId = session.user.id;
     const accountGeneration = accountGenerationRef.current;
     if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+    if (isConfirmedZeroFlowCredits(flowCredits)) {
+      openCreditsSheetFromCamera();
+      return;
+    }
+    setUiErrorOverlay(null);
     shouldGoHomeOnSubmitRef.current = false;
     isTakingPhotoRef.current = true;
     const captureToken = ++captureTokenRef.current;
@@ -1300,8 +1364,15 @@ export default function CameraScreen() {
     const ownerId = session.user.id;
     const accountGeneration = accountGenerationRef.current;
     if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
+    if (isConfirmedZeroFlowCredits(flowCredits)) {
+      openCreditsSheetFromCamera();
+      return;
+    }
+    setUiErrorOverlay(null);
     isPickingGalleryRef.current = true;
+    setIsPickingGallery(true);
     shouldGoHomeOnSubmitRef.current = false;
+    let pickedAsset: { uri: string; width: number; height: number } | null = null;
     try {
       if (Platform.OS === 'ios') {
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -1322,19 +1393,23 @@ export default function CameraScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        await analizeazaImaginea(asset.uri, false, { width: asset.width, height: asset.height });
+        pickedAsset = { uri: asset.uri, width: asset.width, height: asset.height };
       } else {
         resumeCameraPreviewSafely();
       }
     } catch (e) {
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
       console.error(`Eroare galerie: ${e instanceof Error ? e.message : String(e)}`);
-      Alert.alert(t('alerts.titluri.eroare'), t('alerts.mesaje.galerieInaccesibila'));
+      setUiErrorOverlay({ kind: 'gallery_unavailable' });
       resumeCameraPreviewSafely();
     } finally {
       isPickingGalleryRef.current = false;
+      setIsPickingGallery(false);
     }
-  }, [analizeazaImaginea, isPhotoOwnerCurrent, resumeCameraPreviewSafely, seIncarca, session, t]);
+    if (pickedAsset && isPhotoOwnerCurrent(ownerId, accountGeneration)) {
+      await analizeazaImaginea(pickedAsset.uri, false, { width: pickedAsset.width, height: pickedAsset.height });
+    }
+  }, [analizeazaImaginea, flowCredits, isPhotoOwnerCurrent, openCreditsSheetFromCamera, resumeCameraPreviewSafely, seIncarca, session, t]);
 
   const alegeDinGalerie = useCallback(() => {
     void openGalleryPicker(false);
@@ -1346,10 +1421,14 @@ export default function CameraScreen() {
   }, [anuleazaScanarea, failedPhotoJob?.pointer?.draftUri]);
 
   const handleGalleryFromNotFood = useCallback(() => {
+    if (isConfirmedZeroFlowCredits(flowCredits)) {
+      openCreditsSheetFromCamera();
+      return;
+    }
     anuleazaScanarea(failedPhotoJob?.pointer?.draftUri);
     setRecoveryBlocked(false);
     void openGalleryPicker(true);
-  }, [anuleazaScanarea, failedPhotoJob?.pointer?.draftUri, openGalleryPicker]);
+  }, [anuleazaScanarea, failedPhotoJob?.pointer?.draftUri, flowCredits, openCreditsSheetFromCamera, openGalleryPicker]);
 
   const handleHomeFromNotFood = useCallback(() => {
     anuleazaScanarea(failedPhotoJob?.pointer?.draftUri);
@@ -1720,7 +1799,17 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={StyleSheet.absoluteFillObject}
         facing="back"
-        active={rezultat.length === 0 && !saveSuccessData && !seIncarca && !isNonFood && !failedPhotoJob && !pendingDraftSheet}
+        active={
+          rezultat.length === 0
+          && !saveSuccessData
+          && !seIncarca
+          && !isNonFood
+          && !failedPhotoJob
+          && !pendingDraftSheet
+          && !isPickingGallery
+          && !uiErrorOverlay
+          && !flowCredits?.visible
+        }
         onCameraReady={handleCameraReady}
         onMountError={handleCameraMountError}
       />
@@ -1827,6 +1916,24 @@ export default function CameraScreen() {
           onGallery={handleGalleryFromNotFood}
           onHome={handleHomeFromNotFood}
         />
+      ) : uiErrorOverlay ? (
+        <PhotoMealErrorView
+          testID={
+            uiErrorOverlay.kind === 'gallery_unavailable'
+              ? 'camera-gallery-error-card'
+              : uiErrorOverlay.kind === 'fair_use_reached'
+                ? 'camera-fair-use-card'
+                : 'camera-credits-unavailable-card'
+          }
+          errorType={uiErrorOverlay.kind}
+          customMessage={uiErrorOverlay.message}
+          onRetake={handleRetakePhoto}
+          onGallery={() => {
+            setUiErrorOverlay(null);
+            void openGalleryPicker(true);
+          }}
+          onHome={handleHomeFromNotFood}
+        />
       ) : failedPhotoJob ? (
         <PhotoMealErrorView
           testID="camera-failed-job"
@@ -1896,7 +2003,7 @@ export default function CameraScreen() {
         </KeyboardAvoidingView>
       )}
 
-      {scanError && !isNonFood && (
+      {scanError && !isNonFood && !uiErrorOverlay && (
         <View style={[styles.errorCard, { top: insets.top + 78 }]} accessibilityRole="alert" accessibilityLiveRegion="assertive">
           <Text maxFontSizeMultiplier={1.3} style={styles.errorText}>{scanError}</Text>
           {recoveryBlocked ? (
@@ -1936,7 +2043,7 @@ export default function CameraScreen() {
       )}
 
       {/* Shutter & Gallery button */}
-      {rezultat.length === 0 && !isNonFood && !failedPhotoJob && (
+      {rezultat.length === 0 && !isNonFood && !failedPhotoJob && !uiErrorOverlay && (
         <Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(600).delay(200)} style={[styles.shutterArea, { bottom: Math.max(insets.bottom, 16) + 20 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 28 }}>
             <TouchableOpacity
@@ -2002,6 +2109,11 @@ export default function CameraScreen() {
         onConfirm={() => {
           const sheet = pendingDraftSheet;
           if (!sheet || !isPhotoOwnerCurrent(sheet.ownerId, sheet.accountGeneration)) return;
+          if (isConfirmedZeroFlowCredits(flowCredits)) {
+            setPendingDraftSheet(null);
+            openCreditsSheetFromCamera();
+            return;
+          }
           setPendingDraftSheet(null);
           void analizeazaImaginea(sheet.uri, true, undefined, sheet.uri);
         }}

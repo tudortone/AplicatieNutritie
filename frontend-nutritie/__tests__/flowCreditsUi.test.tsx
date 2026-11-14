@@ -27,6 +27,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFlowState = {
     balance: { dailyRemaining: 2, rewarded: 1, purchased: 7, total: 10, rewardedGrantsRemaining: 4, serverDay: '2026-09-21' },
+    balanceReady: true,
     loading: false,
     unlimited: false,
     visible: true,
@@ -35,6 +36,7 @@ beforeEach(() => {
       { id: 'getflow_credits_10', title: '10', description: '', displayPrice: '6,99 RON', currencyCode: 'RON' },
       { id: 'getflow_credits_30', title: '30', description: '', displayPrice: '14,99 RON', currencyCode: 'RON' },
     ],
+    purchaseStatus: { status: 'idle' },
     open: mockOpen,
     close: mockClose,
     refresh: jest.fn(),
@@ -87,6 +89,47 @@ describe('Flow Credits production UI', () => {
     expect(screen.getByText('The advertisement is currently unavailable. Please try again later.')).toBeTruthy();
     await fireEvent.press(screen.getByText('Retry ad · +1'));
     expect(mockWatchRewarded).toHaveBeenCalledTimes(1);
+  });
+
+  test('shows daily rewarded limit explanation at idle when rewardedGrantsRemaining is 0', async () => {
+    mockFlowState.balance.rewardedGrantsRemaining = 0;
+    const screen = await render(<FlowCreditsModalHost />);
+    expect(screen.getByText("Today's rewarded credit limit has been reached.")).toBeTruthy();
+    const watchAdBtn = screen.getByRole('button', { name: 'Watch ad · +1' });
+    expect(watchAdBtn.props.accessibilityState.disabled).toBe(true);
+  });
+
+  test('pressing backdrop dismisses the Flow Credits sheet', async () => {
+    const screen = await render(<FlowCreditsModalHost />);
+    await fireEvent.press(screen.getByTestId('flow-credits-backdrop'));
+    expect(mockClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('displays billing status feedback and disables packs during purchase verification', async () => {
+    mockFlowState.purchaseStatus = { status: 'verifying' };
+    const screen = await render(<FlowCreditsModalHost />);
+    expect(screen.getByTestId('flow-credits-purchase-busy')).toBeTruthy();
+    expect(screen.getByText('Processing purchase…')).toBeTruthy();
+    await fireEvent.press(screen.getByText('30 Flow Credits'));
+    expect(mockPurchase).not.toHaveBeenCalled();
+
+    mockFlowState.purchaseStatus = { status: 'pending' };
+    await screen.rerender(<FlowCreditsModalHost />);
+    expect(screen.getByTestId('flow-credits-purchase-pending')).toBeTruthy();
+
+    mockFlowState.purchaseStatus = { status: 'error' };
+    await screen.rerender(<FlowCreditsModalHost />);
+    expect(screen.getByTestId('flow-credits-purchase-error')).toBeTruthy();
+  });
+
+  test('displays Continue to scan CTA after earning a credit and closes modal on press', async () => {
+    mockFlowState.rewardState = 'granted';
+    const screen = await render(<FlowCreditsModalHost />);
+    const continueBtn = screen.getByTestId('flow-credits-continue-btn');
+    expect(continueBtn).toBeTruthy();
+    expect(screen.getByText('Continue to scan')).toBeTruthy();
+    await fireEvent.press(continueBtn);
+    expect(mockClose).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -399,7 +399,14 @@
     "malformedResultTitle": "Could not structure the nutrition data",
     "malformedResultMessage": "The image could not be processed into reliable nutrition values. No Flow Credits were consumed.",
     "retrySafe": "Retry safely",
-    "scanAgain": "Scan again"
+    "scanAgain": "Scan again",
+    "galleryErrorTitle": "Could not open gallery",
+    "galleryErrorMessage": "The image picker did not respond or was interrupted. No Flow Credits were consumed.",
+    "retryGallery": "Open gallery again",
+    "useCameraInstead": "Use camera instead",
+    "creditsUnavailableTitle": "Credits check unavailable",
+    "creditsUnavailableMessage": "The credits service could not verify your balance right now. Please try again in a moment.",
+    "fairUseReachedMessage": "You have reached the temporary fair-use limit for photo analyses. Please try again later."
   },
   "photoJob": {
     "backgroundTitle": "Analysis continues in the background",
@@ -1444,7 +1451,11 @@
     "upgradePremium": "Upgrade to GetFlow Premium",
     "serverAuthority": "Credits and purchases are confirmed securely by GetFlow servers. Purchased credits never expire.",
     "photoAnalyses": "photo analyses",
-    "freeBadge": "GetFlow Free"
+    "freeBadge": "GetFlow Free",
+    "continueScanning": "Continue to scan",
+    "purchaseProcessing": "Processing purchase…",
+    "purchasePending": "Purchase is awaiting Google Play confirmation.",
+    "purchaseError": "The purchase could not be completed. Please try again."
   },
   "calculatorAi": {
     "badge": "AI nutrition algorithm. Enter your accurate details for precise nutrition targets.",

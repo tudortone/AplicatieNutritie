@@ -10,7 +10,10 @@ export type PhotoErrorType =
   | 'network_error'
   | 'provider_error'
   | 'malformed_result'
-  | 'permission_denied';
+  | 'permission_denied'
+  | 'gallery_unavailable'
+  | 'credits_unavailable'
+  | 'fair_use_reached';
 
 interface PhotoMealErrorViewProps {
   testID?: string;
@@ -79,6 +82,38 @@ export function PhotoMealErrorView({
           primaryIcon: <Camera size={18} color="#000000" />,
           hasGallery: true,
         };
+      case 'gallery_unavailable':
+        return {
+          icon: <ImageIcon size={36} color="#FB923C" />,
+          title: customTitle || t('camera.galleryErrorTitle'),
+          body: customMessage || t('camera.galleryErrorMessage'),
+          primaryLabel: t('camera.retryGallery'),
+          primaryAction: onGallery,
+          primaryIcon: <ImageIcon size={18} color="#000000" />,
+          hasGallery: false,
+          secondaryCamera: true,
+        };
+      case 'credits_unavailable':
+        return {
+          icon: <AlertTriangle size={36} color="#FB923C" />,
+          title: customTitle || t('camera.creditsUnavailableTitle'),
+          body: customMessage || t('camera.creditsUnavailableMessage'),
+          primaryLabel: t('camera.retrySafe'),
+          primaryAction: onRetake,
+          primaryIcon: <RefreshCw size={18} color="#000000" />,
+          hasGallery: true,
+        };
+      case 'fair_use_reached':
+        return {
+          icon: <ShieldCheck size={36} color="#FB923C" />,
+          title: customTitle || t('camera.quotaExceededTitle'),
+          body: customMessage || t('camera.fairUseReachedMessage'),
+          primaryLabel: t('camera.goToHome'),
+          primaryAction: onHome,
+          primaryIcon: <Home size={18} color="#000000" />,
+          hasGallery: false,
+          hideHomeGhost: true,
+        };
       case 'malformed_result':
       default:
         return {
@@ -117,7 +152,10 @@ export function PhotoMealErrorView({
             {content.body}
           </Text>
 
-          {errorType !== 'permission_denied' && (
+          {errorType !== 'permission_denied'
+            && errorType !== 'gallery_unavailable'
+            && errorType !== 'credits_unavailable'
+            && errorType !== 'fair_use_reached' && (
             <View style={styles.refundBadge} testID="credit-refund-reassurance-badge">
               <ShieldCheck size={14} color="#CCFF00" />
               <Text maxFontSizeMultiplier={1.3} style={styles.refundBadgeText}>
@@ -178,19 +216,37 @@ export function PhotoMealErrorView({
               </TouchableOpacity>
             )}
 
+            {/* 2b. Secondary fallback to camera when gallery fails */}
+            {content.secondaryCamera && (
+              <TouchableOpacity
+                testID="error-camera-btn"
+                onPress={onRetake}
+                style={styles.secondaryBtn}
+                accessibilityRole="button"
+                accessibilityLabel={t('camera.useCameraInstead')}
+              >
+                <Camera size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text maxFontSizeMultiplier={1.3} style={styles.secondaryBtnText}>
+                  {t('camera.useCameraInstead')}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             {/* 3. Ghost: Go to Home */}
-            <TouchableOpacity
-              testID={errorType === 'not_food' ? 'not-food-home-btn' : 'error-home-btn'}
-              onPress={onHome}
-              style={styles.ghostBtn}
-              accessibilityRole="button"
-              accessibilityLabel={t('camera.goToHome')}
-            >
-              <Home size={16} color="#CCFF00" style={{ marginRight: 6 }} />
-              <Text maxFontSizeMultiplier={1.3} style={styles.ghostBtnText}>
-                {t('camera.goToHome')}
-              </Text>
-            </TouchableOpacity>
+            {!content.hideHomeGhost && (
+              <TouchableOpacity
+                testID={errorType === 'not_food' ? 'not-food-home-btn' : 'error-home-btn'}
+                onPress={onHome}
+                style={styles.ghostBtn}
+                accessibilityRole="button"
+                accessibilityLabel={t('camera.goToHome')}
+              >
+                <Home size={16} color="#CCFF00" style={{ marginRight: 6 }} />
+                <Text maxFontSizeMultiplier={1.3} style={styles.ghostBtnText}>
+                  {t('camera.goToHome')}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       </BlurView>

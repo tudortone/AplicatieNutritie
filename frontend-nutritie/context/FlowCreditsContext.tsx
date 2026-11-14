@@ -6,7 +6,7 @@ import { isConsentResolved, resolveAdsConsent } from '../lib/ads/adsConsent';
 import { supabase } from '../supabase';
 import { useBilling } from './BillingContext';
 import { usePremium } from './PremiumContext';
-import type { BillingCreditProduct } from '../lib/billing/types';
+import type { BillingCreditProduct, BillingOperationState } from '../lib/billing/types';
 import { getPlayIntegrityHeaders } from '../lib/playIntegrityNative';
 
 export type FlowCreditsBalance = {
@@ -23,11 +23,13 @@ export type FlowCreditCategory = 'daily' | 'rewarded' | 'purchased';
 type RewardState = 'idle' | 'loading' | 'awaiting-server' | 'granted' | 'unavailable' | 'limit';
 type FlowCreditsContextValue = {
   balance: FlowCreditsBalance;
+  balanceReady: boolean;
   loading: boolean;
   unlimited: boolean;
   visible: boolean;
   rewardState: RewardState;
   creditProducts: BillingCreditProduct[];
+  purchaseStatus: BillingOperationState;
   lastConsumedCategory: FlowCreditCategory | null;
   open: () => void;
   close: () => void;
@@ -47,13 +49,17 @@ const EMPTY: FlowCreditsBalance = {
   serverDay: null,
 };
 
+const IDLE_BILLING_OPERATION: BillingOperationState = { status: 'idle' };
+
 const FlowCreditsContext = createContext<FlowCreditsContextValue>({
   balance: EMPTY,
+  balanceReady: false,
   loading: false,
   unlimited: false,
   visible: false,
   rewardState: 'idle',
   creditProducts: [],
+  purchaseStatus: IDLE_BILLING_OPERATION,
   lastConsumedCategory: null,
   open: () => {},
   close: () => {},
@@ -63,6 +69,19 @@ const FlowCreditsContext = createContext<FlowCreditsContextValue>({
   watchRewarded: async () => 'unavailable',
   purchase: async () => {},
 });
+
+/**
+ * Returns true only when the user's Flow Credits balance for the active account
+ * has been confirmed from the backend, is not loading/unlimited, and has 0 total credits.
+ */
+export function hasConfirmedZeroFlowCredits(
+  flow: Pick<FlowCreditsContextValue, 'balance' | 'balanceReady' | 'loading' | 'unlimited'> | null | undefined,
+): boolean {
+  if (!flow || flow.balanceReady !== true || flow.loading || flow.unlimited) {
+    return false;
+  }
+  return (flow.balance?.total ?? 0) <= 0;
+}
 
 function normalizedBalance(value: unknown): FlowCreditsBalance | null {
   if (!value || typeof value !== 'object') return null;
@@ -191,8 +210,8 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   }, [refresh]);
 
   useEffect(() => {
-    if (billing.operation.status === 'verified') void refresh();
-  }, [billing.operation.status, refresh]);
+    if (billing.operation?.status === 'verified') void refresh();
+  }, [billing.operation?.status, refresh]);
 
   const watchRewarded = useCallback(async () => {
     const owner = ownerRef.current;
@@ -353,20 +372,32 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   }, []);
 
   const purchase = useCallback(async (product: BillingCreditProduct) => {
-    await billing.purchaseCredits(product);
+    try {
+      await billing.purchaseCredits(product);
+    } catch {
+      // BillingContext records failure details in billing.operation.
+    }
   }, [billing]);
+
+  const balanceReady = Boolean(appUserId && balanceOwnerId === appUserId);
+  const purchaseStatus = billing.operation ?? IDLE_BILLING_OPERATION;
 
   const value = useMemo<FlowCreditsContextValue>(() => ({
     // Never render the previous account's credits during the render/effect gap
     // when appUserId changes; the network refresh may still be pending.
-    balance: appUserId && balanceOwnerId === appUserId ? balance : EMPTY,
+    balance: balanceReady ? balance : EMPTY,
+    balanceReady,
     loading: loading || premium.loading,
     unlimited: premium.hasFullAccess || premium.isPremium,
     visible,
     rewardState,
     creditProducts: billing.creditProducts,
+    purchaseStatus,
     lastConsumedCategory,
     open: () => {
+      setRewardState((prev) => (
+        prev === 'granted' || prev === 'unavailable' || prev === 'limit' ? 'idle' : prev
+      ));
       void refresh();
       setVisible(true);
     },
@@ -376,7 +407,7 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     rollbackOptimisticCredit,
     watchRewarded,
     purchase,
-  }), [appUserId, balance, balanceOwnerId, loading, premium.loading, premium.hasFullAccess, premium.isPremium, visible, rewardState, billing.creditProducts, lastConsumedCategory, refresh, consumeOptimisticCredit, rollbackOptimisticCredit, watchRewarded, purchase]);
+  }), [balanceReady, balance, loading, premium.loading, premium.hasFullAccess, premium.isPremium, visible, rewardState, billing.creditProducts, purchaseStatus, lastConsumedCategory, refresh, consumeOptimisticCredit, rollbackOptimisticCredit, watchRewarded, purchase]);
 
   return <FlowCreditsContext.Provider value={value}>{children}</FlowCreditsContext.Provider>;
 }

@@ -394,7 +394,14 @@
     "malformedResultTitle": "Nu am putut structura datele",
     "malformedResultMessage": "Imaginea nu a putut fi procesată în valori nutriționale sigure. Creditul tău nu a fost consumat.",
     "retrySafe": "Reîncearcă în siguranță",
-    "scanAgain": "Scanează din nou"
+    "scanAgain": "Scanează din nou",
+    "galleryErrorTitle": "Nu am putut deschide galeria",
+    "galleryErrorMessage": "Selectorul de imagini nu a răspuns sau a fost întrerupt. Creditul tău nu a fost consumat.",
+    "retryGallery": "Deschide galeria din nou",
+    "useCameraInstead": "Folosește camera",
+    "creditsUnavailableTitle": "Verificarea creditelor indisponibilă",
+    "creditsUnavailableMessage": "Serviciul de credite nu a putut confirma soldul acum. Reîncearcă în câteva momente.",
+    "fairUseReachedMessage": "Ai atins limita temporară de siguranță pentru analize foto. Poți încerca din nou mai târziu."
   },
   "photoJob": {
     "backgroundTitle": "Analiza continuă în fundal",
@@ -1444,7 +1451,11 @@
     "upgradePremium": "Treci la GetFlow Premium",
     "serverAuthority": "Creditele și achizițiile sunt confirmate securizat de serverele GetFlow. Creditele cumpărate nu expiră.",
     "photoAnalyses": "analize foto",
-    "freeBadge": "GetFlow Free"
+    "freeBadge": "GetFlow Free",
+    "continueScanning": "Continuă scanarea",
+    "purchaseProcessing": "Se procesează achiziția…",
+    "purchasePending": "Achiziția este în așteptarea confirmării Google Play.",
+    "purchaseError": "Achiziția nu a putut fi finalizată. Încearcă din nou."
   },
   "calculatorAi": {
     "badge": "Algoritm de nutriție cu inteligență artificială. Introdu datele tale pentru a calcula țintele nutriționale optime.",
