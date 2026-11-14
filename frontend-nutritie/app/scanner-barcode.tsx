@@ -7,37 +7,54 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  FlatList,
   Platform,
   Modal,
-  Pressable,
   Linking
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { ScanLine, X, Plus, Minus, Package, Trash2, ArrowLeft, CheckCircle2, ShoppingBag, Snowflake, ChefHat, Clock, Check, Wand2 } from 'lucide-react-native';
+import { ScanLine, X, Plus, ArrowLeft, CheckCircle2, ShoppingBag, ChefHat } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
 import { useNotificationBannerActions } from '../context/NotificationBannerContext';
 import { getProdusByBarcode, ProdusScanat } from '../lib/openfoodfacts';
-import { useCamara, ProdusCamara } from '../hooks/useCamara';
+import { useCamara, ProdusCamara, ProdusCamaraUpdate } from '../hooks/useCamara';
 import { AddMealBottomSheet, AddMealBottomSheetRef } from '../components/AddMealBottomSheet';
 import { ManualProductForm } from '../components/food/ManualProductForm';
+import { PantryView } from '../components/camara/PantryView';
+
+const useSafeLocalSearchParams: typeof useLocalSearchParams =
+  typeof useLocalSearchParams === 'function'
+    ? useLocalSearchParams
+    : ((() => ({})) as unknown as typeof useLocalSearchParams);
 
 export default function ScannerBarcodeScreen() {
   const router = useRouter();
+  const routeParams = useSafeLocalSearchParams<{ tab?: string }>();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { showBanner } = useNotificationBannerActions();
-  const { produse, adaugaProdus, modificaCantitate, toggleCongelator, stergeProdus } = useCamara();
+  const {
+    produse,
+    loading: camaraLoading = false,
+    error: camaraError = null,
+    adaugaProdus,
+    modificaCantitate,
+    actualizeazaProdus,
+    consumaDinCamara,
+    toggleCongelator,
+    stergeProdus,
+    refresh: refreshCamara,
+  } = useCamara();
 
   const [manualModalVisible, setManualModalVisible] = useState(false);
   const [fullManualModalVisible, setFullManualModalVisible] = useState(false);
+  const [manualPrefillName, setManualPrefillName] = useState('');
 
   const [permission, requestPermission] = useCameraPermissions();
   // ⚠️ useRef sincron — previne race condition (useState e async, lasă ferestre)
@@ -46,7 +63,9 @@ export default function ScannerBarcodeScreen() {
   const [searching, setSearching] = useState(false);
   const [produsGasit, setProdusGasit] = useState<ProdusScanat | null>(null);
   const [codNegasit, setCodNegasit] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'scan' | 'camara'>('scan');
+  const [activeTab, setActiveTab] = useState<'scan' | 'camara'>(
+    routeParams?.tab === 'camara' ? 'camara' : 'scan'
+  );
   const [camaraSuccessModal, setCamaraSuccessModal] = useState<{ visible: boolean; produs: ProdusScanat | null }>({ visible: false, produs: null });
 
   const [selectedCamaraItems, setSelectedCamaraItems] = useState<string[]>([]);
@@ -58,22 +77,41 @@ export default function ScannerBarcodeScreen() {
     );
   }, []);
 
-  const handleGateateCuAICamara = useCallback(() => {
-    if (selectedCamaraItems.length === 0) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const handleGeneratePantryRecipes = useCallback(
+    (itemsForRecipes: ProdusCamara[]) => {
+      if (itemsForRecipes.length === 0) {
+        showBanner({
+          title: t('scannerBarcode.emptyPantryTitle'),
+          message: t('scannerBarcode.emptyPantryMsg'),
+          type: 'warning',
+        });
+        return;
+      }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    const ingredienteSelectate = produse
-      .filter(p => selectedCamaraItems.includes(p.id))
-      .map(p => `${p.nume}${p.cantitate && p.cantitate > 1 ? ` (${p.cantitate}x)` : ''}`)
-      .join(', ');
+      const ingredienteText = itemsForRecipes
+        .map((p) => {
+          const qtyTag =
+            typeof p.cantitate_g === 'number' && p.cantitate_g > 0
+              ? `${Math.round(p.cantitate_g)}g`
+              : `${p.cantitate || 1}x`;
+          const freezeSuffix = p.is_congelat ? t('scannerBarcode.frozenIngredientSuffix') : '';
+          return `${p.nume} (${qtyTag}${freezeSuffix})`;
+        })
+        .join(', ');
 
-    const promptReteta = t('scannerBarcode.selectedRecipePrompt', { ingredients: ingredienteSelectate });
+      const promptKey =
+        selectedCamaraItems.length > 0
+          ? 'scannerBarcode.selectedRecipePrompt'
+          : 'scannerBarcode.askGrokPrompt';
 
-    router.push({
-      pathname: '/(tabs)/chat',
-      params: { prompt: promptReteta },
-    });
-  }, [selectedCamaraItems, produse, router, t]);
+      router.push({
+        pathname: '/(tabs)/chat',
+        params: { prompt: t(promptKey, { ingredients: ingredienteText }) },
+      });
+    },
+    [selectedCamaraItems.length, router, showBanner, t]
+  );
 
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
 
@@ -146,219 +184,118 @@ export default function ScannerBarcodeScreen() {
   };
 
   const handleAdaugaLaMasa = (item: ProdusScanat | ProdusCamara) => {
+    const rawGrams =
+      'cantitate_g' in item && typeof item.cantitate_g === 'number' && item.cantitate_g > 0
+        ? item.cantitate_g
+        : undefined;
+    const usePartialRemaining = rawGrams !== undefined && rawGrams < 100;
+    const defaultGr = usePartialRemaining ? Math.max(1, Math.round(rawGrams)) : 100;
+    const scale = defaultGr / 100;
+
     addMealSheetRef.current?.openWithItem({
       nume: item.nume,
-      calorii: item.calorii_100g,
-      proteine: item.proteine_100g,
-      carbohidrati: item.carbohidrati_100g,
-      grasimi: item.grasimi_100g,
-      gramajDefault: 100,
+      calorii: Math.round(item.calorii_100g * scale),
+      proteine: Math.round(item.proteine_100g * scale * 10) / 10,
+      carbohidrati: Math.round(item.carbohidrati_100g * scale * 10) / 10,
+      grasimi: Math.round(item.grasimi_100g * scale * 10) / 10,
+      gramajDefault: defaultGr,
       pantryProductName: item.nume,
+      pantryProductId: 'id' in item ? item.id : undefined,
     });
   };
 
-  const handlePantryUsed = useCallback((productName: string) => {
-    const produsInCamara = produse.find(p =>
-      p.nume.toLowerCase().trim() === productName.toLowerCase().trim()
-    );
-    if (produsInCamara) {
-      const currentQty = produsInCamara.cantitate || 1;
-      if (currentQty <= 1) {
-        stergeProdus(produsInCamara.id);
-        showBanner({ title: t('scannerBarcode.consumedTitle'), message: t('scannerBarcode.consumedMessage', { name: productName }), type: 'success' });
-      } else {
-        modificaCantitate(produsInCamara.id, -1);
-        showBanner({ title: t('scannerBarcode.quantityUpdatedTitle'), message: t('scannerBarcode.quantityUpdatedMessage', { name: productName, count: currentQty - 1 }), type: 'info' });
+  const handlePantryUsed = useCallback(
+    async (productName: string, usedGrams?: number, pantryProductId?: string) => {
+      if (typeof consumaDinCamara === 'function') {
+        const res = await consumaDinCamara({
+          id: pantryProductId,
+          name: productName,
+          usedGrams,
+        });
+        if (res.status === 'consumed') {
+          showBanner({
+            title: t('scannerBarcode.consumedTitle'),
+            message: t('scannerBarcode.consumedMessage', { name: productName }),
+            type: 'success',
+          });
+        } else if (res.status === 'updated_grams') {
+          showBanner({
+            title: t('scannerBarcode.quantityUpdatedTitle'),
+            message: t('scannerBarcode.gramsUpdatedMessage', {
+              name: productName,
+              grams: res.remainingGrams,
+            }),
+            type: 'info',
+          });
+        } else if (res.status === 'updated_count') {
+          showBanner({
+            title: t('scannerBarcode.quantityUpdatedTitle'),
+            message: t('scannerBarcode.quantityUpdatedMessage', {
+              name: productName,
+              count: res.remainingCount,
+            }),
+            type: 'info',
+          });
+        }
+        return;
       }
-    }
-  }, [produse, stergeProdus, modificaCantitate, showBanner, t]);
 
-  if (!permission) {
-    // BUG-059: ecran cu spinner în loc de View gol — fără flash pe starea inițială.
-    return (
-      <View style={[styles.permContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    );
-  }
+      const produsInCamara = produse.find(
+        (p) =>
+          (pantryProductId && p.id === pantryProductId) ||
+          p.nume.toLowerCase().trim() === productName.toLowerCase().trim()
+      );
+      if (produsInCamara) {
+        const currentQty = produsInCamara.cantitate || 1;
+        if (currentQty <= 1) {
+          stergeProdus(produsInCamara.id);
+          showBanner({
+            title: t('scannerBarcode.consumedTitle'),
+            message: t('scannerBarcode.consumedMessage', { name: productName }),
+            type: 'success',
+          });
+        } else {
+          modificaCantitate(produsInCamara.id, -1);
+          showBanner({
+            title: t('scannerBarcode.quantityUpdatedTitle'),
+            message: t('scannerBarcode.quantityUpdatedMessage', {
+              name: productName,
+              count: currentQty - 1,
+            }),
+            type: 'info',
+          });
+        }
+      }
+    },
+    [consumaDinCamara, produse, stergeProdus, modificaCantitate, showBanner, t]
+  );
 
-  if (!permission.granted) {
-    return (
-      <View style={[styles.permContainer, { backgroundColor: colors.background }]}>
-        <ScanLine size={52} color={colors.accent} />
-        <Text maxFontSizeMultiplier={1.3} style={[styles.permTitle, { color: colors.textPrimary }]}>{t('scannerBarcode.permissionTitle')}</Text>
-        <Text maxFontSizeMultiplier={1.3} style={[styles.permSub, { color: colors.textSecondary }]}>
-          {t('scannerBarcode.permissionSubtitle')}
-        </Text>
-        {/* BUG-059: refuz definitiv (canAskAgain=false pe Android) = dead-end la
-            cererea de permisiune; ghidăm utilizatorul către setările aplicației. */}
-        {permission.canAskAgain === false ? (
-          <>
-            <TouchableOpacity
-              onPress={() => Linking.openSettings()}
-              style={[styles.permBtn, { backgroundColor: colors.accent }]}
-              accessibilityLabel={t('scannerBarcode.openSettingsA11y')}
-              accessibilityRole="button"
-              accessibilityHint={t('scannerBarcode.openSettingsHint')}
-            >
-              <Text maxFontSizeMultiplier={1.3} style={[styles.permBtnText, { color: colors.background }]}>{t('scannerBarcode.openSettings')}</Text>
-            </TouchableOpacity>
-            <Text maxFontSizeMultiplier={1.3} style={[styles.permHint, { color: colors.textSecondary }]}>
-              {t('scannerBarcode.cameraDeniedHint')}
-            </Text>
-          </>
-        ) : (
-          <TouchableOpacity
-            onPress={requestPermission}
-            style={[styles.permBtn, { backgroundColor: colors.accent }]}
-            accessibilityLabel={t('scannerBarcode.allowAccessA11y')}
-            accessibilityRole="button"
-          >
-            <Text maxFontSizeMultiplier={1.3} style={[styles.permBtnText, { color: colors.background }]}>{t('scannerBarcode.allowAccess')}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  }
+  const handleSavePantryEdit = useCallback(
+    async (id: string, updates: ProdusCamaraUpdate) => {
+      if (typeof actualizeazaProdus === 'function') {
+        await actualizeazaProdus(id, updates);
+        return;
+      }
+      const existing = produse.find((p) => p.id === id);
+      if (existing && updates.is_congelat !== undefined && updates.is_congelat !== existing.is_congelat) {
+        await toggleCongelator(id);
+      }
+    },
+    [actualizeazaProdus, produse, toggleCongelator]
+  );
+
+  const handleStepGrams = useCallback(
+    async (id: string, nextGrams: number) => {
+      if (typeof actualizeazaProdus === 'function') {
+        await actualizeazaProdus(id, { cantitate_g: nextGrams });
+      }
+    },
+    [actualizeazaProdus]
+  );
 
   const handleAskGrokRecipes = () => {
     Haptics.selectionAsync();
-    if (produse.length === 0) {
-      showBanner({ title: t('scannerBarcode.emptyPantryTitle'), message: t('scannerBarcode.emptyPantryMsg'), type: 'warning' });
-      return;
-    }
-    const ingredienteList = produse.map(p => `${p.nume} (${p.cantitate || 1}x${p.is_congelat ? t('scannerBarcode.frozenIngredientSuffix') : ''})`).join(', ');
-    const promptGrok = t('scannerBarcode.askGrokPrompt', { ingredients: ingredienteList });
-    router.push({
-      pathname: '/(tabs)/chat',
-      params: { prompt: promptGrok }
-    });
-  };
-
-  const renderCamaraItem = ({ item }: { item: ProdusCamara }) => {
-    const isSelected = selectedCamaraItems.includes(item.id);
-    return (
-      // REMED-016: cardul e un simplu View; checkbox-ul real + conținutul stau
-      // într-un singur Pressable (role checkbox), iar butoanele de acțiune sunt
-      // FRAȚI, nu controale cuibărite în interiorul unui checkbox (bug TalkBack).
-      <View
-        style={[styles.pantryCard, { backgroundColor: colors.cardBg, borderColor: isSelected ? colors.accent : item.is_congelat ? `${colors.accentTertiary}66` : colors.cardBorder }]}
-      >
-        <Pressable
-          onPress={() => toggleCamaraSelect(item.id)}
-          style={styles.pantrySelectArea}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: isSelected }}
-          accessibilityLabel={t('scannerBarcode.selectForRecipesA11y', { name: item.nume, selected: isSelected ? t('scannerBarcode.selectedState') : '' })}
-        >
-          {/* Vizual checkbox — doar decorativ; starea e citită de pe Pressable din care face parte. */}
-          <View
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: 12,
-              borderWidth: 2,
-              borderColor: isSelected ? colors.accent : colors.textSecondary,
-              backgroundColor: isSelected ? colors.accent : 'transparent',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: 12,
-            }}
-            importantForAccessibility="no"
-            accessibilityElementsHidden
-          >
-            {isSelected && <Check size={14} color={colors.background} strokeWidth={3} />}
-          </View>
-
-          <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <View style={{ backgroundColor: colors.accent + '26', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
-              <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 11, fontWeight: '900', color: colors.accent }}>{item.cantitate || 1}x STACK</Text>
-            </View>
-            {item.is_congelat ? (
-              <View style={{ backgroundColor: `${colors.accentTertiary}26`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Snowflake size={11} color={colors.accentTertiary} />
-                <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 11, fontWeight: '800', color: colors.accentTertiary }}>{t('scannerBarcode.frozenDays', { count: 90 })}</Text>
-              </View>
-            ) : (
-              <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Clock size={11} color={colors.textSecondary} />
-                <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>{t('scannerBarcode.expiresInDays', { count: item.zile_valabilitate || 14 })}</Text>
-              </View>
-            )}
-          </View>
-
-          <Text maxFontSizeMultiplier={1.3} style={[styles.pantryTitle, { color: colors.textPrimary }]} numberOfLines={2} ellipsizeMode="tail">{item.nume}</Text>
-          {!!item.brand && <Text maxFontSizeMultiplier={1.3} style={[styles.pantryBrand, { color: colors.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">{item.brand}</Text>}
-          <Text maxFontSizeMultiplier={1.3} style={[styles.pantryMacro, { color: colors.accent }]}>
-            {item.calorii_100g} kcal/100g • P: {item.proteine_100g}g • C: {item.carbohidrati_100g}g • G: {item.grasimi_100g}g
-          </Text>
-        </View>
-        </Pressable>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          {/* Butoane stack +/- */}
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.selectionAsync();
-              modificaCantitate(item.id, -1);
-            }}
-            style={[styles.stackBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
-            hitSlop={5}
-            accessibilityRole="button"
-            accessibilityLabel={t('scannerBarcode.decreaseQuantityA11y', 'Scade cantitatea pentru {{name}}', { name: item.nume })}
-          >
-            <Minus size={14} color={colors.textPrimary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.selectionAsync();
-              modificaCantitate(item.id, 1);
-            }}
-            style={[styles.stackBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
-            hitSlop={5}
-            accessibilityRole="button"
-            accessibilityLabel={t('scannerBarcode.increaseQuantityA11y', { name: item.nume })}
-          >
-            <Plus size={14} color={colors.textPrimary} />
-          </TouchableOpacity>
-
-          {/* Butonul comutatorului congelatorului */}
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.selectionAsync();
-              toggleCongelator(item.id);
-            }}
-            style={[styles.stackBtn, { backgroundColor: item.is_congelat ? `${colors.accentTertiary}26` : 'rgba(255,255,255,0.06)' }]}
-            hitSlop={5}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: item.is_congelat }}
-            accessibilityLabel={t(item.is_congelat ? 'scannerBarcode.removeFreezerA11y' : 'scannerBarcode.addFreezerA11y', { name: item.nume })}
-          >
-            <Snowflake size={16} color={item.is_congelat ? colors.accentTertiary : colors.textSecondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => handleAdaugaLaMasa(item)}
-            style={[styles.addMasaBtn, { backgroundColor: colors.accent }]}
-            accessibilityLabel={t('scannerBarcode.addPantryMealA11y', { name: item.nume })}
-            accessibilityRole="button"
-          >
-            <Plus size={18} color={colors.background} strokeWidth={3} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => stergeProdus(item.id)}
-            style={[styles.deleteBtn, { backgroundColor: colors.danger + '1A' }]}
-            accessibilityLabel={t('scannerBarcode.deletePantryA11y', { name: item.nume })}
-            accessibilityRole="button"
-          >
-            <Trash2 size={16} color={colors.danger} />
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
+    handleGeneratePantryRecipes(produse);
   };
 
   return (
@@ -405,9 +342,75 @@ export default function ScannerBarcodeScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {activeTab === 'camara' && (
+          <TouchableOpacity
+            onPress={handleAskGrokRecipes}
+            hitSlop={8}
+            style={[
+              styles.navBtn,
+              {
+                backgroundColor: `${colors.accentTertiary}20`,
+                borderWidth: 1,
+                borderColor: `${colors.accentTertiary}55`,
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={t('scannerBarcode.askRecipesA11y')}
+          >
+            <ChefHat size={19} color={colors.accentTertiary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {activeTab === 'scan' ? (
+        !permission ? (
+          // BUG-059: ecran cu spinner în loc de View gol — fără flash pe starea inițială.
+          <View style={[styles.permContainer, { backgroundColor: colors.background }]}>
+            <ActivityIndicator size="large" color={colors.accent} />
+          </View>
+        ) : !permission.granted ? (
+          <View style={[styles.permContainer, { backgroundColor: colors.background }]}>
+            <ScanLine size={52} color={colors.accent} />
+            <Text maxFontSizeMultiplier={1.3} style={[styles.permTitle, { color: colors.textPrimary }]}>
+              {t('scannerBarcode.permissionTitle')}
+            </Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.permSub, { color: colors.textSecondary }]}>
+              {t('scannerBarcode.permissionSubtitle')}
+            </Text>
+            {/* BUG-059: refuz definitiv (canAskAgain=false pe Android) = dead-end la
+                cererea de permisiune; ghidăm utilizatorul către setările aplicației. */}
+            {permission.canAskAgain === false ? (
+              <>
+                <TouchableOpacity
+                  onPress={() => Linking.openSettings()}
+                  style={[styles.permBtn, { backgroundColor: colors.accent }]}
+                  accessibilityLabel={t('scannerBarcode.openSettingsA11y')}
+                  accessibilityRole="button"
+                  accessibilityHint={t('scannerBarcode.openSettingsHint')}
+                >
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.permBtnText, { color: colors.background }]}>
+                    {t('scannerBarcode.openSettings')}
+                  </Text>
+                </TouchableOpacity>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.permHint, { color: colors.textSecondary }]}>
+                  {t('scannerBarcode.cameraDeniedHint')}
+                </Text>
+              </>
+            ) : (
+              <TouchableOpacity
+                onPress={requestPermission}
+                style={[styles.permBtn, { backgroundColor: colors.accent }]}
+                accessibilityLabel={t('scannerBarcode.allowAccessA11y')}
+                accessibilityRole="button"
+              >
+                <Text maxFontSizeMultiplier={1.3} style={[styles.permBtnText, { color: colors.background }]}>
+                  {t('scannerBarcode.allowAccess')}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
         <View style={styles.cameraWrap}>
           <CameraView
             testID="barcode-scanner-camera"
@@ -596,127 +599,42 @@ export default function ScannerBarcodeScreen() {
             </BlurView>
           )}
         </View>
+        )
       ) : (
-        <View style={styles.pantryWrap}>
-          <View style={{ paddingHorizontal: 20, paddingTop: 14, gap: 10 }}>
-            {/* Buton AI Chef Grok Rețete */}
-            <TouchableOpacity
-              onPress={handleAskGrokRecipes}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                paddingVertical: 12,
-                borderRadius: 16,
-                backgroundColor: `${colors.accentTertiary}1F`,
-                borderWidth: 1.5,
-                borderColor: colors.accentTertiary
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={t('scannerBarcode.askRecipesA11y')}
-            >
-              <ChefHat size={18} color={colors.accentTertiary} />
-              <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 14, fontWeight: '900', color: colors.accentTertiary }}>
-                {t('scannerBarcode.askRecipes')}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Buton + Adaugă Manual (Ouă, Carne, Legume) */}
-            <TouchableOpacity
-              onPress={() => setManualModalVisible(true)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                paddingVertical: 10,
-                borderRadius: 14,
-                backgroundColor: colors.surfaceBg,
-                borderWidth: 1,
-                borderColor: colors.cardBorder
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={t('scannerBarcode.addManualA11y')}
-            >
-              <Plus size={16} color={colors.accent} />
-              <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 13, fontWeight: '800', color: colors.textPrimary }}>
-                {t('scannerBarcode.addManual')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <FlatList
-            data={produse}
-            keyExtractor={(item) => item.id}
-            renderItem={renderCamaraItem}
-            contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-            ListEmptyComponent={
-              <View style={styles.emptyPantry}>
-                <Package size={48} color={colors.textTertiary} />
-                <Text maxFontSizeMultiplier={1.3} style={[styles.emptyPTitle, { color: colors.textPrimary }]}>
-                  {t('scannerBarcode.inventoryEmptyTitle')}
-                </Text>
-                <Text maxFontSizeMultiplier={1.3} style={[styles.emptyPSub, { color: colors.textSecondary }]}>
-                  {t('scannerBarcode.inventoryEmptyMessage')}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setActiveTab('scan')}
-                  style={[styles.emptyPBtn, { backgroundColor: colors.accent }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('scannerBarcode.scanFirstA11y')}
-                >
-                  <Text maxFontSizeMultiplier={1.3} style={[styles.emptyPBtnText, { color: colors.background }]}>{t('scannerBarcode.scanFirst')}</Text>
-                </TouchableOpacity>
-              </View>
+        <PantryView
+          produse={produse}
+          loading={camaraLoading}
+          error={camaraError}
+          onRefresh={refreshCamara}
+          selectedIds={selectedCamaraItems}
+          onToggleSelect={toggleCamaraSelect}
+          onClearSelection={() => setSelectedCamaraItems([])}
+          onQuickAdd={(prefillName) => {
+            if (prefillName) {
+              setManualPrefillName(prefillName);
+              setFullManualModalVisible(true);
+            } else {
+              setManualPrefillName('');
+              setManualModalVisible(true);
             }
-          />
-
-          {selectedCamaraItems.length > 0 && (
-            <View
-              style={{
-                position: 'absolute',
-                left: 16,
-                right: 16,
-                bottom: Math.max(insets.bottom, 16) + 8,
-                borderRadius: 22,
-                borderWidth: 1,
-                borderColor: colors.cardBorder,
-                backgroundColor: colors.surfaceBg,
-                padding: 14,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: 0.35,
-                shadowRadius: 16,
-                elevation: 10,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <TouchableOpacity
-                  style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    paddingVertical: 14,
-                    borderRadius: 16,
-                    backgroundColor: colors.accent,
-                  }}
-                  onPress={handleGateateCuAICamara}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('scannerBarcode.cookSelectedA11y', { count: selectedCamaraItems.length })}
-                >
-                  <Wand2 size={18} color={colors.background} strokeWidth={2.5} />
-                  <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 15, fontWeight: '800', color: colors.background }}>
-                    {t('scannerBarcode.cookSelected', { count: selectedCamaraItems.length })}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-        </View>
+          }}
+          onScanFirst={() => setActiveTab('scan')}
+          onAddMeal={handleAdaugaLaMasa}
+          onStepUnit={(id, delta) => {
+            Haptics.selectionAsync();
+            modificaCantitate(id, delta);
+          }}
+          onStepGrams={(id, nextGrams) => {
+            Haptics.selectionAsync();
+            handleStepGrams(id, nextGrams);
+          }}
+          onSaveEdit={handleSavePantryEdit}
+          onDeleteItem={async (id) => {
+            await stergeProdus(id);
+            setSelectedCamaraItems((prev) => prev.filter((itemId) => itemId !== id));
+          }}
+          onGenerateRecipes={handleGeneratePantryRecipes}
+        />
       )}
 
       {/* Animatie UI & confirmare vizuala cand pui in Camara */}
@@ -805,11 +723,11 @@ export default function ScannerBarcodeScreen() {
 
             <View style={{ gap: 8, width: '100%', marginBottom: 20 }}>
               {[
-                { nume: 'Ouă proaspete (10 buc)', cal: 155, p: 13, c: 1, g: 11, exp: 14, cong: false },
-                { nume: 'Carne de pui piept proaspăt (500g)', cal: 165, p: 31, c: 0, g: 3.6, exp: 90, cong: true },
-                { nume: 'Carne de vită slabă (500g)', cal: 250, p: 26, c: 0, g: 15, exp: 90, cong: true },
-                { nume: 'Brânză de vaci slabă (300g)', cal: 98, p: 18, c: 3.5, g: 1.2, exp: 10, cong: false },
-                { nume: 'Legume proaspete mix (1 kg)', cal: 45, p: 2, c: 9, g: 0.3, exp: 7, cong: false },
+                { nume: 'Ouă proaspete (10 buc)', cal: 155, p: 13, c: 1, g: 11, exp: 14, cong: false, qty: 10, qtyG: undefined },
+                { nume: 'Carne de pui piept proaspăt (500g)', cal: 165, p: 31, c: 0, g: 3.6, exp: 90, cong: true, qty: 1, qtyG: 500 },
+                { nume: 'Carne de vită slabă (500g)', cal: 250, p: 26, c: 0, g: 15, exp: 90, cong: true, qty: 1, qtyG: 500 },
+                { nume: 'Brânză de vaci slabă (300g)', cal: 98, p: 18, c: 3.5, g: 1.2, exp: 10, cong: false, qty: 1, qtyG: 300 },
+                { nume: 'Legume proaspete mix (1 kg)', cal: 45, p: 2, c: 9, g: 0.3, exp: 7, cong: false, qty: 1, qtyG: 1000 },
               ].map((preset, idx) => (
                 <TouchableOpacity
                   key={idx}
@@ -822,9 +740,15 @@ export default function ScannerBarcodeScreen() {
                         calorii_100g: preset.cal,
                         proteine_100g: preset.p,
                         carbohidrati_100g: preset.c,
-                        grasimi_100g: preset.g
+                        grasimi_100g: preset.g,
+                        cantitate_g: preset.qtyG,
                       },
-                      { zileValabilitate: preset.exp, isCongelat: preset.cong, cantitate: 1 }
+                      {
+                        zileValabilitate: preset.exp,
+                        isCongelat: preset.cong,
+                        cantitate: preset.qty,
+                        cantitate_g: preset.qtyG,
+                      }
                     );
                     setManualModalVisible(false);
                     showBanner({ title: t('scannerBarcode.productAddedTitle'), message: t('scannerBarcode.productAddedMessage', { name: preset.nume }), type: 'success' });
@@ -887,11 +811,16 @@ export default function ScannerBarcodeScreen() {
         visible={fullManualModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setFullManualModalVisible(false)}
+        onRequestClose={() => {
+          setFullManualModalVisible(false);
+          setManualPrefillName('');
+        }}
       >
         <View style={{ flex: 1, backgroundColor: colors.background, padding: 16, paddingTop: Math.max(insets.top, 16) }}>
           <ManualProductForm
             initialBarcode={codNegasit || ''}
+            initialName={manualPrefillName}
+            skipRemoteCatalogInsert
             onSave={async (prod, gr) => {
               await adaugaProdus(
                 {
@@ -911,13 +840,17 @@ export default function ScannerBarcodeScreen() {
                 }
               );
               setFullManualModalVisible(false);
+              setManualPrefillName('');
               showBanner({
                 title: t('scannerBarcode.productAddedTitle'),
                 message: t('scannerBarcode.productAddedMessage', { name: prod.name }),
                 type: 'success',
               });
             }}
-            onCancel={() => setFullManualModalVisible(false)}
+            onCancel={() => {
+              setFullManualModalVisible(false);
+              setManualPrefillName('');
+            }}
           />
         </View>
       </Modal>
@@ -983,24 +916,6 @@ const styles = StyleSheet.create({
   actionBtnText: { fontSize: 14, fontWeight: '800' },
   actionBtnPrimary: { flex: 1.3, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   actionPrimaryText: { fontSize: 14, fontWeight: '900' },
-
-  pantryWrap: { flex: 1 },
-  pantryCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 18, borderWidth: 1, marginBottom: 12 },
-  // REMED-016: zona selectabilă (checkbox + conținut) — butoanele sunt frați, nu copii ai checkbox-ului.
-  pantrySelectArea: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingRight: 10 },
-  pantryTitle: { fontSize: 16, fontWeight: '800' },
-  pantryBrand: { fontSize: 13, fontWeight: '600', marginTop: 2 },
-  pantryMacro: { fontSize: 12, fontWeight: '800', marginTop: 6 },
-
-  addMasaBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  deleteBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  stackBtn: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-
-  emptyPantry: { alignItems: 'center', padding: 40, marginTop: 40 },
-  emptyPTitle: { fontSize: 20, fontWeight: '900', marginTop: 16, marginBottom: 8 },
-  emptyPSub: { fontSize: 14, lineHeight: 22, textAlign: 'center', marginBottom: 24 },
-  emptyPBtn: { paddingHorizontal: 20, paddingVertical: 14, borderRadius: 14 },
-  emptyPBtnText: { fontSize: 15, fontWeight: '800' },
 
   successModalBackdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   successModalCard: { width: '100%', borderRadius: 28, borderWidth: 1.5, padding: 24, alignItems: 'center' },

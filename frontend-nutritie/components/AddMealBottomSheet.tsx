@@ -53,6 +53,8 @@ export interface AddMealBottomSheetRef {
     imagineUrl?: string;
     /** Dacă provine din cămară, numele produsului pentru deducere automată */
     pantryProductName?: string;
+    /** ID-ul produsului din cămară pentru deducere exactă */
+    pantryProductId?: string;
   }) => void;
   close: () => void;
 }
@@ -66,7 +68,7 @@ interface AddMealBottomSheetProps {
   // fără un refetch prelungit în așteptare.
   onMasaCreata?: (masa: Masa) => void;
   /** Callback apelat după salvarea unei mese provenite din cămară */
-  onPantryUsed?: (productName: string) => void;
+  onPantryUsed?: (productName: string, usedGrams?: number, pantryProductId?: string) => void;
 }
 
 interface BaseNutrition {
@@ -112,6 +114,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
     const gramajSectionY = useRef(0);
     const [highlightGramaj, setHighlightGramaj] = useState(false);
     const pantryProductNameRef = useRef<string | undefined>(undefined);
+    const pantryProductIdRef = useRef<string | undefined>(undefined);
     // BUG-041: guard sincron anti dublu-tap (ref, nu stare — răspunde în același
     // tick), ca două atingeri rapide pe „Adaugă Masă" să nu creeze două insert-uri.
     const savingRef = useRef(false);
@@ -332,6 +335,8 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         // precedentă nu se refolosește — altfel a doua masă, adăugată deliberat,
         // s-ar ciocni pe cheia primară cu prima și nu s-ar mai scrie.
         idOperatieSalvareRef.current = null;
+        pantryProductNameRef.current = undefined;
+        pantryProductIdRef.current = undefined;
         if (masaToEdit) {
           setEditingMasaId(masaToEdit.id);
           setTipMasa(masaToEdit.tip_masa || defaultCategory || getTipMasaDupaOra());
@@ -401,17 +406,21 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
         clearScrollTimers();
         resetScrollToTop();
         setVisiblePresetCount(20);
+        idOperatieSalvareRef.current = null;
         const defaultGr = item.gramajDefault || 100;
         alimenteOriginaleRef.current = null;
         setEditingMasaId(null);
+        setTipMasa(getTipMasaDupaOra());
         setNume(item.nume);
         setGrame(String(defaultGr));
         setCalorii(String(item.calorii));
         setProteine(String(item.proteine));
         setCarbohidrati(String(item.carbohidrati));
         setGrasimi(String(item.grasimi));
+        setFibre('');
         setImagineUrl(item.imagineUrl || null);
         pantryProductNameRef.current = item.pantryProductName;
+        pantryProductIdRef.current = item.pantryProductId;
 
         setBaseNutrition({
           defaultGrame: defaultGr,
@@ -679,6 +688,13 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                 tip_masa: payload.tip_masa,
                 isOffline: true,
               });
+              if (pantryProductNameRef.current && onPantryUsed) {
+                const parsedGrams = Number(String(grame).replace(',', '.'));
+                const validGrams = Number.isFinite(parsedGrams) && parsedGrams > 0 ? parsedGrams : undefined;
+                onPantryUsed(pantryProductNameRef.current, validGrams, pantryProductIdRef.current);
+                pantryProductNameRef.current = undefined;
+                pantryProductIdRef.current = undefined;
+              }
             } catch {
               Alert.alert(t('alerts.titluri.eroareSalvare'), t('alerts.mesaje.eroareSalvareDinamica', { eroare: err.message }));
             }
@@ -713,8 +729,11 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           });
           // Deducere automată din cămară
           if (pantryProductNameRef.current && onPantryUsed) {
-            onPantryUsed(pantryProductNameRef.current);
+            const parsedGrams = Number(String(grame).replace(',', '.'));
+            const validGrams = Number.isFinite(parsedGrams) && parsedGrams > 0 ? parsedGrams : undefined;
+            onPantryUsed(pantryProductNameRef.current, validGrams, pantryProductIdRef.current);
             pantryProductNameRef.current = undefined;
+            pantryProductIdRef.current = undefined;
           }
         }
       } catch {

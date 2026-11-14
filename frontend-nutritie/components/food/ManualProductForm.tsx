@@ -16,6 +16,8 @@ export const LOCAL_CUSTOM_FOODS_STORAGE_KEY = '@getflow:custom_foods';
 interface ManualProductFormProps {
   initialBarcode?: string;
   initialName?: string;
+  /** Când apelantul persistă deja în produse_camara (ex. useCamara.adaugaProdus), evită dublura */
+  skipRemoteCatalogInsert?: boolean;
   onSave: (product: FoodProduct, gramsConsumed: number) => void;
   onCancel?: () => void;
 }
@@ -23,6 +25,7 @@ interface ManualProductFormProps {
 export function ManualProductForm({
   initialBarcode = '',
   initialName = '',
+  skipRemoteCatalogInsert = false,
   onSave,
   onCancel,
 }: ManualProductFormProps) {
@@ -156,7 +159,7 @@ export function ManualProductForm({
       }
 
       // 2. Persistare remote în Supabase produse_camara dacă este autentificat
-      if (session?.user?.id) {
+      if (!skipRemoteCatalogInsert && session?.user?.id) {
         try {
           await supabase.from('produse_camara').insert({
             user_id: session.user.id,

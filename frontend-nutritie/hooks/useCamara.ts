@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import type { ProdusScanat } from '../lib/openfoodfacts';
 import { calculateDaysUntilExpiry } from './useDaysUntilExpiry';
 import { checkAndSchedulePantryExpiryNotification } from '../lib/pantryNotifications';
+import { normalizePantryText } from '../components/camara/pantryUtils';
 
 export interface ProdusCamara {
   id: string;
@@ -19,13 +20,42 @@ export interface ProdusCamara {
   imagine_url?: string;
   created_at: string;
   cantitate?: number; // număr de bucăți / stack
-  cantitate_g?: number; // grame per bucată
+  cantitate_g?: number; // grame totale rămase (când e urmărit la gram)
   data_expirare?: string; // data de expirare YYYY-MM-DD
   zile_valabilitate?: number; // zile rămase până la expirare (dinamic)
   is_congelat?: boolean; // opțiunea de congelator (carne, fructe congelate)
 }
 
+export type ProdusCamaraUpdate = Partial<
+  Pick<ProdusCamara, 'cantitate' | 'cantitate_g' | 'data_expirare' | 'zile_valabilitate' | 'is_congelat' | 'nume' | 'brand'>
+>;
+
+export type ConsumePantryResult =
+  | { status: 'not_found' }
+  | { status: 'consumed'; item: ProdusCamara }
+  | { status: 'updated_grams'; item: ProdusCamara; remainingGrams: number }
+  | { status: 'updated_count'; item: ProdusCamara; remainingCount: number };
+
 const LOCAL_CAMARA_KEY = 'nutriai_camara_local_v3';
+
+const normalizeFetchedProdus = (p: ProdusCamara & { kcal_100g?: number | null }): ProdusCamara => {
+  let dataExp = p.data_expirare;
+  if (!dataExp) {
+    const zile = typeof p.zile_valabilitate === 'number' ? p.zile_valabilitate : (p.is_congelat ? 90 : 14);
+    dataExp = new Date(new Date(p.created_at || Date.now()).getTime() + zile * 86_400_000).toISOString().split('T')[0];
+  }
+  const dLeft = calculateDaysUntilExpiry(dataExp);
+  const rawKcal = p.calorii_100g ?? p.kcal_100g;
+  const safeKcal = typeof rawKcal === 'number' && Number.isFinite(rawKcal) ? rawKcal : 0;
+  return {
+    ...p,
+    calorii_100g: safeKcal,
+    cantitate: p.cantitate || 1,
+    cantitate_g: typeof p.cantitate_g === 'number' && p.cantitate_g > 0 ? p.cantitate_g : undefined,
+    data_expirare: dataExp,
+    zile_valabilitate: dLeft !== null ? dLeft : (p.is_congelat ? 90 : (p.zile_valabilitate || 14)),
+  };
+};
 
 export function useCamara() {
   const [produse, setProduse] = useState<ProdusCamara[]>([]);
@@ -33,11 +63,19 @@ export function useCamara() {
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // refs for cleanup and avoid race-conditions
-  const isMounted = React.useRef(true);
+  // Ref sincron pentru lista curentă (evită closure stale la tap-uri rapide +/-)
+  const produseRef = useRef<ProdusCamara[]>([]);
+  const isMounted = useRef(true);
   useEffect(() => {
     isMounted.current = true;
     return () => { isMounted.current = false; };
+  }, []);
+
+  const commitProduse = useCallback((nextList: ProdusCamara[]) => {
+    produseRef.current = nextList;
+    if (isMounted.current) {
+      setProduse(nextList);
+    }
   }, []);
 
   const fetchProduse = useCallback(async () => {
@@ -71,33 +109,11 @@ export function useCamara() {
 
       const combinedMap = new Map<string, ProdusCamara>();
       for (const p of remoteProduse) {
-        let dataExp = p.data_expirare;
-        if (!dataExp) {
-          const zile = typeof p.zile_valabilitate === 'number' ? p.zile_valabilitate : (p.is_congelat ? 90 : 14);
-          dataExp = new Date(new Date(p.created_at || Date.now()).getTime() + zile * 86_400_000).toISOString().split('T')[0];
-        }
-        const dLeft = calculateDaysUntilExpiry(dataExp);
-        combinedMap.set(p.id, {
-          ...p,
-          cantitate: p.cantitate || 1,
-          data_expirare: dataExp,
-          zile_valabilitate: dLeft !== null ? dLeft : (p.is_congelat ? 90 : (p.zile_valabilitate || 14)),
-        });
+        combinedMap.set(p.id, normalizeFetchedProdus(p));
       }
       for (const p of localProduse) {
         if (!combinedMap.has(p.id)) {
-          let dataExp = p.data_expirare;
-          if (!dataExp) {
-            const zile = typeof p.zile_valabilitate === 'number' ? p.zile_valabilitate : (p.is_congelat ? 90 : 14);
-            dataExp = new Date(new Date(p.created_at || Date.now()).getTime() + zile * 86_400_000).toISOString().split('T')[0];
-          }
-          const dLeft = calculateDaysUntilExpiry(dataExp);
-          combinedMap.set(p.id, {
-            ...p,
-            cantitate: p.cantitate || 1,
-            data_expirare: dataExp,
-            zile_valabilitate: dLeft !== null ? dLeft : (p.is_congelat ? 90 : (p.zile_valabilitate || 14)),
-          });
+          combinedMap.set(p.id, normalizeFetchedProdus(p));
         }
       }
 
@@ -105,8 +121,8 @@ export function useCamara() {
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
 
+      commitProduse(merged);
       if (isMounted.current) {
-        setProduse(merged);
         checkAndSchedulePantryExpiryNotification(merged).catch(() => {});
       }
     } catch (e) {
@@ -145,39 +161,54 @@ export function useCamara() {
   ): Promise<ProdusCamara> => {
     const { data: { user } } = await supabase.auth.getUser();
     const now = new Date().toISOString();
+    const current = produseRef.current;
 
-    const existentIndex = produse.findIndex(
+    const existentIndex = current.findIndex(
       (p) =>
         (item.barcode && item.barcode !== 'MANUAL' && p.barcode === item.barcode) ||
-        p.nume.trim().toLowerCase() === item.nume.trim().toLowerCase()
+        normalizePantryText(p.nume) === normalizePantryText(item.nume)
     );
 
     if (existentIndex >= 0) {
-      const produsExistent = produse[existentIndex];
+      const produsExistent = current[existentIndex];
       const nouaCantitate = (produsExistent.cantitate || 1) + (options?.cantitate || 1);
+      const addedGrams = options?.cantitate_g ?? item.cantitate_g;
+      const nouaCantitateG =
+        typeof addedGrams === 'number' && addedGrams > 0
+          ? Math.round((produsExistent.cantitate_g || 0) + addedGrams)
+          : produsExistent.cantitate_g;
       let dataExp = options?.dataExpirare ?? produsExistent.data_expirare;
       if (!dataExp) {
         const zile = options?.zileValabilitate ?? produsExistent.zile_valabilitate ?? (options?.isCongelat ? 90 : 14);
         dataExp = new Date(Date.now() + zile * 86_400_000).toISOString().split('T')[0];
       }
       const dLeft = calculateDaysUntilExpiry(dataExp);
+      const nextZile = dLeft !== null ? dLeft : (options?.zileValabilitate || (options?.isCongelat ? 90 : produsExistent.zile_valabilitate));
       const actualizat: ProdusCamara = {
         ...produsExistent,
         cantitate: nouaCantitate,
+        cantitate_g: nouaCantitateG,
         is_congelat: options?.isCongelat ?? produsExistent.is_congelat,
         data_expirare: dataExp,
-        zile_valabilitate: dLeft !== null ? dLeft : (options?.zileValabilitate || (options?.isCongelat ? 90 : produsExistent.zile_valabilitate)),
+        zile_valabilitate: nextZile,
       };
 
-      const nouaLista = produse.map((p, i) => (i === existentIndex ? actualizat : p));
-      setProduse(nouaLista);
+      const nouaLista = produseRef.current.map((p) => (p.id === produsExistent.id ? actualizat : p));
+      commitProduse(nouaLista);
       await salveazaLocalList(nouaLista);
 
       if (user && !produsExistent.id.startsWith('camara_')) {
         try {
           await supabase
             .from('produse_camara')
-            .update({ cantitate: nouaCantitate })
+            .update({
+              cantitate: nouaCantitate,
+              cantitate_g: nouaCantitateG ?? null,
+              data_expirare: dataExp ?? null,
+              zile_valabilitate: nextZile ?? null,
+              is_congelat: actualizat.is_congelat ?? false,
+              updated_at: now,
+            })
             .eq('id', produsExistent.id)
             .eq('user_id', user.id);
         } catch {}
@@ -189,6 +220,8 @@ export function useCamara() {
     const zileVal = options?.zileValabilitate || (options?.isCongelat ? 90 : 14);
     const dataExp = options?.dataExpirare || new Date(Date.now() + zileVal * 86_400_000).toISOString().split('T')[0];
     const dLeft = calculateDaysUntilExpiry(dataExp);
+    const rawGrams = options?.cantitate_g ?? item.cantitate_g;
+    const initialGrams = typeof rawGrams === 'number' && rawGrams > 0 ? Math.round(rawGrams) : undefined;
     const nouProdus: ProdusCamara = {
       id: localId,
       user_id: user ? user.id : 'local_user',
@@ -202,7 +235,7 @@ export function useCamara() {
       imagine_url: item.imagine_url || undefined,
       created_at: now,
       cantitate: options?.cantitate || 1,
-      cantitate_g: options?.cantitate_g ?? item.cantitate_g ?? undefined,
+      cantitate_g: initialGrams,
       data_expirare: dataExp,
       zile_valabilitate: dLeft !== null ? dLeft : zileVal,
       is_congelat: options?.isCongelat || false,
@@ -216,6 +249,7 @@ export function useCamara() {
           nume: nouProdus.nume,
           brand: nouProdus.brand || null,
           calorii_100g: nouProdus.calorii_100g,
+          kcal_100g: nouProdus.calorii_100g,
           proteine_100g: nouProdus.proteine_100g,
           grasimi_100g: nouProdus.grasimi_100g,
           carbohidrati_100g: nouProdus.carbohidrati_100g,
@@ -245,14 +279,14 @@ export function useCamara() {
       } catch {}
     }
 
-    const nouaLista = [nouProdus, ...produse];
-    setProduse(nouaLista);
+    const nouaLista = [nouProdus, ...produseRef.current];
+    commitProduse(nouaLista);
     await salveazaLocalList(nouaLista);
     return nouProdus;
   };
 
   const toggleCongelator = async (id: string) => {
-    const nouaLista = produse.map((p) => {
+    const nouaLista = produseRef.current.map((p) => {
       if (p.id !== id) return p;
       const willFreeze = !p.is_congelat;
 
@@ -283,7 +317,7 @@ export function useCamara() {
         zile_valabilitate: dLeft !== null ? dLeft : (willFreeze ? 90 : 7),
       };
     });
-    setProduse(nouaLista);
+    commitProduse(nouaLista);
     await salveazaLocalList(nouaLista);
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -297,6 +331,7 @@ export function useCamara() {
               is_congelat: actualizat.is_congelat,
               data_expirare: actualizat.data_expirare,
               zile_valabilitate: actualizat.zile_valabilitate,
+              updated_at: new Date().toISOString(),
             })
             .eq('id', id)
             .eq('user_id', user.id);
@@ -305,16 +340,33 @@ export function useCamara() {
     }
   };
 
+  const stergeProdus = async (id: string) => {
+    try {
+      const nouaLista = produseRef.current.filter((p) => p.id !== id);
+      commitProduse(nouaLista);
+      await salveazaLocalList(nouaLista);
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id && !id.startsWith('camara_')) {
+          await supabase.from('produse_camara').delete().eq('id', id).eq('user_id', user.id);
+        }
+      } catch {}
+    } catch (err) {
+      console.error('Eroare stergere produs camara:', err);
+    }
+  };
+
   const modificaCantitate = async (id: string, delta: number) => {
-    const existent = produse.find((p) => p.id === id);
+    const existent = produseRef.current.find((p) => p.id === id);
     if (!existent) return;
     const nouaCantitate = (existent.cantitate || 1) + delta;
     if (nouaCantitate <= 0) {
       await stergeProdus(id);
       return;
     }
-    const nouaLista = produse.map((p) => (p.id === id ? { ...p, cantitate: nouaCantitate } : p));
-    setProduse(nouaLista);
+    const nouaLista = produseRef.current.map((p) => (p.id === id ? { ...p, cantitate: nouaCantitate } : p));
+    commitProduse(nouaLista);
     await salveazaLocalList(nouaLista);
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -322,36 +374,144 @@ export function useCamara() {
       try {
         await supabase
           .from('produse_camara')
-          .update({ cantitate: nouaCantitate })
+          .update({ cantitate: nouaCantitate, updated_at: new Date().toISOString() })
           .eq('id', id)
           .eq('user_id', user.id);
       } catch {}
     }
   };
 
-  const stergeProdus = async (id: string) => {
-    try {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        await supabase.from('produse_camara').delete().eq('id', id).eq('user_id', user?.id);
-      } catch {}
+  const actualizeazaProdus = async (
+    id: string,
+    updates: ProdusCamaraUpdate
+  ): Promise<ProdusCamara | null> => {
+    const existent = produseRef.current.find((p) => p.id === id);
+    if (!existent) return null;
 
-      const nouaLista = produse.filter((p) => p.id !== id);
-      setProduse(nouaLista);
-      await salveazaLocalList(nouaLista);
-    } catch (err) {
-      console.error('Eroare stergere produs camara:', err);
+    const nextExp = updates.data_expirare !== undefined ? updates.data_expirare : existent.data_expirare;
+    let nextZile = updates.zile_valabilitate !== undefined ? updates.zile_valabilitate : existent.zile_valabilitate;
+    if (updates.data_expirare !== undefined && updates.zile_valabilitate === undefined) {
+      const computed = calculateDaysUntilExpiry(updates.data_expirare);
+      if (computed !== null) nextZile = computed;
     }
+
+    const nextCantitate =
+      updates.cantitate !== undefined ? Math.max(1, Math.round(updates.cantitate)) : existent.cantitate ?? 1;
+    const nextCantitateG =
+      updates.cantitate_g !== undefined
+        ? updates.cantitate_g > 0
+          ? Math.round(updates.cantitate_g)
+          : undefined
+        : existent.cantitate_g;
+
+    const actualizat: ProdusCamara = {
+      ...existent,
+      ...updates,
+      cantitate: nextCantitate,
+      cantitate_g: nextCantitateG,
+      data_expirare: nextExp,
+      zile_valabilitate: nextZile,
+    };
+
+    const nouaLista = produseRef.current.map((p) => (p.id === id ? actualizat : p));
+    commitProduse(nouaLista);
+    await salveazaLocalList(nouaLista);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && !id.startsWith('camara_')) {
+      try {
+        await supabase
+          .from('produse_camara')
+          .update({
+            nume: actualizat.nume,
+            brand: actualizat.brand ?? null,
+            cantitate: actualizat.cantitate ?? 1,
+            cantitate_g: actualizat.cantitate_g ?? null,
+            data_expirare: actualizat.data_expirare ?? null,
+            zile_valabilitate: actualizat.zile_valabilitate ?? null,
+            is_congelat: actualizat.is_congelat ?? false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', id)
+          .eq('user_id', user.id);
+      } catch {}
+    }
+
+    return actualizat;
+  };
+
+  const consumaDinCamara = async ({
+    id,
+    name,
+    usedGrams,
+  }: {
+    id?: string;
+    name?: string;
+    usedGrams?: number;
+  }): Promise<ConsumePantryResult> => {
+    const current = produseRef.current;
+    const target =
+      (id ? current.find((p) => p.id === id) : undefined) ??
+      (name
+        ? current.find((p) => normalizePantryText(p.nume) === normalizePantryText(name))
+        : undefined);
+
+    if (!target) return { status: 'not_found' };
+
+    if (
+      typeof target.cantitate_g === 'number' &&
+      target.cantitate_g > 0 &&
+      typeof usedGrams === 'number' &&
+      usedGrams > 0
+    ) {
+      const remainingGrams = Math.round(target.cantitate_g - usedGrams);
+      if (remainingGrams > 0) {
+        const updated = await actualizeazaProdus(target.id, { cantitate_g: remainingGrams });
+        return {
+          status: 'updated_grams',
+          item: updated ?? { ...target, cantitate_g: remainingGrams },
+          remainingGrams,
+        };
+      }
+      if ((target.cantitate || 1) > 1) {
+        const remainingCount = (target.cantitate || 1) - 1;
+        const updated = await actualizeazaProdus(target.id, {
+          cantitate: remainingCount,
+          cantitate_g: 0,
+        });
+        return {
+          status: 'updated_count',
+          item: updated ?? { ...target, cantitate: remainingCount, cantitate_g: undefined },
+          remainingCount,
+        };
+      }
+      await stergeProdus(target.id);
+      return { status: 'consumed', item: target };
+    }
+
+    if ((target.cantitate || 1) > 1) {
+      const remainingCount = (target.cantitate || 1) - 1;
+      await modificaCantitate(target.id, -1);
+      return {
+        status: 'updated_count',
+        item: { ...target, cantitate: remainingCount },
+        remainingCount,
+      };
+    }
+
+    await stergeProdus(target.id);
+    return { status: 'consumed', item: target };
   };
 
   const cautaLocal = (query: string): ProdusCamara[] => {
-    const q = query.trim().toLowerCase();
-    if (!q) return produse;
-    return produse.filter(
+    const q = normalizePantryText(query);
+    const current = produseRef.current;
+    if (!q) return current;
+    return current.filter(
       (p) =>
-        p.nume.toLowerCase().includes(q) ||
-        (p.brand && p.brand.toLowerCase().includes(q)) ||
-        p.barcode.includes(q)
+        normalizePantryText(p.nume).includes(q) ||
+        (p.brand && normalizePantryText(p.brand).includes(q)) ||
+        (p.barcode && p.barcode.toLowerCase().includes(q))
     );
   };
 
@@ -368,17 +528,18 @@ export function useCamara() {
   }, []);
 
   const selectAll = useCallback(() => {
-    setSelectedIds(new Set(produse.map((p) => p.id)));
-  }, [produse]);
+    setSelectedIds(new Set(produseRef.current.map((p) => p.id)));
+  }, []);
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
   }, []);
 
   const useInRecipe = useCallback((): ProdusCamara[] => {
-    if (selectedIds.size === 0) return produse;
-    return produse.filter((p) => selectedIds.has(p.id));
-  }, [produse, selectedIds]);
+    const current = produseRef.current;
+    if (selectedIds.size === 0) return current;
+    return current.filter((p) => selectedIds.has(p.id));
+  }, [selectedIds]);
 
   return {
     produse,
@@ -391,6 +552,8 @@ export function useCamara() {
     useInRecipe,
     adaugaProdus,
     modificaCantitate,
+    actualizeazaProdus,
+    consumaDinCamara,
     toggleCongelator,
     stergeProdus,
     cautaLocal,
