@@ -20,7 +20,13 @@ export default function AuthCallbackScreen() {
   const errorDescription = params.error_description;
   const recovery = params.flow === 'recovery' || params.type === 'recovery';
   const tokenHash = typeof params.token_hash === 'string' && params.token_hash.trim() ? params.token_hash.trim() : undefined;
-  const completionKey = recovery && tokenHash ? `recovery:${tokenHash}` : code;
+  const accessToken = typeof params.access_token === 'string' && params.access_token.trim() ? params.access_token.trim() : undefined;
+  const refreshToken = typeof params.refresh_token === 'string' && params.refresh_token.trim() ? params.refresh_token.trim() : undefined;
+  const completionKey = recovery && tokenHash
+    ? `recovery:${tokenHash}`
+    : recovery && accessToken && refreshToken
+      ? `session:${accessToken.slice(-16)}`
+      : code;
 
   useEffect(() => {
     let active = true;
@@ -34,7 +40,9 @@ export default function AuthCallbackScreen() {
     }
     const task = recovery && tokenHash
       ? oauthFlow.completeRecoveryToken(tokenHash)
-      : oauthFlow.complete({ code, error, error_description: errorDescription });
+      : recovery && accessToken && refreshToken
+        ? oauthFlow.completeRecoverySession(accessToken, refreshToken)
+        : oauthFlow.complete({ code, error, error_description: errorDescription });
 
     void task.then(result => {
       if (active) setCompletion({ key: completionKey, userId: result.user.id });
@@ -51,7 +59,7 @@ export default function AuthCallbackScreen() {
       Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.problemaConexiuneOAuth'));
     });
     return () => { active = false; };
-  }, [code, completionKey, error, errorDescription, recovery, router, t, tokenHash]);
+  }, [accessToken, code, completionKey, error, errorDescription, recovery, refreshToken, router, t, tokenHash]);
 
   useEffect(() => {
     // Schimbul salvează sesiunea înainte ca AuthContext să termine izolarea și

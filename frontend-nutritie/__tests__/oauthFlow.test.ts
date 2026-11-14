@@ -11,14 +11,22 @@ function fixture() {
     current = session('new');
     return { data: { session: current }, error: null };
   });
+  const verifyOtp = jest.fn(async () => {
+    current = session('recovery-token');
+    return { data: { session: current }, error: null };
+  });
+  const updateSession = jest.fn(async () => {
+    current = session('recovery-session');
+    return { data: { session: current }, error: null };
+  });
   const authorize = jest.fn(async () => ({ data: { url: 'https://provider.invalid/authorize' }, error: null }));
   const browser = jest.fn(async (_url: string, _redirect: string) => ({ type: 'success', url: 'nutriai://auth/callback?code=single-use' }));
   const flow = createOAuthFlow({
-    auth: { exchangeCodeForSession: exchange, getSession: async () => ({ data: { session: current }, error: null }), signInWithOAuth: authorize },
+    auth: { exchangeCodeForSession: exchange, verifyOtp, setSession: updateSession, getSession: async () => ({ data: { session: current }, error: null }), signInWithOAuth: authorize },
     openAuthSessionAsync: browser,
     redirectTo: 'nutriai://auth/callback',
   });
-  return { flow, exchange, authorize, browser, setSession: (value: Session | null) => { current = value; } };
+  return { flow, exchange, verifyOtp, updateSession, authorize, browser, setSession: (value: Session | null) => { current = value; } };
 }
 
 describe('AUTH-OAUTH-001 shared PKCE completion', () => {
@@ -90,5 +98,19 @@ describe('AUTH-OAUTH-001 shared PKCE completion', () => {
     const { flow, exchange } = fixture();
     exchange.mockRejectedValue(new Error('sensitive provider data'));
     await expect(flow.complete({ code: 'bad' })).rejects.toThrow('oauth');
+  });
+
+  it('supports implicit recovery sessions via setSession as well as token_hash verification', async () => {
+    const { flow, verifyOtp, updateSession } = fixture();
+    await expect(flow.completeRecoveryToken('tok-hash-1')).resolves.toMatchObject({ user: { id: 'recovery-token' } });
+    expect(verifyOtp).toHaveBeenCalledWith({ token_hash: 'tok-hash-1', type: 'recovery' });
+
+    await expect(flow.completeRecoverySession('access-123456', 'refresh-7890')).resolves.toMatchObject({
+      user: { id: 'recovery-session' },
+    });
+    expect(updateSession).toHaveBeenCalledWith({
+      access_token: 'access-123456',
+      refresh_token: 'refresh-7890',
+    });
   });
 });

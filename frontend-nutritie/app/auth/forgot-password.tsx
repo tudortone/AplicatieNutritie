@@ -48,7 +48,7 @@ function resolvePrefillEmail(raw: unknown): string {
 }
 
 function normalizeOtpCode(raw: string): string {
-  return raw.replace(/\D/g, '').slice(0, 6);
+  return raw.replace(/\D/g, '').slice(0, 8);
 }
 
 export default function ForgotPasswordScreen() {
@@ -172,7 +172,7 @@ export default function ForgotPasswordScreen() {
   ]);
 
   const handleVerifyCode = useCallback(async () => {
-    if (verifying || isOffline || otpCode.length !== 6 || !submittedEmail) return;
+    if (verifying || isOffline || otpCode.length < 6 || otpCode.length > 8 || !submittedEmail) return;
 
     setVerifying(true);
     setErrorMsg(null);
@@ -214,7 +214,7 @@ export default function ForgotPasswordScreen() {
   }, []);
 
   const canSend = !sending && !isOffline;
-  const canVerify = !verifying && !isOffline && otpCode.length === 6;
+  const canVerify = !verifying && !isOffline && otpCode.length >= 6 && otpCode.length <= 8;
   const canResend = !resending && !sending && !isOffline && cooldown === 0;
 
   return (
@@ -461,7 +461,7 @@ export default function ForgotPasswordScreen() {
                     keyboardType="number-pad"
                     autoComplete="one-time-code"
                     textContentType="oneTimeCode"
-                    maxLength={12}
+                    maxLength={16}
                     returnKeyType="done"
                     onSubmitEditing={handleVerifyCode}
                     editable={!verifying}
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   otpInput: {
-    letterSpacing: 6,
+    letterSpacing: 4,
     fontSize: 20,
     fontWeight: '700',
   },

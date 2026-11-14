@@ -75,8 +75,9 @@ Copiază variabilele de mediu din `Render` (sau `.env.production`) în Cloud Run
 - `TRIGGER_SECRET_KEY`: cheia Trigger.dev
 - `PLAY_INTEGRITY_MODE`: `off` (sau `observe`)
 - `PLAY_INTEGRITY_PROJECT_NUMBER`: `435128681048`
-- `ADMOB_REWARDED_AMOUNT`: `1`
-- `ADMOB_REWARDED_ITEM`: `FlowCredit`
+- `ADMOB_REWARDED_AD_UNIT_ID`: `3566028223`
+- `ADMOB_REWARDED_REWARD_AMOUNT`: `1`
+- `ADMOB_REWARDED_REWARD_ITEM`: `"Flow Credit"`
 
 ---
 

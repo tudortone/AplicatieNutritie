@@ -30,9 +30,9 @@ test('checks actual native code and returns an optional notice', async () => {
   expect(result).toMatchObject({ checked: true, currentVersionCode: 37, currentVersionName: '1.0.0', needsOptionalUpdate: true, needsForceUpdate: false });
   expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('versionCode=37&platform=android'), expect.anything());
 });
-test('server minimum is handled as required advice, never an unverified hard gate', async () => {
+test('enforces force update when binary is below minimum or server sets forceUpdate', async () => {
   global.fetch = respond({ ...policy, minVersionCode: 38, forceUpdate: true });
-  expect(await checkForAppUpdate()).toMatchObject({ checked: true, requiresUpdate: true, needsForceUpdate: false, needsOptionalUpdate: true });
+  expect(await checkForAppUpdate()).toMatchObject({ checked: true, requiresUpdate: true, needsForceUpdate: true, needsOptionalUpdate: true });
 });
 test('current or newer binary receives no outdated notice', async () => {
   mutableApp.nativeBuildVersion = '38';

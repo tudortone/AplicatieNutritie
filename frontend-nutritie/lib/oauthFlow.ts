@@ -16,6 +16,7 @@ type Dependencies = {
   auth: {
     exchangeCodeForSession: (code: string) => Promise<AuthResult>;
     verifyOtp?: (params: { token_hash: string; type: 'recovery' }) => Promise<AuthResult>;
+    setSession?: (params: { access_token: string; refresh_token: string }) => Promise<AuthResult>;
     getSession: () => Promise<AuthResult>;
     signInWithOAuth: (options: { provider: 'google' | 'apple'; options: { redirectTo: string; skipBrowserRedirect: true } }) => Promise<{ data: { url: string | null }; error: unknown }>;
   };
@@ -70,6 +71,15 @@ export function createOAuthFlow({ auth, openAuthSessionAsync, redirectTo }: Depe
     );
   }
 
+  async function completeRecoverySession(accessToken: string, refreshToken: string): Promise<Session> {
+    const token = accessToken.trim();
+    const refresh = refreshToken.trim();
+    if (!token || !refresh || !auth.setSession) throw new Error('oauth');
+    return deduplicatedSession(recoveryTokens, `session:${token.slice(-16)}:${refresh.slice(-8)}`, () =>
+      auth.setSession!({ access_token: token, refresh_token: refresh }),
+    );
+  }
+
   async function signIn(provider: 'google' | 'apple'): Promise<'success' | 'cancelled'> {
     if (signingIn) throw new Error('oauth');
     signingIn = true;
@@ -92,7 +102,7 @@ export function createOAuthFlow({ auth, openAuthSessionAsync, redirectTo }: Depe
       signingIn = false;
     }
   }
-  return { complete, completeRecoveryToken, signIn };
+  return { complete, completeRecoveryToken, completeRecoverySession, signIn };
 }
 
 export const oauthFlow = createOAuthFlow({

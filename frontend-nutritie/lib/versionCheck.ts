@@ -75,9 +75,15 @@ export async function checkForAppUpdate(timeoutMs = 4000): Promise<VersionCheckR
     const data = await Promise.race([readPolicy(currentVersionCode, controller.signal), timeout]);
     if (!data) return fallback;
     const outdated = currentVersionCode < data.latestVersionCode;
-    // shortcut: no per-user Play availability API; retain dismissible advice until native availability is verified.
-    return { ...fallback, checked: true, updateInfo: data, needsOptionalUpdate: outdated,
-      requiresUpdate: outdated && (currentVersionCode < data.minVersionCode || data.forceUpdate) };
+    const force = outdated && (currentVersionCode < data.minVersionCode || data.forceUpdate);
+    return {
+      ...fallback,
+      checked: true,
+      updateInfo: data,
+      needsOptionalUpdate: outdated,
+      needsForceUpdate: force,
+      requiresUpdate: force,
+    };
   } catch { return fallback; }
   finally { if (timer !== undefined) clearTimeout(timer); controller.abort(); }
 }

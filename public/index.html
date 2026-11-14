@@ -11,7 +11,7 @@
       var sp = new URLSearchParams(search);
       var hp = new URLSearchParams(hash.charAt(0) === '#' ? hash.slice(1) : hash);
       var hasAuthParam = function (p) {
-        return p.has('code') || p.has('token_hash') || p.has('otp') || p.has('error') || p.has('error_description') || p.get('type') === 'recovery' || p.get('flow') === 'recovery';
+        return p.has('code') || p.has('token_hash') || p.has('access_token') || p.has('otp') || p.has('error') || p.has('error_description') || p.get('type') === 'recovery' || p.get('flow') === 'recovery';
       };
       if (hasAuthParam(sp) || hasAuthParam(hp)) {
         window.location.replace('/reset-password' + search + hash);

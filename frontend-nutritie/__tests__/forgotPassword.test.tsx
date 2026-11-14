@@ -250,6 +250,27 @@ describe('app/auth/forgot-password — UI & recovery flow', () => {
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/noua-parola'));
   });
 
+  it('accepts and verifies 8-digit Supabase OTP codes as well as 6-digit codes', async () => {
+    const view = await render(<ForgotPasswordScreen />);
+    await fireEvent.changeText(view.getByTestId('forgot-email-input'), 'user@getflow.app');
+    await fireEvent.press(view.getByTestId('forgot-send-btn'));
+
+    await waitFor(() => expect(view.getByTestId('forgot-otp-input')).toBeTruthy());
+    await fireEvent.changeText(view.getByTestId('forgot-otp-input'), '1234-567899');
+    expect(view.getByTestId('forgot-otp-input').props.value).toBe('12345678');
+    expect(view.getByTestId('forgot-verify-btn').props.accessibilityState.disabled).toBe(false);
+
+    await fireEvent.press(view.getByTestId('forgot-verify-btn'));
+    await waitFor(() =>
+      expect(mockVerifyOtp).toHaveBeenCalledWith({
+        email: 'user@getflow.app',
+        token: '12345678',
+        type: 'recovery',
+      }),
+    );
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/auth/noua-parola'));
+  });
+
   it('shows controlled inline error when OTP is invalid or expired and supports switching email', async () => {
     mockVerifyOtp.mockResolvedValueOnce({ data: { session: null }, error: { message: 'Token has expired or is invalid' } });
     const view = await render(<ForgotPasswordScreen />);
