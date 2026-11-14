@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const { inregistreazaOperational } = require('../../utils/metrics');
+const { rezumatEroareSigur } = require('../../utils/sentrySanitize');
 
 class PhotoJobError extends Error {
   constructor(code, status = 503) {
@@ -103,7 +104,20 @@ async function triggerIdempotent(tasks, payload, idempotencyKey) {
   }
 }
 
-function createPhotoJobService({ repo, flowCredits, tasks, billing } = {}) {
+function dispatchBackgroundWorker(runBackgroundWorker, triggerPayload, jobId, logger) {
+  if (typeof runBackgroundWorker !== 'function') return;
+  setImmediate(() => {
+    Promise.resolve(runBackgroundWorker(triggerPayload)).catch((bgErr) => {
+      logger?.warn?.(
+        '[PhotoJobService] Fast-path inline photo worker deferred to Trigger.dev',
+        jobId,
+        rezumatEroareSigur(bgErr, { operation: 'inline_photo_worker' }),
+      );
+    });
+  });
+}
+
+function createPhotoJobService({ repo, flowCredits, tasks, billing, runBackgroundWorker = null, logger = console } = {}) {
   if (!repo || !flowCredits || !tasks || !billing) {
     throw new TypeError('Photo job dependencies are required.');
   }
@@ -149,19 +163,21 @@ function createPhotoJobService({ repo, flowCredits, tasks, billing } = {}) {
         const idempotencyKey = crypto.createHash('sha256')
           .update(`getflow-photo:${userId}:${logicalAnalysisId}`)
           .digest('hex');
+        const triggerPayload = {
+          jobId: existingJob.id,
+          userId,
+          logicalAnalysisId,
+          requestFingerprint,
+          imageUrl: normalizedImageUrl,
+          imageFileId: normalizedImageFileId,
+          tipMasa: input.mealType || 'Pranz',
+          limba: input.language || 'ro',
+          reservationId: existingJob.creditReservationId,
+        };
         try {
-          const handle = await triggerIdempotent(tasks, {
-            jobId: existingJob.id,
-            userId,
-            logicalAnalysisId,
-            requestFingerprint,
-            imageUrl: normalizedImageUrl,
-            imageFileId: normalizedImageFileId,
-            tipMasa: input.mealType || 'Pranz',
-            limba: input.language || 'ro',
-            reservationId: existingJob.creditReservationId,
-          }, idempotencyKey);
+          const handle = await triggerIdempotent(tasks, triggerPayload, idempotencyKey);
           await repo.attachTriggerRun({ jobId: existingJob.id, triggerRunId: handle.id });
+          dispatchBackgroundWorker(runBackgroundWorker, triggerPayload, existingJob.id, logger);
           return Object.freeze({ ...replay, triggerRunId: handle.id });
         } catch {
           throw new PhotoJobError('TRIGGER_DISPATCH_UNKNOWN');
@@ -219,7 +235,7 @@ function createPhotoJobService({ repo, flowCredits, tasks, billing } = {}) {
         const idempotencyKey = crypto.createHash('sha256')
           .update(`getflow-photo:${userId}:${logicalAnalysisId}`)
           .digest('hex');
-        const handle = await triggerIdempotent(tasks, {
+        const triggerPayload = {
           jobId: job.id,
           userId,
           logicalAnalysisId,
@@ -229,8 +245,10 @@ function createPhotoJobService({ repo, flowCredits, tasks, billing } = {}) {
           tipMasa: input.mealType || 'Pranz',
           limba: input.language || 'ro',
           reservationId,
-        }, idempotencyKey);
+        };
+        const handle = await triggerIdempotent(tasks, triggerPayload, idempotencyKey);
         await repo.attachTriggerRun({ jobId: job.id, triggerRunId: handle.id });
+        dispatchBackgroundWorker(runBackgroundWorker, triggerPayload, job.id, logger);
         inregistreazaOperational('photo.queued');
         return Object.freeze({ ...job, triggerRunId: handle.id, replay: false });
       } catch (error) {

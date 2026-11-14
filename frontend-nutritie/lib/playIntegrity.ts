@@ -42,6 +42,8 @@ export async function buildPlayIntegrityRequestHash(input: PlayIntegrityRequest)
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+const PLAY_INTEGRITY_TIMEOUT_MS = 3500;
+
 export function createPlayIntegrityClient({
   platform,
   cloudProjectNumber,
@@ -53,11 +55,23 @@ export function createPlayIntegrityClient({
   return Object.freeze({
     async headers(input: PlayIntegrityRequest): Promise<Record<string, string>> {
       if (platform !== 'android' || !/^\d+$/.test(cloudProjectNumber)) return {};
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
       try {
-        if (!prepared) prepared = prepare(cloudProjectNumber);
-        await prepared;
-        const requestHash = await buildPlayIntegrityRequestHash(input);
-        const token = await requestToken(requestHash);
+        const tokenAndHash = (async () => {
+          if (!prepared) prepared = prepare(cloudProjectNumber);
+          await prepared;
+          const requestHash = await buildPlayIntegrityRequestHash(input);
+          const token = await requestToken(requestHash);
+          return { token, requestHash };
+        })();
+        // Prevent late unhandled rejections if native Play Integrity rejects after timeout wins.
+        void tokenAndHash.catch(() => {});
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error('PLAY_INTEGRITY_TIMEOUT'));
+          }, PLAY_INTEGRITY_TIMEOUT_MS);
+        });
+        const { token, requestHash } = await Promise.race([tokenAndHash, timeoutPromise]);
         if (!token) return {};
         return {
           'X-Play-Integrity': token,
@@ -66,6 +80,11 @@ export function createPlayIntegrityClient({
       } catch {
         prepared = null;
         return {};
+      } finally {
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
       }
     },
   });

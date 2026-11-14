@@ -643,6 +643,10 @@ function createAiRouter({
 
       const text = rezultatCascada.text;
       if (!text) {
+        persistedResult = { success: false, errorCode: 'AI_PROVIDERS_UNAVAILABLE' };
+        await flowCredits.recordPhotoResult({
+          userId: req.user.id, reservationId, requestFingerprint, result: persistedResult,
+        }).catch(() => {});
         await releaseReserved('AI_PROVIDERS_UNAVAILABLE');
         console.error('AI vision fail.');
         return res.status(503).json({
@@ -657,6 +661,10 @@ function createAiRouter({
 
       let parsed = parseJsonFromLlm(text, { asteapta: 'array' });
       if (!parsed) {
+        persistedResult = { success: false, errorCode: 'JSON_AI_INVALID' };
+        await flowCredits.recordPhotoResult({
+          userId: req.user.id, reservationId, requestFingerprint, result: persistedResult,
+        }).catch(() => {});
         await releaseReserved('JSON_AI_INVALID');
         return res.status(500).json({ eroare: 'AI nu a returnat un format JSON valid.' });
       }
@@ -1054,7 +1062,10 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
               const result = await callWithSoftTimeout(
                 client.getGenerativeModel({ model: modelName }).generateContent({
                   contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                  generationConfig: { responseMimeType: 'application/json' },
+                  generationConfig: {
+                    responseMimeType: 'application/json',
+                    ...(String(modelName).includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+                  },
                 }),
                 30000,
               );

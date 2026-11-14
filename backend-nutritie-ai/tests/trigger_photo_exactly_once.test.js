@@ -4,7 +4,9 @@ const mockState = {
   reservation: null,
   job: null,
   inferenceCalls: 0,
+  modelsCalled: [],
   generationError: null,
+  generationErrors: [],
   loseCommitResponse: false,
   events: [],
 };
@@ -83,10 +85,15 @@ jest.mock('@supabase/supabase-js', () => ({
 }));
 jest.mock('@google/generative-ai', () => ({
   GoogleGenerativeAI: class {
-    getGenerativeModel() {
+    getGenerativeModel({ model } = {}) {
       return {
         generateContent: async () => {
           mockState.inferenceCalls += 1;
+          mockState.modelsCalled.push(model);
+          if (mockState.generationErrors.length > 0) {
+            const nextErr = mockState.generationErrors.shift();
+            if (nextErr) throw nextErr;
+          }
           if (mockState.generationError) throw mockState.generationError;
           return { response: { text: () => JSON.stringify([{
             nume: 'Orez', estimare_grame: 150, calorii_per_100g: 130,
@@ -144,10 +151,18 @@ describe('photo worker durable inference and settlement', () => {
       result: null,
     };
     mockState.inferenceCalls = 0;
+    mockState.modelsCalled = [];
     mockState.generationError = null;
+    mockState.generationErrors = [];
     mockState.loseCommitResponse = false;
     mockState.events = [];
     previousEnv = { ...process.env };
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.GEMINI_API_KEY_2;
+    delete process.env.GEMINI_API_KEY_3;
+    delete process.env.GEMINI_API_KEY_4;
+    delete process.env.GEMINI_API_KEY_5;
+    delete process.env.GEMINI_API_KEYS;
     process.env.SUPABASE_URL = 'https://test.supabase.co';
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test';
     process.env.IMAGEKIT_URL_ENDPOINT = 'https://ik.imagekit.io/getflow';
@@ -223,5 +238,31 @@ describe('photo worker durable inference and settlement', () => {
     expect(mockState.inferenceCalls).toBe(1);
     expect(mockState.reservation.status).toBe('COMMITTED');
     expect(mockState.job.status).toBe('succeeded');
+  });
+
+  test('falls back in-memory to gemini-2.5-flash-lite when primary model returns 503 high demand', async () => {
+    mockState.generationErrors = [new Error('503 Service Unavailable: high demand')];
+
+    const result = await task.run(PAYLOAD);
+
+    expect(result.success).toBe(true);
+    expect(mockState.modelsCalled).toEqual(['gemini-2.5-flash', 'gemini-2.5-flash-lite']);
+    expect(mockState.reservation.status).toBe('COMMITTED');
+    expect(mockState.job.status).toBe('succeeded');
+  });
+
+  test('releases credit immediately on confirmed 503 failure across all fallbacks without holding PHOTO_OUTCOME_UNKNOWN', async () => {
+    mockState.generationError = new Error('503 Service Unavailable: high demand');
+
+    const result = await task.run(PAYLOAD);
+
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe('AI_HIGH_DEMAND');
+    expect(mockState.modelsCalled).toEqual(['gemini-2.5-flash', 'gemini-2.5-flash-lite']);
+    expect(mockState.reservation.status).toBe('RELEASED');
+    expect(mockState.reservation.outcome_unknown_at).toBeNull();
+    expect(mockState.job.status).toBe('failed');
+    expect(mockState.job.error_code).toBe('AI_HIGH_DEMAND');
+    expect(mockState.events).toEqual(['record', 'release']);
   });
 });

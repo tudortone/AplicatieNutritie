@@ -437,9 +437,27 @@ export async function waitForPhotoJob({
   onStatus?: (job: PhotoJob) => void;
 }): Promise<PhotoJob> {
   void _userId;
+  let consecutiveTransientErrors = 0;
   for (;;) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    const job = await getPhotoJob({ token, jobId, signal });
+    let job: PhotoJob;
+    try {
+      job = await getPhotoJob({ token, jobId, signal });
+      consecutiveTransientErrors = 0;
+    } catch (error) {
+      if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        throw error;
+      }
+      const isTransient = error instanceof PhotoApiError
+        ? error.status >= 500 || error.status === 429
+        : error instanceof TypeError;
+      if (!isTransient || consecutiveTransientErrors >= 2) {
+        throw error;
+      }
+      consecutiveTransientErrors += 1;
+      await sleep(pollIntervalMs, signal);
+      continue;
+    }
     onStatus?.(job);
     if (TERMINAL_SUCCESS.has(job.status)) return job;
     if (job.status === 'failed' || job.status === 'cancelled') {

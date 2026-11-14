@@ -221,6 +221,7 @@ export default function CameraScreen() {
   }, []);
 
   const handleCameraMountError = useCallback((event: { message?: string }) => {
+    if (abortControllerRef.current || recoveryAbortRef.current || isPickingGalleryRef.current) return;
     if (__DEV__) console.warn('[Camera] CameraView mount error:', event?.message || 'unknown');
     cameraReadyRef.current = false;
     captureTokenRef.current += 1;
@@ -509,7 +510,7 @@ export default function CameraScreen() {
       setAnalysisStage(2);
       setPhotoPhase(isRetry ? 'retrying' : 'processing');
 
-      const submitted = await submitPhotoJob({
+      const submitParams = {
         token: session.access_token,
         userId: ownerId,
         imageUrl: uploaded.url,
@@ -520,7 +521,26 @@ export default function CameraScreen() {
         localImageUri: imagineOptimizata.uri,
         draftUri: draftPersistentUri,
         signal: controller.signal,
-      });
+      };
+      let submitted: PhotoJob;
+      try {
+        submitted = await submitPhotoJob(submitParams);
+      } catch (submitErr) {
+        if (
+          submitErr instanceof PhotoApiError
+          && submitErr.code === 'LOGICAL_ID_IMAGE_MISMATCH'
+          && !controller.signal.aborted
+          && uploadGenerationRef.current === uploadGeneration
+          && isPhotoOwnerCurrent(ownerId, accountGeneration)
+        ) {
+          submitted = await submitPhotoJob({
+            ...submitParams,
+            analysisId: `${amprentaBaza}:retry:${idOperatieNoua()}`,
+          });
+        } else {
+          throw submitErr;
+        }
+      }
       if (controller.signal.aborted || uploadGenerationRef.current !== uploadGeneration
         || !isPhotoOwnerCurrent(ownerId, accountGeneration)) {
         if (!shouldGoHomeOnSubmitRef.current && !timeoutDepasit) {
@@ -542,7 +562,6 @@ export default function CameraScreen() {
       consumeOptimisticCredit();
       if (shouldGoHomeOnSubmitRef.current) {
         if (__DEV__) console.log('[Camera] Job pornit pe backend, utilizatorul a mers la Acasă:', submitted.id);
-        await cleanupAttemptDrafts();
         setPhotoPhase('background');
         setSeIncarca(false);
         return;
@@ -598,6 +617,14 @@ export default function CameraScreen() {
           });
           if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
           if (inProgress && !inProgress.missingJob && inProgress.job) {
+            if (inProgress.job.status === 'failed' || inProgress.job.status === 'cancelled') {
+              await clearActivePhotoJob(ownerId, inProgress.job.id).catch(() => { });
+              throw new PhotoApiError(
+                422,
+                inProgress.job.errorCode || 'PHOTO_ANALYSIS_FAILED',
+                inProgress.job.result ?? undefined,
+              );
+            }
             currentPhotoJobIdRef.current = inProgress.job.id;
             setPreviewPhotoUri(inProgress.pointer.localImageUri || inProgress.pointer.draftUri || inProgress.pointer.imageUrl || null);
             setAnalysisStage(inProgress.job.status === 'queued' ? 2 : 3);
@@ -624,6 +651,8 @@ export default function CameraScreen() {
               setSeIncarca(false);
               return;
             }
+          } else {
+            await clearActivePhotoJob(ownerId).catch(() => { });
           }
         } catch (reconnectErr) {
           currentPhotoJobIdRef.current = null;
@@ -634,11 +663,11 @@ export default function CameraScreen() {
 
       if (timeoutDepasit) {
         if (abortControllerRef.current !== controller || !isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
-        await cleanupAttemptDrafts();
         if (activePointer) {
           setPhotoPhase('background');
           setScanError(null);
         } else {
+          await cleanupAttemptDrafts();
           currentPhotoJobIdRef.current = null;
           setPhotoPhase('failed');
           setScanError(t('camera.timeoutError'));
@@ -727,6 +756,10 @@ export default function CameraScreen() {
         return;
       }
       await cleanupAttemptDrafts();
+      await clearActivePhotoJob(
+        ownerId,
+        activePointer?.jobId || currentPhotoJobIdRef.current || undefined,
+      ).catch(() => { });
       currentPhotoJobIdRef.current = null;
       setPhotoPhase('failed');
       const friendlyMsg = resolvedError instanceof PhotoApiError && (resolvedError.code === 'TIMEOUT' || resolvedError.status === 504)
@@ -1289,7 +1322,7 @@ export default function CameraScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        analizeazaImaginea(asset.uri, false, { width: asset.width, height: asset.height });
+        await analizeazaImaginea(asset.uri, false, { width: asset.width, height: asset.height });
       } else {
         resumeCameraPreviewSafely();
       }
@@ -1687,7 +1720,7 @@ export default function CameraScreen() {
         ref={cameraRef}
         style={StyleSheet.absoluteFillObject}
         facing="back"
-        active={rezultat.length === 0 && !saveSuccessData}
+        active={rezultat.length === 0 && !saveSuccessData && !seIncarca && !isNonFood && !failedPhotoJob && !pendingDraftSheet}
         onCameraReady={handleCameraReady}
         onMountError={handleCameraMountError}
       />

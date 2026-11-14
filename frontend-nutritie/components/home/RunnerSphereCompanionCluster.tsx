@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
-import { recoverPhotoJob, clearActivePhotoJob, type PhotoJob, type ActivePhotoJobPointer } from '../../lib/photoJobs';
+import { recoverPhotoJob, clearActivePhotoJob, readPointer, type PhotoJob, type ActivePhotoJobPointer } from '../../lib/photoJobs';
 import { RunnerSphere, type RunnerSphereState } from './RunnerSphere';
 import { PixelCompanion } from './PixelCompanion';
 
@@ -73,10 +73,15 @@ export function RunnerSphereCompanionCluster({
             emptyPolls = 0;
             timer = setTimeout(poll, 2000);
           } else if (!recovered && active && emptyPolls < 15) {
-            // If user navigated to Home while image was still uploading to ImageKit
-            // (before submitPhotoJob persisted the active job pointer), retry gracefully up to ~18s.
-            emptyPolls += 1;
-            timer = setTimeout(poll, 1200);
+            const localPtr = typeof readPointer === 'function'
+              ? await readPointer(session.user.id).catch(() => null)
+              : null;
+            if (localPtr && active) {
+              // If user navigated to Home while image was still uploading to ImageKit
+              // (before submitPhotoJob persisted the active job pointer), retry gracefully up to ~18s.
+              emptyPolls += 1;
+              timer = setTimeout(poll, 1200);
+            }
           }
         } catch {
           if (active) timer = setTimeout(poll, 8000);

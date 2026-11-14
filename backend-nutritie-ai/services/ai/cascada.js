@@ -81,9 +81,16 @@ function creeazaServiciuCascada({ config, registruAi }) {
       return true;
     };
 
+    const poateIncercaFurnizor = async (providerKey) => {
+      if (requestedProvider !== 'auto') return requestedProvider === providerKey;
+      const st = await getProviderStatus(providerKey);
+      return st.status === 'active';
+    };
+
     // 1) OpenAI GPT-4o-mini Vision
     const openaiKeys = serviciuVision.getApiKeysList('OPENAI_API_KEY');
-    if ((requestedProvider === 'auto' || requestedProvider === 'openai') && openaiKeys.length > 0) {
+    if (openaiKeys.length > 0 && (await poateIncercaFurnizor('openai'))) {
+      let authFailed = false;
       for (const key of openaiKeys) {
         if (!cotaUnInceput()) break;
         try {
@@ -108,6 +115,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
           } else {
             inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'analiza-foto', ok: false });
             if (oaiRes.status === 429) await blockProvider('openai', 60, 'Limita de cereri (429)');
+            if (oaiRes.status === 401 || oaiRes.status === 403) authFailed = true;
             console.warn(`OpenAI Vision esuat (${oaiRes.status}).`);
           }
         } catch (e) {
@@ -118,10 +126,11 @@ function creeazaServiciuCascada({ config, registruAi }) {
           }));
         }
       }
+      if (authFailed && !text) await blockProvider('openai', 300, 'Cheie OpenAI invalida (401/403)');
     }
 
     // 2) Groq Vision
-    if (!text && (requestedProvider === 'auto' || requestedProvider === 'groq')) {
+    if (!text && (await poateIncercaFurnizor('groq'))) {
       const groqKeys = serviciuVision.getApiKeysList('GROQ_API_KEY');
       const groqVisionModels = config.ai.groqVisionModels.length > 0
         ? config.ai.groqVisionModels
@@ -129,6 +138,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
           'meta-llama/llama-4-scout-17b-16e-instruct',
           'meta-llama/llama-4-maverick-17b-128e-instruct',
         ];
+      let groqAuthFailed = false;
 
       for (const key of groqKeys) {
         for (const groqModel of groqVisionModels) {
@@ -155,6 +165,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
             } else {
               inregistreazaAi({ provider: 'groq', model: groqModel, ruta: 'analiza-foto', ok: false });
               if (groqRes.status === 429) await blockProvider('groq', 60, 'Limita de cereri Groq (429)');
+              if (groqRes.status === 401 || groqRes.status === 403) groqAuthFailed = true;
               console.warn(`Groq [${groqModel}] (${groqRes.status}).`);
             }
           } catch (groqErr) {
@@ -166,10 +177,11 @@ function creeazaServiciuCascada({ config, registruAi }) {
           }
         }
       }
+      if (groqAuthFailed && !text) await blockProvider('groq', 300, 'Cheie Groq invalida (401/403)');
     }
 
     // 3) Gemini
-    if (!text && (requestedProvider === 'auto' || requestedProvider === 'gemini')) {
+    if (!text && (await poateIncercaFurnizor('gemini'))) {
       const geminiKeys = serviciuVision.getApiKeysList('GEMINI_API_KEY');
       const modelsToTry = serviciuVision.getGeminiModelsList();
       const imagePart = { inlineData: { data: imageBase64, mimeType: imageMime } };
@@ -183,7 +195,10 @@ function creeazaServiciuCascada({ config, registruAi }) {
             // SDK-ul Gemini nu accepta AbortSignal: deadline "soft", marcat explicit.
             const result = await callWithSoftTimeout(model.generateContent({
               contents: [{ role: 'user', parts: [{ text: prompt }, imagePart] }],
-              generationConfig: { responseMimeType: 'application/json' },
+              generationConfig: {
+                responseMimeType: 'application/json',
+                ...(String(modelName).includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+              },
             }), 30000);
 
             if (result?.response) {
@@ -198,6 +213,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
             inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'analiza-foto', ok: false });
             const errMsg = err.message || String(err);
             if (errMsg.includes('429')) await blockProvider('gemini', 60, 'Limita de cereri Gemini (429)');
+            if (errMsg.includes('401') || errMsg.includes('403')) await blockProvider('gemini', 300, 'Cheie Gemini invalida (401/403)');
             console.warn('[AI provider failure]', rezumatEroareSigur(err, {
               operation: 'photo_analysis',
               provider: 'gemini',
@@ -208,8 +224,9 @@ function creeazaServiciuCascada({ config, registruAi }) {
     }
 
     // 4) OpenRouter - doar in modul 'auto' (M2).
-    if (!text && requestedProvider === 'auto') {
+    if (!text && requestedProvider === 'auto' && (await poateIncercaFurnizor('openrouter'))) {
       const orKeys = serviciuVision.getApiKeysList('OPENROUTER_API_KEY');
+      let orAuthFailed = false;
       for (const key of orKeys) {
         if (!cotaUnInceput()) break;
         try {
@@ -231,6 +248,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
           } else {
             inregistreazaAi({ provider: 'openrouter', model: 'google/gemini-flash-1.5', ruta: 'analiza-foto', ok: false });
             if (orRes.status === 429) await blockProvider('openrouter', 60, 'Limita de cereri (429)');
+            if (orRes.status === 401 || orRes.status === 403) orAuthFailed = true;
           }
         } catch (e) {
           inregistreazaAi({ provider: 'openrouter', model: 'google/gemini-flash-1.5', ruta: 'analiza-foto', ok: false });
@@ -240,6 +258,7 @@ function creeazaServiciuCascada({ config, registruAi }) {
           }));
         }
       }
+      if (orAuthFailed && !text) await blockProvider('openrouter', 300, 'Cheie OpenRouter invalida (401/403)');
     }
 
     return { text: null, furnizor: null };

@@ -29,6 +29,7 @@ function textNenul(value: unknown): value is string {
 }
 
 let cachedAuthParams: { params: ImageKitAuthParams; userId: string } | null = null;
+let inFlightPrewarm: Promise<void> | null = null;
 
 export function clearImageKitAuthCache(): void {
   cachedAuthParams = null;
@@ -47,6 +48,10 @@ export async function getImageKitAuthParams(
 
   const currentUserId = data.session.user.id;
   const nowSec = Math.floor(Date.now() / 1000);
+
+  if (!forceRefresh && inFlightPrewarm) {
+    await inFlightPrewarm.catch(() => {});
+  }
 
   // Folosește parametrii din memorie dacă sunt pentru același utilizator și mai au cel puțin 60 secunde de valabilitate.
   // CRITIC: Tokenul ImageKit este de unică folosință (single-use nonce pe server).
@@ -191,8 +196,6 @@ export async function uploadImageToImageKit(
     name: payload.name,
   };
 }
-
-let inFlightPrewarm: Promise<void> | null = null;
 
 /** Pre-warm silențios al credențialelor ImageKit pentru a elimina latența la următoarea poză. */
 export async function prewarmImageKitAuth(): Promise<void> {

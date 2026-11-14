@@ -15,8 +15,7 @@ function numarModel(valoare, { min = 0, max = 100000, implicit = 0 } = {}) {
 
 const GEMINI_FALLBACK_MODELS = [
   'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
+  'gemini-2.5-flash-lite',
 ];
 
 const NUME_FURNIZORI_AI = {

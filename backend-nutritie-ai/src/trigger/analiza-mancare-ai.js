@@ -3,7 +3,7 @@
 const { task } = require('@trigger.dev/sdk/v3');
 const { createClient } = require('@supabase/supabase-js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { obtinePromptAnalizaFoto } = require('../../services/ai/vision');
+const { obtinePromptAnalizaFoto, getApiKeysList } = require('../../services/ai/vision');
 const {
   normalizePhotoItems,
   evaluatePhotoQuality,
@@ -20,7 +20,7 @@ const { esteUuid } = require('../../utils/identitate');
 const { rezumatEroareSigur } = require('../../utils/sentrySanitize');
 const { inregistreazaOperational } = require('../../utils/metrics');
 
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 const MAX_IMAGINE_BYTES = 5 * 1024 * 1024;
 const MAX_ALIMENTE = 50;
 const VARIABILE_OBLIGATORII = Object.freeze([
@@ -232,6 +232,15 @@ async function citesteCorpLimitat(resp, limita) {
   return Buffer.concat(bucati, total);
 }
 
+const DEFINITIVE_FAILURE_CODES = new Set([
+  'AI_HIGH_DEMAND',
+  'AI_RATE_LIMITED',
+  'AI_MODEL_UNAVAILABLE',
+  'AI_EMPTY_RESULT',
+  'JSON_AI_INVALID',
+  'PHOTO_RESULT_INVALID',
+]);
+
 function codEroareSigur(err) {
   if (err?.name === 'TimeoutAiError' || err?.name === 'TimeoutError' || err?.name === 'AbortError') {
     return 'TIMEOUT';
@@ -244,11 +253,111 @@ function codEroareSigur(err) {
   if (msg.includes('429') || /resource exhausted|quota/i.test(msg)) {
     return 'AI_RATE_LIMITED';
   }
-  if (err?.message === 'PHOTO_RESULT_INVALID' || err?.message === 'JSON_AI_INVALID') {
+  if (/\b404\b/.test(msg) && /model|not found/i.test(msg)) {
+    return 'AI_MODEL_UNAVAILABLE';
+  }
+  if (
+    err?.message === 'PHOTO_RESULT_INVALID'
+    || err?.message === 'JSON_AI_INVALID'
+    || err?.message === 'AI_EMPTY_RESULT'
+  ) {
     return err.message;
   }
   const cleanName = err?.name && err?.name !== 'Error' ? err.name : null;
   return err?.code || cleanName || 'ANALIZA_ESUATA';
+}
+
+function esteEroareTimeout(err) {
+  return codEroareSigur(err) === 'TIMEOUT' || /timeout|timed out|etimedout/i.test(String(err?.message || ''));
+}
+
+function esteRespingereExplicitaFurnizor(err) {
+  if (esteEroareTimeout(err)) return false;
+  const cod = codEroareSigur(err);
+  if (DEFINITIVE_FAILURE_CODES.has(cod)) return true;
+  return /\b(400|401|403|404|429|500|502|503|504)\b/.test(String(err?.message || ''));
+}
+
+function construiesteSecventaFallback({ primaryKey, primaryModel, allKeys }) {
+  const candidates = [];
+  const seen = new Set([`${primaryKey}\0${primaryModel}`]);
+  const pushCandidate = (key, model) => {
+    if (!key || !model) return;
+    const token = `${key}\0${model}`;
+    if (seen.has(token)) return;
+    seen.add(token);
+    candidates.push({ key, model });
+  };
+  const extraKeys = (Array.isArray(allKeys) ? allKeys : []).filter((k) => k && k !== primaryKey).slice(0, 2);
+  for (const key of extraKeys) pushCandidate(key, primaryModel);
+
+  const secondaryModel = GEMINI_MODELS.find((m) => m !== primaryModel) || 'gemini-2.5-flash-lite';
+  pushCandidate(primaryKey, secondaryModel);
+  if (extraKeys[0]) pushCandidate(extraKeys[0], secondaryModel);
+  return candidates;
+}
+
+function interpreteazaItemsFoto(text, tipMasa) {
+  if (!text) throw new Error('AI_EMPTY_RESULT');
+  const items = parseJsonFromLlm(text, { asteapta: 'array' });
+  if (!Array.isArray(items)) throw new Error('JSON_AI_INVALID');
+  const isNotFood = items.length === 0 || items.some((item) =>
+    !item || typeof item !== 'object' || /nu.*(mancare|aliment)|non-food|nu s-a detectat|nu contine|not.*food|no.*food/i.test(String(item.nume || ''))
+  );
+  if (isNotFood) return { isNotFood: true };
+
+  const normalizate = normalizePhotoItems(items.slice(0, MAX_ALIMENTE));
+  const quality = evaluatePhotoQuality(normalizate);
+  const suggestedMeal = normalizate.find((item) => item.tip_masa_sugerat)?.tip_masa_sugerat;
+  return {
+    isNotFood: false,
+    normalizate,
+    quality,
+    tipMasaSugerata: inferMealType(suggestedMeal, tipMasa),
+  };
+}
+
+async function apeleazaGeminiSiInterpreteaza({ key, modelName, prompt, imagePart, tipMasa, timeoutMs }) {
+  const client = new GoogleGenerativeAI(key);
+  const model = client.getGenerativeModel({ model: modelName });
+  const response = await callWithSoftTimeout(model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: prompt }, imagePart] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 0.1,
+      maxOutputTokens: 1200,
+      ...(String(modelName).includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+    },
+  }), timeoutMs);
+  return interpreteazaItemsFoto(response?.response?.text(), tipMasa);
+}
+
+async function apeleazaOpenAiSiInterpreteaza({ apiKey, prompt, imageBase64, imageMime, tipMasa }) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      temperature: 0.1,
+      max_tokens: 1200,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: `data:${imageMime};base64,${imageBase64}` } },
+          ],
+        },
+      ],
+    }),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) {
+    throw new Error(`OpenAI API (${res.status})`);
+  }
+  const data = await res.json();
+  const content = data?.choices?.[0]?.message?.content;
+  return interpreteazaItemsFoto(content, tipMasa);
 }
 
 async function finalizeStoredPhotoResult(payload, result) {
@@ -295,6 +404,229 @@ async function reconcileTerminalPhotoFailure(payload, error) {
   }, userId);
 }
 
+async function genereazaAnalizaCuFallback({ incercariGemini, prompt, buffer, mimeDetectat, tipMasa }) {
+  const imageBase64 = buffer.toString('base64');
+  const imagePart = { inlineData: { data: imageBase64, mimeType: mimeDetectat } };
+  const [{ key: primaryKey, model: primaryModel }] = incercariGemini;
+
+  let lastErr;
+  try {
+    return await apeleazaGeminiSiInterpreteaza({
+      key: primaryKey,
+      modelName: primaryModel,
+      prompt,
+      imagePart,
+      tipMasa,
+      timeoutMs: 25000,
+    });
+  } catch (err) {
+    if (!esteRespingereExplicitaFurnizor(err)) throw err;
+    lastErr = err;
+  }
+
+  const allKeys = getApiKeysList('GEMINI_API_KEY');
+  for (const { key, model } of construiesteSecventaFallback({ primaryKey, primaryModel, allKeys })) {
+    try {
+      return await apeleazaGeminiSiInterpreteaza({
+        key,
+        modelName: model,
+        prompt,
+        imagePart,
+        tipMasa,
+        timeoutMs: 20000,
+      });
+    } catch (fbErr) {
+      if (!esteRespingereExplicitaFurnizor(fbErr)) throw fbErr;
+      lastErr = fbErr;
+    }
+  }
+
+  const openAiKey = typeof process.env.OPENAI_API_KEY === 'string' ? process.env.OPENAI_API_KEY.trim() : '';
+  if (openAiKey) {
+    try {
+      return await apeleazaOpenAiSiInterpreteaza({
+        apiKey: openAiKey,
+        prompt,
+        imageBase64,
+        imageMime: mimeDetectat,
+        tipMasa,
+      });
+    } catch (oaiErr) {
+      if (!esteRespingereExplicitaFurnizor(oaiErr)) throw oaiErr;
+      lastErr = oaiErr;
+    }
+  }
+
+  const codFinal = codEroareSigur(lastErr);
+  if (DEFINITIVE_FAILURE_CODES.has(codFinal)) {
+    return {
+      definitiveFailure: {
+        success: false,
+        errorCode: codFinal,
+        eroare: 'Serviciul AI este temporar suprasolicitat. Creditul tău nu a fost consumat — încearcă din nou.',
+        processedAt: new Date().toISOString(),
+      },
+    };
+  }
+  throw lastErr;
+}
+
+async function executaAnalizaMancare(payload) {
+  const executionStartedAt = Date.now();
+  const {
+    imageUrl, imageFileId, logicalAnalysisId, requestFingerprint,
+    tipMasa, limba, userId, jobId, reservationId,
+  } = payload || {};
+  inregistreazaOperational('photo.started');
+  let didClaimThisRun = false;
+
+  try {
+    if (VARIABILE_OBLIGATORII.some((cheie) => !process.env[cheie]?.trim())) {
+      throw Object.assign(new Error('PHOTO_TASK_CONFIGURATION_MISSING'), { code: 'NEEDS_CONFIG' });
+    }
+
+    if (typeof imageUrl !== 'string' || !imageUrl.trim() || !esteUuid(userId)) {
+      throw Object.assign(new Error('PHOTO_TASK_PAYLOAD_INVALID'), { code: 'PAYLOAD_INVALID' });
+    }
+
+    const valideazaImagine = creeazaValideazaUrlImagine({
+      gazdePermise: construiesteGazdePermise({
+        imagekitUrlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+        supabaseUrl: process.env.SUPABASE_URL,
+      }),
+      folderPrefix: `/mancare/${userId}/`,
+    });
+    const verificare = valideazaImagine(imageUrl);
+    if (!verificare.ok) {
+      throw Object.assign(new Error('PHOTO_IMAGE_URL_INVALID'), { code: 'URL_IMAGINE_INVALIDA' });
+    }
+
+    if (typeof logicalAnalysisId !== 'string' || !logicalAnalysisId.trim()
+      || typeof requestFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(requestFingerprint)) {
+      throw new Error('PHOTO_JOB_CONTRACT_MISSING');
+    }
+    const [, reservation] = await Promise.all([
+      requireOwnedJob({
+        jobId, userId, imageUrl: verificare.url, imageFileId, logicalAnalysisId, reservationId,
+      }),
+      readPhotoReservation({ userId, reservationId }),
+    ]);
+    if (reservation.logical_analysis_id !== logicalAnalysisId
+      || reservation.request_fingerprint !== requestFingerprint) {
+      throw new Error('JOB_OWNERSHIP_MISMATCH');
+    }
+    if (reservation.result) return await finalizeStoredPhotoResult(payload, reservation.result);
+    if (reservation.status !== 'RESERVED') throw new Error('PHOTO_RESERVATION_NOT_ACTIVE');
+    if (reservation.inference_claimed_at) throw new Error('PHOTO_OUTCOME_UNKNOWN');
+
+    const resp = await fetch(verificare.url, {
+      signal: AbortSignal.timeout(20000),
+      redirect: 'manual',
+    });
+    if (resp.status >= 300 && resp.status < 400) throw new Error('REDIRECT_INTERZIS');
+    if (!resp.ok) throw new Error('DESCARCARE_ESUATA');
+
+    const mimeDeclarat = String(resp.headers.get('content-type') || '')
+      .split(';')[0]
+      .trim()
+      .toLowerCase();
+    if (!MIME_PERMISE.has(mimeDeclarat)) throw new Error('MIME_INTERZIS');
+
+    const lungime = Number(resp.headers.get('content-length'));
+    if (Number.isFinite(lungime) && lungime > MAX_IMAGINE_BYTES) {
+      throw new Error('IMAGINE_PREA_MARE');
+    }
+
+    const buffer = await citesteCorpLimitat(resp, MAX_IMAGINE_BYTES);
+    const mimeDetectat = detecteazaMime(buffer);
+    if (!mimeDetectat || mimeDetectat !== mimeDeclarat) throw new Error('SEMNATURA_IMAGINE_INVALIDA');
+
+    const incercariGemini = construiesteIncercariGemini({
+      preferredModel: process.env.GEMINI_MODEL,
+      keys: [process.env.GEMINI_API_KEY],
+      maxAttempts: 1,
+    });
+    const claim = await claimPhotoInference({
+      userId, reservationId, requestFingerprint, jobId, logicalAnalysisId,
+      imageUrl: verificare.url, imageFileId,
+    });
+    if (claim.acquired !== true) {
+      if (claim.result) return await finalizeStoredPhotoResult(payload, claim.result);
+      throw new Error('PHOTO_OUTCOME_UNKNOWN');
+    }
+    didClaimThisRun = true;
+
+    const outcome = await genereazaAnalizaCuFallback({
+      incercariGemini,
+      prompt: obtinePromptAnalizaFoto(limba),
+      buffer,
+      mimeDetectat,
+      tipMasa,
+    });
+
+    if (outcome.definitiveFailure) {
+      await recordPhotoResult({
+        userId, reservationId, requestFingerprint, result: outcome.definitiveFailure,
+      });
+      inregistreazaOperational('photo.failed');
+      return await finalizeStoredPhotoResult(payload, outcome.definitiveFailure);
+    }
+
+    if (outcome.isNotFood) {
+      const rezultatNotFood = {
+        success: false,
+        isNotFood: true,
+        errorCode: 'NOT_FOOD',
+        eroare: 'Imaginea încărcată nu pare să conțină alimente. Te rugăm să încerci cu o poză clară a unei mese.',
+        processedAt: new Date().toISOString(),
+      };
+      await recordPhotoResult({ userId, reservationId, requestFingerprint, result: rezultatNotFood });
+      return await finalizeStoredPhotoResult(payload, rezultatNotFood);
+    }
+
+    const rezultatFinal = {
+      success: true,
+      items: outcome.normalizate,
+      totals: outcome.quality.totals,
+      quality: { requiresReview: outcome.quality.requiresReview, issues: outcome.quality.issues },
+      tipMasa: outcome.tipMasaSugerata,
+      userId,
+      processedAt: new Date().toISOString(),
+    };
+    await recordPhotoResult({ userId, reservationId, requestFingerprint, result: rezultatFinal });
+    await finalizeStoredPhotoResult(payload, rezultatFinal);
+    inregistreazaOperational('photo.succeeded', Date.now() - executionStartedAt);
+    return rezultatFinal;
+  } catch (err) {
+    if (process.env.SENTRY_DSN) {
+      try {
+        const Sentry = require('@sentry/node');
+        Sentry.withScope((scope) => {
+          scope.setLevel('error');
+          scope.setExtra('error_summary', rezumatEroareSigur(err, {
+            operation: 'trigger_photo_analysis',
+            provider: 'gemini',
+          }));
+          Sentry.captureMessage('AI_TRIGGER_PHOTO_ANALYSIS_FAILED');
+        });
+      } catch {
+        // Telemetria optionala nu schimba rezultatul task-ului.
+      }
+    }
+    const cod = codEroareSigur(err);
+    if (cod === 'TIMEOUT') inregistreazaOperational('gemini.timeout');
+    if (cod === 'AI_RATE_LIMITED') inregistreazaOperational('gemini.429');
+    console.error('[Trigger analiza-mancare-ai] Esuare:', cod);
+    // A claimed call with no durable result is ambiguous; retries must not infer again.
+    if (jobId && !(cod === 'PHOTO_OUTCOME_UNKNOWN' && !didClaimThisRun)) {
+      await updateAiJob(jobId, { error_code: cod }, userId);
+    }
+    throw err;
+  }
+}
+
+exports.executaAnalizaMancare = executaAnalizaMancare;
+
 exports.analizaMancareTask = task({
   id: 'analiza-mancare-ai',
   queue: {
@@ -323,173 +655,11 @@ exports.analizaMancareTask = task({
     });
     inregistreazaOperational('photo.failed');
   },
-  run: async (payload) => {
-    const executionStartedAt = Date.now();
-    const {
-      imageUrl, imageFileId, logicalAnalysisId, requestFingerprint,
-      tipMasa, limba, userId, jobId, reservationId,
-    } = payload || {};
-    inregistreazaOperational('photo.started');
-
-    try {
-      if (VARIABILE_OBLIGATORII.some((cheie) => !process.env[cheie]?.trim())) {
-        throw Object.assign(new Error('PHOTO_TASK_CONFIGURATION_MISSING'), { code: 'NEEDS_CONFIG' });
-      }
-
-      if (typeof imageUrl !== 'string' || !imageUrl.trim() || !esteUuid(userId)) {
-        throw Object.assign(new Error('PHOTO_TASK_PAYLOAD_INVALID'), { code: 'PAYLOAD_INVALID' });
-      }
-
-      const valideazaImagine = creeazaValideazaUrlImagine({
-        gazdePermise: construiesteGazdePermise({
-          imagekitUrlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
-          supabaseUrl: process.env.SUPABASE_URL,
-        }),
-        folderPrefix: `/mancare/${userId}/`,
-      });
-      const verificare = valideazaImagine(imageUrl);
-      if (!verificare.ok) {
-        throw Object.assign(new Error('PHOTO_IMAGE_URL_INVALID'), { code: 'URL_IMAGINE_INVALIDA' });
-      }
-
-      if (typeof logicalAnalysisId !== 'string' || !logicalAnalysisId.trim()
-        || typeof requestFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(requestFingerprint)) {
-        throw new Error('PHOTO_JOB_CONTRACT_MISSING');
-      }
-      const [, reservation] = await Promise.all([
-        requireOwnedJob({
-          jobId, userId, imageUrl: verificare.url, imageFileId, logicalAnalysisId, reservationId,
-        }),
-        readPhotoReservation({ userId, reservationId }),
-      ]);
-      if (reservation.logical_analysis_id !== logicalAnalysisId
-        || reservation.request_fingerprint !== requestFingerprint) {
-        throw new Error('JOB_OWNERSHIP_MISMATCH');
-      }
-      if (reservation.result) return await finalizeStoredPhotoResult(payload, reservation.result);
-      if (reservation.status !== 'RESERVED') throw new Error('PHOTO_RESERVATION_NOT_ACTIVE');
-      if (reservation.inference_claimed_at) throw new Error('PHOTO_OUTCOME_UNKNOWN');
-
-      const resp = await fetch(verificare.url, {
-        signal: AbortSignal.timeout(20000),
-        redirect: 'manual',
-      });
-      if (resp.status >= 300 && resp.status < 400) throw new Error('REDIRECT_INTERZIS');
-      if (!resp.ok) throw new Error('DESCARCARE_ESUATA');
-
-      const mimeDeclarat = String(resp.headers.get('content-type') || '')
-        .split(';')[0]
-        .trim()
-        .toLowerCase();
-      if (!MIME_PERMISE.has(mimeDeclarat)) throw new Error('MIME_INTERZIS');
-
-      const lungime = Number(resp.headers.get('content-length'));
-      if (Number.isFinite(lungime) && lungime > MAX_IMAGINE_BYTES) {
-        throw new Error('IMAGINE_PREA_MARE');
-      }
-
-      const buffer = await citesteCorpLimitat(resp, MAX_IMAGINE_BYTES);
-      const mimeDetectat = detecteazaMime(buffer);
-      if (!mimeDetectat || mimeDetectat !== mimeDeclarat) throw new Error('SEMNATURA_IMAGINE_INVALIDA');
-
-      const incercariGemini = construiesteIncercariGemini({
-        preferredModel: process.env.GEMINI_MODEL,
-        keys: [process.env.GEMINI_API_KEY],
-        maxAttempts: 1,
-      });
-      const claim = await claimPhotoInference({
-        userId, reservationId, requestFingerprint, jobId, logicalAnalysisId,
-        imageUrl: verificare.url, imageFileId,
-      });
-      if (claim.acquired !== true) {
-        if (claim.result) return await finalizeStoredPhotoResult(payload, claim.result);
-        throw new Error('PHOTO_OUTCOME_UNKNOWN');
-      }
-
-      const imagePart = { inlineData: { data: buffer.toString('base64'), mimeType: mimeDetectat } };
-      const [{ key, model: modelName }] = incercariGemini;
-      const client = new GoogleGenerativeAI(key);
-      const model = client.getGenerativeModel({ model: modelName });
-      const response = await callWithSoftTimeout(model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: obtinePromptAnalizaFoto(limba) }, imagePart] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.1,
-          maxOutputTokens: 1200,
-          ...(String(modelName).includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
-        },
-      }), 25000);
-      const text = response?.response?.text();
-      if (!text) throw new Error('AI_EMPTY_RESULT');
-
-      const items = parseJsonFromLlm(text, { asteapta: 'array' });
-      if (!Array.isArray(items)) throw new Error('JSON_AI_INVALID');
-
-      // Ramura isNotFood: imaginea nu contine alimente (modelul a raspuns cu
-      // array gol [] sau cu alimente/mesaje care semnaleaza non-food).
-      const isNotFood = items.length === 0 || items.some((item) =>
-        !item || typeof item !== 'object' || /nu.*(mancare|aliment)|non-food|nu s-a detectat|nu contine|not.*food|no.*food/i.test(String(item.nume || ''))
-      );
-
-      if (isNotFood) {
-        const rezultatNotFood = {
-          success: false,
-          isNotFood: true,
-          errorCode: 'NOT_FOOD',
-          eroare: 'Imaginea încărcată nu pare să conțină alimente. Te rugăm să încerci cu o poză clară a unei mese.',
-          processedAt: new Date().toISOString(),
-        };
-        await recordPhotoResult({ userId, reservationId, requestFingerprint, result: rezultatNotFood });
-        return await finalizeStoredPhotoResult(payload, rezultatNotFood);
-      }
-
-      const normalizate = normalizePhotoItems(items.slice(0, MAX_ALIMENTE));
-
-      const quality = evaluatePhotoQuality(normalizate);
-      const suggestedMeal = normalizate.find((item) => item.tip_masa_sugerat)?.tip_masa_sugerat;
-
-      const rezultatFinal = {
-        success: true,
-        items: normalizate,
-        totals: quality.totals,
-        quality: { requiresReview: quality.requiresReview, issues: quality.issues },
-        tipMasa: inferMealType(suggestedMeal, tipMasa),
-        userId,
-        processedAt: new Date().toISOString(),
-      };
-      await recordPhotoResult({ userId, reservationId, requestFingerprint, result: rezultatFinal });
-      await finalizeStoredPhotoResult(payload, rezultatFinal);
-      inregistreazaOperational('photo.succeeded', Date.now() - executionStartedAt);
-      return rezultatFinal;
-    } catch (err) {
-      if (process.env.SENTRY_DSN) {
-        try {
-          const Sentry = require('@sentry/node');
-          Sentry.withScope((scope) => {
-            scope.setLevel('error');
-            scope.setExtra('error_summary', rezumatEroareSigur(err, {
-              operation: 'trigger_photo_analysis',
-              provider: 'gemini',
-            }));
-            Sentry.captureMessage('AI_TRIGGER_PHOTO_ANALYSIS_FAILED');
-          });
-        } catch {
-          // Telemetria optionala nu schimba rezultatul task-ului.
-        }
-      }
-      const cod = codEroareSigur(err);
-      if (cod === 'TIMEOUT') inregistreazaOperational('gemini.timeout');
-      if (cod === 'AI_RATE_LIMITED') inregistreazaOperational('gemini.429');
-      console.error('[Trigger analiza-mancare-ai] Esuare:', cod);
-      // A claimed call with no durable result is ambiguous; retries must not infer again.
-      if (jobId) await updateAiJob(jobId, { error_code: cod }, userId);
-      throw err;
-    }
-  },
+  run: executaAnalizaMancare,
 });
 
 exports._test = {
   citesteCorpLimitat, detecteazaMime, codEroareSigur, updateAiJob,
   settlePhotoCredit, requireOwnedJob, construiesteIncercariGemini, PHOTO_CONCURRENCY,
-  normalizePhotoItems, evaluatePhotoQuality, inferMealType,
+  normalizePhotoItems, evaluatePhotoQuality, inferMealType, construiesteSecventaFallback,
 };

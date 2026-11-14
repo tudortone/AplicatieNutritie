@@ -78,6 +78,7 @@ const { creeazaServiciuCascada } = require('./services/ai/cascada');
 const { creeazaServiciuChat } = require('./services/ai/chat');
 const { createFlowCreditsService } = require('./services/monetization/flowCreditsService');
 const { createPhotoJobService } = require('./services/ai/photoJobService');
+const { executaAnalizaMancare } = require('./src/trigger/analiza-mancare-ai');
 const { createRewardedService } = require('./services/monetization/rewardedService');
 const {
   createGoogleAccessTokenProvider,
@@ -183,6 +184,7 @@ const photoJobService = createPhotoJobService({
   flowCredits: flowCreditsService,
   tasks,
   billing: googleBillingService,
+  runBackgroundWorker: (payload) => executaAnalizaMancare(payload),
 });
 const playIntegrityGuard = config.playIntegrity.mode === 'off'
   ? createPlayIntegrityGuard({ mode: 'off' })
