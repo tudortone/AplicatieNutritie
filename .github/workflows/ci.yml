@@ -197,8 +197,8 @@ jobs:
         run: npm run lint
 
       # Gate de audit cu allowlist (scripts/auditGate.js): backlog-ul Expo SDK 54
-      # (advisory-uri 2026-08-08 remediabile doar prin expo@57) e documentat si permis;
-      # orice pachet NOU vulnerabil sau orice CRITICAL ramane blocant. La upgrade expo@57
+      # (advisory-uri 2026-08-08 remediabile doar prin Expo SDK 58) e documentat si permis;
+      # orice pachet NOU vulnerabil sau orice CRITICAL ramane blocant. La upgrade Expo SDK 58
       # se golesc ALLOWLIST-ul si osv-scanner.toml.
       - name: Audit npm dependencies (allowlist gate)
         run: npm run audit:gate
@@ -275,5 +275,4 @@ jobs:
             --config=./osv-scanner.toml
             --lockfile=./backend-nutritie-ai/package-lock.json
             --lockfile=./frontend-nutritie/package-lock.json
-            --lockfile=./tools/scratch_anatomy_svg/package-lock.json
             --lockfile=./tools/trigger-cli/package-lock.json
