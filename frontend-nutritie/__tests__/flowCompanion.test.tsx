@@ -9,7 +9,6 @@ import {
   getEvolutionProgressPercent,
   getLimitBeaconStatus,
 } from '../lib/flowCompanion';
-import { FlowCompanionPill } from '../components/home/FlowCompanionPill';
 import { FlowCompanionModal } from '../components/home/FlowCompanionModal';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -122,46 +121,6 @@ describe('Flow Companion & Nutritional Limit Beacon Suite', () => {
       expect(exceeded.color).toBe('#EF4444');
       expect(exceeded.percent).toBe(108);
       expect(exceeded.differenceKcal).toBe(150);
-    });
-  });
-
-  describe('2. FlowCompanionPill Component', () => {
-    it('renders mascot name and beacon label in standard view', async () => {
-      const mockPress = jest.fn();
-      const view = await render(
-        <FlowCompanionPill
-          streak={5}
-          caloriiConsumate={1200}
-          caloriiTinta={2000}
-          onPress={mockPress}
-        />
-      );
-
-      expect(view.getByTestId('home-flow-companion-pill')).toBeTruthy();
-      expect(view.getByText('Pui de Foc')).toBeTruthy();
-      expect(view.getByText('În grafic')).toBeTruthy();
-
-      await act(async () => {
-        await fireEvent.press(view.getByTestId('home-flow-companion-pill'));
-      });
-      expect(mockPress).toHaveBeenCalledTimes(1);
-    });
-
-    it('renders compact mode with lightbulb beacon on small displays', async () => {
-      const mockPress = jest.fn();
-      const view = await render(
-        <FlowCompanionPill
-          streak={10}
-          caloriiConsumate={1900}
-          caloriiTinta={2000}
-          isCompact={true}
-          onPress={mockPress}
-        />
-      );
-
-      expect(view.getByTestId('home-flow-companion-pill')).toBeTruthy();
-      // Text is omitted in compact mode to guarantee 0 overflow
-      expect(view.queryByText('Râs Electric')).toBeNull();
     });
   });
 

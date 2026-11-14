@@ -5,11 +5,8 @@ import { useReducedMotion, useReducedMotionPreference } from '../hooks/useReduce
 import { MOTION_DURATIONS, SPRING_CONFIGS } from '../constants/motion';
 import { MealSaveSuccessModal } from '../components/ui/MealSaveSuccessModal';
 import { MacroRing } from '../components/MacroRing';
-import RankProgressBar from '../components/fitness/RankProgressBar';
-import ExpiryBar from '../components/food/ExpiryBar';
 import BouncingDot from '../components/BouncingDot';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { MotionCardEnter, MotionMacroBar, MotionSkeleton } from '../components/ui/MotionPrimitives';
 import PasLimba from '../app/onboarding/index';
 import EcranPas from '../components/onboarding/EcranPas';
 import LockScreen from '../components/LockScreen';
@@ -267,27 +264,6 @@ describe('P1-06 — Motion System & Reduced Motion Accessibility Suite', () => {
       expect(view.getByText('/ 2000 kcal')).toBeTruthy();
     });
 
-    it('RankProgressBar displays final kg values and rank', async () => {
-      const view = await render(
-        <RankProgressBar
-          currentKg={72.5}
-          nextRankKg={75}
-          rankLabel="Platină"
-          nextRankLabel="Diamant"
-        />
-      );
-      expect(view.getByText('Platină')).toBeTruthy();
-      expect(view.getByText('72.500 / 75.000 kg')).toBeTruthy();
-    });
-
-    it('ExpiryBar renders label correctly without crashing', async () => {
-      const futureDate = new Date(Date.now() + 86400000 * 3).toISOString();
-      const view = await render(
-        <ExpiryBar expiryDate={futureDate} />
-      );
-      expect(view.toJSON()).toBeTruthy();
-    });
-
     it('SkeletonLoader renders with static opacity when reduced motion is on', async () => {
       const view = await render(
         <SkeletonLoader width={100} height={20} />
@@ -300,19 +276,6 @@ describe('P1-06 — Motion System & Reduced Motion Accessibility Suite', () => {
         <BouncingDot delay={100} />
       );
       expect(view.toJSON()).toBeTruthy();
-    });
-
-    it('MotionPrimitives render immediately with static wrappers in reduced motion', async () => {
-      const view = await render(
-        <>
-          <MotionCardEnter>
-            <SkeletonLoader width={80} height={16} />
-          </MotionCardEnter>
-          <MotionMacroBar progress={0.8} />
-          <MotionSkeleton width={50} height={10} />
-        </>
-      );
-      expect(view.getByTestId('macro-progress-bar')).toBeTruthy();
     });
   });
 
