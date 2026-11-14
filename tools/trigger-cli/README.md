@@ -3,8 +3,8 @@
 This is a private deployment tool, not a new application. It never logs in or deploys during verification. Plain `npx trigger.dev@4.8.1` is not this hardened artifact.
 
 - Runtime: exact Node **22.23.4**, pinned by `.node-version` and checked before patching. Windows x64 archive SHA256: `CBC74B5E0982C9DBB41525FD8FB5DCD32FBEE237863F7829072F4639A1CE5F20`.
-- Manifest/lock: matched CLI and SDK **4.8.1**; no lifecycle hooks. Lock SHA256: `00A3870A556439EE1EB10B02BEF98DC5F0E88D8A862758BC79170663D7DF16CA`.
-- Overrides: tar7.5.21, deepmerge-ts8.0.0, esbuild0.25.12, zod4.6.7, ws8.21.3, socket.io-client4.8.3.
+- Manifest/lock: matched CLI and SDK **4.8.1**; no lifecycle hooks. Lock SHA256: `42127EE5A8924C4237532631A7B2FF142B5EFD8E41581D24C3FD23FC8CD3D5A4`.
+- Overrides: tar7.5.21, deepmerge-ts8.0.0, esbuild0.25.12, hono4.13.18, @hono/node-server2.1.8, zod4.6.7, ws8.21.3, socket.io-client4.8.3.
 - Versioned patch SHA256: `E66FB60DBE990F744B5A5E5DDA6577DFF72A0364F20FEA853929258E698CFA03`.
 - Original `build/plugins.js`: `B600ABC9246DD442A58CDA39653A8123FC70BDF03BAFFC2FCE62CE34C1161AF6`; patched: `8519E16566E7BB3261DEC30C92501732EFCB23AB8067538388CBE0AE2C49A696`.
 
