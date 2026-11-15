@@ -78,6 +78,36 @@ describe('AI Text Models & Contracts (RC-001, RC-003, RC-004, CORR-003)', () => 
         .rejects.toThrow('Nu s-a putut genera MEAL_PROPOSAL');
       expect(global.fetch).toHaveBeenCalledTimes(2);
     });
+    it('supports multiple meals (MEAL_PROPOSALS) with comma macros, ml->g unit, and omitted fiber', async () => {
+      const multi = {
+        type: 'MEAL_PROPOSALS',
+        meals: [
+          {
+            type: 'MEAL_PROPOSAL',
+            nume: 'Ovăz cu iaurt',
+            meal_type: 'mic_dejun',
+            items: [{ name: 'Iaurt', qty: 200, unit: 'ml', kcal: 130, protein_g: '10,5', carbs_g: 8, fat_g: 5 }],
+          },
+          {
+            type: 'MEAL_PROPOSAL',
+            nume: 'Somon cu orez',
+            meal_type: 'pranz',
+            items: [{ name: 'Somon', qty: 150, unit: 'g', kcal: 300, protein_g: 30, carbs_g: 0, fat_g: 18, fiber_g: 0 }],
+          },
+        ],
+      };
+      global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(multi) } }] }) }));
+
+      const result = await creeazaServiciuCuConfig().logFoodDinChat({
+        mesaj: 'adaugă-le în jurnal',
+        mesaje: [{ role: 'assistant', text: '1. Ovăz cu iaurt\n2. Somon cu orez' }],
+      });
+
+      expect(result.type).toBe('MEAL_PROPOSALS');
+      expect(result.meals).toHaveLength(2);
+      expect(result.meals[0].items[0]).toMatchObject({ unit: 'g', protein_g: 10.5, fiber_g: 0 });
+      expect(result.meals[1].nume).toBe('Somon cu orez');
+    });
     it('1. System prompt conține contractul exact MEAL_PROPOSAL și regulile de jurnal', async () => {
       let promptCapturat = '';
       global.fetch = jest.fn(async (url, optiuni) => {

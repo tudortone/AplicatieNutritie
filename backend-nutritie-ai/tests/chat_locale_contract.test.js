@@ -71,6 +71,8 @@ describe('P1-16: Chat & Vision Locale Contract & Meal Proposal Verification', ()
       expect(REGEX_MEAL_LOG_MULTILINGUAL.test('am consumat 200g orez')).toBe(true);
       expect(REGEX_MEAL_LOG_MULTILINGUAL.test('logheaza micul dejun')).toBe(true);
       expect(REGEX_MEAL_LOG_MULTILINGUAL.test('adauga in jurnal masa')).toBe(true);
+      expect(REGEX_MEAL_LOG_MULTILINGUAL.test('adaugă-le în jurnal')).toBe(true);
+      expect(REGEX_MEAL_LOG_MULTILINGUAL.test('adauga ambele mese')).toBe(true);
 
       // English
       expect(REGEX_MEAL_LOG_MULTILINGUAL.test('i ate 2 scrambled eggs')).toBe(true);
@@ -79,6 +81,7 @@ describe('P1-16: Chat & Vision Locale Contract & Meal Proposal Verification', ()
       expect(REGEX_MEAL_LOG_MULTILINGUAL.test('log meal please')).toBe(true);
       expect(REGEX_MEAL_LOG_MULTILINGUAL.test('add to diary')).toBe(true);
       expect(REGEX_MEAL_LOG_MULTILINGUAL.test('log food: 1 banana')).toBe(true);
+      expect(REGEX_MEAL_LOG_MULTILINGUAL.test('add both meals to diary')).toBe(true);
 
       // French
       expect(REGEX_MEAL_LOG_MULTILINGUAL.test('j\'ai mangé une omelette')).toBe(true);

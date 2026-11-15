@@ -24,9 +24,10 @@ const MAX_LUNGIME_MESAJ = 800;
  * Normalizeaza si filtreaza istoricul de conversatie.
  * @returns {{ mesaje: Array<{role: string, content: string}>, respinse: number }}
  */
-function construiesteIstoricSigur(istoric, { maxMesaje = MAX_MESAJE } = {}) {
+function construiesteIstoricSigur(istoric, { maxMesaje = MAX_MESAJE, maxLungimeMesaj = MAX_LUNGIME_MESAJ } = {}) {
 	if (!Array.isArray(istoric)) return { mesaje: [], respinse: 0 };
 
+	const limitaLungime = Math.min(3000, Math.max(MAX_LUNGIME_MESAJ, Number(maxLungimeMesaj) || MAX_LUNGIME_MESAJ));
 	const mesaje = [];
 	let respinse = 0;
 
@@ -45,7 +46,7 @@ function construiesteIstoricSigur(istoric, { maxMesaje = MAX_MESAJE } = {}) {
 			continue;
 		}
 
-		const continut = sanitizeText(brut.content ?? brut.text ?? '', MAX_LUNGIME_MESAJ);
+		const continut = sanitizeText(brut.content ?? brut.text ?? '', limitaLungime);
 		if (!continut) {
 			respinse += 1;
 			continue;
