@@ -7,6 +7,7 @@ import {
   prepareLocalDataForUser,
 } from '../lib/userDataCleanup';
 import { restaureazaProfilSesiune, sincronizeazaOnboardingLaProfil } from '../lib/onboarding';
+import { marcheazaMeseModificate } from '../lib/freshnessMese';
 import { useAppStore } from '../hooks/useAppStore';
 
 interface AuthContextType {
@@ -55,6 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (mounted && version === revision && appliedUser !== nextSession.user.id) {
             await restaureazaProfilSesiune(nextSession.user.id, supabase);
           }
+          marcheazaMeseModificate(nextSession.user.id);
         } else {
           let aveaSpatiuActiv = false;
           if (clearWhenEmpty) {

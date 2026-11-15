@@ -27,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 // (cerePropunereMasa), unde rulează fără hook.
 import i18n from '../../i18n';
 import { useTheme } from '../../context/ThemeContext';
+import { useInteractiveTour, useRegisterTourTarget } from '../../context/InteractiveTourContext';
 import { useAuth } from '../../context/AuthContext';
 import { usePremium } from '../../context/PremiumContext';
 import { useAds } from '../../context/AdsContext';
@@ -42,7 +43,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import KeyboardAwareScreen from '@/components/ui/KeyboardAwareScreen';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { extractTextWithoutMealProposal, containsStructuredMealProtocol } from '../../lib/parseMealProposal';
-import { coachMealTotals, extractCoachMealDrafts, isBareJournalCommand, validateCoachMealDraft, type CoachMealDraft } from '../../lib/coachMealDraft';
+import { coachMealTotals, extractCoachMealDrafts, isBareJournalCommand, normalizeMealUnit, parseCoachNumber, validateCoachMealDraft, type CoachMealDraft } from '../../lib/coachMealDraft';
 import { CoachMealSuggestionCard } from '../../components/coach/CoachMealSuggestionCard';
 import { CoachMealConfirmModal } from '../../components/coach/CoachMealConfirmModal';
 import { MealSaveSuccessModal, type MealSuccessData } from '../../components/ui/MealSaveSuccessModal';
@@ -117,18 +118,28 @@ function cheieIdempotenta(mesaj: string, mesaje: ChatMessage[], userId?: string)
  * apoi parsează răspunsul server (format MEAL_PROPOSAL).
  * Aruncă la status != 2xx sau dacă răspunsul nu conține o propunere validă.
  */
-async function cerePropunereMasa(mesaj: string, accessToken: string, signal?: AbortSignal): Promise<CoachMealDraft[]> {
+async function cerePropunereMasa(
+  mesaj: string,
+  accessToken: string,
+  istoric: { role: string; text: string }[] = [],
+  signal?: AbortSignal,
+): Promise<CoachMealDraft[]> {
+  const amprenta = istoric.map((m) => `${m.role}:${m.text.slice(0, 200)}`).join('|');
   const response = await fetch(buildApiUrl('/log-food-from-chat'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${accessToken}`,
-      // CHAT-001: același mesaj de masă retrimis = aceeași cheie => backend-ul
+      // CHAT-001: același mesaj + context retrimis = aceeași cheie => backend-ul
       // reia propunerea anterioară, nu regenerează (fără dublă execuție/credit).
-      'Idempotency-Key': hashString(mesaj),
+      'Idempotency-Key': hashString(`${mesaj}|${amprenta}`),
     },
     signal,
-    body: JSON.stringify({ mesaj, limba: i18n.language || 'ro' }),
+    body: JSON.stringify({
+      mesaj,
+      ...(istoric.length > 0 ? { mesaje: istoric } : {}),
+      limba: i18n.language || 'ro',
+    }),
   });
 
   if (!response.ok) {
@@ -261,7 +272,7 @@ const ChatMessageList = React.memo(function ChatMessageList({
 const isMealLogIntent = (text: string) => {
   const lower = text.toLowerCase().trim();
   // Aliniat cu regex-ul din backend (/api/chat) pentru suport multilingv (RO, EN, FR, DE):
-  return /(?:am m[aâ]ncat|am consumat|am servit|am b[aă]ut|logheaz[aă]|[iî]nregistreaz[aă]|pune [iî]n jurnal|adaug[aă] [iî]n jurnal|adaug[aă] masa|salveaz[aă] masa|i ate|i had|i drank|log meal|add to diary|log food|record meal|add meal|j'ai mang[eé]|j'ai bu|enregistre|ajouter au journal|ich habe gegessen|ich habe getrunken|mahlzeit loggen|zum tagebuch hinzuf[uü]gen)(?=[\s.,!?;:'"()[\]{}]|$)/iu.test(lower);
+  return /(?:am m[aâ]ncat|am consumat|am servit|am b[aă]ut|logheaz[aă](?:-(?:le|l|o))?|[iî]nregistreaz[aă](?:-(?:le|l|o))?|pune(?:-(?:le|l|o))? [iî]n jurnal|adaug[aă](?:-(?:le|l|o))?(?: (?:ambele|toate|cele \d+))? [iî]n jurnal|adaug[aă](?:-(?:le|l|o))? (?:masa|mesele|ambele mese|toate mesele|cele \d+ mese)|adaug[aă]-(?:le|l)|salveaz[aă](?:-(?:le|l|o))?(?: (?:masa|mesele))?|i ate|i had|i drank|log (?:meal|meals|both|these|all|food)|add (?:meal|meals|both(?: meals)?|all(?: \d+)?(?: meals)?|them|these) to (?:my )?(?:food )?(?:diary|journal)|add to (?:my )?diary|record meal|add (?:both|these|all \d+ )?meals?|j'ai mang[eé]|j'ai bu|enregistre(?:r)?(?:-(?:les|le))?|ajoute(?:r)?(?:-(?:les|le))? au journal|ajoute(?:r)?-(?:les|le)|ich habe gegessen|ich habe getrunken|mahlzeit(?:en)? loggen|beide(?: mahlzeiten)? zum tagebuch hinzuf[uü]gen|zum tagebuch hinzuf[uü]gen)(?=[\s.,!?;:'"()[\]{}]|$)/iu.test(lower);
 };
 
 export default function ChatScreen() {
@@ -276,6 +287,8 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const { tabBarHeight } = useResponsiveLayout();
   const reduceMotion = useReducedMotion();
+  const tour = useInteractiveTour();
+  const tourVisible = Boolean(tour?.tourVisible);
   const [chatInput, setChatInput] = useState('');
   const [loadingChat, setLoadingChat] = useState(false);
   const [recipeModalVisible, setRecipeModalVisible] = useState(false);
@@ -284,6 +297,7 @@ export default function ChatScreen() {
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<CoachMealDraft | null>(null);
   const [savingProposal, setSavingProposal] = useState(false);
+  const [estimatingNutrition, setEstimatingNutrition] = useState(false);
   const [chatQuota, setChatQuota] = useState<{
     userId: string;
     isPremium: boolean;
@@ -442,10 +456,46 @@ export default function ChatScreen() {
     setEditingDraft({
       ...match.draft,
       category: match.draft.category || getTipMasaDupaOra(new Date()),
-      items: match.draft.items.map((item) => ({ ...item })),
+      items: match.draft.items.map((item) => ({ ...item, unit: normalizeMealUnit(item.unit) })),
       date: localDayKey(new Date()),
     });
   }, []);
+
+  const estimateActiveSuggestionNutrition = useCallback(async () => {
+    if (!editingDraft || !session?.access_token || estimatingNutrition || savingRef.current) return;
+    const ownerUserId = session.user.id;
+    const mealName = editingDraft.name.trim();
+    if (!mealName) return;
+    setEstimatingNutrition(true);
+    try {
+      const istoricRecent = mesajeRef.current.filter((m) => !m.isError).slice(-6).map((m) => ({ role: m.role, text: m.text }));
+      const propuneri = await cerePropunereMasa(mealName, session.access_token, istoricRecent);
+      if (currentUserRef.current !== ownerUserId || propuneri.length === 0) return;
+      const matched = propuneri[0];
+      setEditingDraft((current) => current ? {
+        ...matched,
+        name: current.name.trim() || matched.name,
+        category: current.category || matched.category || getTipMasaDupaOra(new Date()),
+        date: current.date || localDayKey(new Date()),
+      } : null);
+    } catch {
+      if (currentUserRef.current === ownerUserId) {
+        Alert.alert(t('alerts.titluri.eroare'), t('chat.errorMealProposal'));
+      }
+    } finally {
+      setEstimatingNutrition(false);
+    }
+  }, [editingDraft, estimatingNutrition, session?.access_token, session?.user?.id, t]);
+
+  const coachDockTargetRef = useRef<View>(null);
+  useRegisterTourTarget('coachAi', {
+    targetRef: coachDockTargetRef,
+    onBeforeMeasure: () => {
+      try {
+        Keyboard.dismiss();
+      } catch {}
+    },
+  });
   
   const { 
     totalCalorii, 
@@ -657,11 +707,27 @@ export default function ChatScreen() {
     if (isBareJournalCommand(mesajText)) {
       const latest = [...mesajeRef.current].reverse().find((message) => message.role === 'ai' && message.suggestions?.some((suggestion) => suggestion.status === 'ready'));
       const eligible = latest?.suggestions?.filter((suggestion) => suggestion.status === 'ready') || [];
-      if (eligible.length === 1) openSuggestion(eligible[0].id);
-      else adaugaMesaj(buleMesaj('ai', t(eligible.length > 1 ? 'chat.suggestion.chooseMeal' : 'chat.suggestion.noMeal')));
-      loadingRef.current = false;
-      setLoadingChat(false);
-      return;
+      const hasStructuredValues = eligible.some((suggestion) => coachMealTotals(suggestion.draft).calories !== '');
+      if (eligible.length === 1 && hasStructuredValues) {
+        openSuggestion(eligible[0].id);
+        loadingRef.current = false;
+        setLoadingChat(false);
+        return;
+      }
+      if (eligible.length > 1 && hasStructuredValues) {
+        adaugaMesaj(buleMesaj('ai', t('chat.suggestion.chooseMeal')));
+        loadingRef.current = false;
+        setLoadingChat(false);
+        return;
+      }
+      if (eligible.length === 0) {
+        adaugaMesaj(buleMesaj('ai', t('chat.suggestion.noMeal')));
+        loadingRef.current = false;
+        setLoadingChat(false);
+        return;
+      }
+      // Dacă sugestiile existente nu aveau valori nutriționale (ex. din text Markdown),
+      // continuăm către ruta dedicată de mai jos cu istoricul recent pentru completare AI.
     }
 
     const controller = new AbortController();
@@ -669,12 +735,16 @@ export default function ChatScreen() {
     const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
 
     try {
-      // Meal-intent ESTE rutat direct catre propunerea de masa ANT de a ajunge la
+      // Meal-intent ESTE rutat direct catre propunerea de masa INAINTE de a ajunge la
       // /chat general. Persistarea ramane la confirmarea explicita a utilizatorului
       // (confirmMealProposal); aici doar obtinem propunerea si o afisam.
-      if (isMealLogIntent(mesajText)) {
+      if (isMealLogIntent(mesajText) || isBareJournalCommand(mesajText)) {
         try {
-          const propuneri = await cerePropunereMasa(mesajText, session.access_token, controller.signal);
+          const istoricRecent = mesajeRef.current
+            .filter((m) => !m.isError)
+            .slice(-8)
+            .map((m) => ({ role: m.role, text: m.text }));
+          const propuneri = await cerePropunereMasa(mesajText, session.access_token, istoricRecent, controller.signal);
           if (currentUserRef.current !== session.user.id) return;
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           adaugaSugestii(t('chat.foodsIdentified'), propuneri);
@@ -770,7 +840,7 @@ export default function ChatScreen() {
         // Păstrăm explicația și pașii rețetei, eliminând doar blocul tehnic JSON
         const textCurat = extractTextWithoutMealProposal(date?.raspuns);
         raspunsText = textCurat || t('chat.foodsIdentified');
-      } else if (containsStructuredMealProtocol(raspunsText)) {
+      } else if (typeof containsStructuredMealProtocol === 'function' && containsStructuredMealProtocol(raspunsText)) {
         adaugaMesaj(buleMesaj('ai', t('chat.errorResponseProcessing'), true));
         return;
       }
@@ -823,11 +893,11 @@ export default function ChatScreen() {
     const [year, month, day] = draft.date.split('-').map(Number);
     mealTime.setFullYear(year, month - 1, day);
     if (!operationIdsRef.current[suggestionId]) operationIdsRef.current[suggestionId] = idOperatieNoua();
-    const calVal = Math.round(Number(totals.calories) || 0);
-    const protVal = Math.round(Number(totals.protein) || 0);
-    const carbVal = Math.round(Number(totals.carbs) || 0);
-    const fatVal = Math.round(Number(totals.fat) || 0);
-    const fibVal = Math.round((Number(totals.fiber) || 0) * 10) / 10;
+    const calVal = Math.round(parseCoachNumber(totals.calories) || 0);
+    const protVal = Math.round(parseCoachNumber(totals.protein) || 0);
+    const carbVal = Math.round(parseCoachNumber(totals.carbs) || 0);
+    const fatVal = Math.round(parseCoachNumber(totals.fat) || 0);
+    const fibVal = Math.round((parseCoachNumber(totals.fiber) || 0) * 10) / 10;
     const payload = construiestePayloadMasaManuala({
       user_id: userId,
       idOperatie: operationIdsRef.current[suggestionId],
@@ -840,12 +910,12 @@ export default function ChatScreen() {
       tip_masa: (draft.category || getTipMasaDupaOra(mealTime)) as TipMasa,
       alimente: draft.items.map((item) => ({
         nume: item.name.trim(),
-        grame: Number(item.quantity) || 100,
-        calorii: Math.round(Number(item.calories) || 0),
-        proteine: Math.round(Number(item.protein) || 0),
-        carbohidrati: Math.round(Number(item.carbs) || 0),
-        grasimi: Math.round(Number(item.fat) || 0),
-        fibre: Math.round((Number(item.fiber) || 0) * 10) / 10,
+        grame: parseCoachNumber(item.quantity) || 100,
+        calorii: Math.round(parseCoachNumber(item.calories) || 0),
+        proteine: Math.round(parseCoachNumber(item.protein) || 0),
+        carbohidrati: Math.round(parseCoachNumber(item.carbs) || 0),
+        grasimi: Math.round(parseCoachNumber(item.fat) || 0),
+        fibre: Math.round((parseCoachNumber(item.fiber) || 0) * 10) / 10,
       })),
       imagine_url: draft.imageUrl || null,
       now: mealTime,
@@ -1196,9 +1266,11 @@ export default function ChatScreen() {
           )}
         </ScrollView>
 
+        {/* Quick AI Action Chips + Composer dock */}
+        <View ref={coachDockTargetRef} collapsable={false}>
         {/* Quick AI Action Chips — horizontally scrollable single compact row */}
         {kbHeightFallback === 0 ? (
-          <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(400)} style={styles.quickActionsRow}>
+          <Animated.View entering={reduceMotion || tourVisible ? undefined : FadeInDown.duration(400)} style={styles.quickActionsRow}>
             <ScrollView
               testID="coach-quick-actions"
               horizontal
@@ -1276,8 +1348,8 @@ export default function ChatScreen() {
         {/* Input */}
         <Animated.View
           testID="coach-composer"
-          entering={reduceMotion ? undefined : FadeInDown.duration(600).delay(200)}
-          style={[styles.inputWrapper, composerBottomStyle]}
+          entering={reduceMotion || tourVisible ? undefined : FadeInDown.duration(600).delay(200)}
+          style={[styles.inputWrapper, { paddingBottom: 4 }]}
         >
           <View style={[styles.inputContainer, { borderColor: colors.accentSecondary + '33', backgroundColor: colors.surfaceElevated }]}>
             <LinearGradient colors={[colors.accentSecondary + '14', 'rgba(0,0,0,0)']} style={styles.inputGrad}>
@@ -1311,6 +1383,8 @@ export default function ChatScreen() {
             </LinearGradient>
           </View>
         </Animated.View>
+        </View>
+        <Animated.View pointerEvents="none" style={composerBottomStyle} />
 
       </KeyboardAwareScreen>
 
@@ -1361,9 +1435,11 @@ export default function ChatScreen() {
         visible={!!activeSuggestionId}
         draft={editingDraft}
         saving={savingProposal}
+        estimating={estimatingNutrition}
         onChange={setEditingDraft}
+        onEstimateNutrition={estimateActiveSuggestionNutrition}
         onCancel={() => {
-          if (savingRef.current) return;
+          if (savingRef.current || estimatingNutrition) return;
           setActiveSuggestionId(null);
           setEditingDraft(null);
         }}

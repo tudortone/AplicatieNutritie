@@ -52,6 +52,7 @@ export interface PantryViewProps {
   onSaveEdit: (id: string, updates: ProdusCamaraUpdate) => Promise<void> | void;
   onDeleteItem: (id: string) => Promise<void> | void;
   onGenerateRecipes: (selected: ProdusCamara[]) => void;
+  controlsTargetRef?: React.RefObject<View | null>;
 }
 
 const SORT_CYCLE: PantrySort[] = ['urgency', 'low_stock', 'alpha', 'recent'];
@@ -80,6 +81,7 @@ export function PantryView({
   onSaveEdit,
   onDeleteItem,
   onGenerateRecipes,
+  controlsTargetRef,
 }: PantryViewProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -224,6 +226,7 @@ export function PantryView({
     <View style={styles.root} testID="pantry-view">
       {/* Zonă sticky: Statistici + Sort + Căutare + Filtre */}
       <View style={styles.controlsHeader}>
+        <View ref={controlsTargetRef} collapsable={false} style={styles.controlsInner}>
         <View style={styles.summaryRow}>
           <Text
             maxFontSizeMultiplier={1.3}
@@ -333,6 +336,7 @@ export function PantryView({
             );
           })}
         </ScrollView>
+        </View>
       </View>
 
       {/* Stare încărcare / eroare / gol / listă */}
@@ -596,6 +600,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xs,
     paddingBottom: Spacing.sm,
+  },
+  controlsInner: {
     gap: 10,
   },
   summaryRow: {

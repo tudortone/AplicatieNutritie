@@ -34,11 +34,6 @@ interface RunnerSphereProps {
   size?: number;
 }
 
-const SafeSvg: any = Svg || (({ children }: any) => children || null);
-const AnimatedSvg: any =
-  typeof Animated?.createAnimatedComponent === 'function' && SafeSvg
-    ? Animated.createAnimatedComponent(SafeSvg)
-    : SafeSvg;
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -324,25 +319,27 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
         </Svg>
 
         {/* Layer 2: Rotating Kinetic Orbital Ring with Traveling Progress Dot */}
-        <AnimatedSvg width={size} height={size} style={[StyleSheet.absoluteFill, orbitAnimatedStyle]}>
-          {/* Luminous orbital trail */}
-          <Circle
-            cx={radius}
-            cy={radius}
-            r={radius - 2.5}
-            stroke={isProcessing ? 'rgba(204, 255, 0, 0.45)' : isCompleted ? 'rgba(16, 185, 129, 0.5)' : 'rgba(204, 255, 0, 0.25)'}
-            strokeWidth={1.5}
-            strokeDasharray={isProcessing ? '14 8' : '22 12'}
-            fill="none"
-          />
-          {/* Leading kinetic energy dot */}
-          <Circle
-            cx={radius + (radius - 2.5) * 0.707}
-            cy={radius - (radius - 2.5) * 0.707}
-            r={isProcessing ? 2.5 : 2}
-            fill={isProcessing ? '#CCFF00' : isCompleted ? '#10B981' : '#CCFF00'}
-          />
-        </AnimatedSvg>
+        <Animated.View style={[StyleSheet.absoluteFill, orbitAnimatedStyle]} pointerEvents="none">
+          <Svg width={size} height={size}>
+            {/* Luminous orbital trail */}
+            <Circle
+              cx={radius}
+              cy={radius}
+              r={radius - 2.5}
+              stroke={isProcessing ? 'rgba(204, 255, 0, 0.45)' : isCompleted ? 'rgba(16, 185, 129, 0.5)' : 'rgba(204, 255, 0, 0.25)'}
+              strokeWidth={1.5}
+              strokeDasharray={isProcessing ? '14 8' : '22 12'}
+              fill="none"
+            />
+            {/* Leading kinetic energy dot */}
+            <Circle
+              cx={radius + (radius - 2.5) * 0.707}
+              cy={radius - (radius - 2.5) * 0.707}
+              r={isProcessing ? 2.5 : 2}
+              fill={isProcessing ? '#CCFF00' : isCompleted ? '#10B981' : '#CCFF00'}
+            />
+          </Svg>
+        </Animated.View>
 
         {/* Layer 3: One continuous athlete pose, animated on the UI thread */}
         <View style={[StyleSheet.absoluteFill, styles.centerAlign]} pointerEvents="none">

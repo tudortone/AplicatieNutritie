@@ -28,6 +28,7 @@ import { BillingProvider } from '../context/BillingContext';
 import { AdsProvider } from '../context/AdsContext';
 import { FlowCreditsProvider } from '../context/FlowCreditsContext';
 import { FlowCreditsModalHost } from '../components/FlowCreditsModalHost';
+import { InteractiveTourOverlayHost, InteractiveTourProvider } from '../context/InteractiveTourContext';
 import { useDailySync } from '../hooks/useDailySync';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import OfflineBanner from '../components/OfflineBanner';
@@ -35,6 +36,7 @@ import { AppUpdateNotice } from '../components/AppUpdateNotice';
 import { GlobalErrorBoundary } from '../components/GlobalErrorBoundary';
 import { buildApiUrl } from '../lib/api';
 import { restaureazaProfilLocal, type ProfilRestaurare } from '../lib/onboarding';
+import { marcheazaMeseModificate } from '../lib/freshnessMese';
 import { scheduleDailyMealReminders, DEFAULT_MEAL_REMINDERS } from '../lib/notifications';
 import {
   getConsent,
@@ -53,7 +55,7 @@ import {
   sanitizeProductionConsoleArguments,
   scrubTelemetryObject,
 } from '../lib/telemetryPrivacy';
-import '../i18n';
+import { i18nReady } from '../i18n';
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -250,7 +252,12 @@ function RootNavigator() {
 
   useEffect(() => {
     let active = true;
-    void Promise.resolve(syncFromAsyncStorage()).catch(() => {}).finally(() => { if (active) setStorageReady(true); });
+    void Promise.all([
+      Promise.resolve(syncFromAsyncStorage()).catch(() => {}),
+      Promise.resolve(i18nReady).catch(() => {}),
+    ]).finally(() => {
+      if (active) setStorageReady(true);
+    });
     return () => { active = false; };
   }, [syncFromAsyncStorage]);
 
@@ -477,6 +484,7 @@ function RootNavigator() {
           void (async () => {
             try {
               await restaureazaProfilLocal(profilServerDate);
+              marcheazaMeseModificate(session.user.id);
               await setOnboardingDone(true);
               setSkipOnboardingToAuth?.(false);
               if (inOnboarding || inAuth) router.replace('/(tabs)');
@@ -518,6 +526,7 @@ function RootNavigator() {
       <PremiumProvider appUserId={session?.user.id ?? null}>
         <FlowCreditsProvider appUserId={session?.user.id ?? null}>
         <AdsProvider userId={session?.user.id ?? null}>
+        <InteractiveTourProvider userId={session?.user.id}>
         <Stack screenOptions={{ headerShown: false, gestureEnabled: true, animation: PUSH_ANIMATION, animationDuration: PUSH_DURATION, fullScreenGestureEnabled: true, contentStyle: { backgroundColor: colors.background } }}>
           <Stack.Screen name="(tabs)" options={{ animation: 'none', gestureEnabled: false }} />
           <Stack.Screen name="auth" options={{ animation: 'fade', animationDuration: 220, gestureEnabled: false }} />
@@ -534,6 +543,8 @@ function RootNavigator() {
           <Stack.Screen name="progres-antrenamente" options={push} />
           <Stack.Screen name="workout-v2-preview" options={push} />
         </Stack>
+        <InteractiveTourOverlayHost screen="tabs" />
+        </InteractiveTourProvider>
         </AdsProvider>
         <FlowCreditsModalHost />
         </FlowCreditsProvider>

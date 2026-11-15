@@ -22,6 +22,7 @@ import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { FlowIcon } from '../../components/ui/FlowIcon';
 import { calculateConservativeWeightProjection, latestMeasuredWeightKg, normalizeWeightHistory } from '../../lib/weightProjection';
 import { isValidBodyWeightKg } from '../../lib/profileWeight';
+import { incarcaTinteDinProfilSupabase, restaureazaProfilLocal } from '../../lib/onboarding';
 
 interface ZiStatistica {
   data: string;
@@ -110,12 +111,21 @@ export default function StatisticiScreen() {
         return;
       }
 
-      // 1. Află calorii țintă
+      // 1. Află calorii țintă (metadata -> AsyncStorage -> public.profil fallback)
       const userMeta = user.user_metadata || {};
       let cTinta = userMeta.caloriiTinta;
       if (!cTinta) {
         const st = await AsyncStorage.getItem('caloriiTinta');
-        cTinta = st ? parseInt(st, 10) : 2000;
+        cTinta = st ? parseInt(st, 10) : undefined;
+      }
+      if (!cTinta && typeof incarcaTinteDinProfilSupabase === 'function') {
+        const profilDb = await incarcaTinteDinProfilSupabase(user.id, supabase);
+        if (profilDb?.caloriiTinta) {
+          cTinta = profilDb.caloriiTinta;
+          if (typeof restaureazaProfilLocal === 'function') {
+            void restaureazaProfilLocal(profilDb).catch(() => {});
+          }
+        }
       }
       const valTinta = Number(cTinta);
       setCaloriiTinta(Number.isFinite(valTinta) && valTinta > 0 ? valTinta : 2000);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import Animated, { FadeInDown } from 'react-native-reanimated'
 import { useTranslation } from 'react-i18next'
@@ -8,10 +8,15 @@ import { ArrowRight } from 'lucide-react-native'
 
 import EcranPas from '../../components/onboarding/EcranPas'
 import CardOptiune from '../../components/onboarding/CardOptiune'
-import { changeLanguage, SUPPORTED_LANGUAGES, LANGUAGE_NAMES, type SupportedLanguage } from '../../i18n'
+import { changeLanguage, i18nReady, SUPPORTED_LANGUAGES, LANGUAGE_NAMES, type SupportedLanguage } from '../../i18n'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 import { useTheme } from '../../context/ThemeContext'
 import { useAppStore } from '../../hooks/useAppStore'
+
+function toSupportedLang(lng?: string | null): SupportedLanguage {
+	const short = (lng || 'en').split('-')[0] as SupportedLanguage
+	return SUPPORTED_LANGUAGES.includes(short) ? short : 'en'
+}
 
 export default function PasLimba() {
 	const { t, i18n } = useTranslation()
@@ -20,13 +25,38 @@ export default function PasLimba() {
 	const router = useRouter()
 	const setSkipOnboardingToAuth = useAppStore((s) => s.setSkipOnboardingToAuth)
 	const [currentLang, setCurrentLang] = useState<SupportedLanguage>(
-		() => (i18n.language as SupportedLanguage) || 'en'
+		() => toSupportedLang(i18n.resolvedLanguage || i18n.language)
 	)
+	const hasSyncedReadyRef = useRef(false)
+	const userSelectedRef = useRef(false)
+
+	useEffect(() => {
+		let active = true
+		if (!hasSyncedReadyRef.current) {
+			hasSyncedReadyRef.current = true
+			void Promise.resolve(i18nReady).then((resolved) => {
+				if (active && !userSelectedRef.current && resolved) {
+					setCurrentLang(toSupportedLang(i18n.resolvedLanguage || i18n.language || resolved))
+				}
+			}).catch(() => { })
+		}
+		const onChanged = (lng: string) => {
+			if (active) {
+				setCurrentLang(toSupportedLang(lng))
+			}
+		}
+		i18n.on?.('languageChanged', onChanged)
+		return () => {
+			active = false
+			i18n.off?.('languageChanged', onChanged)
+		}
+	}, [i18n])
 
 	const handleSelectLanguage = async (lang: SupportedLanguage) => {
 		try {
 			Haptics.selectionAsync()
-		} catch {}
+		} catch { }
+		userSelectedRef.current = true
 		setCurrentLang(lang)
 		await changeLanguage(lang)
 	}
@@ -34,7 +64,7 @@ export default function PasLimba() {
 	const handleSkipToSignIn = () => {
 		try {
 			Haptics.selectionAsync()
-		} catch {}
+		} catch { }
 		// Flag doar in memorie: nu setam onboardingDone=true ca RootLayout sa
 		// poata restaura profilul din DB automat dupa autentificare.
 		setSkipOnboardingToAuth(true)
@@ -77,7 +107,19 @@ export default function PasLimba() {
 						>
 							<CardOptiune
 								titlu={info.label}
-								pictograma={<Text style={{ fontSize: 24 }}>{info.flag}</Text>}
+								pictograma={
+									<View
+										style={[
+											styles.flagBadge,
+											{
+												backgroundColor: isSelected ? colors.accent + '1A' : colors.surfaceElevated,
+												borderColor: isSelected ? colors.accent + '4D' : colors.cardBorder,
+											},
+										]}
+									>
+										<Text style={[styles.flagText, { color: colors.textPrimary }]}>{info.flag}</Text>
+									</View>
+								}
 								selectat={isSelected}
 								laSelectare={() => handleSelectLanguage(lang)}
 							/>
@@ -90,6 +132,19 @@ export default function PasLimba() {
 }
 
 const styles = StyleSheet.create({
+	flagBadge: {
+		width: 42,
+		height: 42,
+		borderRadius: 14,
+		borderWidth: 1,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	flagText: {
+		fontSize: 20,
+		fontWeight: '700',
+		includeFontPadding: false,
+	},
 	skipBtn: {
 		marginTop: 12,
 		minHeight: 48,

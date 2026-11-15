@@ -6,13 +6,17 @@ import { BarChart3, Camera, Flame, PieChart, TrendingUp } from 'lucide-react-nat
 import { useTranslation } from 'react-i18next'
 
 import EcranPas from '../../components/onboarding/EcranPas'
+import { useAuth } from '../../context/AuthContext'
 import { useOnboarding } from '../../context/OnboardingContext'
 import { useTheme } from '../../context/ThemeContext'
 import { useAppStore } from '../../hooks/useAppStore'
+import { salveazaDateOnboarding, sincronizeazaOnboardingLaProfil } from '../../lib/onboarding'
+import { supabase } from '../../supabase'
 
 export default function PasPrezentare() {
 	const { t } = useTranslation()
-	const { plan } = useOnboarding()
+	const { session } = useAuth()
+	const { date, plan } = useOnboarding()
 	const { colors } = useTheme()
 	const { setOnboardingDone } = useAppStore()
 	const router = useRouter()
@@ -49,11 +53,17 @@ export default function PasPrezentare() {
 	const finalizeaza = async () => {
 		setSeIncarca(true)
 		try {
+			await salveazaDateOnboarding(date)
+			const sesiuneActiva =
+				session ?? (await supabase.auth.getSession().catch(() => null))?.data?.session ?? null
+			if (sesiuneActiva?.user?.id) {
+				await sincronizeazaOnboardingLaProfil(sesiuneActiva.user.id, supabase)
+			}
 			// Confirmăm scrierea durabilă înainte de navigare, astfel încât un
 			// reload/kill imediat să nu repornească onboarding-ul.
 			await setOnboardingDone(true)
-			router.replace('/auth')
-			// Oprim navigarea automata; am mers deja catre ecranul de autentificare.
+			router.replace(sesiuneActiva?.user?.id ? '/(tabs)' : '/auth')
+			// Oprim navigarea automata; am mers deja catre destinatia potrivita.
 			return false
 		} catch (eroare) {
 			setSeIncarca(false)

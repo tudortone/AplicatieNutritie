@@ -15,6 +15,7 @@ let mockWaterRemove = jest.fn();
 let mockModalCurrentWeight: number | null = null;
 let mockAddMealOpen = jest.fn();
 let mockAddMealOpenOnMount = false;
+const mockJournalRouterPush = jest.fn();
 
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
@@ -48,7 +49,7 @@ jest.mock('react-i18next', () => ({
     i18n: { language: mockI18nLocale },
   }),
 }));
-jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }), useFocusEffect: jest.fn() }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockJournalRouterPush }), useFocusEffect: jest.fn() }));
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: { getItem: jest.fn(async () => null), setItem: jest.fn(async () => undefined), removeItem: jest.fn(async () => undefined) },
@@ -266,5 +267,25 @@ describe('GetFlow responsive Home and Journal production surfaces', () => {
     const home = await render(<HomeScreen />);
     expect(home.getByText(resources[locale].home.waterMissingWeight)).toBeTruthy();
     expect(home.getByText(resources[locale].home.waterAddWeight)).toBeTruthy();
+  });
+
+  test.each(['ro', 'en', 'fr', 'de'])('Journal Pantry shortcut renders localized label and navigates to camara tab (%s)', async (locale) => {
+    mockJournalRouterPush.mockClear();
+    mockI18nLocale = locale;
+    mockResolveTranslations = true;
+    const resources: Record<string, any> = {
+      ro: require('../i18n/locales/ro.json'),
+      en: require('../i18n/locales/en.json'),
+      fr: require('../i18n/locales/fr.json'),
+      de: require('../i18n/locales/de.json'),
+    };
+    const journal = await render(<HistoryScreen />);
+    const pantryBtn = journal.getByTestId('journal-pantry-btn');
+    expect(journal.getByText(resources[locale].jurnal.pantryBtn)).toBeTruthy();
+    fireEvent.press(pantryBtn);
+    expect(mockJournalRouterPush).toHaveBeenCalledWith({
+      pathname: '/scanner-barcode',
+      params: { tab: 'camara' },
+    });
   });
 });

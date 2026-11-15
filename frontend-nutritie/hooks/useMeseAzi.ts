@@ -7,6 +7,7 @@ import { calculeazaTotaluriZi, totaluriPentruAfisare } from '../lib/nutritionTot
 import { aboneazaLaModificariMese } from '../lib/freshnessMese';
 import { citesteTargeturiPending } from '../lib/sincronizeazaTargeturi';
 import { resolveProfileWeightKg } from '../lib/profileWeight';
+import { incarcaTinteDinProfilSupabase, restaureazaProfilLocal } from '../lib/onboarding';
 import { startOfLocalDayISO, endOfLocalDayISO, localDayKey } from '../lib/dateUtils';
 import {
   getCachedJournalDay,
@@ -208,28 +209,46 @@ export function useMeseAzi(dataSelectata?: Date) {
             metadataVal: number | undefined,
             localVal: number | undefined,
             storedStr: string | null,
+            dbVal: number | undefined,
             fallback: number
           ): number => {
             if (typeof localVal === 'number' && Number.isFinite(localVal) && localVal > 0) return localVal;
             if (typeof metadataVal === 'number' && Number.isFinite(metadataVal) && metadataVal > 0) return metadataVal;
             const parsedStored = storedStr ? Number(storedStr) : NaN;
             if (Number.isFinite(parsedStored) && parsedStored > 0) return parsedStored;
+            if (typeof dbVal === 'number' && Number.isFinite(dbVal) && dbVal > 0) return dbVal;
             return fallback;
           };
 
-          setCaloriiTinta(rezolva(userMetadata.caloriiTinta, pendingTargets?.caloriiTinta, caloriiLocale, 2000));
-          setProteineTinta(rezolva(userMetadata.proteineTinta, pendingTargets?.proteineTinta, proteineLocale, 150));
-          setCarbiTinta(rezolva(userMetadata.carbiTinta, pendingTargets?.carbiTinta, carbiLocali, 250));
-          setGrasimiTinta(rezolva(userMetadata.grasimiTinta, pendingTargets?.grasimiTinta, grasimiLocale, 70));
-          setGreutate(rezolva(userMetadata.greutate, pendingTargets?.greutate, greutateLocala, 75));
+          const hasResolvedFromFastSources = Boolean(
+            (typeof pendingTargets?.caloriiTinta === 'number' && Number.isFinite(pendingTargets.caloriiTinta) && pendingTargets.caloriiTinta > 0) ||
+            (typeof userMetadata.caloriiTinta === 'number' && Number.isFinite(userMetadata.caloriiTinta) && userMetadata.caloriiTinta > 0) ||
+            (caloriiLocale && Number.isFinite(Number(caloriiLocale)) && Number(caloriiLocale) > 0)
+          );
+
+          const profilDb = !hasResolvedFromFastSources && typeof incarcaTinteDinProfilSupabase === 'function'
+            ? await incarcaTinteDinProfilSupabase(currentUser.id, supabase)
+            : null;
+          if (isStale()) return;
+
+          if (profilDb?.caloriiTinta && typeof restaureazaProfilLocal === 'function') {
+            void restaureazaProfilLocal(profilDb).catch(() => {});
+          }
+
+          setCaloriiTinta(rezolva(userMetadata.caloriiTinta, pendingTargets?.caloriiTinta, caloriiLocale, profilDb?.caloriiTinta ?? undefined, 2000));
+          setProteineTinta(rezolva(userMetadata.proteineTinta, pendingTargets?.proteineTinta, proteineLocale, profilDb?.proteineTinta ?? undefined, 150));
+          setCarbiTinta(rezolva(userMetadata.carbiTinta, pendingTargets?.carbiTinta, carbiLocali, profilDb?.carbiTinta ?? undefined, 250));
+          setGrasimiTinta(rezolva(userMetadata.grasimiTinta, pendingTargets?.grasimiTinta, grasimiLocale, profilDb?.grasimiTinta ?? undefined, 70));
+          setGreutate(rezolva(userMetadata.greutate, pendingTargets?.greutate, greutateLocala, profilDb?.greutate ?? undefined, 75));
           setGreutateIntrodusaKg(
             resolveProfileWeightKg({
               pendingKg: pendingTargets?.greutate,
               metadataKg: userMetadata.greutate,
-              storedKg: greutateLocala,
+              storedKg: greutateLocala ?? (profilDb?.greutate != null ? String(profilDb.greutate) : null),
             })
           );
-          targetsLoadedRef.current = true;
+          // Nu blocăm pe 2000 implicit dacă niciuna dintre sursele reale nu a răspuns încă.
+          targetsLoadedRef.current = Boolean(hasResolvedFromFastSources || profilDb?.caloriiTinta);
         }
 
         if (!forceLoading && !isSilent && hasCachedJournalDay(targetDateKey)) {

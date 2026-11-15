@@ -1,8 +1,19 @@
+import * as ExpoCrypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
 import './constants/qaEnvironment';
+
+// PKCE (`resetPasswordForEmail` / `signInWithOAuth`) necesită `crypto.getRandomValues`.
+if (typeof ExpoCrypto?.getRandomValues === 'function') {
+  const runtimeGlobal = globalThis as unknown as { crypto?: { getRandomValues?: typeof ExpoCrypto.getRandomValues } };
+  if (typeof runtimeGlobal.crypto !== 'object' || runtimeGlobal.crypto === null) {
+    runtimeGlobal.crypto = { getRandomValues: ExpoCrypto.getRandomValues };
+  } else if (typeof runtimeGlobal.crypto.getRandomValues !== 'function') {
+    runtimeGlobal.crypto.getRandomValues = ExpoCrypto.getRandomValues;
+  }
+}
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;

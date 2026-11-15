@@ -32,6 +32,7 @@ import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { OAUTH_REDIRECT_URI } from '../../lib/oauthFlow';
 import {
   forgotPasswordErrorKey,
+  suggestRecoveryEmailDomain,
   verifyRecoveryOtpErrorKey,
 } from '../../lib/passwordRecoveryErrors';
 import { supabase } from '../../supabase';
@@ -83,6 +84,7 @@ export default function ForgotPasswordScreen() {
 
   const cardMaxWidth = Math.min(contentMaxWidth, 440);
   const onAccentColor = colors.textOnAccent ?? colors.background;
+  const emailSuggestion = step === 'request' ? suggestRecoveryEmailDomain(email) : null;
 
   const triggerErrorHaptic = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -117,6 +119,10 @@ export default function ForgotPasswordScreen() {
         redirectTo: `${OAUTH_REDIRECT_URI}?flow=recovery`,
       });
       if (error) {
+        console.warn('[ForgotPassword] Recovery request failed:', {
+          status: (error as { status?: number }).status ?? null,
+          code: (error as { code?: string }).code ?? null,
+        });
         triggerErrorHaptic();
         setErrorMsg(t(forgotPasswordErrorKey(error)));
         return;
@@ -128,9 +134,12 @@ export default function ForgotPasswordScreen() {
       setShowExpiredBanner(false);
       setStep('verify');
       setCooldown(COOLDOWN_SECONDS);
-    } catch {
+    } catch (thrown) {
+      console.warn('[ForgotPassword] Recovery request threw:', {
+        name: thrown instanceof Error ? thrown.name : typeof thrown,
+      });
       triggerErrorHaptic();
-      setErrorMsg(t('authForgotPassword.errorRequestFailed'));
+      setErrorMsg(t(forgotPasswordErrorKey(thrown as { status?: number; message?: string; code?: string })));
     } finally {
       setSending(false);
     }
@@ -146,6 +155,10 @@ export default function ForgotPasswordScreen() {
         redirectTo: `${OAUTH_REDIRECT_URI}?flow=recovery`,
       });
       if (error) {
+        console.warn('[ForgotPassword] Resend recovery failed:', {
+          status: (error as { status?: number }).status ?? null,
+          code: (error as { code?: string }).code ?? null,
+        });
         triggerErrorHaptic();
         setErrorMsg(t(forgotPasswordErrorKey(error)));
         return;
@@ -154,9 +167,9 @@ export default function ForgotPasswordScreen() {
       triggerSuccessHaptic();
       setOtpCode('');
       setCooldown(COOLDOWN_SECONDS);
-    } catch {
+    } catch (thrown) {
       triggerErrorHaptic();
-      setErrorMsg(t('authForgotPassword.errorRequestFailed'));
+      setErrorMsg(t(forgotPasswordErrorKey(thrown as { status?: number; message?: string; code?: string })));
     } finally {
       setResending(false);
     }
@@ -321,13 +334,22 @@ export default function ForgotPasswordScreen() {
                 ]}
               >
                 <CheckCircle2 size={16} color={colors.accent} style={styles.noticeIcon} />
-                <Text
-                  testID="forgot-step2-notice"
-                  style={[styles.noticeText, { color: colors.textSecondary }]}
-                  maxFontSizeMultiplier={1.35}
-                >
-                  {t('authForgotPassword.step2Notice', { email: submittedEmail })}
-                </Text>
+                <View style={styles.noticeCopyWrap}>
+                  <Text
+                    testID="forgot-step2-notice"
+                    style={[styles.noticeText, { color: colors.textSecondary }]}
+                    maxFontSizeMultiplier={1.35}
+                  >
+                    {t('authForgotPassword.step2Notice', { email: submittedEmail })}
+                  </Text>
+                  <Text
+                    testID="forgot-step2-google-tip"
+                    style={[styles.noticeSubText, { color: colors.textTertiary }]}
+                    maxFontSizeMultiplier={1.35}
+                  >
+                    {t('authForgotPassword.step2GoogleTip')}
+                  </Text>
+                </View>
               </View>
             )}
 
@@ -356,6 +378,7 @@ export default function ForgotPasswordScreen() {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    spellCheck={false}
                     autoComplete="email"
                     textContentType="emailAddress"
                     returnKeyType="send"
@@ -378,6 +401,36 @@ export default function ForgotPasswordScreen() {
                     </TouchableOpacity>
                   )}
                 </View>
+
+                {emailSuggestion && (
+                  <TouchableOpacity
+                    testID="forgot-email-typo-fix"
+                    style={[
+                      styles.typoBanner,
+                      { backgroundColor: colors.accent + '14', borderColor: colors.accent + '45' },
+                    ]}
+                    onPress={() => {
+                      try {
+                        Haptics.selectionAsync?.().catch(() => {});
+                      } catch {}
+                      setEmail(emailSuggestion.suggestedEmail);
+                      if (errorMsg) setErrorMsg(null);
+                    }}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('authForgotPassword.emailTypoA11y', { domain: emailSuggestion.suggestedDomain })}
+                  >
+                    <AlertCircle size={15} color={colors.accent} />
+                    <Text style={[styles.typoText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+                      {t('authForgotPassword.emailTypoHint', { domain: emailSuggestion.suggestedDomain })}
+                    </Text>
+                    <View style={[styles.typoApplyPill, { backgroundColor: colors.accent }]}>
+                      <Text style={[styles.typoApplyText, { color: onAccentColor }]} maxFontSizeMultiplier={1.2}>
+                        {t('authForgotPassword.emailTypoApply')}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
 
                 {errorMsg && (
                   <View
@@ -689,11 +742,43 @@ const styles = StyleSheet.create({
   noticeIcon: {
     marginTop: 2,
   },
-  noticeText: {
+  noticeCopyWrap: {
     flex: 1,
+    gap: 6,
+  },
+  noticeText: {
     fontSize: 13,
     fontWeight: '500',
     lineHeight: 19,
+  },
+  noticeSubText: {
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 17,
+  },
+  typoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  typoText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  typoApplyPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  typoApplyText: {
+    fontSize: 12,
+    fontWeight: '800',
   },
   fieldLabel: {
     fontSize: 13,

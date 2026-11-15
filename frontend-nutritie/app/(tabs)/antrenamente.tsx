@@ -27,6 +27,7 @@ import { Stepper } from '../../components/ui/Stepper';
 import { Spacing, Radius } from '../../constants/theme';
 import { SkeletonLoader } from '../../components/SkeletonLoader';
 import { useTheme } from '../../context/ThemeContext';
+import { useRegisterTourTarget } from '../../context/InteractiveTourContext';
 import { useAntrenamente } from '../../hooks/useAntrenamente';
 import { useNotify } from '../../hooks/useNotify';
 import { useExercitii } from '../../hooks/useExercitii';
@@ -161,6 +162,26 @@ export default function AntrenamenteScreen() {
   const [saving, setSaving] = useState(false);
   const [timerExerciseId, setTimerExerciseId] = useState<string>('');
   const scrollViewRef = useRef<ScrollView>(null);
+  const sportScrollYRef = useRef(0);
+  const scrollSportToOffset = useCallback((offset: number, animated: boolean) => {
+    scrollViewRef.current?.scrollTo?.({ y: offset, animated });
+  }, []);
+  const sportMapTargetRef = useRef<View>(null);
+  const sportWorkoutsTargetRef = useRef<View>(null);
+
+  useRegisterTourTarget('sportMap', {
+    targetRef: sportMapTargetRef,
+    scrollViewRef,
+    scrollOffsetRef: sportScrollYRef,
+    scrollToOffset: scrollSportToOffset,
+  }, [scrollSportToOffset]);
+
+  useRegisterTourTarget('sportWorkouts', {
+    targetRef: sportWorkoutsTargetRef,
+    scrollViewRef,
+    scrollOffsetRef: sportScrollYRef,
+    scrollToOffset: scrollSportToOffset,
+  }, [scrollSportToOffset]);
   const listContainerYRef = useRef(0);
   const exerciseOffsetsRef = useRef<Record<string, number>>({});
   const timerStartRef = useRef<number | null>(null);
@@ -825,6 +846,10 @@ export default function AntrenamenteScreen() {
     <KeyboardAwareScreen style={{ backgroundColor: colors.background }}>
       <ScrollView
         ref={scrollViewRef}
+        onScroll={(e) => {
+          sportScrollYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomPadding, width: '100%', maxWidth: 680, alignSelf: 'center' }]}
         keyboardShouldPersistTaps='handled'
         showsVerticalScrollIndicator={false}
@@ -849,7 +874,7 @@ export default function AntrenamenteScreen() {
           </View>
         </View>
 
-        <View style={[styles.mapContainer, { backgroundColor: colors.surface }]}>
+        <View ref={sportMapTargetRef} collapsable={false} style={[styles.mapContainer, { backgroundColor: colors.surface }]}>
           <View style={styles.mapRow}>
             <BodyMap view="front" intensity={displayIntensity} width={bodyWidth} maxHeight={300} />
             <BodyMap view="back" intensity={displayIntensity} width={bodyWidth} maxHeight={300} />
@@ -1002,6 +1027,7 @@ export default function AntrenamenteScreen() {
           </View>
         )}
 
+        <View ref={sportWorkoutsTargetRef} collapsable={false}>
         <View style={[styles.searchContainer, { backgroundColor: colors.surfaceElevated }]}>
           <Search color={colors.textSecondary} size={20} style={{ marginRight: 10 }} />
           <TextInput
@@ -1054,6 +1080,7 @@ export default function AntrenamenteScreen() {
             );
           })}
         </ScrollView>
+        </View>
 
         <View
           style={styles.vScroll}

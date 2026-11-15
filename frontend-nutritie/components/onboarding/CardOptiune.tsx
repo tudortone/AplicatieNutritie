@@ -64,9 +64,9 @@ export default function CardOptiune({
 						borderColor: selectat ? colors.accent + '66' : colors.accent + '2A',
 					},
 				]}>
-					{React.isValidElement(pictograma)
+					{accentIcon && React.isValidElement(pictograma)
 						? React.cloneElement(pictograma as React.ReactElement<{ color?: string }>, {
-							color: accentIcon ? colors.accent : undefined,
+							color: colors.accent,
 						})
 						: pictograma}
 				</View>

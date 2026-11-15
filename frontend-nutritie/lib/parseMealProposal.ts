@@ -2,6 +2,7 @@
 // de chat. Funcția e PURE: nu inserează, nu atinge rețeaua — doar transformă
 // răspunsul serverului. Salvare/adaugare are loc exclusiv în confirmMealProposal
 // (cheia de „fără auto-add" pentru rețete, BUG-007).
+import { findNextJsonObjectRange, normalizeMealUnit, parseCoachNumber } from './coachMealDraft';
 
 export interface MealProposalItem {
   name: string;
@@ -35,7 +36,7 @@ export interface MealProposal {
 
 // Număr din valoare liberă ("200", "200 kcal"); NaN/nevalid -> fallback.
 function laNumar(val: any, fallback = 0): number {
-  const n = Number(val);
+  const n = parseCoachNumber(val);
   return Number.isFinite(n) ? n : fallback;
 }
 
@@ -97,7 +98,7 @@ export function parseMealProposal(text: any): MealProposal | null {
         return {
           name: it.name || it.nume || "Aliment",
           qty: qty > 0 ? qty : 100,
-          unit: it.unit || "g",
+          unit: normalizeMealUnit(it.unit || it.unitate),
           protein_g: laNumar(it.protein_g || it.proteine),
           carbs_g: laNumar(it.carbs_g || it.carbohidrati),
           fat_g: laNumar(it.fat_g || it.grasimi),
@@ -118,18 +119,22 @@ export function parseMealProposal(text: any): MealProposal | null {
  */
 export function extractTextWithoutMealProposal(text: any): string {
   if (!text || typeof text !== 'string') return '';
-  const startIndex = text.indexOf('{');
-  const endIndex = text.lastIndexOf('}');
-  if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-    const candidate = text.substring(startIndex, endIndex + 1);
-    if (candidate.includes('MEAL_PROPOSAL') || candidate.includes('meal_type')) {
-      const before = text.substring(0, startIndex).trim();
-      const after = text.substring(endIndex + 1).trim();
-      const combined = [before, after].filter(Boolean).join('\n\n').trim();
-      return combined.length > 0 ? combined : '';
+  let result = text;
+  let cursor = 0;
+  while (cursor < result.length) {
+    const range = findNextJsonObjectRange(result, cursor);
+    if (!range) break;
+    const candidate = result.slice(range.start, range.end + 1);
+    if (candidate.includes('MEAL_PROPOSAL') || candidate.includes('meal_type') || candidate.includes('"meals"')) {
+      const before = result.slice(0, range.start).replace(/```(?:json|JSON)?\s*$/i, '').trim();
+      const after = result.slice(range.end + 1).replace(/^\s*```/, '').trim();
+      result = [before, after].filter(Boolean).join('\n\n').trim();
+      cursor = before.length;
+    } else {
+      cursor = range.end + 1;
     }
   }
-  return text.trim();
+  return result.trim();
 }
 
 /** Detectează protocol structurat invalid care nu trebuie expus în UI. */
@@ -137,8 +142,8 @@ export function containsStructuredMealProtocol(text: unknown): boolean {
   if (typeof text !== 'string') return false;
   const trimmed = text.trim();
   return /^```(?:json)?\s*\{/i.test(trimmed)
-    || (/^\{[\s\S]*$/m.test(trimmed) && /"(?:type|items|meal_type)"\s*:/i.test(trimmed))
-    || /"type"\s*:\s*"MEAL_PROPOSAL"/i.test(trimmed);
+    || (/^\{[\s\S]*$/m.test(trimmed) && /"(?:type|items|meal_type|meals)"\s*:/i.test(trimmed))
+    || /"type"\s*:\s*"MEAL_PROPOSALS?"/i.test(trimmed);
 }
 
 type SupportedChatLocale = 'ro' | 'en' | 'fr' | 'de';

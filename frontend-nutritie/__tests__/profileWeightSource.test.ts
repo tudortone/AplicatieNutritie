@@ -2,6 +2,7 @@ import { act, renderHook, waitFor, cleanup } from '@testing-library/react-native
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMeseAzi } from '../hooks/useMeseAzi';
 import { clearJournalCache } from '../lib/journalCache';
+import { marcheazaMeseModificate } from '../lib/freshnessMese';
 import { calculeazaPlan, salveazaDateOnboarding, sincronizeazaOnboardingLaProfil, type DateOnboarding } from '../lib/onboarding';
 
 let mockUser: { id: string; user_metadata: Record<string, unknown> } = { id: 'user-a', user_metadata: {} };
@@ -154,5 +155,28 @@ describe('useMeseAzi real profile weight source', () => {
 
     expect(hook.result.current.user?.id).toBe('user-b');
     expect(hook.result.current.mese.map((meal) => meal.id)).toEqual(['meal-b']);
+  });
+
+  it('reloads non-2000 onboarding targets on refresh or signal when initially fallen back to 2000', async () => {
+    const hook = await renderHook(() => useMeseAzi(new Date('2026-09-23T12:00:00')));
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    expect(hook.result.current.caloriiTinta).toBe(2000);
+
+    await AsyncStorage.multiSet([
+      ['caloriiTinta', '2640'],
+      ['proteineTinta', '190'],
+      ['carbiTinta', '280'],
+      ['grasimiTinta', '75'],
+    ]);
+    await act(async () => {
+      await hook.result.current.refresh(true);
+    });
+    await waitFor(() => expect(hook.result.current.caloriiTinta).toBe(2640));
+
+    await AsyncStorage.setItem('caloriiTinta', '2750');
+    await act(async () => {
+      marcheazaMeseModificate('user-a');
+    });
+    await waitFor(() => expect(hook.result.current.caloriiTinta).toBe(2750));
   });
 });

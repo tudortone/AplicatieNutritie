@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { marcheazaMeseModificate } from './freshnessMese'
 
 /** Cheia sub care tinem raspunsurile pana cand utilizatorul isi face cont. */
 export const CHEIE_ONBOARDING = 'nutriai-onboarding-date'
@@ -241,6 +242,62 @@ export async function stergeDateOnboarding(): Promise<void> {
 	await AsyncStorage.removeItem(CHEIE_ONBOARDING)
 }
 
+/** Construiește metadata pentru `signUp` / `updateUser` direct din datele de onboarding. */
+export function construiesteMetadataOnboarding(date: DateOnboarding | null): Record<string, unknown> {
+	if (!date || !date.gen || !date.greutateKg) return {}
+	const plan = calculeazaPlan(date)
+	if (!plan) return {}
+	return {
+		caloriiTinta: plan.calorii,
+		proteineTinta: plan.proteineG,
+		carbiTinta: plan.carbohidratiG,
+		grasimiTinta: plan.grasimiG,
+		greutate: date.greutateKg,
+		greutateTinta: date.greutateTintaKg ?? date.greutateKg,
+		varsta: plan.varsta,
+		inaltime: date.inaltimeCm,
+		sex: date.gen,
+		nivel_activitate: date.activitate,
+		obiectiv: date.scop,
+		dieta: date.dieta,
+	}
+}
+
+/** Citește profilul nutrițional din tabela Supabase `profil` (safe cu mock-uri parțiale). */
+export async function incarcaTinteDinProfilSupabase(
+	userId: string,
+	supabaseClient: any,
+): Promise<ProfilRestaurare | null> {
+	if (!userId || !supabaseClient || typeof supabaseClient.from !== 'function') return null
+	try {
+		const tableQuery = supabaseClient
+			.from('profil')
+			?.select?.('calorii_tinta,proteine_tinta,carbi_tinta,grasimi_tinta,greutate,varsta,inaltime,sex,activitate,obiectiv')
+		const eqQuery = tableQuery?.eq?.('user_id', userId)
+		if (!eqQuery || typeof eqQuery.maybeSingle !== 'function') return null
+		const { data, error } = await eqQuery.maybeSingle()
+		if (error || !data) return null
+		const row = data as Record<string, unknown>
+		const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined)
+		const text = (v: unknown) => (typeof v === 'string' && v.length > 0 && v.length <= 64 ? v : undefined)
+		if (!num(row.calorii_tinta)) return null
+		return {
+			caloriiTinta: num(row.calorii_tinta),
+			proteineTinta: num(row.proteine_tinta),
+			carbiTinta: num(row.carbi_tinta),
+			grasimiTinta: num(row.grasimi_tinta),
+			greutate: num(row.greutate),
+			varsta: num(row.varsta),
+			inaltime: num(row.inaltime),
+			sex: text(row.sex),
+			activitate: text(row.activitate),
+			obiectiv: text(row.obiectiv),
+		}
+	} catch {
+		return null
+	}
+}
+
 /**
  * Sincronizează răspunsurile și planul calculat în baza de date Supabase `profil`
  * și în AsyncStorage local la autentificare.
@@ -264,19 +321,23 @@ export async function sincronizeazaOnboardingLaProfil(
 		// altcuiva.
 		//
 		// Regula corecta: datele de onboarding INITIALIZEAZA un profil, nu il
-		// suprascriu niciodata. Daca profilul exista deja in DB, blob-ul nu ne
-		// apartine (sau e depasit) si il aruncam fara sa atingem contul.
+		// suprascriu niciodata. Daca profilul exista deja in DB si are plan complet,
+		// blob-ul nu ne apartine (sau e depasit) si il aruncam fara sa atingem contul.
 		if (supabaseClient) {
 			try {
 				const { data: profilExistent, error: eroareCitire } = await supabaseClient
 					.from('profil')
-					.select('user_id')
+					.select('user_id, calorii_tinta')
 					.eq('user_id', userId)
 					.maybeSingle()
 				// Fail-closed: la eroare de citire NU scriem — mai bine amanam
 				// initializarea decat sa suprascriem un profil real.
 				if (eroareCitire) return false
-				if (profilExistent) {
+				const esteIncompletExplicit =
+					profilExistent &&
+					'calorii_tinta' in profilExistent &&
+					profilExistent.calorii_tinta == null
+				if (profilExistent && !esteIncompletExplicit) {
 					await stergeDateOnboarding()
 					return false
 				}
@@ -324,6 +385,14 @@ export async function sincronizeazaOnboardingLaProfil(
 			if (error) {
 				upsertReusit = false
 				console.warn('[OnboardingSync] Upsert profil esuat:', error.message)
+			} else if (typeof supabaseClient.auth?.updateUser === 'function') {
+				try {
+					await supabaseClient.auth.updateUser({
+						data: construiesteMetadataOnboarding(date),
+					})
+				} catch {
+					// Best-effort mirror în user_metadata; profil + AsyncStorage rămân canonice.
+				}
 			}
 		}
 
@@ -337,6 +406,7 @@ export async function sincronizeazaOnboardingLaProfil(
 		if (upsertReusit) {
 			await stergeDateOnboarding()
 		}
+		marcheazaMeseModificate(userId)
 
 		return upsertReusit
 	} catch (e) {
@@ -381,6 +451,7 @@ export async function restaureazaProfilSesiune(userId: string, client: Pick<Supa
 		varsta: number(row.varsta), inaltime: number(row.inaltime),
 		sex: text(row.sex), activitate: text(row.activitate), obiectiv: text(row.obiectiv),
 	})
+	marcheazaMeseModificate(userId)
 	return true
 }
 

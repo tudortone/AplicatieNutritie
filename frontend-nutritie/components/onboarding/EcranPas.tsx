@@ -117,7 +117,7 @@ export default function EcranPas({
 			let backSubscription: { remove: () => void } | null = null
 			if (Platform.OS === 'android') {
 				backSubscription = BackHandler.addEventListener('hardwareBackPress', () => {
-					if (pasAnterior !== null || router.canGoBack()) {
+					if (pasAnterior !== null) {
 						handleBack()
 						return true
 					}
@@ -135,7 +135,7 @@ export default function EcranPas({
 					safetyTimerRef.current = null
 				}
 			}
-		}, [handleBack, pasAnterior, router])
+		}, [handleBack, pasAnterior])
 	)
 
 	useEffect(() => {
@@ -153,7 +153,7 @@ export default function EcranPas({
 		setApasareInCurs(true)
 		try {
 			Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-		} catch {}
+		} catch { }
 
 		if (safetyTimerRef.current) {
 			clearTimeout(safetyTimerRef.current)
@@ -207,7 +207,7 @@ export default function EcranPas({
 		<SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
 			{!faraAntet && (
 				<View style={styles.antet}>
-					{indice > 0 || router.canGoBack() ? (
+					{indice > 0 ? (
 						<TouchableOpacity
 							onPress={handleBack}
 							style={styles.butonInapoi}

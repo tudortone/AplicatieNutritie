@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,11 @@ import { useCamara, ProdusCamara, ProdusCamaraUpdate } from '../hooks/useCamara'
 import { AddMealBottomSheet, AddMealBottomSheetRef } from '../components/AddMealBottomSheet';
 import { ManualProductForm } from '../components/food/ManualProductForm';
 import { PantryView } from '../components/camara/PantryView';
+import {
+  InteractiveTourOverlayHost,
+  useInteractiveTour,
+  useRegisterTourTarget,
+} from '../context/InteractiveTourContext';
 
 const useSafeLocalSearchParams: typeof useLocalSearchParams =
   typeof useLocalSearchParams === 'function'
@@ -34,7 +39,7 @@ const useSafeLocalSearchParams: typeof useLocalSearchParams =
 
 export default function ScannerBarcodeScreen() {
   const router = useRouter();
-  const routeParams = useSafeLocalSearchParams<{ tab?: string }>();
+  const routeParams = useSafeLocalSearchParams<{ tab?: string; tour?: string }>();
   const { colors } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -64,8 +69,27 @@ export default function ScannerBarcodeScreen() {
   const [produsGasit, setProdusGasit] = useState<ProdusScanat | null>(null);
   const [codNegasit, setCodNegasit] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'scan' | 'camara'>(
-    routeParams?.tab === 'camara' ? 'camara' : 'scan'
+    routeParams?.tab === 'camara' || routeParams?.tour === '1' ? 'camara' : 'scan'
   );
+  const pantryManageTargetRef = useRef<View>(null);
+  const pantryRecipeTargetRef = useRef<View>(null);
+  const tour = useInteractiveTour();
+
+  useEffect(() => {
+    if (routeParams?.tab === 'camara' || routeParams?.tour === '1') {
+      setActiveTab('camara');
+    }
+  }, [routeParams?.tab, routeParams?.tour]);
+
+  useRegisterTourTarget('pantryManage', {
+    targetRef: pantryManageTargetRef,
+    onBeforeMeasure: () => setActiveTab('camara'),
+  });
+
+  useRegisterTourTarget('pantryRecipes', {
+    targetRef: pantryRecipeTargetRef,
+    onBeforeMeasure: () => setActiveTab('camara'),
+  });
   const [camaraSuccessModal, setCamaraSuccessModal] = useState<{ visible: boolean; produs: ProdusScanat | null }>({ visible: false, produs: null });
 
   const [selectedCamaraItems, setSelectedCamaraItems] = useState<string[]>([]);
@@ -344,22 +368,24 @@ export default function ScannerBarcodeScreen() {
         </View>
 
         {activeTab === 'camara' && (
-          <TouchableOpacity
-            onPress={handleAskGrokRecipes}
-            hitSlop={8}
-            style={[
-              styles.navBtn,
-              {
-                backgroundColor: `${colors.accentTertiary}20`,
-                borderWidth: 1,
-                borderColor: `${colors.accentTertiary}55`,
-              },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={t('scannerBarcode.askRecipesA11y')}
-          >
-            <ChefHat size={19} color={colors.accentTertiary} />
-          </TouchableOpacity>
+          <View ref={pantryRecipeTargetRef} collapsable={false}>
+            <TouchableOpacity
+              onPress={handleAskGrokRecipes}
+              hitSlop={8}
+              style={[
+                styles.navBtn,
+                {
+                  backgroundColor: `${colors.accentTertiary}20`,
+                  borderWidth: 1,
+                  borderColor: `${colors.accentTertiary}55`,
+                },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={t('scannerBarcode.askRecipesA11y')}
+            >
+              <ChefHat size={19} color={colors.accentTertiary} />
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -634,6 +660,7 @@ export default function ScannerBarcodeScreen() {
             setSelectedCamaraItems((prev) => prev.filter((itemId) => itemId !== id));
           }}
           onGenerateRecipes={handleGeneratePantryRecipes}
+          controlsTargetRef={pantryManageTargetRef}
         />
       )}
 
@@ -856,6 +883,7 @@ export default function ScannerBarcodeScreen() {
       </Modal>
 
       <AddMealBottomSheet ref={addMealSheetRef} onPantryUsed={handlePantryUsed} />
+      {tour ? <InteractiveTourOverlayHost screen="pantry" /> : null}
     </View>
   );
 }

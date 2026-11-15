@@ -737,6 +737,49 @@ describe('Coach suggestion → explicit Journal confirmation', () => {
     expect(mockInserted).toHaveLength(0);
   });
 
+  test('plural journal request forwards conversation history and creates two selectable MEAL_PROPOSALS cards', async () => {
+    const calls: Array<{ url: string; body: any }> = [];
+    global.fetch = jest.fn(async (url: string, options?: RequestInit) => {
+      const body = options?.body ? JSON.parse(String(options.body)) : null;
+      calls.push({ url: String(url), body });
+      if (String(url).includes('/log-food-from-chat')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            type: 'MEAL_PROPOSALS',
+            meals: [
+              {
+                type: 'MEAL_PROPOSAL', nume: 'Mic dejun proteic', meal_type: 'mic_dejun',
+                items: [{ name: 'Ouă', qty: 100, unit: 'g', kcal: 143, protein_g: 13, carbs_g: 1, fat_g: 10 }],
+              },
+              {
+                type: 'MEAL_PROPOSAL', nume: 'Prânz echilibrat', meal_type: 'pranz',
+                items: [{ name: 'Pui cu orez', qty: 250, unit: 'g', kcal: 380, protein_g: 40, carbs_g: 38, fat_g: 6 }],
+              },
+            ],
+          }),
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ raspuns: 'Propunere 1: Mic dejun proteic. Propunere 2: Prânz echilibrat.' }) };
+    }) as never;
+
+    const view = await render(<ChatScreen />);
+    await send(view, 'Fă-mi 2 idei de mese');
+    await send(view, 'adaugă-le în jurnal');
+
+    const logCall = calls.find((c) => c.url.includes('/log-food-from-chat'));
+    expect(logCall).toBeTruthy();
+    expect(Array.isArray(logCall?.body?.mesaje)).toBe(true);
+    expect(logCall?.body?.mesaje.some((m: any) => String(m.text).includes('Propunere 2'))).toBe(true);
+    expect(view.getAllByLabelText('chat.addToJournal')).toHaveLength(2);
+    await act(async () => { fireEvent.press(view.getAllByLabelText('chat.addToJournal')[0]); });
+    expect(view.getByDisplayValue('Mic dejun proteic')).toBeTruthy();
+    await act(async () => { fireEvent.press(view.getByLabelText('alerts.butoane.anuleaza')); });
+    await act(async () => { fireEvent.press(view.getAllByLabelText('chat.addToJournal')[1]); });
+    expect(view.getByDisplayValue('Prânz echilibrat')).toBeTruthy();
+  });
+
   test('missing nutrition opens an editable draft but disables saving', async () => {
     global.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => ({
       type: 'MEAL_PROPOSAL', name: 'Soup', items: [{ name: 'Soup' }],

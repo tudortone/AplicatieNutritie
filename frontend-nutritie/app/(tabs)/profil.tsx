@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, Modal,
   ScrollView, RefreshControl, Alert, ActivityIndicator, Platform, Switch, Image, Linking, Share,
@@ -51,6 +51,7 @@ import { buildCompleteUserExport, fetchServerGdprExport } from '../../lib/gdprEx
 import { SupportEmailFooter } from '../../components/ui/SupportEmailFooter';
 import { marcheazaMeseModificate } from '../../lib/freshnessMese';
 import { requestHomeTourReplay } from '../../lib/homeTour';
+import { incarcaTinteDinProfilSupabase, restaureazaProfilLocal } from '../../lib/onboarding';
 
 
 const MEAL_REMINDER_LABEL_KEYS: Record<string, string> = {
@@ -81,6 +82,7 @@ export default function ProfilScreen() {
   const [proteineTinta, setProteineTinta] = useState('150');
   const [carbiTinta, setCarbiTinta] = useState('250');
   const [grasimiTinta, setGrasimiTinta] = useState('70');
+  const hasResolvedTargetsRef = useRef(false);
   const [nume, setNume] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [showSuccessAnim, setShowSuccessAnim] = useState(false);
@@ -226,6 +228,22 @@ export default function ProfilScreen() {
         let cb = pTargets?.carbiTinta ?? (localMap.carbiTinta ? parseFloat(localMap.carbiTinta) : undefined) ?? metadata.carbiTinta;
         let gr = pTargets?.grasimiTinta ?? (localMap.grasimiTinta ? parseFloat(localMap.grasimiTinta) : undefined) ?? metadata.grasimiTinta;
 
+        if ((c == null || g == null) && typeof incarcaTinteDinProfilSupabase === 'function') {
+          const dbProfil = await incarcaTinteDinProfilSupabase(session.user.id, supabase);
+          if (dbProfil) {
+            if (g == null && dbProfil.greutate != null) g = dbProfil.greutate;
+            if (c == null && dbProfil.caloriiTinta != null) c = dbProfil.caloriiTinta;
+            if (p == null && dbProfil.proteineTinta != null) p = dbProfil.proteineTinta;
+            if (cb == null && dbProfil.carbiTinta != null) cb = dbProfil.carbiTinta;
+            if (gr == null && dbProfil.grasimiTinta != null) gr = dbProfil.grasimiTinta;
+            if (typeof restaureazaProfilLocal === 'function') {
+              void restaureazaProfilLocal(dbProfil).catch(() => {});
+            }
+          }
+        }
+
+        hasResolvedTargetsRef.current = typeof c === 'number' && Number.isFinite(c) && c > 0;
+
         let nm = pTargets?.nume || metadata.nume || metadata.display_name;
         let av = pTargets?.avatar_url || metadata.avatar_url;
 
@@ -293,33 +311,42 @@ export default function ProfilScreen() {
       return;
     }
     
+    const hasTargetsToPersist = hasResolvedTargetsRef.current;
+
     // Persistare locală, folosită atât pe succes cât și pe eșec backend. Fără
     // ea, o eroare Supabase sărea scrierile locale și afișa fals „Salvat local".
     const salveazaLocal = async () => {
       await AsyncStorage.setItem('greutate', greutate);
       await AsyncStorage.setItem('greutateTinta', greutateTinta);
-      await AsyncStorage.setItem('caloriiTinta', caloriiTinta);
-      await AsyncStorage.setItem('proteineTinta', proteineTinta);
-      await AsyncStorage.setItem('carbiTinta', carbiTinta);
-      await AsyncStorage.setItem('grasimiTinta', grasimiTinta);
+      if (hasTargetsToPersist) {
+        await AsyncStorage.setItem('caloriiTinta', caloriiTinta);
+        await AsyncStorage.setItem('proteineTinta', proteineTinta);
+        await AsyncStorage.setItem('carbiTinta', carbiTinta);
+        await AsyncStorage.setItem('grasimiTinta', grasimiTinta);
+      }
       await AsyncStorage.setItem('nume_profil', nume);
       if (avatarUrl) await AsyncStorage.setItem('avatar_url', avatarUrl);
     };
+
+    const metadataUpdate: Record<string, unknown> = {
+      nume: nume.trim() || session?.user.email?.split('@')[0],
+      avatar_url: avatarUrl || '',
+      greutate: parseFloat(greutate) || 75,
+      greutateTinta: parseFloat(greutateTinta) || 70,
+    };
+    // Nu suprascriem țintele reale din onboarding/DB cu fallback-ul 2000 când profilul nu le-a hidratat încă.
+    if (hasTargetsToPersist) {
+      metadataUpdate.caloriiTinta = parseInt(caloriiTinta, 10);
+      metadataUpdate.proteineTinta = parseInt(proteineTinta, 10);
+      metadataUpdate.carbiTinta = parseInt(carbiTinta, 10);
+      metadataUpdate.grasimiTinta = parseInt(grasimiTinta, 10);
+    }
 
     setLoading(true);
     try {
       // Salvăm întâi în Supabase
       const { error } = await supabase.auth.updateUser({
-        data: {
-          nume: nume.trim() || session?.user.email?.split('@')[0],
-          avatar_url: avatarUrl || '',
-          greutate: parseFloat(greutate) || 75,
-          greutateTinta: parseFloat(greutateTinta) || 70,
-          caloriiTinta: parseInt(caloriiTinta) || 2000,
-          proteineTinta: parseInt(proteineTinta) || 150,
-          carbiTinta: parseInt(carbiTinta) || 250,
-          grasimiTinta: parseInt(grasimiTinta) || 70
-        }
+        data: metadataUpdate,
       });
 
       if (error) throw error;
@@ -348,10 +375,14 @@ export default function ProfilScreen() {
           await salveazaTargeturiPending(session.user.id, {
             greutate: parseFloat(greutate) || 75,
             greutateTinta: parseFloat(greutateTinta) || 70,
-            caloriiTinta: parseInt(caloriiTinta, 10) || 2000,
-            proteineTinta: parseInt(proteineTinta, 10) || 150,
-            carbiTinta: parseInt(carbiTinta, 10) || 250,
-            grasimiTinta: parseInt(grasimiTinta, 10) || 70,
+            ...(hasTargetsToPersist
+              ? {
+                  caloriiTinta: parseInt(caloriiTinta, 10),
+                  proteineTinta: parseInt(proteineTinta, 10),
+                  carbiTinta: parseInt(carbiTinta, 10),
+                  grasimiTinta: parseInt(grasimiTinta, 10),
+                }
+              : {}),
             nume: nume.trim() || undefined,
             avatar_url: avatarUrl || undefined,
           });

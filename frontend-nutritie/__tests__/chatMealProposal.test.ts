@@ -105,4 +105,13 @@ Poftă bună!
     expect(visible).toContain(preparation);
     expect(visible).not.toContain('MEAL_PROPOSAL');
   });
+
+  it('strips multiple structured JSON meal blocks cleanly from prose text', () => {
+    const raw = `Here are two meals:\n\`\`\`json\n{"type":"MEAL_PROPOSAL","nume":"M1","meal_type":"mic_dejun","items":[{"name":"Egg","qty":50,"unit":"g","kcal":70,"protein_g":6,"carbs_g":0,"fat_g":5}]}\n\`\`\`\nAnd lunch:\n{"type":"MEAL_PROPOSAL","nume":"M2","meal_type":"pranz","items":[{"name":"Fish","qty":150,"unit":"g","kcal":210,"protein_g":35,"carbs_g":0,"fat_g":7}]}`;
+    const clean = extractTextWithoutMealProposal(raw);
+    expect(clean).toContain('Here are two meals:');
+    expect(clean).toContain('And lunch:');
+    expect(clean).not.toContain('MEAL_PROPOSAL');
+    expect(clean).not.toContain('"items"');
+  });
 });

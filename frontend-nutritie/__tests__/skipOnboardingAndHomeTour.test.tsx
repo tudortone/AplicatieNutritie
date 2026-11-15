@@ -507,7 +507,17 @@ jest.mock('expo-image-picker', () => ({
 }));
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import i18n from '../i18n';
+import i18n, { changeLanguage, i18nReady, type SupportedLanguage } from '../i18n';
+import roLocale from '../i18n/locales/ro.json';
+import enLocale from '../i18n/locales/en.json';
+import frLocale from '../i18n/locales/fr.json';
+import deLocale from '../i18n/locales/de.json';
+import {
+  InteractiveTourOverlayHost,
+  InteractiveTourProvider,
+  useInteractiveTour,
+  useRegisterTourTarget,
+} from '../context/InteractiveTourContext';
 import { useAppStore } from '../hooks/useAppStore';
 import RootLayout from '../app/_layout';
 import PasLimba from '../app/onboarding/index';
@@ -550,18 +560,22 @@ describe('Skip Onboarding + Interactive Home Spotlight Tour', () => {
     });
   });
 
-  it('PasLimba renders localized skip-to-signin CTA and sets transient skip flag without marking onboarding done', async () => {
+  it('PasLimba renders localized skip-to-signin CTA, updates selected language highlight without reverting, and sets transient skip flag without marking onboarding done', async () => {
     await i18n.changeLanguage('en');
     const screen = await render(<PasLimba />);
 
     const skipBtn = screen.getByTestId('onboarding-skip-signin');
     expect(skipBtn).toBeTruthy();
     expect(screen.getByText(/Already have an account/i)).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'English' }).props.accessibilityState.selected).toBe(true);
+    expect(screen.getByRole('radio', { name: 'Română' }).props.accessibilityState.selected).toBe(false);
 
-    await act(async () => {
-      await i18n.changeLanguage('ro');
+    await fireEvent.press(screen.getByRole('radio', { name: 'Română' }));
+    await waitFor(() => {
+      expect(screen.getByText(/Ai deja cont\?/i)).toBeTruthy();
+      expect(screen.getByRole('radio', { name: 'Română' }).props.accessibilityState.selected).toBe(true);
+      expect(screen.getByRole('radio', { name: 'English' }).props.accessibilityState.selected).toBe(false);
     });
-    expect(screen.getByText(/Ai deja cont\?/i)).toBeTruthy();
 
     await fireEvent.press(screen.getByTestId('onboarding-skip-signin'));
     expect(useAppStore.getState().skipOnboardingToAuth).toBe(true);
@@ -615,17 +629,17 @@ describe('Skip Onboarding + Interactive Home Spotlight Tour', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('spotlight-tour-overlay')).toBeTruthy();
-      expect(screen.getByText(/Pasul 1 din 4/i)).toBeTruthy();
+      expect(screen.getByText(/Pasul 1 din 11/i)).toBeTruthy();
     });
 
     await fireEvent.press(screen.getByTestId('spotlight-next-btn'));
     await waitFor(() => {
-      expect(screen.getByText(/Pasul 2 din 4/i)).toBeTruthy();
+      expect(screen.getByText(/Pasul 2 din 11/i)).toBeTruthy();
     });
 
     await fireEvent.press(screen.getByTestId('spotlight-back-btn'));
     await waitFor(() => {
-      expect(screen.getByText(/Pasul 1 din 4/i)).toBeTruthy();
+      expect(screen.getByText(/Pasul 1 din 11/i)).toBeTruthy();
     });
 
     await fireEvent.press(screen.getByTestId('spotlight-skip-btn'));
@@ -635,8 +649,14 @@ describe('Skip Onboarding + Interactive Home Spotlight Tour', () => {
     expect(asyncStoreMap.get(getHomeTourPromptKey('user-tour-1'))).toBe('skipped');
   });
 
-  it('HomeScreen starts tour from invite CTA and completes all 4 steps to mark completed', async () => {
-    const screen = await render(<HomeScreen />);
+  it('HomeScreen starts Option B tour from invite CTA, traverses all 11 cross-app steps with navigation, and marks completed', async () => {
+    const screen = await render(
+      <InteractiveTourProvider userId="user-tour-1">
+        <HomeScreen />
+        <InteractiveTourOverlayHost screen="tabs" />
+        <InteractiveTourOverlayHost screen="pantry" />
+      </InteractiveTourProvider>,
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('home-tour-invite-start')).toBeTruthy();
@@ -645,23 +665,151 @@ describe('Skip Onboarding + Interactive Home Spotlight Tour', () => {
     await fireEvent.press(screen.getByTestId('home-tour-invite-start'));
     await waitFor(() => {
       expect(screen.getByTestId('spotlight-tour-overlay')).toBeTruthy();
-      expect(screen.getByText(/Pasul 1 din 4/i)).toBeTruthy();
+      expect(screen.getByText(/Pasul 1 din 11/i)).toBeTruthy();
+      expect(screen.getByText(roLocale.homeTour.steps.calorieTitle)).toBeTruthy();
     });
 
-    await fireEvent.press(screen.getByTestId('spotlight-next-btn'));
-    await waitFor(() => expect(screen.getByText(/Pasul 2 din 4/i)).toBeTruthy());
+    const expectedSequence = [
+      { stepNum: 2, title: roLocale.homeTour.steps.scanTitle },
+      { stepNum: 3, title: roLocale.homeTour.steps.hydrationTitle },
+      { stepNum: 4, title: roLocale.homeTour.steps.homeMuscleTitle },
+      {
+        stepNum: 5,
+        title: roLocale.homeTour.steps.journalOverviewTitle,
+        expectedRoute: '/(tabs)/istoric',
+      },
+      { stepNum: 6, title: roLocale.homeTour.steps.journalPantryTitle },
+      {
+        stepNum: 7,
+        title: roLocale.homeTour.steps.pantryManageTitle,
+        expectedRoute: { pathname: '/scanner-barcode', params: { tab: 'camara', tour: '1' } },
+      },
+      { stepNum: 8, title: roLocale.homeTour.steps.pantryRecipesTitle },
+      {
+        stepNum: 9,
+        title: roLocale.homeTour.steps.sportMapTitle,
+        expectedRoute: '/(tabs)/antrenamente',
+      },
+      { stepNum: 10, title: roLocale.homeTour.steps.sportWorkoutsTitle },
+      {
+        stepNum: 11,
+        title: roLocale.homeTour.steps.coachTitle,
+        expectedRoute: '/(tabs)/chat',
+      },
+    ];
 
-    await fireEvent.press(screen.getByTestId('spotlight-next-btn'));
-    await waitFor(() => expect(screen.getByText(/Pasul 3 din 4/i)).toBeTruthy());
+    for (const item of expectedSequence) {
+      await fireEvent.press(screen.getByTestId('spotlight-next-btn'));
+      await waitFor(() => {
+        expect(screen.getByText(new RegExp(`Pasul ${item.stepNum} din 11`, 'i'))).toBeTruthy();
+        expect(screen.getByText(item.title)).toBeTruthy();
+      });
+      if (item.expectedRoute) {
+        expect(mockRouter.push).toHaveBeenCalledWith(item.expectedRoute);
+      }
+    }
 
-    await fireEvent.press(screen.getByTestId('spotlight-next-btn'));
-    await waitFor(() => expect(screen.getByText(/Pasul 4 din 4/i)).toBeTruthy());
+    expect(screen.getByText(roLocale.homeTour.finish)).toBeTruthy();
 
     await fireEvent.press(screen.getByTestId('spotlight-next-btn'));
     await waitFor(() => {
       expect(screen.queryByTestId('spotlight-tour-overlay')).toBeNull();
     });
+    expect(mockRouter.push).toHaveBeenCalledWith('/(tabs)');
     expect(asyncStoreMap.get(getHomeTourPromptKey('user-tour-1'))).toBe('completed');
+  });
+
+  it.each(['ro', 'en', 'fr', 'de'] as SupportedLanguage[])(
+    'Option B tutorial renders every phase and step strictly in selected language (%s)',
+    async (locale) => {
+      const localesMap = {
+        ro: roLocale,
+        en: enLocale,
+        fr: frLocale,
+        de: deLocale,
+      } as const;
+      const loc = localesMap[locale];
+
+      await i18nReady;
+      await changeLanguage(locale);
+
+      const screen = await render(
+        <InteractiveTourProvider userId="user-tour-1">
+          <HomeScreen />
+          <InteractiveTourOverlayHost screen="tabs" />
+          <InteractiveTourOverlayHost screen="pantry" />
+        </InteractiveTourProvider>,
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('home-tour-invite-start')).toBeTruthy();
+        expect(screen.getByText(loc.home.tourInviteStart)).toBeTruthy();
+      });
+
+      await fireEvent.press(screen.getByTestId('home-tour-invite-start'));
+      await waitFor(() => {
+        expect(screen.getByText(loc.homeTour.steps.calorieTitle)).toBeTruthy();
+        expect(screen.getByText(loc.homeTour.phases.home)).toBeTruthy();
+      });
+
+      // Step through remaining 10 steps verifying phase + title localization in chosen language
+      const checkPoints: Array<{ phase: string; title: string; isLast?: boolean }> = [
+        { phase: loc.homeTour.phases.home, title: loc.homeTour.steps.scanTitle },
+        { phase: loc.homeTour.phases.home, title: loc.homeTour.steps.hydrationTitle },
+        { phase: loc.homeTour.phases.home, title: loc.homeTour.steps.homeMuscleTitle },
+        { phase: loc.homeTour.phases.journal, title: loc.homeTour.steps.journalOverviewTitle },
+        { phase: loc.homeTour.phases.journal, title: loc.homeTour.steps.journalPantryTitle },
+        { phase: loc.homeTour.phases.pantry, title: loc.homeTour.steps.pantryManageTitle },
+        { phase: loc.homeTour.phases.pantry, title: loc.homeTour.steps.pantryRecipesTitle },
+        { phase: loc.homeTour.phases.sport, title: loc.homeTour.steps.sportMapTitle },
+        { phase: loc.homeTour.phases.sport, title: loc.homeTour.steps.sportWorkoutsTitle },
+        { phase: loc.homeTour.phases.coach, title: loc.homeTour.steps.coachTitle, isLast: true },
+      ];
+
+      for (const cp of checkPoints) {
+        await fireEvent.press(screen.getByTestId('spotlight-next-btn'));
+        await waitFor(() => {
+          expect(screen.getByText(cp.title)).toBeTruthy();
+          expect(screen.getAllByText(cp.phase).length).toBeGreaterThanOrEqual(1);
+        });
+        if (cp.isLast) {
+          expect(screen.getByText(loc.homeTour.finish)).toBeTruthy();
+        }
+      }
+
+      await fireEvent.press(screen.getByTestId('spotlight-next-btn'));
+    },
+  );
+
+  it('InteractiveTourOverlayHost switches overlay ownership cleanly between tabs and pantry modal host', async () => {
+    mockSegments = ['(tabs)'];
+    const screen = await render(
+      <InteractiveTourProvider userId="user-host-switch">
+        <HomeScreen />
+        <InteractiveTourOverlayHost screen="tabs" />
+        <InteractiveTourOverlayHost screen="pantry" />
+      </InteractiveTourProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('home-tour-invite-start')).toBeTruthy();
+    });
+    await fireEvent.press(screen.getByTestId('home-tour-invite-start'));
+
+    // Steps 1..6 live on 'tabs' host
+    await waitFor(() => {
+      expect(screen.getAllByTestId('spotlight-tour-overlay')).toHaveLength(1);
+      expect(screen.getByText(/Pasul 1 din 11/i)).toBeTruthy();
+    });
+
+    for (let i = 0; i < 6; i += 1) {
+      await fireEvent.press(screen.getByTestId('spotlight-next-btn'));
+    }
+
+    // Step 7 lives on 'pantry' fullScreenModal host — still only 1 active overlay host rendered
+    await waitFor(() => {
+      expect(screen.getAllByTestId('spotlight-tour-overlay')).toHaveLength(1);
+      expect(screen.getByText(roLocale.homeTour.steps.pantryManageTitle)).toBeTruthy();
+    });
   });
 
   it('SpotlightTourOverlay supports interactive glowing target taps on highlighted elements', async () => {
@@ -714,6 +862,119 @@ describe('Skip Onboarding + Interactive Home Spotlight Tour', () => {
 
     await fireEvent.press(screen.getByTestId('spotlight-target-scan'));
     expect(onScanPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('SpotlightTourOverlay hides cutout softly during transitioning and respects bottomReserve + preferredCardPosition', async () => {
+    const stepDock: SpotlightStep = {
+      key: 'coachAi',
+      title: 'Coach AI',
+      body: 'Sugereaza mese si adauga in jurnal',
+      targetRect: { x: 0, y: 1120, width: 750, height: 110 },
+      canTapTarget: true,
+      preferredCardPosition: 'above',
+    };
+
+    const screen = await render(
+      <SpotlightTourOverlay
+        visible
+        transitioning
+        bottomReserve={82}
+        steps={[stepDock]}
+        stepIndex={0}
+        onNext={jest.fn()}
+        onBack={jest.fn()}
+        onSkip={jest.fn()}
+        onFinish={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('spotlight-transition-veil')).toBeTruthy();
+    expect(screen.queryByTestId('spotlight-target-coachAi')).toBeNull();
+    expect(screen.getByTestId('spotlight-coach-card')).toBeTruthy();
+
+    await screen.rerender(
+      <SpotlightTourOverlay
+        visible
+        transitioning={false}
+        bottomReserve={82}
+        steps={[stepDock]}
+        stepIndex={0}
+        onNext={jest.fn()}
+        onBack={jest.fn()}
+        onSkip={jest.fn()}
+        onFinish={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId('spotlight-transition-veil')).toBeNull();
+    const target = screen.getByTestId('spotlight-target-coachAi');
+    expect(target.props.style.left).toBe(8);
+    expect(target.props.style.width).toBe(734);
+    const card = screen.getByTestId('spotlight-coach-card');
+    const cardTopStyle = Array.isArray(card.props.style)
+      ? card.props.style.find((st: any) => st && typeof st.top === 'number')
+      : card.props.style;
+    expect(cardTopStyle.top).toBeLessThan(target.props.style.top);
+  });
+
+  it('InteractiveTourContext dynamically computes scrollToOffset to frame off-viewport targets cleanly', async () => {
+    jest.useFakeTimers();
+    try {
+      const { View, Pressable } = require('react-native');
+      const scrollYRef = { current: 40 };
+      const scrollToOffset = jest.fn((offset: number) => {
+        scrollYRef.current = offset;
+      });
+      let rectCall = 0;
+
+      function DynamicTargetHarness() {
+        const ref = React.useRef<any>(null);
+        const tour = useInteractiveTour();
+        React.useEffect(() => {
+          if (!ref.current) return;
+          ref.current.measureInWindow = (cb: (x: number, y: number, w: number, h: number) => void) => {
+            rectCall += 1;
+            if (rectCall === 1) {
+              cb(16, 1280, 360, 140);
+            } else {
+              cb(16, 108, 360, 140);
+            }
+          };
+        });
+        useRegisterTourTarget('calorie', {
+          targetRef: ref,
+          scrollOffsetRef: scrollYRef,
+          scrollToOffset,
+        }, []);
+        return (
+          <View>
+            <View ref={ref} testID="harness-target" />
+            <Pressable
+              testID="harness-start-tour"
+              onPress={() => tour?.startTour('user-dyn')}
+            />
+          </View>
+        );
+      }
+
+      const screen = await render(
+        <InteractiveTourProvider userId="user-dyn">
+          <DynamicTargetHarness />
+          <InteractiveTourOverlayHost screen="tabs" />
+        </InteractiveTourProvider>,
+      );
+
+      await fireEvent.press(screen.getByTestId('harness-start-tour'));
+      await act(async () => {
+        jest.advanceTimersByTime(600);
+      });
+
+      expect(scrollToOffset).toHaveBeenCalledTimes(1);
+      expect(scrollToOffset.mock.calls[0][0]).toBeGreaterThan(1000);
+      expect(screen.getByTestId('spotlight-target-calorie').props.style.top).toBe(102);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('ProfilScreen interactive guide button queues home tour replay and navigates to Home', async () => {
@@ -848,5 +1109,79 @@ describe('Skip Onboarding + Interactive Home Spotlight Tour', () => {
       expect(useAppStore.getState().skipOnboardingToAuth).toBe(false);
       expect(mockRouter.replace).toHaveBeenCalledWith('/onboarding');
     });
+  });
+
+  it('SpotlightTourOverlay renders in-window with defocused scrim, zero-elevation light band, swipe handlers, and BackHandler skip', async () => {
+    const { BackHandler } = require('react-native');
+    let registeredBackHandler: (() => boolean) | undefined;
+    const removeMock = jest.fn();
+    const backSpy = jest
+      .spyOn(BackHandler, 'addEventListener')
+      .mockImplementation((_event: any, handler: any) => {
+        registeredBackHandler = handler;
+        return { remove: removeMock };
+      });
+
+    const onNext = jest.fn();
+    const onBack = jest.fn();
+    const onSkip = jest.fn();
+    const steps: SpotlightStep[] = [
+      {
+        key: 'calorie',
+        title: 'Calorii',
+        body: 'Pas 1',
+        targetRect: { x: 20, y: 120, width: 320, height: 180 },
+        canTapTarget: true,
+      },
+      {
+        key: 'scan',
+        title: 'Scanare',
+        body: 'Pas 2',
+        targetRect: { x: 20, y: 340, width: 320, height: 90 },
+        canTapTarget: true,
+      },
+    ];
+
+    try {
+      const screen = await render(
+        <SpotlightTourOverlay
+          visible
+          steps={steps}
+          stepIndex={0}
+          onNext={onNext}
+          onBack={onBack}
+          onSkip={onSkip}
+          onFinish={jest.fn()}
+        />,
+      );
+
+      const treeJson = JSON.stringify(screen.toJSON());
+      expect(treeJson).not.toContain('"RCTModalHostView"');
+
+      const card = screen.getByTestId('spotlight-coach-card');
+      expect(typeof card.props.onMoveShouldSetResponder).toBe('function');
+      expect(typeof registeredBackHandler).toBe('function');
+      expect(registeredBackHandler?.()).toBe(true);
+      expect(onSkip).toHaveBeenCalledTimes(1);
+
+      // Step change triggers once-only directional transition without double-firing on rerender
+      await screen.rerender(
+        <SpotlightTourOverlay
+          visible
+          steps={steps}
+          stepIndex={1}
+          onNext={onNext}
+          onBack={onBack}
+          onSkip={onSkip}
+          onFinish={jest.fn()}
+        />,
+      );
+      expect(screen.getByText(/Pasul 2 din 2/i)).toBeTruthy();
+
+      await screen.unmount();
+      expect(removeMock).toHaveBeenCalled();
+    } finally {
+      backSpy.mockRestore();
+    }
   });
 });

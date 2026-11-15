@@ -19,7 +19,13 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../context/ThemeContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAppStore } from '../hooks/useAppStore';
-import { incarcaDateOnboarding, calculeazaPlan, type PlanNutritional } from '../lib/onboarding';
+import {
+  incarcaDateOnboarding,
+  calculeazaPlan,
+  construiesteMetadataOnboarding,
+  sincronizeazaOnboardingLaProfil,
+  type PlanNutritional,
+} from '../lib/onboarding';
 import { oauthFlow } from '../lib/oauthFlow';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getLegalUrls } from '../lib/legalUrls';
@@ -142,21 +148,27 @@ export default function AuthScreen() {
       if (isSignUp) {
         // Datele din setup-ul de dinainte de cont (onboarding) ajung în metadata contului,
         // ca profilul să fie deja completat la prima autentificare.
-        const setupKeys = ['greutate', 'caloriiTinta', 'sex', 'varsta', 'inaltime', 'nivel_activitate', 'obiectiv'];
-        const setupRaw = await AsyncStorage.multiGet(setupKeys);
-        const setupData: Record<string, unknown> = {};
-        for (const [key, value] of setupRaw) {
-          if (!value) continue;
-          if (key === 'greutate') setupData[key] = parseFloat(value) || undefined;
-          else if (key === 'caloriiTinta' || key === 'varsta' || key === 'inaltime') setupData[key] = parseInt(value, 10) || undefined;
-          else setupData[key] = value;
-          if (setupData[key] === undefined) delete setupData[key];
+        const onboardingDate = await incarcaDateOnboarding();
+        const setupData: Record<string, unknown> = construiesteMetadataOnboarding(onboardingDate);
+        if (Object.keys(setupData).length === 0) {
+          const setupKeys = ['greutate', 'caloriiTinta', 'sex', 'varsta', 'inaltime', 'nivel_activitate', 'obiectiv'];
+          const setupRaw = await AsyncStorage.multiGet(setupKeys);
+          for (const [key, value] of setupRaw) {
+            if (!value) continue;
+            if (key === 'greutate') setupData[key] = parseFloat(value) || undefined;
+            else if (key === 'caloriiTinta' || key === 'varsta' || key === 'inaltime') setupData[key] = parseInt(value, 10) || undefined;
+            else setupData[key] = value;
+            if (setupData[key] === undefined) delete setupData[key];
+          }
         }
-        const { error } = await supabase.auth.signUp({
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email: email.trim(),
           password: parola,
           options: { data: setupData },
         });
+        if (!error && signUpData?.session?.user?.id) {
+          await sincronizeazaOnboardingLaProfil(signUpData.session.user.id, supabase);
+        }
         if (error) {
           const msg = getFriendlyErrorMessage(error.message, t);
           setAuthError(msg);

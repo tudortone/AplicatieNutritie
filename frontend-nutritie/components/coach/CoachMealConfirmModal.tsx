@@ -4,26 +4,49 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
 import { MEAL_CATEGORIES } from '../../lib/mealUtils';
-import { coachMealTotals, validateCoachMealDraft, type CoachMealDraft, type CoachMealIngredient } from '../../lib/coachMealDraft';
+import { coachMealTotals, getCoachMealValidationIssue, normalizeMealUnit, type CoachMealDraft, type CoachMealIngredient, type CoachMealValidationIssue } from '../../lib/coachMealDraft';
 import type { TipMasa } from '../../types';
 
 interface Props {
   visible: boolean;
   draft: CoachMealDraft | null;
   saving: boolean;
+  estimating?: boolean;
   onChange: (draft: CoachMealDraft) => void;
+  onEstimateNutrition?: () => void;
   onCancel: () => void;
   onConfirm: () => void;
 }
 
-export function CoachMealConfirmModal({ visible, draft, saving, onChange, onCancel, onConfirm }: Props) {
+const VALIDATION_MESSAGE_KEY: Record<Exclude<CoachMealValidationIssue, null>, string> = {
+  name: 'chat.suggestion.completeValues',
+  category: 'chat.suggestion.completeValues',
+  date: 'chat.suggestion.invalidDate',
+  unit: 'chat.suggestion.invalidUnit',
+  values: 'chat.suggestion.completeValues',
+  limits: 'chat.suggestion.exceedsLimits',
+};
+
+export function CoachMealConfirmModal({
+  visible,
+  draft,
+  saving,
+  estimating = false,
+  onChange,
+  onEstimateNutrition,
+  onCancel,
+  onConfirm,
+}: Props) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   if (!draft) return null;
   const totals = coachMealTotals(draft);
+  const validationIssue = getCoachMealValidationIssue(draft);
+  const isValid = validationIssue === null;
   const updateItem = (index: number, key: keyof CoachMealIngredient, value: string) => {
-    const items = draft.items.map((item, position) => position === index ? { ...item, [key]: value } : item);
+    const nextValue = key === 'unit' ? normalizeMealUnit(value) : value;
+    const items = draft.items.map((item, position) => position === index ? { ...item, [key]: nextValue } : item);
     onChange({ ...draft, items, calories: coachMealTotals({ ...draft, items }).calories });
   };
   const field = (label: string, value: string, onChangeText: (value: string) => void, numeric = false) => (
@@ -41,12 +64,12 @@ export function CoachMealConfirmModal({ visible, draft, saving, onChange, onCanc
     </View>
   );
   return (
-    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { if (!saving) onCancel(); }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.backdrop}>
-        <View style={[styles.sheet, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, paddingBottom: Math.max(insets.bottom, 12) }]}>
+    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent onRequestClose={() => { if (!saving && !estimating) onCancel(); }}>
+      <KeyboardAvoidingView behavior="padding" style={styles.backdrop}>
+        <View style={[styles.sheet, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder, paddingBottom: Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 16) }]}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>{t('chat.suggestion.confirmTitle')}</Text>
           <Text style={[styles.note, { color: colors.textSecondary }]}>{t('chat.suggestion.estimateNotice')}</Text>
-          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+          <ScrollView style={styles.scrollWrap} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
             {field(t('chat.suggestion.mealName'), draft.name, (name) => onChange({ ...draft, name }))}
             {field(t('chat.suggestion.date'), draft.date, (date) => onChange({ ...draft, date }))}
             <Text style={[styles.section, { color: colors.textPrimary }]}>{t('chat.suggestion.category')}</Text>
@@ -81,14 +104,27 @@ export function CoachMealConfirmModal({ visible, draft, saving, onChange, onCanc
               {field(`${t('chat.suggestion.fiber')} ${index + 1}`, item.fiber, (value) => updateItem(index, 'fiber', value), true)}
             </View>)}
             <Text style={[styles.total, { color: colors.textPrimary }]}>{t('chat.suggestion.total')}: {totals.calories || '—'} kcal · P {totals.protein || '—'}g · C {totals.carbs || '—'}g · F {totals.fat || '—'}g</Text>
-            {!validateCoachMealDraft(draft) ? <Text style={[styles.note, { color: colors.textSecondary }]}>{t('chat.suggestion.completeValues')}</Text> : null}
+            {validationIssue ? <Text style={[styles.note, { color: colors.textSecondary }]}>{t(VALIDATION_MESSAGE_KEY[validationIssue])}</Text> : null}
+            {(validationIssue === 'values' || validationIssue === 'unit') && onEstimateNutrition ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={estimating ? t('chat.suggestion.estimating') : t('chat.suggestion.estimateWithAi')}
+                disabled={saving || estimating}
+                onPress={onEstimateNutrition}
+                style={[styles.estimateBtn, { borderColor: colors.accentSecondary, backgroundColor: colors.surfaceElevated }]}
+              >
+                <Text style={{ color: colors.accentSecondary, fontWeight: '800', fontSize: 13 }}>
+                  {estimating ? t('chat.suggestion.estimating') : t('chat.suggestion.estimateWithAi')}
+                </Text>
+              </Pressable>
+            ) : null}
           </ScrollView>
           <View style={styles.actions}>
-            <Pressable accessibilityRole="button" accessibilityLabel={t('alerts.butoane.anuleaza')} disabled={saving} onPress={onCancel} style={[styles.button, { borderColor: colors.cardBorder }]}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('alerts.butoane.anuleaza')} disabled={saving || estimating} onPress={onCancel} style={[styles.button, { borderColor: colors.cardBorder }]}>
               <Text style={{ color: colors.textPrimary, fontWeight: '800' }}>{t('alerts.butoane.anuleaza')}</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel={t('chat.suggestion.confirmSave')} accessibilityState={{ disabled: saving || !validateCoachMealDraft(draft) }} disabled={saving || !validateCoachMealDraft(draft)} onPress={onConfirm} style={[styles.button, { backgroundColor: saving || !validateCoachMealDraft(draft) ? colors.disabledBg : colors.accentSecondary }]}>
-              <Text style={{ color: saving || !validateCoachMealDraft(draft) ? colors.disabledText : colors.textOnAccentSecondary, fontWeight: '800' }}>{saving ? t('chat.saving') : t('chat.suggestion.confirmSave')}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('chat.suggestion.confirmSave')} accessibilityState={{ disabled: saving || estimating || !isValid }} disabled={saving || estimating || !isValid} onPress={onConfirm} style={[styles.button, { backgroundColor: saving || estimating || !isValid ? colors.disabledBg : colors.accentSecondary }]}>
+              <Text style={{ color: saving || estimating || !isValid ? colors.disabledText : colors.textOnAccentSecondary, fontWeight: '800' }}>{saving ? t('chat.saving') : t('chat.suggestion.confirmSave')}</Text>
             </Pressable>
           </View>
         </View>
@@ -99,10 +135,12 @@ export function CoachMealConfirmModal({ visible, draft, saving, onChange, onCanc
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.7)' },
-  sheet: { maxHeight: '88%', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, paddingHorizontal: 16, paddingTop: 18 },
+  sheet: { maxHeight: '90%', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, paddingHorizontal: 16, paddingTop: 18 },
   title: { fontSize: 19, fontWeight: '900' },
   note: { fontSize: 12, lineHeight: 18, marginTop: 5, marginBottom: 8 },
+  scrollWrap: { flexShrink: 1 },
   scroll: { paddingBottom: 16 },
+  estimateBtn: { minHeight: 44, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, marginTop: 4 },
   field: { flex: 1, minWidth: 0, marginTop: 8 },
   label: { fontSize: 12, fontWeight: '700', marginBottom: 4 },
   input: { borderWidth: 1, borderRadius: 10, minHeight: 44, paddingHorizontal: 10, fontSize: 14 },

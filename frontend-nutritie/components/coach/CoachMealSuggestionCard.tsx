@@ -24,10 +24,15 @@ export function CoachMealSuggestionCard({ draft, status = 'ready', onAdd }: Coac
         <Pressable
           onPress={onAdd}
           disabled={status !== 'ready'}
+          hitSlop={6}
           accessibilityRole="button"
           accessibilityLabel={status === 'saved' ? t('chat.suggestion.saved') : t('chat.addToJournal')}
           accessibilityState={{ disabled: status !== 'ready' }}
-          style={[styles.add, { backgroundColor: status === 'ready' ? colors.accentSecondary : colors.surfaceBg }]}
+          style={({ pressed }) => [
+            styles.add,
+            { backgroundColor: status === 'ready' ? colors.accentSecondary : colors.surfaceBg },
+            pressed && status === 'ready' ? { opacity: 0.82 } : null,
+          ]}
         >
           {status === 'saved' ? <Check size={16} color={colors.textPrimary} /> : <Plus size={16} color={colors.textOnAccentSecondary} />}
           <Text style={[styles.addText, { color: status === 'ready' ? colors.textOnAccentSecondary : colors.textPrimary }]}>

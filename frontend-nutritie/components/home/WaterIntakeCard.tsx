@@ -14,6 +14,7 @@ export interface WaterIntakeCardProps {
   onRemoveGlass: () => void;
   onSetConsumedMl: (ml: number) => void | Promise<void>;
   onAddWeight: () => void;
+  noMarginBottom?: boolean;
 }
 
 export function WaterIntakeCard({
@@ -24,6 +25,7 @@ export function WaterIntakeCard({
   onRemoveGlass,
   onSetConsumedMl,
   onAddWeight,
+  noMarginBottom = false,
 }: WaterIntakeCardProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -53,7 +55,11 @@ export function WaterIntakeCard({
 
   return (
     <View
-      style={[styles.card, { borderColor: colors.accentTertiary + '33' }]}
+      style={[
+        styles.card,
+        noMarginBottom ? styles.cardFlushBottom : null,
+        { borderColor: colors.accentTertiary + '33' },
+      ]}
       accessibilityState={{ busy: loading }}
     >
       {Platform.OS === 'ios' ? (
@@ -197,6 +203,7 @@ export function WaterIntakeCard({
 
 const styles = StyleSheet.create({
   card: { width: '100%', maxWidth: 680, alignSelf: 'center', borderRadius: 24, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
+  cardFlushBottom: { marginBottom: 0 },
   backdrop: { overflow: 'hidden' },
   content: { padding: 20 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 16 },

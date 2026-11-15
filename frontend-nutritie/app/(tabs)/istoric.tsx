@@ -13,7 +13,9 @@ import { useFocusRefresh } from '../../hooks/useFocusRefresh';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Flame, Activity, PlusCircle, ChevronDown, ChevronUp, Eye, EyeOff, Utensils, Calendar, AlertCircle, Trash2 } from 'lucide-react-native';
+import { Flame, Activity, PlusCircle, ChevronDown, ChevronUp, Eye, EyeOff, Utensils, Calendar, AlertCircle, Trash2, ShoppingBag } from 'lucide-react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useInteractiveTour, useRegisterTourTarget } from '../../context/InteractiveTourContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useMeseAzi, type CategorieMasaGrupata } from '../../hooks/useMeseAzi';
@@ -84,11 +86,39 @@ export default function HistoryScreen() {
   const [afisarePoze, setAfisarePoze] = useState(true);
   const [mealToDelete, setMealToDelete] = useState<Masa | null>(null);
   const [isDeletingMeal, setIsDeletingMeal] = useState(false);
+  const router = useRouter();
   const mealSheetRef = useRef<AddMealBottomSheetRef>(null);
   const categorieSheetRef = useRef<CategorieDetailSheetRef>(null);
   const mealDetailSheetRef = useRef<MealDetailsSheetRef>(null);
-  const { insets, topInset, horizontalPadding, scrollPaddingTop, scrollPaddingBottom, isVeryCompact } = useResponsiveLayout();
+  const journalListRef = useRef<any>(null);
+  const journalScrollYRef = useRef(0);
+  const scrollJournalToOffset = useCallback((offset: number, animated: boolean) => {
+    journalListRef.current?.scrollToOffset?.({ offset, animated });
+  }, []);
+  const journalSummaryTargetRef = useRef<View>(null);
+  const journalPantryBtnTargetRef = useRef<View>(null);
+  const { insets, topInset, horizontalPadding, scrollPaddingTop, scrollPaddingBottom, isVeryCompact, isCompact } = useResponsiveLayout();
   const reduceMotion = useReducedMotion();
+  const tour = useInteractiveTour();
+  const tourVisible = Boolean(tour?.tourVisible);
+
+  useRegisterTourTarget('journalOverview', {
+    targetRef: journalSummaryTargetRef,
+    scrollOffsetRef: journalScrollYRef,
+    scrollToOffset: scrollJournalToOffset,
+  }, [scrollJournalToOffset]);
+
+  useRegisterTourTarget('journalPantryBtn', {
+    targetRef: journalPantryBtnTargetRef,
+    scrollOffsetRef: journalScrollYRef,
+    scrollToOffset: scrollJournalToOffset,
+  }, [scrollJournalToOffset]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Asigurăm măsurare proaspătă dacă utilizatorul ajunge pe Jurnal în timpul turului.
+    }, [])
+  );
 
   // ACCORDION STATE: All categories start in a compact collapsed state so the user doesn't
   // have to scroll through every meal entry. Tapping a header expands its food items;
@@ -514,7 +544,7 @@ export default function HistoryScreen() {
 
   const renderHeader = () => (
     <>
-      <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(500)} style={styles.header}>
+      <Animated.View entering={reduceMotion || tourVisible ? undefined : FadeInDown.duration(500)} style={styles.header}>
         <View style={[styles.headerRow, { maxWidth: '100%' }]}>
           <Text
             maxFontSizeMultiplier={1.3}
@@ -526,6 +556,35 @@ export default function HistoryScreen() {
             {t('jurnal.yourJournal')}
           </Text>
           <View style={styles.headerActions}>
+            <View ref={journalPantryBtnTargetRef} collapsable={false}>
+              <TouchableOpacity
+                testID="journal-pantry-btn"
+                style={[
+                  styles.addBtnHeader,
+                  isCompact && styles.addBtnHeaderCompact,
+                  {
+                    backgroundColor: colors.accent + '18',
+                    borderColor: colors.accent + '55',
+                  },
+                ]}
+                onPress={() => {
+                  try { void Haptics.selectionAsync(); } catch {}
+                  router.push({ pathname: '/scanner-barcode', params: { tab: 'camara' } } as never);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={t('jurnal.pantryBtnA11y')}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <ShoppingBag size={16} color={colors.accent} />
+                <Text
+                  maxFontSizeMultiplier={1.2}
+                  numberOfLines={1}
+                  style={[styles.addBtnHeaderText, { color: colors.accent }]}
+                >
+                  {t('jurnal.pantryBtn')}
+                </Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
               style={[styles.addBtnHeader, styles.visibilityBtnHeader, { backgroundColor: 'rgba(255,255,255,0.05)', borderColor: colors.cardBorder }]}
               onPress={toggleAfisarePoze}
@@ -568,7 +627,8 @@ export default function HistoryScreen() {
       </Animated.View>
 
       {/* Daily summary & MacroRing */}
-      <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(600).delay(100)} style={[styles.summaryCard, { borderColor: colors.cardBorder }]}>
+      <Animated.View entering={reduceMotion || tourVisible ? undefined : FadeInDown.duration(600).delay(100)} style={[styles.summaryCard, { borderColor: colors.cardBorder }]}>
+        <View ref={journalSummaryTargetRef} collapsable={false}>
         <BlurView intensity={20} tint="dark" style={styles.summaryBlur}>
           <LinearGradient colors={[colors.accent + '12', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
             <Text maxFontSizeMultiplier={1.3} style={[styles.summaryLabel, { color: colors.textSecondary }]}>{t('jurnal.caloricSummary')}</Text>
@@ -633,6 +693,7 @@ export default function HistoryScreen() {
             </TouchableOpacity>
           </LinearGradient>
         </BlurView>
+        </View>
       </Animated.View>
 
       {/* Nutrient Focus / Health-Aware Journal */}
@@ -714,10 +775,15 @@ export default function HistoryScreen() {
           să fie 100% vizibil și accesibil. */}
       <View testID="journal-content-safe-area" style={{ flex: 1, width: '100%', maxWidth: 680, alignSelf: 'center', paddingLeft: horizontalPadding + insets.left, paddingRight: horizontalPadding + insets.right, paddingTop: scrollPaddingTop }}>
         <FlashList
+          ref={journalListRef}
           data={listaJurnal}
           keyExtractor={keyExtractor}
           getItemType={(item) => item.tip}
           renderItem={({ item }) => redareItem(item)}
+          onScroll={(e) => {
+            journalScrollYRef.current = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
           onRefresh={onRefresh}
           refreshing={false}
           showsVerticalScrollIndicator={false}

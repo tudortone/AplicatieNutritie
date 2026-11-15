@@ -6,7 +6,8 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useAppStore } from '../../hooks/useAppStore';
 import { supabase } from '../../supabase';
-import { restaureazaProfilLocal, type ProfilRestaurare } from '../../lib/onboarding';
+import { restaureazaProfilLocal, sincronizeazaOnboardingLaProfil, type ProfilRestaurare } from '../../lib/onboarding';
+import { marcheazaMeseModificate } from '../../lib/freshnessMese';
 import { buildApiUrl } from '../../lib/api';
 
 /**
@@ -28,8 +29,12 @@ export default function AuthCompletionScreen() {
     if (navigatedRef.current) return;
 
     try {
-      // 1. Dacă onboarding-ul local e confirmat, mergem direct în aplicație
+      // 1. Dacă onboarding-ul local e confirmat, ne asigurăm că țintele sunt sincronizate și mergem în aplicație
       if (useAppStore.getState().isOnboardingDone) {
+        if (typeof sincronizeazaOnboardingLaProfil === 'function') {
+          await sincronizeazaOnboardingLaProfil(userId, supabase);
+        }
+        marcheazaMeseModificate(userId);
         navigatedRef.current = true;
         router.replace('/(tabs)');
         return;
@@ -45,6 +50,7 @@ export default function AuthCompletionScreen() {
             const body = (await resp.json()) as { exista?: boolean; complet?: boolean; profil?: ProfilRestaurare | null };
             if (body.exista && body.complet && body.profil) {
               await restaureazaProfilLocal(body.profil);
+              marcheazaMeseModificate(userId);
               await useAppStore.getState().setOnboardingDone(true);
               navigatedRef.current = true;
               router.replace('/(tabs)');
@@ -78,6 +84,7 @@ export default function AuthCompletionScreen() {
             carbiTinta: (dbProfile as any).carbi_tinta,
           };
           await restaureazaProfilLocal(profilRestaurat);
+          marcheazaMeseModificate(userId);
           await useAppStore.getState().setOnboardingDone(true);
           navigatedRef.current = true;
           router.replace('/(tabs)');

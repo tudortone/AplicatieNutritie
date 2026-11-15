@@ -288,5 +288,48 @@ describe('app/auth/forgot-password — UI & recovery flow', () => {
     await fireEvent.press(view.getByTestId('forgot-change-email-btn'));
     await waitFor(() => expect(view.getByTestId('forgot-send-btn')).toBeTruthy());
   });
+
+  it('shows specific invalid-email and email-service messages for Supabase error codes without leaking raw details', async () => {
+    mockResetPasswordForEmail.mockResolvedValueOnce({
+      data: {},
+      error: { status: 400, code: 'email_address_invalid', message: 'Email address "tudortone9@gmail.comt" is invalid' },
+    });
+    const view = await render(<ForgotPasswordScreen />);
+    await fireEvent.changeText(view.getByTestId('forgot-email-input'), 'tudortone9@gmail.comt');
+    await fireEvent.press(view.getByTestId('forgot-send-btn'));
+
+    await waitFor(() => expect(view.getByTestId('forgot-error-banner')).toBeTruthy());
+    expect(view.queryByText(/email_address_invalid|tudortone9/)).toBeNull();
+    expect(view.getByText(/adresă de email validă/i)).toBeTruthy();
+
+    mockResetPasswordForEmail.mockResolvedValueOnce({
+      data: {},
+      error: { status: 500, message: 'smtp auth failed 535' },
+    });
+    await fireEvent.press(view.getByTestId('forgot-send-btn'));
+    await waitFor(() => expect(view.getByText(/Serviciul de email/i)).toBeTruthy());
+    expect(view.queryByText(/535/)).toBeNull();
+  });
+
+  it('offers one-tap domain typo correction pill without leaking user local-part text', async () => {
+    const view = await render(<ForgotPasswordScreen />);
+    await fireEvent.changeText(view.getByTestId('forgot-email-input'), 'tudortone9@gmail.comtt');
+
+    const fixBtn = await waitFor(() => view.getByTestId('forgot-email-typo-fix'));
+    expect(view.queryByText(/tudortone9/)).toBeNull();
+    expect(view.getByText(/gmail\.com/)).toBeTruthy();
+
+    await fireEvent.press(fixBtn);
+    expect(view.getByTestId('forgot-email-input').props.value).toBe('tudortone9@gmail.com');
+    expect(view.queryByTestId('forgot-email-typo-fix')).toBeNull();
+
+    await fireEvent.press(view.getByTestId('forgot-send-btn'));
+    await waitFor(() =>
+      expect(mockResetPasswordForEmail).toHaveBeenCalledWith('tudortone9@gmail.com', {
+        redirectTo: 'nutriai://auth/callback?flow=recovery',
+      }),
+    );
+    expect(view.getByTestId('forgot-step2-google-tip')).toBeTruthy();
+  });
 });
 

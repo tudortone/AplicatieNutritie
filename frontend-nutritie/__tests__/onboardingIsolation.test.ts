@@ -16,6 +16,8 @@ import {
   incarcaDateOnboarding,
   sincronizeazaOnboardingLaProfil,
   calculeazaPlan,
+  construiesteMetadataOnboarding,
+  incarcaTinteDinProfilSupabase,
   type DateOnboarding,
 } from '../lib/onboarding';
 import { clearLocalUserData, prepareLocalDataForUser } from '../lib/userDataCleanup';
@@ -329,5 +331,37 @@ describe('F-02 — izolarea onboarding-ului intre conturi', () => {
     expect(await AsyncStorage.getItem('dieta')).toBe('vegana');
     await clearLocalUserData();
     expect(await AsyncStorage.getItem('dieta')).toBeNull();
+  });
+
+  it('populeaza un rand profil incomplet (calorii_tinta: null) si construieste metadata de signUp', async () => {
+    await salveazaDateOnboarding(DATE_A);
+    const planA = calculeazaPlan(DATE_A)!;
+    const metadata = construiesteMetadataOnboarding(DATE_A);
+    expect(metadata.caloriiTinta).toBe(planA.calorii);
+    expect(metadata.proteineTinta).toBe(planA.proteineG);
+
+    const profiluri: Record<string, any> = { 'user-incomplet': { user_id: 'user-incomplet', calorii_tinta: null } };
+    const client = {
+      from: () => ({
+        select: () => ({
+          eq: (_col: string, val: string) => ({
+            maybeSingle: async () => ({ data: profiluri[val] ?? null, error: null }),
+          }),
+        }),
+        upsert: async (payload: any) => {
+          profiluri[payload.user_id] = payload;
+          return { error: null };
+        },
+      }),
+    };
+
+    const ok = await sincronizeazaOnboardingLaProfil('user-incomplet', client);
+    expect(ok).toBe(true);
+    expect(profiluri['user-incomplet'].calorii_tinta).toBe(planA.calorii);
+    expect(await AsyncStorage.getItem('caloriiTinta')).toBe(String(planA.calorii));
+
+    const extras = await incarcaTinteDinProfilSupabase('user-incomplet', client);
+    expect(extras?.caloriiTinta).toBe(planA.calorii);
+    expect(extras?.proteineTinta).toBe(planA.proteineG);
   });
 });
