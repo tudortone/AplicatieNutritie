@@ -630,7 +630,7 @@ export default function ProfilScreen() {
           <Modal visible={languageModalVisible} transparent animationType="slide" onRequestClose={() => setLanguageModalVisible(false)}>
             <View style={styles.modalBackdrop}>
               <View style={[styles.selectionSheet, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-                <View style={styles.modalTitleRow}><Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('profile.languageTitle')}</Text><TouchableOpacity onPress={() => setLanguageModalVisible(false)} accessibilityLabel={t('common.close')}><Text style={{ color: colors.textSecondary, fontSize: 24 }}>×</Text></TouchableOpacity></View>
+                <View style={styles.modalTitleRow}><Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('profile.languageTitle')}</Text><TouchableOpacity accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => setLanguageModalVisible(false)} accessibilityLabel={t('common.close')}><Text style={{ color: colors.textSecondary, fontSize: 24 }}>×</Text></TouchableOpacity></View>
                 <TextInput value={languageQuery} onChangeText={setLanguageQuery} placeholder={t('profile.searchLanguages')} placeholderTextColor={colors.textTertiary} style={[styles.modalSearch, { color: colors.textPrimary, borderColor: colors.cardBorder }]} autoCorrect={false} />
                 <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8 }}>
                   {filteredLanguages.length === 0 ? <Text style={{ color: colors.textSecondary, paddingVertical: 16 }}>{t('profile.noLanguagesFound')}</Text> : filteredLanguages.map((langKey) => {

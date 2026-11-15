@@ -743,7 +743,7 @@ export default function HistoryScreen() {
       {/* REMED-029: montat doar după prima deschidere; argumentele așteaptă în
           mealSheetArgsRef și sunt consumate de effect-ul deschideAddMeal. */}
       {mealSheetMounted ? (
-        <AddMealBottomSheet ref={mealSheetRef} openOnMount onSuccess={refresh} onMasaCreata={esteAzi ? optimisticAddMeal : undefined} />
+        <AddMealBottomSheet ref={mealSheetRef} openOnMount onSuccess={() => refresh(true)} onMasaCreata={esteAzi ? optimisticAddMeal : undefined} />
       ) : null}
 
       <MealDetailsSheet

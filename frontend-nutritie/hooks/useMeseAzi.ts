@@ -137,7 +137,7 @@ export function useMeseAzi(dataSelectata?: Date) {
 
       const isCached = hasCachedJournalDay(targetDateKey);
 
-      if (forceLoading || (!isSilent && !isCached && hasLoadedDateRef.current !== targetDateKey)) {
+      if (!isSilent && (forceLoading || (!isCached && hasLoadedDateRef.current !== targetDateKey))) {
         setLoading(true);
       }
 

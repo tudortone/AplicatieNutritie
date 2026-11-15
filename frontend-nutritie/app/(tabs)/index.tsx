@@ -177,6 +177,7 @@ export default function HomeScreen() {
   // pentru a preveni interceptarea atingerilor pe Home de către containerul/backdrop-ul
   // BottomSheet-ului nemontat complet.
   const [mealSheetMounted, setMealSheetMounted] = useState(false);
+  const hasLoadedOnceRef = useRef(false);
   const deschideAddMeal = React.useCallback(() => {
     if (addMealSheetRef.current) {
       addMealSheetRef.current.open();
@@ -670,7 +671,11 @@ export default function HomeScreen() {
     return sfaturi[new Date().getDate() % sfaturi.length];
   }, [t]);
 
-  if (loading) {
+  if (!loading) {
+    hasLoadedOnceRef.current = true;
+  }
+
+  if (loading && !hasLoadedOnceRef.current) {
     return (
       <View style={[s.container, { backgroundColor: colors.background, paddingHorizontal: 20, paddingTop: topInset }]}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -1363,7 +1368,7 @@ export default function HomeScreen() {
 
       {/* Reusable Gorhom Bottom Sheet for adding meals - lazy mounted (REMED-029/HOME-TOUCH-001) */}
       {mealSheetMounted ? (
-        <AddMealBottomSheet ref={addMealSheetRef} openOnMount onSuccess={refresh} onMasaCreata={optimisticAddMeal} />
+        <AddMealBottomSheet ref={addMealSheetRef} openOnMount onSuccess={() => refresh(true)} onMasaCreata={optimisticAddMeal} />
       ) : null}
       <StreakBottomSheet ref={streakSheetRef} />
       {/* BUG-004: greutatea se editează direct pe Home, fără navigare la Profil */}
