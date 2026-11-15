@@ -24,7 +24,9 @@ jest.mock('react-native-safe-area-context', () => {
   return { SafeAreaView: ({ children, ...props }: any) => <View {...props}>{children}</View> };
 });
 
+import { StyleSheet } from 'react-native';
 import { NutrientFocusSettingsModal } from '../components/jurnal/NutrientFocusSettingsModal';
+import { NutrientFocusCard } from '../components/jurnal/NutrientFocusCard';
 import { DEFAULT_NUTRIENT_FOCUS_PREFERENCES } from '../lib/nutrientFocus';
 
 describe('Nutrient Focus safe-area shell', () => {
@@ -41,5 +43,17 @@ describe('Nutrient Focus safe-area shell', () => {
     expect(view.getByTestId('nutrient-focus-settings-safe-area').props.edges)
       .toEqual(['top', 'bottom', 'left', 'right']);
     expect(view.getByLabelText('nutrientFocus.close')).toBeTruthy();
+  });
+
+  test('wraps the NutrientFocusCard preset badge instead of overlapping the customize button', async () => {
+    const view = await render(<NutrientFocusCard mese={[]} />);
+    const customizeBtn = await view.findByLabelText('nutrientFocus.customize');
+    const titleNode = view.getByText('nutrientFocus.todaysFocus');
+    const titleGroupStyle = StyleSheet.flatten(titleNode.parent?.props.style);
+    const customizeStyle = StyleSheet.flatten(customizeBtn.props.style);
+
+    expect(titleGroupStyle.flexWrap).toBe('wrap');
+    expect(titleGroupStyle.minWidth).toBe(0);
+    expect(customizeStyle.flexShrink).toBe(0);
   });
 });

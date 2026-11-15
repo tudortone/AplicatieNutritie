@@ -308,26 +308,30 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: Spacing.sm,
     marginBottom: Spacing.sm,
   },
   titleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: Spacing.xs,
     flex: 1,
+    minWidth: 0,
   },
   titleText: {
     fontSize: 14,
     fontWeight: '700',
+    flexShrink: 1,
   },
   presetBadge: {
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
     borderRadius: Radius.pill,
     borderWidth: 1,
-    marginLeft: Spacing.xs,
+    flexShrink: 1,
   },
   presetBadgeText: {
     fontSize: 11,
@@ -336,6 +340,7 @@ const styles = StyleSheet.create({
   settingsButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
     gap: 4,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
