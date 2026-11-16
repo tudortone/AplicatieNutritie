@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator, Platform, Linking
+  ScrollView, Alert, ActivityIndicator, Platform
 } from 'react-native';
 import KeyboardAwareScreen from '../components/ui/KeyboardAwareScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,7 +28,7 @@ import {
 } from '../lib/onboarding';
 import { oauthFlow } from '../lib/oauthFlow';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { getLegalUrls } from '../lib/legalUrls';
+import { openLegalDocumentWithFallback } from '../constants/legal';
 
 // Contul de admin se logheaza cu username-ul „admin" (nu email). Supabase cere
 // email la autentificare, deci identificatorul se mapeaza intern la adresa contului.
@@ -110,15 +110,15 @@ export default function AuthScreen() {
 
   const openLegal = (key: 'termsUrl' | 'privacyUrl') => {
     try { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
-    try {
-      const { termsUrl, privacyUrl } = getLegalUrls();
-      void Linking.openURL(key === 'termsUrl' ? termsUrl : privacyUrl);
-    } catch {
-      Alert.alert(
-        t('authLegal.unavailableTitle'),
-        t('authLegal.unavailableMessage'),
-      );
-    }
+    const docType = key === 'termsUrl' ? 'terms' : 'privacy';
+    void openLegalDocumentWithFallback(
+      docType,
+      (route) => router.push(route as never),
+      {
+        title: t('authLegal.unavailableTitle'),
+        message: t('authLegal.unavailableMessage'),
+      },
+    );
   };
 
   const isValidEmail = (str: string) => /\S+@\S+\.\S+/.test(str.trim());

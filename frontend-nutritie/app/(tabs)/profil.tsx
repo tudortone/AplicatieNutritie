@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, Modal,
-  ScrollView, RefreshControl, Alert, ActivityIndicator, Platform, Switch, Image, Linking, Share,
+  ScrollView, RefreshControl, Alert, ActivityIndicator, Platform, Switch, Image, Share,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Save, LogOut, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Camera, CheckCircle2, User, Pencil, Crown, FileText, Watch, Globe, Download, Award, HelpCircle } from 'lucide-react-native';
+import { Save, LogOut, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Camera, CheckCircle2, User, Pencil, Crown, FileText, Watch, Globe, Download, Award, HelpCircle, Building2 } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
@@ -42,7 +42,13 @@ import { ConfirmSheet } from '../../components/ui/ConfirmSheet';
 import { WatchSelectorSheet, WatchSelectorSheetRef } from '../../components/ui/WatchSelectorSheet';
 import { API_URL } from '../../constants/config';
 import { API_PREFIX } from '../../lib/api';
-import { getLegalUrls } from '../../lib/legalUrls';
+import {
+  MANAGE_SUBSCRIPTIONS_URL,
+  SUPPORT_EMAIL,
+  getOperatorName,
+  openExternalUrlSafe,
+  openLegalDocumentWithFallback,
+} from '../../constants/legal';
 import { salveazaTargeturiPending, stergeTargeturiPending, citesteTargeturiPending } from '../../lib/sincronizeazaTargeturi';
 import { logoutPreservingUserData } from '../../lib/accountLogout';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -452,30 +458,27 @@ export default function ProfilScreen() {
   };
 
   // Deschide un document legal oficial (Termeni / Confidențialitate) în
-  // browser extern. Dacă URL-ul nu e configurat sau e invalid, afișăm fallback.
+  // browser extern, cu fallback automat către ecranele interne offline.
   const openLegalUrl = async (tip: 'terms' | 'privacy') => {
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
-    try {
-      const { termsUrl, privacyUrl } = getLegalUrls();
-      await Linking.openURL(tip === 'terms' ? termsUrl : privacyUrl);
-    } catch {
-      showBanner({
-        title: 'Document indisponibil',
-        message: tip === 'terms'
-          ? 'Termenii și Condițiile nu sunt momentan disponibile.'
-          : 'Politica de Confidențialitate nu este momentan disponibilă.',
-        type: 'warning',
-      });
-    }
+    await openLegalDocumentWithFallback(
+      tip,
+      (route) => router.push(route as never),
+      {
+        title: t('legalScreen.docUnavailableTitle'),
+        message: t('legalScreen.docUnavailableMsg', {
+          nume: tip === 'terms' ? t('legalScreen.termsTitle') : t('legalScreen.privacyTitle'),
+        }),
+      },
+    );
   };
 
   const deschideAbonamenteGooglePlay = async () => {
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
-    try {
-      await Linking.openURL('https://play.google.com/store/account/subscriptions');
-    } catch {
-      Alert.alert(t('common.error'), t('alerts.mesaje.conexiuneServerEsueaza'));
-    }
+    await openExternalUrlSafe(MANAGE_SUBSCRIPTIONS_URL, {
+      title: t('common.error'),
+      message: t('alerts.mesaje.conexiuneServerEsueaza'),
+    });
   };
 
   if (checkingSession) {
@@ -1141,6 +1144,30 @@ export default function ProfilScreen() {
                   </TouchableOpacity>
                 </>
               )}
+
+              <View style={styles.separator} />
+
+              <TouchableOpacity
+                testID="profile-merchant-identity"
+                style={[styles.inputRow, { alignItems: 'center' }]}
+                onPress={() => router.push('/legal' as never)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={t('legalScreen.operatorTitle')}
+              >
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  <Building2 size={18} color={colors.accent} />
+                </View>
+                <View style={[styles.inputContent, { flex: 1 }]}>
+                  <Text style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 15, marginBottom: 2 }]}>
+                    {`${t('legalScreen.operatorTitle')}: ${getOperatorName(i18n.resolvedLanguage || i18n.language || 'ro')}`}
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                    {SUPPORT_EMAIL}
+                  </Text>
+                </View>
+                <ChevronRight size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
             </LinearGradient>
           </BlurView>
           <View style={{ gap: 12, marginBottom: 24 }}>

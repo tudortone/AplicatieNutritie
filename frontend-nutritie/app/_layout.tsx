@@ -469,6 +469,8 @@ function RootNavigator() {
     }
     const esteRecuperareParola = inAuth && (pathname === '/auth/noua-parola' || pathname === '/auth/forgot-password');
     if (esteRecuperareParola) return;
+    const inPublicLegal = pathname === '/legal' || pathname === '/termeni' || pathname === '/confidentialitate';
+    if (inPublicLegal) return;
     // Verificăm profilul contului curent înainte de a repeta chestionarul.
     if (session && !isOnboardingDone && profilVerificatPentru !== session.user.id) return;
 
@@ -537,6 +539,8 @@ function RootNavigator() {
           <Stack.Screen name="scanner-barcode" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom', animationDuration: PUSH_DURATION, gestureEnabled: true, gestureDirection: 'vertical' }} />
           <Stack.Screen name="calculator-ai" options={push} />
           <Stack.Screen name="legal" options={push} />
+          <Stack.Screen name="termeni" options={push} />
+          <Stack.Screen name="confidentialitate" options={push} />
           <Stack.Screen name="jurnal-antrenamente" options={push} />
           <Stack.Screen name="notificari" options={push} />
           <Stack.Screen name="paywall" options={{ ...push, presentation: 'fullScreenModal' }} />

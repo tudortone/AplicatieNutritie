@@ -6,8 +6,6 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
-  Alert,
-  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -31,7 +29,13 @@ import { useTheme } from '../context/ThemeContext';
 import { usePremium, PREMIUM_PACKAGE_IDS } from '../context/PremiumContext';
 import { useFlowCredits } from '../context/FlowCreditsContext';
 import { useNotify } from '../hooks/useNotify';
-import { getLegalUrls } from '../lib/legalUrls';
+import {
+  MANAGE_SUBSCRIPTIONS_URL,
+  SUPPORT_EMAIL,
+  getOperatorName,
+  openExternalUrlSafe,
+  openLegalDocumentWithFallback,
+} from '../constants/legal';
 import { useTranslation } from 'react-i18next';
 import type { BillingOffer, BillingProduct } from '../lib/billing/types';
 import { getBillingUnavailableMessageKey } from '../lib/billing/billingUnavailableCopy';
@@ -82,7 +86,8 @@ export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const notify = useNotify();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const operatorName = getOperatorName(i18n?.resolvedLanguage || i18n?.language || 'ro');
   const flowCredits = useFlowCredits();
   const {
     isPremium,
@@ -167,15 +172,22 @@ export default function PaywallScreen() {
   };
 
   const openLegal = (key: 'termsUrl' | 'privacyUrl') => {
-    try {
-      const { termsUrl, privacyUrl } = getLegalUrls();
-      Linking.openURL(key === 'termsUrl' ? termsUrl : privacyUrl);
-    } catch {
-      Alert.alert(
-        t('authLegal.unavailableTitle'),
-        t('authLegal.unavailableMessage'),
-      );
-    }
+    const docType = key === 'termsUrl' ? 'terms' : 'privacy';
+    void openLegalDocumentWithFallback(
+      docType,
+      (route) => router.push(route as never),
+      {
+        title: t('authLegal.unavailableTitle'),
+        message: t('authLegal.unavailableMessage'),
+      },
+    );
+  };
+
+  const openManageSubscriptions = () => {
+    void openExternalUrlSafe(MANAGE_SUBSCRIPTIONS_URL, {
+      title: t('common.error'),
+      message: t('alerts.mesaje.conexiuneServerEsueaza'),
+    });
   };
 
   const handleRestore = async () => {
@@ -325,6 +337,17 @@ export default function PaywallScreen() {
           >
             <Text style={[styles.primaryActionBtnText, { color: colors.background }]}>
               {operation.status === 'verified' ? t('paywall.cta.continue') : t('access.backToApp')}
+            </Text>
+          </Pressable>
+          <Pressable
+            testID="premium-manage-subscription-button"
+            onPress={openManageSubscriptions}
+            style={[styles.restoreBtn, { marginTop: 14 }]}
+            accessibilityRole="link"
+            accessibilityLabel={t('profile.manageSubscriptionA11y')}
+          >
+            <Text style={[styles.restoreText, { color: colors.textSecondary, textDecorationLine: 'underline' }]}>
+              {t('profile.manageSubscription')}
             </Text>
           </Pressable>
         </View>
@@ -774,9 +797,24 @@ export default function PaywallScreen() {
           </Text>
         </Pressable>
 
+        {/* Manage Google Play Subscription */}
+        <Pressable
+          testID="manage-subscription-button"
+          onPress={openManageSubscriptions}
+          style={styles.restoreBtn}
+          accessibilityRole="link"
+          accessibilityLabel={t('profile.manageSubscriptionA11y')}
+        >
+          <Text style={[styles.restoreText, { color: colors.textSecondary, textDecorationLine: 'underline' }]}>
+            {t('profile.manageSubscription')}
+          </Text>
+        </Pressable>
+
         {/* Legal Disclaimers and External Links */}
         <Text style={[styles.legalText, { color: colors.textTertiary }]}>
           {t('paywall.legal.disclaimer')}
+          {'\n'}
+          {t('paywall.legal.withdrawalNotice', { company: operatorName, email: SUPPORT_EMAIL })}
           {'\n'}
           <Text
             style={{ textDecorationLine: 'underline' }}

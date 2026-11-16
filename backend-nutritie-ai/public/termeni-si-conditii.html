@@ -8,8 +8,9 @@
   <style>
     :root {
       --bg: #090C0E;
-      --card-bg: rgba(22, 28, 36, 0.7);
-      --accent: #10B981;
+      --card-bg: rgba(22, 28, 36, 0.72);
+      --accent: #CCFF00;
+      --accent-green: #10B981;
       --text: #F3F4F6;
       --text-muted: #9CA3AF;
       --border: rgba(255, 255, 255, 0.08);
@@ -43,7 +44,7 @@
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      color: var(--accent);
+      color: var(--accent-green);
       text-decoration: none;
       font-weight: 600;
     }
@@ -67,7 +68,7 @@
       transition: all 0.2s ease;
     }
     .lang-btn.active {
-      background: var(--accent);
+      background: var(--accent-green);
       color: #090C0E;
     }
     h1 {
@@ -75,17 +76,25 @@
       margin-bottom: 0.5rem;
       color: #FFF;
     }
-    .date { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
+    .date { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .trader-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(204, 255, 0, 0.28);
+      border-radius: 1rem;
+      padding: 1.25rem 1.4rem;
+      margin-bottom: 1.75rem;
+    }
+    .trader-box p { margin-bottom: 0.35rem; font-size: 0.95rem; }
     h2 {
-      font-size: 1.35rem;
+      font-size: 1.3rem;
       margin-top: 2rem;
       margin-bottom: 0.75rem;
-      color: #10B981;
+      color: var(--accent-green);
     }
     p, ul, ol { color: #D1D5DB; margin-bottom: 1rem; font-size: 1rem; }
     ul, ol { padding-left: 1.5rem; }
     li { margin-bottom: 0.5rem; }
-    a { color: var(--accent); text-decoration: none; }
+    a { color: var(--accent-green); text-decoration: none; }
     a:hover { text-decoration: underline; }
     footer {
       text-align: center;
@@ -104,67 +113,93 @@
         <button id="btn-ro" class="lang-btn" onclick="switchLang('ro')">Română</button>
       </div>
     </div>
-    
+
     <!-- ENGLISH TERMS -->
     <div id="content-en">
       <h1>Terms of Service</h1>
-      <div class="date">Effective Date: October 2026 | Developer: Individual Developer (GetFlow)</div>
+      <div class="date">Effective Date: November 2026 | Developer &amp; Operator: Individual Developer (GetFlow)</div>
 
-      <p>Welcome to <strong>GetFlow</strong>. By downloading, accessing, or using GetFlow, you agree to be bound by these Terms of Service. If you do not agree, please do not use the application.</p>
+      <div class="trader-box">
+        <p><strong>1. Operator Identity:</strong> Individual Developer (GetFlow — <code>com.totsrl.getflo</code>)</p>
+        <p><strong>Jurisdiction:</strong> Romania, European Union</p>
+        <p><strong>Official Support Email:</strong> <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a></p>
+        <p>Verified developer trader contact details for EEA users are available in the developer details section on Google Play.</p>
+      </div>
 
-      <h2>1. Age Requirement: Adults Only (18+)</h2>
-      <p>GetFlow is intended exclusively for users who are at least 18 years of age. By creating an account or using the app, you confirm and warrant that you are at least 18 years old.</p>
+      <p>Welcome to <strong>GetFlow</strong>. By downloading, accessing, or using GetFlow, you confirm that you have read, understood, and agree to be bound by these Terms of Service and our <a href="/privacy">Privacy Policy</a>.</p>
 
-      <h2>2. Medical & AI Disclaimers</h2>
-      <p><strong>GetFlow is an informational wellness and fitness tool, NOT a medical device.</strong> GetFlow Coach is an artificial intelligence assistant. Estimates, calorie calculations, and nutritional recommendations are for educational and fitness purposes only and do not constitute medical advice, diagnosis, or clinical treatment. Always consult a licensed physician or healthcare professional before embarking on any diet or fitness program.</p>
-
-      <h2>3. Subscriptions & Billing (Google Play)</h2>
-      <p>GetFlow offers optional auto-renewing subscriptions (<code>premium_monthly</code> and <code>premium_annual</code>) and consumable Flow Credit packs:</p>
+      <h2>2. Service Scope &amp; Account Rules (18+ Only)</h2>
+      <p>GetFlow provides digital wellness and fitness tracking tools, including AI photo meal recognition, macro and calorie calculation, interactive muscle workout tracking, and the GetFlow Coach conversational assistant.</p>
       <ul>
-        <li><strong>Billing:</strong> Purchases and subscriptions are processed directly through Google Play Billing. Payment is charged to your Google account at confirmation of purchase.</li>
-        <li><strong>Automatic Renewal:</strong> Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current billing cycle.</li>
-        <li><strong>Easy Cancellation:</strong> You can manage or cancel your subscription at any time directly through Google Play: visit <a href="https://play.google.com/store/account/subscriptions" target="_blank" rel="noopener">Google Play Subscriptions</a> or on your Android device (<em>Google Play Store &rarr; Profile &rarr; Payments & Subscriptions &rarr; Subscriptions</em>). You are never required to contact support to cancel.</li>
+        <li><strong>Adults Only:</strong> GetFlow is strictly intended for individuals aged 18 years or older.</li>
+        <li><strong>Account Responsibility:</strong> You are responsible for maintaining the confidentiality of your login credentials and ensuring lawful, non-abusive use of the platform.</li>
       </ul>
 
-      <h2>4. Consumer Statutory Rights (32 Launch Markets)</h2>
-      <p>Nothing in these Terms limits, excludes, or impairs any mandatory statutory consumer rights or statutory cancellation/withdrawal rights provided under European Union law (including Directive 2011/83/EU on Consumer Rights), UK law (including the Consumer Rights Act 2015), or applicable local consumer protection legislation in your jurisdiction of residence. If any provision of these Terms is deemed contrary to mandatory local consumer law, that law shall govern for consumers in that jurisdiction.</p>
+      <h2>3. Commercial Terms, Subscriptions &amp; Google Play Billing</h2>
+      <p>GetFlow offers optional auto-renewing Premium subscriptions (<code>premium_monthly</code> and <code>premium_annual</code>) and consumable Flow Credit packs:</p>
+      <ul>
+        <li><strong>Billing:</strong> All payments are processed exclusively through Google Play Billing at the exact price, currency, and billing cycle shown prior to confirmation.</li>
+        <li><strong>Automatic Renewal:</strong> Subscriptions automatically renew unless cancelled at least 24 hours before the end of the current billing period.</li>
+        <li><strong>Manage or Cancel Anytime:</strong> You can manage or cancel your subscription directly via <a href="https://play.google.com/store/account/subscriptions" target="_blank" rel="noopener">Google Play Subscriptions</a> or on your Android device (<em>Google Play Store &rarr; Profile &rarr; Payments &amp; subscriptions &rarr; Subscriptions</em>).</li>
+      </ul>
 
-      <h2>5. Intellectual Property</h2>
-      <p>All software code, visual designs, muscle heatmaps, trademarks, and content within GetFlow are the exclusive intellectual property of the developer and creator of GetFlow and protected by copyright and intellectual property treaties.</p>
+      <h2>4. Refunds &amp; Right of Withdrawal (EU Directive 2011/83/EU &amp; GEO 34/2014)</h2>
+      <p>Consumers in the European Economic Area generally have a statutory 14-day right of withdrawal for distance contracts.</p>
+      <p><strong>Digital Content Exception (Art. 16(m) of Directive 2011/83/EU / Romanian GEO 34/2014):</strong> Premium subscriptions and Flow Credits constitute digital content not supplied on a tangible medium. When you confirm a purchase in Google Play, digital access begins immediately with your prior express consent and acknowledgment that the right of withdrawal is waived once performance starts. Eligible refund requests (such as technical errors or unauthorized billing) are handled via Google Play Refund Policies or by contacting <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a>.</p>
 
-      <h2>6. Contact Us</h2>
-      <p>For questions or support regarding these Terms, contact us at: <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a>.</p>
+      <h2>5. Limitation of Liability &amp; Medical / AI Disclaimer</h2>
+      <p><strong>GetFlow is NOT a medical device.</strong> Calorie estimates, AI meal photo analyses, and GetFlow Coach recommendations are strictly informational and educational. They do not constitute medical advice, diagnosis, or treatment. Always consult a qualified physician or dietitian before changing your diet or workout regimen. To the maximum extent permitted by law, the operator of GetFlow is not liable for indirect damages or misuse of automated fitness estimates.</p>
+
+      <h2>6. Governing Law &amp; Dispute Resolution (Romania / EU / ANPC)</h2>
+      <p>These Terms are governed by the laws of Romania and applicable European Union law (including GDPR and the Digital Services Act — Regulation (EU) 2022/2065), without depriving EEA/UK consumers of mandatory statutory protections under their local law.</p>
+      <p>For amicable resolution, contact <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a>. Consumers in Romania and the EU may also submit complaints to the National Authority for Consumer Protection (<a href="https://anpc.ro" target="_blank" rel="noopener">ANPC</a>), use the EU Consumer Redress portal (<a href="https://consumer-redress.ec.europa.eu/" target="_blank" rel="noopener">consumer-redress.ec.europa.eu</a>), or bring claims before competent courts.</p>
+
+      <h2>7. Intellectual Property</h2>
+      <p>All software source code, visual assets, muscle anatomy interfaces, and trademarks within GetFlow remain the exclusive intellectual property of the developer and creator of GetFlow.</p>
     </div>
 
     <!-- ROMANIAN TERMS -->
     <div id="content-ro" style="display: none;">
       <h1>Termeni și Condiții de Utilizare</h1>
-      <div class="date">Data intrării în vigoare: Octombrie 2026 | Dezvoltator: Dezvoltator Individual (GetFlow)</div>
+      <div class="date">Data intrării în vigoare: Noiembrie 2026 | Dezvoltator &amp; Operator: Dezvoltator Individual (GetFlow)</div>
 
-      <p>Prin descărcarea, accesarea sau utilizarea aplicației <strong>GetFlow</strong>, sunteți de acord să respectați acești Termeni și Condiții. Dacă nu sunteți de acord, vă rugăm să nu utilizați aplicația.</p>
+      <div class="trader-box">
+        <p><strong>1. Identitatea Operatorului:</strong> Dezvoltator Individual (GetFlow — <code>com.totsrl.getflo</code>)</p>
+        <p><strong>Jurisdicție:</strong> România, Uniunea Europeană</p>
+        <p><strong>E-mail oficial de suport:</strong> <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a></p>
+        <p>Datele oficiale de contact verificate pentru utilizatorii din SEE sunt disponibile în secțiunea de detalii a dezvoltatorului pe Google Play.</p>
+      </div>
 
-      <h2>1. Cerință de Vârstă: Exclusiv Adulți (18+)</h2>
-      <p>GetFlow este destinat exclusiv persoanelor care au împlinit vârsta de 18 ani. Prin crearea contului sau utilizarea aplicației, confirmați că aveți cel puțin 18 ani.</p>
+      <p>Prin descărcarea, accesarea sau continuarea utilizării aplicației <strong>GetFlow</strong>, confirmați că ați citit și acceptați acești Termeni și Condiții și <a href="/privacy#ro">Politica de Confidențialitate</a>.</p>
 
-      <h2>2. Declinarea Răspunderii Medicale și Asistentul AI</h2>
-      <p><strong>Aplicația GetFlow nu furnizează sfaturi medicale și nu este un dispozitiv medical.</strong> Asistentul GetFlow Coach este un sistem de inteligență artificială. Informațiile, estimările calorice și sugestiile nutriționale au scop exclusiv informativ și educațional. Consultați întotdeauna un medic specialist înainte de a începe un regim alimentar sau un program de antrenament.</p>
-
-      <h2>3. Abonamente și Plăți (Google Play)</h2>
-      <p>GetFlow oferă opțional abonamente Premium cu reînnoire automată (lunar și anual) și pachete de Credite Flow:</p>
+      <h2>2. Obiectul serviciului și regulile de utilizare (Exclusiv 18+)</h2>
+      <p>GetFlow pune la dispoziție instrumente digitale de jurnal alimentar, scanare foto AI a meselor, calcul caloric și macro, urmărirea antrenamentelor pe hartă musculară și asistentul AI GetFlow Coach.</p>
       <ul>
-        <li><strong>Procesarea Plăților:</strong> Plățile sunt gestionate exclusiv prin Google Play Billing, fiind debitate din contul dvs. Google.</li>
-        <li><strong>Reînnoire Automată:</strong> Abonamentele se reînnoiesc automat dacă nu sunt anulate cu cel puțin 24 de ore înainte de expirarea perioadei curente.</li>
-        <li><strong>Anulare Simplă:</strong> Puteți anula abonamentul în orice moment direct din contul Google Play accesând <a href="https://play.google.com/store/account/subscriptions" target="_blank" rel="noopener">Abonamente Google Play</a> sau din telefon (<em>Google Play Store &rarr; Profil &rarr; Plăți și abonamente &rarr; Abonamente</em>). Nu este necesară trimiterea unui e-mail către suport pentru anulare.</li>
+        <li><strong>Eligibilitate 18+:</strong> Serviciul este destinat exclusiv persoanelor care au împlinit vârsta de 18 ani.</li>
+        <li><strong>Utilizarea contului:</strong> Utilizatorul răspunde pentru păstrarea confidențialității datelor de autentificare și utilizarea loială, conformă cu legea, a aplicației.</li>
       </ul>
 
-      <h2>4. Drepturile Legale ale Consumatorilor</h2>
-      <p>Nicio clauză din acești Termeni nu limitează sau exclude drepturile legale obligatorii ale consumatorilor prevăzute de legislația Uniunii Europene (Directiva 2011/83/UE privind drepturile consumatorilor) sau legislația națională aplicabilă în țara dvs. de reședință.</p>
+      <h2>3. Condiții comerciale, Abonamente și Plăți (Google Play Billing)</h2>
+      <p>GetFlow oferă opțional abonamente Premium cu reînnoire automată (lunar — <code>premium_monthly</code> și anual — <code>premium_annual</code>) și pachete consumabile de Credite Flow:</p>
+      <ul>
+        <li><strong>Procesarea plăților:</strong> Toate achizițiile sunt procesate exclusiv prin Google Play Billing la tariful și moneda afișate clar înainte de confirmare.</li>
+        <li><strong>Reînnoire automată:</strong> Abonamentele se reînnoiesc automat pentru aceeași perioadă dacă nu sunt anulate cu cel puțin 24 de ore înainte de expirarea ciclului curent.</li>
+        <li><strong>Gestionare și anulare:</strong> Puteți gestiona sau anula oricând abonamentul din <a href="https://play.google.com/store/account/subscriptions" target="_blank" rel="noopener">Abonamente Google Play</a> sau direct din telefon (<em>Google Play Store &rarr; Profil &rarr; Plăți și abonamente &rarr; Abonamente</em>). Nu este necesară contactarea suportului pentru anulare.</li>
+      </ul>
 
-      <h2>5. Proprietate Intelectuală</h2>
-      <p>Toate elementele vizuale, hărțile musculare, logo-urile și codul sursă al aplicației GetFlow sunt proprietatea intelectuală exclusivă a dezvoltatorului și creatorului GetFlow și sunt protejate de legislația drepturilor de autor.</p>
+      <h2>4. Politica de rambursare și Dreptul de retragere (OUG 34/2014)</h2>
+      <p>În temeiul OUG nr. 34/2014 și al Directivei (UE) 2011/83/UE privind drepturile consumatorilor, beneficiați în mod normal de un termen legal de retragere de <strong>14 zile calendaristice</strong> de la încheierea contractului la distanță.</p>
+      <p><strong>Excepția conținutului digital (Art. 16 lit. m din OUG 34/2014):</strong> Abonamentele și pachetele de Credite Flow reprezintă conținut digital care nu este livrat pe un suport material. Prin confirmarea plății în Google Play, furnizarea digitală începe imediat cu acordul dvs. prealabil expres și cu confirmarea că pierdeți dreptul de retragere odată ce executarea a început. Solicitările de rambursare eligibile (erori tehnice sau plăți neautorizate) sunt procesate prin Google Play sau ne pot fi adresate la <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a>.</p>
 
-      <h2>6. Date de Contact</h2>
-      <p>Pentru orice întrebare, ne puteți contacta la: <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a>.</p>
+      <h2>5. Limitarea răspunderii și Disclaimer Medical / AI</h2>
+      <p><strong>Aplicația GetFlow NU este un dispozitiv medical și NU oferă sfaturi medicale.</strong> Estimările calorice, analizele foto AI și recomandările generate de asistentul GetFlow Coach au caracter strict informativ și educațional și nu înlocuiesc consultul medical, diagnosticul sau recomandarea unui specialist autorizat.</p>
+
+      <h2>6. Legea aplicabilă și soluționarea litigiilor</h2>
+      <p>Prezenții Termeni sunt guvernați de legislația din România și legislația Uniunii Europene aplicabilă (inclusiv GDPR și Regulamentul DSA 2022/2065), fără a limita drepturile imperative ale consumatorului din țara de reședință.</p>
+      <p>Pentru soluționare amiabilă scrieți la <a href="mailto:supportgetflow@gmail.com">supportgetflow@gmail.com</a>. Consumatorii pot apela la Autoritatea Națională pentru Protecția Consumatorilor (<a href="https://anpc.ro" target="_blank" rel="noopener">ANPC — anpc.ro</a>), mecanismele europene de soluționare a litigiilor (<a href="https://consumer-redress.ec.europa.eu/" target="_blank" rel="noopener">SOL / Consumer Redress</a>) sau instanțele judecătorești competente.</p>
+
+      <h2>7. Proprietate intelectuală</h2>
+      <p>Codul sursă, grafica, hărțile musculare, mărcile și elementele GetFlow aparțin exclusiv dezvoltatorului și creatorului GetFlow și sunt protejate de legislația proprietății intelectuale.</p>
     </div>
 
     <footer>

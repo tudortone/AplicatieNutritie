@@ -1,27 +1,40 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, FileText, Landmark, Mail, Building2, Scale, Calendar, ChevronRight, ShieldCheck } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  FileText,
+  Landmark,
+  Mail,
+  Building2,
+  Scale,
+  Calendar,
+  ChevronRight,
+  ShieldCheck,
+  Crown,
+} from 'lucide-react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../context/ThemeContext';
-import { getLegalUrls } from '../lib/legalUrls';
-import { SUPPORT_EMAIL } from '../constants/support';
-
-// ATENȚIE: conținutul juridic este informativ și documentele obligatorii
-// (Termenii, Politica de Confidențialitate și Declarația de Accesibilitate) se deschid extern din documentele
-// legale oficiale configurate prin EXPO_PUBLIC_TERMS_OF_SERVICE_URL /
-// EXPO_PUBLIC_PRIVACY_POLICY_URL.
-
-// Operator și suport: configurabile prin variabile de mediu fără date fabricate.
-const OPERATOR_NAME = process.env.EXPO_PUBLIC_LEGAL_OPERATOR_NAME?.trim() || null;
-const EMAIL_SUPORT = SUPPORT_EMAIL;
+import {
+  ANPC_URL,
+  MANAGE_SUBSCRIPTIONS_URL,
+  SUPPORT_EMAIL,
+  getOperatorName,
+  getTraderSummaryLines,
+  openExternalUrlSafe,
+  openLegalDocumentWithFallback,
+} from '../constants/legal';
 
 export default function LegalScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.resolvedLanguage || i18n.language || 'ro';
+  const isRo = lang.startsWith('ro');
+  const operatorName = getOperatorName(lang);
+  const operatorLines = getTraderSummaryLines(lang);
 
   const section = (icon: React.ReactNode, title: string, children: React.ReactNode, delay = 80) => (
     <Animated.View entering={FadeInDown.duration(450).delay(delay)} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -34,25 +47,20 @@ export default function LegalScreen() {
   );
 
   const deschideDocument = async (tip: 'terms' | 'privacy' | 'accessibility', nume: string) => {
-    try {
-      const { termsUrl, privacyUrl } = getLegalUrls();
-      let url = tip === 'terms' ? termsUrl : privacyUrl;
-      if (tip === 'accessibility') {
-        url = privacyUrl.replace(/\/politica-de-confidentialitate(?:\.html)?|\/privacy(?:\.html)?/, '/declaratie-accesibilitate.html');
-      }
-      await Linking.openURL(url);
-    } catch {
-      Alert.alert(
-        t('legalScreen.docUnavailableTitle'),
-        t('legalScreen.docUnavailableMsg', { nume })
-      );
-    }
+    await openLegalDocumentWithFallback(
+      tip,
+      (route) => router.push(route as never),
+      {
+        title: t('legalScreen.docUnavailableTitle'),
+        message: t('legalScreen.docUnavailableMsg', { nume }),
+      },
+    );
   };
 
-  const actiuneDocument = (icon: React.ReactNode, titlu: string, subtitlu: string, urlKey: 'terms' | 'privacy' | 'accessibility') => (
+  const actiuneDocument = (icon: React.ReactNode, titlu: string, subtitlu: string, onPress: () => void) => (
     <Pressable
       style={({ pressed }) => [styles.actionRow, { borderColor: colors.border, opacity: pressed ? 0.6 : 1 }]}
-      onPress={() => deschideDocument(urlKey, titlu)}
+      onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={titlu}
     >
@@ -105,40 +113,85 @@ export default function LegalScreen() {
           <FileText size={18} color={colors.accent} />,
           t('legalScreen.termsTitle'),
           t('legalScreen.termsSubtitle'),
-          'terms'
+          () => { void deschideDocument('terms', t('legalScreen.termsTitle')); },
+        )}
+
+        {actiuneDocument(
+          <FileText size={18} color={colors.accent} />,
+          t('legalScreen.termsOfflineTitle', isRo ? 'Termeni și Condiții (Offline în aplicație)' : 'Terms of Service (Read Offline in App)'),
+          t('legalScreen.termsOfflineSubtitle', isRo ? 'Include datele comerciantului, OUG 34/2014 și Google Play' : 'Includes trader identity, withdrawal policy & billing terms'),
+          () => router.push('/termeni' as never),
         )}
 
         {actiuneDocument(
           <Scale size={18} color={colors.accent} />,
           t('legalScreen.privacyTitle'),
           t('legalScreen.privacySubtitle'),
-          'privacy'
+          () => { void deschideDocument('privacy', t('legalScreen.privacyTitle')); },
         )}
 
         {actiuneDocument(
           <ShieldCheck size={18} color={colors.accent} />,
           t('legalScreen.accessibilityTitle'),
           t('legalScreen.accessibilitySubtitle'),
-          'accessibility'
+          () => { void deschideDocument('accessibility', t('legalScreen.accessibilityTitle')); },
+        )}
+
+        {actiuneDocument(
+          <Crown size={18} color={colors.accent} />,
+          t('profile.manageSubscription'),
+          t('profile.manageSubscriptionDesc'),
+          () => {
+            void openExternalUrlSafe(MANAGE_SUBSCRIPTIONS_URL, {
+              title: t('common.error'),
+              message: t('alerts.mesaje.conexiuneServerEsueaza'),
+            });
+          },
         )}
 
         {section(
           <Building2 size={18} color={colors.accent} />,
           t('legalScreen.operatorTitle'),
-          <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
-            {OPERATOR_NAME
-              ? t('legalScreen.operatorTextWithOperator', { operator: OPERATOR_NAME, defaultValue: `${OPERATOR_NAME}, operatorul aplicației, este responsabil de prelucrarea datelor personale.` })
-              : t('legalScreen.operatorText')}
-          </Text>,
+          <View style={{ gap: 6 }}>
+            <Text style={[styles.bodyText, { color: colors.textPrimary, fontWeight: '700' }]}>
+              {operatorName}
+            </Text>
+            {operatorLines.slice(1).map((line) => (
+              <Text key={line} style={[styles.bodyText, { color: colors.textSecondary }]}>
+                {line}
+              </Text>
+            ))}
+            <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
+              {t('legalScreen.operatorTextWithOperator', {
+                operator: operatorName,
+                defaultValue: `${operatorName}, operatorul aplicației, este responsabil de prelucrarea datelor personale.`,
+              })}
+            </Text>
+          </View>,
           120
         )}
 
         {section(
           <Landmark size={18} color={colors.accent} />,
           t('legalScreen.jurisdictionTitle'),
-          <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
-            {t('legalScreen.jurisdictionText')}
-          </Text>,
+          <View style={{ gap: 8 }}>
+            <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
+              {t('legalScreen.jurisdictionText')}
+            </Text>
+            <Pressable
+              onPress={() => {
+                void openExternalUrlSafe(ANPC_URL, {
+                  title: t('common.error'),
+                  message: t('alerts.mesaje.conexiuneServerEsueaza'),
+                });
+              }}
+              accessibilityRole="link"
+            >
+              <Text style={[styles.bodyText, { color: colors.accent, textDecorationLine: 'underline' }]}>
+                {t('legalScreen.anpcLink', 'ANPC — Protecția Consumatorilor (anpc.ro)')}
+              </Text>
+            </Pressable>
+          </View>,
           160
         )}
 
@@ -146,7 +199,7 @@ export default function LegalScreen() {
           <Mail size={18} color={colors.accent} />,
           t('legalScreen.contactTitle'),
           <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
-            {t('legalScreen.contactText', { email: EMAIL_SUPORT })}
+            {t('legalScreen.contactText', { email: SUPPORT_EMAIL })}
           </Text>,
           200
         )}

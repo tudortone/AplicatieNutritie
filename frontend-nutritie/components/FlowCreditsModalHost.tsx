@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useFlowCredits } from '../context/FlowCreditsContext';
 import { useTheme } from '../context/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { openLegalDocumentWithFallback } from '../constants/legal';
 
 const FALLBACK_INSETS_CONTEXT = React.createContext<{ bottom?: number } | null>(null);
 
@@ -175,7 +176,32 @@ export function FlowCreditsModalHost() {
               <Crown size={18} color={colors.gold} />
               <Text maxFontSizeMultiplier={1.3} style={[styles.premiumText, { color: colors.gold }]}>{t('flowCredits.upgradePremium')}</Text>
             </TouchableOpacity>
-            <Text maxFontSizeMultiplier={1.3} style={[styles.legal, { color: colors.textTertiary }]}>{t('flowCredits.serverAuthority')}</Text>
+            <Text maxFontSizeMultiplier={1.3} style={[styles.legal, { color: colors.textTertiary }]}>
+              {t('flowCredits.serverAuthority')}
+              {'\n'}
+              {t('flowCredits.legalNotice', 'Processed via Google Play Billing. Instant digital delivery; see ')}
+              <Text
+                style={{ textDecorationLine: 'underline' }}
+                accessibilityRole="link"
+                onPress={() => {
+                  flow.close();
+                  void openLegalDocumentWithFallback('terms', (route) => router.push(route as never));
+                }}
+              >
+                {t('paywall.legal.terms')}
+              </Text>
+              {' · '}
+              <Text
+                style={{ textDecorationLine: 'underline' }}
+                accessibilityRole="link"
+                onPress={() => {
+                  flow.close();
+                  void openLegalDocumentWithFallback('privacy', (route) => router.push(route as never));
+                }}
+              >
+                {t('paywall.legal.privacy')}
+              </Text>
+            </Text>
           </ScrollView>
         </View>
       </View>

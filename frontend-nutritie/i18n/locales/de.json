@@ -487,7 +487,7 @@
     "passwordRequirements": "Das Passwort erfüllt nicht alle Sicherheitsanforderungen."
   },
   "authLegal": {
-    "disclosure": "Mit der Erstellung eines Kontos bestätigen Sie, dass Sie die folgenden Dokumente gelesen haben:",
+    "disclosure": "Durch die weitere Nutzung von GetFlow oder die Kontoerstellung stimmen Sie unseren Nutzungsbedingungen und der Datenschutzerklärung zu:",
     "terms": "Nutzungsbedingungen",
     "privacy": "Datenschutzerklärung",
     "termsA11y": "Nutzungsbedingungen öffnen",
@@ -923,7 +923,8 @@
     "legal": {
       "disclaimer": "Das Abonnement verlängert sich automatisch über Google Play. Sie können jederzeit in Ihren Google Play-Kontoeinstellungen kündigen.",
       "terms": "Nutzungsbedingungen",
-      "privacy": "Datenschutzerklärung"
+      "privacy": "Datenschutzerklärung",
+      "withdrawalNotice": "Betrieben von {{company}} ({{email}}). Der digitale Zugang beginnt sofort mit Ihrer ausdrücklichen Zustimmung (Ausnahme vom 14-tägigen Widerrufsrecht)."
     },
     "creditsOption": {
       "title": "Bevorzugst du flexible Credit-Pakete?",
@@ -1332,13 +1333,17 @@
     "operatorText": "Der App-Betreiber ist verantwortlich für die Verarbeitung personenbezogener Daten.",
     "operatorTextWithOperator": "{{operator}}, App-Betreiber, ist verantwortlich für die Verarbeitung personenbezogener Daten.",
     "jurisdictionTitle": "Gerichtsstand",
-    "jurisdictionText": "Die Dokumente unterliegen rumänischem Recht und der DSGVO (EU).",
+    "jurisdictionText": "Es gilt rumänisches Recht sowie anwendbares Recht der Europäischen Union (DSGVO, Verbraucherrechterichtlinie, DSA).",
     "contactTitle": "Kontakt & Support",
     "contactText": "Bei Fragen zum Datenschutz wende dich an {{email}}.",
     "effectiveDateTitle": "Gültig ab",
     "effectiveDateText": "Dieses Dokument ist gültig ab 1. August 2026.",
     "docUnavailableTitle": "Dokument nicht verfügbar",
-    "docUnavailableMsg": "Das Dokument „{{nume}}“ ist derzeit nicht verfügbar."
+    "docUnavailableMsg": "Das Dokument „{{nume}}“ ist derzeit nicht verfügbar.",
+    "termsOfflineTitle": "Nutzungsbedingungen (Offline in der App)",
+    "termsOfflineSubtitle": "Händlerangaben, Widerrufsbelehrung & Google Play Billing",
+    "openWebA11y": "Dokument im Browser öffnen",
+    "anpcLink": "ANPC — Verbraucherschutz (anpc.ro)"
   },
   "productSearch": {
     "inputPlaceholder": "Produkt, Marke oder Lebensmittel suchen...",
@@ -1587,7 +1592,8 @@
     "continueScanning": "Weiter zum Scannen",
     "purchaseProcessing": "Kauf wird verarbeitet…",
     "purchasePending": "Der Kauf wartet auf die Bestätigung von Google Play.",
-    "purchaseError": "Der Kauf konnte nicht abgeschlossen werden. Bitte versuche es erneut."
+    "purchaseError": "Der Kauf konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
+    "legalNotice": "Abgewickelt über Google Play Billing. Sofortige digitale Bereitstellung; siehe "
   },
   "calculatorAi": {
     "badge": "KI-Ernährungsalgorithmus. Gib deine Daten ein, um präzise Ernährungsziele zu erhalten.",

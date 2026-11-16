@@ -487,7 +487,7 @@
     "passwordRequirements": "Le mot de passe ne respecte pas les critères de sécurité."
   },
   "authLegal": {
-    "disclosure": "En créant un compte, vous confirmez avoir lu et accepté les documents suivants :",
+    "disclosure": "En continuant d'utiliser GetFlow ou en créant un compte, vous acceptez nos Conditions d'utilisation et notre Politique de confidentialité :",
     "terms": "Conditions d'utilisation",
     "privacy": "Politique de confidentialité",
     "termsA11y": "Ouvrir les Conditions d'utilisation",
@@ -923,7 +923,8 @@
     "legal": {
       "disclaimer": "L'abonnement se renouvelle automatiquement via Google Play. Vous pouvez annuler à tout moment dans les paramètres de votre compte Google Play.",
       "terms": "Conditions d'utilisation",
-      "privacy": "Politique de confidentialité"
+      "privacy": "Politique de confidentialité",
+      "withdrawalNotice": "Exploité par {{company}} ({{email}}). L'accès numérique démarre immédiatement avec votre accord exprès (exception au droit de rétractation de 14 jours)."
     },
     "creditsOption": {
       "title": "Vous préférez des packs de crédits flexibles ?",
@@ -1332,13 +1333,17 @@
     "operatorText": "L’éditeur de l’application est responsable du traitement des données personnelles.",
     "operatorTextWithOperator": "{{operator}}, éditeur de l’application, est responsable du traitement des données personnelles.",
     "jurisdictionTitle": "Juridiction",
-    "jurisdictionText": "Les documents sont régis par le droit roumain et le RGPD (UE).",
+    "jurisdictionText": "Ces documents sont régis par le droit roumain et le droit applicable de l’Union européenne (RGPD, Directive consommateurs, DSA).",
     "contactTitle": "Contact & Support",
     "contactText": "Pour toute question sur vos données personnelles, écrivez à {{email}}.",
     "effectiveDateTitle": "Date d’entrée en vigueur",
     "effectiveDateText": "Ce document prend effet le 1er août 2026.",
     "docUnavailableTitle": "Document indisponible",
-    "docUnavailableMsg": "Le document « {{nume}} » n’est pas disponible pour le moment."
+    "docUnavailableMsg": "Le document « {{nume}} » n’est pas disponible pour le moment.",
+    "termsOfflineTitle": "Conditions d'utilisation (Hors ligne dans l'app)",
+    "termsOfflineSubtitle": "Identité du commerçant, rétractation et facturation Google Play",
+    "openWebA11y": "Ouvrir le document dans le navigateur",
+    "anpcLink": "ANPC — Protection des consommateurs (anpc.ro)"
   },
   "productSearch": {
     "inputPlaceholder": "Rechercher un produit, une marque...",
@@ -1587,7 +1592,8 @@
     "continueScanning": "Continuer vers le scan",
     "purchaseProcessing": "Traitement de l'achat…",
     "purchasePending": "L'achat est en attente de confirmation Google Play.",
-    "purchaseError": "L'achat n'a pas pu être finalisé. Veuillez réessayer."
+    "purchaseError": "L'achat n'a pas pu être finalisé. Veuillez réessayer.",
+    "legalNotice": "Traité via Google Play Billing. Livraison numérique immédiate ; voir "
   },
   "calculatorAi": {
     "badge": "Algorithme de nutrition basé sur l'IA. Entrez vos informations pour des objectifs nutritionnels précis.",

@@ -836,7 +836,7 @@
     "backToApp": "Înapoi la aplicație"
   },
   "authLegal": {
-    "disclosure": "Prin crearea contului confirmi că ai citit documentele aplicabile:",
+    "disclosure": "Prin continuarea utilizării și crearea contului, ești de acord cu Termenii și Condițiile și Politica de Confidențialitate:",
     "terms": "Termeni și condiții",
     "privacy": "Politica de confidențialitate",
     "termsA11y": "Deschide Termenii și condițiile",
@@ -923,7 +923,8 @@
     "legal": {
       "disclaimer": "Abonamentul se reînnoiește automat prin Google Play. Poți anula oricând din setările contului Google Play.",
       "terms": "Termeni și condiții",
-      "privacy": "Politica de confidențialitate"
+      "privacy": "Politica de confidențialitate",
+      "withdrawalNotice": "Operat de {{company}} ({{email}}). Achiziția digitală începe imediat cu acordul tău expres (excepție retragere 14 zile OUG 34/2014)."
     },
     "creditsOption": {
       "title": "Preferi pachete flexibile de credite?",
@@ -1332,13 +1333,17 @@
     "operatorText": "Operatorul aplicației este responsabil de prelucrarea datelor personale.",
     "operatorTextWithOperator": "{{operator}}, operatorul aplicației, este responsabil de prelucrarea datelor personale.",
     "jurisdictionTitle": "Jurisdicție",
-    "jurisdictionText": "Documentele sunt guvernate de legislația română și, unde este aplicabil, de Regulamentul (UE) 2016/679 (GDPR). Litigiile se soluționează de instanțele competente din România.",
+    "jurisdictionText": "Documentele sunt guvernate de legislația română și normele UE aplicabile (GDPR, OUG 34/2014, DSA). Litigiile se pot soluționa prin ANPC, portalul european de soluționare a litigiilor sau instanțele competente din România.",
     "contactTitle": "Contact & Suport",
     "contactText": "Pentru relații cu utilizatorii, sesizări și întrebări despre datele tale personale, scrie la {{email}}.",
     "effectiveDateTitle": "Data efectivă",
     "effectiveDateText": "Prezentul document este efectiv începând cu 1 august 2026.",
     "docUnavailableTitle": "Document indisponibil",
-    "docUnavailableMsg": "Documentul „{{nume}}” nu este momentan disponibil."
+    "docUnavailableMsg": "Documentul „{{nume}}” nu este momentan disponibil.",
+    "termsOfflineTitle": "Termeni și Condiții (Offline în aplicație)",
+    "termsOfflineSubtitle": "Include datele comerciantului, OUG 34/2014 și Google Play",
+    "openWebA11y": "Deschide documentul în browser",
+    "anpcLink": "ANPC — Protecția Consumatorilor (anpc.ro)"
   },
   "productSearch": {
     "inputPlaceholder": "Caută produs, brand sau aliment...",
@@ -1587,7 +1592,8 @@
     "continueScanning": "Continuă scanarea",
     "purchaseProcessing": "Se procesează achiziția…",
     "purchasePending": "Achiziția este în așteptarea confirmării Google Play.",
-    "purchaseError": "Achiziția nu a putut fi finalizată. Încearcă din nou."
+    "purchaseError": "Achiziția nu a putut fi finalizată. Încearcă din nou.",
+    "legalNotice": "Procesat prin Google Play Billing. Livrare digitală imediată; consultă "
   },
   "calculatorAi": {
     "badge": "Algoritm de nutriție cu inteligență artificială. Introdu datele tale pentru a calcula țintele nutriționale optime.",
