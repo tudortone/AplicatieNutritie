@@ -86,6 +86,13 @@ const EXCEPTII_AUDIT = [
 		motiv: 'Transitiv prin @expo/cli, @typescript-eslint, glob in Expo SDK 54. Remediabil doar prin upgrade la Expo SDK 58. Exclusiv build-time.',
 		expira: '2026-12-31',
 	},
+	{
+		pachet: 'picomatch',
+		range: '*',
+		advisory: 'GHSA-FC5Q-39XC-VJPF',
+		motiv: 'Transitiv exclusiv in devDependencies / build-time (tinyglobby, fdir, micromatch, metro, jest, eslint in Expo SDK 54). Fara versiune >4.0.7 publicata pe npm; absent din bundle-ul runtime al aplicatiei.',
+		expira: '2026-12-31',
+	},
 ];
 
 const SEVERITATI_IGNORATE = new Set(['low', 'info']);

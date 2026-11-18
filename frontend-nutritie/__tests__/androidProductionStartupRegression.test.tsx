@@ -60,7 +60,7 @@ describe('androidProductionStartupRegression — Complete Android Startup Contra
       // If any code attempts to load MMKV, throw fatal
       jest.doMock('react-native-mmkv', () => {
         throw new Error('FATAL: MMKV must never be loaded during cold start!');
-      });
+      }, { virtual: true });
 
       const state = loadAdGateState('anon');
       expect(state).toEqual(AD_GATE_INITIAL_STATE);

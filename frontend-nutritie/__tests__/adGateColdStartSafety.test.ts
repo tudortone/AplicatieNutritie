@@ -10,7 +10,7 @@ describe('adGateColdStartSafety — P0 Android cold-start safety verification', 
     jest.doMock('react-native-mmkv', () => {
       mmkvCalled = true;
       throw new Error('FATAL: react-native-mmkv must not be invoked during ad gate startup!');
-    });
+    }, { virtual: true });
 
     // Reset module registry to force re-evaluation of adGateStore
     jest.resetModules();

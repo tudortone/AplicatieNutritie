@@ -195,7 +195,17 @@ async function curataPlaintextVechi(cheie: string): Promise<void> {
   }
 }
 
+const cheiAuthCunoscute = new Set<string>();
+try {
+  const ref = new URL(supabaseUrl).hostname.split('.')[0];
+  if (ref) {
+    cheiAuthCunoscute.add(`sb-${ref}-auth-token`);
+    cheiAuthCunoscute.add(`sb-${ref}-auth-token-code-verifier`);
+  }
+} catch {}
+
 async function getItem(cheie: string): Promise<string | null> {
+  cheiAuthCunoscute.add(cheie);
   // Memoria deține valoarea cea mai recentă: e populată doar când scrierea în
   // SecureStore a eșuat (vezi setItem), deci are prioritate față de valoarea
   // persistentă, care ar fi una veche (chunk-uri scrise parțial, manifest vechi).
@@ -222,6 +232,7 @@ async function getItem(cheie: string): Promise<string | null> {
 }
 
 async function setItem(cheie: string, valoare: string): Promise<void> {
+  cheiAuthCunoscute.add(cheie);
   const disponibil = await secureStoreDisponibil();
   await curataPlaintextVechi(cheie);
 
@@ -248,6 +259,15 @@ async function removeItem(cheie: string): Promise<void> {
 }
 
 const adaptorStocareSesiune = { getItem, setItem, removeItem };
+
+/** Șterge explicit toate cheile și chunk-urile de sesiune (inclusiv `__manifest_v2__`) la logout/ștergere cont. */
+export async function purgeSupabaseSessionStorage(): Promise<void> {
+  const chei = [...new Set([...cheiAuthCunoscute, ...memorieSesiune.keys()])];
+  for (const cheie of chei) {
+    await removeItem(cheie);
+  }
+  memorieSesiune.clear();
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

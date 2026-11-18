@@ -559,6 +559,7 @@ app.use('/api', statusR);
 app.use('/api', aiR);
 app.use('/api', photoFlowR);
 app.use('/api', rewardedR);
+app.use('/api', photoOutcomeOpsR);
 app.use('/api', barcodeR);
 app.use('/api', profilR);
 app.use('/api', meseR);

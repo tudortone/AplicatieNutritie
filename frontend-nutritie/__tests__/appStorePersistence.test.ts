@@ -6,7 +6,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 jest.mock('react-native-mmkv', () => ({
   createMMKV: () => { throw new Error('MMKV indisponibil în test'); },
-}));
+}), { virtual: true });
 
 import { useAppStore } from '../hooks/useAppStore';
 

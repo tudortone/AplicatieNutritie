@@ -1,6 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { purgeAdGateState } from './ads/adGateStore';
 import { purgeLocalImageDrafts } from './imageOptimizer';
 import { clearJournalCache } from './journalCache';
+
+async function clearSecureSessionArtifacts(): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('../supabase') as { purgeSupabaseSessionStorage?: () => Promise<void> };
+    if (typeof mod?.purgeSupabaseSessionStorage === 'function') {
+      await mod.purgeSupabaseSessionStorage();
+    }
+  } catch {
+    // Ignorat în medii de test fără variabile EXPO_PUBLIC_SUPABASE_*.
+  }
+}
 
 /**
  * P0-02 local account boundary.
@@ -248,6 +261,9 @@ async function recoverPendingTransition(): Promise<void> {
 }
 
 async function purgeDeletedUserData(owner: string): Promise<void> {
+  purgeAdGateState(owner);
+  purgeAdGateState('anon');
+  await clearSecureSessionArtifacts();
   // Fișierele trebuie eliminate înaintea indexului AsyncStorage care dovedește
   // proprietatea lor. Helper-ul este idempotent și nu atinge directoarele altui cont.
   await purgeLocalImageDrafts(owner);
@@ -306,11 +322,14 @@ export async function clearLocalUserData(): Promise<void> {
   await recoverPendingTransition();
   const previous = await AsyncStorage.getItem(ACTIVE_LOCAL_USER_KEY);
   if (previous) {
+    purgeAdGateState(previous);
     await transitionWorkspace(previous, null);
   } else {
     // Ownerless legacy data is ambiguous and may not be claimed later.
     await clearWorkspace();
   }
+  purgeAdGateState('anon');
+  await clearSecureSessionArtifacts();
 }
 
 /**

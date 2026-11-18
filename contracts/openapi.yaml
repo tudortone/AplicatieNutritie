@@ -367,6 +367,12 @@ paths:
     $ref: '#/components/pathItems/RewardedIntentStatus'
     x-legacy-alias: { canonical: '/api/v1/rewarded/intents/{intentId}', sunset: '2026-09-30T00:00:00Z' }
   /api/webhooks/admob/rewarded: { $ref: '#/components/pathItems/AdmobRewardedWebhook', x-legacy-alias: { canonical: /api/v1/webhooks/admob/rewarded, sunset: '2026-09-30T00:00:00Z' } }
+  /api/admin/photo-outcomes/unknown:
+    $ref: '#/paths/~1api~1v1~1admin~1photo-outcomes~1unknown'
+    x-legacy-alias: { canonical: /api/v1/admin/photo-outcomes/unknown, sunset: '2026-09-30T00:00:00Z' }
+  /api/admin/photo-outcomes/{userId}/{reservationId}/confirm-failure:
+    $ref: '#/paths/~1api~1v1~1admin~1photo-outcomes~1{userId}~1{reservationId}~1confirm-failure'
+    x-legacy-alias: { canonical: '/api/v1/admin/photo-outcomes/{userId}/{reservationId}/confirm-failure', sunset: '2026-09-30T00:00:00Z' }
 
 components:
   securitySchemes:
