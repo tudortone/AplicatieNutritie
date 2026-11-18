@@ -37,7 +37,8 @@ jest.mock('../hooks/useAppStore', () => {
     isOnboardingDone: mockDone,
     setOnboardingDone: mockSetDone,
   });
-  const useAppStore = () => getState();
+  const useAppStore = (selector?: (s: ReturnType<typeof getState>) => unknown) =>
+    typeof selector === 'function' ? selector(getState()) : getState();
   useAppStore.getState = getState;
   return { useAppStore };
 });

@@ -18,7 +18,7 @@ export default function PasPrezentare() {
 	const { session } = useAuth()
 	const { date, plan } = useOnboarding()
 	const { colors } = useTheme()
-	const { setOnboardingDone } = useAppStore()
+	const setOnboardingDone = useAppStore((s) => s.setOnboardingDone)
 	const router = useRouter()
 	const [seIncarca, setSeIncarca] = useState(false)
 

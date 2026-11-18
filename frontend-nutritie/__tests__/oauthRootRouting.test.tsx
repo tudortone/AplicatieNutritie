@@ -23,7 +23,12 @@ jest.mock('expo-router', () => {
 });
 jest.mock('../context/AuthContext', () => ({ AuthProvider: (props: { children: React.ReactNode }) => mockPassthrough(props), useAuth: () => ({ session: mockSession, loadingAuth: mockLoading, isPasswordRecovery: mockPasswordRecovery, clearPasswordRecovery: mockClearPasswordRecovery }) }));
 jest.mock('../context/ThemeContext', () => ({ AppThemeProvider: (props: { children: React.ReactNode }) => mockPassthrough(props), useTheme: () => ({ colors: { background: '#000', accent: '#fff' } }) }));
-jest.mock('../hooks/useAppStore', () => ({ useAppStore: () => ({ isOnboardingDone: mockDone, syncFromAsyncStorage: mockSync, setOnboardingDone: mockSetDone }) }));
+jest.mock('../hooks/useAppStore', () => ({
+  useAppStore: (selector?: (s: { isOnboardingDone: boolean; syncFromAsyncStorage: typeof mockSync; setOnboardingDone: typeof mockSetDone; skipOnboardingToAuth?: boolean; setSkipOnboardingToAuth?: () => void }) => unknown) => {
+    const state = { isOnboardingDone: mockDone, syncFromAsyncStorage: mockSync, setOnboardingDone: mockSetDone, skipOnboardingToAuth: false, setSkipOnboardingToAuth: jest.fn() };
+    return typeof selector === 'function' ? selector(state) : state;
+  },
+}));
 jest.mock('../context/OnboardingContext', () => ({ OnboardingProvider: (props: { children: React.ReactNode }) => mockPassthrough(props) }));
 jest.mock('../context/NotificationBannerContext', () => ({ NotificationBannerProvider: (props: { children: React.ReactNode }) => mockPassthrough(props) }));
 jest.mock('../context/GamificareContext', () => ({ GamificareProvider: (props: { children: React.ReactNode }) => mockPassthrough(props) }));

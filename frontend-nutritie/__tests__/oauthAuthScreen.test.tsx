@@ -19,7 +19,12 @@ jest.mock('../supabase', () => ({ supabase: { auth: {
   getSession: async () => ({ data: { session: mockSession }, error: null }),
   signInWithPassword: (creds: unknown) => mockSignInWithPassword(creds),
 } } }));
-jest.mock('../hooks/useAppStore', () => ({ useAppStore: () => ({ setOnboardingDone: jest.fn() }) }));
+jest.mock('../hooks/useAppStore', () => ({
+  useAppStore: (selector?: (s: { setOnboardingDone: jest.Mock; setSkipOnboardingToAuth: jest.Mock }) => unknown) => {
+    const state = { setOnboardingDone: jest.fn(), setSkipOnboardingToAuth: jest.fn() };
+    return typeof selector === 'function' ? selector(state) : state;
+  },
+}));
 jest.mock('../lib/onboarding', () => ({ incarcaDateOnboarding: async () => null }));
 jest.mock('../hooks/useResponsiveLayout', () => ({ useResponsiveLayout: () => ({ contentMaxWidth: 520 }) }));
 jest.mock('../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));

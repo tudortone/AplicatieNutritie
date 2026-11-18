@@ -6,7 +6,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Dumbbell, Flame, Clock, Calendar, Trash2, ChevronDown, ChevronUp, Award } from 'lucide-react-native';
@@ -137,15 +138,15 @@ export default function JurnalAntrenamenteScreen() {
     incarcaJurnal();
   }, [incarcaJurnal]);
 
-  const toggleExpand = (id: string) => {
+  const toggleExpand = useCallback((id: string) => {
     Haptics.selectionAsync();
     setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
-  };
+  }, []);
 
-  const handleStergere = (item: Antrenament) => {
+  const handleStergere = useCallback((item: Antrenament) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setToDelete(item);
-  };
+  }, []);
 
   // Grupare pe zile
   const zileGrupate = useMemo((): ZiGrupata[] => {
@@ -187,6 +188,106 @@ export default function JurnalAntrenamenteScreen() {
     };
   }, [istoric]);
 
+  const keyExtractor = useCallback((item: ZiGrupata) => item.dataScurta, []);
+
+  const renderDayGroup = useCallback(
+    ({ item: zi }: { item: ZiGrupata }) => (
+      <View style={styles.ziGroup}>
+        <Text style={[styles.ziTitle, { color: colors.textSecondary }]}>{zi.titlu.toUpperCase()}</Text>
+
+        {zi.items.map((ant) => {
+          const isExp = !!expandedIds[ant.id];
+          const nrEx = ant.exercitii?.length || 0;
+          const ora = new Date(ant.created_at).toLocaleTimeString(localeTag, { hour: '2-digit', minute: '2-digit' });
+          const expandA11y = isExp
+            ? t('sport.journal.closeWorkoutA11y', { name: ant.nume })
+            : t('sport.journal.openWorkoutA11y', { name: ant.nume });
+
+          return (
+            <View
+              key={ant.id}
+              style={[styles.card, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+            >
+              <View style={styles.cardHeader}>
+                <TouchableOpacity
+                  style={{ flex: 1 }}
+                  onPress={() => toggleExpand(ant.id)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={expandA11y}
+                >
+                  <View style={styles.rowTop}>
+                    <Text style={[styles.antTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {ant.nume} {nrEx > 0 ? `(${t('sport.journal.exShort', { count: nrEx })})` : ''}
+                    </Text>
+                    <Text style={[styles.antOra, { color: colors.textSecondary }]}>{ora}</Text>
+                  </View>
+
+                  <View style={styles.rowMeta}>
+                    <Clock size={13} color={colors.textSecondary} />
+                    <Text style={[styles.metaText, { color: colors.textSecondary }]}>{t('sport.journal.durationMin', { count: ant.durata_min })}</Text>
+                    <Text style={[styles.metaSep, { color: colors.textSecondary }]}>•</Text>
+                    <Flame size={13} color={colors.accentSecondary} />
+                    <Text style={[styles.metaText, { color: colors.accentSecondary }]}>{ant.calorii_arse} kcal</Text>
+                    {Number(ant.volum_total || 0) > 0 && (
+                      <>
+                        <Text style={[styles.metaSep, { color: colors.textSecondary }]}>•</Text>
+                        <Text style={[styles.metaText, { color: colors.accent }]}>{t('sport.measurement.volumeKgLabel', { kg: ant.volum_total })}</Text>
+                      </>
+                    )}
+                  </View>
+                </TouchableOpacity>
+
+                <View style={styles.actionsRow}>
+                  <TouchableOpacity
+                    onPress={() => handleStergere(ant)}
+                    style={styles.iconBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('sport.journal.deleteWorkoutA11y', { name: ant.nume })}
+                  >
+                    <Trash2 size={16} color={colors.danger} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => toggleExpand(ant.id)}
+                    style={styles.iconBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={expandA11y}
+                  >
+                    {isExp ? (
+                      <ChevronUp size={20} color={colors.textSecondary} />
+                    ) : (
+                      <ChevronDown size={20} color={colors.textSecondary} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {isExp && (
+                <View style={[styles.expWrap, { borderTopColor: colors.cardBorder }]}>
+                  {(!ant.exercitii || ant.exercitii.length === 0) ? (
+                    <Text style={[styles.noExText, { color: colors.textSecondary }]}>{t('sport.journal.noSetDetails')}</Text>
+                  ) : (
+                    <SavedWorkoutExercisesList
+                      workout={ant}
+                      exercitiiMap={exercitiiMap}
+                      onSelectSet={setEditingTarget}
+                      onRequestDeleteExercise={(sel) => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setExerciseToDelete(sel);
+                      }}
+                      testIdPrefix="journal"
+                    />
+                  )}
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    ),
+    [colors, expandedIds, localeTag, t, toggleExpand, handleStergere, exercitiiMap],
+  );
+
   return (
     <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
       {/* HEADER */}
@@ -208,7 +309,11 @@ export default function JurnalAntrenamenteScreen() {
       ) : (
         <FlatList
           data={zileGrupate}
-          keyExtractor={(item) => item.dataScurta}
+          keyExtractor={keyExtractor}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
           contentContainerStyle={[styles.listContent, { width: '100%', maxWidth: 520, alignSelf: 'center', paddingBottom: contentBottomPadding }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -242,100 +347,7 @@ export default function JurnalAntrenamenteScreen() {
               </Text>
             </View>
           }
-          renderItem={({ item: zi }) => (
-            <View style={styles.ziGroup}>
-              <Text style={[styles.ziTitle, { color: colors.textSecondary }]}>{zi.titlu.toUpperCase()}</Text>
-
-              {zi.items.map((ant) => {
-                const isExp = !!expandedIds[ant.id];
-                const nrEx = ant.exercitii?.length || 0;
-                const ora = new Date(ant.created_at).toLocaleTimeString(localeTag, { hour: '2-digit', minute: '2-digit' });
-                const expandA11y = isExp
-                  ? t('sport.journal.closeWorkoutA11y', { name: ant.nume })
-                  : t('sport.journal.openWorkoutA11y', { name: ant.nume });
-
-                return (
-                  <View
-                    key={ant.id}
-                    style={[styles.card, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-                  >
-                    <View style={styles.cardHeader}>
-                      <TouchableOpacity
-                        style={{ flex: 1 }}
-                        onPress={() => toggleExpand(ant.id)}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={expandA11y}
-                      >
-                        <View style={styles.rowTop}>
-                          <Text style={[styles.antTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                            {ant.nume} {nrEx > 0 ? `(${t('sport.journal.exShort', { count: nrEx })})` : ''}
-                          </Text>
-                          <Text style={[styles.antOra, { color: colors.textSecondary }]}>{ora}</Text>
-                        </View>
-
-                        <View style={styles.rowMeta}>
-                          <Clock size={13} color={colors.textSecondary} />
-                          <Text style={[styles.metaText, { color: colors.textSecondary }]}>{t('sport.journal.durationMin', { count: ant.durata_min })}</Text>
-                          <Text style={[styles.metaSep, { color: colors.textSecondary }]}>•</Text>
-                          <Flame size={13} color={colors.accentSecondary} />
-                          <Text style={[styles.metaText, { color: colors.accentSecondary }]}>{ant.calorii_arse} kcal</Text>
-                          {Number(ant.volum_total || 0) > 0 && (
-                            <>
-                              <Text style={[styles.metaSep, { color: colors.textSecondary }]}>•</Text>
-                              <Text style={[styles.metaText, { color: colors.accent }]}>{t('sport.measurement.volumeKgLabel', { kg: ant.volum_total })}</Text>
-                            </>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-
-                      <View style={styles.actionsRow}>
-                        <TouchableOpacity
-                          onPress={() => handleStergere(ant)}
-                          style={styles.iconBtn}
-                          accessibilityRole="button"
-                          accessibilityLabel={t('sport.journal.deleteWorkoutA11y', { name: ant.nume })}
-                        >
-                          <Trash2 size={16} color={colors.danger} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => toggleExpand(ant.id)}
-                          style={styles.iconBtn}
-                          accessibilityRole="button"
-                          accessibilityLabel={expandA11y}
-                        >
-                          {isExp ? (
-                            <ChevronUp size={20} color={colors.textSecondary} />
-                          ) : (
-                            <ChevronDown size={20} color={colors.textSecondary} />
-                          )}
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    {isExp && (
-                      <View style={[styles.expWrap, { borderTopColor: colors.cardBorder }]}>
-                        {(!ant.exercitii || ant.exercitii.length === 0) ? (
-                          <Text style={[styles.noExText, { color: colors.textSecondary }]}>{t('sport.journal.noSetDetails')}</Text>
-                        ) : (
-                          <SavedWorkoutExercisesList
-                            workout={ant}
-                            exercitiiMap={exercitiiMap}
-                            onSelectSet={setEditingTarget}
-                            onRequestDeleteExercise={(sel) => {
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                              setExerciseToDelete(sel);
-                            }}
-                            testIdPrefix="journal"
-                          />
-                        )}
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          )}
+          renderItem={renderDayGroup}
         />
       )}
 

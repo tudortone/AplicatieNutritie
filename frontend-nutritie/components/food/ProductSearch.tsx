@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  FlatList, ActivityIndicator
+  FlatList, ActivityIndicator, Platform
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Search, Plus, X } from 'lucide-react-native';
@@ -259,6 +259,18 @@ export function ProductSearch({
     return () => clearTimeout(timer);
   }, [query, searchCombined]);
 
+  const keyExtractor = useCallback((item: FoodProduct) => item.id, []);
+
+  const renderProductItem = useCallback(
+    ({ item }: { item: FoodProduct }) => (
+      <ProductSearchResult
+        product={item}
+        onSelect={handleSelectProduct}
+      />
+    ),
+    [handleSelectProduct],
+  );
+
   if (isManualMode) {
     return (
       <View style={styles.container}>
@@ -331,16 +343,15 @@ export function ProductSearch({
 
       <FlatList
         data={results}
-        keyExtractor={(item) => item.id}
+        keyExtractor={keyExtractor}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: 20 }}
-        renderItem={({ item }) => (
-          <ProductSearchResult
-            product={item}
-            onSelect={handleSelectProduct}
-          />
-        )}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS === 'android'}
+        renderItem={renderProductItem}
         ListFooterComponent={
           <TouchableOpacity
             accessibilityLabel={t('productSearch.manualEntryA11y')}

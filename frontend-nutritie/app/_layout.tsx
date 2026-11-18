@@ -172,13 +172,11 @@ function RootNavigator() {
   const auth = useAuth() as ReturnType<typeof useAuth> & { isPasswordRecovery?: boolean };
   const { session, loadingAuth } = auth;
   const isPasswordRecovery = Boolean(auth.isPasswordRecovery);
-  const {
-    isOnboardingDone,
-    syncFromAsyncStorage,
-    setOnboardingDone,
-    skipOnboardingToAuth = false,
-    setSkipOnboardingToAuth,
-  } = useAppStore();
+  const isOnboardingDone = useAppStore((s) => s.isOnboardingDone);
+  const syncFromAsyncStorage = useAppStore((s) => s.syncFromAsyncStorage);
+  const setOnboardingDone = useAppStore((s) => s.setOnboardingDone);
+  const skipOnboardingToAuth = useAppStore((s) => s.skipOnboardingToAuth ?? false);
+  const setSkipOnboardingToAuth = useAppStore((s) => s.setSkipOnboardingToAuth);
   const { isLocked, biometricType, unlockApp } = useBiometrics();
   useDailySync();
   // BUG-043: monitorizăm starea de conectivitate ca să descărcăm coada de mese

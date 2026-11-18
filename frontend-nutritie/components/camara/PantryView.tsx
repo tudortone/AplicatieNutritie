@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -204,6 +205,8 @@ export function PantryView({
       setDeleting(false);
     }
   };
+
+  const keyExtractor = useCallback((item: ProdusCamara) => item.id, []);
 
   const renderCard = useCallback(
     ({ item }: { item: ProdusCamara }) => (
@@ -485,8 +488,12 @@ export function PantryView({
       ) : (
         <FlatList
           data={filteredItems}
-          keyExtractor={(item) => item.id}
+          keyExtractor={keyExtractor}
           renderItem={renderCard}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{
             paddingHorizontal: Spacing.lg,

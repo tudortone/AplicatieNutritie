@@ -83,8 +83,8 @@ export default function AuthScreen() {
   const { t } = useTranslation();
   const { contentMaxWidth } = useResponsiveLayout();
   const router = useRouter();
-  const appStore = useAppStore();
-  const { setOnboardingDone, setSkipOnboardingToAuth } = appStore;
+  const setOnboardingDone = useAppStore((s) => s.setOnboardingDone);
+  const setSkipOnboardingToAuth = useAppStore((s) => s.setSkipOnboardingToAuth);
   const [planCalculat, setPlanCalculat] = useState<PlanNutritional | null>(null);
   const [email, setEmail] = useState('');
   const [parola, setParola] = useState('');

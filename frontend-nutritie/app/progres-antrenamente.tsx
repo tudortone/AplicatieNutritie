@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ArrowLeft, ChevronDown, ChevronUp, Clock, Dumbbell, History, Trash2 } from 'lucide-react-native';
@@ -74,6 +74,65 @@ export default function ProgresAntrenamenteScreen() {
     return map;
   }, [exercitii]);
 
+  const keyExtractor = useCallback((item: Antrenament) => item.id, []);
+
+  const renderWorkoutItem = useCallback(
+    ({ item }: { item: Antrenament }) => {
+      const isOpen = Boolean(expanded[item.id]);
+      return (
+        <View style={[styles.workoutCard, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
+          <View style={styles.workoutHeaderRow}>
+            <Pressable
+              onPress={() => setExpanded((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+              accessibilityRole="button"
+              accessibilityLabel={isOpen ? t('sport.progress.closeA11y', { name: item.nume }) : t('sport.progress.openA11y', { name: item.nume })}
+              style={styles.workoutHeader}
+            >
+              <View style={styles.workoutCopy}>
+                <Text style={[styles.workoutName, { color: colors.textPrimary }]}>{item.nume}</Text>
+                <View style={styles.metaRow}>
+                  <Clock size={13} color={colors.textTertiary} />
+                  <Text style={[styles.meta, { color: colors.textSecondary }]}>
+                    {t('sport.progress.durationAndExercises', { min: item.durata_min, count: item.exercitii?.length || 0 })}
+                  </Text>
+                  {item.is_local ? <Text style={[styles.localTag, { color: colors.warning }]}>{t('sport.progress.localTag')}</Text> : null}
+                </View>
+              </View>
+              {isOpen ? <ChevronUp size={20} color={colors.textSecondary} /> : <ChevronDown size={20} color={colors.textSecondary} />}
+            </Pressable>
+            <Pressable
+              testID={`progress-delete-workout-${item.id}`}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setWorkoutToDelete(item);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={t('sport.progress.deleteWorkoutA11y', { name: item.nume })}
+              style={styles.headerDeleteBtn}
+            >
+              <Trash2 size={16} color={colors.danger} />
+            </Pressable>
+          </View>
+          {isOpen ? (
+            <View style={[styles.exerciseList, { borderTopColor: colors.border }]}>
+              <SavedWorkoutExercisesList
+                workout={item}
+                exercitiiMap={exercitiiMap}
+                onSelectSet={setEditingTarget}
+                onRequestDeleteExercise={(sel) => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setExerciseToDelete(sel);
+                }}
+                testIdPrefix="progress"
+              />
+            </View>
+          ) : null}
+        </View>
+      );
+    },
+    [colors, expanded, t, exercitiiMap],
+  );
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
@@ -94,7 +153,11 @@ export default function ProgresAntrenamenteScreen() {
       ) : (
         <FlatList
           data={antrenamente}
-          keyExtractor={(item) => item.id}
+          keyExtractor={keyExtractor}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
           refreshing={loading}
           onRefresh={refresh}
           contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
@@ -123,59 +186,7 @@ export default function ProgresAntrenamenteScreen() {
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('sport.progress.emptyText')}</Text>
             </View>
           }
-          renderItem={({ item }) => {
-            const isOpen = Boolean(expanded[item.id]);
-            return (
-              <View style={[styles.workoutCard, { backgroundColor: colors.surfaceBg, borderColor: colors.border }]}>
-                <View style={styles.workoutHeaderRow}>
-                  <Pressable
-                    onPress={() => setExpanded((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
-                    accessibilityRole="button"
-                    accessibilityLabel={isOpen ? t('sport.progress.closeA11y', { name: item.nume }) : t('sport.progress.openA11y', { name: item.nume })}
-                    style={styles.workoutHeader}
-                  >
-                    <View style={styles.workoutCopy}>
-                      <Text style={[styles.workoutName, { color: colors.textPrimary }]}>{item.nume}</Text>
-                      <View style={styles.metaRow}>
-                        <Clock size={13} color={colors.textTertiary} />
-                        <Text style={[styles.meta, { color: colors.textSecondary }]}>
-                          {t('sport.progress.durationAndExercises', { min: item.durata_min, count: item.exercitii?.length || 0 })}
-                        </Text>
-                        {item.is_local ? <Text style={[styles.localTag, { color: colors.warning }]}>{t('sport.progress.localTag')}</Text> : null}
-                      </View>
-                    </View>
-                    {isOpen ? <ChevronUp size={20} color={colors.textSecondary} /> : <ChevronDown size={20} color={colors.textSecondary} />}
-                  </Pressable>
-                  <Pressable
-                    testID={`progress-delete-workout-${item.id}`}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      setWorkoutToDelete(item);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('sport.progress.deleteWorkoutA11y', { name: item.nume })}
-                    style={styles.headerDeleteBtn}
-                  >
-                    <Trash2 size={16} color={colors.danger} />
-                  </Pressable>
-                </View>
-                {isOpen ? (
-                  <View style={[styles.exerciseList, { borderTopColor: colors.border }]}>
-                    <SavedWorkoutExercisesList
-                      workout={item}
-                      exercitiiMap={exercitiiMap}
-                      onSelectSet={setEditingTarget}
-                      onRequestDeleteExercise={(sel) => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        setExerciseToDelete(sel);
-                      }}
-                      testIdPrefix="progress"
-                    />
-                  </View>
-                ) : null}
-              </View>
-            );
-          }}
+          renderItem={renderWorkoutItem}
         />
       )}
 
