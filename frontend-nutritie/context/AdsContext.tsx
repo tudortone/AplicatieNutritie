@@ -23,7 +23,13 @@ import {
 } from '../lib/ads/adGate';
 import { loadAdGateState, saveAdGateState } from '../lib/ads/adGateStore';
 import { getAdsRuntimeConfig } from '../lib/ads/adsConfig';
-import { adsAvailable, initializeAdsSdk, refreshAdsAfterConsentChange, showPreloadedInterstitial } from '../lib/ads/adsService';
+import {
+  adsAvailable,
+  discardPreloadedInterstitial,
+  initializeAdsSdk,
+  refreshAdsAfterConsentChange,
+  showPreloadedInterstitial,
+} from '../lib/ads/adsService';
 import {
   resolveAdsConsent,
   getCanRequestAds,
@@ -61,6 +67,7 @@ export function AdsProvider({
   userId: string | null;
 }) {
   const { hasFullAccess, loading: premiumLoading } = usePremium();
+  const isPremiumResolved = !premiumLoading;
   const scopeKey = userId || 'anon';
   const stateRef = useRef<AdGateState>(loadAdGateState(scopeKey));
   const [privacyOptionsRequired, setPrivacyOptionsRequired] = useState(() => getPrivacyOptionsRequired());
@@ -72,11 +79,17 @@ export function AdsProvider({
   // Contul curent s-a schimbat (login/logout pe același dispozitiv)
   useEffect(() => {
     stateRef.current = loadAdGateState(scopeKey);
+    discardPreloadedInterstitial();
   }, [scopeKey]);
 
   // Consimțământ + inițializare SDK: DOAR pentru utilizatori non-premium
   useEffect(() => {
-    if (premiumLoading || hasFullAccess || !adsAvailable) return;
+    if (!isPremiumResolved || hasFullAccess || !adsAvailable) {
+      if (hasFullAccess) {
+        discardPreloadedInterstitial();
+      }
+      return;
+    }
     let activ = true;
     (async () => {
       const res = await resolveAdsConsent();
@@ -88,8 +101,9 @@ export function AdsProvider({
     })();
     return () => {
       activ = false;
+      discardPreloadedInterstitial();
     };
-  }, [premiumLoading, hasFullAccess]);
+  }, [isPremiumResolved, hasFullAccess]);
 
   const showPrivacyOptions = useCallback(async () => {
     const success = await showAdsPrivacyOptionsForm();

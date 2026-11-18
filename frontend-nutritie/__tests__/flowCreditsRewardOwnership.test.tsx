@@ -8,6 +8,8 @@ let resolveBalanceForUserB: ((value: object) => void) | null = null;
 let holdRewardIntent = false;
 let resolveRewardIntent: (() => void) | null = null;
 const mockShowRewardedAdWithSsv = jest.fn();
+const mockPreloadRewardedAdWithSsv = jest.fn();
+const mockDiscardPreloadedRewardedAd = jest.fn();
 const mockBillingState = {
   operation: { status: 'idle' },
   creditProducts: [],
@@ -16,7 +18,11 @@ const mockBillingState = {
 let mockPremiumState = { hasFullAccess: false, isPremium: false, loading: false };
 
 jest.mock('../lib/api', () => ({ buildApiUrl: (path: string) => path }));
-jest.mock('../lib/ads/adsService', () => ({ showRewardedAdWithSsv: (...args: unknown[]) => mockShowRewardedAdWithSsv(...args) }));
+jest.mock('../lib/ads/adsService', () => ({
+  showRewardedAdWithSsv: (...args: unknown[]) => mockShowRewardedAdWithSsv(...args),
+  preloadRewardedAdWithSsv: (...args: unknown[]) => mockPreloadRewardedAdWithSsv(...args),
+  discardPreloadedRewardedAd: (...args: unknown[]) => mockDiscardPreloadedRewardedAd(...args),
+}));
 jest.mock('../lib/playIntegrityNative', () => ({ getPlayIntegrityHeaders: jest.fn(async () => ({})) }));
 jest.mock('../context/BillingContext', () => ({ useBilling: () => mockBillingState }));
 jest.mock('../context/PremiumContext', () => ({ usePremium: () => mockPremiumState }));
@@ -73,6 +79,8 @@ describe('Flow Credits rewarded operation ownership', () => {
       throw new Error(`Unexpected request ${path}`);
     }) as jest.Mock;
     mockShowRewardedAdWithSsv.mockResolvedValue('earned-awaiting-server');
+    mockPreloadRewardedAdWithSsv.mockResolvedValue(true);
+    mockDiscardPreloadedRewardedAd.mockResolvedValue(undefined);
   });
 
   test('account switching while the native ad is open cancels old-account polling and UI state', async () => {
@@ -279,5 +287,61 @@ describe('Flow Credits rewarded operation ownership', () => {
     });
     expect(latest!.balance.total).toBe(3);
     expect(latest!.lastConsumedCategory).toBeNull();
+  });
+
+  test('open() pre-warms rewarded intent single-flight across re-renders and close() discards preloaded ad', async () => {
+    const fetchMock = global.fetch as jest.Mock;
+    const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|8'));
+
+    holdRewardIntent = true;
+    await act(async () => {
+      latest!.open();
+    });
+    await waitFor(() => expect(resolveRewardIntent).toEqual(expect.any(Function)));
+
+    // Re-rendering or re-opening while intent creation is still in flight must not send duplicate POST /rewarded/intents
+    await act(async () => {
+      view.rerender(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+      latest!.open();
+    });
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/rewarded/intents')).toHaveLength(1);
+
+    await act(async () => {
+      resolveRewardIntent?.();
+    });
+    await waitFor(() => expect(mockPreloadRewardedAdWithSsv).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      latest!.close();
+    });
+    expect(mockDiscardPreloadedRewardedAd).toHaveBeenCalled();
+  });
+
+  test('evicts expired pre-warmed intent past 4-minute TTL, calls discardPreloadedRewardedAd() and fetches fresh intent', async () => {
+    let fakeNow = 1_700_000_000_000;
+    const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => fakeNow);
+    try {
+      const fetchMock = global.fetch as jest.Mock;
+      const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+      await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|8'));
+
+      await act(async () => {
+        latest!.open();
+      });
+      await waitFor(() => expect(mockPreloadRewardedAdWithSsv).toHaveBeenCalledTimes(1));
+      expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/rewarded/intents')).toHaveLength(1);
+
+      fakeNow += 4 * 60 * 1000 + 1_000;
+
+      await act(async () => {
+        await latest!.watchRewarded();
+      });
+      expect(mockDiscardPreloadedRewardedAd).toHaveBeenCalled();
+      expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/rewarded/intents')).toHaveLength(2);
+      expect(mockShowRewardedAdWithSsv).toHaveBeenCalledTimes(1);
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 });

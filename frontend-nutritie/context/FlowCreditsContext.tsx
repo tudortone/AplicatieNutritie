@@ -1,7 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { buildApiUrl } from '../lib/api';
-import { showRewardedAdWithSsv, initializeAdsSdk, type RewardedAdOutcome } from '../lib/ads/adsService';
+import {
+  showRewardedAdWithSsv,
+  preloadRewardedAdWithSsv,
+  discardPreloadedRewardedAd,
+  initializeAdsSdk,
+  type RewardedAdOutcome,
+} from '../lib/ads/adsService';
 import { isConsentResolved, resolveAdsConsent } from '../lib/ads/adsConsent';
 import { supabase } from '../supabase';
 import { useBilling } from './BillingContext';
@@ -136,9 +142,19 @@ async function authenticatedFetch(path: string, init?: RequestInit, expectedUser
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+const PREWARM_TTL_MS = 4 * 60 * 1000;
+type PrewarmedIntent = {
+  owner: string;
+  intentId: string;
+  customData: string;
+  createdAtMs: number;
+};
+
 export function FlowCreditsProvider({ children, appUserId }: { children: React.ReactNode; appUserId: string | null }) {
   const billing = useBilling();
   const premium = usePremium();
+  const isPremiumResolved = !premium.loading;
+  const hasUnlimitedAccess = premium.hasFullAccess || premium.isPremium;
   const [balance, setBalance] = useState<FlowCreditsBalance>(EMPTY);
   const [balanceOwnerId, setBalanceOwnerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -146,15 +162,27 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   const [rewardState, setRewardState] = useState<RewardState>('idle');
   const [lastConsumedCategory, setLastConsumedCategory] = useState<FlowCreditCategory | null>(null);
   const ownerRef = useRef(appUserId);
+  const visibleRef = useRef(visible);
   const premiumRef = useRef(premium);
   const balanceRef = useRef(balance);
   const lastConsumedCategoryRef = useRef<FlowCreditCategory | null>(null);
   const sequenceRef = useRef(0);
   const rewardOperationRef = useRef(0);
+  const prewarmInFlightRef = useRef<{ owner: string; promise: Promise<PrewarmedIntent | null> } | null>(null);
+  const prewarmedIntentRef = useRef<PrewarmedIntent | null>(null);
   ownerRef.current = appUserId;
+  visibleRef.current = visible;
   premiumRef.current = premium;
   balanceRef.current = balance;
   lastConsumedCategoryRef.current = lastConsumedCategory;
+
+  const clearPrewarmedRewarded = useCallback(() => {
+    prewarmInFlightRef.current = null;
+    prewarmedIntentRef.current = null;
+    if (typeof discardPreloadedRewardedAd === 'function') {
+      discardPreloadedRewardedAd();
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     const owner = ownerRef.current;
@@ -192,6 +220,7 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   useEffect(() => {
     sequenceRef.current += 1;
     rewardOperationRef.current += 1;
+    clearPrewarmedRewarded();
     balanceRef.current = EMPTY;
     setBalance(EMPTY);
     setBalanceOwnerId(null);
@@ -200,7 +229,7 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     setRewardState('idle');
     setVisible(false);
     if (appUserId) void refresh();
-  }, [appUserId, refresh]);
+  }, [appUserId, refresh, clearPrewarmedRewarded]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -212,6 +241,84 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   useEffect(() => {
     if (billing.operation?.status === 'verified') void refresh();
   }, [billing.operation?.status, refresh]);
+
+  const balanceReady = Boolean(appUserId && balanceOwnerId === appUserId);
+
+  useEffect(() => {
+    if (!visible || !appUserId || !isPremiumResolved || hasUnlimitedAccess || !balanceReady || balance.rewardedGrantsRemaining <= 0) {
+      if (!visible || hasUnlimitedAccess || !appUserId) {
+        clearPrewarmedRewarded();
+      }
+      return;
+    }
+    if (typeof preloadRewardedAdWithSsv !== 'function') return;
+    if (prewarmInFlightRef.current?.owner === appUserId) {
+      return;
+    }
+    const now = Date.now();
+    const cached = prewarmedIntentRef.current;
+    if (cached && cached.owner === appUserId && now - cached.createdAtMs < PREWARM_TTL_MS) {
+      return;
+    }
+    if (cached) {
+      clearPrewarmedRewarded();
+    }
+    const targetOwner = appUserId;
+    let promise: Promise<PrewarmedIntent | null> | null = null;
+    promise = (async (): Promise<PrewarmedIntent | null> => {
+      try {
+        await Promise.resolve();
+        if (ownerRef.current !== targetOwner || prewarmInFlightRef.current?.promise !== promise || !visibleRef.current) {
+          return null;
+        }
+        if (!isConsentResolved()) {
+          try { await resolveAdsConsent(); } catch {}
+        }
+        try { await initializeAdsSdk(); } catch {}
+        if (ownerRef.current !== targetOwner || prewarmInFlightRef.current?.promise !== promise || !visibleRef.current) {
+          return null;
+        }
+        const currentPrem = premiumRef.current;
+        if (currentPrem.loading || currentPrem.hasFullAccess || currentPrem.isPremium) return null;
+        const response = await authenticatedFetch('/rewarded/intents', { method: 'POST', body: '{}' }, targetOwner);
+        if (!response.ok) return null;
+        const intent = await response.json() as { intentId?: string; status?: string; ssv?: { userId?: string; customData?: string } };
+        if (
+          intent.status !== 'PENDING'
+          || !intent.intentId
+          || intent.ssv?.userId !== intent.intentId
+          || !intent.ssv.customData
+        ) {
+          return null;
+        }
+        if (ownerRef.current !== targetOwner || prewarmInFlightRef.current?.promise !== promise || !visibleRef.current) {
+          return null;
+        }
+        const currentPremAfter = premiumRef.current;
+        if (currentPremAfter.loading || currentPremAfter.hasFullAccess || currentPremAfter.isPremium) return null;
+        const prewarmed: PrewarmedIntent = {
+          owner: targetOwner,
+          intentId: intent.intentId,
+          customData: intent.ssv.customData,
+          createdAtMs: Date.now(),
+        };
+        prewarmedIntentRef.current = prewarmed;
+        preloadRewardedAdWithSsv({ intentId: prewarmed.intentId, customData: prewarmed.customData });
+        return prewarmed;
+      } catch {
+        return null;
+      } finally {
+        if (promise && prewarmInFlightRef.current?.promise === promise) {
+          prewarmInFlightRef.current = null;
+        }
+      }
+    })();
+    prewarmInFlightRef.current = { owner: targetOwner, promise };
+  }, [visible, appUserId, isPremiumResolved, hasUnlimitedAccess, balanceReady, balance.rewardedGrantsRemaining, clearPrewarmedRewarded]);
+
+  useEffect(() => () => {
+    clearPrewarmedRewarded();
+  }, [clearPrewarmedRewarded]);
 
   const watchRewarded = useCallback(async () => {
     const owner = ownerRef.current;
@@ -226,6 +333,7 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     };
     const stopIfBlocked = () => {
       if (!isCurrentOperation() || !accessBlocksRewardedAds()) return false;
+      clearPrewarmedRewarded();
       updateState('unavailable');
       return true;
     };
@@ -242,17 +350,42 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     }
     updateState('loading');
     try {
-      const response = await authenticatedFetch('/rewarded/intents', { method: 'POST', body: '{}' }, owner);
-      if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
-      if (!response.ok) {
-        updateState(response.status === 429 ? 'limit' : 'unavailable');
-        return response.status === 429 ? 'limit' as const : 'unavailable' as const;
+      let activeIntent: { intentId: string; customData: string } | null = null;
+      const now = Date.now();
+      const cached = prewarmedIntentRef.current;
+      if (cached && cached.owner === owner && now - cached.createdAtMs < PREWARM_TTL_MS) {
+        prewarmedIntentRef.current = null;
+        activeIntent = { intentId: cached.intentId, customData: cached.customData };
+      } else {
+        prewarmedIntentRef.current = null;
+        if (cached && typeof discardPreloadedRewardedAd === 'function') {
+          discardPreloadedRewardedAd();
+        }
+        if (prewarmInFlightRef.current?.owner === owner) {
+          const awaited = await prewarmInFlightRef.current.promise;
+          if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
+          if (awaited && awaited.owner === owner && Date.now() - awaited.createdAtMs < PREWARM_TTL_MS) {
+            prewarmedIntentRef.current = null;
+            activeIntent = { intentId: awaited.intentId, customData: awaited.customData };
+          }
+        }
       }
-      const intent = await response.json() as { intentId?: string; status?: string; ssv?: { userId?: string; customData?: string } };
-      if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
-      if (intent.status !== 'PENDING' || !intent.intentId || intent.ssv?.userId !== intent.intentId || !intent.ssv.customData) {
-        throw new Error('INVALID_REWARD_INTENT');
+
+      if (!activeIntent) {
+        const response = await authenticatedFetch('/rewarded/intents', { method: 'POST', body: '{}' }, owner);
+        if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
+        if (!response.ok) {
+          updateState(response.status === 429 ? 'limit' : 'unavailable');
+          return response.status === 429 ? 'limit' as const : 'unavailable' as const;
+        }
+        const intent = await response.json() as { intentId?: string; status?: string; ssv?: { userId?: string; customData?: string } };
+        if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
+        if (intent.status !== 'PENDING' || !intent.intentId || intent.ssv?.userId !== intent.intentId || !intent.ssv.customData) {
+          throw new Error('INVALID_REWARD_INTENT');
+        }
+        activeIntent = { intentId: intent.intentId, customData: intent.ssv.customData };
       }
+
       if (!isConsentResolved()) {
         try {
           await resolveAdsConsent();
@@ -261,7 +394,8 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
       try {
         await initializeAdsSdk();
       } catch {}
-      const outcome = await showRewardedAdWithSsv({ intentId: intent.intentId, customData: intent.ssv.customData });
+      if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
+      const outcome = await showRewardedAdWithSsv({ intentId: activeIntent.intentId, customData: activeIntent.customData });
       if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
       if (outcome !== 'earned-awaiting-server') {
         updateState(outcome === 'unavailable' ? 'unavailable' : 'idle');
@@ -271,7 +405,7 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
       for (let attempt = 0; attempt < 12; attempt += 1) {
         await delay(1_500);
         if (!isCurrentOperation()) return 'unavailable' as const;
-        const statusResponse = await authenticatedFetch(`/rewarded/intents/${encodeURIComponent(intent.intentId)}`, undefined, owner);
+        const statusResponse = await authenticatedFetch(`/rewarded/intents/${encodeURIComponent(activeIntent.intentId)}`, undefined, owner);
         if (!isCurrentOperation()) return 'unavailable' as const;
         if (!statusResponse.ok) continue;
         const { status } = await statusResponse.json() as { status?: string };
@@ -379,7 +513,6 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     }
   }, [billing]);
 
-  const balanceReady = Boolean(appUserId && balanceOwnerId === appUserId);
   const purchaseStatus = billing.operation ?? IDLE_BILLING_OPERATION;
 
   const value = useMemo<FlowCreditsContextValue>(() => ({
@@ -387,8 +520,8 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     // when appUserId changes; the network refresh may still be pending.
     balance: balanceReady ? balance : EMPTY,
     balanceReady,
-    loading: loading || premium.loading,
-    unlimited: premium.hasFullAccess || premium.isPremium,
+    loading: loading || !isPremiumResolved,
+    unlimited: hasUnlimitedAccess,
     visible,
     rewardState,
     creditProducts: billing.creditProducts,
@@ -401,13 +534,16 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
       void refresh();
       setVisible(true);
     },
-    close: () => setVisible(false),
+    close: () => {
+      clearPrewarmedRewarded();
+      setVisible(false);
+    },
     refresh,
     consumeOptimisticCredit,
     rollbackOptimisticCredit,
     watchRewarded,
     purchase,
-  }), [balanceReady, balance, loading, premium.loading, premium.hasFullAccess, premium.isPremium, visible, rewardState, billing.creditProducts, purchaseStatus, lastConsumedCategory, refresh, consumeOptimisticCredit, rollbackOptimisticCredit, watchRewarded, purchase]);
+  }), [balanceReady, balance, loading, isPremiumResolved, hasUnlimitedAccess, visible, rewardState, billing.creditProducts, purchaseStatus, lastConsumedCategory, clearPrewarmedRewarded, refresh, consumeOptimisticCredit, rollbackOptimisticCredit, watchRewarded, purchase]);
 
   return <FlowCreditsContext.Provider value={value}>{children}</FlowCreditsContext.Provider>;
 }

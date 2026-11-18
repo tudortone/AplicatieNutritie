@@ -229,6 +229,8 @@ export function validateAdsConfiguration(
   iosAppId?: string | null;
   interstitialAndroidUnitId?: string | null;
   interstitialIosUnitId?: string | null;
+  rewardedAndroidUnitId?: string | null;
+  rewardedIosUnitId?: string | null;
   errors: string[];
 } {
   const currentEnv = env || (typeof process !== 'undefined' ? (process.env as Record<string, string | undefined>) : {});
@@ -251,6 +253,8 @@ export function validateAdsConfiguration(
       iosAppId: null,
       interstitialAndroidUnitId: null,
       interstitialIosUnitId: null,
+      rewardedAndroidUnitId: null,
+      rewardedIosUnitId: null,
       errors: [],
     };
   }
@@ -259,9 +263,12 @@ export function validateAdsConfiguration(
   const rawIosAppId = (env ? env.EXPO_PUBLIC_ADMOB_IOS_APP_ID : (STATIC_IOS_APP_ID ?? currentEnv.EXPO_PUBLIC_ADMOB_IOS_APP_ID))?.trim() || '';
   const rawAndroidUnitId = (env ? env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ANDROID_ID : (STATIC_INTERSTITIAL_ANDROID ?? currentEnv.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ANDROID_ID))?.trim() || '';
   const rawIosUnitId = (env ? env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_IOS_ID : (STATIC_INTERSTITIAL_IOS ?? currentEnv.EXPO_PUBLIC_ADMOB_INTERSTITIAL_IOS_ID))?.trim() || '';
+  const rawAndroidRewardedId = (env ? env.EXPO_PUBLIC_ADMOB_REWARDED_ANDROID_ID : (STATIC_REWARDED_ANDROID ?? currentEnv.EXPO_PUBLIC_ADMOB_REWARDED_ANDROID_ID))?.trim() || '';
+  const rawIosRewardedId = (env ? env.EXPO_PUBLIC_ADMOB_REWARDED_IOS_ID : (STATIC_REWARDED_IOS ?? currentEnv.EXPO_PUBLIC_ADMOB_REWARDED_IOS_ID))?.trim() || '';
 
   const targetAppId = isIos ? rawIosAppId : rawAndroidAppId;
   const targetUnitId = isIos ? rawIosUnitId : rawAndroidUnitId;
+  const targetRewardedId = isIos ? rawIosRewardedId : rawAndroidRewardedId;
 
   if (mode === 'test') {
     // În modul test, sunt permise doar ID-urile de test oficiale sau delegate către native TestIds
@@ -270,6 +277,9 @@ export function validateAdsConfiguration(
     }
     if (targetUnitId && !isGoogleTestId(targetUnitId)) {
       errors.push('În modul test, este permis exclusiv Ad Unit ID-ul oficial Google de test. Nu se acceptă ID-uri reale sau modificate.');
+    }
+    if (targetRewardedId && !isGoogleTestId(targetRewardedId)) {
+      errors.push('În modul test, este permis exclusiv Rewarded Ad Unit ID-ul oficial Google de test. Nu se acceptă ID-uri reale sau modificate.');
     }
     if (errors.length > 0) {
       return { ok: false, mode: 'test', errors };
@@ -281,6 +291,8 @@ export function validateAdsConfiguration(
       iosAppId: rawIosAppId || null,
       interstitialAndroidUnitId: rawAndroidUnitId || null,
       interstitialIosUnitId: rawIosUnitId || null,
+      rewardedAndroidUnitId: rawAndroidRewardedId || null,
+      rewardedIosUnitId: rawIosRewardedId || null,
       errors: [],
     };
   }
@@ -296,6 +308,13 @@ export function validateAdsConfiguration(
     errors.push(unitResult.error);
   }
 
+  if (targetRewardedId || isProductionContext(currentEnv) || currentEnv.EAS_BUILD_PROFILE === 'production') {
+    const rewardedResult = validateAdMobUnitId(targetRewardedId, false);
+    if (!rewardedResult.ok && rewardedResult.error) {
+      errors.push(`Rewarded ${rewardedResult.error}`);
+    }
+  }
+
   const ok = errors.length === 0;
   return {
     ok,
@@ -304,6 +323,8 @@ export function validateAdsConfiguration(
     iosAppId: ok && isIos ? rawIosAppId : (ok ? rawIosAppId || null : null),
     interstitialAndroidUnitId: ok && !isIos ? rawAndroidUnitId : (ok ? rawAndroidUnitId || null : null),
     interstitialIosUnitId: ok && isIos ? rawIosUnitId : (ok ? rawIosUnitId || null : null),
+    rewardedAndroidUnitId: ok && !isIos ? (rawAndroidRewardedId || null) : (ok ? rawAndroidRewardedId || null : null),
+    rewardedIosUnitId: ok && isIos ? (rawIosRewardedId || null) : (ok ? rawIosRewardedId || null : null),
     errors,
   };
 }
@@ -385,6 +406,13 @@ export function getAdsRuntimeConfig(
       };
     }
 
+    const hasExplicitRewardedAndroid = Boolean(
+      overrides && 'rewardedAndroidUnitId' in overrides && overrides.rewardedAndroidUnitId != null && String(overrides.rewardedAndroidUnitId).trim() !== '',
+    );
+    const hasExplicitRewardedIos = Boolean(
+      overrides && 'rewardedIosUnitId' in overrides && overrides.rewardedIosUnitId != null && String(overrides.rewardedIosUnitId).trim() !== '',
+    );
+
     return {
       mode: 'real',
       enabled: true,
@@ -394,8 +422,10 @@ export function getAdsRuntimeConfig(
       interstitialIosUnitId: interstitialIos ?? null,
       rewardedAndroidUnitId: validateAdMobUnitId(rewardedAndroid, false).ok
         ? rewardedAndroid
-        : GETFLOW_PRODUCTION_ADMOB.rewardedAndroidUnitId,
-      rewardedIosUnitId: validateAdMobUnitId(rewardedIos, false).ok ? rewardedIos : null,
+        : (hasExplicitRewardedAndroid ? null : (STATIC_REWARDED_ANDROID ? null : GETFLOW_PRODUCTION_ADMOB.rewardedAndroidUnitId)),
+      rewardedIosUnitId: validateAdMobUnitId(rewardedIos, false).ok
+        ? rewardedIos
+        : (hasExplicitRewardedIos ? null : null),
       everyNAnalyses,
       everyNChatMessages,
       minAdIntervalSeconds,

@@ -77,7 +77,7 @@ jest.mock('react-native-mmkv', () => ({
       memoryByScope[key] = value;
     },
   }),
-}));
+}), { virtual: true });
 
 const mockAdsConsent = {
   gatherConsent: jest.fn(),
@@ -655,5 +655,49 @@ describe('P1-09 Non-Vacuity Verifications', () => {
       source: 'photo',
     });
     expect(flawedGate.eligible).toBe(true);
+  });
+
+  test('Interstitial load ERROR retries with bounded exponential backoff (5s -> 15s -> 45s, max 3)', async () => {
+    jest.useFakeTimers();
+    try {
+      const eventHandlers: Record<string, () => void> = {};
+      mockInterstitialInstance.addAdEventListener.mockImplementation((event: string, cb: () => void) => {
+        eventHandlers[event] = cb;
+        return jest.fn();
+      });
+
+      await resolveAdsConsent();
+      preloadInterstitial();
+      expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(1);
+
+      // 1st error -> schedules 5s retry
+      eventHandlers.error?.();
+      jest.advanceTimersByTime(4_999);
+      expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(1);
+      jest.advanceTimersByTime(1);
+      expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(2);
+
+      // 2nd error -> schedules 15s retry
+      eventHandlers.error?.();
+      jest.advanceTimersByTime(14_999);
+      expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(2);
+      jest.advanceTimersByTime(1);
+      expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(3);
+
+      // 3rd error -> schedules 45s retry
+      eventHandlers.error?.();
+      jest.advanceTimersByTime(44_999);
+      expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(3);
+      jest.advanceTimersByTime(1);
+      expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(4);
+
+      // 4th error -> capped at 3 retries, stops scheduling
+      eventHandlers.error?.();
+      jest.advanceTimersByTime(120_000);
+      expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(4);
+    } finally {
+      __resetAdsServiceForTests();
+      jest.useRealTimers();
+    }
   });
 });

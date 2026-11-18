@@ -30,6 +30,21 @@ export function showPreloadedInterstitial(): boolean {
   return false;
 }
 
+export function preloadRewardedAdWithSsv(_input: { intentId: string; customData: string }): boolean {
+  return false;
+}
+
+export function discardPreloadedRewardedAd(): void {
+  // no-op on web
+}
+
+export async function showRewardedAdWithSsv(_input: {
+  intentId: string;
+  customData: string;
+}): Promise<'earned-awaiting-server' | 'dismissed' | 'unavailable'> {
+  return 'unavailable';
+}
+
 export function __resetAdsServiceForTests(): void {
   // no-op
 }

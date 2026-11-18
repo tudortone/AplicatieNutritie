@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { AppState } from 'react-native';
 import { buildApiUrl } from '../lib/api';
 import { supabase } from '../supabase';
 import {
@@ -97,24 +98,41 @@ export function PremiumProvider({ children, appUserId }: {
     }
   }, []);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     const ownerId = appUserId;
     const sequence = ++refreshSequenceRef.current;
     if (!ownerId) {
-      setBoundAccess({ ownerId: null, entitlement: { ...FREE_ACCESS_ENTITLEMENT } });
+      setBoundAccess((prev) => (
+        prev.ownerId === null && !prev.entitlement.hasFullAccess && !prev.entitlement.isPremium
+          ? prev
+          : { ownerId: null, entitlement: { ...FREE_ACCESS_ENTITLEMENT } }
+      ));
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!background) setLoading(true);
     const serverAccess = await fetchServerAccess(ownerId);
     if (currentUserRef.current !== ownerId || refreshSequenceRef.current !== sequence) return;
     // Nicio stare Play/client nu acorda acces. Un raspuns lipsa sau inconsistent
     // este fail-closed pana la urmatoarea revalidare server reusita.
-    setBoundAccess({
-      ownerId,
-      entitlement: { ...(serverAccess ?? FREE_ACCESS_ENTITLEMENT) },
+    const nextEntitlement = serverAccess ?? FREE_ACCESS_ENTITLEMENT;
+    setBoundAccess((prev) => {
+      if (
+        prev.ownerId === ownerId
+        && prev.entitlement.isPremium === nextEntitlement.isPremium
+        && prev.entitlement.isTester === nextEntitlement.isTester
+        && prev.entitlement.isAdmin === nextEntitlement.isAdmin
+        && prev.entitlement.accessTier === nextEntitlement.accessTier
+        && prev.entitlement.hasFullAccess === nextEntitlement.hasFullAccess
+      ) {
+        return prev;
+      }
+      return {
+        ownerId,
+        entitlement: { ...nextEntitlement },
+      };
     });
-    setLoading(false);
+    if (!background) setLoading(false);
   }, [appUserId, fetchServerAccess]);
 
   useEffect(() => {
@@ -122,8 +140,40 @@ export function PremiumProvider({ children, appUserId }: {
     setBoundAccess({ ownerId: appUserId, entitlement: { ...FREE_ACCESS_ENTITLEMENT } });
     void refresh();
     if (!appUserId) return;
-    const interval = setInterval(() => { void refresh(); }, ACCESS_REVALIDATION_INTERVAL_MS);
-    return () => clearInterval(interval);
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const stopPolling = () => {
+      if (interval !== null) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+    const startPolling = () => {
+      if (interval === null) {
+        interval = setInterval(() => {
+          void refresh({ background: true });
+        }, ACCESS_REVALIDATION_INTERVAL_MS);
+      }
+    };
+
+    const initialState = AppState?.currentState;
+    if (initialState !== 'background' && initialState !== 'inactive') {
+      startPolling();
+    }
+
+    const subscription = AppState?.addEventListener?.('change', (nextState) => {
+      if (nextState === 'active') {
+        void refresh({ background: true });
+        startPolling();
+      } else if (nextState === 'background' || nextState === 'inactive') {
+        stopPolling();
+      }
+    });
+
+    return () => {
+      stopPolling();
+      subscription?.remove();
+    };
   }, [appUserId, refresh]);
 
   useEffect(() => {

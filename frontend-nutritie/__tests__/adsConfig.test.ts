@@ -520,7 +520,7 @@ describe('P0-05: AdMob Configuration Hardening & Canonical Mode', () => {
       expect(runtime.rewardedAndroidUnitId).toBeNull();
     });
 
-    it('REAL runtime ignores malformed or Google test rewarded IDs and uses the verified GetFlow unit', () => {
+    it('REAL runtime fails closed on malformed or Google test rewarded IDs', () => {
       for (const unsafeId of [GOOGLE_TEST_INTERSTITIAL_ANDROID, 'not-an-ad-unit']) {
         const runtime = getAdsRuntimeConfig('android', {
           adsMode: 'real',
@@ -529,7 +529,19 @@ describe('P0-05: AdMob Configuration Hardening & Canonical Mode', () => {
           rewardedAndroidUnitId: unsafeId,
         });
         expect(runtime.enabled).toBe(true);
-        expect(runtime.rewardedAndroidUnitId).toBe(PROD_REWARDED_ID);
+        expect(runtime.rewardedAndroidUnitId).toBeNull();
+
+        const validation = validateAdsConfiguration(
+          {
+            EXPO_PUBLIC_ADS_MODE: 'real',
+            EXPO_PUBLIC_ADMOB_ANDROID_APP_ID: PROD_APP_ID,
+            EXPO_PUBLIC_ADMOB_INTERSTITIAL_ANDROID_ID: PROD_INTERSTITIAL_ID,
+            EXPO_PUBLIC_ADMOB_REWARDED_ANDROID_ID: unsafeId,
+          },
+          'android',
+        );
+        expect(validation.ok).toBe(false);
+        expect(validation.errors.some((e) => e.includes('Rewarded'))).toBe(true);
       }
     });
 

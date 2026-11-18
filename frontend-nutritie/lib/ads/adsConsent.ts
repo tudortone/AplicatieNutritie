@@ -17,6 +17,9 @@
  *     la fel: fără reclame, fără blocaje.
  */
 
+import { Platform } from 'react-native';
+import { getAdsRuntimeConfig } from './adsConfig';
+
 type GoogleMobileAdsModule = typeof import('react-native-google-mobile-ads');
 
 let AdsModule: GoogleMobileAdsModule | null = null;
@@ -76,11 +79,15 @@ export async function resolveAdsConsent(): Promise<AdsConsentResolution> {
     }
 
     try {
+      const isTestMode =
+        getAdsRuntimeConfig(Platform.OS === 'ios' ? 'ios' : 'android').mode === 'test';
       let info: any;
       try {
-        info = await AdsModule.AdsConsent.gatherConsent({
-          testDeviceIdentifiers: ['182025E7F769CEBC220B2CA72371661A'],
-        });
+        info = await AdsModule.AdsConsent.gatherConsent(
+          isTestMode
+            ? { testDeviceIdentifiers: ['182025E7F769CEBC220B2CA72371661A'] }
+            : {},
+        );
       } catch {
         // A3: dacă gatherConsent a eșuat (ex. eroare de rețea), consultăm decizia
         // deja persistată în SDK din sesiunile anterioare

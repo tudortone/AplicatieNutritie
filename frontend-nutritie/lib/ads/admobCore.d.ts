@@ -5,6 +5,8 @@ export const GOOGLE_TEST_APP_ID_ANDROID: string;
 export const GOOGLE_TEST_APP_ID_IOS: string;
 export const GOOGLE_TEST_INTERSTITIAL_ANDROID: string;
 export const GOOGLE_TEST_INTERSTITIAL_IOS: string;
+export const GOOGLE_TEST_REWARDED_ANDROID: string;
+export const GOOGLE_TEST_REWARDED_IOS: string;
 export const ADMOB_APP_ID_REGEX: RegExp;
 export const ADMOB_UNIT_ID_REGEX: RegExp;
 
@@ -29,5 +31,7 @@ export function validateAdsConfiguration(
   iosAppId?: string | null;
   interstitialAndroidUnitId?: string | null;
   interstitialIosUnitId?: string | null;
+  rewardedAndroidUnitId?: string | null;
+  rewardedIosUnitId?: string | null;
   errors: string[];
 };

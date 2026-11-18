@@ -90,6 +90,7 @@ describe('P0-05 Review Correction — Mandatory 17-Scenario Regression Matrix', 
         EXPO_PUBLIC_ADS_MODE: 'real',
         EXPO_PUBLIC_ADMOB_ANDROID_APP_ID: REAL_APP_ID,
         EXPO_PUBLIC_ADMOB_INTERSTITIAL_ANDROID_ID: REAL_UNIT_ID,
+        EXPO_PUBLIC_ADMOB_REWARDED_ANDROID_ID: REAL_UNIT_ID,
       },
       'android',
     );

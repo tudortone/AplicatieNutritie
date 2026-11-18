@@ -85,12 +85,14 @@ export function FlowCreditsModalHost() {
 
             {!flow.unlimited ? (
               <TouchableOpacity
-                style={[styles.action, (purchaseBusy || flow.loading || flow.balance.rewardedGrantsRemaining <= 0) && styles.disabled]}
+                style={[styles.action, (busy || purchaseBusy || flow.loading || flow.balance.rewardedGrantsRemaining <= 0) && styles.disabled]}
                 onPress={() => void flow.watchRewarded()}
                 disabled={busy || purchaseBusy || flow.loading || flow.balance.rewardedGrantsRemaining <= 0}
                 accessibilityRole="button"
                 accessibilityLabel={
-                  busy
+                  flow.rewardState === 'loading'
+                    ? t('flowCredits.preparingAd')
+                    : flow.rewardState === 'awaiting-server'
                     ? t('flowCredits.verifyingReward')
                     : flow.loading
                     ? t('common.loading')
@@ -105,7 +107,9 @@ export function FlowCreditsModalHost() {
                   <Play size={18} color="#0A0C0A" fill="#0A0C0A" />
                 )}
                 <Text maxFontSizeMultiplier={1.3} style={styles.actionText}>
-                  {busy
+                  {flow.rewardState === 'loading'
+                    ? t('flowCredits.preparingAd')
+                    : flow.rewardState === 'awaiting-server'
                     ? t('flowCredits.verifyingReward')
                     : flow.loading
                     ? t('common.loading')

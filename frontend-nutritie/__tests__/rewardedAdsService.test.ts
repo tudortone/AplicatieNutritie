@@ -24,7 +24,12 @@ jest.mock('react-native-google-mobile-ads', () => ({
   TestIds: { INTERSTITIAL: 'test-interstitial', REWARDED: 'test-rewarded' },
 }));
 
-import { showRewardedAdWithSsv, __resetAdsServiceForTests } from '../lib/ads/adsService';
+import {
+  showRewardedAdWithSsv,
+  preloadRewardedAdWithSsv,
+  discardPreloadedRewardedAd,
+  __resetAdsServiceForTests,
+} from '../lib/ads/adsService';
 
 describe('rewarded ad SSV client', () => {
   beforeEach(() => {
@@ -77,5 +82,33 @@ describe('rewarded ad SSV client', () => {
     await expect(resultPromise).resolves.toBe('earned-awaiting-server');
     expect(onSettled).toHaveBeenCalledTimes(1);
     expect(rewarded.show).toHaveBeenCalledTimes(1);
+  });
+
+  test('pre-warmed rewarded ad shows immediately once LOADED without reloading', async () => {
+    const started = preloadRewardedAdWithSsv({ intentId: 'intent-pre', customData: 'secret-pre' });
+    expect(started).toBe(true);
+    expect(rewarded.load).toHaveBeenCalledTimes(1);
+
+    listeners.get('rewarded_loaded')?.();
+
+    const resultPromise = showRewardedAdWithSsv({ intentId: 'intent-pre', customData: 'secret-pre' });
+    expect(rewarded.load).toHaveBeenCalledTimes(1);
+    expect(rewarded.show).toHaveBeenCalledTimes(1);
+
+    listeners.get('rewarded_earned')?.({ amount: 1, type: 'flow_credit' });
+    listeners.get('closed')?.();
+    await expect(resultPromise).resolves.toBe('earned-awaiting-server');
+  });
+
+  test('discardPreloadedRewardedAd invalidates pre-warmed ad and falls back to fresh load', async () => {
+    preloadRewardedAdWithSsv({ intentId: 'intent-discard', customData: 'secret-discard' });
+    listeners.get('rewarded_loaded')?.();
+    discardPreloadedRewardedAd();
+
+    const resultPromise = showRewardedAdWithSsv({ intentId: 'intent-discard', customData: 'secret-discard' });
+    expect(rewarded.load).toHaveBeenCalledTimes(2);
+    listeners.get('rewarded_loaded')?.();
+    listeners.get('closed')?.();
+    await expect(resultPromise).resolves.toBe('dismissed');
   });
 });

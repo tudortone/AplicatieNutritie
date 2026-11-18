@@ -81,12 +81,29 @@ function getRewardedUnitId(): string | null {
   return null;
 }
 
+export const INTERSTITIAL_RETRY_DELAYS_MS = [5_000, 15_000, 45_000] as const;
+export const REWARDED_LOAD_TIMEOUT_MS = 15_000;
+export const REWARDED_PRELOAD_TTL_MS = 4 * 60 * 1000;
+
 let sdkInitialized = false;
 let interstitial: InterstitialAdInstance | null = null;
 let interstitialUnsubscribers: Array<() => void> = [];
 let interstitialGeneration = 0;
+let interstitialRetryCount = 0;
+let interstitialRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
-export function discardPreloadedInterstitial(): void {
+function clearInterstitialRetryTimer(): void {
+  if (interstitialRetryTimer !== null) {
+    clearTimeout(interstitialRetryTimer);
+    interstitialRetryTimer = null;
+  }
+}
+
+function discardCurrentInterstitial(resetRetryCount: boolean): void {
+  clearInterstitialRetryTimer();
+  if (resetRetryCount) {
+    interstitialRetryCount = 0;
+  }
   interstitialGeneration += 1;
   interstitial = null;
   for (const unsubscribe of interstitialUnsubscribers.splice(0)) {
@@ -94,23 +111,48 @@ export function discardPreloadedInterstitial(): void {
   }
 }
 
+export function discardPreloadedInterstitial(): void {
+  discardCurrentInterstitial(true);
+}
+
 function attachInterstitialListeners(ad: InterstitialAdInstance, generation: number): void {
   if (!AdsModule) return;
   const { AdEventType } = AdsModule;
   const isCurrentAd = () => interstitial === ad && interstitialGeneration === generation;
   interstitialUnsubscribers.push(ad.addAdEventListener(AdEventType.ERROR, () => {
-    // Do not automatically retry an unavailable/no-fill ad in a tight loop.
-    if (isCurrentAd()) discardPreloadedInterstitial();
+    if (!isCurrentAd()) return;
+    discardCurrentInterstitial(false);
+    if (
+      getCanRequestAds()
+      && isAdsAvailable()
+      && interstitialRetryCount < INTERSTITIAL_RETRY_DELAYS_MS.length
+    ) {
+      const delayMs = INTERSTITIAL_RETRY_DELAYS_MS[interstitialRetryCount];
+      interstitialRetryCount += 1;
+      interstitialRetryTimer = setTimeout(() => {
+        interstitialRetryTimer = null;
+        if (getCanRequestAds()) preloadInterstitial();
+      }, delayMs);
+      if (typeof (interstitialRetryTimer as { unref?: () => void })?.unref === 'function') {
+        (interstitialRetryTimer as { unref?: () => void }).unref?.();
+      }
+    }
   }));
   interstitialUnsubscribers.push(ad.addAdEventListener(AdEventType.LOADED, () => {
-    if (isCurrentAd() && !getCanRequestAds()) discardPreloadedInterstitial();
+    if (!isCurrentAd()) return;
+    if (!getCanRequestAds()) {
+      discardCurrentInterstitial(true);
+      return;
+    }
+    interstitialRetryCount = 0;
+    clearInterstitialRetryTimer();
   }));
   interstitialUnsubscribers.push(ad.addAdEventListener(AdEventType.CLOSED, () => {
     // Preîncărcăm imediat următoarea reclamă, ca următoarea oportunitate
     // eligibilă să nu aștepte un load la cerere (care ar întârzia/eșua vizibil
     // exact în momentul tranziției utilizatorului).
     if (!isCurrentAd()) return;
-    discardPreloadedInterstitial();
+    discardCurrentInterstitial(true);
     if (getCanRequestAds()) preloadInterstitial();
   }));
 }
@@ -122,10 +164,11 @@ function attachInterstitialListeners(ad: InterstitialAdInstance, generation: num
  */
 export function preloadInterstitial(): void {
   if (!getCanRequestAds()) {
-    discardPreloadedInterstitial();
+    discardCurrentInterstitial(true);
     return;
   }
   if (!isAdsAvailable() || !AdsModule || interstitial) return;
+  clearInterstitialRetryTimer();
   try {
     const unitId = getInterstitialUnitId();
     if (!unitId) return;
@@ -137,7 +180,7 @@ export function preloadInterstitial(): void {
     attachInterstitialListeners(ad, generation);
     ad.load();
   } catch {
-    discardPreloadedInterstitial();
+    discardCurrentInterstitial(true);
     // Fail silențios — vezi antetul fișierului.
   }
 }
@@ -152,7 +195,11 @@ export async function initializeAdsSdk(): Promise<void> {
   if (!getCanRequestAds()) return;
   try {
     try {
-      if (typeof AdsModule.default === 'function' && typeof AdsModule.default().setRequestConfiguration === 'function') {
+      if (
+        getRuntimeConfig().mode === 'test'
+        && typeof AdsModule.default === 'function'
+        && typeof AdsModule.default().setRequestConfiguration === 'function'
+      ) {
         await AdsModule.default().setRequestConfiguration({
           testDeviceIdentifiers: ['182025E7F769CEBC220B2CA72371661A'],
         });
@@ -208,6 +255,102 @@ export function showPreloadedInterstitial(): boolean {
 
 export type RewardedAdOutcome = 'earned-awaiting-server' | 'dismissed' | 'unavailable';
 
+type PreloadedRewardedEntry = {
+  ad: RewardedAdInstance;
+  intentId: string;
+  customData: string;
+  createdAtMs: number;
+  status: 'loading' | 'loaded' | 'failed';
+  unsubscribers: Array<() => void>;
+  ttlTimer: ReturnType<typeof setTimeout> | null;
+};
+
+let preloadedRewarded: PreloadedRewardedEntry | null = null;
+
+function detachPreloadedRewardedEntry(entry: PreloadedRewardedEntry): void {
+  if (entry.ttlTimer !== null) {
+    clearTimeout(entry.ttlTimer);
+    entry.ttlTimer = null;
+  }
+  for (const unsubscribe of entry.unsubscribers.splice(0)) {
+    try { unsubscribe(); } catch {}
+  }
+}
+
+export function discardPreloadedRewardedAd(): void {
+  const entry = preloadedRewarded;
+  if (!entry) return;
+  preloadedRewarded = null;
+  detachPreloadedRewardedEntry(entry);
+}
+
+/**
+ * Pre-încarcă o reclamă Rewarded legată de un intent SSV (`intentId` + `customData`),
+ * cu TTL de 4 minute. Este sigură pentru apeluri repetate pe același intent.
+ */
+export function preloadRewardedAdWithSsv({
+  intentId,
+  customData,
+}: { intentId: string; customData: string }): boolean {
+  if (!isAdsAvailable() || !getCanRequestAds() || !AdsModule || !intentId || !customData) {
+    return false;
+  }
+  if (
+    preloadedRewarded
+    && preloadedRewarded.intentId === intentId
+    && preloadedRewarded.customData === customData
+    && preloadedRewarded.status !== 'failed'
+    && Date.now() - preloadedRewarded.createdAtMs < REWARDED_PRELOAD_TTL_MS
+  ) {
+    return true;
+  }
+  const unitId = getRewardedUnitId();
+  if (!unitId) return false;
+  discardPreloadedRewardedAd();
+  try {
+    const ad = AdsModule.RewardedAd.createForAdRequest(unitId, {
+      requestNonPersonalizedAdsOnly: !getConsentPersonalizedAllowed(),
+      serverSideVerificationOptions: { userId: intentId, customData },
+    });
+    const entry: PreloadedRewardedEntry = {
+      ad,
+      intentId,
+      customData,
+      createdAtMs: Date.now(),
+      status: 'loading',
+      unsubscribers: [],
+      ttlTimer: null,
+    };
+    preloadedRewarded = entry;
+    entry.unsubscribers.push(
+      ad.addAdEventListener(AdsModule.RewardedAdEventType.LOADED, () => {
+        if (preloadedRewarded !== entry) return;
+        if (!getCanRequestAds()) {
+          discardPreloadedRewardedAd();
+          return;
+        }
+        entry.status = 'loaded';
+      }),
+      ad.addAdEventListener(AdsModule.AdEventType.ERROR, () => {
+        if (preloadedRewarded !== entry) return;
+        entry.status = 'failed';
+        discardPreloadedRewardedAd();
+      }),
+    );
+    entry.ttlTimer = setTimeout(() => {
+      if (preloadedRewarded === entry) discardPreloadedRewardedAd();
+    }, REWARDED_PRELOAD_TTL_MS);
+    if (typeof (entry.ttlTimer as { unref?: () => void })?.unref === 'function') {
+      (entry.ttlTimer as { unref?: () => void }).unref?.();
+    }
+    ad.load();
+    return true;
+  } catch {
+    discardPreloadedRewardedAd();
+    return false;
+  }
+}
+
 /**
  * Afișează o reclamă rewarded cu date SSV opace. Evenimentul local EARNED_REWARD
  * nu creditează nimic; el permite doar UI-ului să aștepte callback-ul Google
@@ -222,6 +365,22 @@ export function showRewardedAdWithSsv({
   }
   const unitId = getRewardedUnitId();
   if (!unitId) return Promise.resolve('unavailable');
+
+  const preloaded = preloadedRewarded;
+  const canUsePreloaded = Boolean(
+    preloaded
+    && preloaded.intentId === intentId
+    && preloaded.customData === customData
+    && preloaded.status !== 'failed'
+    && Date.now() - preloaded.createdAtMs < REWARDED_PRELOAD_TTL_MS,
+  );
+  if (canUsePreloaded && preloaded) {
+    preloadedRewarded = null;
+    detachPreloadedRewardedEntry(preloaded);
+  } else if (preloaded) {
+    discardPreloadedRewardedAd();
+  }
+
   return new Promise((resolve) => {
     let ad: RewardedAdInstance;
     let earned = false;
@@ -230,20 +389,21 @@ export function showRewardedAdWithSsv({
     const finish = (outcome: RewardedAdOutcome) => {
       if (settled) return;
       settled = true;
-      for (const unsubscribe of unsubscribers) unsubscribe();
+      for (const unsubscribe of unsubscribers) {
+        try { unsubscribe(); } catch {}
+      }
       clearTimeout(timeout);
       resolve(outcome);
     };
-    const timeout = setTimeout(() => finish('unavailable'), 60_000);
+    const timeout = setTimeout(() => finish('unavailable'), REWARDED_LOAD_TIMEOUT_MS);
     try {
-      ad = AdsModule.RewardedAd.createForAdRequest(unitId, {
-        requestNonPersonalizedAdsOnly: !getConsentPersonalizedAllowed(),
-        serverSideVerificationOptions: { userId: intentId, customData },
-      });
+      ad = canUsePreloaded && preloaded
+        ? preloaded.ad
+        : AdsModule.RewardedAd.createForAdRequest(unitId, {
+            requestNonPersonalizedAdsOnly: !getConsentPersonalizedAllowed(),
+            serverSideVerificationOptions: { userId: intentId, customData },
+          });
       unsubscribers.push(
-        ad.addAdEventListener(AdsModule.RewardedAdEventType.LOADED, () => {
-          void ad.show().catch(() => finish('unavailable'));
-        }),
         ad.addAdEventListener(AdsModule.RewardedAdEventType.EARNED_REWARD, () => {
           earned = true;
         }),
@@ -251,22 +411,35 @@ export function showRewardedAdWithSsv({
         ad.addAdEventListener(AdsModule.AdEventType.CLOSED, () =>
           finish(earned ? 'earned-awaiting-server' : 'dismissed')),
       );
-      ad.load();
+      if (canUsePreloaded && preloaded && (preloaded.status === 'loaded' || ad.loaded === true)) {
+        void Promise.resolve(ad.show()).catch(() => finish('unavailable'));
+      } else {
+        unsubscribers.push(
+          ad.addAdEventListener(AdsModule.RewardedAdEventType.LOADED, () => {
+            void Promise.resolve(ad.show()).catch(() => finish('unavailable'));
+          }),
+        );
+        if (!canUsePreloaded) {
+          ad.load();
+        }
+      }
     } catch {
       finish('unavailable');
     }
   });
 }
 
-/** Doar pentru teste: resetează starea internă a modulului (interstițial + flag inițializare). */
+/** Doar pentru teste: resetează starea internă a modulului (interstițial + rewarded + flag inițializare). */
 export function __resetAdsServiceForTests(): void {
   sdkInitialized = false;
-  discardPreloadedInterstitial();
+  discardCurrentInterstitial(true);
+  discardPreloadedRewardedAd();
 }
 
 /** Reconcile any already-loaded ad with the user's latest UMP choice. */
 export async function refreshAdsAfterConsentChange(): Promise<void> {
-  discardPreloadedInterstitial();
+  discardCurrentInterstitial(true);
+  discardPreloadedRewardedAd();
   if (!getCanRequestAds()) return;
   if (sdkInitialized) preloadInterstitial();
   else await initializeAdsSdk();
