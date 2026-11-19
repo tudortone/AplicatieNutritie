@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -68,7 +68,11 @@ export default function PasCalculare() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <View style={styles.continut}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.continut}
+        showsVerticalScrollIndicator={false}
+      >
         <Animated.View entering={reduceMotion ? undefined : FadeInUp.duration(600)} style={styles.iconWrap}>
           <LinearGradient colors={colors.accentGradient} style={styles.iconGrad}>
             <Sparkles size={40} color={colors.background} />
@@ -127,14 +131,15 @@ export default function PasCalculare() {
             )
           })}
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  continut: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 },
+  scroll: { flex: 1 },
+  continut: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28, paddingVertical: 24 },
   iconWrap: { marginBottom: 24 },
   iconGrad: { width: 84, height: 84, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
   textWrap: { alignItems: 'center', marginBottom: 32 },

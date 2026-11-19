@@ -1,13 +1,24 @@
 import React from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import Animated, { FadeInDown } from 'react-native-reanimated'
+import { useRouter } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 
 import EcranPas from '../../components/onboarding/EcranPas'
 import { useOnboarding } from '../../context/OnboardingContext'
 import { useTheme } from '../../context/ThemeContext'
-import { ETICHETE_DIETA } from '../../lib/onboarding'
+import { ETICHETE_DIETA, type TipDieta } from '../../lib/onboarding'
+
+const MAPARE_DIETA_TITLU: Record<TipDieta, string> = {
+	echilibrata: 'onboarding.dietBalancedTitle',
+	low_carb: 'onboarding.dietLowCarbTitle',
+	bogata_proteine: 'onboarding.dietHighProteinTitle',
+	mediteraneana: 'onboarding.dietMediterraneanTitle',
+	vegetariana: 'onboarding.dietVegetarianTitle',
+	vegana: 'onboarding.dietVeganTitle',
+	keto: 'onboarding.dietKetoTitle',
+}
 
 function formateazaData(d: Date, lang: string): string {
 	return d.toLocaleDateString(lang || 'ro', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -25,10 +36,26 @@ function Rand({ eticheta, valoare }: { eticheta: string; valoare: string }) {
 
 export default function PasPlan() {
 	const { t, i18n } = useTranslation()
-	const { date, plan } = useOnboarding()
+	const { date, plan, seIncarca } = useOnboarding()
 	const { colors } = useTheme()
+	const router = useRouter()
 
-	// Planul lipseste doar daca un pas a fost ocolit; atunci nu inventam cifre.
+	if (seIncarca) {
+		return (
+			<EcranPas
+				pas="/onboarding/plan"
+				titlu={t('onboarding.planReadyTitle')}
+				poateContinua={false}
+				seIncarca
+			>
+				<View style={styles.loadingWrap} testID="onboarding-plan-loading">
+					<ActivityIndicator size="large" color={colors.accent} />
+				</View>
+			</EcranPas>
+		)
+	}
+
+	// Planul lipseste doar daca un pas a fost ocolit; oferim cale directa de recuperare.
 	if (!plan) {
 		return (
 			<EcranPas
@@ -37,7 +64,19 @@ export default function PasPlan() {
 				subtitlu={t('onboarding.planMissingAnswersSub')}
 				poateContinua={false}
 			>
-				<View />
+				<View style={styles.recoveryWrap} testID="onboarding-plan-recovery">
+					<TouchableOpacity
+						testID="onboarding-plan-recovery-btn"
+						onPress={() => router.replace('/onboarding/gen' as any)}
+						style={[styles.recoveryBtn, { backgroundColor: colors.accent }]}
+						accessibilityRole="button"
+						accessibilityLabel={t('onboarding.back')}
+					>
+						<Text style={[styles.recoveryBtnText, { color: colors.textOnAccent ?? colors.background }]}>
+							{t('onboarding.planRestartCta', t('onboarding.back'))}
+						</Text>
+					</TouchableOpacity>
+				</View>
 			</EcranPas>
 		)
 	}
@@ -80,8 +119,22 @@ export default function PasPlan() {
 						style={[styles.macroCard, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}
 					>
 						<View style={[styles.punct, { backgroundColor: m.culoare }]} />
-						<Text style={[styles.macroValoare, { color: colors.textPrimary }]}>{m.valoare}</Text>
-						<Text style={[styles.macroEticheta, { color: colors.textSecondary }]}>{m.eticheta}</Text>
+						<Text
+							style={[styles.macroValoare, { color: colors.textPrimary }]}
+							numberOfLines={1}
+							adjustsFontSizeToFit
+							minimumFontScale={0.75}
+						>
+							{m.valoare}
+						</Text>
+						<Text
+							style={[styles.macroEticheta, { color: colors.textSecondary }]}
+							numberOfLines={1}
+							adjustsFontSizeToFit
+							minimumFontScale={0.75}
+						>
+							{m.eticheta}
+						</Text>
 					</View>
 				))}
 			</View>
@@ -99,7 +152,10 @@ export default function PasPlan() {
 					}
 					valoare={plan.ajustare === 0 ? t('onboarding.planNone') : `${Math.abs(plan.ajustare)} kcal`}
 				/>
-				<Rand eticheta={t('onboarding.planDietStyle')} valoare={date.dieta ? ETICHETE_DIETA[date.dieta].titlu : '-'} />
+				<Rand
+					eticheta={t('onboarding.planDietStyle')}
+					valoare={date.dieta ? t(MAPARE_DIETA_TITLU[date.dieta], ETICHETE_DIETA[date.dieta].titlu) : '-'}
+				/>
 				{plan.dataEstimata ? (
 					<Rand eticheta={t('onboarding.planEstimatedDate')} valoare={formateazaData(plan.dataEstimata, i18n.language)} />
 				) : null}
@@ -123,14 +179,18 @@ const styles = StyleSheet.create({
 	calorii: { fontSize: 60, fontWeight: '900', letterSpacing: -2.5, marginVertical: 2 },
 	etichetaMare: { fontSize: 14, fontWeight: '700', opacity: 0.75 },
 	macroRand: { flexDirection: 'row', gap: 10, marginTop: 14 },
-	macroCard: { flex: 1, borderRadius: 18, borderWidth: 1, padding: 14, alignItems: 'center' },
+	macroCard: { flex: 1, minWidth: 0, borderRadius: 18, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 14, alignItems: 'center' },
 	punct: { width: 8, height: 8, borderRadius: 4, marginBottom: 8 },
 	macroValoare: { fontSize: 18, fontWeight: '900' },
-	macroEticheta: { fontSize: 12, marginTop: 3 },
+	macroEticheta: { fontSize: 12, marginTop: 3, textAlign: 'center' },
 	detalii: { borderRadius: 20, borderWidth: 1, padding: 18, marginTop: 14, gap: 12 },
 	randDetaliu: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-	randEticheta: { fontSize: 14, flex: 1 },
-	randValoare: { fontSize: 14, fontWeight: '800' },
+	randEticheta: { fontSize: 14, flex: 1, minWidth: 0 },
+	randValoare: { fontSize: 14, fontWeight: '800', flexShrink: 1, textAlign: 'right' },
 	avertizare: { fontSize: 13, lineHeight: 19, marginTop: 16, fontWeight: '600' },
 	disclaimer: { fontSize: 12, lineHeight: 17, marginTop: 16, textAlign: 'center' },
+	loadingWrap: { flex: 1, minHeight: 180, alignItems: 'center', justifyContent: 'center' },
+	recoveryWrap: { paddingVertical: 20, alignItems: 'center' },
+	recoveryBtn: { minHeight: 48, borderRadius: 16, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' },
+	recoveryBtnText: { fontSize: 15, fontWeight: '800' },
 })

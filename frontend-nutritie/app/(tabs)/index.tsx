@@ -640,9 +640,17 @@ export default function HomeScreen() {
               style={s.streakBadge}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
-              <LinearGradient colors={colors.accentGradient} style={s.streakGrad}>
+              <LinearGradient colors={colors.accentGradient} style={[s.streakGrad, isCompact && { paddingHorizontal: 10, gap: 4 }]}>
                 <Flame size={14} color={colors.background} fill={colors.background} />
-                <Text style={[s.streakText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{t('home.streakDays', { count: streak })}</Text>
+                <Text
+                  style={[s.streakText, { color: colors.background }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
+                  maxFontSizeMultiplier={1.3}
+                >
+                  {t('home.streakDays', { count: streak })}
+                </Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -872,8 +880,8 @@ export default function HomeScreen() {
                 <Camera size={28} color={colors.background} strokeWidth={2.5} />
               </View>
               <View style={s.scanCTAText}>
-                <Text style={[s.scanCTATitle, { color: colors.background }]}>{t('home.scanAiTitle')}</Text>
-                <Text style={s.scanCTASub} maxFontSizeMultiplier={1.3}>{t('home.scanAiSubtitle')}</Text>
+                <Text style={[s.scanCTATitle, { color: colors.textOnAccent }]}>{t('home.scanAiTitle')}</Text>
+                <Text style={[s.scanCTASub, { color: colors.textOnAccent, opacity: 0.85 }]} maxFontSizeMultiplier={1.3}>{t('home.scanAiSubtitle')}</Text>
               </View>
               <View style={s.scanCTAArrow}>
                 <Scan size={20} color={colors.background} />
@@ -892,7 +900,7 @@ export default function HomeScreen() {
             onPress={() => router.push('/scanner-barcode' as any)}
           >
             <Scan size={18} color={colors.accent} />
-            <Text style={[s.secActionText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{t('home.barcode')}</Text>
+            <Text style={[s.secActionText, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.3}>{t('home.barcode')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -902,7 +910,7 @@ export default function HomeScreen() {
             onPress={deschideAddMeal}
           >
             <PlusCircle size={18} color={colors.accentSecondary} />
-            <Text style={[s.secActionText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{t('home.addManual')}</Text>
+            <Text style={[s.secActionText, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.3}>{t('home.addManual')}</Text>
           </TouchableOpacity>
         </Animated.View>
 
@@ -917,7 +925,7 @@ export default function HomeScreen() {
             <View style={s.weightIconWrap}>
               <Scale size={20} color={colors.accent} />
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={[s.weightLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>{t('home.weightProgress')}</Text>
               <Text style={[s.weightValue, { color: colors.textPrimary, fontSize: greutateIntrodusaKg ? 20 : 14 }]} maxFontSizeMultiplier={1.3}>
                 {greutateIntrodusaKg ? `${greutateIntrodusaKg} kg` : t('home.tapToAdd')}
@@ -1026,15 +1034,16 @@ export default function HomeScreen() {
                         accessibilityRole="button"
                         accessibilityLabel={t('home.stepsEditGoalA11y')}
                         hitSlop={8}
+                        style={{ flex: 1, minWidth: 0 }}
                       >
                         <Text style={[s.healthCount, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} maxFontSizeMultiplier={1.3}>
                           <Text style={{ fontSize: 22, fontWeight: '900', color: colors.accent }}>{steps.toLocaleString()}</Text> / {stepGoal.toLocaleString()} {t('home.stepsUnit')}
                         </Text>
                       </TouchableOpacity>
                     )}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 }}>
                       <Flame size={14} color={colors.warning} />
-                      <Text style={[s.healthCalories, { color: colors.warning }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.3}>{t('home.stepsKcalBurned', { calories: activeCalories })}</Text>
+                      <Text style={[s.healthCalories, { color: colors.warning, flexShrink: 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} maxFontSizeMultiplier={1.3}>{t('home.stepsKcalBurned', { calories: activeCalories })}</Text>
                     </View>
                   </View>
                   <View style={[s.manualAddRow, { borderColor: colors.cardBorder }]}>
@@ -1259,7 +1268,7 @@ const s = StyleSheet.create({
   // o zi cu eroare de rețea arăta ca o zi legitimă fără mese (eșec silențios).
   eroareBanner: { width: '100%', maxWidth: 680, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16 },
   eroareText: { flex: 1, fontSize: 13, fontWeight: '600' },
-  eroareBtn: { marginLeft: 8, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  eroareBtn: { marginLeft: 8, minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   eroareBtnText: { fontSize: 13, fontWeight: '800' },
 
   // Header
@@ -1267,9 +1276,9 @@ const s = StyleSheet.create({
   headerActions: { flexShrink: 0, flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', gap: 10 },
   headerActionsCompact: { gap: 8, minWidth: 0, maxWidth: '100%', flexShrink: 1 },
   notificationButton: { width: 44, height: 44, flexShrink: 0, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' },
-  streakBadge: { borderRadius: 20, overflow: 'hidden' },
+  streakBadge: { borderRadius: 20, overflow: 'hidden', flexShrink: 1, minWidth: 0 },
   streakGrad: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, gap: 6 },
-  streakText: { fontWeight: '800', fontSize: 13 },
+  streakText: { fontWeight: '800', fontSize: 13, flexShrink: 1 },
 
   // Ring Card
   ringCard: { width: '100%', maxWidth: 680, alignSelf: 'center', borderRadius: 32, overflow: 'hidden', borderWidth: 1, marginBottom: 20 },
@@ -1307,7 +1316,7 @@ const s = StyleSheet.create({
   scanCTAIcon: { width: 56, height: 56, borderRadius: 18, backgroundColor: 'rgba(9,12,14,0.15)', justifyContent: 'center', alignItems: 'center' },
   scanCTAText: { flex: 1 },
   scanCTATitle: { fontSize: 17, fontWeight: '900', letterSpacing: -0.3 },
-  scanCTASub: { fontSize: 13, color: 'rgba(9,12,14,0.6)', fontWeight: '500', marginTop: 2 },
+  scanCTASub: { fontSize: 13, fontWeight: '600', marginTop: 2 },
   scanCTAArrow: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(9,12,14,0.15)', justifyContent: 'center', alignItems: 'center' },
 
   // Manual CTA
@@ -1338,28 +1347,28 @@ const s = StyleSheet.create({
   healthSub: { fontSize: 12, fontWeight: '500', marginTop: 2 },
   healthRefreshBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1 },
   healthRefreshText: { fontSize: 12, fontWeight: '800' },
-  closeCardBtn: { paddingHorizontal: 8, paddingVertical: 4, justifyContent: 'center', alignItems: 'center' },
+  closeCardBtn: { minWidth: 44, minHeight: 44, paddingHorizontal: 8, paddingVertical: 4, justifyContent: 'center', alignItems: 'center' },
   healthProgressBg: { width: '100%', height: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 5, overflow: 'hidden', marginBottom: 12 },
   healthProgressFill: { height: '100%', borderRadius: 5 },
-  healthFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  healthFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   healthCount: { fontSize: 14, fontWeight: '700' },
   healthCalories: { fontSize: 13, fontWeight: '800' },
   healthOfflineBox: { backgroundColor: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)' },
   healthOfflineText: { fontSize: 13, lineHeight: 18, textAlign: 'center' },
   manualAddRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingTop: 10, borderTopWidth: 1 },
-  completedStepsInput: { minWidth: 92, flexGrow: 1, height: 42, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, fontSize: 15, fontWeight: '800' },
+  completedStepsInput: { minWidth: 92, flexGrow: 1, minHeight: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, fontSize: 15, fontWeight: '800' },
   manualAddHint: { fontSize: 12, fontWeight: '600', flex: 1 },
-  manualAddBtn: { minWidth: 56, height: 34, borderRadius: 10, borderWidth: 1, paddingHorizontal: 10, justifyContent: 'center', alignItems: 'center' },
+  manualAddBtn: { minWidth: 56, minHeight: 44, borderRadius: 10, borderWidth: 1, paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center' },
   manualAddBtnText: { fontSize: 13, fontWeight: '900' },
   goalEditRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   goalInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, minWidth: 84, fontSize: 15, fontWeight: '800' },
   goalBtn: { minWidth: 44, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 12, borderWidth: 1 },
   goalBtnText: { fontSize: 14, fontWeight: '900' },
-  connectBtn: { marginTop: 10, alignSelf: 'center', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
+  connectBtn: { marginTop: 10, alignSelf: 'center', minHeight: 44, justifyContent: 'center', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
   connectBtnText: { fontSize: 13, fontWeight: '900' },
 
-  secActionCard: { flex: 1, height: 48, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  secActionText: { fontSize: 14, fontWeight: '800' },
+  secActionCard: { flex: 1, minHeight: 48, borderRadius: 16, borderWidth: 1, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  secActionText: { flexShrink: 1, fontSize: 14, fontWeight: '800' },
 
   weightCard: { width: '100%', maxWidth: 680, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, borderWidth: 1, marginBottom: 20 },
   weightIconWrap: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
@@ -1383,10 +1392,10 @@ const s = StyleSheet.create({
   tourInviteHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   tourInviteBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1 },
   tourInviteBadgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4, textTransform: 'uppercase' },
-  tourInviteDismiss: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  tourInviteDismiss: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   tourInviteTitle: { fontSize: 17, fontWeight: '900', letterSpacing: -0.3, marginBottom: 4 },
   tourInviteDesc: { fontSize: 13, lineHeight: 19, fontWeight: '500', marginBottom: 16 },
-  tourInviteActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 10 },
+  tourInviteActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 10 },
   tourInviteLaterBtn: { minHeight: 44, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
   tourInviteLaterText: { fontSize: 13, fontWeight: '700' },
   tourInviteStartBtn: { minHeight: 44, paddingHorizontal: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
@@ -1396,6 +1405,6 @@ const s = StyleSheet.create({
   tourBottomCopy: { flex: 1, minWidth: 0 },
   tourBottomTitle: { fontSize: 14, fontWeight: '800' },
   tourBottomSub: { fontSize: 12, fontWeight: '500', marginTop: 2 },
-  tourBottomCtaPill: { minHeight: 36, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tourBottomCtaPill: { flexShrink: 0, minHeight: 36, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
   tourBottomCtaText: { fontSize: 12, fontWeight: '800' },
 });

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import EcranPas from '../../components/onboarding/EcranPas'
 import CardOptiune from '../../components/onboarding/CardOptiune'
 import { useOnboarding } from '../../context/OnboardingContext'
+import { useTheme } from '../../context/ThemeContext'
 import { ETICHETE_ACTIVITATE, type Activitate } from '../../lib/onboarding'
 
 const ORDINE: Activitate[] = ['sedentar', 'usor', 'moderat', 'intens', 'foarte_intens']
@@ -27,6 +28,7 @@ const MAPARE_ACTIVITATE: Record<Activitate, { titluKey: string; detaliuKey: stri
 
 export default function PasActivitate() {
 	const { t } = useTranslation()
+	const { colors } = useTheme()
 	const { date, actualizeaza } = useOnboarding()
 
 	return (
@@ -41,7 +43,7 @@ export default function PasActivitate() {
 					key={a}
 					titlu={t(MAPARE_ACTIVITATE[a].titluKey, ETICHETE_ACTIVITATE[a].titlu)}
 					detaliu={t(MAPARE_ACTIVITATE[a].detaliuKey, ETICHETE_ACTIVITATE[a].detaliu)}
-					pictograma={<Text style={{ fontSize: 20 }}>{SIMBOL[a]}</Text>}
+					pictograma={<Text style={{ fontSize: 20, color: colors.textPrimary }}>{SIMBOL[a]}</Text>}
 					selectat={date.activitate === a}
 					laSelectare={() => actualizeaza({ activitate: a })}
 				/>

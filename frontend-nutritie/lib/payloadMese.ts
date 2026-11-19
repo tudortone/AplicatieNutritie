@@ -377,11 +377,16 @@ function randulPersistatCorespundePayloadului(
   rand: Record<string, unknown>,
   payload: Record<string, unknown>,
 ): boolean {
-  // Dacă payload.id este un număr sau un id egal cu rand.id, verificăm egalitatea.
-  // Dacă payload.id este un UUID client dar rand.id este bigint-ul generat de DB, nu colapsăm la false.
-  if (payload.id !== undefined && (typeof payload.id === 'number' || (typeof payload.id === 'string' && !isNaN(Number(payload.id)) && typeof rand.id === 'number'))) {
+  const payloadClientOpId =
+    typeof payload.client_operation_id === 'string' && payload.client_operation_id.trim() !== ''
+      ? payload.client_operation_id.trim()
+      : (typeof payload.id === 'string' && !/^\d+$/.test(payload.id.trim()) ? payload.id.trim() : null);
+
+  if (payloadClientOpId && typeof rand.client_operation_id === 'string' && rand.client_operation_id.trim() !== '') {
+    if (rand.client_operation_id.trim() !== payloadClientOpId) return false;
+  } else if (payload.id !== undefined && (typeof payload.id === 'number' || (typeof payload.id === 'string' && /^\d+$/.test(payload.id.trim())))) {
     if (String(rand.id) !== String(payload.id)) return false;
-  } else if (payload.id !== undefined && typeof payload.id === 'string' && typeof rand.id === 'string') {
+  } else if (payload.id !== undefined && typeof payload.id === 'string' && typeof rand.id === 'string' && rand.client_operation_id === undefined) {
     if (rand.id !== payload.id) return false;
   }
   const campuriText = ['nume', 'tip_masa'] as const;

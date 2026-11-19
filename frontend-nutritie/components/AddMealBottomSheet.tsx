@@ -9,6 +9,7 @@ import {
   ScrollView,
   Modal,
   BackHandler,
+  KeyboardAvoidingView,
   Platform
 } from 'react-native';
 import BottomSheet, { 
@@ -780,7 +781,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>
+            <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
               {editingMasaId ? t('jurnal.editMealTitle') : t('jurnal.addMealTitle')}
             </Text>
             <TouchableOpacity onPress={() => bottomSheetRef.current?.close()} style={[styles.closeBtn, { backgroundColor: colors.surfaceBg }]} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} accessibilityRole="button" accessibilityLabel={t('jurnal.close')}>
@@ -834,7 +835,7 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
                       accessibilityRole="button"
                       accessibilityLabel={`Elimină ${fav.nume} din favorite`}
                     >
-                      <Trash2 size={13} color={colors.textTertiary} />
+                      <Trash2 size={14} color={colors.textTertiary} />
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -930,15 +931,20 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
               </View>
 
               {selectedCategory && !searchQuery && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingHorizontal: 4 }}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8, paddingHorizontal: 4 }}>
+                  <Text style={{ flex: 1, minWidth: 0, color: colors.textSecondary, fontSize: 13, fontWeight: '700' }} numberOfLines={2}>
                     {t('jurnal.showOptionsFor', {
                       categorie: t(`jurnal.presetCategories.${selectedCategory}`, {
                         defaultValue: categories.find(c => c.id === selectedCategory)?.name ?? '',
                       }),
                     })}
                   </Text>
-                  <TouchableOpacity onPress={() => setSelectedCategory(null)}>
+                  <TouchableOpacity
+                    onPress={() => setSelectedCategory(null)}
+                    style={{ minHeight: 44, paddingHorizontal: 10, justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('jurnal.close')}
+                  >
                     <Text style={{ color: colors.accent, fontSize: 12, fontWeight: '800' }}>{t('jurnal.close')}</Text>
                   </TouchableOpacity>
                 </View>
@@ -1435,43 +1441,56 @@ export const AddMealBottomSheet = forwardRef<AddMealBottomSheetRef, AddMealBotto
           presentationStyle="pageSheet"
           onRequestClose={() => setProductSearchModalVisible(false)}
         >
-          <View style={{ flex: 1, backgroundColor: colors.background, padding: 16, paddingTop: Math.max(insets?.top || 0, 16) }}>
-            <ProductSearch
-              onMealAdded={(masa) => {
-                setProductSearchModalVisible(false);
-                bottomSheetRef.current?.close();
-                if (onMasaCreata) {
-                  onMasaCreata(masa);
-                }
-                if (onSuccess) {
-                  onSuccess();
-                }
+          <KeyboardAvoidingView
+            style={{ flex: 1, backgroundColor: colors.background }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: colors.background,
+                padding: 16,
+                paddingTop: Math.max(insets?.top || 0, 16),
+                paddingBottom: Math.max(insets?.bottom || 0, 16),
               }}
-              onSelectProductWithGrams={(prod, gr) => {
-                const al = prod;
-                setNume(al.brand ? `${al.name} (${al.brand})` : al.name);
-                const safeGr = clampValoare(gr > 0 ? gr : 100, LIMITE_DB_MESE.gramaj, 1);
-                const factor = safeGr / 100;
-                setCalorii(String(Math.round(al.kcalPer100g * factor)));
-                setProteine(String(Math.round(al.proteinPer100g * factor * 10) / 10));
-                setCarbohidrati(String(Math.round(al.carbsPer100g * factor * 10) / 10));
-                setGrasimi(String(Math.round(al.fatPer100g * factor * 10) / 10));
-                if (al.fiberPer100g != null) {
-                  setFibre(String(Math.round(al.fiberPer100g * factor * 10) / 10));
-                }
-                setGrame(String(safeGr));
-                setBaseNutrition({
-                  defaultGrame: 100,
-                  calorii: al.kcalPer100g,
-                  proteine: al.proteinPer100g,
-                  carbohidrati: al.carbsPer100g,
-                  grasimi: al.fatPer100g,
-                });
-                setProductSearchModalVisible(false);
-              }}
-              onClose={() => setProductSearchModalVisible(false)}
-            />
-          </View>
+            >
+              <ProductSearch
+                onMealAdded={(masa) => {
+                  setProductSearchModalVisible(false);
+                  bottomSheetRef.current?.close();
+                  if (onMasaCreata) {
+                    onMasaCreata(masa);
+                  }
+                  if (onSuccess) {
+                    onSuccess();
+                  }
+                }}
+                onSelectProductWithGrams={(prod, gr) => {
+                  const al = prod;
+                  setNume(al.brand ? `${al.name} (${al.brand})` : al.name);
+                  const safeGr = clampValoare(gr > 0 ? gr : 100, LIMITE_DB_MESE.gramaj, 1);
+                  const factor = safeGr / 100;
+                  setCalorii(String(Math.round(al.kcalPer100g * factor)));
+                  setProteine(String(Math.round(al.proteinPer100g * factor * 10) / 10));
+                  setCarbohidrati(String(Math.round(al.carbsPer100g * factor * 10) / 10));
+                  setGrasimi(String(Math.round(al.fatPer100g * factor * 10) / 10));
+                  if (al.fiberPer100g != null) {
+                    setFibre(String(Math.round(al.fiberPer100g * factor * 10) / 10));
+                  }
+                  setGrame(String(safeGr));
+                  setBaseNutrition({
+                    defaultGrame: 100,
+                    calorii: al.kcalPer100g,
+                    proteine: al.proteinPer100g,
+                    carbohidrati: al.carbsPer100g,
+                    grasimi: al.fatPer100g,
+                  });
+                  setProductSearchModalVisible(false);
+                }}
+                onClose={() => setProductSearchModalVisible(false)}
+              />
+            </View>
+          </KeyboardAvoidingView>
         </Modal>
       </BottomSheet>
       <MealSaveSuccessModal
@@ -1523,15 +1542,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
     marginBottom: 20,
   },
   title: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 20,
     fontWeight: 'bold',
   },
   closeBtn: {
-    padding: 8,
-    borderRadius: 20,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+    flexShrink: 0,
   },
   favHeaderTitle: {
     fontSize: 12,
@@ -1540,19 +1566,25 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   favChip: {
-    flexDirection: 'column',
-    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 14,
+    paddingRight: 8,
     paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1,
-    minWidth: 130,
+    minWidth: 140,
+    maxWidth: 220,
+    minHeight: 48,
   },
   favChipDelete: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    padding: 6,
+    minWidth: 32,
+    minHeight: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 8,
+    flexShrink: 0,
   },
   favChipTitle: {
     fontSize: 13,
@@ -1566,6 +1598,8 @@ const styles = StyleSheet.create({
   categoryChip: {
     borderRadius: 20,
     borderWidth: 1,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   categoryText: {
     fontSize: 13,

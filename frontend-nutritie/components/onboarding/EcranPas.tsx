@@ -20,7 +20,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion'
 
 import { useTheme } from '../../context/ThemeContext'
 import { useOnboarding } from '../../context/OnboardingContext'
-import { pasiActivi, pasulUrmator, type PasOnboarding } from './pasi'
+import { pasiActivi, pasulAnterior, pasulUrmator, type PasOnboarding } from './pasi'
 import {
 	anuleazaProtectieNavigare,
 	incepeProtectieNavigare,
@@ -75,12 +75,13 @@ export default function EcranPas({
 	// Stabilizare referențială: pasiActivi alocă un nou array, deci îl memoizăm după date.scop
 	const pasi = useMemo(() => pasiActivi(date.scop), [date.scop])
 	const indice = pasi.indexOf(pas)
-	// pasAnterior este o valoare primitivă stabilă (string | null)
-	const pasAnterior = indice > 0 ? pasi[indice - 1] : null
+	// pasAnterior exclude `/onboarding/calculating` (pentru `/onboarding/plan` -> `/onboarding/dieta`).
+	const pasAnterior = useMemo(() => pasulAnterior(pas, date.scop), [pas, date.scop])
 
 	// NAV-BACK-001: navigare „Înapoi” logică și sigură.
-	// Depinde doar de valori semantice stabile (router, pasAnterior), NU de array-ul nou alocat pasi.
+	// Blocăm Back cât timp `seIncarca` este activ (ex. în timpul `finalizeaza()`).
 	const handleBack = useCallback(() => {
+		if (seIncarca) return true
 		if (safetyTimerRef.current) {
 			clearTimeout(safetyTimerRef.current)
 			safetyTimerRef.current = null
@@ -88,6 +89,11 @@ export default function EcranPas({
 		anuleazaProtectieNavigare()
 		apasareInCursRef.current = false
 		setApasareInCurs(false)
+		// Din `/onboarding/plan`, ocolim explicit `/onboarding/calculating` chiar dacă este în stivă.
+		if (pas === '/onboarding/plan' && pasAnterior) {
+			router.replace(pasAnterior as any)
+			return true
+		}
 		if (router.canGoBack()) {
 			router.back()
 			return true
@@ -97,7 +103,7 @@ export default function EcranPas({
 			return true
 		}
 		return false
-	}, [router, pasAnterior])
+	}, [pas, router, pasAnterior, seIncarca])
 
 	// P0-01: Focus-scoped lifecycle behavior:
 	// 1. Când ecranul primește focus (montare inițială sau revenire via Back):
@@ -210,10 +216,12 @@ export default function EcranPas({
 					{indice > 0 ? (
 						<TouchableOpacity
 							onPress={handleBack}
-							style={styles.butonInapoi}
+							disabled={seIncarca}
+							style={[styles.butonInapoi, seIncarca && { opacity: 0.4 }]}
 							hitSlop={12}
 							accessibilityLabel={textInapoi}
 							accessibilityRole="button"
+							accessibilityState={{ disabled: seIncarca }}
 						>
 							<ArrowLeft size={24} color={colors.textPrimary} />
 						</TouchableOpacity>
@@ -272,7 +280,15 @@ export default function EcranPas({
 							<ActivityIndicator color={colors.background} />
 						) : (
 							<>
-								<Text style={[styles.butonText, { color: colors.background }]}>{textButon}</Text>
+								<Text
+									style={[styles.butonText, { color: colors.background }]}
+									numberOfLines={1}
+									adjustsFontSizeToFit
+									minimumFontScale={0.78}
+									maxFontSizeMultiplier={1.3}
+								>
+									{textButon}
+								</Text>
 								<ArrowRight size={20} color={colors.background} strokeWidth={2.5} />
 							</>
 						)}
@@ -298,6 +314,6 @@ const styles = StyleSheet.create({
 	subsol: { paddingHorizontal: 24, paddingBottom: 12, paddingTop: 8 },
 	buton: { borderRadius: 18, overflow: 'hidden' },
 	butonInactiv: { opacity: 0.4 },
-	butonGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 19, gap: 10 },
-	butonText: { fontSize: 17, fontWeight: '900', letterSpacing: 0.3 },
+	butonGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, paddingHorizontal: 16, gap: 10 },
+	butonText: { flexShrink: 1, textAlign: 'center', fontSize: 17, fontWeight: '900', letterSpacing: 0.3 },
 })

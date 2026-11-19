@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, Modal,
   ScrollView, RefreshControl, Alert, ActivityIndicator, Platform, Switch, Image, Share,
+  KeyboardAvoidingView,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
@@ -81,7 +82,7 @@ export default function ProfilScreen() {
   const { showBanner } = useNotificationBannerActions();
   const notify = useNotify();
   const { insigne } = useGamificareData();
-  const { scrollPaddingTop, scrollPaddingBottom, horizontalPadding } = useResponsiveLayout();
+  const { scrollPaddingTop, scrollPaddingBottom, horizontalPadding, bottomInset = 0 } = useResponsiveLayout();
   const [greutate, setGreutate] = useState('75');
   const [greutateTinta, setGreutateTinta] = useState('70');
   const [caloriiTinta, setCaloriiTinta] = useState('2000');
@@ -99,7 +100,13 @@ export default function ProfilScreen() {
   const reduceMotion = useReducedMotion();
 
   const [loading, setLoading] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
+  const [refreshingProfile, setRefreshingProfile] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const hasLoadedProfileOnceRef = useRef(false);
+  const saveInFlightRef = useRef(false);
+  const exportInFlightRef = useRef(false);
+  const deleteInFlightRef = useRef(false);
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [languageQuery, setLanguageQuery] = useState('');
   const [achievementsModalVisible, setAchievementsModalVisible] = useState(false);
@@ -121,6 +128,8 @@ export default function ProfilScreen() {
   };
 
   const executaStergereaContului = async () => {
+    if (deleteInFlightRef.current) return;
+    deleteInFlightRef.current = true;
     try {
       setLoading(true);
       const res = await fetch(`${API_URL}${API_PREFIX}/user/delete-account`, {
@@ -154,11 +163,13 @@ export default function ProfilScreen() {
     } catch (err: any) {
       Alert.alert(t('common.error'), err.message || t('profile.deleteAccountFailed'));
     } finally {
+      deleteInFlightRef.current = false;
       setLoading(false);
     }
   };
 
   const exportaDateleMele = async () => {
+    if (exportInFlightRef.current || exportingData || loading) return;
     const userId = session?.user.id;
     const token = session?.access_token;
     if (!userId || !token) {
@@ -166,8 +177,9 @@ export default function ProfilScreen() {
       return;
     }
 
+    exportInFlightRef.current = true;
+    setExportingData(true);
     try {
-      setLoading(true);
       const serverExport = await fetchServerGdprExport({
         apiUrl: API_URL,
         apiPrefix: API_PREFIX,
@@ -204,13 +216,19 @@ export default function ProfilScreen() {
     } catch {
       Alert.alert(t('common.error'), t('profile.exportDataFailed'));
     } finally {
-      setLoading(false);
+      exportInFlightRef.current = false;
+      setExportingData(false);
     }
   };
 
-  const initProfile = useCallback(async () => {
+  const initProfile = useCallback(async (options?: { isRefresh?: boolean }) => {
     if (loadingAuth) return;
-    setCheckingSession(true);
+    const isRefresh = options?.isRefresh === true;
+    if (isRefresh) {
+      setRefreshingProfile(true);
+    } else if (!hasLoadedProfileOnceRef.current) {
+      setCheckingSession(true);
+    }
     try {
       if (session) {
         const metadata = user?.user_metadata || session.user.user_metadata || {};
@@ -266,7 +284,9 @@ export default function ProfilScreen() {
     } catch (e) {
       console.warn('Eroare încărcare profil:', e);
     } finally {
+      hasLoadedProfileOnceRef.current = true;
       setCheckingSession(false);
+      setRefreshingProfile(false);
     }
   }, [loadingAuth, session, user]);
 
@@ -308,6 +328,7 @@ export default function ProfilScreen() {
   };
 
   const salveaza = async () => {
+    if (saveInFlightRef.current || loading) return;
     if (!greutate || !greutateTinta || !caloriiTinta || !proteineTinta || !carbiTinta || !grasimiTinta) {
       showBanner({
         title: t('profile.incompleteGoalsTitle'),
@@ -348,6 +369,7 @@ export default function ProfilScreen() {
       metadataUpdate.grasimiTinta = parseInt(grasimiTinta, 10);
     }
 
+    saveInFlightRef.current = true;
     setLoading(true);
     try {
       // Salvăm întâi în Supabase
@@ -405,6 +427,7 @@ export default function ProfilScreen() {
         type: salvatLocal ? 'info' : 'error'
       });
     } finally {
+      saveInFlightRef.current = false;
       setLoading(false);
     }
   };
@@ -522,7 +545,12 @@ export default function ProfilScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom, width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: horizontalPadding }]}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={initProfile} tintColor={colors.accent} colors={[colors.accent]} />
+          <RefreshControl
+            refreshing={refreshingProfile}
+            onRefresh={() => void initProfile({ isRefresh: true })}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+          />
         }
       >
 
@@ -632,7 +660,12 @@ export default function ProfilScreen() {
                     <View style={[styles.themeSwatch, { backgroundColor: tColors.accent }]} />
                     <View style={[styles.themeSwatch, { backgroundColor: tColors.accentSecondary }]} />
                   </View>
-                  <Text style={[styles.themeNameText, { color: isSelected ? tColors.accent : colors.textPrimary }]}>
+                  <Text
+                    style={[styles.themeNameText, { color: isSelected ? tColors.accent : colors.textPrimary }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.78}
+                  >
                     {themeDisplayNames[tName]}
                   </Text>
                 </TouchableOpacity>
@@ -662,9 +695,25 @@ export default function ProfilScreen() {
           </TouchableOpacity>
 
           <Modal visible={languageModalVisible} transparent animationType="slide" onRequestClose={() => setLanguageModalVisible(false)}>
-            <View style={styles.modalBackdrop}>
-              <View style={[styles.selectionSheet, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder }]}>
-                <View style={styles.modalTitleRow}><Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('profile.languageTitle')}</Text><TouchableOpacity accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => setLanguageModalVisible(false)} accessibilityLabel={t('common.close')}><Text style={{ color: colors.textSecondary, fontSize: 24 }}>×</Text></TouchableOpacity></View>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={styles.modalBackdrop}
+            >
+              <View style={[styles.selectionSheet, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder, paddingBottom: Math.max(bottomInset, 20) }]}>
+                <View style={styles.modalTitleRow}>
+                  <Text style={[styles.modalTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {t('profile.languageTitle')}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.modalCloseBtn}
+                    accessibilityRole="button"
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    onPress={() => setLanguageModalVisible(false)}
+                    accessibilityLabel={t('common.close')}
+                  >
+                    <Text style={{ color: colors.textSecondary, fontSize: 24, lineHeight: 26 }}>×</Text>
+                  </TouchableOpacity>
+                </View>
                 <TextInput value={languageQuery} onChangeText={setLanguageQuery} placeholder={t('profile.searchLanguages')} placeholderTextColor={colors.textTertiary} style={[styles.modalSearch, { color: colors.textPrimary, borderColor: colors.cardBorder }]} autoCorrect={false} />
                 <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 8 }}>
                   {filteredLanguages.length === 0 ? <Text style={{ color: colors.textSecondary, paddingVertical: 16 }}>{t('profile.noLanguagesFound')}</Text> : filteredLanguages.map((langKey) => {
@@ -673,7 +722,7 @@ export default function ProfilScreen() {
                   })}
                 </ScrollView>
               </View>
-            </View>
+            </KeyboardAvoidingView>
           </Modal>
         </Animated.View>
 
@@ -874,8 +923,8 @@ export default function ProfilScreen() {
             onPress={() => flowCredits.open()}
             activeOpacity={0.85}
             style={{
-              backgroundColor: '#CCFF0012',
-              borderColor: '#CCFF0044',
+              backgroundColor: `${colors.accent}12`,
+              borderColor: `${colors.accent}44`,
               borderWidth: 1,
               borderRadius: 18,
               padding: 16,
@@ -892,14 +941,14 @@ export default function ProfilScreen() {
                 width: 44,
                 height: 44,
                 borderRadius: 22,
-                backgroundColor: 'rgba(204, 255, 0, 0.15)',
+                backgroundColor: `${colors.accent}26`,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Sparkles size={22} color="#CCFF00" />
+              <Sparkles size={22} color={colors.accent} />
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ fontSize: 15, fontWeight: '900', color: colors.textPrimary }}>
                 {t('profile.flowCreditsTitle')}
               </Text>
@@ -935,8 +984,21 @@ export default function ProfilScreen() {
             <ChevronRight size={18} color={colors.accent} />
           </TouchableOpacity>
           <Modal visible={achievementsModalVisible} transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={() => setAchievementsModalVisible(false)}>
-            <View style={styles.modalBackdrop}><View style={[styles.selectionSheet, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder, paddingBottom: Math.max(scrollPaddingBottom, 20) }]}>
-              <View style={styles.modalTitleRow}><Text style={[styles.modalTitle, { color: colors.textPrimary }]}>{t('profile.viewAllAchievements')}</Text><TouchableOpacity onPress={() => setAchievementsModalVisible(false)} accessibilityRole="button" accessibilityLabel={t('common.close')}><Text style={{ color: colors.textSecondary, fontSize: 24 }}>×</Text></TouchableOpacity></View>
+            <View style={styles.modalBackdrop}><View style={[styles.selectionSheet, { backgroundColor: colors.cardBg, borderColor: colors.cardBorder, paddingBottom: Math.max(bottomInset, 20) }]}>
+              <View style={styles.modalTitleRow}>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                  {t('profile.viewAllAchievements')}
+                </Text>
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setAchievementsModalVisible(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.close')}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Text style={{ color: colors.textSecondary, fontSize: 24, lineHeight: 26 }}>×</Text>
+                </TouchableOpacity>
+              </View>
               <ScrollView contentContainerStyle={{ gap: 10 }}>{sortedAchievements.map((insign) => <AchievementCard key={insign.id} id={insign.id} name={t(insign.numeI18n, { defaultValue: insign.nume })} requirement={t(insign.conditieI18n, { defaultValue: insign.conditie })} unlocked={insigne.includes(insign.id)} width="100%" />)}</ScrollView>
             </View></View>
           </Modal>
@@ -1173,13 +1235,26 @@ export default function ProfilScreen() {
           <View style={{ gap: 12, marginBottom: 24 }}>
             <TouchableOpacity
               testID="profile-export-data"
-              style={[styles.logoutBtn, { borderColor: colors.accent + '55', backgroundColor: colors.accent + '0A' }]}
+              style={[styles.logoutBtn, { borderColor: colors.accent + '55', backgroundColor: colors.accent + '0A', opacity: exportingData ? 0.7 : 1 }]}
               onPress={exportaDateleMele}
+              disabled={exportingData || loading}
               accessibilityRole="button"
               accessibilityLabel={t('profile.exportDataA11y')}
+              accessibilityState={{ disabled: exportingData || loading }}
             >
-              <Download size={18} color={colors.accent} />
-              <Text style={[styles.logoutText, { color: colors.accent }]}>{t('profile.exportData')}</Text>
+              {exportingData ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <Download size={18} color={colors.accent} />
+              )}
+              <Text
+                style={[styles.logoutText, { color: colors.accent }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                {t('profile.exportData')}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               testID="profile-delete-account"
@@ -1250,8 +1325,9 @@ export default function ProfilScreen() {
 const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.55)' },
   selectionSheet: { maxHeight: '82%', width: '100%', maxWidth: 540, alignSelf: 'center', borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, padding: 20, gap: 14 },
-  modalTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  modalTitle: { fontSize: 20, fontWeight: '800' },
+  modalTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  modalTitle: { flex: 1, flexShrink: 1, fontSize: 20, fontWeight: '800' },
+  modalCloseBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
   modalSearch: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, fontSize: 16 },
   languageOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   secondaryAction: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 13, borderWidth: 1, borderRadius: 14 },
@@ -1307,7 +1383,7 @@ const styles = StyleSheet.create({
   // Save button
   saveBtn: { borderRadius: 20, overflow: 'hidden', marginBottom: 20, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
   saveBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20, gap: 10 },
-  saveBtnText: { fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
+  saveBtnText: { flexShrink: 1, fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
 
   // Info card
   infoCard: { borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)', marginBottom: 24 },
@@ -1318,7 +1394,7 @@ const styles = StyleSheet.create({
 
   // Logout
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 20, borderRadius: 20, borderWidth: 1 },
-  logoutText: { fontSize: 16, fontWeight: '700' },
+  logoutText: { flexShrink: 1, fontSize: 16, fontWeight: '700' },
 
   cameraBadge: { position: 'absolute', bottom: 10, right: 0, width: 30, height: 30, borderRadius: 15, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
   successOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28, zIndex: 999, backgroundColor: 'rgba(0,0,0,0.5)' },

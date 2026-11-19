@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, Alert, ActivityIndicator
+  ScrollView, Alert, ActivityIndicator, BackHandler, Platform
 } from 'react-native';
 import KeyboardAwareScreen from '../../components/ui/KeyboardAwareScreen';
 import { supabase } from '../../supabase';
@@ -23,7 +23,7 @@ import { passwordRecoveryErrorKey } from '../../lib/passwordRecoveryErrors';
 export default function NouaParolaScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const { contentMaxWidth } = useResponsiveLayout();
+  const { contentMaxWidth, topInset, bottomInset } = useResponsiveLayout();
   const router = useRouter();
   const [parola, setParola] = useState('');
   const [confirmare, setConfirmare] = useState('');
@@ -32,6 +32,7 @@ export default function NouaParolaScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const verificat = useRef(false);
+  const submittingRef = useRef(false);
   const auth = useOptionalAuth();
   const authLoading = auth?.loadingAuth ?? false;
   const authSession = auth?.session ?? null;
@@ -44,6 +45,25 @@ export default function NouaParolaScreen() {
   const isPasswordValid = isMinLength && hasUpperCase && hasNumber;
   const confirmOk = parola.length > 0 && parola === confirmare;
   const poateTrimite = isPasswordValid && confirmOk;
+
+  const handleExitRecovery = useCallback(async () => {
+    auth?.clearPasswordRecovery?.();
+    if (updatedSuccess) {
+      router.replace('/auth/complete');
+      return;
+    }
+    try { await supabase.auth.signOut?.(); } catch {}
+    router.replace('/auth');
+  }, [auth, router, updatedSuccess]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      void handleExitRecovery();
+      return true;
+    });
+    return () => sub.remove();
+  }, [handleExitRecovery]);
 
   // Fără sesiune (link expirat / deschis direct) → înapoi la login.
   useEffect(() => {
@@ -63,6 +83,7 @@ export default function NouaParolaScreen() {
   }, [authLoading, authSession, router, t]);
 
   const submit = async () => {
+    if (submittingRef.current || loading) return;
     setError(null);
     if (!isPasswordValid) {
       setError(t('authNewPassword.errorNotValid'));
@@ -74,6 +95,7 @@ export default function NouaParolaScreen() {
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
       return;
     }
+    submittingRef.current = true;
     setLoading(true);
     try {
       const { error: eroare } = await supabase.auth.updateUser({ password: parola });
@@ -88,6 +110,7 @@ export default function NouaParolaScreen() {
       setError(t(passwordRecoveryErrorKey(null)));
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   };
@@ -99,7 +122,13 @@ export default function NouaParolaScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: Math.max(topInset + 16, 24),
+            paddingBottom: Math.max(bottomInset + 24, 48),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -133,7 +162,13 @@ export default function NouaParolaScreen() {
                   accessibilityLabel={t('authNewPassword.continueBtn')}
                 >
                   <LinearGradient colors={colors.accentGradient} style={styles.submitGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
-                    <Text style={[styles.submitText, { color: onAccentColor }]} maxFontSizeMultiplier={1.3}>
+                    <Text
+                      style={[styles.submitText, { color: onAccentColor }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.78}
+                      maxFontSizeMultiplier={1.3}
+                    >
                       {t('authNewPassword.continueBtn')}
                     </Text>
                     <ArrowRight size={20} color={onAccentColor} strokeWidth={2.5} />
@@ -251,7 +286,15 @@ export default function NouaParolaScreen() {
                   <ActivityIndicator color={onAccentColor} />
                 ) : (
                   <>
-                    <Text style={[styles.submitText, { color: onAccentColor }]} maxFontSizeMultiplier={1.3}>{t('authNewPassword.saveBtn')}</Text>
+                    <Text
+                      style={[styles.submitText, { color: onAccentColor }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.78}
+                      maxFontSizeMultiplier={1.3}
+                    >
+                      {t('authNewPassword.saveBtn')}
+                    </Text>
                     <ArrowRight size={20} color={onAccentColor} strokeWidth={2.5} />
                   </>
                 )}
@@ -302,14 +345,14 @@ const styles = StyleSheet.create({
   passwordRulesBox: { borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, gap: 8 },
   passwordRulesHeader: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  ruleText: { fontSize: 13, fontWeight: '600' },
+  ruleText: { flex: 1, flexShrink: 1, fontSize: 13, fontWeight: '600' },
 
   errorBanner: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 12, marginBottom: 14 },
   errorText: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
 
   submitBtn: { borderRadius: 18, overflow: 'hidden', marginTop: 8, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 12 },
-  submitGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20, gap: 10 },
-  submitText: { fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
+  submitGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, paddingHorizontal: 16, gap: 10 },
+  submitText: { flexShrink: 1, textAlign: 'center', fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
 
   backBtn: { padding: 16, alignItems: 'center', marginTop: 8 },
   backText: { fontSize: 15, fontWeight: '600' },

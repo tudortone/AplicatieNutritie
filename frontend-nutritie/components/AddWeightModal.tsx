@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,8 +15,11 @@ import Animated, { FadeIn, FadeInUp, FadeOut, FadeOutDown } from 'react-native-r
 import { Scale, X, Check, Target } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+
+const FALLBACK_INSETS_CONTEXT = React.createContext<{ bottom?: number } | null>(null);
 
 interface AddWeightModalProps {
   visible: boolean;
@@ -40,6 +43,8 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { width } = useWindowDimensions();
+  const insets = useContext(SafeAreaInsetsContext ?? FALLBACK_INSETS_CONTEXT);
+  const bottomInset = insets?.bottom ?? 0;
   const reduceMotion = useReducedMotion();
   const [activeTab, setActiveTab] = useState<'curenta' | 'tinta'>(initialTab);
   const [inputVal, setInputVal] = useState(greutateCurenta?.toString() ?? '');
@@ -89,11 +94,11 @@ export const AddWeightModal: React.FC<AddWeightModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, { paddingBottom: Math.max(bottomInset, 20) }]}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardAvoid}
         >
           <Animated.View

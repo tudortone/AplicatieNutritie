@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -57,8 +58,9 @@ export default function ForgotPasswordScreen() {
   const params = useLocalSearchParams<{ email?: string; reason?: string }>();
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { contentMaxWidth } = useResponsiveLayout();
+  const { contentMaxWidth, topInset, bottomInset } = useResponsiveLayout();
   const { isOffline } = useNetworkStatus();
+  const inFlightRef = useRef(false);
 
   const [step, setStep] = useState<Step>('request');
   const [email, setEmail] = useState<string>(() => resolvePrefillEmail(params.email));
@@ -103,7 +105,7 @@ export default function ForgotPasswordScreen() {
   }, [router]);
 
   const handleSendCode = useCallback(async () => {
-    if (sending || isOffline) return;
+    if (inFlightRef.current || sending || isOffline) return;
 
     const normalized = email.trim().toLowerCase();
     if (!EMAIL_PATTERN.test(normalized)) {
@@ -112,6 +114,7 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
+    inFlightRef.current = true;
     setSending(true);
     setErrorMsg(null);
     try {
@@ -141,13 +144,15 @@ export default function ForgotPasswordScreen() {
       triggerErrorHaptic();
       setErrorMsg(t(forgotPasswordErrorKey(thrown as { status?: number; message?: string; code?: string })));
     } finally {
+      inFlightRef.current = false;
       setSending(false);
     }
   }, [email, isOffline, sending, t, triggerErrorHaptic, triggerSuccessHaptic]);
 
   const handleResendCode = useCallback(async () => {
-    if (resending || sending || cooldown > 0 || isOffline || !submittedEmail) return;
+    if (inFlightRef.current || resending || sending || cooldown > 0 || isOffline || !submittedEmail) return;
 
+    inFlightRef.current = true;
     setResending(true);
     setErrorMsg(null);
     try {
@@ -171,6 +176,7 @@ export default function ForgotPasswordScreen() {
       triggerErrorHaptic();
       setErrorMsg(t(forgotPasswordErrorKey(thrown as { status?: number; message?: string; code?: string })));
     } finally {
+      inFlightRef.current = false;
       setResending(false);
     }
   }, [
@@ -185,8 +191,9 @@ export default function ForgotPasswordScreen() {
   ]);
 
   const handleVerifyCode = useCallback(async () => {
-    if (verifying || isOffline || otpCode.length < 6 || otpCode.length > 8 || !submittedEmail) return;
+    if (inFlightRef.current || verifying || isOffline || otpCode.length < 6 || otpCode.length > 8 || !submittedEmail) return;
 
+    inFlightRef.current = true;
     setVerifying(true);
     setErrorMsg(null);
     try {
@@ -207,6 +214,7 @@ export default function ForgotPasswordScreen() {
       triggerErrorHaptic();
       setErrorMsg(t('authForgotPassword.errorInvalidOrExpiredCode'));
     } finally {
+      inFlightRef.current = false;
       setVerifying(false);
     }
   }, [
@@ -237,7 +245,13 @@ export default function ForgotPasswordScreen() {
         style={StyleSheet.absoluteFill}
       />
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(topInset + 16, Platform.OS === 'ios' ? 60 : 44),
+            paddingBottom: Math.max(bottomInset + 24, 40),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -474,18 +488,26 @@ export default function ForgotPasswordScreen() {
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                   >
+                    {sending ? (
+                      <ActivityIndicator size="small" color={colors.disabledText} />
+                    ) : null}
                     <Text
                       style={[
                         styles.primaryText,
                         { color: canSend ? onAccentColor : colors.disabledText },
                       ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.78}
                       maxFontSizeMultiplier={1.3}
                     >
                       {sending
                         ? t('authForgotPassword.sendingBtn')
                         : t('authForgotPassword.sendCodeBtn')}
                     </Text>
-                    <ArrowRight size={20} color={canSend ? onAccentColor : colors.disabledText} />
+                    {!sending ? (
+                      <ArrowRight size={20} color={canSend ? onAccentColor : colors.disabledText} />
+                    ) : null}
                   </LinearGradient>
                 </PressableScale>
               </>
@@ -578,18 +600,26 @@ export default function ForgotPasswordScreen() {
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                   >
+                    {verifying ? (
+                      <ActivityIndicator size="small" color={colors.disabledText} />
+                    ) : null}
                     <Text
                       style={[
                         styles.primaryText,
                         { color: canVerify ? onAccentColor : colors.disabledText },
                       ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.78}
                       maxFontSizeMultiplier={1.3}
                     >
                       {verifying
                         ? t('authForgotPassword.verifyingBtn')
                         : t('authForgotPassword.verifyCodeBtn')}
                     </Text>
-                    <ArrowRight size={20} color={canVerify ? onAccentColor : colors.disabledText} />
+                    {!verifying ? (
+                      <ArrowRight size={20} color={canVerify ? onAccentColor : colors.disabledText} />
+                    ) : null}
                   </LinearGradient>
                 </PressableScale>
 
@@ -598,9 +628,8 @@ export default function ForgotPasswordScreen() {
                   style={[
                     styles.secondaryBtn,
                     {
-                      backgroundColor: colors.inputBg,
+                      backgroundColor: canResend ? colors.inputBg : colors.disabledBg,
                       borderColor: colors.cardBorder,
-                      opacity: canResend ? 1 : 0.6,
                     },
                   ]}
                   onPress={handleResendCode}
@@ -613,12 +642,19 @@ export default function ForgotPasswordScreen() {
                       : t('authForgotPassword.resendBtn')
                   }
                 >
-                  <RefreshCw size={16} color={canResend ? colors.accent : colors.textSecondary} />
+                  {resending ? (
+                    <ActivityIndicator size="small" color={colors.disabledText} />
+                  ) : (
+                    <RefreshCw size={16} color={canResend ? colors.accent : colors.disabledText} />
+                  )}
                   <Text
                     style={[
                       styles.secondaryBtnText,
-                      { color: canResend ? colors.textPrimary : colors.textSecondary },
+                      { color: canResend ? colors.textPrimary : colors.disabledText },
                     ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.78}
                     maxFontSizeMultiplier={1.3}
                   >
                     {cooldown > 0
@@ -833,6 +869,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   primaryText: {
+    flexShrink: 1,
+    textAlign: 'center',
     fontSize: 16,
     fontWeight: '900',
     letterSpacing: 0.2,
@@ -849,6 +887,8 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   secondaryBtnText: {
+    flexShrink: 1,
+    textAlign: 'center',
     fontSize: 14,
     fontWeight: '700',
   },

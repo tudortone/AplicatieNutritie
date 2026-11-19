@@ -23,10 +23,13 @@ export default function AuthCompletionScreen() {
   const router = useRouter();
   const { session, loadingAuth } = useAuth();
   const navigatedRef = useRef(false);
+  const inFlightRef = useRef(false);
   const [showRetry, setShowRetry] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   const resolveAndNavigate = React.useCallback(async (userId: string, token?: string) => {
-    if (navigatedRef.current) return;
+    if (navigatedRef.current || inFlightRef.current) return;
+    inFlightRef.current = true;
 
     try {
       // 1. Dacă onboarding-ul local e confirmat, ne asigurăm că țintele sunt sincronizate și mergem în aplicație
@@ -43,9 +46,17 @@ export default function AuthCompletionScreen() {
       // 2. Verificare server-side pentru profil existent (utilizator existent pe device nou)
       if (token) {
         try {
-          const resp = await fetch(buildApiUrl('/user/profil'), {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 8000);
+          let resp: Response;
+          try {
+            resp = await fetch(buildApiUrl('/user/profil'), {
+              headers: { Authorization: `Bearer ${token}` },
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timer);
+          }
           if (resp.ok) {
             const body = (await resp.json()) as { exista?: boolean; complet?: boolean; profil?: ProfilRestaurare | null };
             if (body.exista && body.complet && body.profil) {
@@ -58,7 +69,7 @@ export default function AuthCompletionScreen() {
             }
           }
         } catch {
-          // Eroare la endpoint-ul de backend — continuăm cu fallback direct Supabase
+          // Eroare / timeout la endpoint-ul de backend — continuăm cu fallback direct Supabase
         }
       }
 
@@ -100,6 +111,8 @@ export default function AuthCompletionScreen() {
     } catch {
       navigatedRef.current = true;
       router.replace(useAppStore.getState().isOnboardingDone ? '/(tabs)' : '/onboarding');
+    } finally {
+      inFlightRef.current = false;
     }
   }, [router]);
 
@@ -132,6 +145,8 @@ export default function AuthCompletionScreen() {
   }, [resolveAndNavigate]);
 
   const reincearca = async () => {
+    if (inFlightRef.current || retrying) return;
+    setRetrying(true);
     setShowRetry(false);
     try {
       const { data } = await supabase.auth.getSession();
@@ -139,9 +154,14 @@ export default function AuthCompletionScreen() {
         await resolveAndNavigate(data.session.user.id, data.session.access_token);
         return;
       }
-    } catch {}
-    navigatedRef.current = true;
-    router.replace('/auth');
+      navigatedRef.current = true;
+      router.replace('/auth');
+    } catch {
+      navigatedRef.current = true;
+      router.replace('/auth');
+    } finally {
+      setRetrying(false);
+    }
   };
 
   return (
@@ -155,11 +175,19 @@ export default function AuthCompletionScreen() {
             testID="auth-completion-retry"
             style={[styles.retryButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={reincearca}
+            disabled={retrying}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t('oauth.retry', 'Reîncearcă')}
+            accessibilityState={{ disabled: retrying }}
           >
-            <Text style={[styles.retryText, { color: colors.textPrimary }]}>
-              {t('oauth.retry', 'Reîncearcă')}
-            </Text>
+            {retrying ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <Text style={[styles.retryText, { color: colors.textPrimary }]}>
+                {t('oauth.retry', 'Reîncearcă')}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -171,6 +199,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   text: { fontSize: 14, fontWeight: '600' },
   retryContainer: { marginTop: 16 },
-  retryButton: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
+  retryButton: {
+    minWidth: 140,
+    minHeight: 44,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   retryText: { fontSize: 14, fontWeight: '600' },
 });

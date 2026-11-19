@@ -3,7 +3,9 @@ import {
   Alert,
   Image,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -178,7 +180,10 @@ export function FlowCompanionModal({
       animationType={reduceMotion ? 'none' : 'slide'}
       transparent
     >
-      <View style={styles.backdrop}>
+      <KeyboardAvoidingView
+        style={styles.backdrop}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <Pressable
           testID="flow-companion-backdrop"
           style={styles.backdropTouchable}
@@ -525,7 +530,7 @@ export function FlowCompanionModal({
             </TouchableOpacity>
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

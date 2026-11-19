@@ -1331,7 +1331,8 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
       await act(async () => fireEvent.press(saveButton));
 
       const inserted = mockInsertMeal.mock.calls[0][0] as Record<string, unknown>;
-      expect(inserted).toEqual(reviewedMeal);
+      const { id: expectedClientOpId, ...expectedDbPayload } = reviewedMeal;
+      expect(inserted).toEqual({ ...expectedDbPayload, client_operation_id: expectedClientOpId });
       expect(savePhotoJobSaveAttempt).toHaveBeenCalledWith(
         mockUser.id, 'photo-job-1', 'recovered-photo-save', reviewedMeal,
       );
@@ -1382,7 +1383,8 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
 
       await act(async () => fireEvent.press(view.getByTestId('camera-add-journal-btn')));
       expect(mockInsertMeal).toHaveBeenCalledTimes(1);
-      expect(mockInsertMeal.mock.calls[0][0]).toEqual(reviewedMeal);
+      const { id: editedClientOpId, ...editedDbPayload } = reviewedMeal;
+      expect(mockInsertMeal.mock.calls[0][0]).toEqual({ ...editedDbPayload, client_operation_id: editedClientOpId });
     });
 
     it('CAMERA ORPHANED SAVE: recovers a locked snapshot after job expiry and retries the exact owner UUID', async () => {
@@ -1424,7 +1426,8 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
 
       await act(async () => fireEvent.press(view.getByTestId('camera-add-journal-btn')));
       expect(mockInsertMeal).toHaveBeenCalledTimes(1);
-      expect(mockInsertMeal.mock.calls[0][0]).toEqual(reviewedMeal);
+      const { id: orphanedClientOpId, ...orphanedDbPayload } = reviewedMeal;
+      expect(mockInsertMeal.mock.calls[0][0]).toEqual({ ...orphanedDbPayload, client_operation_id: orphanedClientOpId });
       expect(savePhotoJobSaveAttempt).toHaveBeenCalledWith(
         mockUser.id, 'expired-photo-job', 'orphaned-photo-save', reviewedMeal,
       );
@@ -1885,6 +1888,7 @@ describe('Blocker 1: Android Gallery Permission Hardening (API 24-32)', () => {
         expect(cleanupPhotoAsset).toHaveBeenCalledWith({
           token: mockSession.access_token,
           fileId: 'meal-file-id',
+          userId: mockUser.id,
         });
         expect(Alert.alert).not.toHaveBeenCalled();
         expect(view.queryByTestId('camera-gallery-error-card')).toBeNull();

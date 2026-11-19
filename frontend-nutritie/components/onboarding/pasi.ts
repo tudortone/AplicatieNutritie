@@ -41,3 +41,17 @@ export function pasulUrmator(curent: PasOnboarding, scop: string | null): PasOnb
 	if (i === -1 || i === pasi.length - 1) return null
 	return pasi[i + 1]
 }
+
+/**
+ * Pasul anterior navigabil (exclude ecranele tranzitorii auto-redirect precum
+ * `/onboarding/calculating`, astfel încât Back din `/onboarding/plan` să ajungă
+ * direct la `/onboarding/dieta` fără buclă infinită).
+ */
+export function pasulAnterior(curent: PasOnboarding, scop: string | null): PasOnboarding | null {
+	const pasi = pasiActivi(scop)
+	let i = pasi.indexOf(curent) - 1
+	while (i >= 0 && pasi[i] === '/onboarding/calculating') {
+		i -= 1
+	}
+	return i >= 0 ? pasi[i] : null
+}

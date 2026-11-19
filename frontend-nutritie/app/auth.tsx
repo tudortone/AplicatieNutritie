@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, Alert, ActivityIndicator, Platform
@@ -81,7 +81,7 @@ export default function AuthScreen() {
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
   const { t } = useTranslation();
-  const { contentMaxWidth } = useResponsiveLayout();
+  const { contentMaxWidth, topInset, bottomInset } = useResponsiveLayout();
   const router = useRouter();
   const setOnboardingDone = useAppStore((s) => s.setOnboardingDone);
   const setSkipOnboardingToAuth = useAppStore((s) => s.setSkipOnboardingToAuth);
@@ -90,6 +90,8 @@ export default function AuthScreen() {
   const [parola, setParola] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingOAuth, setLoadingOAuth] = useState<'google' | 'apple' | null>(null);
+  const submitInFlightRef = useRef(false);
+  const oauthInFlightRef = useRef(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -124,6 +126,7 @@ export default function AuthScreen() {
   const isValidEmail = (str: string) => /\S+@\S+\.\S+/.test(str.trim());
 
   const submit = async () => {
+    if (submitInFlightRef.current || oauthInFlightRef.current || loading || loadingOAuth !== null) return;
     setAuthError(null);
     const identificator = email.trim();
     const esteAdminLogin = !isSignUp && identificator.toLowerCase() === ADMIN_USERNAME;
@@ -143,6 +146,7 @@ export default function AuthScreen() {
       return;
     }
 
+    submitInFlightRef.current = true;
     setLoading(true);
     try {
       if (isSignUp) {
@@ -190,6 +194,7 @@ export default function AuthScreen() {
       setAuthError(msg);
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
     } finally {
+      submitInFlightRef.current = false;
       setLoading(false);
     }
   };
@@ -205,7 +210,7 @@ export default function AuthScreen() {
   };
 
   const signInWithOAuth = async (provider: 'google' | 'apple') => {
-    if (loadingOAuth) return;
+    if (oauthInFlightRef.current || submitInFlightRef.current || loading || loadingOAuth !== null) return;
     if (process.env.EXPO_PUBLIC_APP_ENV === 'qa') {
       setAuthError(t('auth.qaOAuthUnavailable', 'Google and Apple sign-in are unavailable in isolated QA. Use the synthetic email account.'));
       return;
@@ -213,9 +218,9 @@ export default function AuthScreen() {
     if (Platform.OS === 'android' && provider === 'apple') {
       return;
     }
+    oauthInFlightRef.current = true;
     setAuthError(null);
     setLoadingOAuth(provider);
-    setAuthError(null);
     try {
       const rezultat = await oauthFlow.signIn(provider);
       if (rezultat === 'cancelled') {
@@ -228,6 +233,7 @@ export default function AuthScreen() {
     } catch {
       Alert.alert(t('alerts.titluri.eroareOAuth'), t('alerts.mesaje.problemaConexiuneOAuth'));
     } finally {
+      oauthInFlightRef.current = false;
       setLoadingOAuth(null);
     }
   };
@@ -240,7 +246,13 @@ export default function AuthScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: Math.max(topInset + 16, 24),
+            paddingBottom: Math.max(bottomInset + 24, 48),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -460,16 +472,24 @@ export default function AuthScreen() {
                   (isSignUp && !isPasswordValid) ? { opacity: 0.6 } : {}
                 ]}
                 onPress={submit}
-                disabled={loading}
+                disabled={loading || loadingOAuth !== null}
                 accessibilityLabel={isSignUp ? t('auth.signUpButton') : t('auth.signInButton')}
-                accessibilityState={{ disabled: loading }}
+                accessibilityState={{ disabled: loading || loadingOAuth !== null }}
               >
                 <LinearGradient colors={colors.accentGradient} style={styles.submitGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                   {loading ? (
                     <ActivityIndicator color={colors.background} />
                   ) : (
                     <>
-                      <Text style={[styles.submitText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{isSignUp ? t('auth.signUpButton') : t('auth.signInButton')}</Text>
+                      <Text
+                        style={[styles.submitText, { color: colors.background }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.78}
+                        maxFontSizeMultiplier={1.3}
+                      >
+                        {isSignUp ? t('auth.signUpButton') : t('auth.signInButton')}
+                      </Text>
                       <ArrowRight size={20} color={colors.background} strokeWidth={2.5} />
                     </>
                   )}
@@ -487,7 +507,7 @@ export default function AuthScreen() {
                 accessibilityLabel={isSignUp ? t('auth.alreadyHaveAccountA11y') : t('auth.dontHaveAccountA11y')}
               >
                 <Text style={[styles.toggleText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
-                  {isSignUp ? t('auth.alreadyHaveAccount') : t('auth.dontHaveAccount')}
+                  {isSignUp ? t('auth.alreadyHaveAccount') : t('auth.dontHaveAccount')}{' '}
                   <Text style={[styles.toggleAccent, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>{isSignUp ? t('auth.signInLink') : t('auth.signUpLink')}</Text>
                 </Text>
               </TouchableOpacity>
@@ -502,10 +522,10 @@ export default function AuthScreen() {
                 <TouchableOpacity
                   style={[styles.oauthBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                   onPress={() => signInWithOAuth('google')}
-                  disabled={loadingOAuth !== null}
+                  disabled={loading || loadingOAuth !== null}
                   accessibilityRole="button"
                   accessibilityLabel={t("auth.continueWithGoogle") === 'auth.continueWithGoogle' ? 'Continuă cu Google' : t("auth.continueWithGoogle")}
-                  accessibilityState={{ disabled: loadingOAuth !== null }}
+                  accessibilityState={{ disabled: loading || loadingOAuth !== null }}
                 >
                   {loadingOAuth === 'google' ? (
                     <ActivityIndicator color={colors.accent} />
@@ -520,10 +540,10 @@ export default function AuthScreen() {
                   <TouchableOpacity
                     style={[styles.oauthBtn, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
                     onPress={() => signInWithOAuth('apple')}
-                    disabled={loadingOAuth !== null}
+                    disabled={loading || loadingOAuth !== null}
                     accessibilityRole="button"
                     accessibilityLabel={t("auth.continueWithApple") === 'auth.continueWithApple' ? 'Continuă cu Apple' : t("auth.continueWithApple")}
-                    accessibilityState={{ disabled: loadingOAuth !== null }}
+                    accessibilityState={{ disabled: loading || loadingOAuth !== null }}
                   >
                     {loadingOAuth === 'apple' ? (
                       <ActivityIndicator color={colors.accent} />
@@ -636,8 +656,8 @@ const styles = StyleSheet.create({
   input: { flex: 1, paddingVertical: 18, fontSize: 16, fontWeight: '500' },
 
   submitBtn: { borderRadius: 18, overflow: 'hidden', marginTop: 8, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 12 },
-  submitGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 20, gap: 10 },
-  submitText: { fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
+  submitGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, paddingHorizontal: 16, gap: 10 },
+  submitText: { flexShrink: 1, textAlign: 'center', fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
 
   toggleBtn: { padding: 16, alignItems: 'center', marginTop: 8 },
   toggleText: { fontSize: 15, fontWeight: '500' },
@@ -660,6 +680,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   oauthSecurityText: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: 11.5,
     lineHeight: 16,
     textAlign: 'center',
@@ -680,6 +702,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   legalConsentText: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: 11.5,
     textAlign: 'center',
     lineHeight: 16,
@@ -695,9 +719,11 @@ const styles = StyleSheet.create({
   legalChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
   },
@@ -708,7 +734,7 @@ const styles = StyleSheet.create({
   passwordRulesBox: { borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, gap: 8 },
   passwordRulesHeader: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  ruleText: { fontSize: 13, fontWeight: '600' },
+  ruleText: { flex: 1, flexShrink: 1, fontSize: 13, fontWeight: '600' },
   errorBanner: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 12, marginBottom: 14 },
   errorText: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
 
@@ -717,7 +743,7 @@ const styles = StyleSheet.create({
   planHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   planBadgeText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
   planKcalText: { fontSize: 36, fontWeight: '900', letterSpacing: -1, marginVertical: 2 },
-  planMacroRow: { flexDirection: 'row', gap: 8, marginVertical: 8 },
+  planMacroRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginVertical: 8 },
   planMacroPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   planMacroText: { fontSize: 12, fontWeight: '800' },
   planSubtext: { fontSize: 12, textAlign: 'center', opacity: 0.9, marginTop: 4 },

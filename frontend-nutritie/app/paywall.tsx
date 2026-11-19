@@ -220,7 +220,7 @@ export default function PaywallScreen() {
   // State: Tester access
   if (isTester) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 24) }]}>
         <View style={styles.header}>
           <Pressable
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
@@ -261,7 +261,7 @@ export default function PaywallScreen() {
   // State: Admin access (non-paying)
   if (isAdmin && !isPremium) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 24) }]}>
         <View style={styles.header}>
           <Pressable
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
@@ -302,7 +302,7 @@ export default function PaywallScreen() {
   // State: Existing server-confirmed Premium
   if (isPremium && operation.status !== 'verifying' && operation.status !== 'purchasing') {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 24) }]}>
         <View style={styles.header}>
           <Pressable
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
@@ -388,7 +388,10 @@ export default function PaywallScreen() {
         <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom + 24, 40) }]}
+      >
         {/* Hero Section */}
         <View style={styles.hero}>
           <LinearGradient
@@ -624,17 +627,23 @@ export default function PaywallScreen() {
 
                   <Text
                     maxFontSizeMultiplier={1.3}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
                     style={[styles.planTitle, { color: colors.textPrimary }]}
                   >
                     {t('paywall.plans.monthly')}
                   </Text>
                   <Text
                     maxFontSizeMultiplier={1.3}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.75}
                     style={[styles.planPrice, { color: colors.textPrimary }]}
                   >
                     {formatPrice(monthlyOffer)}
                   </Text>
-                  <Text style={[styles.planPeriod, { color: colors.textSecondary }]}>
+                  <Text numberOfLines={2} style={[styles.planPeriod, { color: colors.textSecondary }]}>
                     {t(`paywall.plans.${getPeriodKeyFromOffer(monthlyOffer)}`)}
                   </Text>
                 </Pressable>
@@ -687,17 +696,23 @@ export default function PaywallScreen() {
 
                   <Text
                     maxFontSizeMultiplier={1.3}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
                     style={[styles.planTitle, { color: colors.textPrimary }]}
                   >
                     {t('paywall.plans.annual')}
                   </Text>
                   <Text
                     maxFontSizeMultiplier={1.3}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.75}
                     style={[styles.planPrice, { color: colors.gold }]}
                   >
                     {formatPrice(annualOffer)}
                   </Text>
-                  <Text style={[styles.planPeriod, { color: colors.textSecondary }]}>
+                  <Text numberOfLines={2} style={[styles.planPeriod, { color: colors.textSecondary }]}>
                     {t(`paywall.plans.${getPeriodKeyFromOffer(annualOffer)}`)}
                   </Text>
                 </Pressable>
@@ -765,14 +780,14 @@ export default function PaywallScreen() {
           accessibilityRole="button"
           accessibilityLabel={t('paywall.creditsOption.title')}
         >
-          <View style={[styles.creditPacksIcon, { backgroundColor: 'rgba(204, 255, 0, 0.12)' }]}>
-            <Sparkles size={20} color="#CCFF00" />
+          <View style={[styles.creditPacksIcon, { backgroundColor: `${colors.accent}1F` }]}>
+            <Sparkles size={20} color={colors.accent} />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text maxFontSizeMultiplier={1.3} style={[styles.creditPacksTitle, { color: colors.textPrimary }]}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={[styles.creditPacksTitle, { color: colors.textPrimary }]}>
               {t('paywall.creditsOption.title')}
             </Text>
-            <Text style={[styles.creditPacksSubtitle, { color: colors.textSecondary }]}>
+            <Text numberOfLines={2} style={[styles.creditPacksSubtitle, { color: colors.textSecondary }]}>
               {t('paywall.creditsOption.subtitle')}
             </Text>
           </View>
@@ -816,23 +831,28 @@ export default function PaywallScreen() {
           {t('paywall.legal.disclaimer')}
           {'\n'}
           {t('paywall.legal.withdrawalNotice', { company: operatorName, email: SUPPORT_EMAIL })}
-          {'\n'}
-          <Text
-            style={{ textDecorationLine: 'underline' }}
+        </Text>
+        <View style={styles.legalLinksRow}>
+          <Pressable
+            style={styles.legalLinkBtn}
             accessibilityRole="link"
             onPress={() => openLegal('termsUrl')}
           >
-            {t('paywall.legal.terms')}
-          </Text>
-          {' · '}
-          <Text
-            style={{ textDecorationLine: 'underline' }}
+            <Text style={[styles.legalLinkText, { color: colors.textTertiary }]}>
+              {t('paywall.legal.terms')}
+            </Text>
+          </Pressable>
+          <Text style={[styles.legalDot, { color: colors.textTertiary }]}>·</Text>
+          <Pressable
+            style={styles.legalLinkBtn}
             accessibilityRole="link"
             onPress={() => openLegal('privacyUrl')}
           >
-            {t('paywall.legal.privacy')}
-          </Text>
-        </Text>
+            <Text style={[styles.legalLinkText, { color: colors.textTertiary }]}>
+              {t('paywall.legal.privacy')}
+            </Text>
+          </Pressable>
+        </View>
       </ScrollView>
 
       <ConfirmSheet
@@ -1219,6 +1239,28 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 18,
     lineHeight: 17,
+  },
+  legalLinksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  legalLinkBtn: {
+    minHeight: 44,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  legalLinkText: {
+    fontSize: 12,
+    textDecorationLine: 'underline',
+    fontWeight: '600',
+  },
+  legalDot: {
+    fontSize: 12,
   },
   activeContainer: {
     flex: 1,

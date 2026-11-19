@@ -86,6 +86,7 @@ export default function HistoryScreen() {
   const [afisarePoze, setAfisarePoze] = useState(true);
   const [mealToDelete, setMealToDelete] = useState<Masa | null>(null);
   const [isDeletingMeal, setIsDeletingMeal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const mealSheetRef = useRef<AddMealBottomSheetRef>(null);
   const categorieSheetRef = useRef<CategorieDetailSheetRef>(null);
@@ -238,7 +239,12 @@ export default function HistoryScreen() {
   );
 
   const onRefresh = useCallback(async () => {
-    await Promise.all([refresh(false, true), refreshZileCuMese(), refreshSteps(), refreshAntrenamente()]);
+    setRefreshing(true);
+    try {
+      await Promise.all([refresh(false, true), refreshZileCuMese(), refreshSteps(), refreshAntrenamente()]);
+    } finally {
+      setRefreshing(false);
+    }
   }, [refresh, refreshZileCuMese, refreshSteps, refreshAntrenamente]);
 
   // 1. Ștergere masă cu confirmare GetFlow și UI optimist (U-09)
@@ -473,8 +479,8 @@ export default function HistoryScreen() {
           style={({ pressed }) => [
             styles.discreteAddBtn,
             {
-              borderColor: accent + '60',
-              backgroundColor: accent + (pressed ? '30' : '15'),
+              borderColor: accent + '70',
+              backgroundColor: accent + (pressed ? '35' : '22'),
             },
           ]}
           onPress={() => {
@@ -485,8 +491,13 @@ export default function HistoryScreen() {
           accessibilityLabel={t('jurnal.addCategory', { categorie: label, label })}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <PlusCircle size={15} color={accent} />
-          <Text style={[styles.discreteAddBtnText, { color: accent }]}>
+          <PlusCircle size={15} color={colors.textPrimary} />
+          <Text
+            style={[styles.discreteAddBtnText, { color: colors.textPrimary }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
             {t('jurnal.addCategory', { categorie: label, label })}
           </Text>
         </Pressable>
@@ -515,7 +526,12 @@ export default function HistoryScreen() {
           accessibilityLabel={t('jurnal.addAnotherTo', { categorie: label, label })}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>
+          <Text
+            style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700', flexShrink: 1 }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+          >
             + {t('jurnal.addAnotherTo', { categorie: label, label })}
           </Text>
         </Pressable>
@@ -605,10 +621,10 @@ export default function HistoryScreen() {
         />
 
         {/* Selected Day Banner */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, backgroundColor: colors.accent + '15', borderRadius: Radius.md, borderWidth: 1, borderColor: colors.accent + '40', marginBottom: Spacing.lg }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, backgroundColor: colors.accent + '15', borderRadius: Radius.md, borderWidth: 1, borderColor: colors.accent + '40', marginBottom: Spacing.lg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flex: 1, minWidth: 0 }}>
             <Calendar size={16} color={colors.accent} />
-            <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 15 }}>
+            <Text style={{ color: colors.textPrimary, fontWeight: '800', fontSize: 15, flexShrink: 1 }} numberOfLines={1} ellipsizeMode="tail">
               {formatDataTitlu()}
             </Text>
           </View>
@@ -785,7 +801,7 @@ export default function HistoryScreen() {
           }}
           scrollEventThrottle={16}
           onRefresh={onRefresh}
-          refreshing={false}
+          refreshing={refreshing}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={<>{eroareBanner}{renderHeader()}</>}
           ListFooterComponent={<View style={{ height: scrollPaddingBottom }} />}
@@ -893,17 +909,17 @@ const styles = StyleSheet.create({
 
   // Grouped Sections
   sectionContainer: { marginBottom: 8 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderRadius: 20, borderWidth: 1 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: 16, borderRadius: 20, borderWidth: 1 },
   sectionTitleText: { fontSize: 18, fontWeight: '800' },
   sectionSubtitleText: { fontSize: 12, fontWeight: '600', marginTop: 2 },
-  sectionMacrosSummary: { alignItems: 'flex-end' },
+  sectionMacrosSummary: { alignItems: 'flex-end', flexShrink: 0, maxWidth: '46%' },
   sectionTotalCal: { fontSize: 16, fontWeight: '900' },
   sectionTotalMacros: { fontSize: 11, fontWeight: '600', marginTop: 2 },
-  discreteAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1 },
-  discreteAddBtnText: { fontSize: 12, fontWeight: '800' },
-  addMoreCategoryBtn: { paddingVertical: 12, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', marginTop: 4 },
-  emptyExpandedContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, borderWidth: 1, marginBottom: 8, marginTop: 2 },
-  emptyExpandedText: { fontSize: 13, fontWeight: '600', flex: 1, marginRight: 8 },
+  discreteAddBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 44, gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1 },
+  discreteAddBtnText: { flexShrink: 1, fontSize: 12, fontWeight: '800' },
+  addMoreCategoryBtn: { minHeight: 44, paddingHorizontal: 12, paddingVertical: 12, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', marginTop: 4 },
+  emptyExpandedContainer: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, borderWidth: 1, marginBottom: 8, marginTop: 2 },
+  emptyExpandedText: { fontSize: 13, fontWeight: '600', flex: 1, minWidth: 120, marginRight: 8 },
 
   // Meal card & sub-items
   card: { borderRadius: 24, overflow: 'hidden', marginBottom: 16, borderWidth: 1 },

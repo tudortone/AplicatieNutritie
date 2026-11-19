@@ -86,7 +86,9 @@ export default function StatisticiScreen() {
   const reduceMotion = useReducedMotion();
   const { t, i18n } = useTranslation();
   const { scrollPaddingTop, scrollPaddingBottom, horizontalPadding } = useResponsiveLayout();
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [eroareFetch, setEroareFetch] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'calorii' | 'greutate'>('calorii');
   const [caloriiTinta, setCaloriiTinta] = useState(2000);
   const [zile, setZile] = useState<ZiStatistica[]>([]);
@@ -102,12 +104,15 @@ export default function StatisticiScreen() {
   const [modalGreutateVisible, setModalGreutateVisible] = useState(false);
   const [modalInitialTab, setModalInitialTab] = useState<'curenta' | 'tinta'>('curenta');
 
-  const fetchStatistici = useCallback(async () => {
-    setLoading(true);
+  const fetchStatistici = useCallback(async (options?: { isRefresh?: boolean }) => {
+    const isRefresh = options?.isRefresh === true;
+    if (isRefresh) {
+      setRefreshing(true);
+    }
+    setEroareFetch(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setLoading(false);
         return;
       }
 
@@ -155,6 +160,7 @@ export default function StatisticiScreen() {
 
       if (error) {
         console.error('Eroare statistici Supabase:', error.message);
+        setEroareFetch(t('common.networkError', 'Nu s-au putut încărca statisticile. Verifică conexiunea și încearcă din nou.'));
       } else if (data) {
         const mese = data as Masa[];
 
@@ -248,10 +254,12 @@ export default function StatisticiScreen() {
       setGreutateTinta(isValidBodyWeightKg(targetValue) ? targetValue : null);
     } catch (e) {
       console.error('Eroare neașteptată în statistici:', e);
+      setEroareFetch(t('common.networkError', 'Nu s-au putut încărca statisticile. Verifică conexiunea și încearcă din nou.'));
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+      setRefreshing(false);
     }
-  }, [i18n.language]);
+  }, [i18n.language, t]);
 
   const salveazaGreutate = async (nouaValoare: number) => {
     try {
@@ -322,7 +330,7 @@ export default function StatisticiScreen() {
   const areDateCalorii = zile.some((z) => z.calorii > 0);
   const areDateGreutate = istoricGreutate.some((z) => isValidBodyWeightKg(Number(z.greutate)));
 
-  if (loading) {
+  if (initialLoading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.accent} />
@@ -340,7 +348,12 @@ export default function StatisticiScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingTop: scrollPaddingTop, paddingBottom: scrollPaddingBottom, width: '100%', maxWidth: 680, alignSelf: 'center', paddingHorizontal: horizontalPadding }]}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={fetchStatistici} tintColor={colors.accent} colors={[colors.accent]} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void fetchStatistici({ isRefresh: true })}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+          />
         }
       >
         <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(500)} style={styles.header}>
@@ -358,9 +371,16 @@ export default function StatisticiScreen() {
               accessibilityState={{ selected: activeTab === 'calorii' }}
               accessibilityLabel="Fila aport caloric"
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minWidth: 0 }}>
                 <FlowIcon name="chart" size={15} color={activeTab === 'calorii' ? colors.background : colors.textSecondary} />
-                <Text style={[styles.tabText, { color: activeTab === 'calorii' ? colors.background : colors.textSecondary, fontWeight: activeTab === 'calorii' ? '800' : '600' }]}>Aport Caloric</Text>
+                <Text
+                  style={[styles.tabText, { color: activeTab === 'calorii' ? colors.background : colors.textSecondary, fontWeight: activeTab === 'calorii' ? '800' : '600' }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.78}
+                >
+                  Aport Caloric
+                </Text>
               </View>
             </TouchableOpacity>
 
@@ -371,13 +391,44 @@ export default function StatisticiScreen() {
               accessibilityState={{ selected: activeTab === 'greutate' }}
               accessibilityLabel="Fila evoluție greutate"
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minWidth: 0 }}>
                 <FlowIcon name="scale" size={15} color={activeTab === 'greutate' ? colors.background : colors.textSecondary} />
-                <Text style={[styles.tabText, { color: activeTab === 'greutate' ? colors.background : colors.textSecondary, fontWeight: activeTab === 'greutate' ? '800' : '600' }]}>Evoluție Greutate</Text>
+                <Text
+                  style={[styles.tabText, { color: activeTab === 'greutate' ? colors.background : colors.textSecondary, fontWeight: activeTab === 'greutate' ? '800' : '600' }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.78}
+                >
+                  Evoluție Greutate
+                </Text>
               </View>
             </TouchableOpacity>
           </View>
         </Animated.View>
+
+        {eroareFetch ? (
+          <View
+            testID="statistici-error-banner"
+            style={[styles.eroareBanner, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}
+            accessibilityRole="alert"
+          >
+            <Text style={[styles.eroareText, { color: colors.danger }]} maxFontSizeMultiplier={1.3}>
+              {eroareFetch}
+            </Text>
+            <TouchableOpacity
+              testID="statistici-retry-btn"
+              onPress={() => void fetchStatistici()}
+              style={styles.eroareBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={t('chat.retry')}
+            >
+              <Text style={[styles.eroareBtnText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>
+                {t('chat.retry')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {activeTab === 'greutate' ? (
           <>
@@ -392,8 +443,8 @@ export default function StatisticiScreen() {
               >
                 <LinearGradient colors={[colors.accentSecondary + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
                   <Scale size={20} color={colors.accentSecondary} />
-                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{greutateCurenta === null ? '—' : `${greutateCurenta} kg`}</Text>
-                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>{t('statistici.weightProjection.measured')}</Text>
+                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>{greutateCurenta === null ? '—' : `${greutateCurenta} kg`}</Text>
+                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]} numberOfLines={2}>{t('statistici.weightProjection.measured')}</Text>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -406,8 +457,8 @@ export default function StatisticiScreen() {
               >
                 <LinearGradient colors={[colors.accent + '15', 'rgba(0,0,0,0)']} style={styles.summaryGrad}>
                   <Target size={20} color={colors.accent} />
-                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>{greutateTinta === null ? '—' : `${greutateTinta} kg`}</Text>
-                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>{t('statistici.weightProjection.goal')}</Text>
+                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>{greutateTinta === null ? '—' : `${greutateTinta} kg`}</Text>
+                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]} numberOfLines={2}>{t('statistici.weightProjection.goal')}</Text>
                 </LinearGradient>
               </TouchableOpacity>
 
@@ -416,12 +467,12 @@ export default function StatisticiScreen() {
                   {greutateCurenta !== null && greutateTinta !== null ? (
                     <AnimatedTrendArrow isLoss={greutateCurenta >= greutateTinta} color={colors.warning} />
                   ) : <Scale size={20} color={colors.warning} />}
-                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
+                  <Text style={[styles.summaryVal, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68}>
                     {greutateCurenta !== null && greutateTinta !== null
                       ? `${Math.abs(Math.round((greutateCurenta - greutateTinta) * 10) / 10)} kg`
                       : '—'}
                   </Text>
-                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]}>
+                  <Text style={[styles.summaryLbl, { color: colors.textSecondary }]} numberOfLines={2}>
                     {greutateCurenta === null || greutateTinta === null
                       ? t('statistici.weightProjection.setBoth')
                       : t(greutateCurenta >= greutateTinta
@@ -463,7 +514,7 @@ export default function StatisticiScreen() {
               <BlurView intensity={20} tint="dark" style={styles.chartBlur}>
                 <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.chartGrad}>
                   <View style={styles.chartHeader}>
-                    <View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
                         <FlowIcon name="scale" size={16} color={colors.accentSecondary} />
                         <Text style={[styles.chartTitle, { color: colors.textPrimary }]}>Grafic Greutate</Text>
@@ -593,9 +644,16 @@ export default function StatisticiScreen() {
                         {predictie.status === 'estimated' ? (
                           <>
                             <View style={[styles.predictBox, { backgroundColor: 'rgba(0,0,0,0.2)', borderColor: 'rgba(255,255,255,0.04)' }]}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' }}>
                                 <FlowIcon name="target" size={14} color={colors.accent} />
-                                <Text style={[styles.predictDate, { color: colors.accent }]}>{new Date(`${predictie.targetDate}T12:00:00`).toLocaleDateString(i18n.language, { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+                                <Text
+                                  style={[styles.predictDate, { color: colors.accent }]}
+                                  numberOfLines={1}
+                                  adjustsFontSizeToFit
+                                  minimumFontScale={0.75}
+                                >
+                                  {new Date(`${predictie.targetDate}T12:00:00`).toLocaleDateString(i18n.language, { day: 'numeric', month: 'long', year: 'numeric' })}
+                                </Text>
                               </View>
                               <Text style={[styles.predictWeeks, { color: colors.textSecondary }]}>
                                 {t('statistici.weightProjection.weeklyChange', { amount: predictie.weeklyChangeKg })}
@@ -760,8 +818,8 @@ const styles = StyleSheet.create({
   chartCard: { width: '100%', maxWidth: 680, alignSelf: 'center', borderRadius: 28, overflow: 'hidden', borderWidth: 1, marginBottom: 24 },
   chartBlur: { overflow: 'hidden' },
   chartGrad: { padding: 22 },
-  chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  chartTitle: { fontSize: 18, fontWeight: '800' },
+  chartHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 24 },
+  chartTitle: { flexShrink: 1, fontSize: 18, fontWeight: '800' },
   chartTargetLbl: { fontSize: 13, fontWeight: '600' },
 
   chartArea: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 200, paddingTop: 10 },
@@ -780,13 +838,13 @@ const styles = StyleSheet.create({
 
   // New Tab & Weight Styles
   tabSwitcher: { flexDirection: 'row', borderRadius: 18, borderWidth: 1, padding: 4, marginTop: 16 },
-  tabBtn: { flex: 1, paddingVertical: 10, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  tabText: { fontSize: 13 },
+  tabBtn: { flex: 1, minHeight: 44, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  tabText: { flexShrink: 1, fontSize: 13 },
   
   recordBtn: { borderRadius: 24, borderWidth: 1, overflow: 'hidden' },
   recordGrad: { flexDirection: 'row', alignItems: 'center', padding: 18, gap: 14 },
   recordIcon: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  recordTitle: { fontSize: 16, fontWeight: '800' },
+  recordTitle: { flexShrink: 1, fontSize: 16, fontWeight: '800' },
   recordSub: { fontSize: 12, fontWeight: '500', marginTop: 2 },
   
   chartSwitcher: { flexDirection: 'row', borderRadius: 12, borderWidth: 1, padding: 2 },
@@ -798,10 +856,14 @@ const styles = StyleSheet.create({
   predictGrad: { padding: 22 },
   predictHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   predictIconBg: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  predictTitle: { fontSize: 17, fontWeight: '800' },
+  predictTitle: { flexShrink: 1, fontSize: 17, fontWeight: '800' },
   predictSub: { fontSize: 12, fontWeight: '500', marginTop: 2 },
   predictBox: { padding: 16, borderRadius: 18, borderWidth: 1, alignItems: 'center', marginBottom: 14 },
-  predictDate: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
+  predictDate: { flexShrink: 1, fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
   predictWeeks: { fontSize: 13, fontWeight: '600', marginTop: 2 },
   predictText: { fontSize: 13, lineHeight: 20, fontWeight: '400' },
+  eroareBanner: { width: '100%', maxWidth: 680, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16 },
+  eroareText: { flex: 1, fontSize: 13, fontWeight: '600' },
+  eroareBtn: { marginLeft: 8, minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  eroareBtnText: { fontSize: 13, fontWeight: '800' },
 });

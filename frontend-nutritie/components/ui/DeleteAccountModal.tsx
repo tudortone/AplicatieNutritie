@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useContext, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -15,7 +15,10 @@ import {
 } from 'react-native';
 import { AlertTriangle, X, Trash2 } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
+
+const FALLBACK_INSETS_CONTEXT = React.createContext<{ bottom?: number } | null>(null);
 
 export interface DeleteAccountModalProps {
   visible: boolean;
@@ -32,7 +35,12 @@ export function DeleteAccountModal({
 }: DeleteAccountModalProps) {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const insets = useContext(SafeAreaInsetsContext ?? FALLBACK_INSETS_CONTEXT);
+  const bottomInset = insets?.bottom ?? 0;
   const [confirmText, setConfirmText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const isBusy = loading || submitting;
 
   // Acceptă fie cuvântul localizat, fie standardele internaționale 'STERGE' / 'DELETE'
   const isConfirmed = (() => {
@@ -49,13 +57,14 @@ export function DeleteAccountModal({
     );
   })();
 
-  const handleClose = () => {
+  const handleClose = (force = false) => {
+    if (isBusy && !force) return;
     setConfirmText('');
     onClose();
   };
 
   const handlePressDelete = () => {
-    if (!isConfirmed || loading) return;
+    if (!isConfirmed || isBusy || submittingRef.current) return;
 
     // Avertisment final suplimentar (Double Confirmation) înainte de execuția definitivă
     Alert.alert(
@@ -70,8 +79,16 @@ export function DeleteAccountModal({
           text: t('profile.deleteAccountFinalConfirmBtn'),
           style: 'destructive',
           onPress: async () => {
-            handleClose();
-            await onConfirmDelete();
+            if (submittingRef.current) return;
+            submittingRef.current = true;
+            setSubmitting(true);
+            try {
+              await onConfirmDelete();
+              handleClose(true);
+            } finally {
+              submittingRef.current = false;
+              setSubmitting(false);
+            }
           },
         },
       ]
@@ -81,16 +98,16 @@ export function DeleteAccountModal({
   return (
     <Modal
       visible={visible}
-      onRequestClose={handleClose}
+      onRequestClose={() => handleClose()}
       animationType="fade"
       transparent
       statusBarTranslucent
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Pressable style={styles.backdrop} onPress={handleClose}>
+        <Pressable style={[styles.backdrop, { paddingBottom: Math.max(bottomInset, 20) }]} onPress={() => handleClose()}>
           <Pressable
             style={[
               styles.card,
@@ -113,10 +130,12 @@ export function DeleteAccountModal({
                 </Text>
               </View>
               <TouchableOpacity
-                onPress={handleClose}
+                onPress={() => handleClose()}
+                disabled={isBusy}
                 style={styles.closeBtn}
                 accessibilityRole="button"
                 accessibilityLabel={t('common.close', 'Închide')}
+                accessibilityState={{ disabled: isBusy }}
               >
                 <X size={20} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -159,10 +178,17 @@ export function DeleteAccountModal({
               <View style={styles.actionButtons}>
                 <TouchableOpacity
                   style={[styles.btn, styles.cancelBtn, { borderColor: colors.cardBorder }]}
-                  onPress={handleClose}
-                  disabled={loading}
+                  onPress={() => handleClose()}
+                  disabled={isBusy}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: isBusy }}
                 >
-                  <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>
+                  <Text
+                    style={[styles.cancelBtnText, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.78}
+                  >
                     {t('profile.deleteAccountCancel')}
                   </Text>
                 </TouchableOpacity>
@@ -178,14 +204,21 @@ export function DeleteAccountModal({
                     },
                   ]}
                   onPress={handlePressDelete}
-                  disabled={!isConfirmed || loading}
+                  disabled={!isConfirmed || isBusy}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !isConfirmed || isBusy }}
                 >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  {isBusy ? (
+                    <ActivityIndicator size="small" color={colors.textOnDanger} />
                   ) : (
                     <>
-                      <Trash2 size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.deleteBtnText}>
+                      <Trash2 size={16} color={colors.textOnDanger} style={{ marginRight: 6 }} />
+                      <Text
+                        style={[styles.deleteBtnText, { color: colors.textOnDanger }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.78}
+                      >
                         {t('profile.deleteAccountConfirmBtn')}
                       </Text>
                     </>
@@ -247,8 +280,11 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   closeBtn: {
-    padding: 6,
-    borderRadius: 8,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
   },
   body: {
     marginBottom: 4,
@@ -301,14 +337,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   cancelBtnText: {
+    flexShrink: 1,
     fontSize: 15,
     fontWeight: '600',
   },
   deleteBtn: {
     elevation: 2,
+    paddingHorizontal: 10,
   },
   deleteBtnText: {
-    color: '#FFFFFF',
+    flexShrink: 1,
     fontSize: 14,
     fontWeight: '700',
   },

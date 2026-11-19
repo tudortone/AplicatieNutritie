@@ -74,6 +74,7 @@ export function Coloana({
 			<ScrollView
 				ref={refScroll}
 				style={{ width: latime, height: INALTIME_RAND * 5 }}
+				nestedScrollEnabled
 				showsVerticalScrollIndicator={false}
 				snapToInterval={INALTIME_RAND}
 				decelerationRate="fast"

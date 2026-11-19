@@ -100,7 +100,10 @@ jest.mock('../context/NotificationBannerContext', () => ({
   useNotificationBanner: () => ({ showBanner: jest.fn() }),
   useNotificationBannerData: () => ({ unreadCount: 0 }),
 }));
-jest.mock('../context/GamificareContext', () => ({ useGamificareData: () => ({ streak: 1 }) }));
+jest.mock('../context/GamificareContext', () => ({
+  useGamificareData: () => ({ streak: 1 }),
+  useGamificareActions: () => ({ refreshGamificare: jest.fn() }),
+}));
 jest.mock('../hooks/useApa', () => ({ useApa: () => ({ consumedMl: mockWaterGlasses * 250, pahare: mockWaterGlasses, tinta: 8, loading: false, adaugaPahar: mockWaterAdd, scadePahar: mockWaterRemove, setConsumedMl: jest.fn() }) }));
 jest.mock('../hooks/useHealthSync', () => ({ useHealthSync: () => ({ steps: 0, activeCalories: 0, stepGoal: 10000, isEnabled: false, isAvailable: false, setNewStepGoal: jest.fn(), toggleSync: jest.fn(), refreshSteps: jest.fn(), addManualSteps: jest.fn(), setCompletedSteps: jest.fn() }) }));
 jest.mock('../hooks/useAntrenamente', () => ({ useAntrenamente: () => ({ totalCaloriiArse: 0, antrenamente: [], refresh: jest.fn() }) }));

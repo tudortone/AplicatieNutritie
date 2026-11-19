@@ -102,7 +102,7 @@ export function saveAdGateState(scopeKey: string, state: AdGateState): void {
   const sanitized = sanitizeAdGateState(state);
   memoryCache[k] = sanitized;
   try {
-    AsyncStorage.setItem(k, JSON.stringify(sanitized)).catch(() => {});
+    AsyncStorage.setItem(k, JSON.stringify(sanitized)).catch(() => { });
   } catch {
     // Best-effort: pierderea contorului local nu afectează securitatea sau facturarea.
   }
@@ -114,7 +114,7 @@ export function purgeAdGateState(scopeKey: string): void {
   delete memoryCache[k];
   pendingSeeds.delete(k);
   try {
-    AsyncStorage.removeItem(k).catch(() => {});
+    AsyncStorage.removeItem(k).catch(() => { });
   } catch {
     // Best-effort: starea nu conține autoritate de billing sau securitate.
   }

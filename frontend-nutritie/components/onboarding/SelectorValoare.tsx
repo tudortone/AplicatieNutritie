@@ -116,7 +116,7 @@ export default function SelectorValoare({
 				ultimulTimpHaptic.current = acum
 				try {
 					Haptics.selectionAsync()
-				} catch {}
+				} catch { }
 			}
 			laSchimbare(noua)
 		}
@@ -130,7 +130,7 @@ export default function SelectorValoare({
 			sincronizeazaPozitie(noua, true)
 			try {
 				Haptics.selectionAsync()
-			} catch {}
+			} catch { }
 			laSchimbare(noua)
 		}
 	}
@@ -164,10 +164,16 @@ export default function SelectorValoare({
 				</TouchableOpacity>
 
 				<View style={styles.valoareCenter}>
-					<Text style={[styles.valoare, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+					<Text
+						style={[styles.valoare, { color: colors.textPrimary }]}
+						numberOfLines={1}
+						adjustsFontSizeToFit
+						minimumFontScale={0.72}
+						maxFontSizeMultiplier={1.3}
+					>
 						{valoareAfisata}
 					</Text>
-					<Text style={[styles.unitate, { color: colors.accent }]}>{unitate}</Text>
+					<Text style={[styles.unitate, { color: colors.accent }]} numberOfLines={1}>{unitate}</Text>
 				</View>
 
 				<TouchableOpacity
@@ -252,8 +258,8 @@ export default function SelectorValoare({
 }
 
 const styles = StyleSheet.create({
-	valoareWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
-	valoareCenter: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 8, minWidth: 140 },
+	valoareWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 4 },
+	valoareCenter: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 6 },
 	stepperBtn: {
 		width: 44,
 		height: 44,
@@ -261,9 +267,10 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		alignItems: 'center',
 		justifyContent: 'center',
+		flexShrink: 0,
 	},
-	valoare: { fontSize: 60, fontWeight: '900', letterSpacing: -2 },
-	unitate: { fontSize: 20, fontWeight: '700', marginBottom: 12 },
+	valoare: { flexShrink: 1, fontSize: 60, fontWeight: '900', letterSpacing: -2 },
+	unitate: { flexShrink: 0, fontSize: 20, fontWeight: '700', marginBottom: 12 },
 	riglaWrap: { height: 60, marginTop: 24, justifyContent: 'center' },
 	gradatie: { width: LATIME_PAS, alignItems: 'center', justifyContent: 'center', height: 40 },
 	indicatorWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
