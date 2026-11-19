@@ -91,6 +91,7 @@ let interstitialUnsubscribers: Array<() => void> = [];
 let interstitialGeneration = 0;
 let interstitialRetryCount = 0;
 let interstitialRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let activeRewardedPromise: Promise<RewardedAdOutcome> | null = null;
 
 function clearInterstitialRetryTimer(): void {
   if (interstitialRetryTimer !== null) {
@@ -191,8 +192,14 @@ export function preloadInterstitial(): void {
  * (`lib/ads/adsConsent.ts`), niciodată înainte — vezi master prompt secțiunea 18.
  */
 export async function initializeAdsSdk(): Promise<void> {
-  if (!isAdsAvailable() || !AdsModule || sdkInitialized) return;
+  if (!isAdsAvailable() || !AdsModule) return;
   if (!getCanRequestAds()) return;
+  // P1-06: Dacă SDK-ul era deja inițializat (ex. abonamentul a expirat sau s-a schimbat
+  // contul după discardPreloadedInterstitial), re-preîncărcăm interstițialul.
+  if (sdkInitialized) {
+    preloadInterstitial();
+    return;
+  }
   try {
     try {
       if (
@@ -366,6 +373,11 @@ export function showRewardedAdWithSsv({
   const unitId = getRewardedUnitId();
   if (!unitId) return Promise.resolve('unavailable');
 
+  // P1-04: Single-flight nativ — nu deschide două reclame rewarded simultan.
+  if (activeRewardedPromise) {
+    return activeRewardedPromise;
+  }
+
   const preloaded = preloadedRewarded;
   const canUsePreloaded = Boolean(
     preloaded
@@ -381,7 +393,7 @@ export function showRewardedAdWithSsv({
     discardPreloadedRewardedAd();
   }
 
-  return new Promise((resolve) => {
+  const promise = new Promise<RewardedAdOutcome>((resolve) => {
     let ad: RewardedAdInstance;
     let earned = false;
     let settled = false;
@@ -393,6 +405,9 @@ export function showRewardedAdWithSsv({
         try { unsubscribe(); } catch {}
       }
       clearTimeout(timeout);
+      if (activeRewardedPromise === promise) {
+        activeRewardedPromise = null;
+      }
       resolve(outcome);
     };
     const timeout = setTimeout(() => finish('unavailable'), REWARDED_LOAD_TIMEOUT_MS);
@@ -429,11 +444,14 @@ export function showRewardedAdWithSsv({
       finish('unavailable');
     }
   });
+  activeRewardedPromise = promise;
+  return promise;
 }
 
 /** Doar pentru teste: resetează starea internă a modulului (interstițial + rewarded + flag inițializare). */
 export function __resetAdsServiceForTests(): void {
   sdkInitialized = false;
+  activeRewardedPromise = null;
   discardCurrentInterstitial(true);
   discardPreloadedRewardedAd();
 }

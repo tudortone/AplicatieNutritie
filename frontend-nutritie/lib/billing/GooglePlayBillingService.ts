@@ -67,12 +67,29 @@ export function createGooglePlayBillingService(deps: BillingDependencies) {
   let lifecycle = 0;
   let checkoutSequence = 0;
   let pendingCheckout: PendingCheckout | null = null;
+  let inFlightPurchase: Promise<void> | null = null;
+  let inFlightRestore: Promise<boolean> | null = null;
   let nativeUpdated: NativeListenerSubscription | null = null;
   let nativeError: NativeListenerSubscription | null = null;
+
+  const isActiveTransactionState = () =>
+    state.status === 'purchasing' || state.status === 'verifying' || state.status === 'pending';
 
   const publish = (next: BillingOperationState) => {
     state = { ...next };
     for (const listener of listeners) listener({ ...state });
+  };
+
+  // P1-03: Populează lazy creditProductIds dacă listener-ul sau restore rulează
+  // înainte de terminarea încărcării catalogului.
+  const ensureCreditProductIdsLoaded = async (auth: BillingAuthSnapshot) => {
+    if (creditProductIds.size > 0) return;
+    try {
+      const catalog = await deps.backend.getCatalog(auth);
+      for (const id of catalog.creditProductIds || []) creditProductIds.add(id);
+    } catch {
+      // Fail-safe: continuăm cu set-ul curent
+    }
   };
 
   const processPurchase = async (purchase: NativePurchase, listenerLifecycle: number) => {
@@ -96,6 +113,9 @@ export function createGooglePlayBillingService(deps: BillingDependencies) {
     publish({ status: 'verifying' });
 
     try {
+      if (pendingCheckout?.kind !== 'credits') {
+        await ensureCreditProductIdsLoaded(current);
+      }
       const isCreditPurchase = pendingCheckout?.kind === 'credits' || creditProductIds.has(purchase.productId);
       const verified = isCreditPurchase
         ? await deps.backend.verifyConsumable({
@@ -190,6 +210,8 @@ export function createGooglePlayBillingService(deps: BillingDependencies) {
       started = false;
       lifecycle += 1;
       pendingCheckout = null;
+      inFlightPurchase = null;
+      inFlightRestore = null;
       nativeUpdated?.remove();
       nativeError?.remove();
       nativeUpdated = null;
@@ -197,8 +219,70 @@ export function createGooglePlayBillingService(deps: BillingDependencies) {
       await deps.adapter.disconnect();
     },
 
+    // P1-03: Încărcare atomică a catalogului (abonamente + pachete credite) fără
+    // ca un eșec pe consumabile să blocheze abonamentele sau să suprascrie un checkout activ.
+    async loadCatalog(): Promise<{ products: BillingProduct[]; creditProducts: BillingCreditProduct[] }> {
+      if (!isActiveTransactionState()) publish({ status: 'loading' });
+      try {
+        const auth = requireAuth(await deps.getAuthSnapshot());
+        const catalog = await deps.backend.getCatalog(auth);
+        const allowedCredits = new Set(catalog.creditProductIds || []);
+        creditProductIds.clear();
+        for (const id of allowedCredits) creditProductIds.add(id);
+
+        let safeCredits: BillingCreditProduct[] = [];
+        if (allowedCredits.size > 0) {
+          try {
+            const nativeCredits = await deps.adapter.fetchConsumables([...allowedCredits]);
+            safeCredits = nativeCredits.filter((product) => allowedCredits.has(product.id));
+            creditProducts.clear();
+            for (const product of safeCredits) creditProducts.set(product.id, product);
+          } catch {
+            creditProducts.clear();
+            safeCredits = [];
+          }
+        } else {
+          creditProducts.clear();
+        }
+
+        if (!Array.isArray(catalog.productIds) || catalog.productIds.length === 0) {
+          throw Object.assign(new Error('Empty billing catalog.'), {
+            code: 'PRODUCT_CATALOG_EMPTY',
+          });
+        }
+        const allowedSubs = new Set(catalog.productIds);
+        const nativeSubs = await deps.adapter.fetchSubscriptions(catalog.productIds);
+        const safeSubs = nativeSubs.filter((product) => allowedSubs.has(product.id));
+        products.clear();
+        for (const product of safeSubs) products.set(product.id, product);
+
+        if (!isActiveTransactionState()) {
+          publish(safeSubs.length > 0
+            ? { status: 'idle' }
+            : { status: 'unavailable', code: 'PRODUCTS_NOT_RETURNED' });
+        }
+
+        return {
+          products: safeSubs.map((product) => ({
+            ...product,
+            offers: product.offers.map((offer) => ({ ...offer })),
+          })),
+          creditProducts: safeCredits.map((product) => ({ ...product })),
+        };
+      } catch (error) {
+        products.clear();
+        if (!isActiveTransactionState()) {
+          publish({ status: 'unavailable', code: publicCode(error, 'PRODUCT_QUERY_FAILED') });
+        }
+        return {
+          products: [],
+          creditProducts: [...creditProducts.values()].map((product) => ({ ...product })),
+        };
+      }
+    },
+
     async getProducts(): Promise<BillingProduct[]> {
-      publish({ status: 'loading' });
+      if (!isActiveTransactionState()) publish({ status: 'loading' });
       try {
         const auth = requireAuth(await deps.getAuthSnapshot());
         const catalog = await deps.backend.getCatalog(auth);
@@ -214,22 +298,25 @@ export function createGooglePlayBillingService(deps: BillingDependencies) {
         const safeProducts = nativeProducts.filter((product) => allowed.has(product.id));
         products.clear();
         for (const product of safeProducts) products.set(product.id, product);
-        publish(safeProducts.length > 0
-          ? { status: 'idle' }
-          : { status: 'unavailable', code: 'PRODUCTS_NOT_RETURNED' });
+        if (!isActiveTransactionState()) {
+          publish(safeProducts.length > 0
+            ? { status: 'idle' }
+            : { status: 'unavailable', code: 'PRODUCTS_NOT_RETURNED' });
+        }
         return safeProducts.map((product) => ({
           ...product,
           offers: product.offers.map((offer) => ({ ...offer })),
         }));
       } catch (error) {
         products.clear();
-        publish({ status: 'unavailable', code: publicCode(error, 'PRODUCT_QUERY_FAILED') });
+        if (!isActiveTransactionState()) {
+          publish({ status: 'unavailable', code: publicCode(error, 'PRODUCT_QUERY_FAILED') });
+        }
         return [];
       }
     },
 
     async getCreditProducts(): Promise<BillingCreditProduct[]> {
-      publish({ status: 'loading' });
       try {
         const auth = requireAuth(await deps.getAuthSnapshot());
         const catalog = await deps.backend.getCatalog(auth);
@@ -240,105 +327,129 @@ export function createGooglePlayBillingService(deps: BillingDependencies) {
         const safeProducts = nativeProducts.filter((product) => allowed.has(product.id));
         creditProducts.clear();
         for (const product of safeProducts) creditProducts.set(product.id, product);
-        publish({ status: 'idle' });
         return safeProducts.map((product) => ({ ...product }));
       } catch {
         creditProducts.clear();
-        publish({ status: 'unavailable' });
         return [];
       }
     },
 
-    async purchasePremium(product: BillingProduct, offer: BillingOffer): Promise<void> {
-      const known = products.get(product.id);
-      const knownOffer = known?.offers.find((candidate) =>
-        candidate.offerToken === offer.offerToken && candidate.basePlanId === offer.basePlanId);
-      if (!known || !knownOffer) {
-        publish({ status: 'error', code: 'OFFER_NOT_AVAILABLE' });
-        return;
-      }
-      const auth = requireAuth(await deps.getAuthSnapshot());
-      const sequence = ++checkoutSequence;
-      pendingCheckout = { ownerId: auth.userId, sequence, kind: 'subscription' };
-      publish({ status: 'purchasing' });
-      try {
-        const obfuscatedAccountId = await deps.hashAccountId(auth.userId);
-        if (pendingCheckout?.sequence !== sequence) return;
-        await deps.adapter.requestSubscription({
-          productId: known.id,
-          offerToken: knownOffer.offerToken,
-          obfuscatedAccountId,
-        });
-      } catch (error) {
-        pendingCheckout = null;
-        const code = publicCode(error, 'PURCHASE_FAILED');
-        publish({ status: CANCELED_CODES.has(code) ? 'canceled' : 'error', code });
-      }
-    },
-
-    async purchaseCredits(product: BillingCreditProduct): Promise<void> {
-      const known = creditProducts.get(product.id);
-      if (!known) {
-        publish({ status: 'error', code: 'PRODUCT_NOT_AVAILABLE' });
-        return;
-      }
-      const auth = requireAuth(await deps.getAuthSnapshot());
-      const sequence = ++checkoutSequence;
-      pendingCheckout = { ownerId: auth.userId, sequence, kind: 'credits' };
-      publish({ status: 'purchasing' });
-      try {
-        const obfuscatedAccountId = await deps.hashAccountId(auth.userId);
-        if (pendingCheckout?.sequence !== sequence) return;
-        await deps.adapter.requestConsumable({ productId: known.id, obfuscatedAccountId });
-      } catch (error) {
-        pendingCheckout = null;
-        const code = publicCode(error, 'PURCHASE_FAILED');
-        publish({ status: CANCELED_CODES.has(code) ? 'canceled' : 'error', code });
-      }
-    },
-
-    async restorePurchases(): Promise<boolean> {
-      publish({ status: 'loading' });
-      try {
+    purchasePremium(product: BillingProduct, offer: BillingOffer): Promise<void> {
+      // P1-04: Single-flight sincron la dublu-click pe cumpărare.
+      if (inFlightPurchase) return inFlightPurchase;
+      const run = (async () => {
+        const known = products.get(product.id);
+        const knownOffer = known?.offers.find((candidate) =>
+          candidate.offerToken === offer.offerToken && candidate.basePlanId === offer.basePlanId);
+        if (!known || !knownOffer) {
+          publish({ status: 'error', code: 'OFFER_NOT_AVAILABLE' });
+          return;
+        }
         const auth = requireAuth(await deps.getAuthSnapshot());
-        const available = await deps.adapter.getAvailablePurchases();
-        const purchases = available.filter((purchase) =>
-          purchase.state === 'purchased' && validPurchaseToken(purchase.purchaseToken));
-        if (purchases.length === 0) {
-          publish({ status: 'idle' });
-          return false;
-        }
-        publish({ status: 'verifying' });
-        const consumables = purchases.filter((purchase) => creditProductIds.has(purchase.productId));
-        const subscriptions = purchases.filter((purchase) => !creditProductIds.has(purchase.productId));
-        const purchaseTokens = [...new Set(subscriptions.map((purchase) => purchase.purchaseToken as string))];
-        const verified = purchaseTokens.length > 0
-          ? await deps.backend.resync({ ...auth, purchaseTokens })
-          : { validatServer: true, premium: false };
-        if (!verified.validatServer) throw new Error('Invalid backend authority.');
-        for (const purchase of consumables) {
-          const consumed = await deps.backend.verifyConsumable({
-            ...auth,
-            productId: purchase.productId,
-            purchaseToken: purchase.purchaseToken as string,
+        const sequence = ++checkoutSequence;
+        pendingCheckout = { ownerId: auth.userId, sequence, kind: 'subscription' };
+        publish({ status: 'purchasing' });
+        try {
+          const obfuscatedAccountId = await deps.hashAccountId(auth.userId);
+          if (pendingCheckout?.sequence !== sequence) return;
+          await deps.adapter.requestSubscription({
+            productId: known.id,
+            offerToken: knownOffer.offerToken,
+            obfuscatedAccountId,
           });
-          if (!consumed.validatServer || consumed.consumed !== true) {
-            throw new Error('Consumable recovery remains pending.');
-          }
+        } catch (error) {
+          pendingCheckout = null;
+          const code = publicCode(error, 'PURCHASE_FAILED');
+          publish({ status: CANCELED_CODES.has(code) ? 'canceled' : 'error', code });
         }
-        const current = requireAuth(await deps.getAuthSnapshot());
-        if (current.userId !== auth.userId) {
-          publish({ status: 'error', code: 'ACCOUNT_CHANGED' });
+      })();
+      inFlightPurchase = run.finally(() => {
+        if (inFlightPurchase === run) inFlightPurchase = null;
+      });
+      return inFlightPurchase;
+    },
+
+    purchaseCredits(product: BillingCreditProduct): Promise<void> {
+      // P1-04: Single-flight sincron la dublu-click pe pachet de credite.
+      if (inFlightPurchase) return inFlightPurchase;
+      const run = (async () => {
+        const known = creditProducts.get(product.id);
+        if (!known) {
+          publish({ status: 'error', code: 'PRODUCT_NOT_AVAILABLE' });
+          return;
+        }
+        const auth = requireAuth(await deps.getAuthSnapshot());
+        const sequence = ++checkoutSequence;
+        pendingCheckout = { ownerId: auth.userId, sequence, kind: 'credits' };
+        publish({ status: 'purchasing' });
+        try {
+          const obfuscatedAccountId = await deps.hashAccountId(auth.userId);
+          if (pendingCheckout?.sequence !== sequence) return;
+          await deps.adapter.requestConsumable({ productId: known.id, obfuscatedAccountId });
+        } catch (error) {
+          pendingCheckout = null;
+          const code = publicCode(error, 'PURCHASE_FAILED');
+          publish({ status: CANCELED_CODES.has(code) ? 'canceled' : 'error', code });
+        }
+      })();
+      inFlightPurchase = run.finally(() => {
+        if (inFlightPurchase === run) inFlightPurchase = null;
+      });
+      return inFlightPurchase;
+    },
+
+    restorePurchases(): Promise<boolean> {
+      // P1-04: Single-flight sincron la dublu-click pe restaurare achiziții.
+      if (inFlightRestore) return inFlightRestore;
+      const run = (async (): Promise<boolean> => {
+        publish({ status: 'loading' });
+        try {
+          const auth = requireAuth(await deps.getAuthSnapshot());
+          await ensureCreditProductIdsLoaded(auth);
+          const available = await deps.adapter.getAvailablePurchases();
+          const purchases = available.filter((purchase) =>
+            purchase.state === 'purchased' && validPurchaseToken(purchase.purchaseToken));
+          if (purchases.length === 0) {
+            publish({ status: 'idle' });
+            return false;
+          }
+          publish({ status: 'verifying' });
+          const consumables = purchases.filter((purchase) => creditProductIds.has(purchase.productId));
+          const subscriptions = purchases.filter((purchase) => !creditProductIds.has(purchase.productId));
+          const purchaseTokens = [...new Set(subscriptions.map((purchase) => purchase.purchaseToken as string))];
+          const verified = purchaseTokens.length > 0
+            ? await deps.backend.resync({ ...auth, purchaseTokens })
+            : { validatServer: true, premium: false };
+          if (!verified.validatServer) throw new Error('Invalid backend authority.');
+          for (const purchase of consumables) {
+            const consumed = await deps.backend.verifyConsumable({
+              ...auth,
+              productId: purchase.productId,
+              purchaseToken: purchase.purchaseToken as string,
+            });
+            if (!consumed.validatServer || consumed.consumed !== true) {
+              throw new Error('Consumable recovery remains pending.');
+            }
+          }
+          const current = requireAuth(await deps.getAuthSnapshot());
+          if (current.userId !== auth.userId) {
+            publish({ status: 'error', code: 'ACCOUNT_CHANGED' });
+            return false;
+          }
+          for (const purchase of subscriptions) await deps.adapter.finishTransaction(purchase);
+          await deps.onVerified(auth.userId);
+          publish({ status: 'verified' });
+          // P1-03: Restaurarea pachetelor de credite neconsumate contează ca succes real.
+          return verified.premium === true || consumables.length > 0;
+        } catch {
+          publish({ status: 'error', code: 'VERIFICATION_PENDING' });
           return false;
         }
-        for (const purchase of subscriptions) await deps.adapter.finishTransaction(purchase);
-        await deps.onVerified(auth.userId);
-        publish({ status: 'verified' });
-        return verified.premium === true;
-      } catch {
-        publish({ status: 'error', code: 'VERIFICATION_PENDING' });
-        return false;
-      }
+      })();
+      inFlightRestore = run.finally(() => {
+        if (inFlightRestore === run) inFlightRestore = null;
+      });
+      return inFlightRestore;
     },
   });
 }

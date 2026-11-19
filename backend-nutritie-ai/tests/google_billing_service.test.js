@@ -230,16 +230,101 @@ describe('Google Play billing service — autoritate backend', () => {
     expect(out.errors[0].purchaseToken).toBe(BAD_TOKEN);
   });
 
-  test('RTDN refoloseste proprietarul persistent si ignora sigur tokenul necunoscut', async () => {
+  test('RTDN refoloseste proprietarul persistent, rezolva upgrade prin linkedPurchaseToken si face retry pe achizitie recenta', async () => {
     const necunoscut = harness({ owner: null });
     await expect(necunoscut.service.processRtdnToken({ purchaseToken: TOKEN, messageId: 'm-1' }))
       .resolves.toEqual({ processed: false, reason: 'UNKNOWN_TOKEN' });
-    expect(necunoscut.publisher.getSubscription).not.toHaveBeenCalled();
+    expect(necunoscut.publisher.getSubscription).toHaveBeenCalledTimes(1);
+
+    // P1-01: upgrade Monthly -> Annual (token nou cu linkedPurchaseToken detinut de USER_ID)
+    const oldToken = 'google-play-old-linked-token-987654';
+    const upgrade = harness({
+      owner: null,
+      subscription: googleSubscription({
+        linkedPurchaseToken: oldToken,
+        lineItems: [{
+          productId: 'premium_annual',
+          expiryTime: '2031-01-01T00:00:00.000Z',
+          offerDetails: { basePlanId: 'annual' },
+        }],
+      }),
+    });
+    upgrade.repo.findOwnerByToken.mockImplementation(async (tok) => (tok === oldToken ? USER_ID : null));
+    await expect(upgrade.service.processRtdnToken({
+      purchaseToken: TOKEN,
+      messageId: 'm-upgrade',
+      notificationType: 4,
+      eventTime: '2026-09-14T09:59:00.000Z',
+    })).resolves.toMatchObject({ processed: true, premium: true, productId: 'premium_annual' });
+    expect(upgrade.publisher.getSubscription).toHaveBeenCalledTimes(1);
+    expect(upgrade.publisher.acknowledgeSubscription).toHaveBeenCalledWith(TOKEN, 'premium_annual');
+
+    // P1-01: SUBSCRIPTION_PURCHASED recent fara owner inca -> 503 retryable
+    const recentPurchase = harness({ owner: null });
+    await expect(recentPurchase.service.processRtdnToken({
+      purchaseToken: TOKEN,
+      messageId: 'm-race',
+      notificationType: 4,
+      eventTime: '2026-09-14T09:58:00.000Z',
+    })).rejects.toMatchObject({ code: 'UNKNOWN_TOKEN_RETRY', status: 503, retryable: true });
+
+    // Eveniment vechi (>15 min) ramane ignored sigur
+    await expect(recentPurchase.service.processRtdnToken({
+      purchaseToken: TOKEN,
+      messageId: 'm-old',
+      notificationType: 4,
+      eventTime: '2026-09-14T09:00:00.000Z',
+    })).resolves.toEqual({ processed: false, reason: 'UNKNOWN_TOKEN' });
 
     const cunoscut = harness({ owner: USER_ID });
     await expect(cunoscut.service.processRtdnToken({ purchaseToken: TOKEN, messageId: 'm-2' }))
       .resolves.toMatchObject({ processed: true, premium: true });
     expect(cunoscut.publisher.getSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  test('P1-04: verifyConsumable nu esueaza cu CONSUME_PENDING cand Google raporteaza deja CONSUMPTION_STATE_CONSUMED', async () => {
+    const publisher = {
+      getSubscription: jest.fn(),
+      acknowledgeSubscription: jest.fn(),
+      getProductPurchase: jest.fn().mockResolvedValue({
+        purchaseStateContext: { purchaseState: 'PURCHASED' },
+        consumptionState: 'CONSUMPTION_STATE_CONSUMED',
+        productLineItem: [{ productId: 'flow_credits_10' }],
+        externalAccountIdentifiers: { obfuscatedExternalAccountId: googlePlayAccountId(USER_ID) },
+      }),
+      consumeProduct: jest.fn().mockRejectedValue(new Error('already consumed')),
+    };
+    const repo = {
+      applyVerification: jest.fn(),
+      applyAcknowledgementResult: jest.fn(),
+      getPaidEntitlement: jest.fn(),
+      findOwnerByToken: jest.fn(),
+      claimAcknowledgements: jest.fn(),
+    };
+    const flowCredits = {
+      grantPackVerified: jest.fn().mockResolvedValue({ amount: 10, replay: true }),
+    };
+    const service = createGoogleBillingService({
+      publisher,
+      repo,
+      allowedProductIds: ['premium_monthly'],
+      allowedCreditProductIds: ['flow_credits_10'],
+      flowCredits,
+    });
+
+    const out = await service.verifyConsumable({
+      userId: USER_ID,
+      purchaseToken: TOKEN,
+      productId: 'flow_credits_10',
+    });
+    expect(out).toEqual({
+      validatServer: true,
+      productId: 'flow_credits_10',
+      creditsGranted: 10,
+      replay: true,
+      consumed: true,
+    });
+    expect(publisher.consumeProduct).not.toHaveBeenCalled();
   });
 
   test('workerul confirma lease-urile si programeaza retry fara tokenuri in rezultat', async () => {

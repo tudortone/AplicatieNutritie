@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -139,21 +140,22 @@ export function BillingProvider({
   serviceOverride?: BillingServiceApi;
   nativeAvailableOverride?: boolean;
 }) {
-  const serviceRef = useRef<BillingServiceApi | null>(null);
-  if (!serviceRef.current) serviceRef.current = serviceOverride ?? createDefaultService();
-  const service = serviceRef.current;
+  const [service] = useState<BillingServiceApi>(() => serviceOverride ?? createDefaultService());
   const startPromiseRef = useRef<Promise<void> | null>(null);
   const qa = process.env.EXPO_PUBLIC_APP_ENV === 'qa';
   const nativeAvailable = !qa && (nativeAvailableOverride ??
     (Platform.OS === 'android' && Constants.appOwnership !== 'expo'));
   const [operation, setOperation] = useState<BillingOperationState>(
-    nativeAvailable ? service.getState() : { status: 'unavailable' },
+    () => (nativeAvailable ? service.getState() : { status: 'unavailable' }),
   );
   const [products, setProducts] = useState<BillingProduct[]>([]);
   const [creditProducts, setCreditProducts] = useState<BillingCreditProduct[]>([]);
   const ownerRef = useRef(appUserId);
   const catalogSequenceRef = useRef(0);
-  ownerRef.current = appUserId;
+
+  useLayoutEffect(() => {
+    ownerRef.current = appUserId;
+  }, [appUserId]);
 
   useEffect(() => {
     if (!nativeAvailable) {
@@ -196,10 +198,18 @@ export function BillingProvider({
       }
       return;
     }
-    const [loaded, loadedCredits] = await Promise.all([
-      service.getProducts(),
-      service.getCreditProducts(),
-    ]);
+    let loaded: BillingProduct[];
+    let loadedCredits: BillingCreditProduct[];
+    if (typeof service.loadCatalog === 'function') {
+      const catalogResult = await service.loadCatalog();
+      loaded = catalogResult.products;
+      loadedCredits = catalogResult.creditProducts;
+    } else {
+      [loaded, loadedCredits] = await Promise.all([
+        service.getProducts(),
+        service.getCreditProducts(),
+      ]);
+    }
     if (ownerRef.current !== owner || catalogSequenceRef.current !== sequence) return;
     setProducts(loaded);
     setCreditProducts(loadedCredits);

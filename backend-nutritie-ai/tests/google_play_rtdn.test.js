@@ -155,6 +155,8 @@ describe('RTDN Google Play autenticat si idempotent', () => {
     expect(billingService.processRtdnToken).toHaveBeenCalledWith({
       purchaseToken: PURCHASE_TOKEN,
       messageId: 'pubsub-message-1',
+      notificationType: 2,
+      eventTime: '2026-09-14T09:00:00.000Z',
     });
     expect(repo.completeRtdnEvent).toHaveBeenCalledWith({
       messageId: 'pubsub-message-1',

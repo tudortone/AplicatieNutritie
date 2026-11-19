@@ -112,6 +112,8 @@ function createGooglePlayWebhookRouter({ verifier, repo, billingService, googleP
       const result = await billingService.processRtdnToken({
         purchaseToken,
         messageId: message.messageId,
+        notificationType,
+        eventTime: event.eventTime,
       });
       await repo.completeRtdnEvent({
         messageId: message.messageId,

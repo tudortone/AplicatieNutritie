@@ -6,6 +6,9 @@ const { mapGoogleSubscription } = require('./googleSubscriptionState');
 const ACCOUNT_ID_PREFIX = 'getflow-billing-v1:';
 const MAX_RESYNC_TOKENS = 20;
 const ACK_RETRY_DELAY_MS = 5 * 60 * 1000;
+// P1-01: Tipurile RTDN care pot sosi în cursa cu /billing/google/verify pe achiziție/reactivare nouă.
+const RETRYABLE_UNKNOWN_RTDN_TYPES = new Set([1, 2, 4, 7]);
+const UNKNOWN_TOKEN_RETRY_WINDOW_MS = 15 * 60 * 1000;
 
 class GoogleBillingError extends Error {
   constructor(code, status = 503) {
@@ -98,7 +101,7 @@ function createGoogleBillingService({
     });
   }
 
-  async function verifyInternal({ userId, purchaseToken, visited }) {
+  async function verifyInternal({ userId, purchaseToken, visited, prefetchedGoogleState = null }) {
     requireToken(purchaseToken);
     if (visited.has(purchaseToken) || visited.size >= 4) {
       throw new GoogleBillingError('LINKED_TOKEN_LOOP', 409);
@@ -106,7 +109,7 @@ function createGoogleBillingService({
     visited.add(purchaseToken);
 
     const verificationStartedAt = currentDate();
-    const googleState = await publisher.getSubscription(purchaseToken);
+    const googleState = prefetchedGoogleState ?? await publisher.getSubscription(purchaseToken);
     const mapped = mapGoogleSubscription(googleState, {
       nowMs: currentDate().getTime(),
       allowedProductIds: allowlist,
@@ -212,12 +215,39 @@ function createGoogleBillingService({
       return publicResult(row, { nowMs: currentDate().getTime() });
     },
 
-    async processRtdnToken({ purchaseToken } = {}) {
+    async processRtdnToken({ purchaseToken, notificationType = null, eventTime = null } = {}) {
       requireToken(purchaseToken);
       const owner = await repo.findOwnerByToken(purchaseToken);
-      const userId = typeof owner === 'string' ? owner : owner?.user_id ?? owner?.userId;
-      if (!userId) return Object.freeze({ processed: false, reason: 'UNKNOWN_TOKEN' });
-      const result = await verifyInternal({ userId, purchaseToken, visited: new Set() });
+      let userId = typeof owner === 'string' ? owner : owner?.user_id ?? owner?.userId ?? null;
+      let prefetchedGoogleState = null;
+
+      // P1-01: Dacă token-ul nu există încă în DB (ex: upgrade Monthly->Annual cu linkedPurchaseToken
+      // sau RTDN sosit înainte de /verify), interogăm Google Play și încercăm rezolvarea prin linkedPurchaseToken.
+      if (!userId) {
+        prefetchedGoogleState = await publisher.getSubscription(purchaseToken);
+        const linkedToken = prefetchedGoogleState?.linkedPurchaseToken;
+        if (validPurchaseToken(linkedToken)) {
+          const linkedOwner = await repo.findOwnerByToken(linkedToken);
+          userId = typeof linkedOwner === 'string' ? linkedOwner : linkedOwner?.user_id ?? linkedOwner?.userId ?? null;
+        }
+      }
+
+      if (!userId) {
+        const eventMs = typeof eventTime === 'string' ? Date.parse(eventTime) : Number.NaN;
+        const nowMs = currentDate().getTime();
+        const isRecentEvent = !Number.isFinite(eventMs) || (nowMs - eventMs) <= UNKNOWN_TOKEN_RETRY_WINDOW_MS;
+        if (RETRYABLE_UNKNOWN_RTDN_TYPES.has(notificationType) && isRecentEvent) {
+          throw Object.assign(new GoogleBillingError('UNKNOWN_TOKEN_RETRY', 503), { retryable: true });
+        }
+        return Object.freeze({ processed: false, reason: 'UNKNOWN_TOKEN' });
+      }
+
+      const result = await verifyInternal({
+        userId,
+        purchaseToken,
+        visited: new Set(),
+        prefetchedGoogleState,
+      });
       return Object.freeze({ processed: true, ...result });
     },
 
@@ -267,15 +297,24 @@ function createGoogleBillingService({
       if (externalAccountId !== googlePlayAccountId(userId)) {
         throw new GoogleBillingError('ACCOUNT_MISMATCH', 409);
       }
+      const lineItem = Array.isArray(purchase?.productLineItem)
+        ? purchase.productLineItem.find((item) => item?.productId === productId)
+        : null;
+      const consumptionState = purchase?.consumptionState ?? lineItem?.consumptionState ?? null;
+      const alreadyConsumed = consumptionState === 'CONSUMPTION_STATE_CONSUMED' || consumptionState === 1;
       const grant = await flowCredits.grantPackVerified({
         userId,
         purchaseEventId: hashPurchaseToken(purchaseToken),
         productId,
       });
-      try {
-        await publisher.consumeProduct(purchaseToken, productId);
-      } catch (error) {
-        throw Object.assign(new GoogleBillingError('CONSUME_PENDING', 503), { cause: error });
+      // P1-04: Dacă Google confirmă deja consumul (retry după timeout sau dublu-click),
+      // nu mai apelăm consumeProduct (evită 503 CONSUME_PENDING fals).
+      if (!alreadyConsumed) {
+        try {
+          await publisher.consumeProduct(purchaseToken, productId);
+        } catch (error) {
+          throw Object.assign(new GoogleBillingError('CONSUME_PENDING', 503), { cause: error });
+        }
       }
       return Object.freeze({
         validatServer: true,

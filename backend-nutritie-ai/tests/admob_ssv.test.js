@@ -91,4 +91,44 @@ describe('AdMob rewarded SSV verifier', () => {
     await expect(createAdmobSsvVerifier({ fetchImpl: f.fetchImpl, ...CONTRACT }).verify(f.rawUrl))
       .rejects.toMatchObject({ code: 'SSV_AD_UNIT_MISMATCH' });
   });
+
+  test('P1-02: forces a single-flight key refresh on unknown key_id after cooldown and verifies rotated key', async () => {
+    const pairOld = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const pemOld = pairOld.publicKey.export({ type: 'spki', format: 'pem' });
+    const pairNew = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const pemNew = pairNew.publicKey.export({ type: 'spki', format: 'pem' });
+
+    let currentMs = 1_000_000;
+    const fetchImpl = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ keys: [{ keyId: 7, pem: pemOld }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ keys: [{ keyId: 7, pem: pemOld }, { keyId: 9, pem: pemNew }] }) });
+
+    const verifier = createAdmobSsvVerifier({
+      fetchImpl,
+      now: () => currentMs,
+      refreshCooldownMs: 60_000,
+      ...CONTRACT,
+    });
+
+    const data = ['ad_network=123', 'ad_unit=3566028223', 'custom_data=secret-token', 'reward_amount=1', 'reward_item=Flow%20Credit', 'timestamp=1700000000000', 'transaction_id=tx-rot-1', 'user_id=11111111-1111-4111-8111-111111111111'].join('&');
+    const sigOld = crypto.sign('sha256', Buffer.from(data), pairOld.privateKey).toString('base64url');
+    const sigNew = crypto.sign('sha256', Buffer.from(data), pairNew.privateKey).toString('base64url');
+
+    // Warm cache with key 7
+    await expect(verifier.verify(`/api/v1/webhooks/admob/rewarded?${data}&signature=${sigOld}&key_id=7`))
+      .resolves.toMatchObject({ kind: 'reward', transactionId: 'tx-rot-1' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    // Within cooldown (10s later), bogus key_id does NOT trigger refetch (anti-DoS)
+    currentMs += 10_000;
+    await expect(verifier.verify(`/api/v1/webhooks/admob/rewarded?${data}&signature=${sigNew}&key_id=999`))
+      .rejects.toMatchObject({ code: 'SSV_KEY_UNKNOWN' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    // After cooldown (61s later), rotated key_id=9 triggers forceRefresh and succeeds
+    currentMs += 61_000;
+    await expect(verifier.verify(`/api/v1/webhooks/admob/rewarded?${data}&signature=${sigNew}&key_id=9`))
+      .resolves.toMatchObject({ kind: 'reward', transactionId: 'tx-rot-1' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
 });

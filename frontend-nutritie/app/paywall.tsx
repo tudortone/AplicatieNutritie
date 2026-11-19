@@ -787,6 +787,7 @@ export default function PaywallScreen() {
           accessibilityRole="button"
           disabled={
             buying != null ||
+            operation.status === 'loading' ||
             operation.status === 'purchasing' ||
             operation.status === 'verifying'
           }

@@ -27,35 +27,60 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AD_GATE_INITIAL_STATE, type AdGateState, sanitizeAdGateState } from './adGate';
 
 const memoryCache: Record<string, AdGateState> = {};
-const pendingSeeds = new Set<string>();
+const pendingSeeds = new Map<string, Promise<AdGateState>>();
 
 function keyFor(scopeKey: string): string {
   const safeScope = (scopeKey || 'anon').replace(/[^a-zA-Z0-9_-]/g, '_');
   return `ads:gate:v1:${safeScope}`;
 }
 
-function ensureAsyncSeed(scopeKey: string): void {
+function ensureAsyncSeed(scopeKey: string): Promise<AdGateState> {
   const k = keyFor(scopeKey);
-  if (memoryCache[k] || pendingSeeds.has(k)) return;
-  pendingSeeds.add(k);
-  AsyncStorage.getItem(k)
+  if (memoryCache[k]) return Promise.resolve({ ...memoryCache[k] });
+  const existing = pendingSeeds.get(k);
+  if (existing) return existing;
+  const promise = AsyncStorage.getItem(k)
     .then((raw) => {
-      if (raw && !memoryCache[k]) {
+      if (raw) {
         try {
-          memoryCache[k] = sanitizeAdGateState(JSON.parse(raw));
+          const parsed = sanitizeAdGateState(JSON.parse(raw));
+          if (!memoryCache[k]) {
+            memoryCache[k] = parsed;
+          } else {
+            // P1-06: Dacă un mesaj a fost înregistrat înainte de terminarea hidratării
+            // cold-start, combinăm starea din storage cu cea curentă ca să nu pierdem
+            // contorul sau cooldown-ul existent.
+            memoryCache[k] = sanitizeAdGateState({
+              successfulAnalysisCount: Math.max(
+                memoryCache[k].successfulAnalysisCount,
+                parsed.successfulAnalysisCount,
+              ),
+              chatMessageCount:
+                memoryCache[k].chatMessageCount + parsed.chatMessageCount,
+              lastAdShownAtMs:
+                memoryCache[k].lastAdShownAtMs != null && parsed.lastAdShownAtMs != null
+                  ? Math.max(memoryCache[k].lastAdShownAtMs, parsed.lastAdShownAtMs)
+                  : (memoryCache[k].lastAdShownAtMs ?? parsed.lastAdShownAtMs),
+              lastAdCounterValue: memoryCache[k].lastAdCounterValue ?? parsed.lastAdCounterValue,
+              lastChatAdCounterValue: memoryCache[k].lastChatAdCounterValue ?? parsed.lastChatAdCounterValue,
+            });
+          }
         } catch {
           // Ignoră conținut corupt
         }
       }
+      return memoryCache[k] ? { ...memoryCache[k] } : { ...AD_GATE_INITIAL_STATE };
     })
-    .catch(() => {})
+    .catch(() => (memoryCache[k] ? { ...memoryCache[k] } : { ...AD_GATE_INITIAL_STATE }))
     .finally(() => {
       pendingSeeds.delete(k);
     });
+  pendingSeeds.set(k, promise);
+  return promise;
 }
 
 // Seed imediat pentru utilizatorul anonim la pornirea modulului
-ensureAsyncSeed('anon');
+void ensureAsyncSeed('anon');
 
 export function loadAdGateState(scopeKey: string): AdGateState {
   const k = keyFor(scopeKey);
@@ -63,8 +88,13 @@ export function loadAdGateState(scopeKey: string): AdGateState {
   if (cached) {
     return { ...cached };
   }
-  ensureAsyncSeed(scopeKey);
+  void ensureAsyncSeed(scopeKey);
   return { ...AD_GATE_INITIAL_STATE };
+}
+
+/** P1-06: Hidratare asincronă cold-start pentru ca AdsContext.stateRef să nu suprascrie storage-ul cu 0. */
+export async function hydrateAdGateState(scopeKey: string): Promise<AdGateState> {
+  return ensureAsyncSeed(scopeKey);
 }
 
 export function saveAdGateState(scopeKey: string, state: AdGateState): void {

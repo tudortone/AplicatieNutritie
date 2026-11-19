@@ -298,4 +298,72 @@ describe('GooglePlayBillingService — limita nativa generica', () => {
     expect(adapter.finishTransaction).toHaveBeenCalledTimes(1);
     expect(adapter.finishTransaction).toHaveBeenCalledWith(expect.objectContaining({ productId: 'premium_monthly' }));
   });
+
+  test('P1-03: loadCatalog nu blocheaza abonamentele cand fetchConsumables esueaza', async () => {
+    const { service, adapter } = harness();
+    (adapter.fetchConsumables as jest.Mock).mockRejectedValueOnce(new Error('consumables down'));
+
+    const loaded = await service.loadCatalog();
+    expect(loaded.products).toHaveLength(1);
+    expect(loaded.products[0].id).toBe('premium_monthly');
+    expect(loaded.creditProducts).toEqual([]);
+    expect(service.getState()).toEqual({ status: 'idle' });
+  });
+
+  test('P1-03: purchaseUpdatedListener clasifica corect consumabilele neconsumate chiar inainte de getProducts()', async () => {
+    const { service, backend, emitPurchase } = harness();
+    await service.start();
+    await emitPurchase({
+      productId: 'getflow_credits_10',
+      purchaseToken: 'early-credit-token-12345678901',
+      state: 'purchased',
+      raw: {},
+    });
+    expect(backend.verifyConsumable).toHaveBeenCalledWith(expect.objectContaining({
+      productId: 'getflow_credits_10',
+      purchaseToken: 'early-credit-token-12345678901',
+    }));
+    expect(backend.verify).not.toHaveBeenCalled();
+  });
+
+  test('P1-03: restorePurchases intoarce true cand restaureaza doar pachete de credite neconsumate', async () => {
+    const { service, adapter, backend } = harness();
+    (adapter.getAvailablePurchases as jest.Mock).mockResolvedValue([
+      { productId: 'getflow_credits_10', purchaseToken: 'credit-only-token-1234567890', state: 'purchased', raw: {} },
+    ]);
+
+    await expect(service.restorePurchases()).resolves.toBe(true);
+    expect(backend.verifyConsumable).toHaveBeenCalledTimes(1);
+    expect(backend.resync).not.toHaveBeenCalled();
+  });
+
+  test('P1-04: dublu-click pe purchasePremium si restorePurchases foloseste single-flight', async () => {
+    const { service, adapter } = harness();
+    const loaded = await service.loadCatalog();
+    const product = loaded.products[0];
+
+    let resolveReq: (() => void) | null = null;
+    (adapter.requestSubscription as jest.Mock).mockImplementationOnce(
+      () => new Promise<void>((resolve) => { resolveReq = resolve; }),
+    );
+    const p1 = service.purchasePremium(product, product.offers[0]);
+    const p2 = service.purchasePremium(product, product.offers[0]);
+    for (let i = 0; i < 10 && !resolveReq; i += 1) await Promise.resolve();
+    expect(resolveReq).not.toBeNull();
+    resolveReq!();
+    await Promise.all([p1, p2]);
+    expect(adapter.requestSubscription).toHaveBeenCalledTimes(1);
+
+    let resolveAvail: ((v: NativePurchase[]) => void) | null = null;
+    (adapter.getAvailablePurchases as jest.Mock).mockImplementationOnce(
+      () => new Promise<NativePurchase[]>((resolve) => { resolveAvail = resolve; }),
+    );
+    const r1 = service.restorePurchases();
+    const r2 = service.restorePurchases();
+    for (let i = 0; i < 10 && !resolveAvail; i += 1) await Promise.resolve();
+    expect(resolveAvail).not.toBeNull();
+    resolveAvail!([]);
+    await Promise.all([r1, r2]);
+    expect(adapter.getAvailablePurchases).toHaveBeenCalledTimes(1);
+  });
 });

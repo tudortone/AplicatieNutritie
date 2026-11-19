@@ -34,6 +34,7 @@ function createAdmobSsvVerifier({
   keysUrl = DEFAULT_KEYS_URL,
   now = () => Date.now(),
   cacheTtlMs = 24 * 60 * 60 * 1000,
+  refreshCooldownMs = 60 * 1000,
   expectedAdUnit,
   expectedRewardAmount,
   expectedRewardItem,
@@ -44,26 +45,42 @@ function createAdmobSsvVerifier({
   if (!/^[\x20-\x7e]{1,64}$/.test(String(expectedRewardItem || ''))) throw new TypeError('expected AdMob reward item is required.');
   let cache = null;
   let cacheExpiresAt = 0;
+  let lastFetchAt = -Infinity;
+  let inFlightKeys = null;
 
-  async function getKeys() {
+  async function getKeys({ forceRefresh = false } = {}) {
     const current = Number(now());
-    if (cache && current < cacheExpiresAt) return cache;
-    let response;
+    if (!forceRefresh && cache && current < cacheExpiresAt) return cache;
+    // P1-02: Cooldown anti-DoS pe forceRefresh (ex. atac cu key_id aleatorii)
+    if (forceRefresh && cache && (current - lastFetchAt) < refreshCooldownMs) return cache;
+    if (inFlightKeys) return inFlightKeys;
+
+    inFlightKeys = (async () => {
+      let response;
+      try {
+        response = await fetchImpl(keysUrl, { signal: AbortSignal.timeout(5000) });
+      } catch (cause) {
+        throw Object.assign(new AdmobSsvError('SSV_KEYS_UNAVAILABLE', 503), { cause });
+      }
+      if (!response?.ok) throw new AdmobSsvError('SSV_KEYS_UNAVAILABLE', 503);
+      const payload = await response.json();
+      const next = new Map();
+      for (const entry of Array.isArray(payload?.keys) ? payload.keys : []) {
+        if (Number.isInteger(Number(entry?.keyId)) && typeof entry?.pem === 'string') next.set(String(entry.keyId), entry.pem);
+      }
+      if (next.size === 0) throw new AdmobSsvError('SSV_KEYS_INVALID', 503);
+      const completedAt = Number(now());
+      cache = next;
+      lastFetchAt = completedAt;
+      cacheExpiresAt = completedAt + cacheTtlMs;
+      return next;
+    })();
+
     try {
-      response = await fetchImpl(keysUrl, { signal: AbortSignal.timeout(5000) });
-    } catch (cause) {
-      throw Object.assign(new AdmobSsvError('SSV_KEYS_UNAVAILABLE', 503), { cause });
+      return await inFlightKeys;
+    } finally {
+      inFlightKeys = null;
     }
-    if (!response?.ok) throw new AdmobSsvError('SSV_KEYS_UNAVAILABLE', 503);
-    const payload = await response.json();
-    const next = new Map();
-    for (const entry of Array.isArray(payload?.keys) ? payload.keys : []) {
-      if (Number.isInteger(Number(entry?.keyId)) && typeof entry?.pem === 'string') next.set(String(entry.keyId), entry.pem);
-    }
-    if (next.size === 0) throw new AdmobSsvError('SSV_KEYS_INVALID', 503);
-    cache = next;
-    cacheExpiresAt = current + cacheTtlMs;
-    return next;
   }
 
   return Object.freeze({
@@ -86,8 +103,12 @@ function createAdmobSsvVerifier({
       const rewardAmount = bounded(params.get('reward_amount'), 9, /^[1-9]\d*$/, 'SSV_REWARD_AMOUNT_INVALID');
       const rewardItem = bounded(params.get('reward_item'), 64, /^[\x20-\x7e]+$/, 'SSV_REWARD_ITEM_INVALID');
       bounded(params.get('timestamp'), 20, /^\d{10,20}$/, 'SSV_TIMESTAMP_INVALID');
-      const keys = await getKeys();
-      const pem = keys.get(keyId);
+      let keys = await getKeys();
+      let pem = keys.get(keyId);
+      if (!pem) {
+        keys = await getKeys({ forceRefresh: true });
+        pem = keys.get(keyId);
+      }
       if (!pem) throw new AdmobSsvError('SSV_KEY_UNKNOWN');
       const signedData = raw.slice(queryStart + 1, signatureMarker);
       let valid = false;

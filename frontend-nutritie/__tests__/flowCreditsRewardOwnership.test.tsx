@@ -333,6 +333,7 @@ describe('Flow Credits rewarded operation ownership', () => {
       expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/rewarded/intents')).toHaveLength(1);
 
       fakeNow += 4 * 60 * 1000 + 1_000;
+      mockShowRewardedAdWithSsv.mockResolvedValueOnce('dismissed');
 
       await act(async () => {
         await latest!.watchRewarded();
@@ -343,5 +344,58 @@ describe('Flow Credits rewarded operation ownership', () => {
     } finally {
       nowSpy.mockRestore();
     }
+  });
+
+  test('P1-04: double-tap on watchRewarded uses single-flight without invalidating active ad', async () => {
+    let resolveAd!: (value: 'dismissed') => void;
+    mockShowRewardedAdWithSsv.mockReturnValueOnce(new Promise((resolve) => { resolveAd = resolve; }));
+    const fetchMock = global.fetch as jest.Mock;
+    const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|8'));
+
+    let p1!: ReturnType<FlowCreditsValue['watchRewarded']>;
+    let p2!: ReturnType<FlowCreditsValue['watchRewarded']>;
+    await act(async () => {
+      p1 = latest!.watchRewarded();
+      p2 = latest!.watchRewarded();
+      await waitFor(() => expect(mockShowRewardedAdWithSsv).toHaveBeenCalledTimes(1));
+    });
+
+    await act(async () => {
+      resolveAd('dismissed');
+      const [r1, r2] = await Promise.all([p1, p2]);
+      expect(r1).toBe('dismissed');
+      expect(r2).toBe('dismissed');
+    });
+
+    expect(mockShowRewardedAdWithSsv).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/rewarded/intents')).toHaveLength(1);
+  });
+
+  test('P1-04: transient network error during SSV polling retries and still grants reward', async () => {
+    const fetchMock = global.fetch as jest.Mock;
+    let statusCalls = 0;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/flow-credits') return response({ total: 9, rewardedGrantsRemaining: 2 });
+      if (url === '/rewarded/intents') {
+        return response({ intentId: 'intent-a', status: 'PENDING', ssv: { userId: 'intent-a', customData: 'opaque' } });
+      }
+      if (url === '/rewarded/intents/intent-a') {
+        statusCalls += 1;
+        if (statusCalls === 1) throw new Error('Network blip');
+        return response({ status: 'GRANTED' });
+      }
+      throw new Error(`Unexpected ${url}`);
+    });
+    const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|9'));
+
+    let outcome!: string;
+    await act(async () => {
+      outcome = await latest!.watchRewarded();
+    });
+    expect(outcome).toBe('granted');
+    expect(statusCalls).toBe(2);
   });
 });

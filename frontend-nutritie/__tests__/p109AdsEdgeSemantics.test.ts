@@ -48,7 +48,7 @@ import {
   SHARED_AD_COOLDOWN_SECONDS,
   type AdGateState,
 } from '../lib/ads/adGate';
-import { loadAdGateState, saveAdGateState, __resetAdGateStoreForTests } from '../lib/ads/adGateStore';
+import { loadAdGateState, hydrateAdGateState, saveAdGateState, __resetAdGateStoreForTests } from '../lib/ads/adGateStore';
 import { getAdsRuntimeConfig } from '../lib/ads/adsConfig';
 import {
   resolveAdsConsent,
@@ -62,6 +62,7 @@ import {
   initializeAdsSdk,
   showPreloadedInterstitial,
   preloadInterstitial,
+  discardPreloadedInterstitial,
   refreshAdsAfterConsentChange,
   isInterstitialReady,
   adsAvailable,
@@ -699,5 +700,33 @@ describe('P1-09 Non-Vacuity Verifications', () => {
       __resetAdsServiceForTests();
       jest.useRealTimers();
     }
+  });
+
+  test('P1-06: initializeAdsSdk re-preloads interstitial after discard (subscription expiry / account switch)', async () => {
+    await resolveAdsConsent();
+    await initializeAdsSdk();
+    expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(1);
+
+    discardPreloadedInterstitial();
+    await initializeAdsSdk();
+    expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(2);
+  });
+
+  test('P1-06: hydrateAdGateState restores persisted counter/cooldown on cold start without wiping AsyncStorage', async () => {
+    const AsyncStorage = require('@react-native-async-storage/async-storage');
+    await AsyncStorage.setItem(
+      'ads:gate:v1:user-cold',
+      JSON.stringify({
+        successfulAnalysisCount: 0,
+        chatMessageCount: 11,
+        lastAdShownAtMs: 1_700_000_000_000,
+        lastAdCounterValue: null,
+        lastChatAdCounterValue: null,
+      }),
+    );
+
+    const hydrated = await hydrateAdGateState('user-cold');
+    expect(hydrated.chatMessageCount).toBe(11);
+    expect(hydrated.lastAdShownAtMs).toBe(1_700_000_000_000);
   });
 });

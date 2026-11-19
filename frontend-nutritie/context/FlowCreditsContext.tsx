@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { buildApiUrl } from '../lib/api';
 import {
@@ -160,6 +160,9 @@ async function authenticatedFetch(path: string, init?: RequestInit, expectedUser
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const PREWARM_TTL_MS = 4 * 60 * 1000;
+// P1-04: Polling SSV rezilient (~46s total cu backoff progresiv) pentru webhook-uri AdMob întârziate.
+const SSV_POLL_DELAYS_MS = [1_500, 1_500, 2_000, 2_000, 2_500, 3_000, 3_000, 3_500, 4_000, 4_500, 5_000, 5_000, 5_000, 4_000];
+type WatchRewardedOutcome = RewardedAdOutcome | 'granted' | 'limit';
 type PrewarmedIntent = {
   owner: string;
   intentId: string;
@@ -185,13 +188,17 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   const lastConsumedCategoryRef = useRef<FlowCreditCategory | null>(null);
   const sequenceRef = useRef(0);
   const rewardOperationRef = useRef(0);
+  const watchInFlightRef = useRef<{ owner: string; promise: Promise<WatchRewardedOutcome> } | null>(null);
   const prewarmInFlightRef = useRef<{ owner: string; promise: Promise<PrewarmedIntent | null> } | null>(null);
   const prewarmedIntentRef = useRef<PrewarmedIntent | null>(null);
-  ownerRef.current = appUserId;
-  visibleRef.current = visible;
-  premiumRef.current = premium;
-  balanceRef.current = balance;
-  lastConsumedCategoryRef.current = lastConsumedCategory;
+
+  useLayoutEffect(() => {
+    ownerRef.current = appUserId;
+    visibleRef.current = visible;
+    premiumRef.current = premium;
+    balanceRef.current = balance;
+    lastConsumedCategoryRef.current = lastConsumedCategory;
+  }, [appUserId, visible, premium, balance, lastConsumedCategory]);
 
   const clearPrewarmedRewarded = useCallback(() => {
     prewarmInFlightRef.current = null;
@@ -237,6 +244,7 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   useEffect(() => {
     sequenceRef.current += 1;
     rewardOperationRef.current += 1;
+    watchInFlightRef.current = null;
     clearPrewarmedRewarded();
     balanceRef.current = EMPTY;
     setBalance(EMPTY);
@@ -338,17 +346,26 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   }, [visible, appUserId, isPremiumResolved, hasUnlimitedAccess, balanceReady, balance.rewardedGrantsRemaining, clearPrewarmedRewarded]);
 
   useEffect(() => () => {
+    rewardOperationRef.current += 1;
+    watchInFlightRef.current = null;
     clearPrewarmedRewarded();
   }, [clearPrewarmedRewarded]);
 
-  const watchRewarded = useCallback(async () => {
+  const watchRewarded = useCallback((): Promise<WatchRewardedOutcome> => {
     const owner = ownerRef.current;
-    const operation = ++rewardOperationRef.current;
-    const isCurrentOperation = () => Boolean(owner) && ownerRef.current === owner && rewardOperationRef.current === operation;
     const accessBlocksRewardedAds = () => {
       const current = premiumRef.current;
       return current.loading || current.hasFullAccess || current.isPremium;
     };
+    if (!owner || accessBlocksRewardedAds()) return Promise.resolve('unavailable' as const);
+
+    // P1-04: Single-flight per user — un dublu-tap nu anulează reclama/polling-ul SSV deja activ.
+    if (watchInFlightRef.current && watchInFlightRef.current.owner === owner) {
+      return watchInFlightRef.current.promise;
+    }
+
+    const operation = ++rewardOperationRef.current;
+    const isCurrentOperation = () => Boolean(owner) && ownerRef.current === owner && rewardOperationRef.current === operation;
     const updateState = (state: RewardState) => {
       if (isCurrentOperation()) setRewardState(state);
     };
@@ -358,101 +375,130 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
       updateState('unavailable');
       return true;
     };
-    if (!owner || accessBlocksRewardedAds()) return 'unavailable' as const;
-    const eligibleBalance = balanceOwnerId === owner ? balance : await refresh();
-    if (!isCurrentOperation() || accessBlocksRewardedAds()) return 'unavailable' as const;
-    if (!eligibleBalance) {
-      updateState('unavailable');
-      return 'unavailable' as const;
-    }
-    if (eligibleBalance.rewardedGrantsRemaining <= 0) {
-      updateState('limit');
-      return 'limit' as const;
-    }
-    updateState('loading');
-    try {
-      let activeIntent: { intentId: string; customData: string } | null = null;
-      const now = Date.now();
-      const cached = prewarmedIntentRef.current;
-      if (cached && cached.owner === owner && now - cached.createdAtMs < PREWARM_TTL_MS) {
-        prewarmedIntentRef.current = null;
-        activeIntent = { intentId: cached.intentId, customData: cached.customData };
-      } else {
-        prewarmedIntentRef.current = null;
-        if (cached && typeof discardPreloadedRewardedAd === 'function') {
-          discardPreloadedRewardedAd();
-        }
-        if (prewarmInFlightRef.current?.owner === owner) {
-          const awaited = await prewarmInFlightRef.current.promise;
-          if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
-          if (awaited && awaited.owner === owner && Date.now() - awaited.createdAtMs < PREWARM_TTL_MS) {
-            prewarmedIntentRef.current = null;
-            activeIntent = { intentId: awaited.intentId, customData: awaited.customData };
+
+    const run = (async (): Promise<WatchRewardedOutcome> => {
+      const eligibleBalance = balanceOwnerId === owner ? balance : await refresh();
+      if (!isCurrentOperation() || accessBlocksRewardedAds()) return 'unavailable' as const;
+      if (!eligibleBalance) {
+        updateState('unavailable');
+        return 'unavailable' as const;
+      }
+      if (eligibleBalance.rewardedGrantsRemaining <= 0) {
+        updateState('limit');
+        return 'limit' as const;
+      }
+      const balanceBeforeReward = eligibleBalance.total;
+      updateState('loading');
+      try {
+        let activeIntent: { intentId: string; customData: string } | null = null;
+        const now = Date.now();
+        const cached = prewarmedIntentRef.current;
+        if (cached && cached.owner === owner && now - cached.createdAtMs < PREWARM_TTL_MS) {
+          prewarmedIntentRef.current = null;
+          activeIntent = { intentId: cached.intentId, customData: cached.customData };
+        } else {
+          prewarmedIntentRef.current = null;
+          if (cached && typeof discardPreloadedRewardedAd === 'function') {
+            discardPreloadedRewardedAd();
+          }
+          if (prewarmInFlightRef.current?.owner === owner) {
+            const awaited = await prewarmInFlightRef.current.promise;
+            if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
+            if (awaited && awaited.owner === owner && Date.now() - awaited.createdAtMs < PREWARM_TTL_MS) {
+              prewarmedIntentRef.current = null;
+              activeIntent = { intentId: awaited.intentId, customData: awaited.customData };
+            }
           }
         }
-      }
 
-      if (!activeIntent) {
-        const response = await authenticatedFetch(
-          '/rewarded/intents',
-          { method: 'POST', body: '{}', headers: { 'Idempotency-Key': idOperatieNoua() } },
-          owner,
-        );
-        if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
-        if (!response.ok) {
-          updateState(response.status === 429 ? 'limit' : 'unavailable');
-          return response.status === 429 ? 'limit' as const : 'unavailable' as const;
+        if (!activeIntent) {
+          const response = await authenticatedFetch(
+            '/rewarded/intents',
+            { method: 'POST', body: '{}', headers: { 'Idempotency-Key': idOperatieNoua() } },
+            owner,
+          );
+          if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
+          if (!response.ok) {
+            updateState(response.status === 429 ? 'limit' : 'unavailable');
+            return response.status === 429 ? 'limit' as const : 'unavailable' as const;
+          }
+          const intent = await response.json() as { intentId?: string; status?: string; ssv?: { userId?: string; customData?: string } };
+          if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
+          if (intent.status !== 'PENDING' || !intent.intentId || intent.ssv?.userId !== intent.intentId || !intent.ssv.customData) {
+            throw new Error('INVALID_REWARD_INTENT');
+          }
+          activeIntent = { intentId: intent.intentId, customData: intent.ssv.customData };
         }
-        const intent = await response.json() as { intentId?: string; status?: string; ssv?: { userId?: string; customData?: string } };
-        if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
-        if (intent.status !== 'PENDING' || !intent.intentId || intent.ssv?.userId !== intent.intentId || !intent.ssv.customData) {
-          throw new Error('INVALID_REWARD_INTENT');
-        }
-        activeIntent = { intentId: intent.intentId, customData: intent.ssv.customData };
-      }
 
-      if (!isConsentResolved()) {
+        if (!isConsentResolved()) {
+          try {
+            await resolveAdsConsent();
+          } catch {}
+        }
         try {
-          await resolveAdsConsent();
+          await initializeAdsSdk();
         } catch {}
-      }
-      try {
-        await initializeAdsSdk();
-      } catch {}
-      if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
-      const outcome = await showRewardedAdWithSsv({ intentId: activeIntent.intentId, customData: activeIntent.customData });
-      if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
-      if (outcome !== 'earned-awaiting-server') {
-        updateState(outcome === 'unavailable' ? 'unavailable' : 'idle');
-        return outcome;
-      }
-      updateState('awaiting-server');
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        await delay(1_500);
-        if (!isCurrentOperation()) return 'unavailable' as const;
-        const statusResponse = await authenticatedFetch(`/rewarded/intents/${encodeURIComponent(activeIntent.intentId)}`, undefined, owner);
-        if (!isCurrentOperation()) return 'unavailable' as const;
-        if (!statusResponse.ok) continue;
-        const { status } = await statusResponse.json() as { status?: string };
-        if (status === 'GRANTED') {
-          await refresh();
+        if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
+        const outcome = await showRewardedAdWithSsv({ intentId: activeIntent.intentId, customData: activeIntent.customData });
+        if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
+        if (outcome !== 'earned-awaiting-server') {
+          updateState(outcome === 'unavailable' ? 'unavailable' : 'idle');
+          return outcome;
+        }
+        updateState('awaiting-server');
+        for (const waitMs of SSV_POLL_DELAYS_MS) {
+          await delay(waitMs);
           if (!isCurrentOperation()) return 'unavailable' as const;
+          let statusResponse: Response;
+          try {
+            statusResponse = await authenticatedFetch(`/rewarded/intents/${encodeURIComponent(activeIntent.intentId)}`, undefined, owner);
+          } catch {
+            // P1-04: O eroare tranzitorie de rețea pe un poll nu trebuie să abandoneze SSV-ul.
+            continue;
+          }
+          if (!isCurrentOperation()) return 'unavailable' as const;
+          if (!statusResponse.ok) continue;
+          let status: string | undefined;
+          try {
+            ({ status } = await statusResponse.json() as { status?: string });
+          } catch {
+            continue;
+          }
+          if (status === 'GRANTED') {
+            await refresh();
+            if (!isCurrentOperation()) return 'unavailable' as const;
+            updateState('granted');
+            return 'granted' as const;
+          }
+          if (status === 'DENIED_LIMIT') {
+            updateState('limit');
+            return 'limit' as const;
+          }
+          if (status === 'EXPIRED') break;
+        }
+        // Reîmprospătare finală în caz că webhook-ul SSV a ajuns chiar la limita ferestrei.
+        const finalBalance = await refresh();
+        if (!isCurrentOperation()) return 'unavailable' as const;
+        if (finalBalance && finalBalance.total > balanceBeforeReward) {
           updateState('granted');
           return 'granted' as const;
         }
-        if (status === 'DENIED_LIMIT') {
-          updateState('limit');
-          return 'limit' as const;
-        }
-        if (status === 'EXPIRED') break;
+        updateState('unavailable');
+        return 'unavailable' as const;
+      } catch {
+        updateState('unavailable');
+        return 'unavailable' as const;
       }
-      updateState('unavailable');
-      return 'unavailable' as const;
-    } catch {
-      updateState('unavailable');
-      return 'unavailable' as const;
-    }
-  }, [balance, balanceOwnerId, refresh]);
+    })();
+
+    const tracked = run.finally(() => {
+      if (watchInFlightRef.current?.promise === tracked) {
+        watchInFlightRef.current = null;
+      }
+    });
+    watchInFlightRef.current = { owner, promise: tracked };
+    return tracked;
+  }, [balance, balanceOwnerId, refresh, clearPrewarmedRewarded]);
 
   const consumeOptimisticCredit = useCallback((): FlowCreditCategory | null => {
     if (premiumRef.current.hasFullAccess || premiumRef.current.isPremium) {

@@ -21,7 +21,7 @@ import {
   type AdGateState,
   type AdSource,
 } from '../lib/ads/adGate';
-import { loadAdGateState, saveAdGateState } from '../lib/ads/adGateStore';
+import { hydrateAdGateState, loadAdGateState, saveAdGateState } from '../lib/ads/adGateStore';
 import { getAdsRuntimeConfig } from '../lib/ads/adsConfig';
 import {
   adsAvailable,
@@ -76,13 +76,24 @@ export function AdsProvider({
     [],
   );
 
-  // Contul curent s-a schimbat (login/logout pe același dispozitiv)
+  // Contul curent s-a schimbat (login/logout pe același dispozitiv) + hidratare asincronă cold-start (P1-06)
   useEffect(() => {
+    let activ = true;
     stateRef.current = loadAdGateState(scopeKey);
     discardPreloadedInterstitial();
+    void hydrateAdGateState(scopeKey).then((hydrated) => {
+      if (activ) {
+        stateRef.current = hydrated;
+      }
+    });
+    return () => {
+      activ = false;
+    };
   }, [scopeKey]);
 
-  // Consimțământ + inițializare SDK: DOAR pentru utilizatori non-premium
+  // Consimțământ + inițializare SDK: DOAR pentru utilizatori non-premium.
+  // P1-06: Include scopeKey în dependințe ca după switch de cont sau expirare abonament
+  // (hasFullAccess true -> false), interstițialul să fie re-preîncărcat.
   useEffect(() => {
     if (!isPremiumResolved || hasFullAccess || !adsAvailable) {
       if (hasFullAccess) {
@@ -103,7 +114,7 @@ export function AdsProvider({
       activ = false;
       discardPreloadedInterstitial();
     };
-  }, [isPremiumResolved, hasFullAccess]);
+  }, [isPremiumResolved, hasFullAccess, scopeKey]);
 
   const showPrivacyOptions = useCallback(async () => {
     const success = await showAdsPrivacyOptionsForm();
@@ -136,9 +147,12 @@ export function AdsProvider({
       });
       if (!decizie.eligible) return;
       if (hasFullAccess) return;
+      // P1-06: Aplicăm nextStateIfAttempted (reset contor + cooldown 10 min) DOAR
+      // dacă reclama preîncărcată a fost efectiv afișată.
+      const shown = showPreloadedInterstitial();
+      if (!shown) return;
       stateRef.current = decizie.nextStateIfAttempted;
       saveAdGateState(scopeKey, stateRef.current);
-      showPreloadedInterstitial();
     },
     [hasFullAccess, scopeKey, runtimeConfig.everyNChatMessages, runtimeConfig.minAdIntervalSeconds],
   );
