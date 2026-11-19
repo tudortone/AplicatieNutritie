@@ -28,7 +28,13 @@ function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, bi
 
       if (!isTrusted) {
         if (config?.playIntegrity?.mode === 'off' || config?.playIntegrity?.mode === 'observe') {
-          const fallbackSeed = `${req.user.id}:${req.get('x-play-integrity-request-hash') || req.get('idempotency-key') || crypto.randomUUID()}`;
+          const idempotencyKey = typeof req.get === 'function'
+            ? req.get('idempotency-key')
+            : req.headers?.['idempotency-key'];
+          const normalizedKey = typeof idempotencyKey === 'string' && idempotencyKey.trim()
+            ? idempotencyKey.trim().slice(0, 200)
+            : '';
+          const fallbackSeed = `${req.user.id}:${normalizedKey || crypto.randomUUID()}`;
           tokenHash = crypto.createHash('sha256').update(`reward-intent-token:${fallbackSeed}`).digest('hex');
           requestHash = crypto.createHash('sha256').update(`reward-intent-req:${fallbackSeed}`).digest('base64url');
         } else {

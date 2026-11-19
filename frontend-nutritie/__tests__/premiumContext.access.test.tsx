@@ -31,17 +31,27 @@ jest.mock('../context/BillingContext', () => ({
 }));
 
 let mockSessionUserId = 'tester-a';
+let mockAccessToken = 'token-tester-a';
+const mockRefreshSession = jest.fn(async () => ({
+  data: {
+    session: {
+      access_token: `refreshed-${mockSessionUserId}`,
+      user: { id: mockSessionUserId },
+    },
+  },
+}));
 jest.mock('../supabase', () => ({
   supabase: {
     auth: {
       getSession: jest.fn(async () => ({
         data: {
           session: {
-            access_token: `token-${mockSessionUserId}`,
+            access_token: mockAccessToken,
             user: { id: mockSessionUserId },
           },
         },
       })),
+      refreshSession: () => mockRefreshSession(),
     },
   },
 }));
@@ -96,6 +106,18 @@ describe('PremiumContext — exclusiv server-authoritative', () => {
     jest.clearAllMocks();
     latestStatus = null;
     mockSessionUserId = 'tester-a';
+    mockAccessToken = 'token-tester-a';
+    mockRefreshSession.mockImplementation(async () => {
+      mockAccessToken = `refreshed-${mockSessionUserId}`;
+      return {
+        data: {
+          session: {
+            access_token: mockAccessToken,
+            user: { id: mockSessionUserId },
+          },
+        },
+      };
+    });
     process.env.EXPO_PUBLIC_API_URL = 'https://api.example.test';
     mockRestorePurchases.mockResolvedValue(false);
   });
@@ -156,6 +178,7 @@ describe('PremiumContext — exclusiv server-authoritative', () => {
     const view = await render(<PremiumProvider appUserId="tester-a"><Probe /></PremiumProvider>);
     await waitFor(() => expect(view.getByTestId('access-status').props.children).toContain('tester|false|true'));
     mockSessionUserId = 'free-b';
+    mockAccessToken = 'token-free-b';
     await view.rerender(<PremiumProvider appUserId="free-b"><Probe /></PremiumProvider>);
     expect(view.getByTestId('access-status').props.children).not.toContain('tester|false|true');
     await waitFor(() => expect(view.getByTestId('access-status').props.children).toContain('free|false'));
@@ -193,5 +216,38 @@ describe('PremiumContext — exclusiv server-authoritative', () => {
     });
     expect(view.getByTestId('access-status').props.children).toContain('free|false');
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('recupereaza automat un 401 prin refreshSession fara a retrograda abonatul Premium', async () => {
+    const fetchMock = jest.fn((_url: string, init?: { headers?: Record<string, string> }) => {
+      if (init?.headers?.Authorization === 'Bearer token-tester-a') {
+        return Promise.resolve({ ok: false, status: 401, json: async () => ({ cod: 'TOKEN_INVALID' }) });
+      }
+      return response(PREMIUM);
+    });
+    global.fetch = fetchMock as jest.Mock;
+    const view = await render(<PremiumProvider appUserId="tester-a"><Probe /></PremiumProvider>);
+    await waitFor(() => expect(view.getByTestId('access-status').props.children).toContain('premium|true'));
+    expect(mockRefreshSession).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('nu retrogradeaza abonatul Premium la FREE pe un singur 401 tranzitoriu, dar esueaza inchis la al doilea 401 consecutiv', async () => {
+    mockRefreshSession.mockResolvedValue({ data: { session: null } } as never);
+    const fetchMock = jest.fn()
+      .mockImplementationOnce(() => response(PREMIUM))
+      .mockImplementation(() => Promise.resolve({ ok: false, status: 401, json: async () => ({ cod: 'TOKEN_INVALID' }) }));
+    global.fetch = fetchMock as jest.Mock;
+
+    const view = await render(<PremiumProvider appUserId="tester-a"><Probe /></PremiumProvider>);
+    await waitFor(() => expect(view.getByTestId('access-status').props.children).toContain('premium|true'));
+
+    // Primul 401 tranzitoriu pastreaza dreptul validat anterior.
+    await act(async () => { await latestStatus?.refresh(); });
+    expect(view.getByTestId('access-status').props.children).toContain('premium|true');
+
+    // Al doilea 401 consecutiv revine fail-closed la FREE.
+    await act(async () => { await latestStatus?.refresh(); });
+    await waitFor(() => expect(view.getByTestId('access-status').props.children).toContain('free|false'));
   });
 });

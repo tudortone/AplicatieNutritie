@@ -1,6 +1,7 @@
 import * as ExpoCrypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState, Platform } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
 import './constants/qaEnvironment';
@@ -287,3 +288,34 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   // respinge primul; acesta e backstop-ul de la nivel de client.
   db: { timeout: 10000 },
 });
+
+// P0-11: Pe React Native, GoTrue pornește ticker-ul de refresh (30s) fără să îl
+// oprească în fundal (unde Android Doze poate declanșa cooldown-ul de 60s) și
+// fără să îl reia instant la revenirea în prim-plan. Înregistrăm un singur
+// listener AppState nativ, idempotent față de HMR/Fast Refresh.
+const AUTO_REFRESH_LISTENER_KEY = Symbol.for('getflow.supabaseAutoRefreshListenerInstalled');
+
+export function ensureSupabaseAppStateAutoRefresh(): void {
+  if (Platform?.OS === 'web') return;
+  if (typeof AppState?.addEventListener !== 'function') return;
+  const runtimeGlobal = globalThis as Record<PropertyKey, unknown>;
+  if (runtimeGlobal[AUTO_REFRESH_LISTENER_KEY]) return;
+  runtimeGlobal[AUTO_REFRESH_LISTENER_KEY] = true;
+
+  const syncAutoRefresh = (state: string | null | undefined) => {
+    if (state === 'active') {
+      if (typeof supabase.auth?.startAutoRefresh === 'function') {
+        void supabase.auth.startAutoRefresh();
+      }
+    } else if (state === 'background' || state === 'inactive') {
+      if (typeof supabase.auth?.stopAutoRefresh === 'function') {
+        void supabase.auth.stopAutoRefresh();
+      }
+    }
+  };
+
+  syncAutoRefresh(AppState.currentState);
+  AppState.addEventListener('change', syncAutoRefresh);
+}
+
+ensureSupabaseAppStateAutoRefresh();

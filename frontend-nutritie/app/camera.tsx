@@ -502,6 +502,17 @@ export default function CameraScreen() {
       controller.abort();
     }, 75000);
 
+    const getFreshToken = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const activeSession = data?.session;
+        if (activeSession?.access_token && activeSession.user?.id === ownerId) {
+          return activeSession.access_token;
+        }
+      } catch {}
+      return session.access_token;
+    };
+
     try {
       const imagineOptimizata = await optimizeImageBeforeUpload(imageUri, knownDimensions);
       if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) {
@@ -553,6 +564,7 @@ export default function CameraScreen() {
 
       const submitParams = {
         token: session.access_token,
+        getToken: getFreshToken,
         userId: ownerId,
         imageUrl: uploaded.url,
         imageFileId: uploaded.fileId,
@@ -609,6 +621,7 @@ export default function CameraScreen() {
       }
       const completed = await waitForPhotoJob({
         token: session.access_token,
+        getToken: getFreshToken,
         userId: ownerId,
         jobId: submitted.id,
         pollIntervalMs: 750,
@@ -653,6 +666,7 @@ export default function CameraScreen() {
           if (!isPhotoOwnerCurrent(ownerId, accountGeneration)) return;
           const inProgress = await recoverPhotoJobForCamera({
             token: session.access_token,
+            getToken: getFreshToken,
             userId: ownerId,
             signal: controller.signal,
           });
@@ -675,6 +689,7 @@ export default function CameraScreen() {
               ? inProgress.job
               : await waitForPhotoJob({
                 token: session.access_token,
+                getToken: getFreshToken,
                 userId: ownerId,
                 jobId: inProgress.job.id,
                 pollIntervalMs: 750,
@@ -739,7 +754,7 @@ export default function CameraScreen() {
         setPreviewPhotoUri(null);
         await cleanupAttemptDrafts();
         if (uploadedFileId && session?.access_token && typeof cleanupPhotoAsset === 'function') {
-          void cleanupPhotoAsset({ token: session.access_token, fileId: uploadedFileId }).catch(() => { });
+          void cleanupPhotoAsset({ token: session.access_token, userId: ownerId, fileId: uploadedFileId }).catch(() => { });
         }
         setPhotoPhase('idle');
         setScanError(null);
@@ -851,10 +866,21 @@ export default function CameraScreen() {
       void warmFn().catch(() => { });
     }
 
+    const getRecoveryToken = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const activeSession = data?.session;
+        if (activeSession?.access_token && activeSession.user?.id === userId) {
+          return activeSession.access_token;
+        }
+      } catch {}
+      return token;
+    };
+
     const recover = async () => {
       let active: RecoveredPhotoJobForCamera | null = null;
       try {
-        active = await recoverPhotoJobForCamera({ token, userId, signal: controller.signal });
+        active = await recoverPhotoJobForCamera({ token, getToken: getRecoveryToken, userId, signal: controller.signal });
         if (!active || controller.signal.aborted || isTakingPhotoRef.current || abortControllerRef.current !== null
           || !isPhotoOwnerCurrent(userId, accountGeneration)) return;
         if (active.missingJob) {
@@ -938,7 +964,7 @@ export default function CameraScreen() {
             }
           }
           if (realPointer) {
-            const fetched = await getPhotoJob({ token, jobId: realPointer.jobId, signal: controller.signal });
+            const fetched = await getPhotoJob({ token, getToken: getRecoveryToken, userId, jobId: realPointer.jobId, signal: controller.signal });
             active = { job: fetched, pointer: realPointer };
           } else {
             await clearPreliminaryPhotoJobPointer(userId).catch(() => { });
@@ -967,7 +993,7 @@ export default function CameraScreen() {
         const completed = active.job.status === 'succeeded' || active.job.status === 'completed'
           ? active.job
           : await waitForPhotoJob({
-            token, userId, jobId: active.job.id, pollIntervalMs: 750, signal: controller.signal,
+            token, getToken: getRecoveryToken, userId, jobId: active.job.id, pollIntervalMs: 750, maxDurationMs: 75_000, signal: controller.signal,
             onStatus: (job: PhotoJob) => {
               if (!isPhotoOwnerCurrent(userId, accountGeneration)) return;
               if (job.status === 'queued') setAnalysisStage(2);
@@ -1011,6 +1037,7 @@ export default function CameraScreen() {
             return;
           }
           setPhotoPhase('failed');
+          setSeIncarca(false);
           setScanError(t('camera.genericScanError'));
           setRecoveryBlocked(error instanceof PhotoApiError && (
             error.code === 'INVALID_PENDING_MEAL_SAVE_DRAFT'

@@ -5,7 +5,7 @@ import {
   ScrollView, Keyboard, Alert, Modal, Platform
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { buildApiUrl } from '@/lib/api';
+import { authenticatedFetch } from '@/lib/api';
 import { citesteContextProfilChat } from '../../lib/chatProfileContext';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusRefresh } from '../../hooks/useFocusRefresh';
@@ -123,13 +123,13 @@ async function cerePropunereMasa(
   accessToken: string,
   istoric: { role: string; text: string }[] = [],
   signal?: AbortSignal,
+  userId?: string,
 ): Promise<CoachMealDraft[]> {
   const amprenta = istoric.map((m) => `${m.role}:${m.text.slice(0, 200)}`).join('|');
-  const response = await fetch(buildApiUrl('/log-food-from-chat'), {
+  const response = await authenticatedFetch('/log-food-from-chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
       // CHAT-001: același mesaj + context retrimis = aceeași cheie => backend-ul
       // reia propunerea anterioară, nu regenerează (fără dublă execuție/credit).
       'Idempotency-Key': hashString(`${mesaj}|${amprenta}`),
@@ -140,6 +140,9 @@ async function cerePropunereMasa(
       ...(istoric.length > 0 ? { mesaje: istoric } : {}),
       limba: i18n.language || 'ro',
     }),
+  }, {
+    expectedUserId: userId,
+    fallbackToken: accessToken,
   });
 
   if (!response.ok) {
@@ -342,8 +345,9 @@ export default function ChatScreen() {
     setQuotaUnavailableReason(null);
     let failureReason: 'network' | 'endpoint' = 'network';
     try {
-      const resp = await fetch(buildApiUrl('/chat/quota'), {
-        headers: { 'Authorization': `Bearer ${token}` },
+      const resp = await authenticatedFetch('/chat/quota', undefined, {
+        expectedUserId: userId,
+        fallbackToken: token,
       });
       if (!resp.ok) {
         failureReason = 'endpoint';
@@ -744,7 +748,13 @@ export default function ChatScreen() {
             .filter((m) => !m.isError)
             .slice(-8)
             .map((m) => ({ role: m.role, text: m.text }));
-          const propuneri = await cerePropunereMasa(mesajText, session.access_token, istoricRecent, controller.signal);
+          const propuneri = await cerePropunereMasa(
+            mesajText,
+            session.access_token,
+            istoricRecent,
+            controller.signal,
+            session.user.id,
+          );
           if (currentUserRef.current !== session.user.id) return;
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           adaugaSugestii(t('chat.foodsIdentified'), propuneri);
@@ -770,11 +780,10 @@ export default function ChatScreen() {
       const cheieIdempotentaChat = cheieIdempotenta(mesajText, istoricActivat, session.user?.id);
       const profil = await citesteContextProfilChat(session.user.id);
       if (currentUserRef.current !== session.user.id || controller.signal.aborted) return;
-      const raspuns = await fetch(buildApiUrl('/chat'), {
+      const raspuns = await authenticatedFetch('/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
           'Idempotency-Key': cheieIdempotentaChat,
         },
         signal: controller.signal,
@@ -788,6 +797,9 @@ export default function ChatScreen() {
           profil,
           limba: i18n.language || 'ro'
         }),
+      }, {
+        expectedUserId: session.user.id,
+        fallbackToken: session.access_token,
       });
       let date: any = null;
       try {

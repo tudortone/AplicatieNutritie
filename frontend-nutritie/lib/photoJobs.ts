@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { buildApiUrl } from './api';
+import { authenticatedFetch } from './api';
 import { idMasaDinOperatie } from './idUtils';
 import { getPlayIntegrityHeaders } from './playIntegrityNative';
 
@@ -262,16 +262,25 @@ export async function savePhotoJobSaveAttempt(
 }
 
 export async function cleanupPhotoAsset({
-  token, fileId, signal,
-}: { token: string; fileId: string; signal?: AbortSignal }): Promise<void> {
-  const response = await fetch(buildApiUrl('/photo-assets/cleanup'), {
+  token, getToken, userId, fileId, signal,
+}: {
+  token?: string;
+  getToken?: () => Promise<string | null | undefined>;
+  userId?: string;
+  fileId: string;
+  signal?: AbortSignal;
+}): Promise<void> {
+  const response = await authenticatedFetch('/photo-assets/cleanup', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ fileId }),
     signal,
+  }, {
+    expectedUserId: userId,
+    fallbackToken: token,
+    getToken,
   });
   if (!response.ok) {
     let code = 'MEDIA_CLEANUP_FAILED';
@@ -284,7 +293,8 @@ export async function cleanupPhotoAsset({
 }
 
 export interface SubmitPhotoJobInput {
-  token: string;
+  token?: string;
+  getToken?: () => Promise<string | null | undefined>;
   userId: string;
   imageUrl: string;
   imageFileId?: string | null;
@@ -307,16 +317,23 @@ export async function submitPhotoJob(input: SubmitPhotoJobInput): Promise<PhotoJ
     mealType: input.mealType,
     language: input.language,
   };
-  const integrityHeaders = await getPlayIntegrityHeaders({ method: 'POST', path: '/photo-jobs', userId: input.userId, body });
-  const response = await fetch(buildApiUrl('/photo-jobs'), {
+  const response = await authenticatedFetch('/photo-jobs', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${input.token}`,
       'Content-Type': 'application/json',
-      ...integrityHeaders,
     },
     body: JSON.stringify(body),
     signal: input.signal,
+  }, {
+    expectedUserId: input.userId,
+    fallbackToken: input.token,
+    getToken: input.getToken,
+    buildHeaders: () => getPlayIntegrityHeaders({
+      method: 'POST',
+      path: '/photo-jobs',
+      userId: input.userId,
+      body,
+    }),
   });
   const job = parseJob(await parseResponse(response));
   await savePointer({
@@ -332,18 +349,38 @@ export async function submitPhotoJob(input: SubmitPhotoJobInput): Promise<PhotoJ
 }
 
 export async function getPhotoJob({
-  token, jobId, signal,
-}: { token: string; jobId: string; signal?: AbortSignal }): Promise<PhotoJob> {
-  const response = await fetch(buildApiUrl(`/photo-jobs/${encodeURIComponent(jobId)}`), {
-    headers: { Authorization: `Bearer ${token}` },
+  token, getToken, userId, jobId, signal,
+}: {
+  token?: string;
+  getToken?: () => Promise<string | null | undefined>;
+  userId?: string;
+  jobId: string;
+  signal?: AbortSignal;
+}): Promise<PhotoJob> {
+  const response = await authenticatedFetch(`/photo-jobs/${encodeURIComponent(jobId)}`, {
     signal,
+  }, {
+    expectedUserId: userId,
+    fallbackToken: token,
+    getToken,
   });
   return parseJob(await parseResponse(response));
 }
 
-async function getBackendActivePhotoJob(token: string, signal?: AbortSignal): Promise<PhotoJob | null> {
-  const response = await fetch(buildApiUrl('/photo-jobs/active'), {
-    headers: { Authorization: `Bearer ${token}` }, signal,
+async function getBackendActivePhotoJob({
+  token, getToken, userId, signal,
+}: {
+  token?: string;
+  getToken?: () => Promise<string | null | undefined>;
+  userId?: string;
+  signal?: AbortSignal;
+}): Promise<PhotoJob | null> {
+  const response = await authenticatedFetch('/photo-jobs/active', {
+    signal,
+  }, {
+    expectedUserId: userId,
+    fallbackToken: token,
+    getToken,
   });
   const body = await parseResponse(response);
   if (!isRecord(body) || body.job === null) return null;
@@ -351,8 +388,13 @@ async function getBackendActivePhotoJob(token: string, signal?: AbortSignal): Pr
 }
 
 export async function recoverPhotoJobForCamera({
-  token, userId, signal,
-}: { token: string; userId: string; signal?: AbortSignal }): Promise<RecoveredPhotoJobForCamera | null> {
+  token, getToken, userId, signal,
+}: {
+  token?: string;
+  getToken?: () => Promise<string | null | undefined>;
+  userId: string;
+  signal?: AbortSignal;
+}): Promise<RecoveredPhotoJobForCamera | null> {
   let pointer = await readPointer(userId);
   if (pointer) {
     if (pointer.jobId && pointer.jobId.startsWith('in_flight')) {
@@ -374,7 +416,7 @@ export async function recoverPhotoJobForCamera({
       }
     } else {
       try {
-        const fetchedJob = await getPhotoJob({ token, jobId: pointer.jobId, signal });
+        const fetchedJob = await getPhotoJob({ token, getToken, userId, jobId: pointer.jobId, signal });
         return { job: fetchedJob, pointer };
       } catch (error) {
         if (!(error instanceof PhotoApiError) || error.status !== 404) throw error;
@@ -390,7 +432,7 @@ export async function recoverPhotoJobForCamera({
       }
     }
   }
-  const job = await getBackendActivePhotoJob(token, signal);
+  const job = await getBackendActivePhotoJob({ token, getToken, userId, signal });
   if (!job) return null;
   pointer = { userId, jobId: job.id, imageUrl: job.imageUrl, imageFileId: job.imageFileId, savedAt: Date.now() };
   await savePointer(pointer);
@@ -399,9 +441,14 @@ export async function recoverPhotoJobForCamera({
 
 /** Status-card recovery requires a live backend job; only Camera can reconcile a saved local meal snapshot. */
 export async function recoverPhotoJob({
-  token, userId, signal,
-}: { token: string; userId: string; signal?: AbortSignal }): Promise<RecoveredPhotoJob | null> {
-  const recovered = await recoverPhotoJobForCamera({ token, userId, signal });
+  token, getToken, userId, signal,
+}: {
+  token?: string;
+  getToken?: () => Promise<string | null | undefined>;
+  userId: string;
+  signal?: AbortSignal;
+}): Promise<RecoveredPhotoJob | null> {
+  const recovered = await recoverPhotoJobForCamera({ token, getToken, userId, signal });
   if (recovered?.missingJob) {
     throw new PhotoApiError(404, 'PHOTO_JOB_MISSING_PENDING_MEAL_SAVE');
   }
@@ -421,28 +468,35 @@ function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
 
 export async function waitForPhotoJob({
   token,
-  userId: _userId,
+  getToken,
+  userId,
   jobId,
   signal,
   pollIntervalMs = 1200,
+  maxDurationMs = 75_000,
   sleep = defaultSleep,
   onStatus,
 }: {
-  token: string;
+  token?: string;
+  getToken?: () => Promise<string | null | undefined>;
   userId: string;
   jobId: string;
   signal?: AbortSignal;
   pollIntervalMs?: number;
+  maxDurationMs?: number;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   onStatus?: (job: PhotoJob) => void;
 }): Promise<PhotoJob> {
-  void _userId;
+  const startedAt = Date.now();
   let consecutiveTransientErrors = 0;
   for (;;) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (maxDurationMs > 0 && Date.now() - startedAt >= maxDurationMs) {
+      throw new PhotoApiError(504, 'PHOTO_POLL_TIMEOUT');
+    }
     let job: PhotoJob;
     try {
-      job = await getPhotoJob({ token, jobId, signal });
+      job = await getPhotoJob({ token, getToken, userId, jobId, signal });
       consecutiveTransientErrors = 0;
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {

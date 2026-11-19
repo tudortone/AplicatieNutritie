@@ -375,4 +375,60 @@ describe('async Photo job client', () => {
     const pointer = JSON.parse((await AsyncStorage.getItem(activePhotoJobKey(USER_A)))!);
     expect(pointer.jobId).toBe('job-existing-1');
   });
+
+  test('waitForPhotoJob resolves fresh tokens per poll via getToken and recovers when a poll hits 401', async () => {
+    let currentToken = 'expired-token';
+    const getToken = jest.fn(async () => currentToken);
+    const fetchMock = jest.spyOn(global, 'fetch')
+      .mockImplementationOnce(async (_url, init) => {
+        expect((init?.headers as Record<string, string>)?.Authorization).toBe('Bearer expired-token');
+        // Token rotates right before 401 recovery poll
+        currentToken = 'refreshed-token';
+        return response(401, { cod: 'TOKEN_INVALID' });
+      })
+      .mockImplementationOnce(async (_url, init) => {
+        expect((init?.headers as Record<string, string>)?.Authorization).toBe('Bearer refreshed-token');
+        return response(200, { id: 'job-rot', status: 'succeeded', result: { success: true, items: [{ nume: 'Măr' }] } });
+      });
+
+    const job = await waitForPhotoJob({
+      token: 'expired-token',
+      getToken,
+      userId: USER_A,
+      jobId: 'job-rot',
+      pollIntervalMs: 0,
+      sleep: async () => {},
+    });
+
+    expect(job.status).toBe('succeeded');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(getToken).toHaveBeenCalled();
+  });
+
+  test('waitForPhotoJob enforces explicit maxDurationMs instead of polling forever', async () => {
+    jest.spyOn(global, 'fetch').mockImplementation(() => response(200, {
+      id: 'job-stuck',
+      status: 'running',
+    }));
+    let fakeNow = 1_000_000;
+    const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => fakeNow);
+    try {
+      await expect(waitForPhotoJob({
+        token: 'token-a',
+        userId: USER_A,
+        jobId: 'job-stuck',
+        pollIntervalMs: 750,
+        maxDurationMs: 75_000,
+        sleep: async () => {
+          fakeNow += 25_000;
+        },
+      })).rejects.toMatchObject({
+        name: 'PhotoApiError',
+        status: 504,
+        code: 'PHOTO_POLL_TIMEOUT',
+      });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
 });

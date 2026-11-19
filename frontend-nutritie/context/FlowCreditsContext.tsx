@@ -13,6 +13,7 @@ import { supabase } from '../supabase';
 import { useBilling } from './BillingContext';
 import { usePremium } from './PremiumContext';
 import type { BillingCreditProduct, BillingOperationState } from '../lib/billing/types';
+import { idOperatieNoua } from '../lib/idUtils';
 import { getPlayIntegrityHeaders } from '../lib/playIntegrityNative';
 
 export type FlowCreditsBalance = {
@@ -111,6 +112,7 @@ async function authenticatedFetch(path: string, init?: RequestInit, expectedUser
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     let integrityHeaders: Record<string, string> = {};
+    let extraIdempotencyHeader: Record<string, string> = {};
     if (path === '/rewarded/intents' && init?.method === 'POST') {
       let body: Record<string, unknown> = {};
       if (typeof init.body === 'string') {
@@ -121,7 +123,21 @@ async function authenticatedFetch(path: string, init?: RequestInit, expectedUser
           }
         } catch {}
       }
-      integrityHeaders = await getPlayIntegrityHeaders({ method: 'POST', path, userId: data.session.user.id, body });
+      const existingHeaders = init.headers && !Array.isArray(init.headers) && !(init.headers instanceof Headers)
+        ? (init.headers as Record<string, string>)
+        : {};
+      const existingIdempotencyKey = existingHeaders['Idempotency-Key'] || existingHeaders['idempotency-key'];
+      const idempotencyKey = (typeof existingIdempotencyKey === 'string' && existingIdempotencyKey.trim())
+        ? existingIdempotencyKey.trim()
+        : idOperatieNoua();
+      extraIdempotencyHeader = { 'Idempotency-Key': idempotencyKey };
+      integrityHeaders = await getPlayIntegrityHeaders({
+        method: 'POST',
+        path,
+        userId: data.session.user.id,
+        body,
+        idempotencyKey,
+      });
     }
     return await fetch(buildApiUrl(path), {
       ...init,
@@ -131,6 +147,7 @@ async function authenticatedFetch(path: string, init?: RequestInit, expectedUser
         Pragma: 'no-cache',
         ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
         ...init?.headers,
+        ...extraIdempotencyHeader,
         ...integrityHeaders,
       },
       signal: controller.signal,
@@ -280,7 +297,11 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
         }
         const currentPrem = premiumRef.current;
         if (currentPrem.loading || currentPrem.hasFullAccess || currentPrem.isPremium) return null;
-        const response = await authenticatedFetch('/rewarded/intents', { method: 'POST', body: '{}' }, targetOwner);
+        const response = await authenticatedFetch(
+          '/rewarded/intents',
+          { method: 'POST', body: '{}', headers: { 'Idempotency-Key': idOperatieNoua() } },
+          targetOwner,
+        );
         if (!response.ok) return null;
         const intent = await response.json() as { intentId?: string; status?: string; ssv?: { userId?: string; customData?: string } };
         if (
@@ -372,7 +393,11 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
       }
 
       if (!activeIntent) {
-        const response = await authenticatedFetch('/rewarded/intents', { method: 'POST', body: '{}' }, owner);
+        const response = await authenticatedFetch(
+          '/rewarded/intents',
+          { method: 'POST', body: '{}', headers: { 'Idempotency-Key': idOperatieNoua() } },
+          owner,
+        );
         if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
         if (!response.ok) {
           updateState(response.status === 429 ? 'limit' : 'unavailable');

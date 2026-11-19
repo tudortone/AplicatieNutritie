@@ -8,8 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { AppState } from 'react-native';
-import { buildApiUrl } from '../lib/api';
-import { supabase } from '../supabase';
+import { authenticatedFetch } from '../lib/api';
 import {
   FREE_ACCESS_ENTITLEMENT,
   parseServerAccessEntitlement,
@@ -49,9 +48,9 @@ const PremiumContext = createContext<PremiumStatus>({
   loading: false,
   operation: { status: 'unavailable' },
   subscriptionPackages: [],
-  refresh: async () => {},
-  refreshProducts: async () => {},
-  purchaseSubscription: async () => {},
+  refresh: async () => { },
+  refreshProducts: async () => { },
+  purchaseSubscription: async () => { },
   restore: async () => false,
 });
 
@@ -76,25 +75,30 @@ export function PremiumProvider({ children, appUserId }: {
   });
   const currentUserRef = useRef(appUserId);
   const refreshSequenceRef = useRef(0);
+  const consecutive401Ref = useRef(0);
+  const verifiedOwnerRef = useRef<string | null>(null);
   currentUserRef.current = appUserId;
 
-  const fetchServerAccess = useCallback(async (ownerId: string) => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), ACCESS_REQUEST_TIMEOUT_MS);
+  const fetchServerAccess = useCallback(async (
+    ownerId: string,
+  ): Promise<
+    | { kind: 'ok'; entitlement: AccessEntitlement }
+    | { kind: 'transient_401' }
+    | { kind: 'failed' }
+  > => {
     try {
-      const { data } = await supabase.auth.getSession();
-      const session = data.session;
-      if (!session?.access_token || session.user.id !== ownerId) return null;
-      const response = await fetch(buildApiUrl('/user/premium-status'), {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        signal: controller.signal,
+      const response = await authenticatedFetch('/user/premium-status', undefined, {
+        expectedUserId: ownerId,
+        timeoutMs: ACCESS_REQUEST_TIMEOUT_MS,
       });
-      if (!response.ok) return null;
-      return parseServerAccessEntitlement(await response.json());
+      if (response.status === 401) {
+        return { kind: 'transient_401' };
+      }
+      if (!response.ok) return { kind: 'failed' };
+      const parsed = parseServerAccessEntitlement(await response.json());
+      return parsed ? { kind: 'ok', entitlement: parsed } : { kind: 'failed' };
     } catch {
-      return null;
-    } finally {
-      clearTimeout(timeout);
+      return { kind: 'failed' };
     }
   }, []);
 
@@ -102,6 +106,8 @@ export function PremiumProvider({ children, appUserId }: {
     const ownerId = appUserId;
     const sequence = ++refreshSequenceRef.current;
     if (!ownerId) {
+      consecutive401Ref.current = 0;
+      verifiedOwnerRef.current = null;
       setBoundAccess((prev) => (
         prev.ownerId === null && !prev.entitlement.hasFullAccess && !prev.entitlement.isPremium
           ? prev
@@ -111,11 +117,30 @@ export function PremiumProvider({ children, appUserId }: {
       return;
     }
     if (!background) setLoading(true);
-    const serverAccess = await fetchServerAccess(ownerId);
+    const result = await fetchServerAccess(ownerId);
     if (currentUserRef.current !== ownerId || refreshSequenceRef.current !== sequence) return;
+
+    if (result.kind === 'transient_401') {
+      consecutive401Ref.current += 1;
+      // Nu retrogradam brusc un abonat deja validat pe un singur 401 tranzitoriu;
+      // al doilea 401 consecutiv revine fail-closed la FREE.
+      if (consecutive401Ref.current === 1 && verifiedOwnerRef.current === ownerId) {
+        if (!background) setLoading(false);
+        return;
+      }
+    } else {
+      consecutive401Ref.current = 0;
+    }
+
+    if (result.kind === 'ok') {
+      verifiedOwnerRef.current = ownerId;
+    } else {
+      verifiedOwnerRef.current = null;
+    }
+
     // Nicio stare Play/client nu acorda acces. Un raspuns lipsa sau inconsistent
     // este fail-closed pana la urmatoarea revalidare server reusita.
-    const nextEntitlement = serverAccess ?? FREE_ACCESS_ENTITLEMENT;
+    const nextEntitlement = result.kind === 'ok' ? result.entitlement : FREE_ACCESS_ENTITLEMENT;
     setBoundAccess((prev) => {
       if (
         prev.ownerId === ownerId
@@ -137,6 +162,8 @@ export function PremiumProvider({ children, appUserId }: {
 
   useEffect(() => {
     refreshSequenceRef.current += 1;
+    consecutive401Ref.current = 0;
+    verifiedOwnerRef.current = null;
     setBoundAccess({ ownerId: appUserId, entitlement: { ...FREE_ACCESS_ENTITLEMENT } });
     void refresh();
     if (!appUserId) return;

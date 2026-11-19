@@ -111,4 +111,54 @@ describe('rewarded ad SSV client', () => {
     listeners.get('closed')?.();
     await expect(resultPromise).resolves.toBe('dismissed');
   });
+
+  test('does not abort a 30s rewarded ad at t=15s once LOADED triggers ad.show()', async () => {
+    jest.useFakeTimers();
+    try {
+      const resultPromise = showRewardedAdWithSsv({ intentId: 'intent-30s', customData: 'secret-30s' });
+      jest.advanceTimersByTime(1_000);
+      listeners.get('rewarded_loaded')?.();
+      expect(rewarded.show).toHaveBeenCalledTimes(1);
+
+      // Advance well past REWARDED_LOAD_TIMEOUT_MS (15s) to simulate a full 30s video playback.
+      jest.advanceTimersByTime(30_000);
+      listeners.get('rewarded_earned')?.({ amount: 1, type: 'flow_credit' });
+      listeners.get('closed')?.();
+
+      await expect(resultPromise).resolves.toBe('earned-awaiting-server');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('does not abort a preloaded 30s rewarded ad at t=15s after immediate ad.show()', async () => {
+    jest.useFakeTimers();
+    try {
+      preloadRewardedAdWithSsv({ intentId: 'intent-pre-30s', customData: 'secret-pre-30s' });
+      listeners.get('rewarded_loaded')?.();
+
+      const resultPromise = showRewardedAdWithSsv({ intentId: 'intent-pre-30s', customData: 'secret-pre-30s' });
+      expect(rewarded.show).toHaveBeenCalledTimes(1);
+
+      jest.advanceTimersByTime(30_000);
+      listeners.get('rewarded_earned')?.({ amount: 1, type: 'flow_credit' });
+      listeners.get('closed')?.();
+
+      await expect(resultPromise).resolves.toBe('earned-awaiting-server');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('still times out at 15s when the rewarded ad never emits LOADED', async () => {
+    jest.useFakeTimers();
+    try {
+      const resultPromise = showRewardedAdWithSsv({ intentId: 'intent-hang', customData: 'secret-hang' });
+      jest.advanceTimersByTime(15_000);
+      await expect(resultPromise).resolves.toBe('unavailable');
+      expect(rewarded.show).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

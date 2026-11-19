@@ -412,10 +412,12 @@ export function showRewardedAdWithSsv({
           finish(earned ? 'earned-awaiting-server' : 'dismissed')),
       );
       if (canUsePreloaded && preloaded && (preloaded.status === 'loaded' || ad.loaded === true)) {
+        clearTimeout(timeout);
         void Promise.resolve(ad.show()).catch(() => finish('unavailable'));
       } else {
         unsubscribers.push(
           ad.addAdEventListener(AdsModule.RewardedAdEventType.LOADED, () => {
+            clearTimeout(timeout);
             void Promise.resolve(ad.show()).catch(() => finish('unavailable'));
           }),
         );

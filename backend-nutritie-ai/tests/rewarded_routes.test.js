@@ -81,6 +81,55 @@ describe('rewarded routes', () => {
     expect(callArgs.tokenHash).toMatch(/^[a-f0-9]{64}$/);
     expect(typeof callArgs.requestHash).toBe('string');
   });
+  test.each(['off', 'observe'])('ignores static x-play-integrity-request-hash in %s mode so sequential intents never collide', async (mode) => {
+    const { app, rewardedService } = build({
+      integrityValue: { trusted: false, reason: 'UNTRUSTED' },
+      config: { playIntegrity: { mode } },
+    });
+    const staticHash = 'static-constant-request-hash-for-empty-body';
+    await request(app)
+      .post('/api/v1/rewarded/intents')
+      .set('Authorization', 'Bearer valid')
+      .set('X-Play-Integrity-Request-Hash', staticHash)
+      .send({})
+      .expect(201);
+    await request(app)
+      .post('/api/v1/rewarded/intents')
+      .set('Authorization', 'Bearer valid')
+      .set('X-Play-Integrity-Request-Hash', staticHash)
+      .send({})
+      .expect(201);
+    expect(rewardedService.createIntent).toHaveBeenCalledTimes(2);
+    const firstHash = rewardedService.createIntent.mock.calls[0][0].tokenHash;
+    const secondHash = rewardedService.createIntent.mock.calls[1][0].tokenHash;
+    expect(firstHash).not.toBe(secondHash);
+
+    // Distinct client Idempotency-Key values produce distinct deterministic hashes; same key replays deterministically.
+    await request(app)
+      .post('/api/v1/rewarded/intents')
+      .set('Authorization', 'Bearer valid')
+      .set('Idempotency-Key', 'attempt-1')
+      .send({})
+      .expect(201);
+    await request(app)
+      .post('/api/v1/rewarded/intents')
+      .set('Authorization', 'Bearer valid')
+      .set('Idempotency-Key', 'attempt-2')
+      .send({})
+      .expect(201);
+    await request(app)
+      .post('/api/v1/rewarded/intents')
+      .set('Authorization', 'Bearer valid')
+      .set('Idempotency-Key', 'attempt-1')
+      .send({})
+      .expect(201);
+    expect(rewardedService.createIntent.mock.calls[2][0].tokenHash).not.toBe(
+      rewardedService.createIntent.mock.calls[3][0].tokenHash,
+    );
+    expect(rewardedService.createIntent.mock.calls[2][0].tokenHash).toBe(
+      rewardedService.createIntent.mock.calls[4][0].tokenHash,
+    );
+  });
   test('returns the same intent status on verified token replay', async () => {
     const { app, rewardedService } = build();
     await request(app).post('/api/v1/rewarded/intents').set('Authorization', 'Bearer valid').expect(201);
