@@ -71,14 +71,14 @@ function creeazaBazaDate() {
       }),
       insert: async (rand: Record<string, unknown>) => {
         inserturi.push(rand);
-        const id = rand.id as string | undefined;
+        const id = (rand.client_operation_id ?? rand.id) as string | undefined;
         if (!id) {
-          // Fără id, DB-ul generează unul nou la FIECARE insert — exact defectul.
+          // Fără id/client_operation_id, DB-ul generează unul nou la FIECARE insert — exact defectul.
           randuri.set(`auto-${randuri.size}-${Math.random()}`, rand);
           return { error: null };
         }
         if (randuri.has(id)) {
-          return { error: { code: '23505', message: 'duplicate key value violates unique constraint "mese_pkey"' } };
+          return { error: { code: '23505', message: 'duplicate key value violates unique constraint "idx_mese_user_client_operation_id"' } };
         }
         randuri.set(id, rand);
         return { error: null };

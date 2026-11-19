@@ -3,7 +3,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import { useNotificationBannerActions } from './NotificationBannerContext';
 import { useDailyReset } from '../hooks/useDailyReset';
+import { useCurrentDayKey } from '../hooks/useCurrentDayKey';
 import { localDayKey } from '../lib/dateUtils';
+import { aboneazaLaModificariAntrenamente, aboneazaLaModificariMese } from '../lib/freshnessMese';
+import * as AuthContextModule from './AuthContext';
+
+const useAuthSafe =
+  typeof AuthContextModule.useOptionalAuth === 'function'
+    ? AuthContextModule.useOptionalAuth
+    : AuthContextModule.useAuth;
 
 export interface QuestZilnic {
   id: string;
@@ -49,6 +57,22 @@ export function calculeazaNivel(xpTotal: number) {
 }
 
 const GAMIFICARE_STORAGE_KEY = 'gamificare_v2_server_authoritative';
+
+function gamificareKeyForUser(userId: string): string {
+  return `${GAMIFICARE_STORAGE_KEY}_${userId}`;
+}
+
+function resolveDeviceTimezone(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (typeof tz === 'string' && tz.trim().length > 0 && tz.length <= 64) {
+      return tz.trim();
+    }
+  } catch {
+    // Fallback sigur pe fusul implicit al aplicatiei.
+  }
+  return 'Europe/Bucharest';
+}
 
 // Ziua se calculeaza in fusul orar LOCAL, la fel ca in lib/dateUtils.ts
 // (localDayKey) si hooks/useDailyReset.ts (localDateKey). `toISOString()` da
@@ -115,10 +139,10 @@ export type GamificareData = Omit<
 >;
 
 const GamificareActionsContext = createContext<GamificareActions>({
-  setQuesturiAzi: () => {},
-  adaugaProgres: () => {},
-  revendicaRecompensaZilnica: () => {},
-  refreshGamificare: async () => {},
+  setQuesturiAzi: () => { },
+  adaugaProgres: () => { },
+  revendicaRecompensaZilnica: () => { },
+  refreshGamificare: async () => { },
 });
 
 const GamificareDataContext = createContext<GamificareData>({
@@ -140,28 +164,74 @@ export function useGamificareContext() {
 }
 
 export function GamificareProvider({ children }: { children: React.ReactNode }) {
+  const auth = useAuthSafe();
+  const hasAuthProvider = auth !== null;
+  const authUserId = auth?.user?.id ?? auth?.session?.user?.id ?? null;
+  const currentDayKey = useCurrentDayKey();
   const { showNotification } = useNotificationBannerActions();
   const [stare, setStare] = useState<StareGamificare>(STARE_INITIALA);
   const stareRef = useRef(stare);
+  const mountedRef = useRef(true);
+  const activeUserIdRef = useRef<string | null>(authUserId);
+  const refreshSeqRef = useRef(0);
+  const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastDayKeyRef = useRef(currentDayKey);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (progressTimerRef.current) {
+        clearTimeout(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     stareRef.current = stare;
   }, [stare]);
 
-  const aplicaStare = useCallback(async (noua: StareGamificare) => {
+  const aplicaStare = useCallback(async (noua: StareGamificare, expectedUserId: string | null) => {
+    if (!mountedRef.current || !expectedUserId || activeUserIdRef.current !== expectedUserId) return;
     stareRef.current = noua;
     setStare(noua);
     try {
-      await AsyncStorage.setItem(GAMIFICARE_STORAGE_KEY, JSON.stringify(noua));
+      await AsyncStorage.setItem(gamificareKeyForUser(expectedUserId), JSON.stringify(noua));
     } catch {
       // Cache-ul local este doar rezerva offline; serverul ramane sursa de adevar.
     }
   }, []);
 
   const refreshGamificare = useCallback(async () => {
+    const seq = ++refreshSeqRef.current;
+    let expectedUserId = activeUserIdRef.current;
+    if (!expectedUserId && !hasAuthProvider) {
+      try {
+        const { data: fallbackSession } = await supabase.auth.getSession();
+        expectedUserId = fallbackSession?.session?.user?.id ?? null;
+        if (expectedUserId && mountedRef.current) {
+          activeUserIdRef.current = expectedUserId;
+        }
+      } catch {
+        expectedUserId = null;
+      }
+    }
+
+    if (!expectedUserId) {
+      if (mountedRef.current && seq === refreshSeqRef.current) {
+        setStare(STARE_INITIALA);
+        stareRef.current = STARE_INITIALA;
+      }
+      return;
+    }
+
     let locala: StareGamificare | null = null;
     try {
-      const salvata = await AsyncStorage.getItem(GAMIFICARE_STORAGE_KEY);
+      const salvata = await AsyncStorage.getItem(gamificareKeyForUser(expectedUserId));
+      if (!mountedRef.current || activeUserIdRef.current !== expectedUserId || seq !== refreshSeqRef.current) {
+        return;
+      }
       locala = salvata ? normalizaStare(JSON.parse(salvata)) : null;
       if (locala) {
         if (locala.ultimaZiActiva !== today()) {
@@ -175,23 +245,55 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
       }
     } catch {
       locala = null;
-      setStare(STARE_INITIALA);
-      stareRef.current = STARE_INITIALA;
+      if (mountedRef.current && activeUserIdRef.current === expectedUserId && seq === refreshSeqRef.current) {
+        setStare(STARE_INITIALA);
+        stareRef.current = STARE_INITIALA;
+      }
     }
 
     try {
       const { data: authData } = await supabase.auth.getSession();
-      if (!authData.session?.user) return;
+      const sessionUserId = authData?.session?.user?.id ?? null;
+      if (
+        !sessionUserId ||
+        sessionUserId !== expectedUserId ||
+        !mountedRef.current ||
+        activeUserIdRef.current !== expectedUserId ||
+        seq !== refreshSeqRef.current
+      ) {
+        return;
+      }
 
       // RPC-ul nu accepta XP/progres de la client. Baza de date calculeaza totul
-      // din mesele, antrenamentele si profilul utilizatorului autentificat.
-      const { data, error } = await supabase.rpc('sincronizeaza_gamificare_sigur');
+      // din mesele, antrenamentele si profilul utilizatorului autentificat, folosind
+      // fusul orar IANA validat server-side (P0-09).
+      const deviceTz = resolveDeviceTimezone();
+      let { data, error } = await supabase.rpc('sincronizeaza_gamificare_sigur', {
+        p_timezone: deviceTz,
+      });
+      if (error) {
+        const msg = String((error as { message?: string }).message ?? '');
+        const code = String((error as { code?: string }).code ?? '');
+        if (code === 'PGRST202' || msg.includes('p_timezone') || msg.includes('Could not find the function')) {
+          const fallback = await supabase.rpc('sincronizeaza_gamificare_sigur');
+          data = fallback.data;
+          error = fallback.error;
+        }
+      }
       if (error) throw error;
+
+      if (!mountedRef.current || activeUserIdRef.current !== expectedUserId || seq !== refreshSeqRef.current) {
+        return;
+      }
+      const { data: postAuthData } = await supabase.auth.getSession();
+      if (postAuthData?.session?.user?.id !== expectedUserId) return;
+
       const serverState = normalizaStare(data);
       if (!serverState) throw new Error('Raspuns gamificare invalid.');
 
       const anterior = stareRef.current;
-      await aplicaStare(serverState);
+      await aplicaStare(serverState, expectedUserId);
+      if (!mountedRef.current || activeUserIdRef.current !== expectedUserId) return;
 
       if (serverState.nivel > anterior.nivel) {
         showNotification({
@@ -210,52 +312,92 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
       }
     } catch (err) {
       if (__DEV__) console.debug('[Gamificare] Sincronizarea server nu este disponibila.', err);
-      if (!locala) {
+      if (
+        !locala &&
+        mountedRef.current &&
+        activeUserIdRef.current === expectedUserId &&
+        seq === refreshSeqRef.current
+      ) {
         setStare(STARE_INITIALA);
         stareRef.current = STARE_INITIALA;
       }
     }
-  }, [aplicaStare, showNotification]);
+  }, [aplicaStare, hasAuthProvider, showNotification]);
 
-  const activeUserIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    let montat = true;
-    supabase.auth.getSession().then(({ data }: any) => {
-      if (!montat) return;
-      activeUserIdRef.current = data.session?.user?.id ?? null;
+  const scheduleGamificareRefresh = useCallback((delayMs = 350) => {
+    if (progressTimerRef.current) {
+      clearTimeout(progressTimerRef.current);
+    }
+    progressTimerRef.current = setTimeout(() => {
+      progressTimerRef.current = null;
+      if (!mountedRef.current) return;
       void refreshGamificare();
-    }).catch(() => {});
+    }, delayMs);
+  }, [refreshGamificare]);
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-      if (!montat) return;
-      const nextUserId = session?.user?.id ?? null;
-      if (nextUserId !== activeUserIdRef.current) {
-        activeUserIdRef.current = nextUserId;
-        stareRef.current = STARE_INITIALA;
-        setStare(STARE_INITIALA);
-        if (nextUserId) {
-          void refreshGamificare();
-        }
+  // P0-12: consumă authUserId din AuthContext (fără subscripție onAuthStateChange redundantă)
+  useEffect(() => {
+    activeUserIdRef.current = authUserId;
+    refreshSeqRef.current += 1;
+    if (progressTimerRef.current) {
+      clearTimeout(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+    stareRef.current = STARE_INITIALA;
+    setStare(STARE_INITIALA);
+    if (authUserId) {
+      void refreshGamificare();
+    }
+  }, [authUserId, refreshGamificare]);
+
+  // P0-09: la rollover-ul zilei (00:00 sau revenire din background), resetează questurile
+  // și resincronizează fereastra retroactivă (v_zi - 1..v_zi) pe server.
+  useEffect(() => {
+    if (lastDayKeyRef.current === currentDayKey) return;
+    lastDayKeyRef.current = currentDayKey;
+    const next = {
+      ...stareRef.current,
+      ultimaZiActiva: currentDayKey,
+      questuriAzi: questuriDefault(),
+    };
+    stareRef.current = next;
+    setStare(next);
+    if (activeUserIdRef.current) {
+      void refreshGamificare();
+    }
+  }, [currentDayKey, refreshGamificare]);
+
+  // P0-09: sincronizează gamificarea după salvarea meselor și a antrenamentelor.
+  useEffect(() => {
+    const unsubMese = aboneazaLaModificariMese((userId) => {
+      if (activeUserIdRef.current && userId === activeUserIdRef.current) {
+        scheduleGamificareRefresh(250);
       }
     });
-
+    const unsubAntrenamente = aboneazaLaModificariAntrenamente((userId) => {
+      if (activeUserIdRef.current && userId === activeUserIdRef.current) {
+        scheduleGamificareRefresh(250);
+      }
+    });
     return () => {
-      montat = false;
-      authListener?.subscription?.unsubscribe();
+      unsubMese();
+      unsubAntrenamente();
     };
-  }, [refreshGamificare]);
+  }, [scheduleGamificareRefresh]);
 
   // BUG-008: updaterul de setState trebuie sa fie PUR sub React Compiler — fara
   // side effects (AsyncStorage) si fara mutarea ref-urilor in interior. Calculam
   // `next` din stareRef.current (oglinda sincrona a ultimei stari) IN AFARA
   // setState, apoi aplicam starea si persistam separat.
   const setQuesturiAzi = useCallback((updater: React.SetStateAction<QuestZilnic[]>) => {
+    const ownerId = activeUserIdRef.current;
     const questuri = typeof updater === 'function' ? updater(stareRef.current.questuriAzi) : updater;
     const next = { ...stareRef.current, questuriAzi: questuri };
     setStare(next);
     stareRef.current = next;
-    AsyncStorage.setItem(GAMIFICARE_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+    if (ownerId) {
+      AsyncStorage.setItem(gamificareKeyForUser(ownerId), JSON.stringify(next)).catch(() => { });
+    }
   }, []);
 
   useDailyReset({ questuriAzi: stare.questuriAzi, setQuesturiAzi });
@@ -273,8 +415,8 @@ export function GamificareProvider({ children }: { children: React.ReactNode }) 
         ),
       }));
     }
-    setTimeout(() => { void refreshGamificare(); }, 350);
-  }, [refreshGamificare]);
+    scheduleGamificareRefresh(350);
+  }, [scheduleGamificareRefresh]);
 
   const revendicaRecompensaZilnica = useCallback(() => {
     // Bonusul este acordat o singura data de functia SQL daca toate cele trei

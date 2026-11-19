@@ -438,21 +438,65 @@ export async function verificaReluareMasa(
       };
     };
   },
-  payload: { id: string | number; nume?: string; tip_masa?: string } & Record<string, unknown>,
+  payload: { id: string | number; client_operation_id?: string; nume?: string; tip_masa?: string } & Record<string, unknown>,
 ): Promise<RezultatReluareMasa> {
+  const selectCols = 'id, client_operation_id, user_id, data, ora, created_at, nume, tip_masa, calorii, proteine, grasimi, carbohidrati, fibre, alimente, imagine_url';
+  const rawId = payload.id;
+  const isNumericId =
+    typeof rawId === 'number'
+    || (typeof rawId === 'string' && rawId.trim() !== '' && /^\d+$/.test(rawId.trim()));
+  const clientOpId =
+    typeof payload.client_operation_id === 'string' && payload.client_operation_id.trim() !== ''
+      ? payload.client_operation_id.trim()
+      : !isNumericId && typeof rawId === 'string' && rawId.trim() !== ''
+        ? rawId.trim()
+        : null;
+
   let rand: Record<string, unknown> | null = null;
   try {
-    const idVal = payload.id !== undefined && !isNaN(Number(payload.id)) ? Number(payload.id) : payload.id;
-    const idQuery = client
-      .from('mese')
-      .select('id, user_id, data, ora, created_at, nume, tip_masa, calorii, proteine, grasimi, carbohidrati, fibre, alimente, imagine_url')
-      .eq('id', idVal);
-    const query = payload.user_id !== undefined
-      ? idQuery.eq('user_id', String(payload.user_id))
-      : idQuery;
-    const raspuns = await query.maybeSingle();
-    if (raspuns?.error) return { tip: 'necunoscut' };
-    rand = raspuns?.data ?? null;
+    if (clientOpId) {
+      const opQuery = client
+        .from('mese')
+        .select(selectCols)
+        .eq('client_operation_id', clientOpId);
+      const boundOpQuery = payload.user_id !== undefined
+        ? opQuery.eq('user_id', String(payload.user_id))
+        : opQuery;
+      const opRes = await boundOpQuery.maybeSingle();
+      if (!opRes?.error && opRes?.data) {
+        rand = opRes.data;
+      } else if (!opRes?.error && opRes?.data === null && !isNumericId) {
+        return { tip: 'necunoscut' };
+      }
+    }
+
+    if (!rand && isNumericId) {
+      const idVal = Number(rawId);
+      const idQuery = client
+        .from('mese')
+        .select(selectCols)
+        .eq('id', idVal);
+      const query = payload.user_id !== undefined
+        ? idQuery.eq('user_id', String(payload.user_id))
+        : idQuery;
+      const raspuns = await query.maybeSingle();
+      if (raspuns?.error) return { tip: 'necunoscut' };
+      rand = raspuns?.data ?? null;
+    } else if (!rand && !clientOpId) {
+      return { tip: 'necunoscut' };
+    } else if (!rand) {
+      // Fallback doar pentru scheme legacy/teste fără coloana `client_operation_id`
+      const idQuery = client
+        .from('mese')
+        .select('id, user_id, data, ora, created_at, nume, tip_masa, calorii, proteine, grasimi, carbohidrati, fibre, alimente, imagine_url')
+        .eq('id', rawId);
+      const query = payload.user_id !== undefined
+        ? idQuery.eq('user_id', String(payload.user_id))
+        : idQuery;
+      const raspuns = await query.maybeSingle();
+      if (raspuns?.error) return { tip: 'necunoscut' };
+      rand = raspuns?.data ?? null;
+    }
   } catch {
     return { tip: 'necunoscut' };
   }

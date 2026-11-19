@@ -110,45 +110,74 @@ export async function sincronizeazaTargeturiLocale(
     }
 
     const { targets } = pendingPayload;
-    const data: Record<string, any> = {};
+    const profilData: Record<string, unknown> = {};
 
     if (typeof targets.greutate === 'number' && Number.isFinite(targets.greutate)) {
-      data.greutate = targets.greutate;
+      profilData.greutate = targets.greutate;
     }
     if (typeof targets.greutateTinta === 'number' && Number.isFinite(targets.greutateTinta)) {
-      data.greutateTinta = targets.greutateTinta;
+      profilData.greutate_tinta = targets.greutateTinta;
     }
     if (typeof targets.caloriiTinta === 'number' && Number.isFinite(targets.caloriiTinta)) {
-      data.caloriiTinta = targets.caloriiTinta;
+      profilData.calorii_tinta = Math.round(targets.caloriiTinta);
     }
     if (typeof targets.proteineTinta === 'number' && Number.isFinite(targets.proteineTinta)) {
-      data.proteineTinta = targets.proteineTinta;
+      profilData.proteine_tinta = Math.round(targets.proteineTinta);
     }
     if (typeof targets.carbiTinta === 'number' && Number.isFinite(targets.carbiTinta)) {
-      data.carbiTinta = targets.carbiTinta;
+      profilData.carbi_tinta = Math.round(targets.carbiTinta);
     }
     if (typeof targets.grasimiTinta === 'number' && Number.isFinite(targets.grasimiTinta)) {
-      data.grasimiTinta = targets.grasimiTinta;
+      profilData.grasimi_tinta = Math.round(targets.grasimiTinta);
     }
     if (typeof targets.nume === 'string' && targets.nume.trim().length > 0) {
-      data.nume = targets.nume.trim();
+      profilData.nume = targets.nume.trim();
     }
     if (typeof targets.avatar_url === 'string' && targets.avatar_url.trim().length > 0) {
-      data.avatar_url = targets.avatar_url.trim();
+      profilData.avatar_url = targets.avatar_url.trim();
     }
 
-    if (Object.keys(data).length === 0) {
+    if (Object.keys(profilData).length === 0) {
       await stergeTargeturiPending(userId);
       return true;
     }
 
-    const { error } = await supabase.auth.updateUser({ data });
-    if (!error) {
-      await stergeTargeturiPending(userId);
-      return true;
+    // P0-12: Verificăm strict sesiunea activă înainte de scriere ca un switch rapid
+    // de cont să nu poată scrie datele contului A peste contul B.
+    if (typeof supabase?.auth?.getSession === 'function') {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const activeSessionUserId = sessionData?.session?.user?.id ?? null;
+      if (!activeSessionUserId || activeSessionUserId !== userId) {
+        return false;
+      }
     }
 
-    return false;
+    // Persistăm pe tabela `profil` protejată prin RLS cu filtru explicit `.eq('user_id', userId)`.
+    const updateQuery = supabase
+      .from('profil')
+      .update({ ...profilData, updated_at: new Date().toISOString() })
+      .eq('user_id', userId) as unknown as {
+        select?: (cols: string) => Promise<{ data?: unknown[] | null; error?: unknown }>;
+      };
+    const updateRes = typeof updateQuery?.select === 'function'
+      ? await updateQuery.select('user_id')
+      : await (updateQuery as unknown as Promise<{ data?: unknown[] | null; error?: unknown }>);
+
+    if (updateRes?.error) {
+      return false;
+    }
+
+    if (Array.isArray(updateRes?.data) && updateRes.data.length === 0) {
+      const { error: upsertError } = await supabase
+        .from('profil')
+        .upsert({ user_id: userId, ...profilData, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+      if (upsertError) {
+        return false;
+      }
+    }
+
+    await stergeTargeturiPending(userId);
+    return true;
   } catch {
     // Eșec de rețea / server indisponibil -> păstrăm payload-ul pentru retry
     return false;

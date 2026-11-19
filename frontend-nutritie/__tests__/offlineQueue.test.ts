@@ -222,8 +222,9 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
     };
 
     const rezultat = await processOfflineQueue(supabaseFake as any, 'user_123');
-    // id-ul UUID e trimis în insert, ca PK-ul să poată detecta duplicatul
-    expect(inserari[0].id).toBe(idUuid);
+    // P0-06: UUID-ul merge pe client_operation_id (niciodată în coloana BIGINT id)
+    expect(inserari[0].id).toBeUndefined();
+    expect(inserari[0].client_operation_id).toBe(idUuid);
     expect(rezultat.procesate).toBe(1);
     expect(rezultat.esuate).toBe(0);
 
@@ -243,7 +244,7 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
       from: () => ({
         insert: async (payload: any) => {
           inserari.push(payload);
-          if (payload.id === idUuid1) {
+          if (payload.client_operation_id === idUuid1) {
             // Serverul respinge ACEST payload (nu e eroare de rețea)
             return { error: { code: '22P02', status: 400, message: 'invalid input syntax' } };
           }
@@ -325,5 +326,70 @@ describe('U-04 — Coadă offline FIFO pentru salvarea meselor', () => {
     // B nu a fost niciodata trimisa la server, deci TREBUIE sa ramana in coada.
     const finalQueue = await getOfflineQueue('user_123');
     expect(finalQueue.map((m) => m.id)).toContain(idUuidB);
+  });
+
+  it('P0-07: două apeluri concurente processOfflineQueue folosesc single-flight (fără dublare insert)', async () => {
+    const idUuid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    await pushOfflineMeal({ ...masaSample1, id: idUuid });
+
+    const inserari: any[] = [];
+    let releaseInsert!: () => void;
+    const insertGate = new Promise<void>((resolve) => {
+      releaseInsert = resolve;
+    });
+
+    const supabaseFake = {
+      auth: { getUser: async () => ({ data: { user: { id: 'user_123' } }, error: null }) },
+      from: () => ({
+        insert: async (payload: any) => {
+          inserari.push(payload);
+          await insertGate;
+          return { error: null };
+        },
+      }),
+    };
+
+    const p1 = processOfflineQueue(supabaseFake as any, 'user_123');
+    const p2 = processOfflineQueue(supabaseFake as any, 'user_123');
+    releaseInsert();
+    const [r1, r2] = await Promise.all([p1, p2]);
+
+    expect(inserari).toHaveLength(1);
+    expect(r1.procesate).toBe(1);
+    expect(r2.procesate).toBe(1);
+  });
+
+  it('P0-07: clearOfflineQueue apelat în timpul flush-ului nu resuscitează mesele șterse', async () => {
+    const idUuidA = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const idUuidB = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    await pushOfflineMeal({ ...masaSample1, id: idUuidA });
+    await pushOfflineMeal({ ...masaSample2, id: idUuidB });
+
+    const supabaseFake = {
+      auth: { getUser: async () => ({ data: { user: { id: 'user_123' } }, error: null }) },
+      from: () => ({
+        insert: async () => {
+          // Utilizatorul dă logout / șterge coada în mijlocul procesării
+          await clearOfflineQueue('user_123');
+          return { error: new Error('Network aborted') };
+        },
+      }),
+    };
+
+    await processOfflineQueue(supabaseFake as any, 'user_123');
+    const finalQueue = await getOfflineQueue('user_123');
+    expect(finalQueue).toEqual([]);
+  });
+
+  it('P0-07: pushOfflineMealVerificat concurent serializează per userId fără pierderi', async () => {
+    const ids = [
+      'dddddddd-dddd-4ddd-8ddd-ddddddddddd1',
+      'dddddddd-dddd-4ddd-8ddd-ddddddddddd2',
+      'dddddddd-dddd-4ddd-8ddd-ddddddddddd3',
+    ];
+    await Promise.all(ids.map((id) => pushOfflineMealVerificat({ ...masaSample1, id })));
+
+    const finalQueue = await getOfflineQueue('user_123');
+    expect(finalQueue.map((m) => m.id).sort()).toEqual(ids.sort());
   });
 });

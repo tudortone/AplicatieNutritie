@@ -37,6 +37,7 @@ export interface VerifiedMealSaveEvent {
 type AscultatorSalvare = (event: VerifiedMealSaveEvent) => void;
 
 const ascultatori = new Set<AscultatorMese>();
+const ascultatoriAntrenamente = new Set<AscultatorMese>();
 const ascultatoriSalvare = new Set<AscultatorSalvare>();
 const salvateEmise = new Set<string>();
 let revisionSalvare = 0;
@@ -62,6 +63,23 @@ export function marcheazaMeseModificate(userId: string): void {
 export function aboneazaLaModificariMese(ascultator: AscultatorMese): () => void {
   ascultatori.add(ascultator);
   return () => { ascultatori.delete(ascultator); };
+}
+
+/** Anunță că antrenamentele utilizatorului au fost persistate pe server. */
+export function marcheazaAntrenamenteModificate(userId: string): void {
+  if (typeof userId !== 'string' || userId.trim() === '') return;
+  for (const ascultator of [...ascultatoriAntrenamente]) {
+    try {
+      ascultator(userId);
+    } catch {
+      // Un consumator defect nu trebuie să blocheze ceilalți consumatori.
+    }
+  }
+}
+
+export function aboneazaLaModificariAntrenamente(ascultator: AscultatorMese): () => void {
+  ascultatoriAntrenamente.add(ascultator);
+  return () => { ascultatoriAntrenamente.delete(ascultator); };
 }
 
 /**

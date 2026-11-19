@@ -25,7 +25,7 @@ import { BodyMap } from '../../components/fitness/BodyMap';
 import { computeDailyMuscleIntensity, normalizeMuscleLoadToIntensity } from '../../lib/fitnessEngine';
 import { useExercitii } from '../../hooks/useExercitii';
 import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
-import { useGamificareData } from '../../context/GamificareContext';
+import { useGamificareActions, useGamificareData } from '../../context/GamificareContext';
 import { StreakBottomSheet, StreakBottomSheetRef } from '../../components/gamification/StreakBottomSheet';
 import { PressableScale } from '../../components/ui/PressableScale';
 import { AddWeightModal } from '../../components/AddWeightModal';
@@ -138,6 +138,7 @@ export default function HomeScreen() {
   const reduceMotion = useReducedMotion();
   const { unreadCount } = useNotificationBannerData();
   const { streak } = useGamificareData();
+  const { refreshGamificare } = useGamificareActions();
   const auth = useAuth();
   const flowCredits = useFlowCredits();
   const addMealSheetRef = useRef<AddMealBottomSheetRef>(null);
@@ -467,9 +468,10 @@ export default function HomeScreen() {
       refresh(true);
       refreshSteps();
       refreshAntrenamente();
+      void refreshGamificare();
     },
     5000,
-    [refresh, refreshSteps, refreshAntrenamente],
+    [refresh, refreshSteps, refreshAntrenamente, refreshGamificare],
   );
 
   const caloriiConsumate = totalCalorii;
@@ -559,6 +561,7 @@ export default function HomeScreen() {
               refresh(false, true);
               void refreshSteps();
               void refreshAntrenamente();
+              void refreshGamificare();
             }}
             tintColor={colors.accent}
             colors={[colors.accent]}

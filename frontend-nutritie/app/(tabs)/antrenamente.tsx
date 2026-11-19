@@ -70,15 +70,22 @@ const formatClock = (totalSec: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
-// Cronometru self-contained: tick-uiește local (250ms) ca să NU re-randeze întregul
-// ecran de antrenament. Mount-unmout-ul e controlat de `timerExerciseId`.
+// Cronometru self-contained: actualizează direct `secs` în state (React Compiler safe)
+// ca să nu înghețe la 0:00 și să nu re-randeze întregul ecran de antrenament.
 function TimerValue({ startedAt, style }: { startedAt: number | null; style: StyleProp<TextStyle> }) {
-  const [, setTick] = useState(0);
+  const [secs, setSecs] = useState(() =>
+    startedAt == null ? 0 : Math.max(0, Math.round((Date.now() - startedAt) / 1000)),
+  );
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 250);
+    if (startedAt == null) {
+      setSecs(0);
+      return;
+    }
+    const update = () => setSecs(Math.max(0, Math.round((Date.now() - startedAt) / 1000)));
+    update();
+    const id = setInterval(update, 250);
     return () => clearInterval(id);
-  }, []);
-  const secs = startedAt == null ? 0 : Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+  }, [startedAt]);
   return <Text style={style}>{formatClock(secs)}</Text>;
 }
 
@@ -184,7 +191,7 @@ export default function AntrenamenteScreen() {
   }, [scrollSportToOffset]);
   const listContainerYRef = useRef(0);
   const exerciseOffsetsRef = useRef<Record<string, number>>({});
-  const timerStartRef = useRef<number | null>(null);
+  const [timerStartedAt, setTimerStartedAt] = useState<number | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const acumulatMsRef = useRef(0);
   const hasSessionRef = useRef(false);
@@ -386,11 +393,11 @@ export default function AntrenamenteScreen() {
 
   const onSelectCategory = (cat: Categorie) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (timerExerciseId && timerStartRef.current) {
-      const elapsed = Math.round((Date.now() - timerStartRef.current) / 1000);
+    if (timerExerciseId && timerStartedAt != null) {
+      const elapsed = Math.round((Date.now() - timerStartedAt) / 1000);
       const timerEx = exercitii.find((e) => e.id === timerExerciseId);
       if (elapsed > 0 && timerEx) setInputFor(timerEx, { time: String(elapsed) });
-      timerStartRef.current = null;
+      setTimerStartedAt(null);
       setTimerExerciseId('');
     }
     setSelectedCategory(cat);
@@ -416,7 +423,7 @@ export default function AntrenamenteScreen() {
     const target = session[ex.id]?.[index];
     if (!target) return;
     Haptics.selectionAsync();
-    timerStartRef.current = null;
+    setTimerStartedAt(null);
     setTimerExerciseId('');
     setEditingSet({ exId: ex.id, index });
     setWarmupFor(target.set_type === 'warmup' ? ex.id : '');
@@ -482,20 +489,20 @@ export default function AntrenamenteScreen() {
 
   const startTimer = (ex: Exercitiu) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    timerStartRef.current = Date.now();
+    setTimerStartedAt(Date.now());
     setTimerExerciseId(ex.id);
   };
 
   const stopTimer = (ex: Exercitiu) => {
-    const elapsed = timerStartRef.current ? Math.round((Date.now() - timerStartRef.current) / 1000) : 0;
-    timerStartRef.current = null;
+    const elapsed = timerStartedAt != null ? Math.round((Date.now() - timerStartedAt) / 1000) : 0;
+    setTimerStartedAt(null);
     setTimerExerciseId('');
     if (elapsed > 0) setInputFor(ex, { time: String(elapsed) });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   };
 
   const resetTimer = (ex?: Exercitiu) => {
-    timerStartRef.current = null;
+    setTimerStartedAt(null);
     setTimerExerciseId('');
     if (ex) setInputFor(ex, { time: '0' });
   };
@@ -723,7 +730,7 @@ export default function AntrenamenteScreen() {
         {fields.usesTime ? (
           <View style={[styles.timerBox, { borderColor: timerRunning ? colors.accent : colors.cardBorder }]}>
             {timerRunning ? (
-              <TimerValue startedAt={timerStartRef.current} style={[styles.timerValue, styles.tabularNums, { color: colors.accent }]} />
+              <TimerValue startedAt={timerStartedAt} style={[styles.timerValue, styles.tabularNums, { color: colors.accent }]} />
             ) : (
               <Text style={[styles.timerValue, styles.tabularNums, { color: colors.textPrimary }]}>
                 {formatClock(parseInt(current.time, 10) || 0)}

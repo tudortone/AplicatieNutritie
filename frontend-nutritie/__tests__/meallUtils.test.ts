@@ -47,7 +47,7 @@ describe('lib/mealUtils — poza mesei', () => {
 });
 
 describe('lib/mealUtils — inserare photo meal', () => {
-  it('preserves id on initial insert and rounds macros to integer', async () => {
+  it('maps UUID id to client_operation_id (omitting BIGINT id) and rounds macros to integer', async () => {
     const payload = {
       id: '123e4567-e89b-42d3-a456-426614174000',
       user_id: 'user-1',
@@ -66,7 +66,7 @@ describe('lib/mealUtils — inserare photo meal', () => {
     await insereazaMasaCuPoza(client as never, payload);
 
     expect(insert).toHaveBeenCalledWith({
-      id: '123e4567-e89b-42d3-a456-426614174000',
+      client_operation_id: '123e4567-e89b-42d3-a456-426614174000',
       user_id: 'user-1',
       nume: 'Meal photo',
       imagine_url: 'https://example.test/meal.jpg',
@@ -78,7 +78,7 @@ describe('lib/mealUtils — inserare photo meal', () => {
     });
   });
 
-  it('retries without id when PostgreSQL returns 22P02 bigint syntax error', async () => {
+  it('retries without client_operation_id when schema cache does not have the column yet', async () => {
     const payload = {
       id: '123e4567-e89b-42d3-a456-426614174000',
       user_id: 'user-1',
@@ -87,7 +87,7 @@ describe('lib/mealUtils — inserare photo meal', () => {
     };
     const selectFail = jest.fn().mockResolvedValue({
       data: null,
-      error: { code: '22P02', message: 'invalid input syntax for type bigint: "123e4567-e89b-42d3-a456-426614174000"' },
+      error: { code: 'PGRST204', message: "Could not find the 'client_operation_id' column of 'mese' in the schema cache" },
     });
     const selectSuccess = jest.fn().mockResolvedValue({
       data: [{ user_id: 'user-1', nume: 'Meal photo', calorii: 100, id: 89 }],
@@ -101,8 +101,9 @@ describe('lib/mealUtils — inserare photo meal', () => {
     const res = await insereazaMasaCuPoza(client as never, payload);
 
     expect(insert).toHaveBeenCalledTimes(2);
-    expect(insert.mock.calls[0][0].id).toBe('123e4567-e89b-42d3-a456-426614174000');
-    expect(insert.mock.calls[1][0].id).toBeUndefined();
+    expect(insert.mock.calls[0][0].id).toBeUndefined();
+    expect(insert.mock.calls[0][0].client_operation_id).toBe('123e4567-e89b-42d3-a456-426614174000');
+    expect(insert.mock.calls[1][0].client_operation_id).toBeUndefined();
     expect(res.data).toHaveLength(1);
     expect(res.data[0].id).toBe(89);
   });

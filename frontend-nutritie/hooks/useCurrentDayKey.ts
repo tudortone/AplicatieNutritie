@@ -11,7 +11,7 @@ import { localDayKey } from '../lib/dateUtils';
  */
 export function useCurrentDayKey(): string {
   const [dayKey, setDayKey] = useState<string>(() => localDayKey());
-  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState ?? 'active');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const update = useCallback(() => {
@@ -30,7 +30,8 @@ export function useCurrentDayKey(): string {
     update();
 
     const subscription = AppState.addEventListener('change', (next: AppStateStatus) => {
-      if (appStateRef.current.match(/inactive|background/) && next === 'active') {
+      const prev = appStateRef.current;
+      if (typeof prev === 'string' && /inactive|background/.test(prev) && next === 'active') {
         update();
       }
       appStateRef.current = next;

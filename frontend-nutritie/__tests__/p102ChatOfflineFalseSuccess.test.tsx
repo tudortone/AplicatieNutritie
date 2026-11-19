@@ -60,7 +60,8 @@ jest.mock('../supabase', () => ({
         if (mockInsertMode === 'pending') return new Promise<{ data: unknown[]; error: null }>((resolve) => { mockPendingInsertResolve = resolve; });
         if (mockInsertMode === 'empty') return { data: [], error: null };
         if (mockInsertMode === 'legacy') return { data: [{ ...(payload as Record<string, unknown>), id: 42 }], error: null };
-        return { data: [payload], error: null };
+        const row = payload as Record<string, unknown>;
+        return { data: [{ ...row, id: row.id ?? row.client_operation_id ?? 101 }], error: null };
       },
       select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
     }),
@@ -827,7 +828,11 @@ describe('Coach suggestion → explicit Journal confirmation', () => {
     expect(payload.calorii).toBe(180);
     expect(payload.alimente).toEqual([expect.objectContaining({ grame: 250, calorii: 180 })]);
     expect(mockFreshness.mark).toHaveBeenCalledWith(UTILIZATOR.id);
-    expect(mockFreshness.announce).toHaveBeenCalledWith(UTILIZATOR.id, [payload.id], [payload.data]);
+    expect(mockFreshness.announce).toHaveBeenCalledWith(
+      UTILIZATOR.id,
+      [String(payload.id ?? payload.client_operation_id ?? 101)],
+      [payload.data],
+    );
     expect(mockRefresh).toHaveBeenCalled();
     expect(view.getByLabelText('chat.suggestion.openJournal')).toBeTruthy();
   });

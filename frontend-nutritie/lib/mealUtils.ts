@@ -196,31 +196,64 @@ export async function insereazaMasaCuPoza(
   if (payloadCurat.grasimi !== undefined) payloadCurat.grasimi = clampValoare(Math.round(Number(payloadCurat.grasimi) || 0), LIMITE_DB_MESE.grasimi, 0);
   if (payloadCurat.fibre !== undefined) payloadCurat.fibre = clampValoare(Math.round((Number(payloadCurat.fibre) || 0) * 10) / 10, LIMITE_DB_MESE.fibre, 0);
 
-  const query1 = client.from('mese').insert(payloadCurat);
-  const prima = typeof query1?.select === 'function' ? await query1.select() : await query1;
+  // P0-06: Cheia primară `mese.id` în producție este BIGINT (identity/autoincrement).
+  // Nu trimitem niciodată un UUID client în `id` — îl mapăm pe `client_operation_id`
+  // (index unic parțial pe `(user_id, client_operation_id)`), astfel încât atât salvările
+  // online cât și `offlineQueue.ts` să fie idempotente fără erori `22P02` sau duplicate.
+  const rawId = payloadCurat.id;
+  const isNumericId =
+    typeof rawId === 'number'
+    || (typeof rawId === 'string' && rawId.trim() !== '' && /^\d+$/.test(rawId.trim()));
+  if (rawId !== undefined && !isNumericId) {
+    if (!payloadCurat.client_operation_id && typeof rawId === 'string' && rawId.trim() !== '') {
+      payloadCurat.client_operation_id = rawId.trim();
+    }
+    delete payloadCurat.id;
+  } else if (typeof rawId === 'string' && isNumericId) {
+    payloadCurat.id = Number(rawId);
+  }
 
-  // În PostgreSQL/Supabase, tabela `mese` are cheia primară `id` de tip BIGINT (identity/autoincrement).
-  // Dacă insertul eșuează cu 22P02 din cauza unui string UUID în `id`, reîncercăm fără `id`
-  // pentru ca Postgres să atribuie automat următorul id din secvență.
-  if (prima.error && (prima.error.code === '22P02' || /invalid input syntax for type bigint/i.test(String(prima.error.message)))) {
+  const runInsert = async (row: Record<string, unknown>) => {
+    const query = client.from('mese').insert(row);
+    return typeof query?.select === 'function' ? await query.select() : await query;
+  };
+
+  const prima = await runInsert(payloadCurat);
+  if (!prima?.error) return prima;
+
+  const msg1 = String(prima.error.message || '');
+  const lipsaClientOp =
+    /client_operation_id/i.test(msg1)
+    && (prima.error.code === '42703' || prima.error.code === 'PGRST204' || /column|schema cache/i.test(msg1));
+
+  if (lipsaClientOp) {
+    const faraClientOp = { ...payloadCurat };
+    delete faraClientOp.client_operation_id;
+    const aDoua = await runInsert(faraClientOp);
+    if (!aDoua?.error || !SEMNALE_COLOANA_LIPSA.test(String(aDoua.error.message || ''))) {
+      return aDoua;
+    }
+    const faraAmbele = { ...faraClientOp };
+    delete faraAmbele.imagine_url;
+    return runInsert(faraAmbele);
+  }
+
+  if (payloadCurat.id !== undefined && (prima.error.code === '22P02' || /invalid input syntax for type bigint/i.test(msg1))) {
     const faraId = { ...payloadCurat };
     delete faraId.id;
-    const query2 = client.from('mese').insert(faraId);
-    const aDoua = typeof query2?.select === 'function' ? await query2.select() : await query2;
-    if (!aDoua.error || !SEMNALE_COLOANA_LIPSA.test(String(aDoua.error.message))) {
+    const aDoua = await runInsert(faraId);
+    if (!aDoua?.error || !SEMNALE_COLOANA_LIPSA.test(String(aDoua.error.message || ''))) {
       return aDoua;
     }
     const faraPozaSiId = { ...faraId };
     delete faraPozaSiId.imagine_url;
-    const query3 = client.from('mese').insert(faraPozaSiId);
-    return typeof query3?.select === 'function' ? query3.select() : query3;
+    return runInsert(faraPozaSiId);
   }
 
-  if (prima.error && SEMNALE_COLOANA_LIPSA.test(String(prima.error.message))) {
+  if (SEMNALE_COLOANA_LIPSA.test(msg1)) {
     const faraPoza = { ...payloadCurat };
     delete faraPoza.imagine_url;
-    const query4 = client.from('mese').insert(faraPoza);
-    return typeof query4?.select === 'function' ? query4.select() : query4;
+    return runInsert(faraPoza);
   }
   return prima;
 }

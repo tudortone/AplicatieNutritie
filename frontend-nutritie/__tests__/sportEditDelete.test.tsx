@@ -212,7 +212,7 @@ const {
   recalculateEditedWorkout,
 } = actualAntrenamente;
 
-const LOCAL_STORAGE_KEY = 'nutriai_antrenamente_local_v2';
+const LOCAL_STORAGE_KEY = 'nutriai_antrenamente_local_v3_user-uuid-1234';
 const CLOUD_WORKOUT_ID = '11111111-1111-4111-8111-111111111111';
 const LOCAL_WORKOUT_ID = '22222222-2222-4222-8222-222222222222';
 

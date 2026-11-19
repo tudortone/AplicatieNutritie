@@ -53,6 +53,130 @@ export function WaterIntakeCard({
     if (next !== consumedMl) void onSetConsumedMl(next);
   }, [consumedMl, onSetConsumedMl]);
 
+  const cardContents = (
+    <LinearGradient
+      colors={[colors.accentTertiary + '15', 'rgba(0,0,0,0)']}
+      style={styles.content}
+    >
+      <View style={styles.header}>
+        <View style={styles.titleRow}>
+          <View style={[styles.iconWrap, { backgroundColor: colors.accentTertiary + '25' }]}>
+            <Droplet size={20} color={colors.accentTertiary} fill={colors.accentTertiary} />
+          </View>
+          <View style={styles.heading}>
+            <Text style={[styles.title, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+              {t('home.waterTitle')}
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
+              {hasTarget
+                ? t('home.waterTargetMl', { ml: targetMl })
+                : t('home.waterMissingWeight')}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.controls}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t('home.waterMinusA11y')}
+            accessibilityState={{ disabled: loading }}
+            disabled={loading}
+            testID="water-remove-glass"
+            hitSlop={6}
+            style={[styles.removeButton, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
+            onPress={onRemoveGlass}
+          >
+            <Minus size={19} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t('home.waterPlusA11y')}
+            accessibilityState={{ disabled: loading }}
+            disabled={loading}
+            testID="water-add-glass"
+            hitSlop={4}
+            style={[styles.addButton, { shadowColor: colors.accentTertiary }]}
+            onPress={onAddGlass}
+          >
+            <LinearGradient colors={[colors.accentTertiary, colors.accentTertiary + '66']} style={styles.addButtonFill}>
+              <Plus size={22} color={colors.textOnAccent} strokeWidth={3} />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {hasTarget ? (
+        <View
+          testID="water-progress"
+          accessibilityRole="progressbar"
+          accessibilityLabel={t('home.waterProgressA11y')}
+          accessibilityValue={{ min: 0, max: targetMl, now: Math.min(consumedMl, targetMl) }}
+          style={styles.progressTrack}
+        >
+          <LinearGradient
+            colors={[colors.accentTertiary, colors.accentTertiary + '66']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[styles.progressFill, { width: `${progressPercent}%` }]}
+          />
+        </View>
+      ) : null}
+
+      <View style={styles.footer}>
+        <View
+          testID="water-consumed-ml"
+          accessibilityLabel={t('home.waterConsumedMl', { ml: consumedMl })}
+          style={styles.consumed}
+        >
+          <TextInput
+            testID="water-consumed-input"
+            accessibilityLabel={t('home.waterEditConsumedA11y')}
+            value={draftMl}
+            onFocus={() => { editingRef.current = true; }}
+            onChangeText={(value) => {
+              const next = value.replace(/[^\d]/g, '').slice(0, 5);
+              draftMlRef.current = next;
+              setDraftMl(next);
+            }}
+            onBlur={commitConsumedMl}
+            onSubmitEditing={commitConsumedMl}
+            keyboardType="number-pad"
+            selectTextOnFocus
+            maxLength={5}
+            style={[styles.consumedInput, { color: colors.accentTertiary, borderColor: colors.accentTertiary + '55' }]}
+          />
+          <Text style={[styles.consumedUnit, { color: colors.textPrimary }]}>ml</Text>
+        </View>
+        {hasTarget ? (
+          <Text
+            testID="water-target-ml"
+            style={[styles.target, { color: colors.textTertiary }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            maxFontSizeMultiplier={1.3}
+          >
+            {t('home.waterTargetValue', { ml: targetMl })}
+          </Text>
+        ) : (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t('home.waterAddWeight')}
+            testID="water-add-weight"
+            onPress={onAddWeight}
+            style={styles.addWeightButton}
+          >
+            <Scale size={15} color={colors.accentTertiary} />
+            <Text style={[styles.addWeightText, { color: colors.accentTertiary }]} maxFontSizeMultiplier={1.3}>
+              {t('home.waterAddWeight')}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      {loading ? <ActivityIndicator accessibilityLabel={t('common.loading')} color={colors.accentTertiary} style={styles.loading} /> : null}
+    </LinearGradient>
+  );
+
   return (
     <View
       style={[
@@ -64,141 +188,15 @@ export function WaterIntakeCard({
     >
       {Platform.OS === 'ios' ? (
         <BlurView intensity={20} tint="dark" style={styles.backdrop}>
-          <CardContents />
+          {cardContents}
         </BlurView>
       ) : (
         <View style={styles.backdrop}>
-          <CardContents />
+          {cardContents}
         </View>
       )}
     </View>
   );
-
-  function CardContents() {
-    return (
-      <LinearGradient
-        colors={[colors.accentTertiary + '15', 'rgba(0,0,0,0)']}
-        style={styles.content}
-      >
-        <View style={styles.header}>
-          <View style={styles.titleRow}>
-            <View style={[styles.iconWrap, { backgroundColor: colors.accentTertiary + '25' }]}>
-              <Droplet size={20} color={colors.accentTertiary} fill={colors.accentTertiary} />
-            </View>
-            <View style={styles.heading}>
-              <Text style={[styles.title, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
-                {t('home.waterTitle')}
-              </Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
-                {hasTarget
-                  ? t('home.waterTargetMl', { ml: targetMl })
-                  : t('home.waterMissingWeight')}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.controls}>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={t('home.waterMinusA11y')}
-              accessibilityState={{ disabled: loading }}
-              disabled={loading}
-              testID="water-remove-glass"
-              hitSlop={6}
-              style={[styles.removeButton, { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder }]}
-              onPress={onRemoveGlass}
-            >
-              <Minus size={19} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={t('home.waterPlusA11y')}
-              accessibilityState={{ disabled: loading }}
-              disabled={loading}
-              testID="water-add-glass"
-              hitSlop={4}
-              style={[styles.addButton, { shadowColor: colors.accentTertiary }]}
-              onPress={onAddGlass}
-            >
-              <LinearGradient colors={[colors.accentTertiary, colors.accentTertiary + '66']} style={styles.addButtonFill}>
-                <Plus size={22} color={colors.textOnAccent} strokeWidth={3} />
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {hasTarget ? (
-          <View
-            testID="water-progress"
-            accessibilityRole="progressbar"
-            accessibilityLabel={t('home.waterProgressA11y')}
-            accessibilityValue={{ min: 0, max: targetMl, now: Math.min(consumedMl, targetMl) }}
-            style={styles.progressTrack}
-          >
-            <LinearGradient
-              colors={[colors.accentTertiary, colors.accentTertiary + '66']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={[styles.progressFill, { width: `${progressPercent}%` }]}
-            />
-          </View>
-        ) : null}
-
-        <View style={styles.footer}>
-          <View
-            testID="water-consumed-ml"
-            accessibilityLabel={t('home.waterConsumedMl', { ml: consumedMl })}
-            style={styles.consumed}
-          >
-            <TextInput
-              testID="water-consumed-input"
-              accessibilityLabel={t('home.waterEditConsumedA11y')}
-              value={draftMl}
-              onFocus={() => { editingRef.current = true; }}
-              onChangeText={(value) => {
-                const next = value.replace(/[^\d]/g, '').slice(0, 5);
-                draftMlRef.current = next;
-                setDraftMl(next);
-              }}
-              onBlur={commitConsumedMl}
-              onSubmitEditing={commitConsumedMl}
-              keyboardType="number-pad"
-              selectTextOnFocus
-              maxLength={5}
-              style={[styles.consumedInput, { color: colors.accentTertiary, borderColor: colors.accentTertiary + '55' }]}
-            />
-            <Text style={[styles.consumedUnit, { color: colors.textPrimary }]}>ml</Text>
-          </View>
-          {hasTarget ? (
-            <Text
-              testID="water-target-ml"
-              style={[styles.target, { color: colors.textTertiary }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.75}
-              maxFontSizeMultiplier={1.3}
-            >
-              {t('home.waterTargetValue', { ml: targetMl })}
-            </Text>
-          ) : (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={t('home.waterAddWeight')}
-              testID="water-add-weight"
-              onPress={onAddWeight}
-              style={styles.addWeightButton}
-            >
-              <Scale size={15} color={colors.accentTertiary} />
-              <Text style={[styles.addWeightText, { color: colors.accentTertiary }]} maxFontSizeMultiplier={1.3}>
-                {t('home.waterAddWeight')}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        {loading ? <ActivityIndicator accessibilityLabel={t('common.loading')} color={colors.accentTertiary} style={styles.loading} /> : null}
-      </LinearGradient>
-    );
-  }
 }
 
 const styles = StyleSheet.create({

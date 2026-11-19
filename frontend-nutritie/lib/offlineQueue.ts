@@ -1,4 +1,5 @@
 import { verificaReluareMasa } from './payloadMese';
+import { insereazaMasaCuPoza } from './mealUtils';
 import { anuntaMasaSalvataVerificat, marcheazaMeseModificate } from './freshnessMese';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -14,6 +15,7 @@ export function getOfflineQueueKey(userId?: string | null): string {
 
 export interface MasaOfflinePayload {
   id: string;
+  client_operation_id?: string;
   user_id: string;
   nume: string;
   calorii: number;
@@ -55,6 +57,33 @@ function esteUuidValid(v: string): boolean {
 }
 
 const inMemoryFallbackQueues = new Map<string, MasaOfflinePayload[]>();
+const userQueueLocks = new Map<string, Promise<unknown>>();
+const inFlightProcessByUser = new Map<string, Promise<{ procesate: number; esuate: number }>>();
+const clearGenerationByUser = new Map<string, number>();
+let globalClearGeneration = 0;
+
+function queueLockKey(userId?: string | null): string {
+  return userId && typeof userId === 'string' && userId.trim().length > 0
+    ? userId.trim()
+    : '__global__';
+}
+
+function getClearGeneration(userId: string): number {
+  return globalClearGeneration + (clearGenerationByUser.get(userId) ?? 0);
+}
+
+function withUserQueueLock<T>(userId: string | null | undefined, fn: () => Promise<T>): Promise<T> {
+  const key = queueLockKey(userId);
+  const previous = userQueueLocks.get(key) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(fn);
+  const tracked = next.finally(() => {
+    if (userQueueLocks.get(key) === tracked) {
+      userQueueLocks.delete(key);
+    }
+  });
+  userQueueLocks.set(key, tracked);
+  return next;
+}
 
 /**
  * Migrează datele dintr-o eventuală coadă globală veche (`@nutri_offline_meals_queue`)
@@ -164,14 +193,16 @@ export async function saveOfflineQueue(queue: MasaOfflinePayload[], userId?: str
 export async function pushOfflineMeal(payload: MasaOfflinePayload): Promise<number> {
   if (!payload || !payload.user_id) return 0;
   const userId = payload.user_id;
-  const current = await getOfflineQueue(userId);
-  // Prevenim duplicatele după id
-  if (current.some((item) => item.id === payload.id)) {
-    return current.length;
-  }
-  const updated = [...current, payload];
-  await saveOfflineQueue(updated, userId);
-  return updated.length;
+  return withUserQueueLock(userId, async () => {
+    const current = await getOfflineQueue(userId);
+    // Prevenim duplicatele după id
+    if (current.some((item) => item.id === payload.id)) {
+      return current.length;
+    }
+    const updated = [...current, payload];
+    await saveOfflineQueue(updated, userId);
+    return updated.length;
+  });
 }
 
 /**
@@ -188,22 +219,26 @@ export async function pushOfflineMealVerificat(
 ): Promise<{ persistat: boolean; lungime: number; duplicat: boolean }> {
   if (!payload || !payload.user_id) return { persistat: false, lungime: 0, duplicat: false };
   const userId = payload.user_id;
-  const current = await getOfflineQueue(userId);
-  if (current.some((item) => item.id === payload.id)) {
-    return { persistat: true, lungime: current.length, duplicat: true };
-  }
-  const updated = [...current, payload];
-  const persistat = await saveOfflineQueue(updated, userId);
-  return { persistat, lungime: updated.length, duplicat: false };
+  return withUserQueueLock(userId, async () => {
+    const current = await getOfflineQueue(userId);
+    if (current.some((item) => item.id === payload.id)) {
+      return { persistat: true, lungime: current.length, duplicat: true };
+    }
+    const updated = [...current, payload];
+    const persistat = await saveOfflineQueue(updated, userId);
+    return { persistat, lungime: updated.length, duplicat: false };
+  });
 }
 
 export async function popOfflineMeal(userId?: string | null): Promise<MasaOfflinePayload | null> {
   if (userId) {
-    const current = await getOfflineQueue(userId);
-    if (current.length === 0) return null;
-    const [removed, ...remaining] = current;
-    await saveOfflineQueue(remaining, userId);
-    return removed;
+    return withUserQueueLock(userId, async () => {
+      const current = await getOfflineQueue(userId);
+      if (current.length === 0) return null;
+      const [removed, ...remaining] = current;
+      await saveOfflineQueue(remaining, userId);
+      return removed;
+    });
   }
 
   const all = await getOfflineQueue();
@@ -217,12 +252,17 @@ export async function popOfflineMeal(userId?: string | null): Promise<MasaOfflin
 
 export async function clearOfflineQueue(userId?: string | null): Promise<void> {
   if (userId) {
-    const key = getOfflineQueueKey(userId);
-    inMemoryFallbackQueues.delete(key);
-    try {
-      await AsyncStorage.removeItem(key);
-    } catch {}
+    const uid = userId.trim();
+    clearGenerationByUser.set(uid, (clearGenerationByUser.get(uid) ?? 0) + 1);
+    await withUserQueueLock(uid, async () => {
+      const key = getOfflineQueueKey(uid);
+      inMemoryFallbackQueues.delete(key);
+      try {
+        await AsyncStorage.removeItem(key);
+      } catch {}
+    });
   } else {
+    globalClearGeneration += 1;
     inMemoryFallbackQueues.clear();
     try {
       await AsyncStorage.removeItem(OFFLINE_QUEUE_KEY_LEGACY);
@@ -257,158 +297,159 @@ export async function processOfflineQueue(
     return { procesate: 0, esuate: 0 };
   }
 
-  let queue = await getOfflineQueue(activeUid);
-  const queueSnapshot = [...queue];
-  if (queue.length === 0) {
-    return { procesate: 0, esuate: 0 };
+  const normalizedUid = activeUid.trim();
+  const existingRun = inFlightProcessByUser.get(normalizedUid);
+  if (existingRun) {
+    return existingRun;
   }
 
-  let procesate = 0;
-  let esuate = 0;
-  const pentruReincercare: MasaOfflinePayload[] = [];
-  // Id-urile confirmate ca ajunse pe server (insert reusit sau duplicat 23505).
-  // Doar acestea au voie sa fie eliminate din coada persistata la final.
-  const sincronizate = new Set<string>();
-  // Intrari care nu apartin utilizatorului conectat: se purja, ca inainte.
-  const deEliminat = new Set<string>();
-
-  while (queue.length > 0) {
-    const masa = queue[0];
-
-    // Gardă strictă de izolare cont: dacă un item are user_id diferit de utilizatorul
-    // conectat, nu îl trimitem în Supabase (ar pica la RLS sau ar polua DB-ul).
-    if (masa.user_id !== activeUid) {
-      queue.shift();
-      deEliminat.add(masa.id);
-      continue;
+  const runPromise = (async (): Promise<{ procesate: number; esuate: number }> => {
+    const startClearGen = getClearGeneration(normalizedUid);
+    const queue = await withUserQueueLock(normalizedUid, () => getOfflineQueue(normalizedUid));
+    const queueSnapshot = [...queue];
+    if (queue.length === 0) {
+      return { procesate: 0, esuate: 0 };
     }
 
-    try {
-      const { error } = await supabaseClient.from('mese').insert({
-        ...(esteUuidValid(masa.id)
-          ? { id: masa.id }
-          : !isNaN(Number(masa.id)) && typeof masa.id !== 'boolean'
-          ? { id: Number(masa.id) }
-          : {}),
-        user_id: masa.user_id,
-        nume: masa.nume,
-        calorii: Math.round(Number(masa.calorii) || 0),
-        proteine: Math.round(Number(masa.proteine) || 0),
-        grasimi: Math.round(Number(masa.grasimi) || 0),
-        carbohidrati: Math.round(Number(masa.carbohidrati) || 0),
-        fibre: Math.round((Number(masa.fibre) || 0) * 10) / 10,
-        tip_masa: masa.tip_masa,
-        alimente: masa.alimente,
-        data: masa.data,
-        ora: masa.ora ?? null,
-        created_at: masa.created_at,
-        imagine_url: masa.imagine_url ?? null,
-      });
+    let procesate = 0;
+    let esuate = 0;
+    const pentruReincercare: MasaOfflinePayload[] = [];
+    const sincronizate = new Set<string>();
+    const deEliminat = new Set<string>();
 
-      if (error) {
-        if (error.code === '23505') {
-          // BUG-054: rand deja inserat de o sincronizare partiala precedenta
-          // (insertul a ajuns la DB, dar pop-ul din coada a esuat).
-          //
-          // P1-01 (Blocant 1): 23505 dovedeste doar ca EXISTA un rand cu acest id,
-          // nu ca este aceeasi masa. Verificam continutul persistat inainte de a
-          // declara intrarea sincronizata; altfel o intrare cu alt continut ar fi
-          // stearsa tacut din coada ca si cum ar fi ajuns pe server.
-          const verificare = await verificaReluareMasa(
-            supabaseClient as never,
-            masa as unknown as { id: string } & Record<string, unknown>,
-          );
-          if (verificare.tip === 'reluare_confirmata') {
-            queue.shift();
-            sincronizate.add(masa.id);
-            procesate++;
-            continue;
-          }
-          if (verificare.tip === 'conflict_continut') {
-            // Nu este masa noastra. Nu o declaram sincronizata si nu o pastram in
-            // coada la infinit: o scoatem si o contorizam ca esec real, vizibil.
-            queue.shift();
-            deEliminat.add(masa.id);
-            esuate++;
-            continue;
-          }
-          // `necunoscut`: nu putem dovedi nimic — pastram intrarea pentru o
-          // reluare ulterioara, fara sa pretindem succes.
-          esuate++;
-          break;
-        }
+    while (queue.length > 0) {
+      if (getClearGeneration(normalizedUid) !== startClearGen) {
+        break;
+      }
+      const masa = queue[0];
 
-        if (!error.code && !error.status) {
-          // Eroare de transport (fara cod Postgres/status HTTP) — reteaua e
-          // indisponibila. Oprim pasul ca sa pastram ordinea FIFO si mesajele.
-          esuate++;
-          break;
-        }
-
-        // BUG-060: serverul a raspuns cu o eroare pentru ACEST payload (ex.
-        // constraint, payload invalid). Un singur item respins NU mai blocheaza
-        // restul cozii: il reincadram la final pentru o reincercare ulterioara
-        // si continuam cu urmatoarele (daca totul s-ar bloca pe primul, restul
-        // meselor offline nu s-ar sincroniza niciodata).
+      if (masa.user_id !== normalizedUid) {
         queue.shift();
-        pentruReincercare.push(masa);
-        esuate++;
+        deEliminat.add(masa.id);
         continue;
       }
 
-      // Succes -> scoatem primul element din coadă
-      queue.shift();
-      sincronizate.add(masa.id);
-      procesate++;
-    } catch {
-      // Eroare lansata (fetch rejected) — tot retea indisponibila. Pastram masa.
-      esuate++;
-      break;
+      const clientOpId =
+        typeof masa.client_operation_id === 'string' && masa.client_operation_id.trim() !== ''
+          ? masa.client_operation_id.trim()
+          : (esteUuidValid(masa.id) || (typeof masa.id === 'string' && masa.id.trim() !== '' && isNaN(Number(masa.id))))
+            ? masa.id.trim()
+            : undefined;
+
+      try {
+        const { error } = await insereazaMasaCuPoza(supabaseClient as never, {
+          ...(clientOpId
+            ? { client_operation_id: clientOpId }
+            : !isNaN(Number(masa.id)) && typeof masa.id !== 'boolean'
+            ? { id: Number(masa.id) }
+            : {}),
+          user_id: masa.user_id,
+          nume: masa.nume,
+          calorii: Math.round(Number(masa.calorii) || 0),
+          proteine: Math.round(Number(masa.proteine) || 0),
+          grasimi: Math.round(Number(masa.grasimi) || 0),
+          carbohidrati: Math.round(Number(masa.carbohidrati) || 0),
+          fibre: Math.round((Number(masa.fibre) || 0) * 10) / 10,
+          tip_masa: masa.tip_masa,
+          alimente: masa.alimente,
+          data: masa.data,
+          ora: masa.ora ?? null,
+          created_at: masa.created_at,
+          imagine_url: masa.imagine_url ?? null,
+        });
+
+        if (error) {
+          if (error.code === '23505') {
+            const verificare = await verificaReluareMasa(
+              supabaseClient as never,
+              {
+                ...masa,
+                ...(clientOpId ? { client_operation_id: clientOpId } : {}),
+              } as unknown as { id: string } & Record<string, unknown>,
+            );
+            if (verificare.tip === 'reluare_confirmata') {
+              queue.shift();
+              sincronizate.add(masa.id);
+              procesate++;
+              continue;
+            }
+            if (verificare.tip === 'conflict_continut') {
+              queue.shift();
+              deEliminat.add(masa.id);
+              esuate++;
+              continue;
+            }
+            esuate++;
+            break;
+          }
+
+          if (!error.code && !error.status) {
+            esuate++;
+            break;
+          }
+
+          queue.shift();
+          pentruReincercare.push(masa);
+          esuate++;
+          continue;
+        }
+
+        queue.shift();
+        sincronizate.add(masa.id);
+        procesate++;
+      } catch {
+        esuate++;
+        break;
+      }
+    }
+
+    await withUserQueueLock(normalizedUid, async () => {
+      // P0-07: Dacă coada a fost ștearsă în timpul flush-ului (logout/ștergere cont),
+      // nu rescriem niciodată intrările vechi înapoi în AsyncStorage.
+      if (getClearGeneration(normalizedUid) !== startClearGen) {
+        return;
+      }
+      const ramase = new Map<string, MasaOfflinePayload>();
+      for (const masa of [...queue, ...pentruReincercare]) ramase.set(masa.id, masa);
+
+      const live = await getOfflineQueue(normalizedUid);
+      const rezultat: MasaOfflinePayload[] = [];
+      const vazute = new Set<string>();
+      for (const masa of live) {
+        if (sincronizate.has(masa.id) || deEliminat.has(masa.id)) continue;
+        if (vazute.has(masa.id)) continue;
+        vazute.add(masa.id);
+        rezultat.push(ramase.get(masa.id) ?? masa);
+      }
+      for (const masa of pentruReincercare) {
+        if (!vazute.has(masa.id)) {
+          vazute.add(masa.id);
+          rezultat.push(masa);
+        }
+      }
+
+      await saveOfflineQueue(rezultat, normalizedUid);
+    });
+
+    if (procesate > 0 && getClearGeneration(normalizedUid) === startClearGen) {
+      marcheazaMeseModificate(normalizedUid);
+      const salvate = queueSnapshot.filter((masa) => sincronizate.has(masa.id));
+      anuntaMasaSalvataVerificat(
+        normalizedUid,
+        salvate.map((masa) => masa.id),
+        [...new Set(salvate.map((masa) => String(masa.data ?? masa.created_at ?? '').slice(0, 10)))],
+      );
+    }
+
+    return { procesate, esuate };
+  })();
+
+  inFlightProcessByUser.set(normalizedUid, runPromise);
+  try {
+    return await runPromise;
+  } finally {
+    if (inFlightProcessByUser.get(normalizedUid) === runPromise) {
+      inFlightProcessByUser.delete(normalizedUid);
     }
   }
-
-  // Nu suprascriem coada cu instantaneul citit la inceput: `pushOfflineMeal`
-  // poate scrie in acelasi timp (utilizatorul salveaza o masa noua cat timp
-  // sincronizarea e in zbor), iar un overwrite ar sterge definitiv acele mese
-  // fara ca ele sa fi ajuns vreodata pe server. Recitim starea curenta si
-  // eliminam DOAR intrarile pe care chiar le-am confirmat sincronizate.
-  const ramase = new Map<string, MasaOfflinePayload>();
-  for (const masa of [...queue, ...pentruReincercare]) ramase.set(masa.id, masa);
-
-  const live = await getOfflineQueue(activeUid);
-  const rezultat: MasaOfflinePayload[] = [];
-  const vazute = new Set<string>();
-  for (const masa of live) {
-    // Intrarile altui utilizator au fost deja filtrate mai sus; aici pastram
-    // orice masa care nu a fost sincronizata in aceasta rulare.
-    if (sincronizate.has(masa.id) || deEliminat.has(masa.id)) continue;
-    if (vazute.has(masa.id)) continue;
-    vazute.add(masa.id);
-    rezultat.push(ramase.get(masa.id) ?? masa);
-  }
-  // Intrari reincadrate care intre timp au disparut din storage (ex. golire
-  // concurenta) — le pastram, altfel s-ar pierde tacut.
-  for (const masa of pentruReincercare) {
-    if (!vazute.has(masa.id)) {
-      vazute.add(masa.id);
-      rezultat.push(masa);
-    }
-  }
-
-  await saveOfflineQueue(rezultat, activeUid);
-  // P1-04: dacă sincronizarea a scris efectiv pe server, datele canonice s-au
-  // schimbat — emitem o SINGURĂ invalidare pentru toată reluarea, ca ecranele
-  // deschise (Home) să se împrospăteze fără repornirea aplicației. Nu emitem
-  // nimic dacă nu s-a procesat nimic real.
-  if (procesate > 0) {
-    marcheazaMeseModificate(activeUid);
-    const salvate = queueSnapshot.filter((masa) => sincronizate.has(masa.id));
-    anuntaMasaSalvataVerificat(
-      activeUid,
-      salvate.map((masa) => masa.id),
-      [...new Set(salvate.map((masa) => String(masa.data ?? masa.created_at ?? '').slice(0, 10)))],
-    );
-  }
-
-  return { procesate, esuate };
 }
