@@ -179,12 +179,14 @@ const googleBillingService = createGoogleBillingService({
   allowedCreditProductIds: config.googlePlay.creditProductIds,
   flowCredits: flowCreditsService,
 });
+const triggerEnabled = Boolean(config.triggerSecretKey);
 const photoJobService = createPhotoJobService({
   repo: createPhotoJobsRepo({ supabaseAdmin }),
   flowCredits: flowCreditsService,
   tasks,
   billing: googleBillingService,
-  runBackgroundWorker: (payload) => executaAnalizaMancare(payload),
+  triggerEnabled,
+  runBackgroundWorker: triggerEnabled ? null : (payload) => executaAnalizaMancare(payload),
 });
 const playIntegrityGuard = config.playIntegrity.mode === 'off'
   ? createPlayIntegrityGuard({ mode: 'off' })
@@ -676,13 +678,18 @@ if (require.main === module) {
   // CREDIT_RECONCILE_ACTIV=0. Restituie doar debite orfane (crash-window) —
   // mutare în favoarea utilizatorului, deci default-on e sigur.
   if (process.env.CREDIT_RECONCILE_ACTIV !== '0') {
-    const { reconciliaCrediteConsumate } = require('./utils/reconcileCredite');
+    const {
+      reconciliaCrediteConsumate,
+      reconciliaRezervariFotoExpirate,
+    } = require('./utils/reconcileCredite');
     const tickerReconcile = setInterval(() => {
       reconciliaCrediteConsumate({ supabaseAdmin }).catch((e) =>
         console.error('[Reconciliere credite]', rezumatEroareSigur(e, { operation: 'reconcile_credits' })));
+      reconciliaRezervariFotoExpirate({ supabaseAdmin }).catch((e) =>
+        console.error('[Reconciliere rezervari foto]', rezumatEroareSigur(e, { operation: 'reconcile_photo_reservations' })));
     }, 15 * 60 * 1000);
     if (tickerReconcile.unref) tickerReconcile.unref();
-    console.log('[Credite] Worker reconciliere activ, interval 15 minute.');
+    console.log('[Credite] Worker reconciliere activ (credite + rezervari foto), interval 15 minute.');
   } else {
     console.log('[Credite] Worker reconciliere inactiv (CREDIT_RECONCILE_ACTIV=0).');
   }

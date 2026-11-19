@@ -62,6 +62,12 @@ function createFlowCreditsRepo({ supabaseAdmin, rewardLimit = 5, dailyLimit = 3,
         p_now: now,
       }), 'reconcilePhotoResult');
     },
+    async reconcileStalePhotoReservations({ userId, now }) {
+      return unwrapRpc(await supabaseAdmin.rpc('reconcile_stale_flow_photo_reservations', {
+        p_user_id: userId,
+        p_now: now,
+      }), 'reconcileStalePhotoReservations');
+    },
     async listPhotoOutcomeReconciliationQueue({ limit = 50, now } = {}) {
       return unwrapRpc(await supabaseAdmin.rpc('list_flow_photo_outcome_reconciliation_queue', {
         p_limit: limit,

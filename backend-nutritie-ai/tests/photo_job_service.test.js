@@ -239,4 +239,56 @@ describe('durable Photo AI job admission', () => {
     expect(hReplayReserved.tasks.trigger).not.toHaveBeenCalled();
     expect(hReplayReserved.flowCredits.releasePhoto).not.toHaveBeenCalled();
   });
+
+  test('does not invoke inline runBackgroundWorker when Trigger.dev is enabled (prevents dual-worker race)', async () => {
+    const h = harness();
+    const runBackgroundWorker = jest.fn(async () => {});
+    const svc = createPhotoJobService({
+      repo: h.repo,
+      flowCredits: h.flowCredits,
+      tasks: h.tasks,
+      billing: h.billing,
+      triggerEnabled: true,
+      runBackgroundWorker,
+    });
+    await svc.submit(input);
+    await new Promise((r) => setImmediate(r));
+    expect(h.tasks.trigger).toHaveBeenCalledTimes(1);
+    expect(runBackgroundWorker).not.toHaveBeenCalled();
+  });
+
+  test('falls back to inline runBackgroundWorker only when Trigger.dev is explicitly disabled', async () => {
+    const h = harness();
+    const runBackgroundWorker = jest.fn(async () => {});
+    const svc = createPhotoJobService({
+      repo: h.repo,
+      flowCredits: h.flowCredits,
+      tasks: h.tasks,
+      billing: h.billing,
+      triggerEnabled: false,
+      runBackgroundWorker,
+    });
+    const job = await svc.submit(input);
+    await new Promise((r) => setImmediate(r));
+    expect(job.status).toBe('queued');
+    expect(h.tasks.trigger).not.toHaveBeenCalled();
+    expect(runBackgroundWorker).toHaveBeenCalledTimes(1);
+  });
+
+  test('getActive reconciles stale photo reservations before querying active jobs', async () => {
+    const h = harness();
+    const order = [];
+    h.flowCredits.reconcileStalePhotoReservations = jest.fn(async () => {
+      order.push('reconcile');
+      return { ok: true, releasedBeforeInference: 1, markedUnknown: 0 };
+    });
+    h.repo.getActiveOwned.mockImplementationOnce(async () => {
+      order.push('getActiveOwned');
+      return null;
+    });
+
+    await expect(h.service.getActive({ userId: USER_A })).resolves.toBeNull();
+    expect(order).toEqual(['reconcile', 'getActiveOwned']);
+    expect(h.flowCredits.reconcileStalePhotoReservations).toHaveBeenCalledWith({ userId: USER_A });
+  });
 });

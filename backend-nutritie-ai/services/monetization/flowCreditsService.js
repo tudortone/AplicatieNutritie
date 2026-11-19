@@ -70,6 +70,15 @@ function createFlowCreditsService({ repo, now = () => new Date() } = {}) {
         now: serverNow(),
       });
     },
+    reconcileStalePhotoReservations({ userId } = {}) {
+      if (typeof repo.reconcileStalePhotoReservations !== 'function') {
+        return Promise.resolve({ ok: true, releasedBeforeInference: 0, markedUnknown: 0 });
+      }
+      return repo.reconcileStalePhotoReservations({
+        userId: requiredString(userId, 'INVALID_USER'),
+        now: serverNow(),
+      });
+    },
     listPhotoOutcomeReconciliationQueue({ limit = 50 } = {}) {
       if (typeof repo.listPhotoOutcomeReconciliationQueue !== 'function') {
         throw new TypeError('Photo reconciliation queue is not supported by repo');

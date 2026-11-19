@@ -9,7 +9,7 @@ jest.mock('@sentry/node', () => ({
 }));
 
 const Sentry = require('@sentry/node');
-const { reconciliaCrediteConsumate } = require('../utils/reconcileCredite');
+const { reconciliaCrediteConsumate, reconciliaRezervariFotoExpirate } = require('../utils/reconcileCredite');
 
 describe('Reconciliere credite (H3)', () => {
   test('RPC returneaza randuri orfane => raportate ca procesate', async () => {
@@ -46,6 +46,35 @@ describe('Reconciliere credite (H3)', () => {
     const rezultat = await reconciliaCrediteConsumate({});
     expect(rezultat).toEqual({ procesate: 0, erori: 1 });
     expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  test('reconciliaRezervariFotoExpirate apeleaza reconcile_all_stale_flow_photo_reservations si raporteaza contoarele', async () => {
+    const supabaseAdmin = {
+      rpc: jest.fn(async () => ({
+        data: { ok: true, usersChecked: 2, releasedBeforeInference: 1, markedUnknown: 1 },
+        error: null,
+      })),
+    };
+    const rezultat = await reconciliaRezervariFotoExpirate({ supabaseAdmin, limit: 50 });
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('reconcile_all_stale_flow_photo_reservations', expect.objectContaining({
+      p_limit: 50,
+      p_now: expect.any(String),
+    }));
+    expect(rezultat).toEqual({
+      usersChecked: 2,
+      releasedBeforeInference: 1,
+      markedUnknown: 1,
+      erori: 0,
+    });
+  });
+
+  test('reconciliaRezervariFotoExpirate face fail-loud in Sentry la eroare RPC', async () => {
+    const supabaseAdmin = { rpc: jest.fn(async () => ({ data: null, error: { message: 'boom' } })) };
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const rezultat = await reconciliaRezervariFotoExpirate({ supabaseAdmin });
+    expect(rezultat.erori).toBe(1);
+    expect(Sentry.withScope).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });
 });

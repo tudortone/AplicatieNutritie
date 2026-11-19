@@ -53,4 +53,44 @@ async function reconciliaCrediteConsumate({ supabaseAdmin } = {}) {
   return { procesate: randuri.length, erori: 0 };
 }
 
-module.exports = { reconciliaCrediteConsumate };
+async function reconciliaRezervariFotoExpirate({ supabaseAdmin, limit = 100 } = {}) {
+  if (!supabaseAdmin) {
+    console.warn('[Reconciliere rezervari foto] supabaseAdmin lipsa — tick ratat.');
+    return { usersChecked: 0, releasedBeforeInference: 0, markedUnknown: 0, erori: 1 };
+  }
+
+  inregistreazaUtilizareAdmin();
+
+  const { data, error } = await supabaseAdmin.rpc('reconcile_all_stale_flow_photo_reservations', {
+    p_limit: limit,
+    p_now: new Date().toISOString(),
+  });
+  if (error) {
+    console.error('[Reconciliere rezervari foto]', rezumatEroareSigur(error, {
+      operation: 'reconcile_photo_reservations',
+      provider: 'supabase',
+    }));
+    try {
+      Sentry.withScope((scope) => {
+        scope.setLevel('error');
+        scope.setTag('reconcile.photo_reservations.failed', 'true');
+        Sentry.captureException(error);
+      });
+    } catch {
+      // Sentry indisponibil — eroarea e deja logată mai sus
+    }
+    return { usersChecked: 0, releasedBeforeInference: 0, markedUnknown: 0, erori: 1 };
+  }
+
+  const usersChecked = Number(data?.usersChecked) || 0;
+  const releasedBeforeInference = Number(data?.releasedBeforeInference) || 0;
+  const markedUnknown = Number(data?.markedUnknown) || 0;
+  if (releasedBeforeInference > 0 || markedUnknown > 0) {
+    console.log(
+      `[Reconciliere rezervari foto] users=${usersChecked} released=${releasedBeforeInference} markedUnknown=${markedUnknown}.`,
+    );
+  }
+  return { usersChecked, releasedBeforeInference, markedUnknown, erori: 0 };
+}
+
+module.exports = { reconciliaCrediteConsumate, reconciliaRezervariFotoExpirate };

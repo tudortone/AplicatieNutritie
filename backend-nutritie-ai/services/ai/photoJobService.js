@@ -117,9 +117,30 @@ function dispatchBackgroundWorker(runBackgroundWorker, triggerPayload, jobId, lo
   });
 }
 
-function createPhotoJobService({ repo, flowCredits, tasks, billing, runBackgroundWorker = null, logger = console } = {}) {
+function createPhotoJobService({
+  repo,
+  flowCredits,
+  tasks,
+  billing,
+  triggerEnabled = true,
+  runBackgroundWorker = null,
+  logger = console,
+} = {}) {
   if (!repo || !flowCredits || !tasks || !billing) {
     throw new TypeError('Photo job dependencies are required.');
+  }
+
+  async function dispatchPhotoExecution(triggerPayload, jobId, idempotencyKey) {
+    if (triggerEnabled) {
+      const handle = await triggerIdempotent(tasks, triggerPayload, idempotencyKey);
+      await repo.attachTriggerRun({ jobId, triggerRunId: handle.id });
+      return handle.id;
+    }
+    if (typeof runBackgroundWorker !== 'function') {
+      throw new PhotoJobError('TRIGGER_DISPATCH_UNKNOWN');
+    }
+    dispatchBackgroundWorker(runBackgroundWorker, triggerPayload, jobId, logger);
+    return null;
   }
 
   return Object.freeze({
@@ -175,10 +196,8 @@ function createPhotoJobService({ repo, flowCredits, tasks, billing, runBackgroun
           reservationId: existingJob.creditReservationId,
         };
         try {
-          const handle = await triggerIdempotent(tasks, triggerPayload, idempotencyKey);
-          await repo.attachTriggerRun({ jobId: existingJob.id, triggerRunId: handle.id });
-          dispatchBackgroundWorker(runBackgroundWorker, triggerPayload, existingJob.id, logger);
-          return Object.freeze({ ...replay, triggerRunId: handle.id });
+          const triggerRunId = await dispatchPhotoExecution(triggerPayload, existingJob.id, idempotencyKey);
+          return Object.freeze({ ...replay, ...(triggerRunId ? { triggerRunId } : {}) });
         } catch {
           throw new PhotoJobError('TRIGGER_DISPATCH_UNKNOWN');
         }
@@ -246,11 +265,9 @@ function createPhotoJobService({ repo, flowCredits, tasks, billing, runBackgroun
           limba: input.language || 'ro',
           reservationId,
         };
-        const handle = await triggerIdempotent(tasks, triggerPayload, idempotencyKey);
-        await repo.attachTriggerRun({ jobId: job.id, triggerRunId: handle.id });
-        dispatchBackgroundWorker(runBackgroundWorker, triggerPayload, job.id, logger);
+        const triggerRunId = await dispatchPhotoExecution(triggerPayload, job.id, idempotencyKey);
         inregistreazaOperational('photo.queued');
-        return Object.freeze({ ...job, triggerRunId: handle.id, replay: false });
+        return Object.freeze({ ...job, ...(triggerRunId ? { triggerRunId } : {}), replay: false });
       } catch (error) {
         if (job?.id) {
           // Keep the durable queued job and reservation; Trigger acceptance may be ambiguous.
@@ -285,10 +302,14 @@ function createPhotoJobService({ repo, flowCredits, tasks, billing, runBackgroun
       return owned;
     },
 
-    getActive({ userId, dataContext } = {}) {
+    async getActive({ userId, dataContext } = {}) {
+      const validUserId = requireString(userId, 'INVALID_USER', 128);
+      if (typeof flowCredits.reconcileStalePhotoReservations === 'function') {
+        await flowCredits.reconcileStalePhotoReservations({ userId: validUserId }).catch(() => {});
+      }
       return repo.getActiveOwned({
         ctx: dataContext,
-        userId: requireString(userId, 'INVALID_USER', 128),
+        userId: validUserId,
       });
     },
   });
