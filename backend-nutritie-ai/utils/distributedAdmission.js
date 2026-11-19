@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { creeazaClientRedis } = require('./storePartajat');
+const { creeazaClientRedis, cuTimeoutRedis } = require('./storePartajat');
 
 const ACQUIRE_SCRIPT = `
 redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
@@ -88,7 +88,7 @@ function createDistributedAdmission({
       if (!client.isReady) return denied('unavailable');
 
       try {
-        const result = Number(await client.eval(ACQUIRE_SCRIPT, {
+        const result = Number(await cuTimeoutRedis(client.eval(ACQUIRE_SCRIPT, {
           keys: [globalKey, userKey],
           arguments: [
             String(timestamp),
@@ -97,7 +97,7 @@ function createDistributedAdmission({
             String(leaseTtl),
             String(timestamp + leaseTtl),
           ],
-        }));
+        })));
         if (result === 1) return denied('user');
         if (result === 2) return denied('global');
         if (result !== 0) return denied('unavailable');
@@ -106,10 +106,10 @@ function createDistributedAdmission({
           async release() {
             if (!client.isReady) return false;
             try {
-              return Number(await client.eval(RELEASE_SCRIPT, {
+              return Number(await cuTimeoutRedis(client.eval(RELEASE_SCRIPT, {
                 keys: [globalKey, userKey],
                 arguments: [token],
-              })) === 1;
+              }))) === 1;
             } catch {
               return false;
             }

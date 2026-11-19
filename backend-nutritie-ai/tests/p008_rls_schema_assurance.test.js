@@ -224,7 +224,8 @@ describe('P0-08 — schema REALA respecta invariantii de securitate', () => {
     ]);
     const faraArgumenteIdentitate = clientCallable.find((f) => f.nume === 'public.sincronizeaza_gamificare_sigur');
     const feedbackSubmit = clientCallable.find((f) => f.nume === 'public.submit_user_feedback');
-    expect(faraArgumenteIdentitate.argumente.trim()).toBe('');
+    expect(faraArgumenteIdentitate.argumente).toMatch(/^\s*(p_timezone\s+text(?:\s+default\s+'[^']+')?)?\s*$/i);
+    expect(faraArgumenteIdentitate.argumente).not.toMatch(/user_id|email|owner/i);
     expect(feedbackSubmit.argumente).toMatch(/p_message\s+text/i);
     expect(feedbackSubmit.argumente).not.toMatch(/user_id|email|owner/i);
   });

@@ -6,7 +6,12 @@ const fs = require('fs');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Sentry = require('@sentry/node');
 
-const { callWithTimeout, callWithSoftTimeout } = require('../utils/httpTimeout');
+const {
+  callWithTimeout,
+  ClientAbortError,
+  esteAnulatDeClient,
+  creeazaDeadlineCerere,
+} = require('../utils/httpTimeout');
 const { parseJsonFromLlm } = require('../utils/llmJson');
 const { inregistreazaAi, inregistreazaOperational } = require('../utils/metrics');
 const { curataMinim, detectPromptInjection, citesteQuery } = require('../utils/sanitize');
@@ -149,6 +154,7 @@ function createAiRouter({
   serviciuChat,
   semaforAi,
   chatAdmission = null,
+  aiAdmission = null,
   idempotencyCritic = (_req, _res, next) => next(),
   // M-05: clientul admin (service_role) se injecteaza din server.js, creat cu
   // fetch + timeout de 10s. Inainte se construia aici un client duplicat fara
@@ -420,12 +426,8 @@ function createAiRouter({
       try {
         handle = await tasks.trigger('analiza-mancare-ai', triggerPayload, triggerOptions);
       } catch {
-        try {
-          handle = await tasks.trigger('analiza-mancare-ai', triggerPayload, triggerOptions);
-        } catch {
-          await supabaseAdmin.from('ai_jobs').update({ error_code: 'TRIGGER_DISPATCH_UNKNOWN' }).eq('id', jobId);
-          return sendPhotoAdmissionError(res, 'TRIGGER_DISPATCH_UNKNOWN');
-        }
+        await supabaseAdmin.from('ai_jobs').update({ error_code: 'TRIGGER_DISPATCH_UNKNOWN' }).eq('id', jobId);
+        return sendPhotoAdmissionError(res, 'TRIGGER_DISPATCH_UNKNOWN');
       }
 
       await supabaseAdmin.from('ai_jobs').update({ trigger_run_id: handle.id }).eq('id', jobId);
@@ -525,6 +527,7 @@ function createAiRouter({
       let fileBuffer = Buffer.isBuffer(req.fileBuffer)
         ? req.fileBuffer
         : await fs.promises.readFile(req.file.path);
+      req.fileBuffer = null;
       const imageMime = serviciuVision.detectImageMime(fileBuffer);
       if (!imageMime) {
         return res.status(400).json({ eroare: 'Tip fișier nepermis. Doar imagini JPEG/PNG/WEBP sunt acceptate.' });
@@ -630,7 +633,7 @@ function createAiRouter({
         if (errSemafor?.cod === 'AI_SUPRAINCARCAT') {
           return res.status(503).json({ eroare: errSemafor.message });
         }
-        if (errSemafor?.cod === 'REQUEST_ABORTED') {
+        if (errSemafor?.cod === 'REQUEST_ABORTED' || esteAnulatDeClient(errSemafor, controllerAbord.signal)) {
           return res.status(499).end();
         }
         if (errSemafor?.status === 400) {
@@ -733,6 +736,7 @@ function createAiRouter({
       console.error('[AI route]', rezumatEroareSigur(error, { operation: 'photo_analysis' }));
       return res.status(500).json({ eroare: 'Eroare la analiza imaginii cu AI.' });
     } finally {
+      req.fileBuffer = null;
       if (logicalInFlightKey) operatiiFotoInCurs.delete(logicalInFlightKey);
       if (userInFlightLocked && req.user?.id) utilizatoriFotoSincronInCurs.delete(req.user.id);
       if (typeof req._curataFisierMultipart === 'function') {
@@ -767,6 +771,28 @@ function createAiRouter({
     handleAnalizaFoto,
   );
 
+  const dobandesteAdmisieAi = async (req, res, rutaMetric) => {
+    if (!aiAdmission) return { ok: true, release: async () => true };
+    const admission = await aiAdmission.acquire(req.user?.id);
+    if (!admission.ok) {
+      inregistreazaOperational(`ai.rejected.${rutaMetric}.${admission.reason}`);
+      res.setHeader('Retry-After', String(admission.retryAfterSeconds || 3));
+      if (admission.reason === 'unavailable') {
+        res.status(503).json({ cod: 'AI_ADMISSION_UNAVAILABLE', eroare: 'Serviciul AI este temporar indisponibil.' });
+        return null;
+      }
+      res.status(429).json({
+        cod: admission.reason === 'user' ? 'AI_IN_PROGRESS' : 'AI_CAPACITY_REACHED',
+        eroare: admission.reason === 'user'
+          ? 'Ai deja o cerere AI în curs. Așteaptă finalizarea ei.'
+          : 'Serviciul AI este foarte solicitat. Încearcă din nou în câteva momente.',
+      });
+      return null;
+    }
+    inregistreazaOperational(`ai.active.${rutaMetric}`);
+    return admission;
+  };
+
   // ==========================================
   // RUTA 2: CHAT CONVERSATIONAL (GROQ / LLAMA 3.3)
   // ==========================================
@@ -788,9 +814,6 @@ function createAiRouter({
       });
     }
     inregistreazaOperational('chat.active');
-    // M1: propagăm AbortSignal-ul pe deconectarea clientului în tot fluxul chat
-    // (ruleazaChat → Groq fetch). Fără asta, un client deconectat lăsa generarea
-    // să continue 35s și să fie facturată degeaba — același pattern ca vision.
     const controllerAbord = new AbortController();
     const peDeconectare = () => {
       if (res.writableEnded) return;
@@ -800,6 +823,9 @@ function createAiRouter({
     try {
       return res.json(await serviciuChat.ruleazaChat(req.body, controllerAbord.signal));
     } catch (err) {
+      if (esteAnulatDeClient(err, controllerAbord.signal)) {
+        return res.writableEnded ? undefined : res.status(499).end();
+      }
       if (err instanceof EroareAiClient) return res.status(err.status).json({ raspuns: err.mesaj });
       console.error('[AI route]', rezumatEroareSigur(err, { operation: 'chat_completion' }));
       const limbaChat = String(req.body?.limba || 'ro').toLowerCase();
@@ -822,8 +848,8 @@ function createAiRouter({
   // RUTA DEDICATA: LOGARE MASA DIN CHAT (JSON STRICT MEAL_PROPOSAL)
   // ==========================================
   const handleLogFoodChat = async (req, res) => {
-    // M1: abortează fetch-ul Groq dacă clientul se deconectează (același pattern ca
-    // vision) — altfel generarea continuă și e facturată degeaba.
+    const admission = await dobandesteAdmisieAi(req, res, 'log_food');
+    if (!admission) return undefined;
     const controllerAbord = new AbortController();
     const peDeconectare = () => {
       if (res.writableEnded) return;
@@ -833,6 +859,9 @@ function createAiRouter({
     try {
       return res.json(await serviciuChat.logFoodDinChat(req.body, controllerAbord.signal));
     } catch (err) {
+      if (esteAnulatDeClient(err, controllerAbord.signal)) {
+        return res.writableEnded ? undefined : res.status(499).end();
+      }
       if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
       console.error('[AI route]', rezumatEroareSigur(err, { operation: 'log_food_from_chat' }));
       const limbaLog = String(req.body?.limba || 'ro').toLowerCase();
@@ -847,6 +876,7 @@ function createAiRouter({
       return res.status(500).json({ eroare: eroareMsg });
     } finally {
       res.removeListener('close', peDeconectare);
+      await admission.release();
     }
   };
 
@@ -858,7 +888,8 @@ function createAiRouter({
   // RUTA: ESTIMARE RAPIDA TEXT ALIMENT (GROQ/LLM)
   // ==========================================
   router.post('/estimeaza-mancare-text', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, async (req, res) => {
-    // M1: abortează fetch-ul Groq la deconectarea clientului (pattern comun vision).
+    const admission = await dobandesteAdmisieAi(req, res, 'estimate_text');
+    if (!admission) return undefined;
     const controllerAbord = new AbortController();
     const peDeconectare = () => {
       if (res.writableEnded) return;
@@ -868,11 +899,15 @@ function createAiRouter({
     try {
       return res.json(await serviciuChat.estimeazaMancareText(req.body, controllerAbord.signal));
     } catch (err) {
+      if (esteAnulatDeClient(err, controllerAbord.signal)) {
+        return res.writableEnded ? undefined : res.status(499).end();
+      }
       if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
       console.error('[AI route]', rezumatEroareSigur(err, { operation: 'estimate_food_text' }));
       return res.status(500).json({ eroare: 'Nu s-a putut estima alimentul cu AI.' });
     } finally {
       res.removeListener('close', peDeconectare);
+      await admission.release();
     }
   });
 
@@ -880,7 +915,8 @@ function createAiRouter({
   // RUTA: PROFIL NUTRITIV PER 100g (GROQ/LLM)
   // ==========================================
   router.post('/profil-nutritiv', requireAuth, aiLimiter, idempotencyCritic, checkAiUsageQuota, async (req, res) => {
-    // M1: abortează fetch-ul Groq la deconectarea clientului (pattern comun vision).
+    const admission = await dobandesteAdmisieAi(req, res, 'nutrition_profile');
+    if (!admission) return undefined;
     const controllerAbord = new AbortController();
     const peDeconectare = () => {
       if (res.writableEnded) return;
@@ -890,11 +926,15 @@ function createAiRouter({
     try {
       return res.json(await serviciuChat.profilNutritiv(req.body, controllerAbord.signal));
     } catch (err) {
+      if (esteAnulatDeClient(err, controllerAbord.signal)) {
+        return res.writableEnded ? undefined : res.status(499).end();
+      }
       if (err instanceof EroareAiClient) return res.status(err.status).json({ eroare: err.mesaj });
       console.error('[AI route]', rezumatEroareSigur(err, { operation: 'nutrition_profile' }));
       return res.status(500).json({ eroare: 'Nu s-a putut genera profilul nutritiv cu AI.' });
     } finally {
       res.removeListener('close', peDeconectare);
+      await admission.release();
     }
   });
 
@@ -902,10 +942,8 @@ function createAiRouter({
   // RUTA 1.3: CORECTARE SI COMBINARE / VISION FALLBACK
   // ==========================================
   const handleVisionFallbackOrCorrection = async (req, res) => {
-    // M1: abortează fetch-urile Groq/OpenAI din fallback la deconectarea clientului
-    // (același semnal de anulare ca analiza foto, S4-04). Gemini folosește
-    // callWithSoftTimeout, care nu acceptă AbortSignal, deci verificăm manual
-    // signal.aborted înainte de fiecare apel ca să nu pornim generare inutilă.
+    const admission = await dobandesteAdmisieAi(req, res, 'vision_fallback');
+    if (!admission) return undefined;
     const controllerAbord = new AbortController();
     const peDeconectare = () => {
       if (res.writableEnded) return;
@@ -970,42 +1008,59 @@ Returneaza DOAR JSON valid exact in formatul:
 }
 Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid.`;
 
-      const corpText = (model) => ({
+      const corpText = (model, { isGroq = false } = {}) => ({
         model,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.15,
+        max_tokens: 1200,
+        ...(isGroq ? { reasoning_effort: 'low' } : {}),
         response_format: { type: 'json_object' },
       });
+
+      const deadline = creeazaDeadlineCerere(50_000, controllerAbord.signal);
+      const TIMEOUT_INCERCARE_MS = 15_000;
+      const MAX_INCERCARI = 4;
+      let apeluri = 0;
+      const poateIncerca = () => {
+        if (deadline.esteAnulatDeClient()) throw new ClientAbortError();
+        if (deadline.esteExpirat() || deadline.timpRamasMs() <= 0 || apeluri >= MAX_INCERCARI) return false;
+        apeluri += 1;
+        return true;
+      };
 
       let content = null;
       let lastErr = null;
 
       const groqTextModels = config?.ai?.groqTextModels || ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'];
-      for (const key of serviciuVision.getApiKeysList('GROQ_API_KEY')) {
+      groqLoop: for (const key of serviciuVision.getApiKeysList('GROQ_API_KEY')) {
         for (const modelName of groqTextModels) {
+          if (!poateIncerca()) break groqLoop;
           try {
             const response = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
               method: 'POST',
               headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify(corpText(modelName)),
+              body: JSON.stringify(corpText(modelName, { isGroq: true })),
               signal,
-            }), 30000, controllerAbord.signal);
+            }), Math.min(TIMEOUT_INCERCARE_MS, deadline.timpRamasMs()), deadline.signal);
 
             if (response.ok) {
               const data = await response.json();
               content = data.choices?.[0]?.message?.content;
               if (content) {
                 inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'vision-fallback', usage: data.usage, ok: true });
-                break;
+                break groqLoop;
               }
               inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'vision-fallback', ok: false });
             } else {
               inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'vision-fallback', ok: false });
               lastErr = new Error(`Groq API (${response.status}) pe modelul ${modelName}`);
               console.warn(`Groq vision-fallback esuat (${response.status}) pe modelul ${modelName}`);
+              if (response.status === 429) break groqLoop;
+              if (response.status === 401 || response.status === 403) break;
             }
           } catch (e) {
             inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'vision-fallback', ok: false });
+            if (esteAnulatDeClient(e, controllerAbord.signal)) throw new ClientAbortError();
             lastErr = e;
             console.warn('[AI provider failure]', rezumatEroareSigur(e, {
               operation: 'vision_fallback',
@@ -1013,34 +1068,35 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
             }));
           }
         }
-        if (content) break;
       }
 
       if (!content) {
-        for (const key of serviciuVision.getApiKeysList('OPENAI_API_KEY')) {
+        openaiLoop: for (const key of serviciuVision.getApiKeysList('OPENAI_API_KEY')) {
+          if (!poateIncerca()) break openaiLoop;
           try {
             const response = await callWithTimeout((signal) => fetch('https://api.openai.com/v1/chat/completions', {
               method: 'POST',
               headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(corpText('gpt-4o-mini')),
               signal,
-            }), 30000, controllerAbord.signal);
+            }), Math.min(TIMEOUT_INCERCARE_MS, deadline.timpRamasMs()), deadline.signal);
 
             if (response.ok) {
               const data = await response.json();
               content = data.choices?.[0]?.message?.content;
               if (content) {
                 inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'vision-fallback', usage: data.usage, ok: true });
-                break;
+                break openaiLoop;
               }
               inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'vision-fallback', ok: false });
             } else {
               inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'vision-fallback', ok: false });
               lastErr = new Error(`OpenAI API (${response.status})`);
+              if (response.status === 429) break openaiLoop;
             }
           } catch (e) {
-            // Inainte acest catch era gol: erorile OpenAI dispareau fara urma.
             inregistreazaAi({ provider: 'openai', model: 'gpt-4o-mini', ruta: 'vision-fallback', ok: false });
+            if (esteAnulatDeClient(e, controllerAbord.signal)) throw new ClientAbortError();
             lastErr = e;
             console.warn('[AI provider failure]', rezumatEroareSigur(e, {
               operation: 'vision_fallback',
@@ -1052,41 +1108,42 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
 
       if (!content) {
         const modelsToTry = serviciuVision.getGeminiModelsList();
-        for (const key of serviciuVision.getApiKeysList('GEMINI_API_KEY')) {
+        geminiLoop: for (const key of serviciuVision.getApiKeysList('GEMINI_API_KEY')) {
           const client = new GoogleGenerativeAI(key);
           for (const modelName of modelsToTry) {
-            // M1: callWithSoftTimeout nu acceptă AbortSignal — verificăm manual că
-            // clientul nu s-a deconectat între timp, ca să nu pornim o generare nouă.
-            if (controllerAbord.signal.aborted) break;
+            if (!poateIncerca()) break geminiLoop;
             try {
-              const result = await callWithSoftTimeout(
-                client.getGenerativeModel({ model: modelName }).generateContent({
+              const result = await callWithTimeout(
+                (signal) => client.getGenerativeModel({ model: modelName }).generateContent({
                   contents: [{ role: 'user', parts: [{ text: prompt }] }],
                   generationConfig: {
                     responseMimeType: 'application/json',
+                    maxOutputTokens: 1200,
                     ...(String(modelName).includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
                   },
-                }),
-                30000,
+                }, { signal }),
+                Math.min(TIMEOUT_INCERCARE_MS, deadline.timpRamasMs()),
+                deadline.signal,
               );
               if (result?.response) {
                 content = result.response.text();
                 if (content) {
                   inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'vision-fallback', usage: result.response.usageMetadata, ok: true });
-                  break;
+                  break geminiLoop;
                 }
                 inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'vision-fallback', ok: false });
               }
             } catch (e) {
               inregistreazaAi({ provider: 'gemini', model: modelName, ruta: 'vision-fallback', ok: false });
+              if (esteAnulatDeClient(e, controllerAbord.signal)) throw new ClientAbortError();
               lastErr = e;
               console.warn('[AI provider failure]', rezumatEroareSigur(e, {
                 operation: 'vision_fallback',
                 provider: 'gemini',
               }));
+              if (String(e?.message || '').includes('429')) break geminiLoop;
             }
           }
-          if (content) break;
         }
       }
 
@@ -1121,12 +1178,16 @@ Nu adauga markdown, explicatii sau text aditional in afara obiectului JSON valid
         totals.grasimi += Math.round((item.grasimi_per_100g * gr) / 100);
       });
 
-      res.json({ action_taken: actionTaken, ingredients, new_totals: totals });
+      return res.json({ action_taken: actionTaken, ingredients, new_totals: totals });
     } catch (err) {
+      if (esteAnulatDeClient(err, controllerAbord.signal)) {
+        return res.writableEnded ? undefined : res.status(499).end();
+      }
       console.error('[AI route]', rezumatEroareSigur(err, { operation: 'vision_fallback' }));
-      res.status(500).json({ eroare: 'Nu s-a putut procesa corectia cu AI.' });
+      return res.status(500).json({ eroare: 'Nu s-a putut procesa corectia cu AI.' });
     } finally {
       res.removeListener('close', peDeconectare);
+      await admission.release();
     }
   };
 

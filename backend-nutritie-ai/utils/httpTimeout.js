@@ -23,6 +23,42 @@ class TimeoutAiError extends Error {
 	}
 }
 
+class ClientAbortError extends Error {
+	constructor() {
+		super('Cererea AI a fost anulata de client.');
+		this.name = 'AbortError';
+		this.cod = 'CLIENT_ABORTED';
+	}
+}
+
+function esteAnulatDeClient(eroare, signalExtern) {
+	return Boolean(
+		signalExtern?.aborted
+		|| eroare?.cod === 'CLIENT_ABORTED'
+		|| eroare?.cod === 'REQUEST_ABORTED'
+		|| (eroare?.name === 'AbortError' && eroare?.cod !== 'AI_TIMEOUT'),
+	);
+}
+
+/**
+ * Construieste un deadline global per cerere AI, combinat optional cu
+ * `signalExtern` (deconectarea clientului). Expune `timpRamasMs()` pentru a
+ * margini fiecare incercare individuala la bugetul ramas.
+ */
+function creeazaDeadlineCerere(ms, signalExtern) {
+	const deadlineMs = Math.max(1, Number(ms) || 30000);
+	const expiraLa = Date.now() + deadlineMs;
+	const semnalTimeout = AbortSignal.timeout(deadlineMs);
+	const signal = signalExtern ? AbortSignal.any([semnalTimeout, signalExtern]) : semnalTimeout;
+	return {
+		signal,
+		expiraLa,
+		timpRamasMs: () => Math.max(0, expiraLa - Date.now()),
+		esteExpirat: () => semnalTimeout.aborted || Date.now() >= expiraLa,
+		esteAnulatDeClient: () => Boolean(signalExtern?.aborted),
+	};
+}
+
 /**
  * Ruleaza o cerere cu deadline strict, optional anulabila si din exterior.
  *
@@ -41,12 +77,25 @@ async function callWithTimeout(factory, ms = 30000, signalExtern) {
 		);
 	}
 
-	const signal = signalExtern ? AbortSignal.any([AbortSignal.timeout(ms), signalExtern]) : AbortSignal.timeout(ms);
+	if (signalExtern?.aborted) {
+		throw new ClientAbortError();
+	}
+	if (!Number.isFinite(ms) || ms <= 0) {
+		throw new TimeoutAiError(ms);
+	}
+
+	const signalTimeout = AbortSignal.timeout(ms);
+	const signal = signalExtern ? AbortSignal.any([signalTimeout, signalExtern]) : signalTimeout;
 
 	try {
 		return await factory(signal);
 	} catch (eroare) {
-		if (eroare?.name === 'TimeoutError' || eroare?.name === 'AbortError') {
+		// Pastram AbortError distinct cand clientul s-a deconectat, ca buclele
+		// din cascada/chat sa iasa imediat fara sa incerce alti furnizori.
+		if (signalExtern?.aborted) {
+			throw new ClientAbortError();
+		}
+		if (signalTimeout.aborted || eroare?.name === 'TimeoutError' || eroare?.name === 'AbortError') {
 			throw new TimeoutAiError(ms);
 		}
 		throw eroare;
@@ -79,4 +128,11 @@ async function callWithSoftTimeout(promise, ms = 30000) {
 	}
 }
 
-module.exports = { TimeoutAiError, callWithTimeout, callWithSoftTimeout };
+module.exports = {
+	TimeoutAiError,
+	ClientAbortError,
+	esteAnulatDeClient,
+	creeazaDeadlineCerere,
+	callWithTimeout,
+	callWithSoftTimeout,
+};

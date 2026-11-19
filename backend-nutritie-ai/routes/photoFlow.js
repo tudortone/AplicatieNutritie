@@ -3,8 +3,45 @@
 const crypto = require('crypto');
 const express = require('express');
 const { construiesteGazdePermise, creeazaValideazaUrlImagine } = require('../utils/valideazaUrlImagine');
+const { callWithSoftTimeout } = require('../utils/httpTimeout');
 const { PhotoJobError } = require('../services/ai/photoJobService');
 const { FlowCreditsError } = require('../services/monetization/flowCreditsService');
+
+const IMAGEKIT_API = 'https://api.imagekit.io/v1';
+const IMAGEKIT_TIMEOUT_MS = 8000;
+
+function imagekitAuthHeader(privateKey) {
+  return `Basic ${Buffer.from(`${privateKey}:`, 'utf8').toString('base64')}`;
+}
+
+async function fetchImagekitFileDetails(fileId, privateKey) {
+  const response = await fetch(`${IMAGEKIT_API}/files/${encodeURIComponent(fileId)}/details`, {
+    method: 'GET',
+    headers: { Authorization: imagekitAuthHeader(privateKey) },
+    signal: AbortSignal.timeout(IMAGEKIT_TIMEOUT_MS),
+    redirect: 'error',
+  });
+  if (!response.ok) {
+    const err = new Error(`IMAGEKIT_DETAILS_${response.status}`);
+    err.status = response.status;
+    throw err;
+  }
+  return response.json();
+}
+
+async function deleteImagekitFile(fileId, privateKey) {
+  const response = await fetch(`${IMAGEKIT_API}/files/${encodeURIComponent(fileId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: imagekitAuthHeader(privateKey) },
+    signal: AbortSignal.timeout(IMAGEKIT_TIMEOUT_MS),
+    redirect: 'error',
+  });
+  if (!response.ok && response.status !== 404) {
+    const err = new Error(`IMAGEKIT_DELETE_${response.status}`);
+    err.status = response.status;
+    throw err;
+  }
+}
 
 function text(value, fallback, max) {
   if (typeof value !== 'string') return fallback;
@@ -127,16 +164,24 @@ function createPhotoFlowRouter({
     if (!fileId || !/^[a-zA-Z0-9_-]+$/.test(fileId)) {
       return res.status(400).json({ eroare: 'Referință media invalidă.', cod: 'INVALID_FILE_ID' });
     }
-    if (!imagekit?.getFileDetails || !imagekit?.deleteFile) {
+    const imagekitPrivateKey = config?.imagekit?.privateKey;
+    const areSdkInjectat = Boolean(imagekit?.getFileDetails && imagekit?.deleteFile);
+    if (!imagekitPrivateKey && !areSdkInjectat) {
       return res.status(503).json({ eroare: 'Curățarea media este indisponibilă.', cod: 'MEDIA_CLEANUP_DISABLED' });
     }
     try {
-      const details = await imagekit.getFileDetails(fileId);
+      const details = imagekitPrivateKey
+        ? await fetchImagekitFileDetails(fileId, imagekitPrivateKey)
+        : await callWithSoftTimeout(imagekit.getFileDetails(fileId), IMAGEKIT_TIMEOUT_MS);
       const path = typeof details?.filePath === 'string' ? details.filePath : '';
       if (!path.startsWith(`/mancare/${req.user.id}/`)) {
         return res.status(403).json({ eroare: 'Assetul nu aparține contului curent.', cod: 'MEDIA_NOT_OWNED' });
       }
-      await imagekit.deleteFile(fileId);
+      if (imagekitPrivateKey) {
+        await deleteImagekitFile(fileId, imagekitPrivateKey);
+      } else {
+        await callWithSoftTimeout(imagekit.deleteFile(fileId), IMAGEKIT_TIMEOUT_MS);
+      }
       return res.status(204).end();
     } catch {
       return res.status(503).json({ eroare: 'Assetul nu a putut fi curățat.', cod: 'MEDIA_CLEANUP_FAILED' });

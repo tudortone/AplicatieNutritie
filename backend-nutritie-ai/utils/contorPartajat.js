@@ -8,7 +8,7 @@
 // N-06: mapa de mesaje e plafonată (PLAFON_AVERTISMENTE + evicție FIFO), ca
 // mesajele unice (nelimitate ca formă) să nu crească fără limită — implementarea
 // se află în storePartajat.js.
-const { creeazaClientRedis, codEroare, logWarnThrottled: avertizeaza } = require('./storePartajat');
+const { creeazaClientRedis, cuTimeoutRedis, codEroare, logWarnThrottled: avertizeaza } = require('./storePartajat');
 
 const PLAFON_INTRARI = 5000;
 
@@ -127,7 +127,7 @@ function creeazaContorPartajat({ url, prefix = 'nutri:contor', plafon, fallbackL
       const finala = cheieFinala(cheie);
       if (!client?.isReady) return fallbackLocal ? local.get(finala) : Number.NaN;
       try {
-        const raw = await client.get(finala);
+        const raw = await cuTimeoutRedis(client.get(finala));
         if (raw === null || raw === undefined) return 0;
         const parsed = Number(raw);
         return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
@@ -142,10 +142,10 @@ function creeazaContorPartajat({ url, prefix = 'nutri:contor', plafon, fallbackL
       if (!client?.isReady) return fallbackLocal ? local.increment(finala, ttlMs) : Number.NaN;
 
       try {
-        return await client.eval(INCR_CU_TTL_LUA, {
+        return await cuTimeoutRedis(client.eval(INCR_CU_TTL_LUA, {
           keys: [finala],
           arguments: [String(ttlMs || 0)],
-        });
+        }));
       } catch (err) {
         avertizeaza(`[Contor] Redis indisponibil (${codEroare(err)}); ${fallbackLocal ? 'folosesc rezerva locala.' : 'cererea necesita contorul partajat.'}`);
         return fallbackLocal ? local.increment(finala, ttlMs) : Number.NaN;
@@ -156,7 +156,7 @@ function creeazaContorPartajat({ url, prefix = 'nutri:contor', plafon, fallbackL
       const finala = cheieFinala(cheie);
       if (!client?.isReady) return fallbackLocal ? local.ttl(finala) : Number.NaN;
       try {
-        return await client.ttl(finala);
+        return await cuTimeoutRedis(client.ttl(finala));
       } catch (err) {
         avertizeaza(`[Contor] TTL Redis indisponibil (${codEroare(err)}); ${fallbackLocal ? 'folosesc rezerva locala.' : 'cererea necesita contorul partajat.'}`);
         return fallbackLocal ? local.ttl(finala) : Number.NaN;
@@ -170,10 +170,10 @@ function creeazaContorPartajat({ url, prefix = 'nutri:contor', plafon, fallbackL
       if (!client?.isReady) return fallbackLocal ? local.decrement(finala) : Number.NaN;
 
       try {
-        return await client.eval(DECR_CU_FLOOR_LUA, {
+        return await cuTimeoutRedis(client.eval(DECR_CU_FLOOR_LUA, {
           keys: [finala],
           arguments: [],
-        });
+        }));
       } catch (err) {
         avertizeaza(`[Contor] Redis indisponibil (${codEroare(err)}); ${fallbackLocal ? 'folosesc rezerva locala.' : 'cererea necesita contorul partajat.'}`);
         return fallbackLocal ? local.decrement(finala) : Number.NaN;

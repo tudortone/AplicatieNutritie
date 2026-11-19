@@ -285,7 +285,38 @@ describe('P0-03 — quota branch-local pentru fallback-ul Groq de barcode', () =
     expect(res.body.produs.nume).toBe('Iaurt OFF');
     expect(contor.increment).not.toHaveBeenCalled();
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(global.fetch.mock.calls[0][0]).toBe(`https://world.openfoodfacts.org/api/v3/product/${BARCODE}.json`);
+    expect(global.fetch.mock.calls[0][0]).toBe(
+      `https://world.openfoodfacts.org/api/v3/product/${BARCODE}.json?fields=product_name,product_name_ro,brands,quantity,nutriments,image_front_small_url,image_url`,
+    );
     expect(global.fetch.mock.calls[0][1].headers['User-Agent']).toBe('GetFlow/1.0.0 (https://api.nutriai.ro)');
+  });
+
+  test('OFF 429 sau timeout nu declanseaza fallback Groq si intoarce allowManualEntry', async () => {
+    const fetch429 = jest.fn(async () => ({ ok: false, status: 429, json: async () => ({}) }));
+    global.fetch = fetch429;
+    const { app, contor } = creeazaAplicatie({ rezultatIncrement: 1 });
+
+    const res429 = await request(app)
+      .get(`/produs-barcode/${BARCODE}`)
+      .set('Authorization', 'Bearer free');
+
+    expect(res429.status).toBe(404);
+    expect(res429.body.allowManualEntry).toBe(true);
+    expect(contor.increment).not.toHaveBeenCalled();
+    expect(numaraApeluriGroq(fetch429)).toBe(0);
+
+    const fetchTimeout = jest.fn(async () => {
+      throw new Error('Request timed out');
+    });
+    global.fetch = fetchTimeout;
+
+    const resTimeout = await request(app)
+      .get(`/produs-barcode/${BARCODE}`)
+      .set('Authorization', 'Bearer free');
+
+    expect(resTimeout.status).toBe(404);
+    expect(resTimeout.body.allowManualEntry).toBe(true);
+    expect(contor.increment).not.toHaveBeenCalled();
+    expect(numaraApeluriGroq(fetchTimeout)).toBe(0);
   });
 });

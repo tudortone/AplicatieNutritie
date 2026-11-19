@@ -1,6 +1,18 @@
 'use strict';
 
-const { callWithTimeout, callWithSoftTimeout } = require('../../utils/httpTimeout');
+const {
+  callWithTimeout,
+  ClientAbortError,
+  esteAnulatDeClient,
+  creeazaDeadlineCerere,
+} = require('../../utils/httpTimeout');
+
+const DEADLINE_CHAT_MS = 45_000;
+const DEADLINE_JSON_HELPER_MS = 35_000;
+const TIMEOUT_INCERCARE_CHAT_MS = 15_000;
+const TIMEOUT_INCERCARE_JSON_MS = 12_000;
+const MAX_INCERCARI_CHAT = 4;
+const MAX_INCERCARI_JSON = 3;
 const { inregistreazaAi } = require('../../utils/metrics');
 const { curataMinim, detectPromptInjection } = require('../../utils/sanitize');
 const { construiesteIstoricSigur } = require('../../utils/promptSafety');
@@ -481,6 +493,8 @@ function creeazaServiciuChat({ config, genAI }) {
     }
 
     const isMealLog = REGEX_MEAL_LOG_MULTILINGUAL.test(ultimulMesaj);
+    const deadline = creeazaDeadlineCerere(DEADLINE_CHAT_MS, semnalAnulare);
+    let apeluri = 0;
 
     try {
       const groqKeys = getGroqKeysList();
@@ -492,12 +506,19 @@ function creeazaServiciuChat({ config, genAI }) {
 
       cheiLoop: for (const key of groqKeys) {
         for (const modelName of groqTextModels) {
+          if (deadline.esteAnulatDeClient()) throw new ClientAbortError();
+          const timpRamas = deadline.timpRamasMs();
+          if (deadline.esteExpirat() || timpRamas <= 0 || apeluri >= MAX_INCERCARI_CHAT) {
+            break cheiLoop;
+          }
+          apeluri += 1;
           try {
             const groqBody = {
               model: modelName,
               messages,
               temperature: isMealLog ? 0.2 : 0.7,
-              max_tokens: 2200,
+              max_tokens: isMealLog ? 1200 : 700,
+              reasoning_effort: 'low',
             };
             if (isMealLog) {
               groqBody.response_format = { type: 'json_object' };
@@ -511,12 +532,15 @@ function creeazaServiciuChat({ config, genAI }) {
               },
               body: JSON.stringify(groqBody),
               signal,
-            }), 35000, semnalAnulare);
+            }), Math.min(TIMEOUT_INCERCARE_CHAT_MS, timpRamas), deadline.signal);
 
             if (!response.ok) {
               inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', ok: false });
               ultimulEsecGroq = new Error(`Eroare Groq API (${response.status}) pe modelul ${modelName}`);
-              if (response.status === 401 || response.status === 403 || response.status === 429) {
+              if (response.status === 429) {
+                break cheiLoop;
+              }
+              if (response.status === 401 || response.status === 403) {
                 break; // Incearca urmatoarea cheie Groq
               }
               continue;
@@ -543,6 +567,7 @@ function creeazaServiciuChat({ config, genAI }) {
             return { raspuns: rawContent };
           } catch (err) {
             inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'chat', ok: false });
+            if (esteAnulatDeClient(err, semnalAnulare)) throw new ClientAbortError();
             ultimulEsecGroq = err;
           }
         }
@@ -550,6 +575,7 @@ function creeazaServiciuChat({ config, genAI }) {
 
       throw (ultimulEsecGroq || new Error('Toate cheile si modelele Groq au esuat'));
     } catch (groqError) {
+      if (esteAnulatDeClient(groqError, semnalAnulare)) throw groqError;
       console.warn('[AI provider fallback]', rezumatEroareSigur(groqError, {
         operation: 'chat_completion',
         provider: 'groq',
@@ -562,12 +588,19 @@ function creeazaServiciuChat({ config, genAI }) {
       const geminiPrompt = `${systemPrompt}\n\nIstoricul conversatiei si intrebarea curenta:\n${conversatieFaraSystem}\n\nASSISTANT:`;
 
       for (const modelName of getGeminiModelsList().filter(Boolean)) {
-        if (semnalAnulare?.aborted) break;
+        if (deadline.esteAnulatDeClient()) throw new ClientAbortError();
+        const timpRamas = deadline.timpRamasMs();
+        if (deadline.esteExpirat() || timpRamas <= 0 || apeluri >= MAX_INCERCARI_CHAT) break;
+        apeluri += 1;
         try {
           const model = genAI.getGenerativeModel({ model: modelName });
-          const result = await callWithSoftTimeout(model.generateContent({
+          const result = await callWithTimeout((signal) => model.generateContent({
             contents: [{ role: 'user', parts: [{ text: geminiPrompt }] }],
-          }), 30000);
+            generationConfig: {
+              maxOutputTokens: isMealLog ? 1200 : 700,
+              ...(String(modelName).includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+            },
+          }, { signal }), Math.min(TIMEOUT_INCERCARE_CHAT_MS, timpRamas), deadline.signal);
           const raspunsText = result?.response?.text();
           if (raspunsText) {
             if (isMealLog) {
@@ -581,10 +614,12 @@ function creeazaServiciuChat({ config, genAI }) {
             return { raspuns: raspunsText };
           }
         } catch (gemErr) {
+          if (esteAnulatDeClient(gemErr, semnalAnulare)) throw new ClientAbortError();
           console.warn('[AI provider fallback]', rezumatEroareSigur(gemErr, {
             operation: 'chat_completion',
             provider: 'gemini',
           }));
+          if (String(gemErr?.message || '').includes('429')) break;
         }
       }
       throw groqError;
@@ -676,10 +711,19 @@ RETURNEAZA STRICT UN OBIECT JSON valid:
 
     let parsed = null;
     let ultimulEsec = null;
+    let avutRaspunsProviderOk = false;
+    const deadline = creeazaDeadlineCerere(DEADLINE_JSON_HELPER_MS, semnalAnulare);
+    let apeluri = 0;
 
     if (groqKeys.length > 0) {
       cheiLoop: for (const key of groqKeys) {
         for (const modelName of groqTextModels) {
+          if (deadline.esteAnulatDeClient()) throw new ClientAbortError();
+          const timpRamas = deadline.timpRamasMs();
+          if (deadline.esteExpirat() || timpRamas <= 0 || apeluri >= MAX_INCERCARI_JSON) {
+            break cheiLoop;
+          }
+          apeluri += 1;
           try {
             const response = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
               method: 'POST',
@@ -691,17 +735,20 @@ RETURNEAZA STRICT UN OBIECT JSON valid:
                 model: modelName,
                 messages: [{ role: 'user', content: prompt }],
                 temperature: 0.1,
-                max_tokens: 2200,
+                max_tokens: 1200,
                 response_format: { type: 'json_object' },
                 reasoning_effort: 'low',
               }),
               signal,
-            }), 25000, semnalAnulare);
+            }), Math.min(TIMEOUT_INCERCARE_JSON_MS, timpRamas), deadline.signal);
 
             if (!response.ok) {
               inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
               ultimulEsec = new Error(`Eroare Groq /api/log-food-from-chat (${response.status}) pe modelul ${modelName}`);
-              if (response.status === 401 || response.status === 403 || response.status === 429) {
+              if (response.status === 429) {
+                break cheiLoop;
+              }
+              if (response.status === 401 || response.status === 403) {
                 break; // Incearca urmatoarea cheie Groq
               }
               continue;
@@ -713,6 +760,7 @@ RETURNEAZA STRICT UN OBIECT JSON valid:
               ultimulEsec = new Error('Raspuns gol primit de la AI.');
               continue;
             }
+            avutRaspunsProviderOk = true;
 
             const candidate = parseJsonFromLlm(content, { asteapta: 'obiect' });
             const brute = extrageMeseBruteDinJson(candidate);
@@ -733,6 +781,7 @@ RETURNEAZA STRICT UN OBIECT JSON valid:
             break cheiLoop;
           } catch (err) {
             inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'log-food-from-chat', ok: false });
+            if (esteAnulatDeClient(err, semnalAnulare)) throw new ClientAbortError();
             ultimulEsec = err;
           }
         }
@@ -741,17 +790,25 @@ RETURNEAZA STRICT UN OBIECT JSON valid:
 
     if (!parsed && genAI) {
       for (const modelName of getGeminiModelsList().filter(Boolean)) {
-        if (semnalAnulare?.aborted) break;
+        if (deadline.esteAnulatDeClient()) throw new ClientAbortError();
+        const timpRamas = deadline.timpRamasMs();
+        if (deadline.esteExpirat() || timpRamas <= 0 || apeluri >= MAX_INCERCARI_CHAT) break;
+        apeluri += 1;
         try {
           const model = genAI.getGenerativeModel({
             model: modelName,
-            generationConfig: { responseMimeType: 'application/json' },
+            generationConfig: {
+              responseMimeType: 'application/json',
+              maxOutputTokens: 1200,
+              ...(String(modelName).includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+            },
           });
-          const result = await callWithSoftTimeout(model.generateContent({
+          const result = await callWithTimeout((signal) => model.generateContent({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          }), 25000);
+          }, { signal }), Math.min(TIMEOUT_INCERCARE_JSON_MS, timpRamas), deadline.signal);
           const rawText = result?.response?.text();
           if (rawText) {
+            avutRaspunsProviderOk = true;
             const candidate = parseJsonFromLlm(rawText, { asteapta: 'obiect' });
             const normalizat = normalizeazaRaspunsSetMese(candidate, { defaultMealType: true, cereMacroEditabile: true });
             if (normalizat) {
@@ -761,10 +818,12 @@ RETURNEAZA STRICT UN OBIECT JSON valid:
             }
           }
         } catch (gemErr) {
+          if (esteAnulatDeClient(gemErr, semnalAnulare)) throw new ClientAbortError();
           console.warn('[AI logFoodDinChat fallback]', rezumatEroareSigur(gemErr, {
             operation: 'meal_proposal',
             provider: 'gemini',
           }));
+          if (String(gemErr?.message || '').includes('429')) break;
         }
       }
     }
@@ -772,6 +831,9 @@ RETURNEAZA STRICT UN OBIECT JSON valid:
     if (!parsed) {
       if (groqKeys.length === 0 && !genAI) {
         throw new EroareAiClient(503, 'Serviciul de planificare a mesei nu este disponibil momentan.');
+      }
+      if (avutRaspunsProviderOk) {
+        throw new EroareAiClient(422, 'Nu s-a putut genera MEAL_PROPOSAL pentru textul introdus.');
       }
       throw (ultimulEsec || new Error('Nu s-a putut genera MEAL_PROPOSAL prin modelele disponibile.'));
     }
@@ -803,9 +865,17 @@ RETURNEAZA STRICT UN OBIECT JSON in formatul: {"nume": ${JSON.stringify(curatat)
 
     let parsed = null;
     let ultimulEsec = null;
+    const deadline = creeazaDeadlineCerere(DEADLINE_JSON_HELPER_MS, semnalAnulare);
+    let apeluri = 0;
 
     cheiLoop: for (const key of groqKeys) {
       for (const modelName of groqTextModels) {
+        if (deadline.esteAnulatDeClient()) throw new ClientAbortError();
+        const timpRamas = deadline.timpRamasMs();
+        if (deadline.esteExpirat() || timpRamas <= 0 || apeluri >= MAX_INCERCARI_JSON) {
+          break cheiLoop;
+        }
+        apeluri += 1;
         try {
           const groqResponse = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
@@ -814,15 +884,20 @@ RETURNEAZA STRICT UN OBIECT JSON in formatul: {"nume": ${JSON.stringify(curatat)
               model: modelName,
               messages: [{ role: 'user', content: prompt }],
               temperature: 0.2,
+              max_tokens: 250,
+              reasoning_effort: 'low',
               response_format: { type: 'json_object' },
             }),
             signal,
-          }), 25000, semnalAnulare);
+          }), Math.min(TIMEOUT_INCERCARE_JSON_MS, timpRamas), deadline.signal);
 
           if (!groqResponse.ok) {
             inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'estimeaza-mancare-text', ok: false });
             ultimulEsec = new Error(`Eroare Groq API (${groqResponse.status}) pe modelul ${modelName}`);
-            if (groqResponse.status === 401 || groqResponse.status === 403 || groqResponse.status === 429) {
+            if (groqResponse.status === 429) {
+              break cheiLoop;
+            }
+            if (groqResponse.status === 401 || groqResponse.status === 403) {
               break; // Incearca urmatoarea cheie Groq
             }
             continue;
@@ -847,6 +922,7 @@ RETURNEAZA STRICT UN OBIECT JSON in formatul: {"nume": ${JSON.stringify(curatat)
           break cheiLoop;
         } catch (err) {
           inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'estimeaza-mancare-text', ok: false });
+          if (esteAnulatDeClient(err, semnalAnulare)) throw new ClientAbortError();
           ultimulEsec = err;
         }
       }
@@ -906,9 +982,17 @@ Valorile sunt estimari de referinta (gen USDA). Daca nu esti sigur de un micronu
 
     let parsed = null;
     let ultimulEsec = null;
+    const deadline = creeazaDeadlineCerere(DEADLINE_JSON_HELPER_MS, semnalAnulare);
+    let apeluri = 0;
 
     cheiLoop: for (const key of groqKeys) {
       for (const modelName of groqTextModels) {
+        if (deadline.esteAnulatDeClient()) throw new ClientAbortError();
+        const timpRamas = deadline.timpRamasMs();
+        if (deadline.esteExpirat() || timpRamas <= 0 || apeluri >= MAX_INCERCARI_JSON) {
+          break cheiLoop;
+        }
+        apeluri += 1;
         try {
           const groqResponse = await callWithTimeout((signal) => fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
@@ -917,15 +1001,20 @@ Valorile sunt estimari de referinta (gen USDA). Daca nu esti sigur de un micronu
               model: modelName,
               messages: [{ role: 'user', content: prompt }],
               temperature: 0.2,
+              max_tokens: 900,
+              reasoning_effort: 'low',
               response_format: { type: 'json_object' },
             }),
             signal,
-          }), 25000, semnalAnulare);
+          }), Math.min(TIMEOUT_INCERCARE_JSON_MS, timpRamas), deadline.signal);
 
           if (!groqResponse.ok) {
             inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'profil-nutritiv', ok: false });
             ultimulEsec = new Error(`Eroare Groq API (${groqResponse.status}) pe modelul ${modelName}`);
-            if (groqResponse.status === 401 || groqResponse.status === 403 || groqResponse.status === 429) {
+            if (groqResponse.status === 429) {
+              break cheiLoop;
+            }
+            if (groqResponse.status === 401 || groqResponse.status === 403) {
               break; // Incearca urmatoarea cheie Groq
             }
             continue;
@@ -950,6 +1039,7 @@ Valorile sunt estimari de referinta (gen USDA). Daca nu esti sigur de un micronu
           break cheiLoop;
         } catch (err) {
           inregistreazaAi({ provider: 'groq', model: modelName, ruta: 'profil-nutritiv', ok: false });
+          if (esteAnulatDeClient(err, semnalAnulare)) throw new ClientAbortError();
           ultimulEsec = err;
         }
       }

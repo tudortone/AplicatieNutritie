@@ -69,7 +69,12 @@ const { createGoogleBillingRepo } = require('./repositories/googleBillingRepo');
 const { createFlowCreditsRepo } = require('./repositories/flowCreditsRepo');
 const { createPhotoJobsRepo } = require('./repositories/photoJobsRepo');
 const { createRewardedRepo } = require('./repositories/rewardedRepo');
-const { creeazaStoreRateLimit, creeazaRegistruCheiValori } = require('./utils/storePartajat');
+const {
+  creeazaStoreRateLimit,
+  creeazaRegistruCheiValori,
+  asteaptaConexiuneRedis,
+  MemoryStoreMarginit,
+} = require('./utils/storePartajat');
 const { createDistributedAdmission } = require('./utils/distributedAdmission');
 const { getAiStatistici } = require('./utils/metrics');
 const { sanitizeRequest } = require('./utils/sanitize');
@@ -222,14 +227,28 @@ const playIntegrityGuard = config.playIntegrity.mode === 'off'
   });
 const checkAiUsageQuota = creeazaCheckAiUsageQuota({ supabaseAdmin, billingService: googleBillingService });
 const chatQuota = creeazaServiciuChatQuota({ billingService: googleBillingService });
-// P-012: limitator dedicat webhook-urilor (Clerk/Svix). Se monteaza pe calea
-// webhook-urilor INAINTE de router (si INAINTE de preAuthLimiter, care altfel nu
-// se aplica), ca burst-urile legitime Clerk sa treaca dar traficul evadat sa fie
-// blocat (600 req/min/IP, MemoryStore per proces).
+const storePartajat = creeazaStoreRateLimit({ url: config.redisUrl });
+const {
+  preAuthLimiter,
+  generalLimiter,
+  statusLimiter,
+  aiLimiter,
+  billingLimiter,
+  feedbackLimiter,
+  gdprExportLimiter,
+} = creeazaLimitatoare({
+  store: storePartajat?.store,
+  avertizeazaFaraStore: config.esteProductie,
+});
+
+// P-012: limitator dedicat webhook-urilor (Clerk/Svix/Google Play/AdMob SSV).
+// Montat INAINTE de router (si INAINTE de body-parse), acum pe store-ul partajat
+// Redis (cu fallback MemoryStoreMarginit max 10k chei).
 const webhooksLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 600,
   keyGenerator: ipFallbackKey,
+  store: storePartajat ? storePartajat.store({ prefix: 'rl:webhooks:' }) : new MemoryStoreMarginit(),
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS',
@@ -289,12 +308,6 @@ app.use((req, res, next) => {
 });
 
 app.use(idempotencyMiddleware);
-
-const storePartajat = creeazaStoreRateLimit({ url: config.redisUrl });
-const { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter, billingLimiter, feedbackLimiter } = creeazaLimitatoare({
-  store: storePartajat?.store,
-  avertizeazaFaraStore: config.esteProductie,
-});
 
 // PR1-backend: statusLimiter nu mai e aplicat global pe /ai-status in server.js,
 // ci direct pe ruta din routes/status.js (imprenn cu requireAuth).
@@ -383,6 +396,12 @@ const chatAdmission = createDistributedAdmission({
   globalLimit: config.ai.chatGlobalConcurrency,
   ttlMs: 60_000,
 });
+const aiAdmission = createDistributedAdmission({
+  url: config.redisUrl,
+  prefix: 'nutri:ai-admission',
+  globalLimit: config.ai.chatGlobalConcurrency,
+  ttlMs: 60_000,
+});
 
 app.get('/', (req, res, next) => {
   if (req.accepts('html')) {
@@ -395,12 +414,9 @@ app.get('/', (req, res, next) => {
     timestamp: new Date().toISOString(),
   });
 });
-// S4-01: /health face acum un ping real catre Supabase (readiness), nu doar
-// versiunea statica. Supabase poate returna error fara sa arunce; atat acest
-// caz, cat si timeoutul fetchCuTimeoutSupabase (S4-06, 10s), trebuie sa dea 503. Runda de tabele
-// de sanatate este aleasa ca sa nu depinda de date: intereseaza doar ca reteaua
-// si PostgREST raspund; eroarea de tabel inexistent este ignorata.
-app.get('/health', healthLimiter, async (_req, res) => {
+// S4-01: /health face ping real catre Supabase (readiness) fara Redis rate limiter,
+// ca probe-ul Cloud Run/Render sa nu fie afectat de o indisponibilitate Redis.
+app.get('/health', async (_req, res) => {
   try {
     const { error } = await supabase.from('health_check').select('*').maybeSingle();
     if (error && !['PGRST205', '42P01'].includes(error.code)) throw error;
@@ -434,6 +450,7 @@ const aiR = createAiRouter({
   serviciuChat,
   semaforAi,
   chatAdmission,
+  aiAdmission,
   idempotencyCritic: idempotencyMiddlewareCritic,
   supabaseAdmin,
   billingService: googleBillingService,
@@ -454,7 +471,11 @@ const barcodeR = createBarcodeRouter({
   // P1-12: zălogul atomic pentru fallback-ul AI de barcode. Aceeași infrastructură
   // partajată ca idempotența (Redis `SET NX`), cu prefix separat ca spațiile de
   // chei ale celor două tipuri de operații să nu se ciocnească.
-  registruClaim: creeazaRegistruCheiValori({ url: config.redisUrl, prefix: 'nutri:barcode-ai' }),
+  registruClaim: creeazaRegistruCheiValori({
+    url: config.redisUrl,
+    prefix: 'nutri:barcode-ai',
+    failClosed: true,
+  }),
 });
 const profilR = createProfilRouter({ requireAuth, generalLimiter, config });
 const meseR = createMeseRouter({
@@ -516,6 +537,7 @@ const statusR = createStatusRouter({
 const gdprR = createGdprRouter({
   requireAuth,
   generalLimiter,
+  gdprExportLimiter,
   supabaseAdmin,
   contextDate,
   profilRepo: createProfilRepo(),
@@ -694,26 +716,27 @@ if (require.main === module) {
     console.log('[Credite] Worker reconciliere inactiv (CREDIT_RECONCILE_ACTIV=0).');
   }
 
-  const server = app.listen(config.port, config.host, () => {
-    console.log(`Serverul securizat ruleaza pe ${config.host}:${config.port}`);
-    startKeepAliveTicker();
-  });
-  // S4-06: timeout la nivel de socket — o cerere ramasa in aer (provider AI
-  // care nu raspunde, DB agatat) nu tine conexiunea deschisa la nesfarsit.
-  // G4: bugetul AI (cascada de furnizori, 30s per apel, plafonat la
-  // maxApeluriPerRequest=8) poate atinge ~4 min in cel mai rau caz legitim. La 25s
-  // se distrugea socket-ul pe o analiza lenta dar valida. Acoperim intregul buget;
-  // fiecare apel de furnizor se auto-intrerupe la 30s, deci cererea nu ramane
-  // blocata la nesfarsit.
-  server.timeout = 300000;
-  const shutdown = (signal) => {
-    console.log(`${signal} primit - inchid serverul elegant...`);
-    billingWorker.stop();
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(1), 10000).unref();
-  };
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  (async () => {
+    if (config.redisUrl) {
+      const redisReady = await asteaptaConexiuneRedis({ url: config.redisUrl, timeoutMs: 3000 });
+      console.log(`[Redis] Conexiune initiala inainte de listen: ${redisReady ? 'ready' : 'timeout (continua cu fallback/fail-closed)'}`);
+    }
+    const server = app.listen(config.port, config.host, () => {
+      console.log(`Serverul securizat ruleaza pe ${config.host}:${config.port}`);
+      startKeepAliveTicker();
+    });
+    // S4-06: timeout la nivel de socket — o cerere ramasa in aer (provider AI
+    // care nu raspunde, DB agatat) nu tine conexiunea deschisa la nesfarsit.
+    server.timeout = 300000;
+    const shutdown = (signal) => {
+      console.log(`${signal} primit - inchid serverul elegant...`);
+      billingWorker.stop();
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(1), 10000).unref();
+    };
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+  })();
 }
 
 module.exports = app;

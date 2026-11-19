@@ -42,9 +42,10 @@ const {
   stergeIdentitateClerk,
   extrageFileIdsUtilizator,
   stergeDeadLetterUtilizator,
-  citesteTotPaginat,
-  exportaAbonamenteGooglePlay,
-  exportaFeedbackUtilizator,
+  itereazaPaginatKeyset,
+  DIMENSIUNE_PAGINA_KEYSET,
+  COLOANE_EXPORT_ABONAMENTE_GOOGLE,
+  COLOANE_EXPORT_USER_FEEDBACK,
   stergeEvenimenteRtdnUtilizator,
 } = require('../utils/gdprServices');
 const {
@@ -56,63 +57,76 @@ const {
 } = require('../utils/gdprWorker');
 const { codEroare } = require('../utils/codEroare');
 
-function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextDate, profilRepo }) {
+function scrieChunkCuBackpressure(res, chunk) {
+  if (res.destroyed || res.writableEnded) return Promise.resolve(false);
+  if (res.write(chunk)) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const peDrain = () => {
+      res.removeListener('close', peClose);
+      resolve(!res.destroyed);
+    };
+    const peClose = () => {
+      res.removeListener('drain', peDrain);
+      resolve(false);
+    };
+    res.once('drain', peDrain);
+    res.once('close', peClose);
+  });
+}
+
+function createGdprRouter({
+  requireAuth,
+  generalLimiter,
+  gdprExportLimiter = generalLimiter,
+  supabaseAdmin,
+  contextDate,
+  profilRepo,
+}) {
   const router = express.Router();
 
-  router.get('/export-data', requireAuth, generalLimiter, async (req, res) => {
+  router.get('/export-data', requireAuth, gdprExportLimiter, async (req, res) => {
     try {
       const ctx = contextDate(req, res);
-      const userId = ctx.userId;
-      // F-06: paginat. Fara `.range()`, PostgREST taia tacut exportul la
-      // `max-rows` (implicit 1000), deci un utilizator cu istoric lung primea un
-      // export INCOMPLET prezentat ca fiind complet.
-      const citeste = (tabela, coloanaOrdine = 'id') =>
-        citesteTotPaginat({
-          client: { from: (t) => tabelUtilizator(ctx, t) },
-          tabela,
-          userId,
-          coloanaOrdine,
-        });
+      const userId = ctx?.userId;
+      if (!userId || !ctx?.db) {
+        throw new Error('GDPR_EXPORT_CONTEXT_INVALID');
+      }
+      const clientUtilizator = { from: (t) => tabelUtilizator(ctx, t) };
 
-      const [
-        mese,
-        profil,
-        antrenamente,
-        produseCamara,
-        gamificare,
-        evenimenteGamificare,
-        workoutLogs,
-        auditLog,
-        estimariBarcode,
-        aiJobs,
-        crediteAi,
-        tranzactiiCredite,
-        rezervariFlowCredits,
-        intentiiRecompensa,
-        workoutTemplates,
-        abonamenteGooglePlay,
-        userFeedback,
-      ] = await Promise.all([
-        citeste('mese'),
-        profilRepo.getProfil(ctx),
-        citeste('antrenamente'),
-        citeste('produse_camara'),
-        citeste('gamificare'),
-        citeste('gamificare_evenimente'),
-        citeste('workout_logs'),
-        citeste('audit_log'),
-        citeste('barcode_estimari_utilizator', 'code'),
-        citeste('ai_jobs'),
-        citeste('credite_ai', 'user_id'),
-        citeste('credite_tranzactii'),
-        citeste('flow_credit_reservations'),
-        citeste('flow_reward_intents'),
-        citeste('workout_templates'),
-        exportaAbonamenteGooglePlay({ supabaseAdmin, userId }),
-        exportaFeedbackUtilizator({ supabaseAdmin, userId }),
-      ]);
+      const profil = await profilRepo.getProfil(ctx);
 
-      return res.json({
+      const surseExport = [
+        { cheie: 'mese', client: clientUtilizator, tabela: 'mese', coloanaOrdine: 'id' },
+        { cheie: 'antrenamente', client: clientUtilizator, tabela: 'antrenamente', coloanaOrdine: 'id' },
+        { cheie: 'produse_camara', client: clientUtilizator, tabela: 'produse_camara', coloanaOrdine: 'id' },
+        { cheie: 'gamificare', client: clientUtilizator, tabela: 'gamificare', coloanaOrdine: 'id' },
+        { cheie: 'gamificare_evenimente', client: clientUtilizator, tabela: 'gamificare_evenimente', coloanaOrdine: 'id' },
+        { cheie: 'workout_logs', client: clientUtilizator, tabela: 'workout_logs', coloanaOrdine: 'id' },
+        { cheie: 'audit_log', client: clientUtilizator, tabela: 'audit_log', coloanaOrdine: 'id' },
+        { cheie: 'estimari_barcode', client: clientUtilizator, tabela: 'barcode_estimari_utilizator', coloanaOrdine: 'code' },
+        { cheie: 'ai_jobs', client: clientUtilizator, tabela: 'ai_jobs', coloanaOrdine: 'id' },
+        { cheie: 'credite_ai', client: clientUtilizator, tabela: 'credite_ai', coloanaOrdine: 'user_id' },
+        { cheie: 'credite_tranzactii', client: clientUtilizator, tabela: 'credite_tranzactii', coloanaOrdine: 'id' },
+        { cheie: 'flow_credit_reservations', client: clientUtilizator, tabela: 'flow_credit_reservations', coloanaOrdine: 'id' },
+        { cheie: 'flow_reward_intents', client: clientUtilizator, tabela: 'flow_reward_intents', coloanaOrdine: 'id' },
+        { cheie: 'workout_templates', client: clientUtilizator, tabela: 'workout_templates', coloanaOrdine: 'id' },
+        {
+          cheie: 'abonamente_google_play',
+          client: supabaseAdmin,
+          tabela: 'google_play_subscriptions',
+          coloane: COLOANE_EXPORT_ABONAMENTE_GOOGLE,
+          coloanaOrdine: 'purchase_token_hash',
+        },
+        {
+          cheie: 'user_feedback',
+          client: supabaseAdmin,
+          tabela: 'user_feedback',
+          coloane: COLOANE_EXPORT_USER_FEEDBACK,
+          coloanaOrdine: 'id',
+        },
+      ];
+
+      const antetJson = JSON.stringify({
         exportDate: new Date().toISOString(),
         user_id: userId,
         user: req.user,
@@ -121,26 +135,50 @@ function createGdprRouter({ requireAuth, generalLimiter, supabaseAdmin, contextD
           description: 'Acest export conține metadatele și URL-urile securizate ale fișierelor media asociate contului. Fișierele binare brute nu sunt înglobate direct în formatul JSON, dar pot fi descărcate individual utilizând URL-urile furnizate înainte de ștergerea contului.',
         },
         profil: profil || null,
-        mese,
-        antrenamente,
-        produse_camara: produseCamara,
-        gamificare,
-        gamificare_evenimente: evenimenteGamificare,
-        workout_logs: workoutLogs,
-        audit_log: auditLog,
-        estimari_barcode: estimariBarcode,
-        ai_jobs: aiJobs,
-        credite_ai: crediteAi,
-        credite_tranzactii: tranzactiiCredite,
-        flow_credit_reservations: rezervariFlowCredits,
-        flow_reward_intents: intentiiRecompensa,
-        workout_templates: workoutTemplates,
-        abonamente_google_play: abonamenteGooglePlay,
-        user_feedback: userFeedback,
       });
+
+      // Export secvențial: 1 tabelă pe rând, paginare keyset (id > last_id LIMIT 500).
+      // Fiecare lot de 500 rânduri este serializat imediat și eliberat din heap,
+      // iar răspunsul HTTP pornește abia după confirmarea tuturor tabelelor ca orice
+      // eroare DB să întoarcă atomic 500 (niciodată un 200 cu JSON trunchiat).
+      const bucati = [antetJson.slice(0, -1)];
+      for (const sursa of surseExport) {
+        if (res.destroyed || req.socket?.destroyed) return undefined;
+        bucati.push(`,${JSON.stringify(sursa.cheie)}:[`);
+        let primulRand = true;
+        for await (const lot of itereazaPaginatKeyset({
+          client: sursa.client,
+          tabela: sursa.tabela,
+          userId,
+          dimensiunePagina: DIMENSIUNE_PAGINA_KEYSET,
+          coloane: sursa.coloane || '*',
+          coloanaOrdine: sursa.coloanaOrdine,
+        })) {
+          if (res.destroyed || req.socket?.destroyed) return undefined;
+          let bucata = '';
+          for (const rand of lot) {
+            bucata += (primulRand ? '' : ',') + JSON.stringify(rand);
+            primulRand = false;
+          }
+          if (bucata) bucati.push(bucata);
+        }
+        bucati.push(']');
+      }
+      bucati.push('}');
+
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      for (const bucata of bucati) {
+        if (!(await scrieChunkCuBackpressure(res, bucata))) return undefined;
+      }
+      res.end();
+      return undefined;
     } catch (err) {
       console.error('[GDPR] Export esuat:', codEroare(err));
-      return res.status(500).json({ eroare: 'Nu s-au putut pregăti datele pentru export.' });
+      if (!res.headersSent) {
+        return res.status(500).json({ eroare: 'Nu s-au putut pregăti datele pentru export.' });
+      }
+      res.destroy(err);
+      return undefined;
     }
   });
 

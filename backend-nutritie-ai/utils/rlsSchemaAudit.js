@@ -188,18 +188,62 @@ function analizeazaSchema(optiuni = {}) {
     }
 
     // --- functii ----------------------------------------------------------
-    for (const m of brut.replace(/--[^\n]*/g, '').matchAll(
+    const normalizeazaSemnaturaArgs = (argList) => String(argList || '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const faraDefault = part.replace(/\bdefault\b[\s\S]*$/i, '').trim();
+        const tokens = faraDefault.split(/\s+/);
+        return tokens[tokens.length - 1].toLowerCase();
+      })
+      .join(',');
+
+    const faraComentarii = brut.replace(/--[^\n]*/g, '');
+    const evenimenteFunctii = [];
+    for (const m of faraComentarii.matchAll(
+      /drop\s+function\s+(?:if\s+exists\s+)?([a-z_.]+)\s*\(([\s\S]*?)\)/gi,
+    )) {
+      evenimenteFunctii.push({
+        tip: 'drop',
+        pozitie: m.index,
+        nume: m[1].toLowerCase(),
+        semnatura: normalizeazaSemnaturaArgs(m[2]),
+      });
+    }
+    for (const m of faraComentarii.matchAll(
       /create\s+(?:or\s+replace\s+)?function\s+([a-z_.]+)\s*\(([\s\S]*?)\)\s*returns[\s\S]*?(?=\$\$)/gi,
     )) {
       const antet = m[0];
-      functii.push({
-        nume: m[1],
+      evenimenteFunctii.push({
+        tip: 'create',
+        pozitie: m.index,
+        nume: m[1].toLowerCase(),
+        semnatura: normalizeazaSemnaturaArgs(m[2]),
         argumente: m[2] || '',
         securityDefiner: /security\s+definer/i.test(antet),
         searchPath: (antet.match(/set\s+search_path\s*=\s*([^\n;]+)/i) || [, null])[1],
-        grantClient: false,
         fisier: fisier.nume,
       });
+    }
+    evenimenteFunctii.sort((a, b) => a.pozitie - b.pozitie);
+    for (const ev of evenimenteFunctii) {
+      const idxExistent = functii.findIndex((f) => f.nume === ev.nume && f.semnatura === ev.semnatura);
+      if (ev.tip === 'drop') {
+        if (idxExistent !== -1) functii.splice(idxExistent, 1);
+      } else {
+        const intrare = {
+          nume: ev.nume,
+          semnatura: ev.semnatura,
+          argumente: ev.argumente,
+          securityDefiner: ev.securityDefiner,
+          searchPath: ev.searchPath,
+          grantClient: idxExistent !== -1 ? functii[idxExistent].grantClient : false,
+          fisier: ev.fisier,
+        };
+        if (idxExistent !== -1) functii[idxExistent] = intrare;
+        else functii.push(intrare);
+      }
     }
     for (const m of s.matchAll(/create\s+(?:or\s+replace\s+)?view\s+([a-z_."]+)/gi)) views.push(normalizeaza(m[1]));
 

@@ -2,6 +2,7 @@
 
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = rateLimit;
+const { MemoryStoreMarginit } = require('./storePartajat');
 
 /**
  * Limitatoare de trafic.
@@ -66,8 +67,11 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 	// fabricant: { store: creeaza }. Un obiect store împărțit direct între cele 4
 	// limitatoare ar fi respins la init() cu ERR_ERL_STORE_REUSE (v8), deci acea
 	// ramură nu putea fi atinsă corect niciodată.
-	const cuStorePropriu = (prefix) =>
-		typeof store === 'function' ? { store: store({ prefix }) } : {};
+	const cuStorePropriu = (prefix) => (
+		typeof store === 'function'
+			? { store: store({ prefix }) }
+			: { store: new MemoryStoreMarginit() }
+	);
 
 	// N-05: dacă cineva trece un `store` nefuncțional, nu-l împărțim spre 4
 	// limitatoare (ar crăpa la init) — avertisment unic la boot + MemoryStore implicit.
@@ -149,7 +153,27 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 		message: mesaj('Ai trimis prea multe mesaje de feedback. Încearcă din nou mai târziu.'),
 	});
 
-	return { preAuthLimiter, generalLimiter, statusLimiter, aiLimiter, healthLimiter, billingLimiter, feedbackLimiter };
+	// Exportul GDPR citește toate tabelele utilizatorului: plafon dedicat (2/oră/user)
+	// ca un cont să nu poată genera sarcină abuzivă repetată pe Postgres.
+	const gdprExportLimiter = rateLimit({
+		...comun,
+		...cuStorePropriu('rl:gdpr-export:'),
+		windowMs: 60 * 60 * 1000,
+		max: 2,
+		keyGenerator: cheieIdentitateVerificata,
+		message: mesaj('Poți exporta datele de cel mult 2 ori pe oră. Încearcă din nou mai târziu.'),
+	});
+
+	return {
+		preAuthLimiter,
+		generalLimiter,
+		statusLimiter,
+		aiLimiter,
+		healthLimiter,
+		billingLimiter,
+		feedbackLimiter,
+		gdprExportLimiter,
+	};
 }
 
 module.exports = {

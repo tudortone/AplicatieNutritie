@@ -178,6 +178,73 @@ async function stergeDeadLetterUtilizator({ supabaseAdmin, userId, clerkUserId, 
  * adica un raspuns incomplet la o cerere legala de portabilitate.
  */
 const DIMENSIUNE_PAGINA_EXPORT = 1000;
+const DIMENSIUNE_PAGINA_KEYSET = 500;
+
+/**
+ * Generator secvențial pe keyset pagination (`coloanaOrdine > last_cursor LIMIT 500`).
+ * Evită scanările O(N²) ale `OFFSET` / `.range()` pe tabele mari. Când clientul
+ * injectat (mock-uri legacy de test) nu expune `.gt()` / `.limit()`, cade înapoi
+ * pe `.range()` păstrând același contract fail-closed.
+ */
+async function* itereazaPaginatKeyset({
+  client,
+  tabela,
+  userId,
+  dimensiunePagina = DIMENSIUNE_PAGINA_KEYSET,
+  coloane = '*',
+  coloanaOrdine = 'id',
+}) {
+  let ultimulCursor;
+  for (let pagina = 0; ; pagina += 1) {
+    let query = client
+      .from(tabela)
+      .select(coloane)
+      .eq('user_id', userId)
+      .order(coloanaOrdine, { ascending: true });
+
+    const areKeyset = typeof query?.gt === 'function' && typeof query?.limit === 'function';
+    if (areKeyset) {
+      if (ultimulCursor !== undefined) {
+        query = query.gt(coloanaOrdine, ultimulCursor);
+      }
+      query = query.limit(dimensiunePagina);
+    } else {
+      const deLa = pagina * dimensiunePagina;
+      query = query.range(deLa, deLa + dimensiunePagina - 1);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      if (pagina === 0 && CODURI_TABELA_INEXISTENTA.has(error.code)) return;
+      throw error;
+    }
+
+    const lot = data ?? [];
+    if (lot.length > 0) {
+      yield lot;
+    }
+
+    // Ultima pagină: mai puține rânduri decât limita cerută.
+    if (lot.length < dimensiunePagina) break;
+
+    if (areKeyset) {
+      const urmatorCursor = lot[lot.length - 1]?.[coloanaOrdine];
+      if (urmatorCursor === undefined || urmatorCursor === null || urmatorCursor === ultimulCursor) {
+        const err = new Error('GDPR_PAGINATION_INCOMPLETE');
+        err.code = 'GDPR_PAGINATION_INCOMPLETE';
+        throw err;
+      }
+      ultimulCursor = urmatorCursor;
+    }
+
+    // Plasă de siguranță împotriva unei bucle infinite: fail-closed, nu trunchiere tăcută.
+    if (pagina > 10000) {
+      const err = new Error('GDPR_PAGINATION_INCOMPLETE');
+      err.code = 'GDPR_PAGINATION_INCOMPLETE';
+      throw err;
+    }
+  }
+}
 
 async function citesteTotPaginat({
   client,
@@ -188,29 +255,15 @@ async function citesteTotPaginat({
   coloanaOrdine = 'id',
 }) {
   const toate = [];
-  for (let pagina = 0; ; pagina += 1) {
-    const de_la = pagina * dimensiunePagina;
-    const pana_la = de_la + dimensiunePagina - 1;
-    const { data, error } = await client
-      .from(tabela)
-      .select(coloane)
-      .eq('user_id', userId)
-      .order(coloanaOrdine, { ascending: true })
-      .range(de_la, pana_la);
-    if (error) {
-      if (pagina === 0 && CODURI_TABELA_INEXISTENTA.has(error.code)) return [];
-      throw error;
-    }
-    const lot = data ?? [];
+  for await (const lot of itereazaPaginatKeyset({
+    client,
+    tabela,
+    userId,
+    dimensiunePagina,
+    coloane,
+    coloanaOrdine,
+  })) {
     toate.push(...lot);
-    // Ultima pagina: mai putine randuri decat am cerut.
-    if (lot.length < dimensiunePagina) break;
-    // Plasa de siguranta impotriva unei bucle infinite daca `range` e ignorat: fail-closed, nu trunchiere tacuta.
-    if (pagina > 10000) {
-      const err = new Error('GDPR_PAGINATION_INCOMPLETE');
-      err.code = 'GDPR_PAGINATION_INCOMPLETE';
-      throw err;
-    }
   }
   return toate;
 }
@@ -439,8 +492,11 @@ module.exports = {
   filtreazaFileIdsProprii,
   stergeDeadLetterUtilizator,
   citesteTotPaginat,
+  itereazaPaginatKeyset,
   DIMENSIUNE_PAGINA_EXPORT,
+  DIMENSIUNE_PAGINA_KEYSET,
   COLOANE_EXPORT_ABONAMENTE_GOOGLE,
+  COLOANE_EXPORT_USER_FEEDBACK,
   exportaAbonamenteGooglePlay,
   exportaFeedbackUtilizator,
   stergeEvenimenteRtdnUtilizator,

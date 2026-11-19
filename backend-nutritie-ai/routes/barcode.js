@@ -84,8 +84,15 @@ function createBarcodeRouter({
   registruClaim = creeazaRegistruCheiValori({
     url: process.env.REDIS_URL,
     prefix: 'nutri:barcode-ai',
+    failClosed: true,
+  }),
+  registruCautare = creeazaRegistruCheiValori({
+    url: process.env.REDIS_URL,
+    prefix: 'nutri:off-search',
+    failClosed: false,
   }),
 }) {
+  const CACHE_CAUTARE_TTL_MS = 30 * 60 * 1000;
   const router = express.Router();
   const groqTextModels = config?.ai?.groqTextModels || ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b'];
   // P1-12: scrierea răspunsului se sare dacă socket-ul clientului a dispărut, dar
@@ -276,6 +283,16 @@ function createBarcodeRouter({
       return res.status(400).json({ eroare: 'Termenul de cautare trebuie sa aiba intre 2 si 80 de caractere.' });
     }
 
+    const cheieCache = crypto.createHash('sha256').update(termen.toLowerCase()).digest('hex');
+    try {
+      const dinCache = await registruCautare.get(cheieCache);
+      if (Array.isArray(dinCache)) {
+        return res.json(dinCache);
+      }
+    } catch {
+      // Cache read miss/error falls back to live OFF search.
+    }
+
     try {
       const response = await callWithTimeout((signal) => fetch(OFF_SEARCH_URL, {
         method: 'POST',
@@ -300,7 +317,7 @@ function createBarcodeRouter({
 
       const payload = await response.json();
       const produse = extrageRezultateCautareOff(payload).slice(0, 20);
-      return res.json(produse.map((produs) => ({
+      const normalizate = produse.map((produs) => ({
         code: String(produs?.code || '').slice(0, 20),
         product_name: String(produs?.product_name || '').slice(0, 150),
         brands: String(produs?.brands || '').slice(0, 100),
@@ -310,7 +327,9 @@ function createBarcodeRouter({
           carbohydrates_100g: numarModel(produs?.nutriments?.carbohydrates_100g, { max: 100 }),
           fat_100g: numarModel(produs?.nutriments?.fat_100g, { max: 100 }),
         },
-      })));
+      }));
+      registruCautare.set(cheieCache, normalizate, CACHE_CAUTARE_TTL_MS).catch(() => {});
+      return res.json(normalizate);
     } catch (err) {
       console.warn('[Barcode] Cautare OpenFoodFacts esuata:', codEroare(err));
       return res.status(502).json({ eroare: 'Catalogul extern nu este disponibil momentan.' });
@@ -348,11 +367,22 @@ function createBarcodeRouter({
         console.warn('[Barcode] Citire cache esuata:', codEroare(err));
       }
 
-      const resp = await callWithTimeout((signal) => fetch(construiesteUrlOpenFoodFacts(code), {
-        headers: { 'User-Agent': OFF_USER_AGENT, Accept: 'application/json' },
-        signal,
-      }), 12000);
+      let resp = null;
+      try {
+        resp = await callWithTimeout((signal) => fetch(construiesteUrlOpenFoodFacts(code), {
+          headers: { 'User-Agent': OFF_USER_AGENT, Accept: 'application/json' },
+          signal,
+        }), 12000);
+      } catch (offErr) {
+        console.warn('[Barcode] OpenFoodFacts timeout/eroare retea:', codEroare(offErr));
+        return res.status(404).json({
+          eroare: 'Catalogul extern nu raspunde momentan. Poti introduce produsul manual.',
+          allowManualEntry: true,
+          suggestedAction: 'manual_or_ai_text',
+        });
+      }
 
+      let produsConfirmatAbsent = false;
       if (resp.ok) {
         const data = await resp.json();
         const product = data?.product;
@@ -390,6 +420,19 @@ function createBarcodeRouter({
             dinCache: false,
           });
         }
+        produsConfirmatAbsent = true;
+      } else if (resp.status === 404) {
+        produsConfirmatAbsent = true;
+      }
+
+      // Fallback-ul Groq ruleaza STRICT cand produsul este confirmat absent (404 / status=0).
+      // Pe 429, 5xx sau alte erori tranzitorii OFF nu declansam cost AI inutil.
+      if (!produsConfirmatAbsent) {
+        return res.status(404).json({
+          eroare: 'Catalogul extern este temporar indisponibil. Poti introduce produsul manual.',
+          allowManualEntry: true,
+          suggestedAction: 'manual_or_ai_text',
+        });
       }
 
       const groqKeys = getApiKeysList('GROQ_API_KEY');
@@ -439,6 +482,7 @@ function createBarcodeRouter({
                 messages: [{ role: 'user', content: aiPrompt }],
                 temperature: 0.1,
                 max_tokens: 400,
+                reasoning_effort: 'low',
                 response_format: { type: 'json_object' },
               }),
               signal,

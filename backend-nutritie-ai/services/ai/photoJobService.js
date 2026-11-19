@@ -96,12 +96,7 @@ function validateFreshPhotoReservation(reservation, userId) {
 
 async function triggerIdempotent(tasks, payload, idempotencyKey) {
   const options = { idempotencyKey, idempotencyKeyTTL: '24h' };
-  try {
-    return await tasks.trigger('analiza-mancare-ai', payload, options);
-  } catch {
-    // A retry with the same key reconciles an accepted run whose HTTP response was lost.
-    return tasks.trigger('analiza-mancare-ai', payload, options);
-  }
+  return tasks.trigger('analiza-mancare-ai', payload, options);
 }
 
 function dispatchBackgroundWorker(runBackgroundWorker, triggerPayload, jobId, logger) {

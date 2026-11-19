@@ -140,12 +140,16 @@ describe('durable Photo AI job admission', () => {
     expect(premium.flowCredits.reservePhoto).toHaveBeenCalledWith(expect.objectContaining({ entitlement: 'premium' }));
   });
 
-  test('ambiguous Trigger dispatch leaves the durable job and reservation for same-key reconciliation', async () => {
+  test('ambiguous Trigger dispatch leaves the durable job and reservation for same-key reconciliation without duplicate inline retry', async () => {
     const h = harness({ dispatchError: new Error('network unavailable') });
     await expect(h.service.submit(input)).rejects.toBeInstanceOf(PhotoJobError);
     expect(h.repo.markFailed).not.toHaveBeenCalled();
     expect(h.flowCredits.releasePhoto).not.toHaveBeenCalled();
     expect(h.records.get('job-1')).toMatchObject({ status: 'queued', creditReservationId: 'reservation-1' });
+    expect(h.tasks.trigger).toHaveBeenCalledTimes(1);
+
+    // Client replay reconciles the queued job with the exact same idempotencyKey.
+    await expect(h.service.submit(input)).rejects.toBeInstanceOf(PhotoJobError);
     expect(h.tasks.trigger).toHaveBeenCalledTimes(2);
     expect(h.tasks.trigger.mock.calls[0][2].idempotencyKey)
       .toBe(h.tasks.trigger.mock.calls[1][2].idempotencyKey);

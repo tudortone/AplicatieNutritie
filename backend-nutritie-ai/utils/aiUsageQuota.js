@@ -74,6 +74,7 @@ function creeazaCheckAiUsageQuota({
   const sursa = contor || creeazaContorPartajat({
     url: process.env.REDIS_URL,
     prefix: 'nutri:quota-ai',
+    fallbackLocal: false,
   });
 
   return async function checkAiUsageQuota(req, res, next) {

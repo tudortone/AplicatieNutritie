@@ -42,7 +42,12 @@ function createGoogleAccessTokenProvider(options = {}) {
   });
   let clientPromise = null;
   return async () => {
-    if (!clientPromise) clientPromise = auth.getClient();
+    if (!clientPromise) {
+      clientPromise = auth.getClient().catch((err) => {
+        clientPromise = null;
+        throw err;
+      });
+    }
     const client = await clientPromise;
     return normalizeAccessToken(await client.getAccessToken());
   };

@@ -1,6 +1,8 @@
 'use strict';
 
-require('dotenv').config();
+if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
+  require('dotenv').config();
+}
 
 /**
  * Configurare centralizata si validata la pornire.

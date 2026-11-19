@@ -101,12 +101,14 @@ class EroareProprietateProdus extends Error {
  * Construieste URL-ul OpenFoodFacts pentru un cod de bare.
  * Codul este validat inainte de interpolare, deci nu poate injecta cale sau query.
  */
+const CAMPURI_PRODUS_OFF = 'product_name,product_name_ro,brands,quantity,nutriments,image_front_small_url,image_url';
+
 function construiesteUrlOpenFoodFacts(cod) {
 	const curat = String(cod ?? '').trim();
 	if (!esteCodBareValid(curat)) {
 		throw new TypeError('Cod de bare invalid.');
 	}
-	return 'https://' + GAZDA_OFF + CALE_PRODUS_OFF + curat + '.json';
+	return 'https://' + GAZDA_OFF + CALE_PRODUS_OFF + curat + '.json?fields=' + CAMPURI_PRODUS_OFF;
 }
 
 /** Transforma un rand din baza de date in forma trimisa clientului. */

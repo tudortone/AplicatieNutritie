@@ -10,7 +10,7 @@ const {
   inferMealType,
 } = require('../../services/ai/photoResultQuality');
 const { parseJsonFromLlm } = require('../../utils/llmJson');
-const { callWithSoftTimeout } = require('../../utils/httpTimeout');
+const { callWithTimeout } = require('../../utils/httpTimeout');
 const {
   construiesteGazdePermise,
   creeazaValideazaUrlImagine,
@@ -320,7 +320,7 @@ function interpreteazaItemsFoto(text, tipMasa) {
 async function apeleazaGeminiSiInterpreteaza({ key, modelName, prompt, imagePart, tipMasa, timeoutMs }) {
   const client = new GoogleGenerativeAI(key);
   const model = client.getGenerativeModel({ model: modelName });
-  const response = await callWithSoftTimeout(model.generateContent({
+  const response = await callWithTimeout((signal) => model.generateContent({
     contents: [{ role: 'user', parts: [{ text: prompt }, imagePart] }],
     generationConfig: {
       responseMimeType: 'application/json',
@@ -328,7 +328,7 @@ async function apeleazaGeminiSiInterpreteaza({ key, modelName, prompt, imagePart
       maxOutputTokens: 1200,
       ...(String(modelName).includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
     },
-  }), timeoutMs);
+  }, { signal }), timeoutMs);
   return interpreteazaItemsFoto(response?.response?.text(), tipMasa);
 }
 

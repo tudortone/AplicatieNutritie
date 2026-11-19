@@ -18,15 +18,39 @@
  * Configurabil prin env `INSTANTE_ASTEPTATE` (default: 1).
  */
 
-const { MemoryStore } = require('express-rate-limit');
 // Task 1: codEroare mutat în utilitarul comun (utils/codEroare.js) — o singură
 // definiție pentru întregul backend. Re-exportat mai jos, la module.exports,
 // ca utils/contorPartajat.js (care îl destructure din acest modul) să rămână verde.
 const { codEroare } = require('./codEroare');
 
 const PLAFON_INTRARI = 5000;
+const PLAFON_RATE_LIMIT_MEMORIE = 10_000;
 const CURATARE_INTERVAL_MS = 5 * 60 * 1000;
 const SALTIRE_LOGGING_MS = 30 * 1000;
+const TIMEOUT_COMANDA_REDIS_MS = 1500;
+
+/**
+ * Mărginește durata oricărei comenzi Redis (inclusiv când pachetele sunt deja
+ * în bufferul TCP și clientul așteaptă răspuns pe un socket half-open).
+ */
+function cuTimeoutRedis(promisiune, ms = TIMEOUT_COMANDA_REDIS_MS) {
+  const p = Promise.resolve(promisiune);
+  // Previne unhandledRejection dacă promisiunea originală respinge după timeout.
+  p.catch(() => { });
+  let timer = null;
+  const timeoutPromise = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const err = new Error(`REDIS_COMMAND_TIMEOUT (${ms}ms)`);
+      err.name = 'RedisTimeoutError';
+      err.code = 'REDIS_COMMAND_TIMEOUT';
+      reject(err);
+    }, ms);
+    if (timer.unref) timer.unref();
+  });
+  return Promise.race([p, timeoutPromise]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
 
 // M-03: numărul de instanțe așteptate (env INSTANTE_ASTEPTATE), citit per apel.
 // Fallback sigur: lipsă, zero sau ne-numeric -> 1 — nu se împarte niciodată la 0.
@@ -112,7 +136,21 @@ function creeazaClientRedis({ url }) {
   const existent = clientRedisCache.get(cheieCache);
   if (existent) return existent;
   const redis = require('redis');
-  const client = redis.createClient({ url });
+  const client = redis.createClient({
+    url,
+    disableOfflineQueue: true,
+    pingInterval: 15_000,
+    commandsQueueMaxLength: 500,
+    socket: {
+      connectTimeout: 3000,
+      socketTimeout: 2000,
+      // Strategia implicită din @redis/client oprește reconectarea pe SocketTimeoutError;
+      // backoff cu jitter menține clientul recuperabil după pauze de rețea/Redis.
+      reconnectStrategy: (retries) => (
+        Math.min((2 ** Math.min(retries, 10)) * 50, 2000) + Math.floor(Math.random() * 200)
+      ),
+    },
+  });
   client.on('error', (err) => {
     const cod = codEroare(err);
     logWarnThrottled(`[Redis] Eroare client: ${cod}`);
@@ -132,14 +170,120 @@ function creeazaClientRedis({ url }) {
   return client;
 }
 
+/**
+ * Așteaptă conexiunea inițială Redis (mărginit la timeoutMs) înainte ca serverul
+ * HTTP să înceapă să accepte trafic, prevenind fereastra de degradare la cold start.
+ */
+function asteaptaConexiuneRedis({ url, timeoutMs = 3000 } = {}) {
+  if (!url) return Promise.resolve(false);
+  const client = creeazaClientRedis({ url });
+  if (client.isReady) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    let finalizat = false;
+    let timer = null;
+    const gata = (rezultat) => {
+      if (finalizat) return;
+      finalizat = true;
+      if (timer) clearTimeout(timer);
+      if (typeof client.off === 'function') client.off('ready', peReady);
+      else if (typeof client.removeListener === 'function') client.removeListener('ready', peReady);
+      resolve(rezultat);
+    };
+    const peReady = () => gata(true);
+    if (typeof client.on === 'function') {
+      client.on('ready', peReady);
+    }
+    timer = setTimeout(() => gata(Boolean(client.isReady)), timeoutMs);
+    if (timer.unref) timer.unref();
+  });
+}
+
+/**
+ * Store local LRU/FIFO mărginit pentru express-rate-limit (max 10.000 chei).
+ * Înlocuiește MemoryStore-ul nemărginit, prevenind OOM sub IP rotation / DDoS.
+ */
+class MemoryStoreMarginit {
+  constructor({ maxKeys = PLAFON_RATE_LIMIT_MEMORIE } = {}) {
+    this.maxKeys = Number.isInteger(maxKeys) && maxKeys > 0 ? maxKeys : PLAFON_RATE_LIMIT_MEMORIE;
+    this.windowMs = 60 * 1000;
+    this.localKeys = true;
+    this.map = new Map();
+  }
+
+  init(options) {
+    if (options && Number.isFinite(options.windowMs) && options.windowMs > 0) {
+      this.windowMs = options.windowMs;
+    }
+  }
+
+  _curataSiEvicta(acum) {
+    if (this.map.size < this.maxKeys) return;
+    for (const [k, entry] of this.map) {
+      if (entry.resetTimeMs <= acum) this.map.delete(k);
+    }
+    while (this.map.size >= this.maxKeys) {
+      const ceaMaiVeche = this.map.keys().next().value;
+      if (ceaMaiVeche === undefined) break;
+      this.map.delete(ceaMaiVeche);
+    }
+  }
+
+  increment(key) {
+    const acum = Date.now();
+    const existent = this.map.get(key);
+    if (existent && existent.resetTimeMs > acum) {
+      existent.totalHits += 1;
+      // Reîmprospătăm poziția LRU (cel mai recent accesat la final).
+      this.map.delete(key);
+      this.map.set(key, existent);
+      return {
+        totalHits: existent.totalHits,
+        resetTime: new Date(existent.resetTimeMs),
+      };
+    }
+    if (existent) this.map.delete(key);
+    this._curataSiEvicta(acum);
+    const resetTimeMs = acum + this.windowMs;
+    this.map.set(key, { totalHits: 1, resetTimeMs });
+    return {
+      totalHits: 1,
+      resetTime: new Date(resetTimeMs),
+    };
+  }
+
+  decrement(key) {
+    const existent = this.map.get(key);
+    if (!existent) return;
+    if (existent.resetTimeMs <= Date.now()) {
+      this.map.delete(key);
+      return;
+    }
+    if (existent.totalHits > 0) existent.totalHits -= 1;
+  }
+
+  resetKey(key) {
+    this.map.delete(key);
+  }
+
+  resetAll() {
+    this.map.clear();
+  }
+
+  shutdown() {
+    this.map.clear();
+  }
+}
+
 class StoreCuRezerva {
   constructor({ client, storeRedis }) {
     this.client = client;
     this.storeRedis = storeRedis;
-    this.storeRezerva = new MemoryStore();
+    this.storeRezerva = new MemoryStoreMarginit({ maxKeys: PLAFON_RATE_LIMIT_MEMORIE });
     this.localKeys = false;
     this.optiuniInitRedis = null;
     this.initListenerAtasat = false;
+    this._initializeazaRedis = null;
   }
 
   init(options) {
@@ -151,19 +295,23 @@ class StoreCuRezerva {
       }
     }
     if (!this.storeRedis.init) return;
-    // client.connect() este asincron: la primul init clientul nu este inca 'ready',
-    // asa ca init-ul RedisStore-ului se amana pana la evenimentul 'ready'. Altfel
-    // RedisStore ramane fara windowMs si cade permanent pe rezerva (MemoryStore).
+    // Atașăm ÎNTOTDEAUNA listener-ul `ready`, chiar dacă clientul e deja `isReady`:
+    // la reconectare după restart Redis, `rate-limit-redis` trebuie să reîncarce scriptul
+    // Lua (altele `incrementScriptSha` ar rămâne otrăvit permanent).
     this.optiuniInitRedis = options;
-    const initializeazaRedis = () =>
-      Promise.resolve(this.storeRedis.init(this.optiuniInitRedis)).catch((err) => {
-        logWarnThrottled(`[RateLimit] init Redis esuat (${codEroare(err)}); ramane rezerva.`);
-      });
-    if (this.client.isReady) {
-      initializeazaRedis();
-    } else if (!this.initListenerAtasat && typeof this.client.on === 'function') {
+    this._initializeazaRedis = () =>
+      cuTimeoutRedis(Promise.resolve(this.storeRedis.init(this.optiuniInitRedis)), TIMEOUT_COMANDA_REDIS_MS)
+        .catch((err) => {
+          logWarnThrottled(`[RateLimit] init Redis esuat (${codEroare(err)}); ramane rezerva.`);
+        });
+    if (!this.initListenerAtasat && typeof this.client.on === 'function') {
       this.initListenerAtasat = true;
-      this.client.on('ready', initializeazaRedis);
+      this.client.on('ready', () => {
+        if (this._initializeazaRedis) this._initializeazaRedis();
+      });
+    }
+    if (this.client.isReady) {
+      this._initializeazaRedis();
     }
   }
 
@@ -184,12 +332,16 @@ class StoreCuRezerva {
   async increment(key) {
     if (this.client.isReady) {
       try {
-        return await this.storeRedis.increment(key);
+        return await cuTimeoutRedis(this.storeRedis.increment(key), TIMEOUT_COMANDA_REDIS_MS);
       } catch (err) {
         const cod = codEroare(err);
         logWarnThrottled(`[RateLimit] Redis indisponibil (${cod}); trec pe rezerva.`);
         // P-11: alertă Sentry la fallback
         alertaSentryRedisCazut(cod);
+        // Re-inițializăm scriptul Lua dacă eroarea poate proveni dintr-un SHA/script invalid.
+        if (this.client.isReady && this._initializeazaRedis && !/NOSCRIPT/i.test(String(err?.message || ''))) {
+          this._initializeazaRedis();
+        }
       }
     } else {
       const cod = codEroare(eroareRedisNeconectat());
@@ -202,7 +354,7 @@ class StoreCuRezerva {
   async decrement(key) {
     if (this.client.isReady) {
       try {
-        return await this.storeRedis.decrement(key);
+        return await cuTimeoutRedis(this.storeRedis.decrement(key), TIMEOUT_COMANDA_REDIS_MS);
       } catch (err) {
         logWarnThrottled(`[RateLimit] Redis indisponibil (${codEroare(err)}); trec pe rezerva.`);
       }
@@ -213,7 +365,7 @@ class StoreCuRezerva {
   async resetKey(key) {
     if (this.client.isReady) {
       try {
-        return await this.storeRedis.resetKey(key);
+        return await cuTimeoutRedis(this.storeRedis.resetKey(key), TIMEOUT_COMANDA_REDIS_MS);
       } catch (err) {
         logWarnThrottled(`[RateLimit] Redis indisponibil (${codEroare(err)}); trec pe rezerva.`);
       }
@@ -224,7 +376,7 @@ class StoreCuRezerva {
   async resetAll() {
     if (this.client.isReady && this.storeRedis.resetAll) {
       try {
-        return await this.storeRedis.resetAll();
+        return await cuTimeoutRedis(this.storeRedis.resetAll(), TIMEOUT_COMANDA_REDIS_MS);
       } catch (err) {
         logWarnThrottled(`[RateLimit] Redis indisponibil (${codEroare(err)}); trec pe rezerva.`);
       }
@@ -246,7 +398,7 @@ function creeazaStoreRateLimit({ url }) {
       client,
       storeRedis: new RedisStore({
         prefix,
-        sendCommand: (...args) => client.sendCommand(args),
+        sendCommand: (...args) => cuTimeoutRedis(client.sendCommand(args), TIMEOUT_COMANDA_REDIS_MS),
       }),
     });
   return { store: creeaza };
@@ -301,7 +453,7 @@ class MapCuExpirare {
   }
 }
 
-function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
+function creeazaRegistruCheiValori({ url, prefix = 'nutri', failClosed = false } = {}) {
   const cheieFinala = (key) => `${prefix}:${key}`;
   const rezerva = new MapCuExpirare();
   rezerva.pornesteCuratare();
@@ -310,51 +462,61 @@ function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
     const client = creeazaClientRedis({ url });
     return {
       redis: true,
+      failClosed: Boolean(failClosed),
       // M-04: flag expus — store-ul partajat e „degradat" când clientul Redis nu e
       // ready. Idempotency (rute critice) il consultă ca să închidă fail-closed (503)
-      // fără a mai încerca vreun claim pe un stoc indisponibil. Comportamentul
-      // de fallback (rezerva locală) rămâne neschimbat.
+      // fără a mai încerca vreun claim pe un stoc indisponibil.
       get degradat() {
         return !client.isReady;
       },
       async get(key) {
-        if (!client.isReady) return rezerva.get(cheieFinala(key));
+        if (!client.isReady) {
+          if (failClosed) throw eroareRedisNeconectat();
+          return rezerva.get(cheieFinala(key));
+        }
         try {
-          const val = await client.get(cheieFinala(key));
+          const val = await cuTimeoutRedis(client.get(cheieFinala(key)), TIMEOUT_COMANDA_REDIS_MS);
           return val ? JSON.parse(val) : null;
         } catch (err) {
-          logWarnThrottled(`[Redis] get esuat (${codEroare(err)}); trec pe rezerva.`);
+          logWarnThrottled(`[Redis] get esuat (${codEroare(err)}); ${failClosed ? 'fail-closed' : 'trec pe rezerva'}.`);
+          if (failClosed) throw err;
           return rezerva.get(cheieFinala(key));
         }
       },
       async set(key, value, ttlMs) {
-        rezerva.set(cheieFinala(key), value, ttlMs);
-        if (!client.isReady) return;
+        const finala = cheieFinala(key);
+        if (!client.isReady) {
+          if (failClosed) throw eroareRedisNeconectat();
+          rezerva.set(finala, value, ttlMs);
+          return;
+        }
         try {
           const str = JSON.stringify(value);
           if (ttlMs && ttlMs > 0) {
-            await client.set(cheieFinala(key), str, { PX: ttlMs });
+            await cuTimeoutRedis(client.set(finala, str, { PX: ttlMs }), TIMEOUT_COMANDA_REDIS_MS);
           } else {
-            await client.set(cheieFinala(key), str);
+            await cuTimeoutRedis(client.set(finala, str), TIMEOUT_COMANDA_REDIS_MS);
           }
         } catch (err) {
-          logWarnThrottled(`[Redis] set esuat (${codEroare(err)}); ramane doar rezerva.`);
+          logWarnThrottled(`[Redis] set esuat (${codEroare(err)}); ${failClosed ? 'fail-closed' : 'trec pe rezerva'}.`);
+          if (failClosed) throw err;
+          rezerva.set(finala, value, ttlMs);
         }
       },
       async setIfAbsent(key, value, ttlMs) {
         const finala = cheieFinala(key);
-        if (!client.isReady) return rezerva.setIfAbsent(finala, value, ttlMs);
+        if (!client.isReady) {
+          if (failClosed) throw eroareRedisNeconectat();
+          return rezerva.setIfAbsent(finala, value, ttlMs);
+        }
         try {
           const optiuni = { NX: true };
           if (ttlMs && ttlMs > 0) optiuni.PX = ttlMs;
-          const rezultat = await client.set(finala, JSON.stringify(value), optiuni);
-          if (rezultat === 'OK') {
-            rezerva.set(finala, value, ttlMs);
-            return true;
-          }
-          return false;
+          const rezultat = await cuTimeoutRedis(client.set(finala, JSON.stringify(value), optiuni), TIMEOUT_COMANDA_REDIS_MS);
+          return rezultat === 'OK';
         } catch (err) {
-          logWarnThrottled(`[Redis] SET NX esuat (${codEroare(err)}); trec pe rezerva.`);
+          logWarnThrottled(`[Redis] SET NX esuat (${codEroare(err)}); ${failClosed ? 'fail-closed' : 'trec pe rezerva'}.`);
+          if (failClosed) throw err;
           return rezerva.setIfAbsent(finala, value, ttlMs);
         }
       },
@@ -362,7 +524,7 @@ function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
         rezerva.del(cheieFinala(key));
         if (!client.isReady) return;
         try {
-          await client.del(cheieFinala(key));
+          await cuTimeoutRedis(client.del(cheieFinala(key)), TIMEOUT_COMANDA_REDIS_MS);
         } catch (err) {
           logWarnThrottled(`[Redis] del esuat (${codEroare(err)}).`);
         }
@@ -378,12 +540,12 @@ function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
         const asteptat = JSON.stringify(value);
         const local = rezerva.get(finala);
         if (local !== null && JSON.stringify(local) === asteptat) rezerva.del(finala);
-        if (!client.isReady) return true;
+        if (!client.isReady) return !failClosed;
         try {
-          const rezultat = await client.eval(
+          const rezultat = await cuTimeoutRedis(client.eval(
             "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
             { keys: [finala], arguments: [asteptat] },
-          );
+          ), TIMEOUT_COMANDA_REDIS_MS);
           return Number(rezultat) === 1;
         } catch (err) {
           logWarnThrottled(`[Redis] delIfMatch esuat (${codEroare(err)}).`);
@@ -395,6 +557,7 @@ function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
 
   return {
     redis: false,
+    failClosed: Boolean(failClosed),
     // M-04: fără Redis nu există „client căzut" — rezerva locală e sursa întreagă,
     // deci nu e degradat (flag-ul reflectă doar stocul partajat).
     degradat: false,
@@ -425,9 +588,12 @@ function creeazaRegistruCheiValori({ url, prefix = 'nutri' } = {}) {
 
 module.exports = {
   creeazaClientRedis,
+  asteaptaConexiuneRedis,
+  cuTimeoutRedis,
   creeazaStoreRateLimit,
   creeazaRegistruCheiValori,
   StoreCuRezerva,
+  MemoryStoreMarginit,
   MapCuExpirare,
   codEroare,
   resetAlertaSentry, // expus pentru teste

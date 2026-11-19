@@ -134,4 +134,26 @@ describe('GET /cauta-produs', () => {
     expect(raspuns.status).toBe(400);
     expect(global.fetch).not.toHaveBeenCalled();
   });
+
+  test('serveste a doua cautare identica din cache 30m fara al doilea apel OFF', async () => {
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        hits: [{ code: '5941234567890', product_name: 'Lapte 3.5%', brands: 'Ferma', nutriments: {} }],
+      }),
+    }));
+    const app = creeazaAplicatie();
+
+    const r1 = await request(app)
+      .get('/cauta-produs?q=Lapte')
+      .set('Authorization', 'Bearer token-valid');
+    const r2 = await request(app)
+      .get('/cauta-produs?q=lapte')
+      .set('Authorization', 'Bearer token-valid');
+
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+    expect(r2.body).toEqual(r1.body);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
 });

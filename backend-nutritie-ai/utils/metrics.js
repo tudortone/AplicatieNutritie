@@ -56,7 +56,8 @@ function contorAi(map, cheie) {
  */
 function inregistreazaAi({ provider, model, ruta, usage, ok }) {
   const tokensIn = usage?.prompt_tokens ?? usage?.promptTokenCount ?? 0;
-  const tokensOut = usage?.completion_tokens ?? usage?.candidatesTokenCount ?? 0;
+  const tokensOut = (usage?.completion_tokens ?? usage?.candidatesTokenCount ?? 0)
+    + (usage?.thoughtsTokenCount ?? 0);
   const cost = estimeazaCost(model, tokensIn, tokensOut);
 
   for (const [map, cheie] of [

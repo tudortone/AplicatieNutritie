@@ -40,6 +40,11 @@ const registruImplicit = creeazaRegistruCheiValori({
   url: process.env.REDIS_URL,
   prefix: 'nutri:idem',
 });
+const registruImplicitCritic = creeazaRegistruCheiValori({
+  url: process.env.REDIS_URL,
+  prefix: 'nutri:idem',
+  failClosed: true,
+});
 
 const hash = (valoare) => crypto
   .createHash('sha256')
@@ -168,9 +173,9 @@ async function revendicaAtomic(registru, key, valoare, ttlMs) {
  *   Pe GET-uri sau rute idempotente prin natura lor, lasă false (comportament original).
  */
 function creeazaMiddlewareIdempotenta({
-  registru = registruImplicit,
-  ttlMs = TTL_MS,
   rutaCritica = false,
+  registru = rutaCritica ? registruImplicitCritic : registruImplicit,
+  ttlMs = TTL_MS,
   permiteMultipart = false,
 } = {}) {
   return async function idempotencyMiddleware(req, res, next) {
