@@ -26,12 +26,13 @@
       "channel": "development"
     },
     "preview": {
+      "extends": "production",
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       },
       "channel": "preview",
-      "autoIncrement": true
+      "autoIncrement": false
     },
     "production": {
       "node": "22.20.0",
