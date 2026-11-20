@@ -42,8 +42,8 @@ function formatIntent(intent, owner, requestHash, replay, now) {
   });
 }
 
-async function createNewIntent({ owner, tokenHash, requestHash, repo, flowCredits, serverDate }) {
-  const balance = await flowCredits.getBalance({ userId: owner });
+async function createNewIntent({ owner, tokenHash, requestHash, repo, flowCredits, serverDate, timezone = null }) {
+  const balance = await flowCredits.getBalance({ userId: owner, ...(timezone ? { timezone } : {}) });
   if (Number(balance?.rewardedGrantsRemaining) <= 0) throw new RewardedError('REWARDED_DAILY_LIMIT', 429);
   const id = crypto.randomUUID();
   const customData = crypto.randomBytes(32).toString('base64url');
@@ -74,7 +74,7 @@ function createRewardedService({ repo, flowCredits, now = () => new Date() } = {
     return date;
   };
   return Object.freeze({
-    async createIntent({ userId, tokenHash, requestHash } = {}) {
+    async createIntent({ userId, tokenHash, requestHash, timezone = null } = {}) {
       const owner = required(userId, 'INVALID_USER', 128);
       const token = required(tokenHash, 'PLAY_INTEGRITY_REQUIRED', 64);
       const request = required(requestHash, 'PLAY_INTEGRITY_REQUIRED', 128);
@@ -89,6 +89,7 @@ function createRewardedService({ repo, flowCredits, now = () => new Date() } = {
         repo,
         flowCredits,
         serverDate,
+        timezone,
       });
     },
     async getIntentStatus({ intentId, userId } = {}) {

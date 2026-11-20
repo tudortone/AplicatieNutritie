@@ -25,6 +25,17 @@ const { creeazaServiciuChatQuota } = require('../utils/chatQuota');
 const { PhotoJobError } = require('../services/ai/photoJobService');
 const { FlowCreditsError } = require('../services/monetization/flowCreditsService');
 
+function requestTimezone(req) {
+  const raw = (typeof req.get === 'function'
+    ? (req.get('x-timezone') || req.get('x-client-timezone'))
+    : (req.headers?.['x-timezone'] || req.headers?.['x-client-timezone']))
+    || req.query?.tz
+    || req.body?.timezone;
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 && trimmed.length <= 64 ? trimmed : null;
+}
+
 function mapPhotoAdmissionStatus(code) {
   if (
     code === 'PHOTO_IN_PROGRESS'
@@ -353,6 +364,7 @@ function createAiRouter({
           mealType: tipMasa || 'Pranz',
           language: req.body?.limba || req.body?.language || 'ro',
           fullAccess: req.user.esteTester === true,
+          timezone: requestTimezone(req),
           dataContext: typeof contextDate === 'function' ? contextDate(req, res) : {},
         });
 
@@ -376,6 +388,7 @@ function createAiRouter({
         logicalAnalysisId,
         requestFingerprint,
         entitlement,
+        timezone: requestTimezone(req),
       });
       const verificareRezervare = valideazaRezervareProaspataFoto(reservation, req.user.id);
       if (!verificareRezervare.ok) {
@@ -556,6 +569,7 @@ function createAiRouter({
         logicalAnalysisId,
         requestFingerprint,
         entitlement,
+        timezone: requestTimezone(req),
       });
       const savedResult = reservation?.result;
       if (savedResult && Array.isArray(savedResult.payload)) {

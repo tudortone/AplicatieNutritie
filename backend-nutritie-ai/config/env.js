@@ -322,7 +322,7 @@ function incarcaConfig() {
 			})(),
 		}),
 		flowCredits: Object.freeze({
-			dailyLimit: intregDinEnv(process.env.FLOW_CREDITS_DAILY_LIMIT, 3, { minimZero: true }),
+			dailyLimit: intregDinEnv(process.env.FLOW_CREDITS_DAILY_LIMIT, 2, { minimZero: true }),
 			rewardedDailyLimit: intregDinEnv(process.env.FLOW_REWARDED_DAILY_LIMIT, 5, { minimZero: true }),
 			premiumDailyFairUse: intregDinEnv(process.env.PREMIUM_PHOTO_DAILY_FAIR_USE, 50),
 		}),

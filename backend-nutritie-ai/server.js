@@ -143,6 +143,8 @@ app.use(cors({
     'X-Payload-Fingerprint',
     'X-Play-Integrity',
     'X-Play-Integrity-Request-Hash',
+    'X-Timezone',
+    'X-Client-Timezone',
   ],
   exposedHeaders: ['Idempotency-Status', 'Retry-After', 'X-AI-Quota-Remaining', 'X-Protectie-RLS', 'X-Credite-Ramase'],
 }));

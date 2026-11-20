@@ -51,10 +51,17 @@ function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, bi
       if (paidEntitlement?.premium !== false) {
         throw Object.assign(new Error('Paid access could not be verified.'), { code: 'REWARDED_ENTITLEMENT_UNAVAILABLE', status: 503 });
       }
+      const timezoneRaw = (typeof req.get === 'function'
+        ? (req.get('x-timezone') || req.get('x-client-timezone'))
+        : (req.headers?.['x-timezone'] || req.headers?.['x-client-timezone']));
+      const timezone = typeof timezoneRaw === 'string' && timezoneRaw.trim().length > 0 && timezoneRaw.trim().length <= 64
+        ? timezoneRaw.trim()
+        : null;
       const intent = await rewardedService.createIntent({
         userId: req.user.id,
         tokenHash,
         requestHash,
+        timezone,
       });
       return res.status(intent.replay === true ? 200 : 201).json({
         intentId: intent.intentId,

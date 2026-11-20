@@ -46,10 +46,10 @@ function createTransactionalRepo() {
       const row = account(userId);
       rollDay(row, now);
       return {
-        dailyRemaining: Math.max(0, 3 - row.dailyUsed),
+        dailyRemaining: Math.max(0, 2 - row.dailyUsed),
         rewarded: row.rewarded,
         purchased: row.purchased,
-        total: Math.max(0, 3 - row.dailyUsed) + row.rewarded + row.purchased,
+        total: Math.max(0, 2 - row.dailyUsed) + row.rewarded + row.purchased,
         rewardedGrantsRemaining: Math.max(0, 5 - row.rewardedGranted),
         serverDay: row.serverDay,
       };
@@ -71,7 +71,7 @@ function createTransactionalRepo() {
         if (row.premiumUsed >= 50) return { ok: false, code: 'PREMIUM_FAIR_USE_REACHED' };
         row.premiumUsed += 1;
         source = 'PREMIUM';
-      } else if (row.dailyUsed < 3) {
+      } else if (row.dailyUsed < 2) {
         row.dailyUsed += 1;
         source = 'DAILY';
       } else if (row.rewarded > 0) {
@@ -143,13 +143,13 @@ describe('Flow Credits core server contract', () => {
     }))).toThrow(expect.objectContaining({ code: 'INVALID_REQUEST_FINGERPRINT' }));
   });
 
-  test('free account gets 3 server-day reservations and the fourth is blocked', async () => {
+  test('free account gets 2 server-day reservations and the third is blocked', async () => {
     const service = createFlowCreditsService({ repo: createTransactionalRepo(), now: () => DAY_1 });
-    for (let i = 1; i <= 3; i += 1) {
+    for (let i = 1; i <= 2; i += 1) {
       await expect(service.reservePhoto(photoInput(`photo-${i}`)))
         .resolves.toMatchObject({ ok: true, source: 'DAILY' });
     }
-    await expect(service.reservePhoto(photoInput('photo-4')))
+    await expect(service.reservePhoto(photoInput('photo-3')))
       .resolves.toEqual(expect.objectContaining({ ok: false, code: 'FLOW_CREDITS_EXHAUSTED' }));
   });
 
@@ -159,7 +159,7 @@ describe('Flow Credits core server contract', () => {
       repo: createTransactionalRepo(),
       now: () => serverNow,
     });
-    for (let i = 0; i < 3; i += 1) {
+    for (let i = 0; i < 2; i += 1) {
       await service.reservePhoto(photoInput(`d1-${i}`, { clientNow: DAY_2 }));
     }
     await expect(service.reservePhoto(photoInput('d1-blocked', { clientNow: DAY_2 })))
@@ -175,11 +175,11 @@ describe('Flow Credits core server contract', () => {
     await service.grantRewardVerified({ userId: USER, rewardEventId: 'reward-1' });
     await service.grantPackVerified({ userId: USER, purchaseEventId: 'pack-1', productId: 'getflow_credits_10' });
     const sources = [];
-    for (let i = 0; i < 5; i += 1) {
+    for (let i = 0; i < 4; i += 1) {
       const result = await service.reservePhoto(photoInput(`order-${i}`));
       sources.push(result.source);
     }
-    expect(sources).toEqual(['DAILY', 'DAILY', 'DAILY', 'REWARDED', 'PURCHASED']);
+    expect(sources).toEqual(['DAILY', 'DAILY', 'REWARDED', 'PURCHASED']);
   });
 
   test.each([
@@ -231,7 +231,7 @@ describe('Flow Credits core server contract', () => {
     const results = await Promise.all(Array.from({ length: 12 }, () =>
       service.reservePhoto(photoInput('parallel-photo'))));
     expect(new Set(results.map((result) => result.reservationId)).size).toBe(1);
-    await expect(service.getBalance({ userId: USER })).resolves.toMatchObject({ dailyRemaining: 2 });
+    await expect(service.getBalance({ userId: USER })).resolves.toMatchObject({ dailyRemaining: 1 });
   });
 
   test('premium bypasses ordinary buckets but fair-use remains server enforced', async () => {
@@ -244,7 +244,7 @@ describe('Flow Credits core server contract', () => {
     await expect(service.reservePhoto(photoInput('premium-51', {
       entitlement: 'premium',
     }))).resolves.toMatchObject({ ok: false, code: 'PREMIUM_FAIR_USE_REACHED' });
-    await expect(service.getBalance({ userId: USER })).resolves.toMatchObject({ dailyRemaining: 3 });
+    await expect(service.getBalance({ userId: USER })).resolves.toMatchObject({ dailyRemaining: 2 });
   });
 
   test('full access is accepted only from the server entitlement argument and does not spend', async () => {
@@ -253,6 +253,15 @@ describe('Flow Credits core server contract', () => {
       entitlement: 'full_access',
       clientFullAccess: false,
     }))).resolves.toMatchObject({ ok: true, source: 'FULL_ACCESS' });
-    await expect(service.getBalance({ userId: USER })).resolves.toMatchObject({ dailyRemaining: 3 });
+    await expect(service.getBalance({ userId: USER })).resolves.toMatchObject({ dailyRemaining: 2 });
+  });
+
+  test('validates IANA timezone and forwards valid values while rejecting malformed ones', async () => {
+    const getBalance = jest.fn(async () => ({ dailyRemaining: 2, rewarded: 0, purchased: 0, total: 2 }));
+    const service = createFlowCreditsService({ repo: { getBalance }, now: () => DAY_1 });
+    await service.getBalance({ userId: USER, timezone: 'Europe/Bucharest' });
+    expect(getBalance).toHaveBeenLastCalledWith(expect.objectContaining({ timezone: 'Europe/Bucharest' }));
+    await service.getBalance({ userId: USER, timezone: 'Invalid/Timezone; DROP TABLE' });
+    expect(getBalance).toHaveBeenLastCalledWith(expect.objectContaining({ timezone: null }));
   });
 });

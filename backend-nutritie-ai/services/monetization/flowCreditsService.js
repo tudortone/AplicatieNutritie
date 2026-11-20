@@ -21,6 +21,18 @@ function requiredFingerprint(value) {
   return value;
 }
 
+function optionalTimezone(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 64) return null;
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: trimmed });
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
 function createFlowCreditsService({ repo, now = () => new Date() } = {}) {
   if (!repo || typeof repo.getBalance !== 'function') throw new TypeError('Flow Credits repository is required.');
   const serverNow = () => {
@@ -29,10 +41,14 @@ function createFlowCreditsService({ repo, now = () => new Date() } = {}) {
     return date.toISOString();
   };
   return Object.freeze({
-    getBalance({ userId } = {}) {
-      return repo.getBalance({ userId: requiredString(userId, 'INVALID_USER'), now: serverNow() });
+    getBalance({ userId, timezone } = {}) {
+      return repo.getBalance({
+        userId: requiredString(userId, 'INVALID_USER'),
+        now: serverNow(),
+        timezone: optionalTimezone(timezone),
+      });
     },
-    reservePhoto({ userId, logicalAnalysisId, requestFingerprint, entitlement } = {}) {
+    reservePhoto({ userId, logicalAnalysisId, requestFingerprint, entitlement, timezone } = {}) {
       if (typeof repo.reservePhoto !== 'function') throw new TypeError('reservePhoto is not supported by repo');
       return repo.reservePhoto({
         userId: requiredString(userId, 'INVALID_USER'),
@@ -40,6 +56,7 @@ function createFlowCreditsService({ repo, now = () => new Date() } = {}) {
         requestFingerprint: requiredFingerprint(requestFingerprint),
         now: serverNow(),
         entitlement: entitlement || null,
+        timezone: optionalTimezone(timezone),
       });
     },
     claimPhotoInference(input = {}) {

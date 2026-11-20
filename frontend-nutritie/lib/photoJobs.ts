@@ -317,10 +317,19 @@ export async function submitPhotoJob(input: SubmitPhotoJobInput): Promise<PhotoJ
     mealType: input.mealType,
     language: input.language,
   };
+  let deviceTimezone: string | null = null;
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (typeof tz === 'string' && tz.trim().length > 0 && tz.trim().length <= 64) {
+      deviceTimezone = tz.trim();
+    }
+  } catch {}
+
   const response = await authenticatedFetch('/photo-jobs', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...(deviceTimezone ? { 'X-Timezone': deviceTimezone } : {}),
     },
     body: JSON.stringify(body),
     signal: input.signal,

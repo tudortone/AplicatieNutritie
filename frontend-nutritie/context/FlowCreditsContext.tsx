@@ -104,6 +104,15 @@ function normalizedBalance(value: unknown): FlowCreditsBalance | null {
   };
 }
 
+function getDeviceTimezone(): string | null {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return typeof tz === 'string' && tz.trim().length > 0 && tz.trim().length <= 64 ? tz.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 async function authenticatedFetch(path: string, init?: RequestInit, expectedUserId?: string) {
   const { data } = await supabase.auth.getSession();
   if (!data.session?.access_token) throw new Error('AUTH_REQUIRED');
@@ -139,12 +148,14 @@ async function authenticatedFetch(path: string, init?: RequestInit, expectedUser
         idempotencyKey,
       });
     }
+    const deviceTimezone = getDeviceTimezone();
     return await fetch(buildApiUrl(path), {
       ...init,
       headers: {
         Authorization: `Bearer ${data.session.access_token}`,
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         Pragma: 'no-cache',
+        ...(deviceTimezone ? { 'X-Timezone': deviceTimezone } : {}),
         ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
         ...init?.headers,
         ...extraIdempotencyHeader,

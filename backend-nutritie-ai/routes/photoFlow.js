@@ -49,6 +49,15 @@ function text(value, fallback, max) {
   return normalized.length > 0 && normalized.length <= max ? normalized : fallback;
 }
 
+function requestTimezone(req) {
+  const raw = (typeof req.get === 'function'
+    ? (req.get('x-timezone') || req.get('x-client-timezone'))
+    : (req.headers?.['x-timezone'] || req.headers?.['x-client-timezone']))
+    || req.query?.tz
+    || req.body?.timezone;
+  return text(raw, null, 64);
+}
+
 function logicalId(body, userId) {
   const supplied = text(body.analysisId, null, 256);
   if (supplied) return supplied;
@@ -97,7 +106,7 @@ function createPhotoFlowRouter({
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
-      return res.json(await flowCredits.getBalance({ userId: req.user.id }));
+      return res.json(await flowCredits.getBalance({ userId: req.user.id, timezone: requestTimezone(req) }));
     } catch (error) {
       return sendError(res, error);
     }
@@ -127,6 +136,7 @@ function createPhotoFlowRouter({
         mealType: text(req.body?.mealType, 'Pranz', 50),
         language: text(req.body?.language, 'ro', 10),
         fullAccess: req.user.esteTester === true,
+        timezone: requestTimezone(req),
         dataContext: contextDate(req, res),
       });
       return res.status(job.replay && job.status !== 'failed' ? 200 : 202).json(job);
