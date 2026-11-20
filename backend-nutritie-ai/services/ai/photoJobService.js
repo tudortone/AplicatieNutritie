@@ -210,7 +210,7 @@ function createPhotoJobService({
         logicalAnalysisId,
         requestFingerprint,
         entitlement,
-        timezone: input.timezone || null,
+        ...(input.timezone ? { timezone: input.timezone } : {}),
       });
 
       if (reservation?.ok && reservation.replay === true && reservation.status === 'RESERVED') {

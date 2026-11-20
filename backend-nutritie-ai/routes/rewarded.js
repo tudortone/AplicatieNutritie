@@ -61,7 +61,7 @@ function createRewardedRouter({ requireAuth, generalLimiter, rewardedService, bi
         userId: req.user.id,
         tokenHash,
         requestHash,
-        timezone,
+        ...(timezone ? { timezone } : {}),
       });
       return res.status(intent.replay === true ? 200 : 201).json({
         intentId: intent.intentId,

@@ -355,6 +355,7 @@ function createAiRouter({
         .digest('hex');
 
       if (photoJobs && typeof photoJobs.submit === 'function') {
+        const timezone = requestTimezone(req);
         const job = await photoJobs.submit({
           userId: req.user.id,
           logicalAnalysisId,
@@ -364,7 +365,7 @@ function createAiRouter({
           mealType: tipMasa || 'Pranz',
           language: req.body?.limba || req.body?.language || 'ro',
           fullAccess: req.user.esteTester === true,
-          timezone: requestTimezone(req),
+          ...(timezone ? { timezone } : {}),
           dataContext: typeof contextDate === 'function' ? contextDate(req, res) : {},
         });
 
@@ -383,12 +384,13 @@ function createAiRouter({
       }
 
       const entitlement = await resolvePhotoEntitlement(req.user);
+      const timezone = requestTimezone(req);
       const reservation = await flowCredits.reservePhoto({
         userId: req.user.id,
         logicalAnalysisId,
         requestFingerprint,
         entitlement,
-        timezone: requestTimezone(req),
+        ...(timezone ? { timezone } : {}),
       });
       const verificareRezervare = valideazaRezervareProaspataFoto(reservation, req.user.id);
       if (!verificareRezervare.ok) {
@@ -564,12 +566,13 @@ function createAiRouter({
       userInFlightLocked = true;
 
       const entitlement = await resolvePhotoEntitlement(req.user);
+      const timezone = requestTimezone(req);
       const reservation = await flowCredits.reservePhoto({
         userId: req.user.id,
         logicalAnalysisId,
         requestFingerprint,
         entitlement,
-        timezone: requestTimezone(req),
+        ...(timezone ? { timezone } : {}),
       });
       const savedResult = reservation?.result;
       if (savedResult && Array.isArray(savedResult.payload)) {

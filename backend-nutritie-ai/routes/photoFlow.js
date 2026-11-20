@@ -106,7 +106,11 @@ function createPhotoFlowRouter({
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
-      return res.json(await flowCredits.getBalance({ userId: req.user.id, timezone: requestTimezone(req) }));
+      const timezone = requestTimezone(req);
+      return res.json(await flowCredits.getBalance({
+        userId: req.user.id,
+        ...(timezone ? { timezone } : {}),
+      }));
     } catch (error) {
       return sendError(res, error);
     }
@@ -128,6 +132,7 @@ function createPhotoFlowRouter({
       return res.status(400).json({ eroare: validation.eroare, cod: 'INVALID_IMAGE_URL' });
     }
     try {
+      const timezone = requestTimezone(req);
       const job = await photoJobs.submit({
         userId: req.user.id,
         logicalAnalysisId: logicalId(req.body || {}, req.user.id),
@@ -136,7 +141,7 @@ function createPhotoFlowRouter({
         mealType: text(req.body?.mealType, 'Pranz', 50),
         language: text(req.body?.language, 'ro', 10),
         fullAccess: req.user.esteTester === true,
-        timezone: requestTimezone(req),
+        ...(timezone ? { timezone } : {}),
         dataContext: contextDate(req, res),
       });
       return res.status(job.replay && job.status !== 'failed' ? 200 : 202).json(job);
