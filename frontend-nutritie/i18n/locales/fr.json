@@ -193,7 +193,16 @@
     "manageSubscriptionA11y": "Ouvrir les abonnements Google Play pour gérer ou résilier",
     "interactiveGuideTitle": "Guide interactif de l'application",
     "interactiveGuideDesc": "Relancer la visite complète : Accueil, Journal, Garde-manger, Sport et Coach IA",
-    "interactiveGuideA11y": "Relancer la visite interactive complète de l'application"
+    "interactiveGuideA11y": "Relancer la visite interactive complète de l'application",
+    "checkUpdatesTitle": "Vérifier les mises à jour",
+    "checkUpdatesA11y": "Vérifier les mises à jour de l'application et voir la version actuelle",
+    "checkingUpdates": "Recherche de mises à jour…",
+    "currentVersionLabel": "Version actuelle : {{version}} · Appuyez pour vérifier",
+    "upToDate": "Vous utilisez la dernière version ({{version}})",
+    "updateAvailable": "Mise à jour disponible pour GetFlow — ouvrir Google Play",
+    "updateCheckUnavailable": "Vérification automatique impossible · Vérifiez dans Google Play",
+    "openInGooglePlay": "Ouvrir dans Google Play",
+    "openInGooglePlayA11y": "Ouvrir la fiche GetFlow sur Google Play Store"
   },
   "nutrition": {
     "protein": "Protéines",
@@ -921,7 +930,7 @@
       "error_message": "Un problème est survenu lors du traitement de l'achat. Veuillez réessayer."
     },
     "legal": {
-      "disclaimer": "L'abonnement se renouvelle automatiquement via Google Play. Vous pouvez annuler à tout moment dans les paramètres de votre compte Google Play.",
+      "disclaimer": "L'abonnement se renouvelle automatiquement via votre compte Google Play au tarif et à la fréquence affichés, sauf résiliation au moins 24 heures avant la fin de la période en cours. Les taxes applicables sont gérées par Google Play ; résiliez à tout moment dans les paramètres Google Play.",
       "terms": "Conditions d'utilisation",
       "privacy": "Politique de confidentialité",
       "withdrawalNotice": "Exploité par {{company}} ({{email}}). L'accès numérique démarre immédiatement avec votre accord exprès (exception au droit de rétractation de 14 jours)."
@@ -1571,7 +1580,7 @@
     "daily": "Quotidiens",
     "bonus": "Bonus",
     "purchased": "Achetés",
-    "resetInfo": "Vous recevez 2 crédits quotidiens gratuits chaque jour (les crédits bonus et achetés n'expirent pas). Obtenez-en plus via des publicités (jusqu'à 5/jour) ou des packs.",
+    "resetInfo": "Vous recevez 2 crédits quotidiens gratuits chaque jour (les crédits bonus et achetés n'expirent pas). Obtenez-en plus via des publicités (jusqu'à 3/jour) ou des packs.",
     "watchAd": "Voir une publicité · +1",
     "preparingAd": "Préparation de l'annonce…",
     "verifyingReward": "Vérification de la récompense…",
@@ -1594,7 +1603,7 @@
     "purchaseProcessing": "Traitement de l'achat…",
     "purchasePending": "L'achat est en attente de confirmation Google Play.",
     "purchaseError": "L'achat n'a pas pu être finalisé. Veuillez réessayer.",
-    "legalNotice": "Traité via Google Play Billing. Livraison numérique immédiate ; voir "
+    "legalNotice": "Achat unique non récurrent traité via Google Play Billing. Livraison numérique immédiate ; la TVA et taxes locales applicables sont affichées et gérées par Google Play."
   },
   "calculatorAi": {
     "badge": "Algorithme de nutrition basé sur l'IA. Entrez vos informations pour des objectifs nutritionnels précis.",

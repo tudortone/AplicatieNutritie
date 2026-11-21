@@ -15,7 +15,7 @@ function unwrapRpc(result, operation) {
   return result.data;
 }
 
-function createFlowCreditsRepo({ supabaseAdmin, rewardLimit = 5, dailyLimit = 2, premiumFairUse = 50 } = {}) {
+function createFlowCreditsRepo({ supabaseAdmin, rewardLimit = 3, dailyLimit = 2, premiumFairUse = 50 } = {}) {
   if (!supabaseAdmin?.rpc) throw new TypeError('Supabase admin RPC client is required.');
   return Object.freeze({
     async getBalance({ userId, now, timezone = null }) {

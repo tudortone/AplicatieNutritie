@@ -15,7 +15,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Save, LogOut, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Camera, CheckCircle2, User, Pencil, Crown, FileText, Watch, Globe, Download, Award, HelpCircle, Building2 } from 'lucide-react-native';
+import Constants from 'expo-constants';
+import { Save, LogOut, Zap, Sparkles, ChevronRight, Palette, Bell, Lock, ShieldCheck, Footprints, Activity, Camera, CheckCircle2, User, Pencil, Crown, FileText, Watch, Globe, Download, Award, HelpCircle, Building2, RefreshCw, ExternalLink } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../context/ThemeContext';
@@ -60,6 +61,7 @@ import { buildCompleteUserExport, fetchServerGdprExport } from '../../lib/gdprEx
 import { SupportEmailFooter } from '../../components/ui/SupportEmailFooter';
 import { marcheazaMeseModificate } from '../../lib/freshnessMese';
 import { requestHomeTourReplay } from '../../lib/homeTour';
+import { checkForAppUpdate, getCurrentVersionCode, getCurrentVersionName, openAppStore } from '../../lib/versionCheck';
 import { incarcaTinteDinProfilSupabase, restaureazaProfilLocal } from '../../lib/onboarding';
 
 
@@ -112,6 +114,36 @@ export default function ProfilScreen() {
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [languageQuery, setLanguageQuery] = useState('');
   const [achievementsModalVisible, setAchievementsModalVisible] = useState(false);
+  const updateCheckInFlightRef = useRef(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'up_to_date' | 'available' | 'error'>('idle');
+
+  const appVersionName = Constants.expoConfig?.version || getCurrentVersionName() || '1.0.0';
+  const nativeBuildCode = getCurrentVersionCode();
+  const versionDisplayText = nativeBuildCode ? `v${appVersionName} (${nativeBuildCode})` : `v${appVersionName}`;
+
+  const verificaActualizari = async () => {
+    if (updateCheckInFlightRef.current) return;
+    updateCheckInFlightRef.current = true;
+    setCheckingUpdate(true);
+    try {
+      const result = await checkForAppUpdate(5000);
+      if (!result.checked) {
+        setUpdateStatus('error');
+        return;
+      }
+      setUpdateStatus(result.needsOptionalUpdate || result.needsForceUpdate ? 'available' : 'up_to_date');
+    } catch {
+      setUpdateStatus('error');
+    } finally {
+      updateCheckInFlightRef.current = false;
+      setCheckingUpdate(false);
+    }
+  };
+
+  const deschideGooglePlay = () => {
+    void openAppStore();
+  };
 
   const normalizedLanguageQuery = languageQuery.trim().toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const sortedLanguages = [...SUPPORTED_LANGUAGES].sort((a, b) => new Intl.Collator(i18n.language || 'en').compare(LANGUAGE_NAMES[a].label, LANGUAGE_NAMES[b].label));
@@ -1245,6 +1277,95 @@ export default function ProfilScreen() {
                 </View>
                 <ChevronRight size={18} color={colors.textSecondary} />
               </TouchableOpacity>
+
+              <View style={styles.separator} />
+
+              <TouchableOpacity
+                testID="profile-check-updates"
+                style={[styles.inputRow, { alignItems: 'center', minHeight: 44 }]}
+                onPress={() => {
+                  void verificaActualizari();
+                }}
+                disabled={checkingUpdate}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={t('profile.checkUpdatesA11y')}
+                accessibilityState={{ busy: checkingUpdate, disabled: checkingUpdate }}
+              >
+                <View style={[styles.inputIcon, { backgroundColor: colors.accent + '1F' }]}>
+                  {checkingUpdate ? (
+                    <ActivityIndicator size="small" color={colors.accent} />
+                  ) : (
+                    <RefreshCw size={18} color={colors.accent} />
+                  )}
+                </View>
+                <View style={[styles.inputContent, { flex: 1, minWidth: 0 }]}>
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    numberOfLines={2}
+                    style={[styles.inputLabel, { color: colors.textPrimary, fontSize: 15, marginBottom: 2 }]}
+                  >
+                    {t('profile.checkUpdatesTitle')}
+                  </Text>
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    numberOfLines={2}
+                    style={{
+                      color:
+                        updateStatus === 'up_to_date'
+                          ? colors.accent
+                          : updateStatus === 'available'
+                          ? colors.warning
+                          : colors.textSecondary,
+                      fontSize: 12,
+                    }}
+                  >
+                    {checkingUpdate
+                      ? t('profile.checkingUpdates')
+                      : updateStatus === 'up_to_date'
+                      ? t('profile.upToDate', { version: versionDisplayText })
+                      : updateStatus === 'available'
+                      ? t('profile.updateAvailable')
+                      : updateStatus === 'error'
+                      ? t('profile.updateCheckUnavailable')
+                      : t('profile.currentVersionLabel', { version: versionDisplayText })}
+                  </Text>
+                </View>
+                <ChevronRight size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              {(updateStatus === 'available' || updateStatus === 'error') && (
+                <View style={{ paddingHorizontal: 20, paddingBottom: 14 }}>
+                  <TouchableOpacity
+                    testID="profile-open-play-store"
+                    onPress={deschideGooglePlay}
+                    activeOpacity={0.75}
+                    accessibilityRole="link"
+                    accessibilityLabel={t('profile.openInGooglePlayA11y')}
+                    style={{
+                      minHeight: 44,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: colors.accent,
+                      backgroundColor: colors.accent + '14',
+                      paddingHorizontal: 14,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <ExternalLink size={16} color={colors.accent} />
+                    <Text
+                      maxFontSizeMultiplier={1.3}
+                      numberOfLines={1}
+                      style={{ color: colors.accent, fontSize: 13, fontWeight: '800' }}
+                    >
+                      {t('profile.openInGooglePlay')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </LinearGradient>
           </BlurView>
           <View style={{ gap: 12, marginBottom: 24 }}>

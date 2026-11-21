@@ -193,7 +193,16 @@
     "manageSubscriptionA11y": "Google Play-Abonnements zum Verwalten oder Kündigen öffnen",
     "interactiveGuideTitle": "Interaktiver App-Leitfaden",
     "interactiveGuideDesc": "Vollständige Tour durch Start, Tagebuch, Vorrat, Training & KI-Coach starten",
-    "interactiveGuideA11y": "Vollständige interaktive App-Tour erneut starten"
+    "interactiveGuideA11y": "Vollständige interaktive App-Tour erneut starten",
+    "checkUpdatesTitle": "Nach Updates suchen",
+    "checkUpdatesA11y": "Nach App-Updates suchen und aktuelle Version anzeigen",
+    "checkingUpdates": "Suche nach Updates…",
+    "currentVersionLabel": "Aktuelle Version: {{version}} · Tippen zum Prüfen",
+    "upToDate": "Sie verwenden die neueste Version ({{version}})",
+    "updateAvailable": "Update für GetFlow verfügbar — Google Play öffnen",
+    "updateCheckUnavailable": "Automatische Prüfung fehlgeschlagen · In Google Play prüfen",
+    "openInGooglePlay": "In Google Play öffnen",
+    "openInGooglePlayA11y": "GetFlow-Seite im Google Play Store öffnen"
   },
   "nutrition": {
     "protein": "Protein",
@@ -921,7 +930,7 @@
       "error_message": "Beim Verarbeiten des Kaufs ist ein Problem aufgetreten. Bitte versuchen Sie es erneut."
     },
     "legal": {
-      "disclaimer": "Das Abonnement verlängert sich automatisch über Google Play. Sie können jederzeit in Ihren Google Play-Kontoeinstellungen kündigen.",
+      "disclaimer": "Das Abonnement verlängert sich automatisch über Ihr Google Play-Konto zum angezeigten Preis und Zyklus, sofern es nicht mindestens 24 Stunden vor Ablauf gekündigt wird. Anfallende Steuern werden von Google Play verwaltet; jederzeit in den Google Play-Kontoeinstellungen kündbar.",
       "terms": "Nutzungsbedingungen",
       "privacy": "Datenschutzerklärung",
       "withdrawalNotice": "Betrieben von {{company}} ({{email}}). Der digitale Zugang beginnt sofort mit Ihrer ausdrücklichen Zustimmung (Ausnahme vom 14-tägigen Widerrufsrecht)."
@@ -1571,7 +1580,7 @@
     "daily": "Täglich",
     "bonus": "Bonus",
     "purchased": "Gekauft",
-    "resetInfo": "Du erhältst jeden Tag 2 kostenlose tägliche Credits (Bonus- und gekaufte Credits verfallen nicht). Hol dir mehr per Werbung (bis zu 5/Tag) oder mit Packs.",
+    "resetInfo": "Du erhältst jeden Tag 2 kostenlose tägliche Credits (Bonus- und gekaufte Credits verfallen nicht). Hol dir mehr per Werbung (bis zu 3/Tag) oder mit Packs.",
     "watchAd": "Werbung ansehen · +1",
     "preparingAd": "Werbung wird vorbereitet…",
     "verifyingReward": "Belohnung wird geprüft…",
@@ -1594,7 +1603,7 @@
     "purchaseProcessing": "Kauf wird verarbeitet…",
     "purchasePending": "Der Kauf wartet auf die Bestätigung von Google Play.",
     "purchaseError": "Der Kauf konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
-    "legalNotice": "Abgewickelt über Google Play Billing. Sofortige digitale Bereitstellung; siehe "
+    "legalNotice": "Einmaliger, nicht wiederkehrender Kauf über Google Play Billing. Sofortige digitale Bereitstellung; anfallende lokale Steuern/MwSt. werden von Google Play angezeigt und abgewickelt."
   },
   "calculatorAi": {
     "badge": "KI-Ernährungsalgorithmus. Gib deine Daten ein, um präzise Ernährungsziele zu erhalten.",

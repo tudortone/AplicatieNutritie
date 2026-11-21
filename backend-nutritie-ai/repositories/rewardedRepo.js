@@ -1,6 +1,6 @@
 'use strict';
 
-function createRewardedRepo({ supabaseAdmin, dailyLimit = 5 } = {}) {
+function createRewardedRepo({ supabaseAdmin, dailyLimit = 3 } = {}) {
   if (!supabaseAdmin?.from || !supabaseAdmin?.rpc) throw new TypeError('Supabase admin client is required.');
   return Object.freeze({
     async findByIntegrityTokenHash({ tokenHash }) {

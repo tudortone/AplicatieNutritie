@@ -50,7 +50,7 @@ function createTransactionalRepo() {
         rewarded: row.rewarded,
         purchased: row.purchased,
         total: Math.max(0, 2 - row.dailyUsed) + row.rewarded + row.purchased,
-        rewardedGrantsRemaining: Math.max(0, 5 - row.rewardedGranted),
+        rewardedGrantsRemaining: Math.max(0, 3 - row.rewardedGranted),
         serverDay: row.serverDay,
       };
     },
@@ -115,7 +115,7 @@ function createTransactionalRepo() {
       if (events.has(eventId)) return { applied: false };
       const row = account(userId);
       rollDay(row, now);
-      if (row.rewardedGranted >= 5) return { applied: false, code: 'REWARDED_DAILY_LIMIT' };
+      if (row.rewardedGranted >= 3) return { applied: false, code: 'REWARDED_DAILY_LIMIT' };
       events.add(eventId);
       row.rewardedGranted += 1;
       row.rewarded += 1;

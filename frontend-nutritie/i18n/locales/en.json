@@ -193,7 +193,16 @@
     "manageSubscriptionA11y": "Open Google Play subscriptions to manage or cancel",
     "interactiveGuideTitle": "Interactive App Guide",
     "interactiveGuideDesc": "Replay the full walkthrough across Home, Journal, Pantry, Workouts & AI Coach",
-    "interactiveGuideA11y": "Replay the complete interactive app tour"
+    "interactiveGuideA11y": "Replay the complete interactive app tour",
+    "checkUpdatesTitle": "Check for Updates",
+    "checkUpdatesA11y": "Check for app updates and view current version",
+    "checkingUpdates": "Checking for updates…",
+    "currentVersionLabel": "Current version: {{version}} · Tap to check",
+    "upToDate": "You're using the latest version ({{version}})",
+    "updateAvailable": "Update available for GetFlow — open Google Play",
+    "updateCheckUnavailable": "Could not verify automatically · You can check in Google Play",
+    "openInGooglePlay": "Open in Google Play",
+    "openInGooglePlayA11y": "Open GetFlow listing in Google Play Store"
   },
   "nutrition": {
     "protein": "Protein",
@@ -921,7 +930,7 @@
       "error_message": "A problem occurred while processing the purchase. Please try again."
     },
     "legal": {
-      "disclaimer": "Subscription automatically renews via Google Play. You can cancel anytime in your Google Play account settings.",
+      "disclaimer": "Subscription automatically renews via your Google Play account at the displayed price and billing cycle unless cancelled at least 24 hours before the end of the current period. Applicable taxes are managed by Google Play; cancel anytime in Google Play account settings.",
       "terms": "Terms of Service",
       "privacy": "Privacy Policy",
       "withdrawalNotice": "Operated by {{company}} ({{email}}). Digital access begins immediately with your express consent (14-day withdrawal exception applies)."
@@ -1571,7 +1580,7 @@
     "daily": "Daily",
     "bonus": "Bonus",
     "purchased": "Purchased",
-    "resetInfo": "You receive 2 free daily credits every day (bonus and purchased credits never expire). Get extra credits by watching ads (up to 5/day) or purchasing packs.",
+    "resetInfo": "You receive 2 free daily credits every day (bonus and purchased credits never expire). Get extra credits by watching ads (up to 3/day) or purchasing packs.",
     "watchAd": "Watch ad · +1",
     "preparingAd": "Preparing ad…",
     "verifyingReward": "Verifying reward…",
@@ -1594,7 +1603,7 @@
     "purchaseProcessing": "Processing purchase…",
     "purchasePending": "Purchase is awaiting Google Play confirmation.",
     "purchaseError": "The purchase could not be completed. Please try again.",
-    "legalNotice": "Processed via Google Play Billing. Instant digital delivery; see "
+    "legalNotice": "One-time non-recurring purchase processed securely via Google Play Billing. Instant digital delivery; applicable local taxes/VAT are shown and managed by Google Play."
   },
   "calculatorAi": {
     "badge": "AI nutrition algorithm. Enter your accurate details for precise nutrition targets.",

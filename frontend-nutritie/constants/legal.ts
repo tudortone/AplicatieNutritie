@@ -4,19 +4,19 @@ import { SUPPORT_EMAIL } from './support';
 import { getLegalUrls } from '../lib/legalUrls';
 
 /**
- * Configurare legală centralizată (Dezvoltator Individual / Operator GetFlow).
- * Datele comerciale sau personale suplimentare (PFA/SRL, adresă publică, telefon public)
- * NU sunt stocate în codul sursă public; pot fi injectate opțional la build prin EXPO_PUBLIC_LEGAL_*.
+ * Configurare legală centralizată (TOT SRL / Operator GetFlow).
+ * Datele comerciale suplimentare (CUI, Reg. Com., adresă publică, telefon public)
+ * pot fi injectate opțional la build prin EXPO_PUBLIC_LEGAL_*.
  */
 export const OPERATOR_DISPLAY_NAME_RO =
   process.env.EXPO_PUBLIC_LEGAL_COMPANY_NAME?.trim() ||
   process.env.EXPO_PUBLIC_LEGAL_OPERATOR_NAME?.trim() ||
-  'Dezvoltator Individual (GetFlow)';
+  'TOT SRL';
 
 export const OPERATOR_DISPLAY_NAME_EN =
   process.env.EXPO_PUBLIC_LEGAL_COMPANY_NAME?.trim() ||
   process.env.EXPO_PUBLIC_LEGAL_OPERATOR_NAME?.trim() ||
-  'Individual Developer (GetFlow)';
+  'TOT SRL';
 
 export const COMPANY_NAME = OPERATOR_DISPLAY_NAME_RO;
 
@@ -175,14 +175,14 @@ export function getTermsSections(lang: string): LegalSectionContent[] {
         title: '2. Obiectul serviciului și regulile de utilizare',
         paragraphs: [
           'GetFlow oferă instrumente digitale pentru jurnal nutrițional, scanare foto AI a meselor, calcul caloric și de macronutrienți, monitorizarea antrenamentelor pe hartă musculară și asistentul conversațional GetFlow Coach.',
-          'Serviciul este destinat exclusiv persoanelor cu vârsta de cel puțin 18 ani. Sunteți responsabil pentru confidențialitatea credențialelor de acces și utilizarea loială, non-abuzivă a platformei.',
+          'Vârsta minimă de utilizare: serviciul este destinat exclusiv persoanelor cu vârsta de cel puțin 16 ani (sau vârsta minimă legală pentru consimțământ digital aplicabilă în jurisdicția dvs.). Sunteți responsabil pentru confidențialitatea credențialelor de acces și utilizarea loială, non-abuzivă a platformei.',
         ],
       },
       {
-        title: '3. Condiții comerciale, Abonamente și Plăți (Google Play Billing)',
+        title: '3. Condiții comerciale, Abonamente, Taxe și Google Play Billing',
         paragraphs: [
-          'GetFlow oferă abonamente opționale cu reînnoire automată (lunar — premium_monthly și anual — premium_annual) și pachete consumabile de Credite Flow.',
-          'Toate plățile sunt procesate securizat prin Google Play Billing la prețul și moneda afișate înainte de confirmarea tranzacției.',
+          'GetFlow oferă abonamente opționale cu reînnoire automată (lunar — premium_monthly și anual — premium_annual, inclusiv eventuale perioade de probă gratuită afișate explicit în oferta Google Play) și pachete consumabile de Credite Flow.',
+          'Toate plățile sunt procesate securizat prin contul dvs. Google Play la prețul și în moneda locală afișate înainte de confirmare. Acolo unde legislația fiscală o impune, Google Play acționează ca Merchant of Record și calculează, colectează și virează TVA sau taxele locale aplicabile.',
           'Abonamentele se reînnoiesc automat pentru aceeași durată și la același tarif dacă nu sunt anulate cu cel puțin 24 de ore înainte de expirarea perioadei curente.',
           'Gestionare și anulare: puteți administra sau anula oricând abonamentul din Google Play Store → Profil → Plăți și abonamente → Abonamente, ori direct la adresa https://play.google.com/store/account/subscriptions.',
         ],
@@ -203,9 +203,9 @@ export function getTermsSections(lang: string): LegalSectionContent[] {
         ],
       },
       {
-        title: '6. Legea aplicabilă și soluționarea litigiilor',
+        title: '6. Legea aplicabilă și aplicabilitate internațională',
         paragraphs: [
-          'Prezenții Termeni sunt guvernați de legislația din România și normele aplicabile ale Uniunii Europene (inclusiv GDPR și Regulamentul DSA 2022/2065), fără a aduce atingere normelor imperative de protecție a consumatorilor din țara dvs. de reședință.',
+          'Prezenții Termeni sunt guvernați de legislația din România și normele aplicabile ale Uniunii Europene (inclusiv GDPR și Regulamentul DSA 2022/2065), aplicându-se utilizatorilor din întreaga lume fără a limita drepturile imperative de protecție a consumatorilor din țara dvs. de reședință (SEE, Regatul Unit sau alte jurisdicții internaționale).',
           `Litigiile se soluționează pe cale amiabilă (${SUPPORT_EMAIL}), prin sesizarea Autorității Naționale pentru Protecția Consumatorilor (ANPC — ${ANPC_URL}), prin portalul european de soluționare a litigiilor (${EU_ODR_URL}) sau de instanțele competente.`,
         ],
       },
@@ -216,24 +216,24 @@ export function getTermsSections(lang: string): LegalSectionContent[] {
     {
       title: '1. App Operator Identity',
       paragraphs: [
-        `The GetFlow mobile application (com.totsrl.getflo) is developed and operated by ${operator}, based in ${OPERATOR_JURISDICTION_EN}.`,
+        `The GetFlow mobile application (com.totsrl.getflo) is developed and operated globally by ${operator}, based in ${OPERATOR_JURISDICTION_EN}.`,
         ...getTraderSummaryLines(lang).slice(1),
-        'Verified trader contact details for EEA consumers are also displayed on the Google Play store listing developer section.',
+        'Verified trader contact details for EEA and international consumers are also displayed on the Google Play store listing developer section.',
       ],
     },
     {
-      title: '2. Scope of Service & Account Rules',
+      title: '2. Scope of Service & Minimum Age (16+)',
       paragraphs: [
         'GetFlow provides digital tools for nutrition logging, AI photo meal calorie analysis, macro tracking, interactive muscle workout tracking, and the GetFlow Coach AI assistant.',
-        'The service is strictly intended for users aged 18 or older. You are responsible for safeguarding your account credentials and using the service lawfully.',
+        'Minimum age requirement: the service is strictly intended for individuals aged 16 or older (or the higher minimum age of digital consent required under applicable local law). You are responsible for safeguarding your account credentials and using the service lawfully.',
       ],
     },
     {
-      title: '3. Commercial Terms, Subscriptions & Google Play Billing',
+      title: '3. Commercial Terms, Taxes & Google Play Billing',
       paragraphs: [
-        'GetFlow offers optional auto-renewing subscriptions (monthly — premium_monthly and annual — premium_annual) as well as consumable Flow Credit packs.',
-        'All purchases are billed securely through Google Play Billing at the exact price and currency displayed before purchase confirmation.',
-        'Subscriptions automatically renew unless cancelled at least 24 hours prior to the end of the current billing cycle.',
+        'GetFlow offers optional auto-renewing subscriptions (monthly — premium_monthly and annual — premium_annual, including any introductory or trial period displayed on the Google Play checkout sheet) as well as consumable Flow Credit packs.',
+        'All payments are billed securely through your Google Play account at the exact price and local currency shown before purchase confirmation. Where required by local tax law, Google Play acts as Merchant of Record and handles VAT/sales tax calculation, collection, and remittance.',
+        'Subscriptions automatically renew for the same duration and rate unless cancelled at least 24 hours prior to the end of the current billing cycle.',
         'You can manage or cancel your subscription anytime directly via Google Play Store → Profile → Payments & subscriptions → Subscriptions, or at https://play.google.com/store/account/subscriptions.',
       ],
     },
@@ -253,10 +253,10 @@ export function getTermsSections(lang: string): LegalSectionContent[] {
       ],
     },
     {
-      title: '6. Governing Law & Dispute Resolution',
+      title: '6. Governing Law & Global Dispute Resolution',
       paragraphs: [
-        'These Terms are governed by the laws of Romania and applicable European Union law (including GDPR and the EU Digital Services Act), without limiting mandatory consumer rights in your EEA/UK jurisdiction.',
-        `Unresolved disputes may be submitted amicably via ${SUPPORT_EMAIL}, to the Romanian National Authority for Consumer Protection (ANPC — ${ANPC_URL}), the EU Consumer Redress portal (${EU_ODR_URL}), or competent courts.`,
+        'These Terms apply globally and are governed by the laws of Romania and applicable European Union law (including GDPR and the EU Digital Services Act), without limiting mandatory statutory consumer protections in your country of residence (EEA, UK, or other international jurisdictions).',
+        `Unresolved disputes may be submitted amicably via ${SUPPORT_EMAIL}, to the Romanian National Authority for Consumer Protection (ANPC — ${ANPC_URL}), the EU Consumer Redress portal (${EU_ODR_URL}), or competent local courts.`,
       ],
     },
   ];
@@ -268,24 +268,30 @@ export function getPrivacySections(lang: string): LegalSectionContent[] {
   if (isRo) {
     return [
       {
-        title: '1. Operatorul datelor & Contact',
+        title: '1. Operatorul datelor & Aplicabilitate Globală',
         paragraphs: [
-          `Operator: ${operator} — ${OPERATOR_JURISDICTION_RO}.`,
+          `Operator de date: ${operator} — ${OPERATOR_JURISDICTION_RO}.`,
           `E-mail responsabil confidențialitate / GDPR: ${SUPPORT_EMAIL}${SUPPORT_PHONE ? ` | Telefon: ${SUPPORT_PHONE}` : ''}.`,
+          'Aplicăm GDPR (Regulamentul UE 2016/679) și UK GDPR pentru utilizatorii din SEE/Regatul Unit și oferim drepturi echivalente de transparență, acces, portabilitate și ștergere utilizatorilor din toate țările.',
         ],
       },
       {
-        title: '2. Ce date colectăm (Exclusiv 18+)',
+        title: '2. Ce date colectăm (16+ / Conform legii locale)',
         paragraphs: [
-          'Identificatori cont (e-mail, UID Supabase), profil fizic și obiective (vârstă, sex, înălțime, greutate, țintă calorică/macro), jurnal alimentar, fotografii cu mese stocate pe ImageKit CDN, istoric antrenamente și date opționale Health Connect (doar permisiunea READ_STEPS, procesată local).',
-          'Informațiile de plată (card bancar) sunt procesate exclusiv de Google Play Billing; GetFlow primește doar token-ul de achiziție și statusul abonamentului.',
+          'Serviciul este destinat persoanelor de cel puțin 16 ani (sau vârsta minimă legală pentru consimțământ digital din jurisdicția dvs.). Colectăm identificatori cont (e-mail, UID Supabase), profil fizic și obiective (vârstă, sex, înălțime, greutate, țintă calorică/macro), jurnal alimentar, fotografii cu mese pe ImageKit CDN, istoric antrenamente și date opționale Health Connect (doar READ_STEPS, procesată local).',
+          'Informațiile de plată (card bancar) și taxele/TVA aferente sunt procesate exclusiv de Google Play Billing; GetFlow primește doar token-ul de achiziție și statusul abonamentului.',
         ],
       },
       {
-        title: '3. Drepturile dvs., Export & Ștergere cont',
+        title: '3. Transferuri Internaționale & Procesatori Terți',
         paragraphs: [
-          `În temeiul GDPR (Regulamentul UE 2016/679), aveți drept de acces, rectificare, portabilitate („Exportă datele mele” din Profil), opoziție și ștergere definitivă („Șterge contul” din Profil sau solicitare la ${SUPPORT_EMAIL} — ștergere ireversibilă în cel mult 30 de zile).`,
-          'Raportările tehnice Sentry elimină automat datele PII și sunt păstrate maximum 90 de zile.',
+          'Pentru operarea globală a serviciului colaborăm cu procesatori verificați sub DPA și Clauze Contractuale Standard (SCC) / EU-U.S. DPF: Supabase (bază de date UE Frankfurt), Google Cloud (Cloud Run europe-west3) și Gemini AI (inferență efemeră foto/text), Google AdMob & UMP (reclame cu consimțământ), Google Play Billing & Play Integrity (plăți și integritate), Sentry (telemetrie anonimizată PII, retenție max 90 de zile) și ImageKit CDN (stocare media mese).',
+        ],
+      },
+      {
+        title: '4. Drepturile dvs. Globale, Export & Ștergere cont',
+        paragraphs: [
+          `Indiferent de țara de reședință, aveți drept de acces, rectificare, portabilitate („Exportă datele mele” din Profil), opoziție și ștergere definitivă („Șterge contul” din Profil sau solicitare la ${SUPPORT_EMAIL} — ștergere ireversibilă în cel mult 30 de zile).`,
         ],
       },
     ];
@@ -293,23 +299,30 @@ export function getPrivacySections(lang: string): LegalSectionContent[] {
 
   return [
     {
-      title: '1. Data Controller & Contact',
+      title: '1. Data Controller & Global Scope',
       paragraphs: [
         `Data Controller: ${operator} — ${OPERATOR_JURISDICTION_EN}.`,
         `Privacy & GDPR Contact: ${SUPPORT_EMAIL}${SUPPORT_PHONE ? ` | Phone: ${SUPPORT_PHONE}` : ''}.`,
+        'We comply with EU GDPR (Regulation 2016/679) and UK GDPR for EEA/UK users and extend equivalent access, portability, and deletion protections to users worldwide.',
       ],
     },
     {
-      title: '2. Data Categories Processed (18+ Only)',
+      title: '2. Data Categories & Minimum Age (16+)',
       paragraphs: [
-        'Account identifiers (email, Supabase UID), fitness metrics and targets, food journal entries, meal photos stored securely on ImageKit CDN, workout logs, and optional read-only Health Connect step counts (READ_STEPS processed locally on device).',
-        'Payment card details are processed solely by Google Play Billing; GetFlow only verifies purchase tokens and entitlement state.',
+        'GetFlow is intended for users aged 16 or older (or the applicable age of digital consent under local law). We process account identifiers (email, Supabase UID), fitness metrics and targets, food journal entries, meal photos stored on ImageKit CDN, workout logs, and optional read-only Health Connect step counts (READ_STEPS processed locally).',
+        'Payment card details and applicable taxes/VAT are processed solely by Google Play Billing; GetFlow only receives purchase tokens and entitlement state.',
       ],
     },
     {
-      title: '3. Your GDPR Rights, Data Export & Deletion',
+      title: '3. International Transfers & Subprocessors',
       paragraphs: [
-        `You can export your personal data or permanently delete your account and associated meal photos anytime inside Profile → Data & Privacy, or by contacting ${SUPPORT_EMAIL} (erasure completed within 30 calendar days).`,
+        'To operate globally, data is processed via vetted subprocessors bound by Data Processing Addenda, EU-U.S. Data Privacy Framework, and Standard Contractual Clauses (SCCs): Supabase (EU Frankfurt database), Google Cloud (Cloud Run europe-west3) & Gemini AI (ephemeral meal/chat analysis), Google AdMob / UMP, Google Play Billing & Play Integrity, Sentry (PII-scrubbed diagnostics, 90-day max retention), and ImageKit CDN.',
+      ],
+    },
+    {
+      title: '4. Your Global Rights, Data Export & Deletion',
+      paragraphs: [
+        `Regardless of your country, you may access, export („Export my data”), correct, or permanently delete your account and associated meal photos anytime inside Profile → Data & Privacy, or by contacting ${SUPPORT_EMAIL} (permanent erasure within 30 calendar days).`,
       ],
     },
   ];

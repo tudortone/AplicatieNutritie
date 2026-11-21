@@ -188,7 +188,16 @@
     "manageSubscriptionA11y": "Deschide abonamentele Google Play pentru gestionare sau anulare",
     "interactiveGuideTitle": "Ghid interactiv aplicație",
     "interactiveGuideDesc": "Reia turul complet prin Acasă, Jurnal, Cămară, Sport și Coach AI",
-    "interactiveGuideA11y": "Reia ghidul interactiv complet al aplicației"
+    "interactiveGuideA11y": "Reia ghidul interactiv complet al aplicației",
+    "checkUpdatesTitle": "Verifică actualizări",
+    "checkUpdatesA11y": "Verifică actualizările aplicației și versiunea curentă",
+    "checkingUpdates": "Se verifică actualizările…",
+    "currentVersionLabel": "Versiune curentă: {{version}} · Apasă pentru verificare",
+    "upToDate": "Folosești cea mai nouă versiune ({{version}})",
+    "updateAvailable": "Actualizare disponibilă pentru GetFlow — deschide Google Play",
+    "updateCheckUnavailable": "Nu s-a putut verifica automat · Poți verifica în Google Play",
+    "openInGooglePlay": "Deschide în Google Play",
+    "openInGooglePlayA11y": "Deschide pagina GetFlow în magazinul Google Play"
   },
   "nutrition": {
     "protein": "Proteine",
@@ -921,7 +930,7 @@
       "error_message": "A apărut o problemă la procesarea achiziției. Te rugăm să reîncerci."
     },
     "legal": {
-      "disclaimer": "Abonamentul se reînnoiește automat prin Google Play. Poți anula oricând din setările contului Google Play.",
+      "disclaimer": "Abonamentul se reînnoiește automat prin contul tău Google Play, la prețul și frecvența afișate, cu excepția anulării cu cel puțin 24 de ore înainte de sfârșitul perioadei curente. Taxele aplicabile sunt gestionate de Google Play; poți anula oricând din setările contului Google Play.",
       "terms": "Termeni și condiții",
       "privacy": "Politica de confidențialitate",
       "withdrawalNotice": "Operat de {{company}} ({{email}}). Achiziția digitală începe imediat cu acordul tău expres (excepție retragere 14 zile OUG 34/2014)."
@@ -1571,7 +1580,7 @@
     "daily": "Zilnice",
     "bonus": "Bonus",
     "purchased": "Cumpărate",
-    "resetInfo": "Primești 2 credite zilnice gratuite în fiecare zi (creditele bonus și cumpărate nu expiră). Poți obține credite în plus vizionând reclame (până la 5/zi) sau din pachete.",
+    "resetInfo": "Primești 2 credite zilnice gratuite în fiecare zi (creditele bonus și cumpărate nu expiră). Poți obține credite în plus vizionând reclame (până la 3/zi) sau din pachete.",
     "watchAd": "Vezi reclamă · +1",
     "preparingAd": "Se pregătește reclama…",
     "verifyingReward": "Se verifică recompensa…",
@@ -1594,7 +1603,7 @@
     "purchaseProcessing": "Se procesează achiziția…",
     "purchasePending": "Achiziția este în așteptarea confirmării Google Play.",
     "purchaseError": "Achiziția nu a putut fi finalizată. Încearcă din nou.",
-    "legalNotice": "Procesat prin Google Play Billing. Livrare digitală imediată; consultă "
+    "legalNotice": "Achiziție unică (non-recurentă) procesată securizat prin Google Play Billing. Livrare digitală imediată; taxele locale/TVA aplicabile sunt afișate și gestionate de Google Play."
   },
   "calculatorAi": {
     "badge": "Algoritm de nutriție cu inteligență artificială. Introdu datele tale pentru a calcula țintele nutriționale optime.",
