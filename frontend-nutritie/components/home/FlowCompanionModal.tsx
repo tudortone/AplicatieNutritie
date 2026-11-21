@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Alert,
-  Image,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -14,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -234,7 +234,9 @@ export function FlowCompanionModal({
                   <Image
                     source={COMPANION_FULL_IMAGE}
                     style={styles.heroArtwork}
-                    resizeMode="cover"
+                    contentFit="cover"
+                    allowDownscaling
+                    cachePolicy="memory-disk"
                   />
                 ) : (
                   <SproutArtwork size={156} />

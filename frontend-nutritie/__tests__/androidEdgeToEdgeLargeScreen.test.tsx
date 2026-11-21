@@ -127,6 +127,7 @@ describe('Android 15/16 Edge-to-Edge & Large Screen Compatibility', () => {
       if (!transform) throw new Error('Responsive manifest mod is not registered');
       const manifest: AndroidConfig.Manifest.AndroidManifest = { manifest: {
         $: { 'xmlns:android': 'http://schemas.android.com/apk/res/android' }, queries: [],
+        'uses-feature': [{ $: { 'android:name': 'android.hardware.camera', 'android:required': 'true' } }],
         application: [{ $: { 'android:name': '.MainApplication' }, activity: [{ $: { 'android:name': '.MainActivity' } }] }],
       } };
       const result = await transform({ ...config, modRawConfig: config,
@@ -136,9 +137,16 @@ describe('Android 15/16 Edge-to-Edge & Large Screen Compatibility', () => {
       const activity = AndroidConfig.Manifest.getMainActivityOrThrow(result.modResults);
       expect(activity.$['android:screenOrientation']).toBe('unspecified');
       expect(activity.$['android:resizeableActivity']).toBe('true');
+      expect(result.modResults.manifest.$['xmlns:tools']).toBe('http://schemas.android.com/tools');
       expect(result.modResults.manifest).toEqual(expect.objectContaining({
         'supports-screens': [{ $: { 'android:resizeable': 'true' } }],
       }));
+      const features = (result.modResults.manifest as Record<string, unknown>)['uses-feature'];
+      expect(features).toEqual(expect.arrayContaining([
+        { $: { 'android:name': 'android.hardware.camera', 'android:required': 'false', 'tools:replace': 'android:required' } },
+        { $: { 'android:name': 'android.hardware.screen.portrait', 'android:required': 'false', 'tools:replace': 'android:required' } },
+        { $: { 'android:name': 'android.hardware.wifi', 'android:required': 'false', 'tools:replace': 'android:required' } },
+      ]));
     });
 
     test('managed style transform emits transparent system bars and short-edge cutout policy', async () => {

@@ -1,10 +1,11 @@
 
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
-  ActivityIndicator, AppState, Image, Pressable, Text, View, StyleSheet, TouchableOpacity,
+  ActivityIndicator, AppState, Pressable, Text, View, StyleSheet, TouchableOpacity,
   Alert, KeyboardAvoidingView, Platform, Linking,
   useWindowDimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { BlurView } from 'expo-blur';
@@ -2129,7 +2130,9 @@ export default function CameraScreen() {
             <Image
               source={{ uri: pendingDraftSheet.uri }}
               style={[styles.draftPreviewImg, { borderColor: colors.border }]}
-              resizeMode="cover"
+              contentFit="cover"
+              allowDownscaling
+              cachePolicy="memory-disk"
             />
           </View>
         ) : null}

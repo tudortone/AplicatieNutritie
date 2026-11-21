@@ -1,9 +1,10 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ActivityIndicator,
+  View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
   ScrollView, Keyboard, Alert, Modal, Platform
 } from 'react-native';
+import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authenticatedFetch } from '@/lib/api';
 import { citesteContextProfilChat } from '../../lib/chatProfileContext';
@@ -1098,7 +1099,9 @@ export default function ChatScreen() {
                   testID="coach-avatar"
                   source={require('../../assets/coach/getflow-coach-avatar.png')}
                   style={styles.aiAvatarImage}
-                  resizeMode="cover"
+                  contentFit="cover"
+                  allowDownscaling
+                  cachePolicy="memory-disk"
                   accessible={false}
                 />
               </View>

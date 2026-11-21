@@ -2,10 +2,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, Modal,
-  ScrollView, RefreshControl, Alert, ActivityIndicator, Platform, Switch, Image, Share,
+  ScrollView, RefreshControl, Alert, ActivityIndicator, Platform, Switch, Share,
   KeyboardAvoidingView,
 } from 'react-native';
+import { Image } from 'expo-image';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../../supabase';
@@ -319,7 +321,18 @@ export default function ProfilScreen() {
       });
       if (!rezultat.canceled && rezultat.assets && rezultat.assets.length > 0) {
         const nouaUri = rezultat.assets[0].uri;
-        setAvatarUrl(nouaUri);
+        let avatarUriFinal = nouaUri;
+        try {
+          const manipulated = await ImageManipulator.manipulateAsync(
+            nouaUri,
+            [{ resize: { width: 512 } }],
+            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
+          );
+          if (manipulated?.uri) avatarUriFinal = manipulated.uri;
+        } catch {
+          // Fallback la URI-ul original dacă manipularea nu este disponibilă (ex. web/mediu de test)
+        }
+        setAvatarUrl(avatarUriFinal);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (e) {
@@ -563,8 +576,10 @@ export default function ProfilScreen() {
                   <Image
                     source={{ uri: avatarUrl }}
                     style={{ width: '100%', height: '100%', borderRadius: 29 }}
-                    // FIX UI: fara resizeMode imaginea era intinsa/deformata.
-                    resizeMode="cover"
+                    // FIX UI: fara contentFit imaginea era intinsa/deformata.
+                    contentFit="cover"
+                    allowDownscaling
+                    cachePolicy="memory-disk"
                     accessibilityLabel={t('profile.profilePhotoA11y')}
                   />
                 ) : (

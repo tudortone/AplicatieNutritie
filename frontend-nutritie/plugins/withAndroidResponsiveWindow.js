@@ -1,6 +1,45 @@
 const { withAndroidManifest, withAndroidStyles } = require('expo/config-plugins');
 
 const CUTOUT_API_LEVEL = '27';
+const OPTIONAL_HARDWARE_FEATURES = [
+  'android.hardware.screen.portrait',
+  'android.hardware.wifi',
+];
+
+function ensureOptionalHardwareFeatures(manifest) {
+  manifest.$ = manifest.$ || {};
+  manifest.$['xmlns:tools'] = manifest.$['xmlns:tools'] || 'http://schemas.android.com/tools';
+
+  const features = Array.isArray(manifest['uses-feature']) ? manifest['uses-feature'] : [];
+
+  for (const entry of features) {
+    if (entry?.$?.['android:name']) {
+      entry.$['android:required'] = 'false';
+      entry.$['tools:replace'] = 'android:required';
+    }
+  }
+
+  for (const featureName of OPTIONAL_HARDWARE_FEATURES) {
+    const existing = features.find((entry) => entry?.$?.['android:name'] === featureName);
+    if (existing) {
+      existing.$ = {
+        ...existing.$,
+        'android:required': 'false',
+        'tools:replace': 'android:required',
+      };
+    } else {
+      features.push({
+        $: {
+          'android:name': featureName,
+          'android:required': 'false',
+          'tools:replace': 'android:required',
+        },
+      });
+    }
+  }
+
+  manifest['uses-feature'] = features;
+}
 
 function withResizableAndroidManifest(config) {
   return withAndroidManifest(config, (mod) => {
@@ -12,6 +51,7 @@ function withResizableAndroidManifest(config) {
     const screens = manifest['supports-screens']?.[0] || { $: {} };
     screens.$ = { ...screens.$, 'android:resizeable': 'true' };
     manifest['supports-screens'] = [screens];
+    ensureOptionalHardwareFeatures(manifest);
     return mod;
   });
 }

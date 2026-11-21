@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Text, Image } from 'react-native';
+import { StyleSheet, View, Text } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -185,7 +186,9 @@ export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
           <Image
             source={SPLASH_LOGO}
             style={styles.logoImage}
-            resizeMode="contain"
+            contentFit="contain"
+            allowDownscaling
+            cachePolicy="memory"
             accessibilityLabel="GetFlow Logo"
           />
         </Animated.View>

@@ -1,8 +1,16 @@
-const { withAppBuildGradle } = require('@expo/config-plugins');
-const { replaceDefaultProguardRules } = require('./androidR8ProguardTransform');
+const { withAppBuildGradle, withGradleProperties } = require('@expo/config-plugins');
+const {
+  replaceDefaultProguardRules,
+  upsertR8FullModeProperties,
+} = require('./androidR8ProguardTransform');
 
 function withAndroidR8OptimizedProguard(config) {
-  return withAppBuildGradle(config, (modConfig) => {
+  const withProperties = withGradleProperties(config, (modConfig) => {
+    modConfig.modResults = upsertR8FullModeProperties(modConfig.modResults);
+    return modConfig;
+  });
+
+  return withAppBuildGradle(withProperties, (modConfig) => {
     if (modConfig.modResults.language !== 'groovy') {
       throw new Error('GetFlow R8 optimized ProGuard plugin expects app/build.gradle in Groovy format.');
     }

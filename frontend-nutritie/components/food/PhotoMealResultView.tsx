@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
-  Image,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -10,6 +9,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { ChevronDown, AlertTriangle, Plus, RotateCcw, Maximize2, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -210,7 +210,9 @@ export function PhotoMealResultView({
             <Image
               source={{ uri: photoUri }}
               style={styles.heroPhotoImage}
-              resizeMode="cover"
+              contentFit="cover"
+              allowDownscaling
+              cachePolicy="memory-disk"
             />
             <LinearGradient
               colors={['transparent', 'rgba(9, 12, 14, 0.85)']}
@@ -518,7 +520,9 @@ export function PhotoMealResultView({
             <Image
               source={{ uri: photoUri }}
               style={styles.lightboxImage}
-              resizeMode="contain"
+              contentFit="contain"
+              allowDownscaling
+              cachePolicy="memory-disk"
             />
           ) : null}
         </View>
