@@ -1,6 +1,5 @@
 const { withAndroidManifest, withAndroidStyles } = require('expo/config-plugins');
 
-const CUTOUT_API_LEVEL = '27';
 const OPTIONAL_HARDWARE_FEATURES = [
   'android.hardware.screen.portrait',
   'android.hardware.wifi',
@@ -56,26 +55,26 @@ function withResizableAndroidManifest(config) {
   });
 }
 
-function setStyleItem(style, name, value, extraAttributes = {}) {
-  const items = style.item || [];
-  const existing = items.find((item) => item.$?.name === name);
-  const replacement = { $: { name, ...extraAttributes }, _: value };
-  if (existing) Object.assign(existing, replacement);
-  else items.push(replacement);
-  style.item = items;
-}
+const DEPRECATED_EDGE_TO_EDGE_STYLE_ITEMS = new Set([
+  'android:statusBarColor',
+  'android:navigationBarColor',
+  'android:windowLayoutInDisplayCutoutMode',
+]);
 
-function withEdgeToEdgeStyles(config) {
+function withCleanEdgeToEdgeStyles(config) {
   return withAndroidStyles(config, (mod) => {
-    const appTheme = mod.modResults.resources.style?.find(({ $ }) => $?.name === 'AppTheme');
+    const styles = mod.modResults.resources.style;
+    const appTheme = styles?.find(({ $ }) => $?.name === 'AppTheme');
     if (!appTheme) throw new Error('GetFlow AppTheme was not found in Android styles.');
-    setStyleItem(appTheme, 'android:statusBarColor', '@android:color/transparent');
-    setStyleItem(appTheme, 'android:navigationBarColor', '@android:color/transparent');
-    setStyleItem(appTheme, 'android:windowLayoutInDisplayCutoutMode', 'shortEdges', {
-      'tools:targetApi': CUTOUT_API_LEVEL,
-    });
+    for (const style of styles) {
+      if (Array.isArray(style.item)) {
+        style.item = style.item.filter(
+          (item) => !DEPRECATED_EDGE_TO_EDGE_STYLE_ITEMS.has(item?.$?.name),
+        );
+      }
+    }
     return mod;
   });
 }
 
-module.exports = (config) => withEdgeToEdgeStyles(withResizableAndroidManifest(config));
+module.exports = (config) => withCleanEdgeToEdgeStyles(withResizableAndroidManifest(config));

@@ -149,21 +149,33 @@ describe('Android 15/16 Edge-to-Edge & Large Screen Compatibility', () => {
       ]));
     });
 
-    test('managed style transform emits transparent system bars and short-edge cutout policy', async () => {
+    test('managed style transform strips deprecated Android 15/16 edge-to-edge XML attributes', async () => {
       const withResponsiveWindow = jest.requireActual<(config: ExportedConfig) => ExportedConfig>('../plugins/withAndroidResponsiveWindow');
       const config = withResponsiveWindow({ name: 'GetFlow', slug: 'nutriai' });
       const transform = config.mods?.android?.styles;
       if (!transform) throw new Error('Responsive styles mod is not registered');
       const result = await transform({ ...config, modRawConfig: config,
         modRequest: { projectRoot: __dirname, platformProjectRoot: __dirname, platform: 'android', modName: 'styles', introspect: true },
-        modResults: { resources: { style: [{ $: { name: 'AppTheme', parent: 'Theme.AppCompat' }, item: [] }] } },
+        modResults: {
+          resources: {
+            style: [{
+              $: { name: 'AppTheme', parent: 'Theme.AppCompat.DayNight.NoActionBar' },
+              item: [
+                { $: { name: 'android:enforceNavigationBarContrast', 'tools:targetApi': '29' }, _: 'true' },
+                { $: { name: 'android:statusBarColor' }, _: '@android:color/transparent' },
+                { $: { name: 'android:navigationBarColor' }, _: '@android:color/transparent' },
+                { $: { name: 'android:windowLayoutInDisplayCutoutMode', 'tools:targetApi': '27' }, _: 'shortEdges' },
+              ],
+            }],
+          },
+        },
       });
-      const items = result.modResults.resources.style?.[0].item;
-      expect(items).toEqual(expect.arrayContaining([
-        { $: { name: 'android:statusBarColor' }, _: '@android:color/transparent' },
-        { $: { name: 'android:navigationBarColor' }, _: '@android:color/transparent' },
-        { $: { name: 'android:windowLayoutInDisplayCutoutMode', 'tools:targetApi': '27' }, _: 'shortEdges' },
-      ]));
+      const items = result.modResults.resources.style?.[0].item ?? [];
+      const names = items.map((item) => item.$?.name);
+      expect(names).toContain('android:enforceNavigationBarContrast');
+      expect(names).not.toContain('android:statusBarColor');
+      expect(names).not.toContain('android:navigationBarColor');
+      expect(names).not.toContain('android:windowLayoutInDisplayCutoutMode');
     });
 
     test('Zero app-owned deprecated window API invocations in application source code', () => {
