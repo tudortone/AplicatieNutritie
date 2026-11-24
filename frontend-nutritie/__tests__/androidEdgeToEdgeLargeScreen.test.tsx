@@ -144,6 +144,28 @@ describe('Android 15/16 Edge-to-Edge & Large Screen Compatibility', () => {
       const features = (result.modResults.manifest as Record<string, unknown>)['uses-feature'];
       expect(features).toEqual(expect.arrayContaining([
         { $: { 'android:name': 'android.hardware.camera', 'android:required': 'false', 'tools:replace': 'android:required' } },
+        { $: { 'android:name': 'android.hardware.camera.autofocus', 'android:required': 'false', 'tools:replace': 'android:required' } },
+        { $: { 'android:name': 'android.hardware.camera.front', 'android:required': 'false', 'tools:replace': 'android:required' } },
+        { $: { 'android:name': 'android.hardware.faketouch', 'android:required': 'false', 'tools:replace': 'android:required' } },
+        { $: { 'android:name': 'android.hardware.screen.portrait', 'android:required': 'false', 'tools:replace': 'android:required' } },
+        { $: { 'android:name': 'android.hardware.wifi', 'android:required': 'false', 'tools:replace': 'android:required' } },
+      ]));
+
+      const emptyManifest: AndroidConfig.Manifest.AndroidManifest = { manifest: {
+        $: { 'xmlns:android': 'http://schemas.android.com/apk/res/android' }, queries: [],
+        'uses-feature': [],
+        application: [{ $: { 'android:name': '.MainApplication' }, activity: [{ $: { 'android:name': '.MainActivity' } }] }],
+      } };
+      const emptyResult = await transform({ ...config, modRawConfig: config,
+        modRequest: { projectRoot: __dirname, platformProjectRoot: __dirname, platform: 'android', modName: 'manifest', introspect: true },
+        modResults: AndroidConfig.Orientation.setAndroidOrientation(config, emptyManifest),
+      });
+      const emittedFeatures = (emptyResult.modResults.manifest as Record<string, unknown>)['uses-feature'];
+      expect(emittedFeatures).toEqual(expect.arrayContaining([
+        { $: { 'android:name': 'android.hardware.camera', 'android:required': 'false', 'tools:replace': 'android:required' } },
+        { $: { 'android:name': 'android.hardware.camera.autofocus', 'android:required': 'false', 'tools:replace': 'android:required' } },
+        { $: { 'android:name': 'android.hardware.camera.front', 'android:required': 'false', 'tools:replace': 'android:required' } },
+        { $: { 'android:name': 'android.hardware.faketouch', 'android:required': 'false', 'tools:replace': 'android:required' } },
         { $: { 'android:name': 'android.hardware.screen.portrait', 'android:required': 'false', 'tools:replace': 'android:required' } },
         { $: { 'android:name': 'android.hardware.wifi', 'android:required': 'false', 'tools:replace': 'android:required' } },
       ]));

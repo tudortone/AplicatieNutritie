@@ -1,6 +1,10 @@
 const { withAndroidManifest, withAndroidStyles } = require('expo/config-plugins');
 
 const OPTIONAL_HARDWARE_FEATURES = [
+  'android.hardware.camera',
+  'android.hardware.camera.autofocus',
+  'android.hardware.camera.front',
+  'android.hardware.faketouch',
   'android.hardware.screen.portrait',
   'android.hardware.wifi',
 ];
