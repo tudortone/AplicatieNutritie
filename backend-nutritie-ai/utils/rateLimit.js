@@ -114,7 +114,7 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 	// si keep-alive bat aici periodic dintr-un IP stabil.
 	const healthLimiter = rateLimit({
 		...comun,
-		...cuStorePropriu('rl:health:'),
+		store: new MemoryStoreMarginit(),
 		windowMs: 60 * 1000,
 		max: 300,
 		keyGenerator: ipFallbackKey,

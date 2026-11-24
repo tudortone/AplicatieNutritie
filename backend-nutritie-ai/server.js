@@ -551,7 +551,6 @@ const feedbackR = createFeedbackRouter({
 });
 const versionCheckR = createVersionCheckRouter({
   config,
-  versionLimiter: generalLimiter,
 });
 // /api/v1 = prefix canonic
 app.use('/api/v1', versionCheckR);

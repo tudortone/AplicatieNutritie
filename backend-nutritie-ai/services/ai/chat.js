@@ -518,7 +518,7 @@ function creeazaServiciuChat({ config, genAI }) {
               messages,
               temperature: isMealLog ? 0.2 : 0.7,
               max_tokens: isMealLog ? 1200 : 700,
-              reasoning_effort: 'low',
+              ...(/(gpt-oss|qwen3|deepseek-r1)/i.test(modelName) ? { reasoning_effort: 'low' } : {}),
             };
             if (isMealLog) {
               groqBody.response_format = { type: 'json_object' };

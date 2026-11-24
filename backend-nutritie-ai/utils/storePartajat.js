@@ -139,18 +139,21 @@ function creeazaClientRedis({ url }) {
   const client = redis.createClient({
     url,
     disableOfflineQueue: true,
-    pingInterval: 15_000,
+    pingInterval: 240_000,
     commandsQueueMaxLength: 500,
     socket: {
       connectTimeout: 3000,
-      socketTimeout: 2000,
-      // Strategia implicită din @redis/client oprește reconectarea pe SocketTimeoutError;
+      // Omitem `socketTimeout`: un timeout de inactivitate mai mic decât `pingInterval`
+      // (15s) ar închide conexiunile sănătoase Upstash în repaus; fiecare comandă
+      // este deja mărginită individual prin `cuTimeoutRedis`.
+      // Strategia implicită din @redis/client oprește reconectarea pe erori de socket;
       // backoff cu jitter menține clientul recuperabil după pauze de rețea/Redis.
       reconnectStrategy: (retries) => (
         Math.min((2 ** Math.min(retries, 10)) * 50, 2000) + Math.floor(Math.random() * 200)
       ),
     },
   });
+  if (typeof client.setMaxListeners === 'function') client.setMaxListeners(25);
   client.on('error', (err) => {
     const cod = codEroare(err);
     logWarnThrottled(`[Redis] Eroare client: ${cod}`);
