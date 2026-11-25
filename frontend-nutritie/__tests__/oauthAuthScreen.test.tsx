@@ -7,6 +7,8 @@ const mockBrowser = jest.fn();
 const mockAuthorize = jest.fn();
 const mockExchange = jest.fn();
 const mockSignInWithPassword = jest.fn();
+const mockSignUp = jest.fn();
+const mockResend = jest.fn();
 let mockSession: any = null;
 const mockSessionPush = jest.fn();
 const mockRouter = { replace: jest.fn(), push: mockSessionPush };
@@ -18,6 +20,8 @@ jest.mock('../supabase', () => ({ supabase: { auth: {
   exchangeCodeForSession: (code: string) => mockExchange(code),
   getSession: async () => ({ data: { session: mockSession }, error: null }),
   signInWithPassword: (creds: unknown) => mockSignInWithPassword(creds),
+  signUp: (creds: unknown) => mockSignUp(creds),
+  resend: (params: unknown) => mockResend(params),
 } } }));
 jest.mock('../hooks/useAppStore', () => ({
   useAppStore: (selector?: (s: { setOnboardingDone: jest.Mock; setSkipOnboardingToAuth: jest.Mock }) => unknown) => {
@@ -25,10 +29,14 @@ jest.mock('../hooks/useAppStore', () => ({
     return typeof selector === 'function' ? selector(state) : state;
   },
 }));
-jest.mock('../lib/onboarding', () => ({ incarcaDateOnboarding: async () => null }));
+jest.mock('../lib/onboarding', () => ({
+  incarcaDateOnboarding: async () => null,
+  construiesteMetadataOnboarding: () => ({}),
+  sincronizeazaOnboardingLaProfil: jest.fn(async () => undefined),
+}));
 jest.mock('../hooks/useResponsiveLayout', () => ({ useResponsiveLayout: () => ({ contentMaxWidth: 520 }) }));
 jest.mock('../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
-jest.mock('../context/ThemeContext', () => ({ useTheme: () => ({ colors: { accent: '#fff', accentGradient: ['#fff', '#fff'], background: '#000', surfaceBg: '#111', cardBorder: '#222', textPrimary: '#fff', textSecondary: '#888' } }) }));
+jest.mock('../context/ThemeContext', () => ({ useTheme: () => ({ colors: { accent: '#fff', accentGradient: ['#fff', '#fff'], background: '#000', surfaceBg: '#111', cardBorder: '#222', textPrimary: '#fff', textSecondary: '#888', danger: '#f55', success: '#3d9' } }) }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('../components/ui/PressableScale', () => ({ PressableScale: ({ children, onPress, ...props }: any) => { const { Pressable } = require('react-native'); return <Pressable onPress={onPress} {...props}>{children}</Pressable>; } }));
 jest.mock('../components/ui/KeyboardAwareScreen', () => ({ __esModule: true, default: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
@@ -36,7 +44,7 @@ jest.mock('expo-linear-gradient', () => ({ LinearGradient: ({ children }: { chil
 jest.mock('expo-blur', () => ({ BlurView: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
 jest.mock('lucide-react-native', () => {
   const Icon = () => null;
-  return { Scan: Icon, ArrowRight: Icon, Mail: Icon, Lock: Icon, AlertCircle: Icon, CheckCircle2: Icon, Circle: Icon, Eye: Icon, EyeOff: Icon, Sparkles: Icon, ShieldCheck: Icon, FileText: Icon };
+  return { Scan: Icon, ArrowRight: Icon, Mail: Icon, Lock: Icon, AlertCircle: Icon, CheckCircle2: Icon, Circle: Icon, Eye: Icon, EyeOff: Icon, Sparkles: Icon, ShieldCheck: Icon, FileText: Icon, RefreshCw: Icon };
 });
 
 describe('AUTH-OAUTH-001 auth UI cancellation and retry', () => {
@@ -47,6 +55,8 @@ describe('AUTH-OAUTH-001 auth UI cancellation and retry', () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     mockAuthorize.mockResolvedValue({ data: { url: 'https://provider.invalid' }, error: null });
     mockSignInWithPassword.mockReset();
+    mockSignUp.mockReset();
+    mockResend.mockReset();
     mockSession = null;
     Platform.OS = originalPlatform;
   });
@@ -191,5 +201,100 @@ describe('AUTH-OAUTH-001 auth UI cancellation and retry', () => {
     await fireEvent.press(view.getByLabelText('auth.forgotPasswordA11y'));
     expect(mockRouter.push).toHaveBeenCalledWith('/auth/forgot-password');
     expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('shows neutral password rules and confirm password field when switching to Sign-Up', async () => {
+    Platform.OS = 'android';
+    const view = await render(<AuthScreen />);
+
+    await fireEvent.press(view.getByTestId('auth-mode-signup-tab'));
+
+    expect(view.getByTestId('auth-confirm-password-input')).toBeTruthy();
+    const minLengthText = view.getByText('auth.ruleMinLength');
+    const flattened = Array.isArray(minLengthText.props.style)
+      ? Object.assign({}, ...minLengthText.props.style)
+      : minLengthText.props.style;
+    expect(flattened.color).toBe('#888');
+  });
+
+  it('blocks sign-up when passwords do not match and shows validation error', async () => {
+    Platform.OS = 'android';
+    const view = await render(<AuthScreen />);
+
+    await fireEvent.press(view.getByTestId('auth-mode-signup-tab'));
+    await fireEvent.changeText(view.getByPlaceholderText('auth.signUpEmailPlaceholder'), 'newuser@getflow.app');
+    await fireEvent.changeText(view.getByPlaceholderText('auth.passwordPlaceholder'), 'StrongPass1');
+    await fireEvent.changeText(view.getByTestId('auth-confirm-password-input'), 'StrongPass2');
+    await fireEvent.press(view.getByLabelText('auth.signUpButton'));
+
+    expect(view.getByText('authValidation.passwordMismatch')).toBeTruthy();
+    expect(mockSignUp).not.toHaveBeenCalled();
+  });
+
+  it('shows dedicated inline account-created card with resend & sign-in actions instead of Alert.alert', async () => {
+    Platform.OS = 'android';
+    mockSignUp.mockResolvedValue({
+      data: { user: { id: 'new-u1', identities: [{ id: 'id-1' }] }, session: null },
+      error: null,
+    });
+    mockResend.mockResolvedValue({ data: {}, error: null });
+    const view = await render(<AuthScreen />);
+
+    await fireEvent.press(view.getByTestId('auth-mode-signup-tab'));
+    await fireEvent.changeText(view.getByPlaceholderText('auth.signUpEmailPlaceholder'), 'nou@getflow.app');
+    await fireEvent.changeText(view.getByPlaceholderText('auth.passwordPlaceholder'), 'StrongPass1');
+    await fireEvent.changeText(view.getByTestId('auth-confirm-password-input'), 'StrongPass1');
+    await fireEvent.press(view.getByLabelText('auth.signUpButton'));
+
+    await waitFor(() => expect(view.getByTestId('auth-signup-success-card')).toBeTruthy());
+    expect(view.getByText('auth.signUpSuccessTitle')).toBeTruthy();
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(mockSignUp).toHaveBeenCalledWith(expect.objectContaining({
+      email: 'nou@getflow.app',
+      password: 'StrongPass1',
+    }));
+
+    // Cooldown starts at 60s, so resend button is disabled initially; switching to sign-in preserves email
+    expect(view.getByTestId('auth-signup-resend-btn').props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(view.getByTestId('auth-signup-goto-signin'));
+    await waitFor(() => expect(view.getByPlaceholderText('auth.emailPlaceholder').props.value).toBe('nou@getflow.app'));
+  });
+
+  it('treats Supabase empty identities on signUp as existing account instead of false success', async () => {
+    Platform.OS = 'android';
+    mockSignUp.mockResolvedValue({
+      data: { user: { id: 'existing-u1', identities: [] }, session: null },
+      error: null,
+    });
+    const view = await render(<AuthScreen />);
+
+    await fireEvent.press(view.getByTestId('auth-mode-signup-tab'));
+    await fireEvent.changeText(view.getByPlaceholderText('auth.signUpEmailPlaceholder'), 'exists@getflow.app');
+    await fireEvent.changeText(view.getByPlaceholderText('auth.passwordPlaceholder'), 'StrongPass1');
+    await fireEvent.changeText(view.getByTestId('auth-confirm-password-input'), 'StrongPass1');
+    await fireEvent.press(view.getByLabelText('auth.signUpButton'));
+
+    await waitFor(() => expect(view.getByText('auth.errUserAlreadyRegistered')).toBeTruthy());
+    expect(view.queryByTestId('auth-signup-success-card')).toBeNull();
+    expect(view.getByTestId('auth-existing-account-signin-btn')).toBeTruthy();
+  });
+
+  it('does not show verify-email alert when signUp returns an active session immediately', async () => {
+    Platform.OS = 'android';
+    mockSignUp.mockResolvedValue({
+      data: { user: { id: 'instant-u1' }, session: { user: { id: 'instant-u1' }, access_token: 'tok' } },
+      error: null,
+    });
+    const view = await render(<AuthScreen />);
+
+    await fireEvent.press(view.getByTestId('auth-mode-signup-tab'));
+    await fireEvent.changeText(view.getByPlaceholderText('auth.signUpEmailPlaceholder'), 'instant@getflow.app');
+    await fireEvent.changeText(view.getByPlaceholderText('auth.passwordPlaceholder'), 'StrongPass1');
+    await fireEvent.changeText(view.getByTestId('auth-confirm-password-input'), 'StrongPass1');
+    await fireEvent.press(view.getByLabelText('auth.signUpButton'));
+
+    await waitFor(() => expect(mockSignUp).toHaveBeenCalledTimes(1));
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(view.queryByTestId('auth-signup-success-card')).toBeNull();
   });
 });

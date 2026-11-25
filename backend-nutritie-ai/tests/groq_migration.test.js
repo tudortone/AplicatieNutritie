@@ -549,5 +549,43 @@ describe('AI Text Models & Contracts (RC-001, RC-003, RC-004, CORR-003)', () => 
       expect(res.body.produs.nume).toBe('Produs salvat de Cheia 2');
       expect(authHeaders).toEqual(['Bearer gsk_mock_key_primary', 'Bearer gsk_mock_key_secondary']);
     });
+
+    it('3. Omite reasoning_effort pentru modele non-reasoning si il include doar pentru modele reasoning pe toate helper-ele Groq', async () => {
+      const corpuri = [];
+      global.fetch = jest.fn(async (_url, optiuni) => {
+        const corp = JSON.parse(optiuni.body);
+        corpuri.push(corp);
+        if (corp.model === 'llama-3.3-70b-versatile') {
+          return { ok: false, status: 400, json: async () => ({ error: { message: 'unsupported' } }) };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  nume: 'Pui la gratar',
+                  calorii: 165,
+                  proteine: 31,
+                  carbohidrati: 0,
+                  grasimi: 3.6,
+                  gramajDefault: 100,
+                }),
+              },
+            }],
+          }),
+        };
+      });
+
+      const service = creeazaServiciuCuConfig(['llama-3.3-70b-versatile', 'openai/gpt-oss-120b']);
+      const rezultat = await service.estimeazaMancareText({ text: 'piept de pui 100g' });
+
+      expect(rezultat.calorii).toBe(165);
+      expect(corpuri).toHaveLength(2);
+      expect(corpuri[0].model).toBe('llama-3.3-70b-versatile');
+      expect(corpuri[0].reasoning_effort).toBeUndefined();
+      expect(corpuri[1].model).toBe('openai/gpt-oss-120b');
+      expect(corpuri[1].reasoning_effort).toBe('low');
+    });
   });
 });

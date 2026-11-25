@@ -173,4 +173,20 @@ describe('P0-BILLING-01 — limiter billing dupa identitate verificata', () => {
     expect((await request(app).get('/billing').set('X-Test-User', 'user-a')).statusCode).toBe(429);
     expect((await request(app).get('/billing').set('X-Test-User', 'user-b')).statusCode).toBe(200);
   });
+
+  test('pastreaza preAuthLimiter/statusLimiter/healthLimiter in memorie si foloseste Redis doar pentru cotele critice', () => {
+    const prefixe = [];
+    const storeFactory = ({ prefix }) => {
+      prefixe.push(prefix);
+      return undefined;
+    };
+    creeazaLimitatoare({ store: storeFactory });
+
+    expect(prefixe).not.toContain('rl:preauth:');
+    expect(prefixe).not.toContain('rl:status:');
+    expect(prefixe).not.toContain('rl:health:');
+    expect(prefixe).toEqual(
+      expect.arrayContaining(['rl:general:', 'rl:ai:', 'rl:billing:', 'rl:feedback:', 'rl:gdpr-export:']),
+    );
+  });
 });

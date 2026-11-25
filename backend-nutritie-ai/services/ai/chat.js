@@ -21,6 +21,10 @@ const { rezumatEroareSigur } = require('../../utils/sentrySanitize');
 const { creeazaServiciuVision, numarModel } = require('./vision');
 const { contextProfilChat } = require('../../utils/chatProfileContext');
 
+const optiuniReasoningGroq = (modelName) => (
+  /(gpt-oss|qwen3|deepseek-r1)/i.test(String(modelName || '')) ? { reasoning_effort: 'low' } : {}
+);
+
 /**
  * Eroare de client (400). Transporta mesajul exact pe care ruta il pune in
  * corpul raspunsului (sub cheia specifica fiecarei rute: `raspuns` sau `eroare`).
@@ -518,7 +522,7 @@ function creeazaServiciuChat({ config, genAI }) {
               messages,
               temperature: isMealLog ? 0.2 : 0.7,
               max_tokens: isMealLog ? 1200 : 700,
-              ...(/(gpt-oss|qwen3|deepseek-r1)/i.test(modelName) ? { reasoning_effort: 'low' } : {}),
+              ...optiuniReasoningGroq(modelName),
             };
             if (isMealLog) {
               groqBody.response_format = { type: 'json_object' };
@@ -737,7 +741,7 @@ RETURNEAZA STRICT UN OBIECT JSON valid:
                 temperature: 0.1,
                 max_tokens: 1200,
                 response_format: { type: 'json_object' },
-                reasoning_effort: 'low',
+                ...optiuniReasoningGroq(modelName),
               }),
               signal,
             }), Math.min(TIMEOUT_INCERCARE_JSON_MS, timpRamas), deadline.signal);
@@ -885,7 +889,7 @@ RETURNEAZA STRICT UN OBIECT JSON in formatul: {"nume": ${JSON.stringify(curatat)
               messages: [{ role: 'user', content: prompt }],
               temperature: 0.2,
               max_tokens: 250,
-              reasoning_effort: 'low',
+              ...optiuniReasoningGroq(modelName),
               response_format: { type: 'json_object' },
             }),
             signal,
@@ -1002,7 +1006,7 @@ Valorile sunt estimari de referinta (gen USDA). Daca nu esti sigur de un micronu
               messages: [{ role: 'user', content: prompt }],
               temperature: 0.2,
               max_tokens: 900,
-              reasoning_effort: 'low',
+              ...optiuniReasoningGroq(modelName),
               response_format: { type: 'json_object' },
             }),
             signal,

@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AppState, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   useAnimatedProps,
@@ -157,6 +157,16 @@ export function interpolateRunnerFrame(phase: number): RunnerFrame {
 
 export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSphereProps) {
   const reduceMotion = useReducedMotion();
+  const [isAppActive, setIsAppActive] = useState(
+    () => AppState?.currentState !== 'background' && AppState?.currentState !== 'inactive',
+  );
+
+  useEffect(() => {
+    const subscription = AppState?.addEventListener?.('change', (nextState) => {
+      setIsAppActive(nextState !== 'background' && nextState !== 'inactive');
+    });
+    return () => subscription?.remove();
+  }, []);
 
   // Animation drivers (100% UI-thread Reanimated)
   const spinRotation = useSharedValue(0);
@@ -165,7 +175,7 @@ export function RunnerSphere({ state = 'idle', onPress, size = 44 }: RunnerSpher
 
   const isProcessing = state === 'processing';
   const isCompleted = state === 'completed';
-  const runMotion = shouldAnimateRunner(state, reduceMotion);
+  const runMotion = shouldAnimateRunner(state, reduceMotion) && isAppActive;
 
   // 1. Authentic Stride Cycle driven 100% on Reanimated UI thread (0 to 6 over 600ms gait cycle)
   useEffect(() => {

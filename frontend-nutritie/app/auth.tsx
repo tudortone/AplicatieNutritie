@@ -1,5 +1,5 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, Alert, ActivityIndicator, Platform
@@ -8,9 +8,8 @@ import KeyboardAwareScreen from '../components/ui/KeyboardAwareScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../supabase';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
-import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, Sparkles, ShieldCheck, FileText } from 'lucide-react-native';
+import { Scan, ArrowRight, Mail, Lock, AlertCircle, CheckCircle2, Circle, Eye, EyeOff, Sparkles, ShieldCheck, FileText, RefreshCw } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { PressableScale } from '../components/ui/PressableScale';
@@ -26,7 +25,7 @@ import {
   sincronizeazaOnboardingLaProfil,
   type PlanNutritional,
 } from '../lib/onboarding';
-import { oauthFlow } from '../lib/oauthFlow';
+import { OAUTH_REDIRECT_URI, oauthFlow } from '../lib/oauthFlow';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { openLegalDocumentWithFallback } from '../constants/legal';
 
@@ -88,27 +87,89 @@ export default function AuthScreen() {
   const [planCalculat, setPlanCalculat] = useState<PlanNutritional | null>(null);
   const [email, setEmail] = useState('');
   const [parola, setParola] = useState('');
+  const [confirmParola, setConfirmParola] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingOAuth, setLoadingOAuth] = useState<'google' | 'apple' | null>(null);
   const submitInFlightRef = useRef(false);
   const oauthInFlightRef = useRef(false);
+  const hasUserToggledModeRef = useRef(false);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const confirmPasswordInputRef = useRef<TextInput>(null);
   const [isSignUp, setIsSignUp] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [errorField, setErrorField] = useState<'email' | 'password' | 'confirm' | null>(null);
+  const [existingAccountHint, setExistingAccountHint] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [confirmTouched, setConfirmTouched] = useState(false);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [signUpSuccessEmail, setSignUpSuccessEmail] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
+  const [resendFeedback, setResendFeedback] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     incarcaDateOnboarding().then((d) => {
       if (d) {
         const p = calculeazaPlan(d);
-        if (p) setPlanCalculat(p);
+        if (p) {
+          setPlanCalculat(p);
+          if (!hasUserToggledModeRef.current) {
+            setIsSignUp(true);
+          }
+        }
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const intervalId = setInterval(() => {
+      setResendCooldown((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(intervalId);
+  }, [resendCooldown]);
+
+  const onAccentColor = colors.textOnAccent ?? colors.background;
+  const cardBg = colors.cardBg ?? colors.surfaceBg;
+  const inputBg = colors.inputBg ?? colors.surfaceBg;
+  const inputBorder = colors.inputBorder ?? colors.cardBorder;
+  const overlayLight = colors.overlayLight ?? 'rgba(255,255,255,0.06)';
+  const overlayStrong = colors.overlayStrong ?? colors.cardBorder;
+  const dangerColor = colors.danger ?? '#FF5C5C';
+  const dangerBg = colors.dangerBg ?? 'rgba(255,92,92,0.12)';
+  const dangerBorder = colors.dangerBorder ?? 'rgba(255,92,92,0.35)';
+  const successColor = colors.success ?? '#34D399';
 
   const isMinLength = parola.length >= 8;
   const hasUpperCase = /[A-Z]/.test(parola);
   const hasNumber = /[0-9]/.test(parola);
   const isPasswordValid = isMinLength && hasUpperCase && hasNumber;
+  const passwordsMatch = parola.length > 0 && parola === confirmParola;
+  const showPasswordValidation = passwordTouched || attemptedSubmit;
+  const showConfirmFeedback = confirmParola.length > 0 || confirmTouched || attemptedSubmit;
+
+  const getRuleColor = (passed: boolean) => {
+    if (passed) return successColor;
+    return showPasswordValidation ? dangerColor : colors.textSecondary;
+  };
+
+  const switchMode = (nextSignUp: boolean) => {
+    hasUserToggledModeRef.current = true;
+    setIsSignUp(nextSignUp);
+    setAuthError(null);
+    setErrorField(null);
+    setExistingAccountHint(false);
+    setAttemptedSubmit(false);
+    setPasswordTouched(false);
+    setConfirmTouched(false);
+    setConfirmParola('');
+    setShowConfirmPassword(false);
+    setSignUpSuccessEmail(null);
+    setResendFeedback(null);
+  };
 
   const openLegal = (key: 'termsUrl' | 'privacyUrl') => {
     try { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
@@ -128,20 +189,35 @@ export default function AuthScreen() {
   const submit = async () => {
     if (submitInFlightRef.current || oauthInFlightRef.current || loading || loadingOAuth !== null) return;
     setAuthError(null);
+    setErrorField(null);
+    setExistingAccountHint(false);
+    setAttemptedSubmit(true);
+
     const identificator = email.trim();
     const esteAdminLogin = !isSignUp && identificator.toLowerCase() === ADMIN_USERNAME;
-    if (!identificator || !parola) {
+    if (!identificator || !parola || (isSignUp && !confirmParola)) {
+      if (!identificator) setErrorField('email');
+      else if (!parola) setErrorField('password');
+      else setErrorField('confirm');
       setAuthError(t('authValidation.requiredFields'));
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
       return;
     }
     if (!isValidEmail(identificator) && !esteAdminLogin) {
+      setErrorField('email');
       setAuthError(t('authValidation.invalidEmail'));
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
       return;
     }
     if (isSignUp && !isPasswordValid) {
+      setErrorField('password');
       setAuthError(t('authValidation.passwordRequirements'));
+      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
+      return;
+    }
+    if (isSignUp && !passwordsMatch) {
+      setErrorField('confirm');
+      setAuthError(t('authValidation.passwordMismatch'));
       try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
       return;
     }
@@ -166,25 +242,44 @@ export default function AuthScreen() {
           }
         }
         const { data: signUpData, error } = await supabase.auth.signUp({
-          email: email.trim(),
+          email: identificator,
           password: parola,
-          options: { data: setupData },
+          options: { data: setupData, emailRedirectTo: OAUTH_REDIRECT_URI },
         });
-        if (!error && signUpData?.session?.user?.id) {
-          await sincronizeazaOnboardingLaProfil(signUpData.session.user.id, supabase);
-        }
         if (error) {
           const msg = getFriendlyErrorMessage(error.message, t);
+          const lower = error.message.toLowerCase();
+          if (lower.includes('already registered') || lower.includes('already exists')) {
+            setErrorField('email');
+            setExistingAccountHint(true);
+          }
           setAuthError(msg);
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
+        } else if (signUpData?.session?.user?.id) {
+          await sincronizeazaOnboardingLaProfil(signUpData.session.user.id, supabase);
+          try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+        } else if (Array.isArray(signUpData?.user?.identities) && signUpData.user.identities.length === 0) {
+          // Supabase anti-enumeration: returnează user fără identities pentru adrese deja înregistrate.
+          setErrorField('email');
+          setExistingAccountHint(true);
+          setAuthError(t('auth.errUserAlreadyRegistered'));
           try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
         } else {
           try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-          Alert.alert(t('alerts.titluri.contCreat'), t('alerts.mesaje.verificaEmailConfirmare'));
+          setParola('');
+          setConfirmParola('');
+          setAttemptedSubmit(false);
+          setPasswordTouched(false);
+          setConfirmTouched(false);
+          setResendFeedback(null);
+          setSignUpSuccessEmail(identificator);
+          setResendCooldown(60);
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email: esteAdminLogin ? ADMIN_EMAIL : identificator, password: parola });
         if (error) {
           const msg = getFriendlyErrorMessage(error.message, t);
+          setErrorField('password');
           setAuthError(msg);
           try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
         }
@@ -196,6 +291,33 @@ export default function AuthScreen() {
     } finally {
       submitInFlightRef.current = false;
       setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!signUpSuccessEmail || resending || resendCooldown > 0) return;
+    setResending(true);
+    setResendFeedback(null);
+    setAuthError(null);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: signUpSuccessEmail,
+        options: { emailRedirectTo: OAUTH_REDIRECT_URI },
+      });
+      if (error) {
+        setAuthError(getFriendlyErrorMessage(error.message, t));
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
+        return;
+      }
+      setResendFeedback(t('auth.signUpResendSuccess'));
+      setResendCooldown(60);
+      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+    } catch (e: any) {
+      setAuthError(getFriendlyErrorMessage(e?.message || t('auth.errConnection'), t));
+      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch {}
+    } finally {
+      setResending(false);
     }
   };
 
@@ -242,15 +364,15 @@ export default function AuthScreen() {
     <KeyboardAwareScreen style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Background glows */}
       <View style={[styles.glowTop, { backgroundColor: colors.accent }]} />
-      <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary }]} />
+      <View style={[styles.glowBottom, { backgroundColor: colors.accentSecondary ?? colors.accent }]} />
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
           {
-            paddingTop: Math.max(topInset + 16, 24),
-            paddingBottom: Math.max(bottomInset + 24, 48),
+            paddingTop: Math.max((topInset ?? 0) + 12, 20),
+            paddingBottom: Math.max((bottomInset ?? 0) + 24, 44),
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -259,63 +381,54 @@ export default function AuthScreen() {
         {/* Logo */}
         <Animated.View entering={reduceMotion ? undefined : ZoomIn.duration(700).springify()} style={[styles.logoWrap, { shadowColor: colors.accent }]}>
           <LinearGradient colors={colors.accentGradient} style={styles.logoGrad}>
-            <Scan size={42} color={colors.background} strokeWidth={2.5} />
+            <Scan size={36} color={onAccentColor} strokeWidth={2.5} />
           </LinearGradient>
         </Animated.View>
 
         {/* Calculated Plan Banner */}
         {planCalculat ? (
-          <>
           <Animated.View style={[styles.planCard, { maxWidth: contentMaxWidth }]}>
             <LinearGradient colors={colors.accentGradient} style={styles.planGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <View style={styles.planHeaderRow}>
-                <Sparkles size={20} color={colors.background} />
-                <Text style={[styles.planBadgeText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{t('auth.planBadge')}</Text>
+                <Sparkles size={18} color={onAccentColor} />
+                <Text style={[styles.planBadgeText, { color: onAccentColor }]} maxFontSizeMultiplier={1.3}>{t('auth.planBadge')}</Text>
               </View>
-              <Text style={[styles.planKcalText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.calorii} {t('auth.kcalPerDay')}</Text>
+              <Text style={[styles.planKcalText, { color: onAccentColor }]} maxFontSizeMultiplier={1.3}>{planCalculat.calorii} {t('auth.kcalPerDay')}</Text>
               <View style={styles.planMacroRow}>
                 <View style={[styles.planMacroPill, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-                  <Text style={[styles.planMacroText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.proteineG}g {t('nutrition.protein')}</Text>
+                  <Text style={[styles.planMacroText, { color: onAccentColor }]} maxFontSizeMultiplier={1.3}>{planCalculat.proteineG}g {t('nutrition.protein')}</Text>
                 </View>
                 <View style={[styles.planMacroPill, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-                  <Text style={[styles.planMacroText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.carbohidratiG}g {t('nutrition.carbs')}</Text>
+                  <Text style={[styles.planMacroText, { color: onAccentColor }]} maxFontSizeMultiplier={1.3}>{planCalculat.carbohidratiG}g {t('nutrition.carbs')}</Text>
                 </View>
                 <View style={[styles.planMacroPill, { backgroundColor: 'rgba(0,0,0,0.15)' }]}>
-                  <Text style={[styles.planMacroText, { color: colors.background }]} maxFontSizeMultiplier={1.3}>{planCalculat.grasimiG}g {t('nutrition.fats')}</Text>
+                  <Text style={[styles.planMacroText, { color: onAccentColor }]} maxFontSizeMultiplier={1.3}>{planCalculat.grasimiG}g {t('nutrition.fats')}</Text>
                 </View>
               </View>
-              <Text style={[styles.planSubtext, { color: colors.background }]} maxFontSizeMultiplier={1.3}>
+              <Text style={[styles.planSubtext, { color: onAccentColor }]} maxFontSizeMultiplier={1.3}>
                 {t('auth.planActivateCta')}
               </Text>
+              <TouchableOpacity
+                style={styles.planRecalculateChip}
+                onPress={() => {
+                  setSkipOnboardingToAuth?.(false);
+                  setOnboardingDone(false);
+                  router.replace('/onboarding');
+                }}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={t('auth.recalculatePlanA11y')}
+              >
+                <Text style={[styles.planRecalculateText, { color: onAccentColor }]} maxFontSizeMultiplier={1.3}>
+                  {t('auth.recalculatePlanCta')}
+                </Text>
+              </TouchableOpacity>
             </LinearGradient>
           </Animated.View>
-          {/* Refă testele: chiar și cu un plan deja calculat, utilizatorul poate
-              relua chestionarul de la început — aceeași acțiune ca la cardul fără
-              plan (setOnboardingDone(false) + revenire la /onboarding). */}
-          <Animated.View style={{ width: '100%', maxWidth: contentMaxWidth, marginBottom: 20, marginTop: 14 }}>
-            <TouchableOpacity
-              style={[styles.noPlanCard, { borderColor: colors.accent + '44', backgroundColor: colors.cardBg }]}
-              onPress={() => {
-                setSkipOnboardingToAuth?.(false);
-                setOnboardingDone(false);
-                router.replace('/onboarding');
-              }}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel={t("auth.recalculatePlanA11y")}
-            >
-              <Sparkles size={20} color={colors.accent} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.noPlanTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{t('auth.recalculatePlanTitle')}</Text>
-                <Text style={[styles.noPlanSub, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>{t('auth.recalculatePlanCta')}</Text>
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
-          </>
         ) : (
-          <Animated.View style={{ width: '100%', maxWidth: contentMaxWidth, marginBottom: 20 }}>
+          <Animated.View style={{ width: '100%', maxWidth: contentMaxWidth, marginBottom: 16 }}>
             <TouchableOpacity
-              style={[styles.noPlanCard, { borderColor: colors.accent + '44', backgroundColor: colors.cardBg }]}
+              style={[styles.noPlanCard, { borderColor: colors.accent + '44', backgroundColor: cardBg }]}
               onPress={() => {
                 setSkipOnboardingToAuth?.(false);
                 setOnboardingDone(false);
@@ -333,26 +446,187 @@ export default function AuthScreen() {
         )}
 
         {/* Form card */}
-        <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(700).delay(400).springify()} style={[styles.formCard, { borderColor: colors.cardBorder, maxWidth: contentMaxWidth }]}>
-          <BlurView intensity={25} tint="dark" style={styles.formBlur}>
-            <LinearGradient colors={[colors.cardBg, 'rgba(0,0,0,0)']} style={styles.formGrad}>
+        <Animated.View
+          entering={reduceMotion ? undefined : FadeInDown.duration(700).delay(250).springify()}
+          style={[styles.formCard, { backgroundColor: cardBg, borderColor: colors.cardBorder, maxWidth: contentMaxWidth }]}
+        >
+          {signUpSuccessEmail ? (
+            <View testID="auth-signup-success-card" style={styles.successCard}>
+              <View style={[styles.successIconWrap, { backgroundColor: overlayLight, borderColor: colors.cardBorder }]}>
+                <CheckCircle2 size={32} color={successColor} />
+              </View>
+              <Text style={[styles.formTitle, styles.centeredText, { color: colors.textPrimary, marginBottom: 8 }]} maxFontSizeMultiplier={1.3}>
+                {t('auth.signUpSuccessTitle')}
+              </Text>
+              <Text style={[styles.successSubtitle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
+                {t('auth.signUpSuccessSubtitle', { email: signUpSuccessEmail })}
+              </Text>
 
-              <Text style={[styles.formTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>{isSignUp ? t('auth.signUpTitle') : t('auth.signInTitle')}</Text>
+              {authError ? (
+                <View style={[styles.errorBanner, { backgroundColor: dangerBg, borderColor: dangerBorder, width: '100%', marginTop: 12 }]}>
+                  <AlertCircle size={18} color={dangerColor} style={{ marginRight: 8 }} />
+                  <Text style={[styles.errorText, { color: dangerColor }]} maxFontSizeMultiplier={1.3}>{authError}</Text>
+                </View>
+              ) : null}
+
+              {resendFeedback ? (
+                <View style={[styles.successBanner, { backgroundColor: overlayLight, borderColor: successColor }]}>
+                  <CheckCircle2 size={16} color={successColor} style={{ marginRight: 8 }} />
+                  <Text style={[styles.errorText, { color: successColor }]} maxFontSizeMultiplier={1.3}>{resendFeedback}</Text>
+                </View>
+              ) : null}
+
+              <PressableScale
+                testID="auth-signup-goto-signin"
+                style={[styles.submitBtn, { shadowColor: colors.accent, width: '100%', marginTop: 16 }]}
+                onPress={() => {
+                  const createdEmail = signUpSuccessEmail;
+                  switchMode(false);
+                  if (createdEmail) setEmail(createdEmail);
+                }}
+                accessibilityLabel={t('auth.signUpGoToSignIn')}
+              >
+                <LinearGradient colors={colors.accentGradient} style={styles.submitGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+                  <Text
+                    style={[styles.submitText, { color: onAccentColor }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.78}
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {t('auth.signUpGoToSignIn')}
+                  </Text>
+                  <ArrowRight size={20} color={onAccentColor} strokeWidth={2.5} />
+                </LinearGradient>
+              </PressableScale>
+
+              <TouchableOpacity
+                testID="auth-signup-resend-btn"
+                style={[
+                  styles.secondaryActionBtn,
+                  { backgroundColor: colors.surfaceBg, borderColor: colors.cardBorder },
+                  (resending || resendCooldown > 0) ? { opacity: 0.6 } : null,
+                ]}
+                onPress={handleResendConfirmation}
+                disabled={resending || resendCooldown > 0}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  resendCooldown > 0
+                    ? t('auth.signUpResendCooldown', { seconds: resendCooldown })
+                    : t('auth.signUpResendCta')
+                }
+              >
+                {resending ? (
+                  <ActivityIndicator color={colors.accent} size="small" />
+                ) : (
+                  <View style={styles.secondaryActionInner}>
+                    <RefreshCw size={16} color={colors.accent} />
+                    <Text style={[styles.secondaryActionText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+                      {resendCooldown > 0
+                        ? t('auth.signUpResendCooldown', { seconds: resendCooldown })
+                        : t('auth.signUpResendCta')}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                testID="auth-signup-different-email-btn"
+                style={styles.differentEmailBtn}
+                onPress={() => {
+                  switchMode(true);
+                  setEmail('');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={t('auth.signUpUseDifferentEmail')}
+              >
+                <Text style={[styles.differentEmailText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
+                  {t('auth.signUpUseDifferentEmail')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              {/* Segmented mode selector */}
+              <View
+                testID="auth-mode-segmented"
+                accessibilityRole="tablist"
+                style={[styles.modeSegmentWrap, { backgroundColor: inputBg, borderColor: inputBorder }]}
+              >
+                <TouchableOpacity
+                  testID="auth-mode-signup-tab"
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isSignUp }}
+                  onPress={() => switchMode(true)}
+                  style={[
+                    styles.modeSegmentBtn,
+                    isSignUp ? { backgroundColor: colors.accent } : null,
+                  ]}
+                  activeOpacity={0.85}
+                >
+                  <Text
+                    style={[
+                      styles.modeSegmentText,
+                      { color: isSignUp ? onAccentColor : colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {t('auth.modeSignUp')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  testID="auth-mode-signin-tab"
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: !isSignUp }}
+                  onPress={() => switchMode(false)}
+                  style={[
+                    styles.modeSegmentBtn,
+                    !isSignUp ? { backgroundColor: colors.accent } : null,
+                  ]}
+                  activeOpacity={0.85}
+                >
+                  <Text
+                    style={[
+                      styles.modeSegmentText,
+                      { color: !isSignUp ? onAccentColor : colors.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {t('auth.modeSignIn')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={[styles.formTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+                {isSignUp ? t('auth.signUpTitle') : t('auth.signInTitle')}
+              </Text>
 
               {/* Email */}
-              <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}>
+              <View style={[
+                styles.inputWrap,
+                { backgroundColor: inputBg, borderColor: errorField === 'email' ? dangerColor : inputBorder },
+              ]}>
                 <View style={styles.inputIconWrap}>
-                  <Mail size={18} color={colors.textSecondary} />
+                  <Mail size={18} color={errorField === 'email' ? dangerColor : colors.textSecondary} />
                 </View>
                 <TextInput
+                  ref={emailInputRef}
                   style={[styles.input, { color: colors.textPrimary }]}
-                  accessibilityLabel={t("auth.emailPlaceholder")}
-                  placeholder={t("auth.emailPlaceholder")}
+                  accessibilityLabel={isSignUp ? t('auth.signUpEmailPlaceholder') : t('auth.emailPlaceholder')}
+                  placeholder={isSignUp ? t('auth.signUpEmailPlaceholder') : t('auth.emailPlaceholder')}
                   placeholderTextColor={colors.textSecondary}
                   value={email}
-                  onChangeText={(t) => {
-                    setEmail(t);
+                  onChangeText={(val) => {
+                    setEmail(val);
                     if (authError) setAuthError(null);
+                    if (errorField === 'email') setErrorField(null);
+                    if (existingAccountHint) setExistingAccountHint(false);
                   }}
                   autoCapitalize="none"
                   keyboardType="email-address"
@@ -361,36 +635,47 @@ export default function AuthScreen() {
                   autoComplete="email"
                   textContentType="emailAddress"
                   returnKeyType="next"
+                  onSubmitEditing={() => passwordInputRef.current?.focus()}
                   selectionColor={colors.accent}
                 />
               </View>
 
               {/* Password */}
-              <View style={[styles.inputWrap, { backgroundColor: colors.inputBg, borderColor: authError ? colors.danger : colors.inputBorder }]}>
+              <View style={[
+                styles.inputWrap,
+                { backgroundColor: inputBg, borderColor: errorField === 'password' ? dangerColor : inputBorder },
+              ]}>
                 <View style={styles.inputIconWrap}>
-                  <Lock size={18} color={colors.textSecondary} />
+                  <Lock size={18} color={errorField === 'password' ? dangerColor : colors.textSecondary} />
                 </View>
                 <TextInput
+                  ref={passwordInputRef}
                   style={[styles.input, { color: colors.textPrimary }]}
-                  accessibilityLabel={t("auth.passwordPlaceholder")}
-                  placeholder={t("auth.passwordPlaceholder")}
+                  accessibilityLabel={t('auth.passwordPlaceholder')}
+                  placeholder={t('auth.passwordPlaceholder')}
                   placeholderTextColor={colors.textSecondary}
                   value={parola}
-                  onChangeText={(t) => {
-                    setParola(t);
+                  onChangeText={(val) => {
+                    setParola(val);
+                    if (!passwordTouched && val.length > 0) setPasswordTouched(true);
                     if (authError) setAuthError(null);
+                    if (errorField === 'password' || errorField === 'confirm') setErrorField(null);
+                  }}
+                  onBlur={() => {
+                    if (parola.length > 0) setPasswordTouched(true);
                   }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  autoComplete="password"
-                  textContentType="password"
-                  returnKeyType="done"
+                  autoComplete={isSignUp ? 'password-new' : 'password'}
+                  textContentType={isSignUp ? 'newPassword' : 'password'}
+                  returnKeyType={isSignUp ? 'next' : 'done'}
+                  onSubmitEditing={() => (isSignUp ? confirmPasswordInputRef.current?.focus() : void submit())}
                   selectionColor={colors.accent}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
-                  style={{ padding: 14, marginRight: 2 }}
+                  style={styles.eyeBtn}
                   accessibilityRole="button"
                   accessibilityLabel={showPassword ? t('auth.hidePasswordA11y') : t('auth.showPasswordA11y')}
                   accessibilityState={{ selected: showPassword }}
@@ -403,52 +688,148 @@ export default function AuthScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Password Requirements (doar la înregistrare) */}
+              {/* Confirm Password (doar la înregistrare) */}
               {isSignUp && (
-                <Animated.View style={[styles.passwordRulesBox, { backgroundColor: colors.overlayLight, borderColor: colors.overlayStrong }]}>
-                  <Text style={[styles.passwordRulesHeader, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
-                    {t('auth.passwordRequirementsHeader')}
-                  </Text>
-                  <View style={styles.ruleRow}>
-                    {isMinLength ? (
-                      <CheckCircle2 size={16} color={colors.success} />
-                    ) : (
-                      <Circle size={16} color={colors.danger} />
-                    )}
-                    <Text style={[styles.ruleText, { color: isMinLength ? colors.success : colors.danger }]} maxFontSizeMultiplier={1.3}>
-                      {t('auth.ruleMinLength')}
-                    </Text>
+                <>
+                  <View style={[
+                    styles.inputWrap,
+                    {
+                      backgroundColor: inputBg,
+                      borderColor: errorField === 'confirm' || (showConfirmFeedback && !passwordsMatch && confirmParola.length > 0)
+                        ? dangerColor
+                        : passwordsMatch
+                          ? successColor
+                          : inputBorder,
+                    },
+                  ]}>
+                    <View style={styles.inputIconWrap}>
+                      <Lock
+                        size={18}
+                        color={errorField === 'confirm' || (showConfirmFeedback && !passwordsMatch && confirmParola.length > 0)
+                          ? dangerColor
+                          : passwordsMatch
+                            ? successColor
+                            : colors.textSecondary}
+                      />
+                    </View>
+                    <TextInput
+                      ref={confirmPasswordInputRef}
+                      testID="auth-confirm-password-input"
+                      style={[styles.input, { color: colors.textPrimary }]}
+                      accessibilityLabel={t('auth.confirmPasswordPlaceholder')}
+                      placeholder={t('auth.confirmPasswordPlaceholder')}
+                      placeholderTextColor={colors.textSecondary}
+                      value={confirmParola}
+                      onChangeText={(val) => {
+                        setConfirmParola(val);
+                        if (!confirmTouched && val.length > 0) setConfirmTouched(true);
+                        if (authError) setAuthError(null);
+                        if (errorField === 'confirm') setErrorField(null);
+                      }}
+                      onBlur={() => {
+                        if (confirmParola.length > 0) setConfirmTouched(true);
+                      }}
+                      secureTextEntry={!showConfirmPassword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      autoComplete="password-new"
+                      textContentType="newPassword"
+                      returnKeyType="done"
+                      onSubmitEditing={() => void submit()}
+                      selectionColor={colors.accent}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                      style={styles.eyeBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={showConfirmPassword ? t('auth.hidePasswordA11y') : t('auth.showPasswordA11y')}
+                      accessibilityState={{ selected: showConfirmPassword }}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff size={18} color={colors.textSecondary} />
+                      ) : (
+                        <Eye size={18} color={colors.textSecondary} />
+                      )}
+                    </TouchableOpacity>
                   </View>
 
-                  <View style={styles.ruleRow}>
-                    {hasUpperCase ? (
-                      <CheckCircle2 size={16} color={colors.success} />
-                    ) : (
-                      <Circle size={16} color={colors.danger} />
-                    )}
-                    <Text style={[styles.ruleText, { color: hasUpperCase ? colors.success : colors.danger }]} maxFontSizeMultiplier={1.3}>
-                      {t('auth.ruleUpperCase')}
-                    </Text>
-                  </View>
+                  {showConfirmFeedback && confirmParola.length > 0 ? (
+                    <View style={styles.confirmFeedbackRow}>
+                      {passwordsMatch ? (
+                        <CheckCircle2 size={14} color={successColor} />
+                      ) : (
+                        <AlertCircle size={14} color={dangerColor} />
+                      )}
+                      <Text
+                        style={[styles.confirmFeedbackText, { color: passwordsMatch ? successColor : dangerColor }]}
+                        maxFontSizeMultiplier={1.3}
+                      >
+                        {passwordsMatch ? t('auth.passwordsMatch') : t('auth.passwordsMismatch')}
+                      </Text>
+                    </View>
+                  ) : null}
 
-                  <View style={styles.ruleRow}>
-                    {hasNumber ? (
-                      <CheckCircle2 size={16} color={colors.success} />
-                    ) : (
-                      <Circle size={16} color={colors.danger} />
-                    )}
-                    <Text style={[styles.ruleText, { color: hasNumber ? colors.success : colors.danger }]} maxFontSizeMultiplier={1.3}>
-                      {t('auth.ruleNumber')}
+                  {/* Password Requirements (neutru inițial, verde când e valid, roșu doar după interacțiune/submit) */}
+                  <Animated.View style={[styles.passwordRulesBox, { backgroundColor: overlayLight, borderColor: overlayStrong }]}>
+                    <Text style={[styles.passwordRulesHeader, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>
+                      {t('auth.passwordRequirementsHeader')}
                     </Text>
-                  </View>
-                </Animated.View>
+                    <View style={styles.ruleRow}>
+                      {isMinLength ? (
+                        <CheckCircle2 size={16} color={successColor} />
+                      ) : (
+                        <Circle size={16} color={getRuleColor(false)} />
+                      )}
+                      <Text style={[styles.ruleText, { color: getRuleColor(isMinLength) }]} maxFontSizeMultiplier={1.3}>
+                        {t('auth.ruleMinLength')}
+                      </Text>
+                    </View>
+
+                    <View style={styles.ruleRow}>
+                      {hasUpperCase ? (
+                        <CheckCircle2 size={16} color={successColor} />
+                      ) : (
+                        <Circle size={16} color={getRuleColor(false)} />
+                      )}
+                      <Text style={[styles.ruleText, { color: getRuleColor(hasUpperCase) }]} maxFontSizeMultiplier={1.3}>
+                        {t('auth.ruleUpperCase')}
+                      </Text>
+                    </View>
+
+                    <View style={styles.ruleRow}>
+                      {hasNumber ? (
+                        <CheckCircle2 size={16} color={successColor} />
+                      ) : (
+                        <Circle size={16} color={getRuleColor(false)} />
+                      )}
+                      <Text style={[styles.ruleText, { color: getRuleColor(hasNumber) }]} maxFontSizeMultiplier={1.3}>
+                        {t('auth.ruleNumber')}
+                      </Text>
+                    </View>
+                  </Animated.View>
+                </>
               )}
 
               {/* Error Banner */}
               {authError && (
-                <Animated.View style={[styles.errorBanner, { backgroundColor: colors.dangerBg, borderColor: colors.dangerBorder }]}>
-                  <AlertCircle size={18} color={colors.danger} style={{ marginRight: 8 }} />
-                  <Text style={[styles.errorText, { color: colors.danger }]} maxFontSizeMultiplier={1.3}>{authError}</Text>
+                <Animated.View style={[styles.errorBanner, { backgroundColor: dangerBg, borderColor: dangerBorder }]}>
+                  <View style={styles.errorBannerRow}>
+                    <AlertCircle size={18} color={dangerColor} style={{ marginRight: 8 }} />
+                    <Text style={[styles.errorText, { color: dangerColor }]} maxFontSizeMultiplier={1.3}>{authError}</Text>
+                  </View>
+                  {existingAccountHint ? (
+                    <TouchableOpacity
+                      testID="auth-existing-account-signin-btn"
+                      onPress={() => switchMode(false)}
+                      style={[styles.existingAccountBtn, { borderColor: dangerBorder, backgroundColor: colors.surfaceBg }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('auth.existingAccountCta')}
+                    >
+                      <Text style={[styles.existingAccountText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.3}>
+                        {t('auth.existingAccountCta')}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </Animated.View>
               )}
 
@@ -458,7 +839,7 @@ export default function AuthScreen() {
                   onPress={goToForgotPassword}
                   disabled={loading || Boolean(loadingOAuth)}
                   accessibilityRole="button"
-                  accessibilityLabel={t("auth.forgotPasswordA11y")}
+                  accessibilityLabel={t('auth.forgotPasswordA11y')}
                 >
                   <Text style={[styles.forgotText, { color: colors.accent }]} maxFontSizeMultiplier={1.3}>{t('auth.forgotPassword')}</Text>
                 </TouchableOpacity>
@@ -469,7 +850,7 @@ export default function AuthScreen() {
                 style={[
                   styles.submitBtn,
                   { shadowColor: colors.accent },
-                  (isSignUp && !isPasswordValid) ? { opacity: 0.6 } : {}
+                  (isSignUp && (!isPasswordValid || !passwordsMatch)) ? { opacity: 0.65 } : {},
                 ]}
                 onPress={submit}
                 disabled={loading || loadingOAuth !== null}
@@ -478,11 +859,11 @@ export default function AuthScreen() {
               >
                 <LinearGradient colors={colors.accentGradient} style={styles.submitGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
                   {loading ? (
-                    <ActivityIndicator color={colors.background} />
+                    <ActivityIndicator color={onAccentColor} />
                   ) : (
                     <>
                       <Text
-                        style={[styles.submitText, { color: colors.background }]}
+                        style={[styles.submitText, { color: onAccentColor }]}
                         numberOfLines={1}
                         adjustsFontSizeToFit
                         minimumFontScale={0.78}
@@ -490,7 +871,7 @@ export default function AuthScreen() {
                       >
                         {isSignUp ? t('auth.signUpButton') : t('auth.signInButton')}
                       </Text>
-                      <ArrowRight size={20} color={colors.background} strokeWidth={2.5} />
+                      <ArrowRight size={20} color={onAccentColor} strokeWidth={2.5} />
                     </>
                   )}
                 </LinearGradient>
@@ -499,10 +880,7 @@ export default function AuthScreen() {
               {/* Toggle */}
               <TouchableOpacity
                 style={styles.toggleBtn}
-                onPress={() => {
-                  setAuthError(null);
-                  setIsSignUp(!isSignUp);
-                }}
+                onPress={() => switchMode(!isSignUp)}
                 accessibilityRole="button"
                 accessibilityLabel={isSignUp ? t('auth.alreadyHaveAccountA11y') : t('auth.dontHaveAccountA11y')}
               >
@@ -513,9 +891,9 @@ export default function AuthScreen() {
               </TouchableOpacity>
 
               <View style={styles.dividerWrap}>
-                <View style={[styles.dividerLine, { backgroundColor: colors.overlayStrong }]} />
+                <View style={[styles.dividerLine, { backgroundColor: overlayStrong }]} />
                 <Text style={[styles.dividerText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.3}>{t('auth.orDivider')}</Text>
-                <View style={[styles.dividerLine, { backgroundColor: colors.overlayStrong }]} />
+                <View style={[styles.dividerLine, { backgroundColor: overlayStrong }]} />
               </View>
 
               <View style={styles.oauthWrap}>
@@ -524,7 +902,7 @@ export default function AuthScreen() {
                   onPress={() => signInWithOAuth('google')}
                   disabled={loading || loadingOAuth !== null}
                   accessibilityRole="button"
-                  accessibilityLabel={t("auth.continueWithGoogle") === 'auth.continueWithGoogle' ? 'Continuă cu Google' : t("auth.continueWithGoogle")}
+                  accessibilityLabel={t('auth.continueWithGoogle') === 'auth.continueWithGoogle' ? 'Continuă cu Google' : t('auth.continueWithGoogle')}
                   accessibilityState={{ disabled: loading || loadingOAuth !== null }}
                 >
                   {loadingOAuth === 'google' ? (
@@ -542,7 +920,7 @@ export default function AuthScreen() {
                     onPress={() => signInWithOAuth('apple')}
                     disabled={loading || loadingOAuth !== null}
                     accessibilityRole="button"
-                    accessibilityLabel={t("auth.continueWithApple") === 'auth.continueWithApple' ? 'Continuă cu Apple' : t("auth.continueWithApple")}
+                    accessibilityLabel={t('auth.continueWithApple') === 'auth.continueWithApple' ? 'Continuă cu Apple' : t('auth.continueWithApple')}
                     accessibilityState={{ disabled: loading || loadingOAuth !== null }}
                   >
                     {loadingOAuth === 'apple' ? (
@@ -621,9 +999,8 @@ export default function AuthScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-
-            </LinearGradient>
-          </BlurView>
+            </>
+          )}
         </Animated.View>
 
       </ScrollView>
@@ -637,38 +1014,55 @@ const styles = StyleSheet.create({
   glowBottom: { position: 'absolute', bottom: -100, left: -80, width: 350, height: 350, borderRadius: 175, opacity: 0.07 },
 
   scroll: { flex: 1 },
-  content: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 24, paddingBottom: 48 },
+  content: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 20, paddingBottom: 44 },
 
-  logoWrap: { marginBottom: 28, shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.5, shadowRadius: 32, elevation: 20 },
-  logoGrad: { width: 88, height: 88, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
+  logoWrap: { marginBottom: 20, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.45, shadowRadius: 24, elevation: 16 },
+  logoGrad: { width: 76, height: 76, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
 
-  titleWrap: { alignItems: 'center', marginBottom: 44 },
-  title: { fontSize: 48, fontWeight: '900', letterSpacing: -2, marginBottom: 8 },
-  subtitle: { fontSize: 16, textAlign: 'center', fontWeight: '400', maxWidth: '80%', lineHeight: 24 },
+  formCard: { width: '100%', borderRadius: 24, borderWidth: 1, padding: 22 },
+  formTitle: { fontSize: 20, fontWeight: '800', marginBottom: 18, letterSpacing: -0.3 },
+  centeredText: { textAlign: 'center' },
 
-  formCard: { width: '100%', borderRadius: 32, overflow: 'hidden', borderWidth: 1 },
-  formBlur: { overflow: 'hidden' },
-  formGrad: { padding: 28 },
-  formTitle: { fontSize: 20, fontWeight: '800', marginBottom: 24, letterSpacing: -0.3 },
+  modeSegmentWrap: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 4,
+    gap: 4,
+    marginBottom: 18,
+  },
+  modeSegmentBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+  },
+  modeSegmentText: { fontSize: 14, fontWeight: '800' },
 
-  inputWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 18, borderWidth: 1, marginBottom: 14, paddingHorizontal: 16 },
-  inputIconWrap: { marginRight: 12 },
-  input: { flex: 1, paddingVertical: 18, fontSize: 16, fontWeight: '500' },
+  inputWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, marginBottom: 12, paddingLeft: 14, paddingRight: 4, minHeight: 54 },
+  inputIconWrap: { marginRight: 10 },
+  input: { flex: 1, paddingVertical: 14, fontSize: 16, fontWeight: '500' },
+  eyeBtn: { minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
 
-  submitBtn: { borderRadius: 18, overflow: 'hidden', marginTop: 8, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 12 },
-  submitGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, paddingHorizontal: 16, gap: 10 },
-  submitText: { flexShrink: 1, textAlign: 'center', fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
+  confirmFeedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -4, marginBottom: 10, paddingHorizontal: 4 },
+  confirmFeedbackText: { flex: 1, flexShrink: 1, fontSize: 12.5, fontWeight: '600' },
 
-  toggleBtn: { padding: 16, alignItems: 'center', marginTop: 8 },
-  toggleText: { fontSize: 15, fontWeight: '500' },
+  submitBtn: { borderRadius: 16, overflow: 'hidden', marginTop: 6, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 18, elevation: 10 },
+  submitGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 54, paddingVertical: 14, paddingHorizontal: 16, gap: 10 },
+  submitText: { flexShrink: 1, textAlign: 'center', fontSize: 17, fontWeight: '900', letterSpacing: 0.2 },
+
+  toggleBtn: { minHeight: 44, paddingVertical: 10, paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
+  toggleText: { fontSize: 14.5, fontWeight: '500', textAlign: 'center' },
   toggleAccent: { fontWeight: '700' },
-  forgotBtn: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center', marginBottom: 14, paddingHorizontal: 4 },
+  forgotBtn: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center', marginBottom: 10, paddingHorizontal: 4 },
   forgotText: { fontSize: 13, fontWeight: '700' },
-  dividerWrap: { flexDirection: 'row', alignItems: 'center', marginVertical: 18, gap: 12 },
+  dividerWrap: { flexDirection: 'row', alignItems: 'center', marginVertical: 14, gap: 12 },
   dividerLine: { flex: 1, height: 1 },
   dividerText: { fontSize: 13, fontWeight: '600' },
   oauthWrap: { flexDirection: 'row', gap: 12 },
-  oauthBtn: { flex: 1, height: 50, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  oauthBtn: { flex: 1, minHeight: 50, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
   oauthBtnText: { fontSize: 15, fontWeight: '700' },
   oauthBtnContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   oauthSecurityRow: {
@@ -688,8 +1082,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   legalConsentWrap: {
-    marginTop: 20,
-    paddingTop: 16,
+    marginTop: 18,
+    paddingTop: 14,
     borderTopWidth: 1,
     alignItems: 'center',
   },
@@ -731,24 +1125,79 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  passwordRulesBox: { borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, gap: 8 },
-  passwordRulesHeader: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
+  passwordRulesBox: { borderRadius: 14, padding: 12, marginBottom: 12, borderWidth: 1, gap: 7 },
+  passwordRulesHeader: { fontSize: 12.5, fontWeight: '700', marginBottom: 2 },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ruleText: { flex: 1, flexShrink: 1, fontSize: 13, fontWeight: '600' },
-  errorBanner: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, padding: 12, marginBottom: 14 },
+  errorBanner: { borderRadius: 14, borderWidth: 1, padding: 12, marginBottom: 12, gap: 10 },
+  errorBannerRow: { flexDirection: 'row', alignItems: 'center' },
   errorText: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  existingAccountBtn: {
+    minHeight: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  existingAccountText: { fontSize: 13, fontWeight: '700' },
 
-  planCard: { width: '100%', borderRadius: 24, overflow: 'hidden', marginBottom: 20 },
-  planGrad: { padding: 20, alignItems: 'center' },
-  planHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  planBadgeText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
-  planKcalText: { fontSize: 36, fontWeight: '900', letterSpacing: -1, marginVertical: 2 },
+  successCard: { alignItems: 'center', paddingVertical: 6 },
+  successIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  successSubtitle: { fontSize: 14, lineHeight: 20, textAlign: 'center', paddingHorizontal: 4 },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 10,
+    marginTop: 12,
+  },
+  secondaryActionBtn: {
+    width: '100%',
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingHorizontal: 14,
+  },
+  secondaryActionInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  secondaryActionText: { fontSize: 14, fontWeight: '700' },
+  differentEmailBtn: { minHeight: 44, justifyContent: 'center', alignItems: 'center', marginTop: 8, paddingHorizontal: 12 },
+  differentEmailText: { fontSize: 13, fontWeight: '600' },
+
+  planCard: { width: '100%', borderRadius: 22, overflow: 'hidden', marginBottom: 16 },
+  planGrad: { padding: 18, alignItems: 'center' },
+  planHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  planBadgeText: { fontSize: 12.5, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
+  planKcalText: { fontSize: 34, fontWeight: '900', letterSpacing: -1, marginVertical: 2 },
   planMacroRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginVertical: 8 },
-  planMacroPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  planMacroPill: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 },
   planMacroText: { fontSize: 12, fontWeight: '800' },
-  planSubtext: { fontSize: 12, textAlign: 'center', opacity: 0.9, marginTop: 4 },
+  planSubtext: { fontSize: 12, textAlign: 'center', opacity: 0.9, marginTop: 2 },
+  planRecalculateChip: {
+    marginTop: 10,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.14)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  planRecalculateText: { fontSize: 12.5, fontWeight: '800' },
 
-  noPlanCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, borderWidth: 1, padding: 16, gap: 14 },
+  noPlanCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 18, borderWidth: 1, minHeight: 56, padding: 14, gap: 12 },
   noPlanTitle: { fontSize: 14, fontWeight: '700' },
   noPlanSub: { fontSize: 13, fontWeight: '800', marginTop: 2 },
 });

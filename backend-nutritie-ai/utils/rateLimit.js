@@ -84,7 +84,7 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 
 	const preAuthLimiter = rateLimit({
 		...comun,
-		...cuStorePropriu('rl:preauth:'),
+		store: new MemoryStoreMarginit(),
 		windowMs: 15 * 60 * 1000,
 		max: 300,
 		keyGenerator: ipFallbackKey,
@@ -102,7 +102,7 @@ function creeazaLimitatoare({ store, avertizeazaFaraStore = false } = {}) {
 
 	const statusLimiter = rateLimit({
 		...comun,
-		...cuStorePropriu('rl:status:'),
+		store: new MemoryStoreMarginit(),
 		windowMs: 60 * 1000,
 		max: 120,
 		keyGenerator: ipFallbackKey,

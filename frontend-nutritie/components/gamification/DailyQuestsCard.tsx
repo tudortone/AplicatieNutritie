@@ -49,12 +49,34 @@ function CountdownLabel() {
 
   useEffect(() => {
     const tick = () => setRemainingMs(msUntilMidnight(new Date()));
-    const interval = setInterval(tick, 1000);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const stop = () => {
+      if (interval !== null) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+    const start = () => {
+      if (interval === null) {
+        interval = setInterval(tick, 1000);
+      }
+    };
+
+    const initialState = AppState?.currentState;
+    if (initialState !== 'background' && initialState !== 'inactive') {
+      start();
+    }
+
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') tick();
+      if (state === 'active') {
+        tick();
+        start();
+      } else if (state === 'background' || state === 'inactive') {
+        stop();
+      }
     });
     return () => {
-      clearInterval(interval);
+      stop();
       subscription.remove();
     };
   }, []);
@@ -99,13 +121,35 @@ export default function DailyQuestsCard({ snapshot, compact }: DailyQuestsCardPr
       }
     };
 
-    const interval = setInterval(checkDay, 60000);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const stop = () => {
+      if (interval !== null) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+    const start = () => {
+      if (interval === null) {
+        interval = setInterval(checkDay, 60000);
+      }
+    };
+
+    const initialState = AppState?.currentState;
+    if (initialState !== 'background' && initialState !== 'inactive') {
+      start();
+    }
+
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') checkDay();
+      if (state === 'active') {
+        checkDay();
+        start();
+      } else if (state === 'background' || state === 'inactive') {
+        stop();
+      }
     });
     return () => {
       alive = false;
-      clearInterval(interval);
+      stop();
       subscription.remove();
     };
   }, [activeDay, refresh]);
