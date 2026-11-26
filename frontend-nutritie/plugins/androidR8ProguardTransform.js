@@ -4,6 +4,7 @@ const REQUIRED_R8_GRADLE_PROPERTIES = [
   { key: 'android.enableR8.fullMode', value: 'true' },
   { key: 'android.enableMinifyInReleaseBuilds', value: 'true' },
   { key: 'android.enableShrinkResourcesInReleaseBuilds', value: 'true' },
+  { key: 'android.r8.optimizedResourceShrinking', value: 'true' },
 ];
 
 function replaceDefaultProguardRules(contents) {

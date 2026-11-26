@@ -33,12 +33,17 @@ try {
 let canRequestAdsCache = false;
 let personalizedAllowedCache = false;
 let privacyOptionsRequiredCache = false;
+let consentNetworkFailedCache = false;
 let resolvedCache = false;
 let inFlightResolution: Promise<AdsConsentResolution> | null = null;
 
 /** Rezultatul ultimei rezolvări de consimțământ — `false` implicit (fail-closed) până se apelează `resolveAdsConsent()`. */
 export function getCanRequestAds(): boolean {
   return canRequestAdsCache;
+}
+
+export function getConsentNetworkFailed(): boolean {
+  return consentNetworkFailedCache;
 }
 
 export function getConsentPersonalizedAllowed(): boolean {
@@ -75,12 +80,14 @@ export async function resolveAdsConsent(): Promise<AdsConsentResolution> {
       canRequestAdsCache = false;
       personalizedAllowedCache = false;
       privacyOptionsRequiredCache = false;
+      consentNetworkFailedCache = false;
       return { canRequestAds: false, personalized: false, privacyOptionsRequired: false };
     }
 
     try {
       const isTestMode =
         getAdsRuntimeConfig(Platform.OS === 'ios' ? 'ios' : 'android').mode === 'test';
+      let gatherFailed = false;
       let info: any;
       try {
         info = await AdsModule.AdsConsent.gatherConsent(
@@ -89,6 +96,7 @@ export async function resolveAdsConsent(): Promise<AdsConsentResolution> {
             : {},
         );
       } catch {
+        gatherFailed = true;
         // A3: dacă gatherConsent a eșuat (ex. eroare de rețea), consultăm decizia
         // deja persistată în SDK din sesiunile anterioare
         info = await AdsModule.AdsConsent.getConsentInfo();
@@ -104,6 +112,8 @@ export async function resolveAdsConsent(): Promise<AdsConsentResolution> {
       )) {
         canRequestAdsCache = true;
       }
+
+      consentNetworkFailedCache = gatherFailed && !canRequestAdsCache;
 
       const reqStatus = String(info?.privacyOptionsRequirementStatus || '');
       privacyOptionsRequiredCache =
@@ -135,6 +145,7 @@ export async function resolveAdsConsent(): Promise<AdsConsentResolution> {
       canRequestAdsCache = false;
       personalizedAllowedCache = false;
       privacyOptionsRequiredCache = false;
+      consentNetworkFailedCache = true;
       return { canRequestAds: false, personalized: false, privacyOptionsRequired: false };
     } finally {
       inFlightResolution = null;
@@ -170,6 +181,7 @@ export async function showAdsPrivacyOptionsForm(): Promise<boolean> {
         reqStatus === 'REQUIRED';
 
       if (canRequestAdsCache) {
+        consentNetworkFailedCache = false;
         try {
           const choices = await AdsModule.AdsConsent.getUserChoices();
           personalizedAllowedCache = choices?.selectPersonalisedAds === true;
@@ -192,6 +204,7 @@ export function __resetAdsConsentForTests(): void {
   canRequestAdsCache = false;
   personalizedAllowedCache = false;
   privacyOptionsRequiredCache = false;
+  consentNetworkFailedCache = false;
   resolvedCache = false;
   inFlightResolution = null;
 }

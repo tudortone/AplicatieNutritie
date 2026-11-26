@@ -398,4 +398,17 @@ describe('Flow Credits rewarded operation ownership', () => {
     expect(outcome).toBe('granted');
     expect(statusCalls).toBe(2);
   });
+
+  test('surfaces blocked outcome and sets rewardState=blocked when ads are blocked by AdBlock or Private DNS', async () => {
+    mockShowRewardedAdWithSsv.mockResolvedValueOnce('blocked');
+    const view = await render(<FlowCreditsProvider appUserId="user-a"><Probe /></FlowCreditsProvider>);
+    await waitFor(() => expect(view.getByTestId('credits-state').props.children).toBe('idle|8'));
+
+    let outcome!: string;
+    await act(async () => {
+      outcome = await latest!.watchRewarded();
+    });
+    expect(outcome).toBe('blocked');
+    expect(latest!.rewardState).toBe('blocked');
+  });
 });

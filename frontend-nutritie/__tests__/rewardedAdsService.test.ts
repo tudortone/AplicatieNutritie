@@ -10,9 +10,13 @@ const rewarded = {
 };
 const mockCreateRewarded = jest.fn((_unitId: unknown, _options: unknown) => rewarded);
 
+let mockCanRequestAds = true;
+let mockConsentNetworkFailed = false;
+
 jest.mock('expo-constants', () => ({ __esModule: true, default: { appOwnership: 'standalone' } }));
 jest.mock('../lib/ads/adsConsent', () => ({
-  getCanRequestAds: () => true,
+  getCanRequestAds: () => mockCanRequestAds,
+  getConsentNetworkFailed: () => mockConsentNetworkFailed,
   getConsentPersonalizedAllowed: () => false,
 }));
 jest.mock('react-native-google-mobile-ads', () => ({
@@ -28,6 +32,7 @@ import {
   showRewardedAdWithSsv,
   preloadRewardedAdWithSsv,
   discardPreloadedRewardedAd,
+  isAdBlockerOrNetworkError,
   __resetAdsServiceForTests,
 } from '../lib/ads/adsService';
 
@@ -36,6 +41,8 @@ describe('rewarded ad SSV client', () => {
     jest.clearAllMocks();
     listeners.clear();
     __resetAdsServiceForTests();
+    mockCanRequestAds = true;
+    mockConsentNetworkFailed = false;
     process.env.EXPO_PUBLIC_ADS_MODE = 'test';
   });
 
@@ -160,5 +167,26 @@ describe('rewarded ad SSV client', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  test('classifies network/DNS ad-blocker errors as blocked while keeping no-fill unavailable', async () => {
+    expect(isAdBlockerOrNetworkError({ code: 'googleMobileAds/network-error', message: 'Network error' })).toBe(true);
+    expect(isAdBlockerOrNetworkError({ message: 'Unable to resolve host "googleads.g.doubleclick.net"' })).toBe(true);
+    expect(isAdBlockerOrNetworkError({ message: 'Blocked by AdGuard DNS' })).toBe(true);
+    expect(isAdBlockerOrNetworkError({ code: 'googleMobileAds/no-fill', message: 'No fill' })).toBe(false);
+
+    const networkPromise = showRewardedAdWithSsv({ intentId: 'intent-net', customData: 'secret-net' });
+    listeners.get('error')?.({ code: 'googleMobileAds/network-error', message: 'Network error' });
+    await expect(networkPromise).resolves.toBe('blocked');
+    expect(rewarded.show).not.toHaveBeenCalled();
+
+    listeners.clear();
+    const noFillPromise = showRewardedAdWithSsv({ intentId: 'intent-nofill', customData: 'secret-nofill' });
+    listeners.get('error')?.({ code: 'googleMobileAds/no-fill', message: 'No fill' });
+    await expect(noFillPromise).resolves.toBe('unavailable');
+
+    mockCanRequestAds = false;
+    mockConsentNetworkFailed = true;
+    await expect(showRewardedAdWithSsv({ intentId: 'intent-ump', customData: 'secret-ump' })).resolves.toBe('blocked');
   });
 });

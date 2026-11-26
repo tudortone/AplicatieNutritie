@@ -82,11 +82,23 @@ describe('Flow Credits production UI', () => {
     expect(mockPurchase).toHaveBeenCalledWith(expect.objectContaining({ id: 'getflow_credits_30' }));
   });
 
-  test('unavailable ad state displays localized explanation and active retry action', async () => {
+  test('unavailable ad state displays localized explanation, DNS tip, and active retry action', async () => {
     mockFlowState.rewardState = 'unavailable';
     const screen = await render(<FlowCreditsModalHost />);
     expect(await screen.findByText('Retry ad · +1')).toBeTruthy();
     expect(screen.getByText('The advertisement is currently unavailable. Please try again later.')).toBeTruthy();
+    expect(screen.getByTestId('flow-credits-ad-dns-tip')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Retry ad · +1'));
+    expect(mockWatchRewarded).toHaveBeenCalledTimes(1);
+  });
+
+  test('blocked ad state displays AdBlock/Private DNS alert notice and active retry action', async () => {
+    mockFlowState.rewardState = 'blocked';
+    const screen = await render(<FlowCreditsModalHost />);
+    const notice = await screen.findByTestId('flow-credits-ad-blocked-notice');
+    expect(notice).toBeTruthy();
+    expect(screen.getByText('Ad appears to be blocked')).toBeTruthy();
+    expect(screen.getByText(/AdGuard DNS/i)).toBeTruthy();
     await fireEvent.press(screen.getByText('Retry ad · +1'));
     expect(mockWatchRewarded).toHaveBeenCalledTimes(1);
   });

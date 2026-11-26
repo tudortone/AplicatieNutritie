@@ -32,6 +32,7 @@ describe('withAndroidR8OptimizedProguard', () => {
         { type: 'property', key: 'android.enableR8.fullMode', value: 'true' },
         { type: 'property', key: 'android.enableMinifyInReleaseBuilds', value: 'true' },
         { type: 'property', key: 'android.enableShrinkResourcesInReleaseBuilds', value: 'true' },
+        { type: 'property', key: 'android.r8.optimizedResourceShrinking', value: 'true' },
       ]),
     );
 
@@ -39,12 +40,14 @@ describe('withAndroidR8OptimizedProguard', () => {
       { type: 'property', key: 'android.enableR8.fullMode', value: 'false' },
       { type: 'property', key: 'android.enableMinifyInReleaseBuilds', value: 'false' },
       { type: 'property', key: 'android.enableShrinkResourcesInReleaseBuilds', value: 'false' },
+      { type: 'property', key: 'android.r8.optimizedResourceShrinking', value: 'false' },
     ]);
 
     expect(updated).toEqual([
       { type: 'property', key: 'android.enableR8.fullMode', value: 'true' },
       { type: 'property', key: 'android.enableMinifyInReleaseBuilds', value: 'true' },
       { type: 'property', key: 'android.enableShrinkResourcesInReleaseBuilds', value: 'true' },
+      { type: 'property', key: 'android.r8.optimizedResourceShrinking', value: 'true' },
     ]);
   });
 

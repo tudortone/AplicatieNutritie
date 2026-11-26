@@ -41,7 +41,7 @@ export function discardPreloadedRewardedAd(): void {
 export async function showRewardedAdWithSsv(_input: {
   intentId: string;
   customData: string;
-}): Promise<'earned-awaiting-server' | 'dismissed' | 'unavailable'> {
+}): Promise<'earned-awaiting-server' | 'dismissed' | 'unavailable' | 'blocked'> {
   return 'unavailable';
 }
 

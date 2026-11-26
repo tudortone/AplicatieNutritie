@@ -13,6 +13,10 @@ export function getCanRequestAds(): boolean {
   return false;
 }
 
+export function getConsentNetworkFailed(): boolean {
+  return false;
+}
+
 export function getConsentPersonalizedAllowed(): boolean {
   return false;
 }

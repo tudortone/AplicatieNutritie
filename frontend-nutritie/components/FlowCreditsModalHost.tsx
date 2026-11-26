@@ -1,7 +1,7 @@
 import React, { useContext } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Camera, Crown, Play, ShoppingBag, Sparkles, X } from 'lucide-react-native';
+import { Camera, Crown, Play, ShieldAlert, ShoppingBag, Sparkles, X } from 'lucide-react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useFlowCredits } from '../context/FlowCreditsContext';
@@ -130,7 +130,7 @@ export function FlowCreditsModalHost() {
                     ? t('flowCredits.verifyingReward')
                     : flow.loading
                     ? t('common.loading')
-                    : flow.rewardState === 'unavailable'
+                    : flow.rewardState === 'unavailable' || flow.rewardState === 'blocked'
                     ? t('flowCredits.retryAd')
                     : t('flowCredits.watchAd')
                 }
@@ -153,7 +153,7 @@ export function FlowCreditsModalHost() {
                     ? t('flowCredits.verifyingReward')
                     : flow.loading
                     ? t('common.loading')
-                    : flow.rewardState === 'unavailable'
+                    : flow.rewardState === 'unavailable' || flow.rewardState === 'blocked'
                     ? t('flowCredits.retryAd')
                     : t('flowCredits.watchAd')}
                 </Text>
@@ -161,7 +161,36 @@ export function FlowCreditsModalHost() {
             ) : null}
             {flow.rewardState === 'granted' ? <Text maxFontSizeMultiplier={1.3} style={[styles.success, { color: colors.accent }]}>{t('flowCredits.rewardGranted')}</Text> : null}
             {!flow.unlimited && rewardedLimitReached ? <Text maxFontSizeMultiplier={1.3} style={[styles.note, { color: colors.warning }]}>{t('flowCredits.rewardLimit')}</Text> : null}
-            {flow.rewardState === 'unavailable' ? <Text maxFontSizeMultiplier={1.3} style={[styles.note, { color: colors.textSecondary }]}>{t('flowCredits.adUnavailable')}</Text> : null}
+            {flow.rewardState === 'blocked' ? (
+              <View
+                testID="flow-credits-ad-blocked-notice"
+                style={styles.adBlockedNotice}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+              >
+                <View style={styles.adBlockedHeader}>
+                  <ShieldAlert size={16} color={colors.warning} />
+                  <Text maxFontSizeMultiplier={1.3} style={[styles.adBlockedTitle, { color: colors.warning }]}>
+                    {t('flowCredits.adBlockedTitle')}
+                  </Text>
+                </View>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.adBlockedHint, { color: colors.textSecondary }]}>
+                  {t('flowCredits.adBlockedHint')}
+                </Text>
+              </View>
+            ) : null}
+            {flow.rewardState === 'unavailable' ? (
+              <>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.note, { color: colors.textSecondary }]}>{t('flowCredits.adUnavailable')}</Text>
+                <Text
+                  testID="flow-credits-ad-dns-tip"
+                  maxFontSizeMultiplier={1.3}
+                  style={[styles.dnsTip, { color: colors.textTertiary }]}
+                >
+                  {t('flowCredits.adUnavailableDnsTip')}
+                </Text>
+              </>
+            ) : null}
 
             {canContinueScanning ? (
               <TouchableOpacity
@@ -312,6 +341,19 @@ const styles = StyleSheet.create({
   continueBtn: { marginTop: 12, borderWidth: 1.5, minHeight: 48, paddingHorizontal: 14, borderRadius: 16, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' },
   continueBtnText: { flexShrink: 1, fontSize: 14, fontWeight: '800' },
   note: { textAlign: 'center', marginTop: 10, fontSize: 12, lineHeight: 17 },
+  dnsTip: { textAlign: 'center', marginTop: 4, fontSize: 11, lineHeight: 16 },
+  adBlockedNotice: {
+    marginTop: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    backgroundColor: 'rgba(245, 158, 11, 0.10)',
+    padding: 12,
+    gap: 6,
+  },
+  adBlockedHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  adBlockedTitle: { fontSize: 13, fontWeight: '800' },
+  adBlockedHint: { fontSize: 12, lineHeight: 17, textAlign: 'center' },
   statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
   statusNote: { marginTop: 0 },
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24, marginBottom: 10 },

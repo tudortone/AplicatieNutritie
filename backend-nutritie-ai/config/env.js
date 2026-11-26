@@ -158,6 +158,8 @@ function incarcaConfig() {
 	const googlePlayProductIds = listaDinEnv(process.env.GOOGLE_PLAY_SUBSCRIPTION_PRODUCT_IDS);
 	const googlePlayCreditProductIds = listaDinEnv(process.env.GOOGLE_PLAY_CREDIT_PRODUCT_IDS);
 	const playIntegrityMode = process.env.PLAY_INTEGRITY_MODE || 'off';
+	const usesCloudRunAdc = process.env.GOOGLE_PLAY_USE_ADC === '1' && Boolean(process.env.K_SERVICE);
+	const hasGoogleCredentials = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS) || usesCloudRunAdc;
 	if (!['off', 'observe', 'enforce'].includes(playIntegrityMode)) {
 		opreste('PLAY_INTEGRITY_MODE trebuie sa fie off, observe sau enforce.');
 	}
@@ -166,7 +168,7 @@ function incarcaConfig() {
 		(!process.env.GOOGLE_PLAY_PACKAGE_NAME ||
 			googlePlayProductIds.length === 0 ||
 			googlePlayCreditProductIds.length === 0 ||
-			!process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+			!hasGoogleCredentials ||
 			!process.env.GOOGLE_PLAY_PUBSUB_AUDIENCE ||
 			!process.env.GOOGLE_PLAY_PUBSUB_SERVICE_ACCOUNT_EMAIL)
 	) {

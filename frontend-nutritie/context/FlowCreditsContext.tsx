@@ -8,7 +8,7 @@ import {
   initializeAdsSdk,
   type RewardedAdOutcome,
 } from '../lib/ads/adsService';
-import { isConsentResolved, resolveAdsConsent } from '../lib/ads/adsConsent';
+import { getCanRequestAds, isConsentResolved, resolveAdsConsent } from '../lib/ads/adsConsent';
 import { supabase } from '../supabase';
 import { useBilling } from './BillingContext';
 import { usePremium } from './PremiumContext';
@@ -27,7 +27,7 @@ export type FlowCreditsBalance = {
 
 export type FlowCreditCategory = 'daily' | 'rewarded' | 'purchased';
 
-type RewardState = 'idle' | 'loading' | 'awaiting-server' | 'granted' | 'unavailable' | 'limit';
+type RewardState = 'idle' | 'loading' | 'awaiting-server' | 'granted' | 'unavailable' | 'blocked' | 'limit';
 type FlowCreditsContextValue = {
   balance: FlowCreditsBalance;
   balanceReady: boolean;
@@ -307,7 +307,8 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
         if (ownerRef.current !== targetOwner || prewarmInFlightRef.current?.promise !== promise || !visibleRef.current) {
           return null;
         }
-        if (!isConsentResolved()) {
+        const canRequest = typeof getCanRequestAds === 'function' ? getCanRequestAds() : true;
+        if (!isConsentResolved() || !canRequest) {
           try { await resolveAdsConsent(); } catch {}
         }
         try { await initializeAdsSdk(); } catch {}
@@ -441,7 +442,8 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
           activeIntent = { intentId: intent.intentId, customData: intent.ssv.customData };
         }
 
-        if (!isConsentResolved()) {
+        const canRequest = typeof getCanRequestAds === 'function' ? getCanRequestAds() : true;
+        if (!isConsentResolved() || !canRequest) {
           try {
             await resolveAdsConsent();
           } catch {}
@@ -453,7 +455,7 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
         const outcome = await showRewardedAdWithSsv({ intentId: activeIntent.intentId, customData: activeIntent.customData });
         if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
         if (outcome !== 'earned-awaiting-server') {
-          updateState(outcome === 'unavailable' ? 'unavailable' : 'idle');
+          updateState(outcome === 'blocked' ? 'blocked' : outcome === 'unavailable' ? 'unavailable' : 'idle');
           return outcome;
         }
         updateState('awaiting-server');
@@ -611,7 +613,7 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
     lastConsumedCategory,
     open: () => {
       setRewardState((prev) => (
-        prev === 'granted' || prev === 'unavailable' || prev === 'limit' ? 'idle' : prev
+        prev === 'granted' || prev === 'unavailable' || prev === 'blocked' || prev === 'limit' ? 'idle' : prev
       ));
       void refresh();
       setVisible(true);

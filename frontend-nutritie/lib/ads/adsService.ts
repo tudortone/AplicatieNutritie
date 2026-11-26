@@ -18,7 +18,7 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { getAdsRuntimeConfig } from './adsConfig';
-import { getCanRequestAds, getConsentPersonalizedAllowed } from './adsConsent';
+import { getCanRequestAds, getConsentNetworkFailed, getConsentPersonalizedAllowed } from './adsConsent';
 
 type GoogleMobileAdsModule = typeof import('react-native-google-mobile-ads');
 // `InterstitialAd` are constructor `protected` (se creează doar prin
@@ -260,7 +260,23 @@ export function showPreloadedInterstitial(): boolean {
   }
 }
 
-export type RewardedAdOutcome = 'earned-awaiting-server' | 'dismissed' | 'unavailable';
+export type RewardedAdOutcome = 'earned-awaiting-server' | 'dismissed' | 'unavailable' | 'blocked';
+
+export function isAdBlockerOrNetworkError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const err = error as { code?: unknown; message?: unknown };
+  const code = String(err.code ?? '').toLowerCase();
+  const message = String(err.message ?? '').toLowerCase();
+  if (code.includes('no-fill') || code.includes('no_fill') || message.includes('no fill') || code === '3') {
+    return false;
+  }
+  if (code === '2' || code.includes('network-error') || code.includes('network_error')) {
+    return true;
+  }
+  return /network error|unable to resolve host|err_name_not_resolved|err_connection|failed to connect|dns|adblock|adguard|blocked by/i.test(
+    message,
+  );
+}
 
 type PreloadedRewardedEntry = {
   ad: RewardedAdInstance;
@@ -367,8 +383,12 @@ export function showRewardedAdWithSsv({
   intentId,
   customData,
 }: { intentId: string; customData: string }): Promise<RewardedAdOutcome> {
-  if (!isAdsAvailable() || !getCanRequestAds() || !AdsModule) {
+  if (!isAdsAvailable() || !AdsModule) {
     return Promise.resolve('unavailable');
+  }
+  if (!getCanRequestAds()) {
+    const consentBlocked = typeof getConsentNetworkFailed === 'function' && getConsentNetworkFailed();
+    return Promise.resolve(consentBlocked ? 'blocked' : 'unavailable');
   }
   const unitId = getRewardedUnitId();
   if (!unitId) return Promise.resolve('unavailable');
@@ -422,7 +442,8 @@ export function showRewardedAdWithSsv({
         ad.addAdEventListener(AdsModule.RewardedAdEventType.EARNED_REWARD, () => {
           earned = true;
         }),
-        ad.addAdEventListener(AdsModule.AdEventType.ERROR, () => finish('unavailable')),
+        ad.addAdEventListener(AdsModule.AdEventType.ERROR, (error?: unknown) =>
+          finish(isAdBlockerOrNetworkError(error) ? 'blocked' : 'unavailable')),
         ad.addAdEventListener(AdsModule.AdEventType.CLOSED, () =>
           finish(earned ? 'earned-awaiting-server' : 'dismissed')),
       );

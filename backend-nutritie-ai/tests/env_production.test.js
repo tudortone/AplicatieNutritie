@@ -69,6 +69,21 @@ describe('configuratia backend de productie', () => {
     expect(rezultat.stderr).toContain(nume);
   });
 
+  test('accepta Cloud Run ADC fara GOOGLE_APPLICATION_CREDENTIALS doar cand GOOGLE_PLAY_USE_ADC=1 si K_SERVICE sunt setate', () => {
+    expect(pornesteConfig({
+      GOOGLE_APPLICATION_CREDENTIALS: undefined,
+      GOOGLE_PLAY_USE_ADC: '1',
+      K_SERVICE: 'nutritie-backend-ai',
+    }).status).toBe(0);
+
+    const withoutCloudRun = pornesteConfig({
+      GOOGLE_APPLICATION_CREDENTIALS: undefined,
+      GOOGLE_PLAY_USE_ADC: '1',
+    });
+    expect(withoutCloudRun.status).not.toBe(0);
+    expect(withoutCloudRun.stderr).toContain('GOOGLE_APPLICATION_CREDENTIALS');
+  });
+
   test('refuza orice package name diferit de aplicatia Play autoritativa', () => {
     const rezultat = pornesteConfig({ GOOGLE_PLAY_PACKAGE_NAME: 'com.attacker.copy' });
     expect(rezultat.status).not.toBe(0);
