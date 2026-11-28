@@ -352,7 +352,7 @@ export function getAdsRuntimeConfig(
     overrides?.everyNAnalyses ?? STATIC_AD_EVERY_N_ANALYSES,
     3,
   );
-  const everyNChatMessages = 15;
+  const everyNChatMessages = 6;
   const minAdIntervalSeconds = nonNegativeIntOr(
     overrides?.minAdIntervalSeconds ?? STATIC_AD_MIN_INTERVAL_SECONDS,
     600,

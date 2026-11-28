@@ -7,7 +7,7 @@
  *  - `maybeShowInterstitial('chat')` — se apelează după ce răspunsul AI s-a terminat.
  *    NICIODATĂ nu întrerupe fluxuri critice (meal save, auth, onboarding).
  *    Photo AI nu mai afișează interstițiale; este monetizat prin Flow Credits.
- *    Chat păstrează pragul 15 și cooldown-ul de 10 minute.
+ *    Chat păstrează pragul 6 și cooldown-ul de 10 minute, cu preîncărcare just-in-time.
  *
  * Utilizatorii Premium / testeri: toate funcțiile devin no-op.
  */
@@ -27,6 +27,7 @@ import {
   adsAvailable,
   discardPreloadedInterstitial,
   initializeAdsSdk,
+  preloadInterstitial,
   refreshAdsAfterConsentChange,
   showPreloadedInterstitial,
 } from '../lib/ads/adsService';
@@ -132,7 +133,18 @@ export function AdsProvider({
     if (hasFullAccess) return;
     stateRef.current = recordChatUserMessageState(stateRef.current);
     saveAdGateState(scopeKey, stateRef.current);
-  }, [hasFullAccess, scopeKey]);
+    if (!adsAvailable) return;
+    const decizie = evaluateAdEligibility(stateRef.current, {
+      hasFullAccess,
+      nowMs: Date.now(),
+      source: 'chat',
+      everyN: runtimeConfig.everyNChatMessages,
+      minIntervalSeconds: Math.max(runtimeConfig.minAdIntervalSeconds, 600),
+    });
+    if (decizie.eligible) {
+      preloadInterstitial();
+    }
+  }, [hasFullAccess, scopeKey, runtimeConfig.everyNChatMessages, runtimeConfig.minAdIntervalSeconds]);
 
   const maybeShowInterstitial = useCallback(
     (source: AdSource = 'chat') => {

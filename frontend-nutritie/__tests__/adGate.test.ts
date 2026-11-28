@@ -125,8 +125,8 @@ describe('adGate — contorul de mesaje chat și cooldown-ul partajat (Phase C)'
     expect(state.chatMessageCount).toBe(2);
   });
 
-  it('nu este eligibil pentru reclamă chat la sub 15 mesaje', () => {
-    const state = sendChatMessages(14);
+  it('nu este eligibil pentru reclamă chat la sub 6 mesaje', () => {
+    const state = sendChatMessages(AD_EVERY_N_CHAT_MESSAGES - 1);
     const decizie = evaluateAdEligibility(state, {
       hasFullAccess: false,
       nowMs: NOW,
@@ -136,7 +136,7 @@ describe('adGate — contorul de mesaje chat și cooldown-ul partajat (Phase C)'
     expect(decizie.reason).toBe('not-multiple');
   });
 
-  it('devine eligibil la mesajul #15 și resetează contorul chat în nextStateIfAttempted', () => {
+  it('devine eligibil la mesajul #6 și resetează contorul chat în nextStateIfAttempted', () => {
     const state = sendChatMessages(AD_EVERY_N_CHAT_MESSAGES);
     const decizie = evaluateAdEligibility(state, {
       hasFullAccess: false,
@@ -146,7 +146,7 @@ describe('adGate — contorul de mesaje chat și cooldown-ul partajat (Phase C)'
     expect(decizie.eligible).toBe(true);
     expect(decizie.reason).toBe('eligible');
     expect(decizie.nextStateIfAttempted.chatMessageCount).toBe(0);
-    expect(decizie.nextStateIfAttempted.lastChatAdCounterValue).toBe(15);
+    expect(decizie.nextStateIfAttempted.lastChatAdCounterValue).toBe(6);
     expect(decizie.nextStateIfAttempted.lastAdShownAtMs).toBe(NOW);
   });
 
@@ -158,8 +158,8 @@ describe('adGate — contorul de mesaje chat și cooldown-ul partajat (Phase C)'
     state = decizieFoto.nextStateIfAttempted;
     expect(state.lastAdShownAtMs).toBe(NOW);
 
-    // 2. În chat, utilizatorul trimite 15 mesaje doar 3 minute mai târziu (NOW + 180s)
-    state = sendChatMessages(15, state);
+    // 2. În chat, utilizatorul trimite 6 mesaje doar 3 minute mai târziu (NOW + 180s)
+    state = sendChatMessages(6, state);
     const decizieChatPrecoce = evaluateAdEligibility(state, {
       hasFullAccess: false,
       nowMs: NOW + 180_000,

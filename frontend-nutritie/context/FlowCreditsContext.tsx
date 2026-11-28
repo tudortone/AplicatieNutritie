@@ -3,7 +3,6 @@ import { AppState } from 'react-native';
 import { buildApiUrl } from '../lib/api';
 import {
   showRewardedAdWithSsv,
-  preloadRewardedAdWithSsv,
   discardPreloadedRewardedAd,
   initializeAdsSdk,
   type RewardedAdOutcome,
@@ -170,16 +169,9 @@ async function authenticatedFetch(path: string, init?: RequestInit, expectedUser
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-const PREWARM_TTL_MS = 4 * 60 * 1000;
 // P1-04: Polling SSV rezilient (~46s total cu backoff progresiv) pentru webhook-uri AdMob întârziate.
 const SSV_POLL_DELAYS_MS = [1_500, 1_500, 2_000, 2_000, 2_500, 3_000, 3_000, 3_500, 4_000, 4_500, 5_000, 5_000, 5_000, 4_000];
 type WatchRewardedOutcome = RewardedAdOutcome | 'granted' | 'limit';
-type PrewarmedIntent = {
-  owner: string;
-  intentId: string;
-  customData: string;
-  createdAtMs: number;
-};
 
 export function FlowCreditsProvider({ children, appUserId }: { children: React.ReactNode; appUserId: string | null }) {
   const billing = useBilling();
@@ -193,27 +185,21 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
   const [rewardState, setRewardState] = useState<RewardState>('idle');
   const [lastConsumedCategory, setLastConsumedCategory] = useState<FlowCreditCategory | null>(null);
   const ownerRef = useRef(appUserId);
-  const visibleRef = useRef(visible);
   const premiumRef = useRef(premium);
   const balanceRef = useRef(balance);
   const lastConsumedCategoryRef = useRef<FlowCreditCategory | null>(null);
   const sequenceRef = useRef(0);
   const rewardOperationRef = useRef(0);
   const watchInFlightRef = useRef<{ owner: string; promise: Promise<WatchRewardedOutcome> } | null>(null);
-  const prewarmInFlightRef = useRef<{ owner: string; promise: Promise<PrewarmedIntent | null> } | null>(null);
-  const prewarmedIntentRef = useRef<PrewarmedIntent | null>(null);
 
   useLayoutEffect(() => {
     ownerRef.current = appUserId;
-    visibleRef.current = visible;
     premiumRef.current = premium;
     balanceRef.current = balance;
     lastConsumedCategoryRef.current = lastConsumedCategory;
-  }, [appUserId, visible, premium, balance, lastConsumedCategory]);
+  }, [appUserId, premium, balance, lastConsumedCategory]);
 
   const clearPrewarmedRewarded = useCallback(() => {
-    prewarmInFlightRef.current = null;
-    prewarmedIntentRef.current = null;
     if (typeof discardPreloadedRewardedAd === 'function') {
       discardPreloadedRewardedAd();
     }
@@ -280,83 +266,6 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
 
   const balanceReady = Boolean(appUserId && balanceOwnerId === appUserId);
 
-  useEffect(() => {
-    if (!visible || !appUserId || !isPremiumResolved || hasUnlimitedAccess || !balanceReady || balance.rewardedGrantsRemaining <= 0) {
-      if (!visible || hasUnlimitedAccess || !appUserId) {
-        clearPrewarmedRewarded();
-      }
-      return;
-    }
-    if (typeof preloadRewardedAdWithSsv !== 'function') return;
-    if (prewarmInFlightRef.current?.owner === appUserId) {
-      return;
-    }
-    const now = Date.now();
-    const cached = prewarmedIntentRef.current;
-    if (cached && cached.owner === appUserId && now - cached.createdAtMs < PREWARM_TTL_MS) {
-      return;
-    }
-    if (cached) {
-      clearPrewarmedRewarded();
-    }
-    const targetOwner = appUserId;
-    let promise: Promise<PrewarmedIntent | null> | null = null;
-    promise = (async (): Promise<PrewarmedIntent | null> => {
-      try {
-        await Promise.resolve();
-        if (ownerRef.current !== targetOwner || prewarmInFlightRef.current?.promise !== promise || !visibleRef.current) {
-          return null;
-        }
-        const canRequest = typeof getCanRequestAds === 'function' ? getCanRequestAds() : true;
-        if (!isConsentResolved() || !canRequest) {
-          try { await resolveAdsConsent(); } catch {}
-        }
-        try { await initializeAdsSdk(); } catch {}
-        if (ownerRef.current !== targetOwner || prewarmInFlightRef.current?.promise !== promise || !visibleRef.current) {
-          return null;
-        }
-        const currentPrem = premiumRef.current;
-        if (currentPrem.loading || currentPrem.hasFullAccess || currentPrem.isPremium) return null;
-        const response = await authenticatedFetch(
-          '/rewarded/intents',
-          { method: 'POST', body: '{}', headers: { 'Idempotency-Key': idOperatieNoua() } },
-          targetOwner,
-        );
-        if (!response.ok) return null;
-        const intent = await response.json() as { intentId?: string; status?: string; ssv?: { userId?: string; customData?: string } };
-        if (
-          intent.status !== 'PENDING'
-          || !intent.intentId
-          || intent.ssv?.userId !== intent.intentId
-          || !intent.ssv.customData
-        ) {
-          return null;
-        }
-        if (ownerRef.current !== targetOwner || prewarmInFlightRef.current?.promise !== promise || !visibleRef.current) {
-          return null;
-        }
-        const currentPremAfter = premiumRef.current;
-        if (currentPremAfter.loading || currentPremAfter.hasFullAccess || currentPremAfter.isPremium) return null;
-        const prewarmed: PrewarmedIntent = {
-          owner: targetOwner,
-          intentId: intent.intentId,
-          customData: intent.ssv.customData,
-          createdAtMs: Date.now(),
-        };
-        prewarmedIntentRef.current = prewarmed;
-        preloadRewardedAdWithSsv({ intentId: prewarmed.intentId, customData: prewarmed.customData });
-        return prewarmed;
-      } catch {
-        return null;
-      } finally {
-        if (promise && prewarmInFlightRef.current?.promise === promise) {
-          prewarmInFlightRef.current = null;
-        }
-      }
-    })();
-    prewarmInFlightRef.current = { owner: targetOwner, promise };
-  }, [visible, appUserId, isPremiumResolved, hasUnlimitedAccess, balanceReady, balance.rewardedGrantsRemaining, clearPrewarmedRewarded]);
-
   useEffect(() => () => {
     rewardOperationRef.current += 1;
     watchInFlightRef.current = null;
@@ -402,45 +311,22 @@ export function FlowCreditsProvider({ children, appUserId }: { children: React.R
       const balanceBeforeReward = eligibleBalance.total;
       updateState('loading');
       try {
-        let activeIntent: { intentId: string; customData: string } | null = null;
-        const now = Date.now();
-        const cached = prewarmedIntentRef.current;
-        if (cached && cached.owner === owner && now - cached.createdAtMs < PREWARM_TTL_MS) {
-          prewarmedIntentRef.current = null;
-          activeIntent = { intentId: cached.intentId, customData: cached.customData };
-        } else {
-          prewarmedIntentRef.current = null;
-          if (cached && typeof discardPreloadedRewardedAd === 'function') {
-            discardPreloadedRewardedAd();
-          }
-          if (prewarmInFlightRef.current?.owner === owner) {
-            const awaited = await prewarmInFlightRef.current.promise;
-            if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
-            if (awaited && awaited.owner === owner && Date.now() - awaited.createdAtMs < PREWARM_TTL_MS) {
-              prewarmedIntentRef.current = null;
-              activeIntent = { intentId: awaited.intentId, customData: awaited.customData };
-            }
-          }
+        const response = await authenticatedFetch(
+          '/rewarded/intents',
+          { method: 'POST', body: '{}', headers: { 'Idempotency-Key': idOperatieNoua() } },
+          owner,
+        );
+        if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
+        if (!response.ok) {
+          updateState(response.status === 429 ? 'limit' : 'unavailable');
+          return response.status === 429 ? 'limit' as const : 'unavailable' as const;
         }
-
-        if (!activeIntent) {
-          const response = await authenticatedFetch(
-            '/rewarded/intents',
-            { method: 'POST', body: '{}', headers: { 'Idempotency-Key': idOperatieNoua() } },
-            owner,
-          );
-          if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
-          if (!response.ok) {
-            updateState(response.status === 429 ? 'limit' : 'unavailable');
-            return response.status === 429 ? 'limit' as const : 'unavailable' as const;
-          }
-          const intent = await response.json() as { intentId?: string; status?: string; ssv?: { userId?: string; customData?: string } };
-          if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
-          if (intent.status !== 'PENDING' || !intent.intentId || intent.ssv?.userId !== intent.intentId || !intent.ssv.customData) {
-            throw new Error('INVALID_REWARD_INTENT');
-          }
-          activeIntent = { intentId: intent.intentId, customData: intent.ssv.customData };
+        const intent = await response.json() as { intentId?: string; status?: string; ssv?: { userId?: string; customData?: string } };
+        if (!isCurrentOperation() || stopIfBlocked()) return 'unavailable' as const;
+        if (intent.status !== 'PENDING' || !intent.intentId || intent.ssv?.userId !== intent.intentId || !intent.ssv.customData) {
+          throw new Error('INVALID_REWARD_INTENT');
         }
+        const activeIntent = { intentId: intent.intentId, customData: intent.ssv.customData };
 
         const canRequest = typeof getCanRequestAds === 'function' ? getCanRequestAds() : true;
         if (!isConsentResolved() || !canRequest) {

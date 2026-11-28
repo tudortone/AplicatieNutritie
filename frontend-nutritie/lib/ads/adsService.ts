@@ -149,12 +149,10 @@ function attachInterstitialListeners(ad: InterstitialAdInstance, generation: num
     clearInterstitialRetryTimer();
   }));
   interstitialUnsubscribers.push(ad.addAdEventListener(AdEventType.CLOSED, () => {
-    // Preîncărcăm imediat următoarea reclamă, ca următoarea oportunitate
-    // eligibilă să nu aștepte un load la cerere (care ar întârzia/eșua vizibil
-    // exact în momentul tranziției utilizatorului).
+    // Curățăm instanța închisă fără a preîncărca imediat alta, deoarece contorul
+    // s-a resetat și cooldown-ul tocmai a început; următoarea cerere va porni just-in-time.
     if (!isCurrentAd()) return;
     discardCurrentInterstitial(true);
-    if (getCanRequestAds()) preloadInterstitial();
   }));
 }
 
@@ -187,19 +185,14 @@ export function preloadInterstitial(): void {
 }
 
 /**
- * Inițializează SDK-ul Google Mobile Ads (o singură dată) și pornește
- * preîncărcarea primei reclame. Trebuie apelat DUPĂ rezolvarea consimțământului
- * (`lib/ads/adsConsent.ts`), niciodată înainte — vezi master prompt secțiunea 18.
+ * Inițializează SDK-ul Google Mobile Ads (o singură dată) FĂRĂ a preîncărca
+ * automat o reclamă. Preîncărcarea pornește doar just-in-time când utilizatorul
+ * se apropie de o oportunitate eligibilă (evită solicitările cu 0 afișări).
  */
 export async function initializeAdsSdk(): Promise<void> {
   if (!isAdsAvailable() || !AdsModule) return;
   if (!getCanRequestAds()) return;
-  // P1-06: Dacă SDK-ul era deja inițializat (ex. abonamentul a expirat sau s-a schimbat
-  // contul după discardPreloadedInterstitial), re-preîncărcăm interstițialul.
-  if (sdkInitialized) {
-    preloadInterstitial();
-    return;
-  }
+  if (sdkInitialized) return;
   try {
     try {
       if (
@@ -214,7 +207,6 @@ export async function initializeAdsSdk(): Promise<void> {
     } catch {}
     await AdsModule.default().initialize();
     sdkInitialized = true;
-    preloadInterstitial();
   } catch {
     // Fail-open pentru UX: fără reclame disponibile, aplicația continuă normal.
     sdkInitialized = false;
@@ -479,9 +471,10 @@ export function __resetAdsServiceForTests(): void {
 
 /** Reconcile any already-loaded ad with the user's latest UMP choice. */
 export async function refreshAdsAfterConsentChange(): Promise<void> {
+  const hadInterstitial = interstitial !== null;
   discardCurrentInterstitial(true);
   discardPreloadedRewardedAd();
   if (!getCanRequestAds()) return;
-  if (sdkInitialized) preloadInterstitial();
-  else await initializeAdsSdk();
+  if (!sdkInitialized) await initializeAdsSdk();
+  if (hadInterstitial) preloadInterstitial();
 }

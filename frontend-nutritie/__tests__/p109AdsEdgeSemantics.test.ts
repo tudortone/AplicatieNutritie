@@ -243,9 +243,10 @@ describe('P1-09 Mandatory Test Matrix — UMP Consent Lifecycle (1–5)', () => 
     expect(isInterstitialReady()).toBe(false);
   });
 
-  test('a changed personalization choice reloads with a non-personalized request', async () => {
+  test('a changed personalization choice reloads with a non-personalized request when an interstitial was pending', async () => {
     await resolveAdsConsent();
     await initializeAdsSdk();
+    preloadInterstitial();
     mockInterstitialInstance.loaded = true;
     mockAdsConsent.getUserChoices.mockResolvedValue({ selectPersonalisedAds: false });
     mockAdsConsent.showPrivacyOptionsForm.mockResolvedValue({
@@ -258,6 +259,23 @@ describe('P1-09 Mandatory Test Matrix — UMP Consent Lifecycle (1–5)', () => 
 
     const interstitialFactory = (require('react-native-google-mobile-ads') as any).InterstitialAd.createForAdRequest;
     expect(interstitialFactory).toHaveBeenLastCalledWith(expect.any(String), { requestNonPersonalizedAdsOnly: true });
+  });
+
+  test('refreshAdsAfterConsentChange does NOT preload when no interstitial was pending', async () => {
+    await resolveAdsConsent();
+    await initializeAdsSdk();
+    expect(mockInterstitialInstance.load).not.toHaveBeenCalled();
+
+    mockAdsConsent.getUserChoices.mockResolvedValue({ selectPersonalisedAds: false });
+    mockAdsConsent.showPrivacyOptionsForm.mockResolvedValue({
+      canRequestAds: true,
+      privacyOptionsRequirementStatus: 'NOT_REQUIRED',
+    });
+
+    await showAdsPrivacyOptionsForm();
+    await refreshAdsAfterConsentChange();
+
+    expect(mockInterstitialInstance.load).not.toHaveBeenCalled();
   });
 
   test('a synchronous interstitial load failure clears the cached ad so a later attempt can retry', async () => {
@@ -321,9 +339,9 @@ describe('P1-09 Mandatory Test Matrix — Chat Cadence & AI Turn Completion (9�
     minIntervalSeconds: 600,
   };
 
-  test('9. user messages 1–14 -> no ad', () => {
+  test('9. user messages 1–5 -> no ad', () => {
     let state = { ...AD_GATE_INITIAL_STATE };
-    for (let i = 1; i <= 14; i++) {
+    for (let i = 1; i <= AD_EVERY_N_CHAT_MESSAGES - 1; i++) {
       state = recordChatUserMessage(state);
       const decizie = evaluateAdEligibility(state, chatOptions);
       expect(decizie.eligible).toBe(false);
@@ -331,14 +349,14 @@ describe('P1-09 Mandatory Test Matrix — Chat Cadence & AI Turn Completion (9�
     }
   });
 
-  test('10 & 11. message 15 -> eligible once AI response completes', () => {
+  test('10 & 11. message 6 -> eligible once AI response completes', () => {
     let state = { ...AD_GATE_INITIAL_STATE };
-    for (let i = 1; i <= 14; i++) {
+    for (let i = 1; i <= AD_EVERY_N_CHAT_MESSAGES - 1; i++) {
       state = recordChatUserMessage(state);
     }
-    // Message 15 sent by user
+    // Message 6 sent by user
     state = recordChatUserMessage(state);
-    expect(state.chatMessageCount).toBe(15);
+    expect(state.chatMessageCount).toBe(6);
 
     const decizie = evaluateAdEligibility(state, chatOptions);
     expect(decizie.eligible).toBe(true);
@@ -352,7 +370,7 @@ describe('P1-09 Mandatory Test Matrix — Chat Cadence & AI Turn Completion (9�
     // In chat.tsx, if response fails/malformed, maybeShowInterstitial is NOT called.
     // Verify that state preserves counter without falsely marking lastAdShownAtMs
     let state = { ...AD_GATE_INITIAL_STATE };
-    for (let i = 1; i <= 15; i++) {
+    for (let i = 1; i <= AD_EVERY_N_CHAT_MESSAGES; i++) {
       state = recordChatUserMessage(state);
     }
     // No attempt was made
@@ -702,14 +720,34 @@ describe('P1-09 Non-Vacuity Verifications', () => {
     }
   });
 
-  test('P1-06: initializeAdsSdk re-preloads interstitial after discard (subscription expiry / account switch)', async () => {
+  test('P1-06: initializeAdsSdk initializes SDK without preloading an interstitial ad', async () => {
     await resolveAdsConsent();
     await initializeAdsSdk();
-    expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(1);
+    expect(mockMobileAdsDefault).toHaveBeenCalled();
+    expect(mockInterstitialInstance.load).not.toHaveBeenCalled();
 
     discardPreloadedInterstitial();
     await initializeAdsSdk();
-    expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(2);
+    expect(mockInterstitialInstance.load).not.toHaveBeenCalled();
+  });
+
+  test('AdEventType.CLOSED discards the closed interstitial without auto-preloading a replacement', async () => {
+    const eventHandlers: Record<string, () => void> = {};
+    mockInterstitialInstance.addAdEventListener.mockImplementation((event: string, cb: () => void) => {
+      eventHandlers[event] = cb;
+      return jest.fn();
+    });
+
+    await resolveAdsConsent();
+    preloadInterstitial();
+    expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(1);
+
+    mockInterstitialInstance.loaded = true;
+    expect(showPreloadedInterstitial()).toBe(true);
+
+    eventHandlers.closed?.();
+    expect(isInterstitialReady()).toBe(false);
+    expect(mockInterstitialInstance.load).toHaveBeenCalledTimes(1);
   });
 
   test('P1-06: hydrateAdGateState restores persisted counter/cooldown on cold start without wiping AsyncStorage', async () => {

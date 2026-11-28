@@ -2,7 +2,7 @@
  * adGate.ts — logica PURĂ (fără RN/MMKV/SDK) a "porții" de reclame pentru
  * utilizatorii gratuiți:
  * 1. 1 reclamă interstițială la fiecare 3 analize foto REUȘITE.
- * 2. 1 reclamă interstițială după mesajul #15 trimis în chat de utilizator către AI
+ * 2. 1 reclamă interstițială după mesajul #6 trimis în chat de utilizator către AI
  *    (afișată DOAR după ce răspunsul AI s-a finalizat complet).
  * 3. Cooldown partajat de minimum 10 minute (600 secunde) între ORICARE două reclame
  *    (previne: reclamă foto -> imediat reclamă chat).
@@ -10,7 +10,7 @@
  */
 
 export const AD_EVERY_N_SUCCESSFUL_ANALYSES = 3;
-export const AD_EVERY_N_CHAT_MESSAGES = 15;
+export const AD_EVERY_N_CHAT_MESSAGES = 6;
 export const SHARED_AD_COOLDOWN_SECONDS = 600; // 10 minute cooldown partajat
 export const MIN_AD_INTERVAL_SECONDS_DEFAULT = SHARED_AD_COOLDOWN_SECONDS;
 
